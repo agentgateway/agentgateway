@@ -23,6 +23,15 @@ pub struct Eviction {
 		with = "serde_dur_option"
 	)]
 	pub duration: Option<Duration>,
+
+	/// Number of consecutive failures required before evicting the backend.
+	/// When absent or zero, a single unhealthy response can trigger eviction.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub threshold: Option<i32>,
+
+	/// When true, an evicted backend that returns a healthy response is immediately marked healthy.
+	#[serde(default)]
+	pub health_on_return: bool,
 }
 
 /// Health policy: determines when a backend is unhealthy and how to evict it.
@@ -72,6 +81,10 @@ pub struct LocalEviction {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub duration: Option<Duration>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub threshold: Option<i32>,
+	#[serde(default)]
+	pub health_on_return: bool,
 }
 
 /// Local/config health policy with CEL as string; converted to Policy by compiling the expression.
@@ -113,6 +126,8 @@ impl TryFrom<LocalHealthPolicy> for Policy {
 		};
 		let eviction = local.eviction.map(|e| Eviction {
 			duration: e.duration,
+			threshold: e.threshold,
+			health_on_return: e.health_on_return,
 		});
 		Ok(Policy {
 			unhealthy_expression,

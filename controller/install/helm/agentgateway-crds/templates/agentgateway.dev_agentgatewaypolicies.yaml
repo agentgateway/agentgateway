@@ -463,6 +463,18 @@ spec:
                                                   - message: evictionDuration must
                                                       be at least 1 second
                                                     rule: duration(self) >= duration('1s')
+                                                healthOnReturn:
+                                                  description: HealthOnReturn defines
+                                                    if an evicted backend should be
+                                                    marked healthy immediately after
+                                                    returning a healthy response.
+                                                  type: boolean
+                                                threshold:
+                                                  description: Threshold defines the
+                                                    number of consecutive failures
+                                                    before the backend is evicted.
+                                                  format: int32
+                                                  type: integer
                                               type: object
                                             unhealthyCondition:
                                               description: |-
@@ -1133,6 +1145,18 @@ spec:
                                                   - message: evictionDuration must
                                                       be at least 1 second
                                                     rule: duration(self) >= duration('1s')
+                                                healthOnReturn:
+                                                  description: HealthOnReturn defines
+                                                    if an evicted backend should be
+                                                    marked healthy immediately after
+                                                    returning a healthy response.
+                                                  type: boolean
+                                                threshold:
+                                                  description: Threshold defines the
+                                                    number of consecutive failures
+                                                    before the backend is evicted.
+                                                  format: int32
+                                                  type: integer
                                               type: object
                                             unhealthyCondition:
                                               description: |-
@@ -1799,6 +1823,18 @@ spec:
                                                   - message: evictionDuration must
                                                       be at least 1 second
                                                     rule: duration(self) >= duration('1s')
+                                                healthOnReturn:
+                                                  description: HealthOnReturn defines
+                                                    if an evicted backend should be
+                                                    marked healthy immediately after
+                                                    returning a healthy response.
+                                                  type: boolean
+                                                threshold:
+                                                  description: Threshold defines the
+                                                    number of consecutive failures
+                                                    before the backend is evicted.
+                                                  format: int32
+                                                  type: integer
                                               type: object
                                             unhealthyCondition:
                                               description: |-
@@ -2682,6 +2718,18 @@ spec:
                                                   - message: evictionDuration must
                                                       be at least 1 second
                                                     rule: duration(self) >= duration('1s')
+                                                healthOnReturn:
+                                                  description: HealthOnReturn defines
+                                                    if an evicted backend should be
+                                                    marked healthy immediately after
+                                                    returning a healthy response.
+                                                  type: boolean
+                                                threshold:
+                                                  description: Threshold defines the
+                                                    number of consecutive failures
+                                                    before the backend is evicted.
+                                                  format: int32
+                                                  type: integer
                                               type: object
                                             unhealthyCondition:
                                               description: |-
@@ -3352,6 +3400,18 @@ spec:
                                                   - message: evictionDuration must
                                                       be at least 1 second
                                                     rule: duration(self) >= duration('1s')
+                                                healthOnReturn:
+                                                  description: HealthOnReturn defines
+                                                    if an evicted backend should be
+                                                    marked healthy immediately after
+                                                    returning a healthy response.
+                                                  type: boolean
+                                                threshold:
+                                                  description: Threshold defines the
+                                                    number of consecutive failures
+                                                    before the backend is evicted.
+                                                  format: int32
+                                                  type: integer
                                               type: object
                                             unhealthyCondition:
                                               description: |-
@@ -4286,6 +4346,16 @@ spec:
                               rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                             - message: evictionDuration must be at least 1 second
                               rule: duration(self) >= duration('1s')
+                          healthOnReturn:
+                            description: HealthOnReturn defines if an evicted backend
+                              should be marked healthy immediately after returning
+                              a healthy response.
+                            type: boolean
+                          threshold:
+                            description: Threshold defines the number of consecutive
+                              failures before the backend is evicted.
+                            format: int32
+                            type: integer
                         type: object
                       unhealthyCondition:
                         description: |-

@@ -965,6 +965,10 @@ message BackendPolicySpec {
   message Eviction {
     // specify the time to evict (e.g. 30s, 60s).
     google.protobuf.Duration duration = 1;
+    // specify many consecutive failures before we evict the backend
+    int32 threshold = 2;
+    // configures if an evicted backend that later returns a healthy response should immediately be marked healthy 
+    bool health_on_return = 3;
   }
   message Health {
     // cel expression evaluated per request to determine if eviction should be triggered

@@ -152,9 +152,15 @@ func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy, targe
 	healthPolicy := policy.Spec.Backend.Health
 
 	var evictionProto *api.BackendPolicySpec_Eviction
-	if healthPolicy.Eviction != nil && healthPolicy.Eviction.Duration != nil {
+	if healthPolicy.Eviction != nil {
+		var duration *durationpb.Duration
+		if healthPolicy.Eviction.Duration != nil {
+			duration = durationpb.New(healthPolicy.Eviction.Duration.Duration)
+		}
 		evictionProto = &api.BackendPolicySpec_Eviction{
-			Duration: durationpb.New(healthPolicy.Eviction.Duration.Duration),
+			Duration:       duration,
+			Threshold:      ptr.OrDefault(healthPolicy.Eviction.Threshold, 0),
+			HealthOnReturn: ptr.OrDefault(healthPolicy.Eviction.HealthOnReturn, false),
 		}
 	}
 

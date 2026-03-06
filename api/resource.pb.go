@@ -8638,9 +8638,13 @@ func (x *BackendPolicySpec_InferenceRouting) GetFailureMode() BackendPolicySpec_
 type BackendPolicySpec_Eviction struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// specify the time to evict (e.g. 30s, 60s).
-	Duration      *durationpb.Duration `protobuf:"bytes,1,opt,name=duration,proto3" json:"duration,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Duration *durationpb.Duration `protobuf:"bytes,1,opt,name=duration,proto3" json:"duration,omitempty"`
+	// specify many consecutive failures before we evict the backend
+	Threshold int32 `protobuf:"varint,2,opt,name=threshold,proto3" json:"threshold,omitempty"`
+	// configures if an evicted backend that later returns a healthy response should immediately be marked healthy
+	HealthOnReturn bool `protobuf:"varint,3,opt,name=health_on_return,json=healthOnReturn,proto3" json:"health_on_return,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *BackendPolicySpec_Eviction) Reset() {
@@ -8678,6 +8682,20 @@ func (x *BackendPolicySpec_Eviction) GetDuration() *durationpb.Duration {
 		return x.Duration
 	}
 	return nil
+}
+
+func (x *BackendPolicySpec_Eviction) GetThreshold() int32 {
+	if x != nil {
+		return x.Threshold
+	}
+	return 0
+}
+
+func (x *BackendPolicySpec_Eviction) GetHealthOnReturn() bool {
+	if x != nil {
+		return x.HealthOnReturn
+	}
+	return false
 }
 
 type BackendPolicySpec_Health struct {
@@ -11242,7 +11260,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xcc>\n" +
+	"\x04kind\"\x95?\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -11385,9 +11403,11 @@ const file_resource_proto_rawDesc = "" +
 	"\vFailureMode\x12\v\n" +
 	"\aUNKNOWN\x10\x00\x12\x0f\n" +
 	"\vFAIL_CLOSED\x10\x01\x12\r\n" +
-	"\tFAIL_OPEN\x10\x02\x1aA\n" +
+	"\tFAIL_OPEN\x10\x02\x1a\x89\x01\n" +
 	"\bEviction\x125\n" +
-	"\bduration\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\bduration\x1a\x8c\x01\n" +
+	"\bduration\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\bduration\x12\x1c\n" +
+	"\tthreshold\x18\x02 \x01(\x05R\tthreshold\x12(\n" +
+	"\x10health_on_return\x18\x03 \x01(\bR\x0ehealthOnReturn\x1a\x8c\x01\n" +
 	"\x06Health\x12/\n" +
 	"\x13unhealthy_condition\x18\x01 \x01(\tR\x12unhealthyCondition\x12Q\n" +
 	"\beviction\x18\x02 \x01(\v25.agentgateway.dev.resource.BackendPolicySpec.EvictionR\beviction\x1a\xbe\x03\n" +

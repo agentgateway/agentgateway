@@ -1188,12 +1188,22 @@ fn convert_health(
 	};
 	let eviction = h.eviction.as_ref().map(|ev| health::Eviction {
 		duration: ev.duration.map(convert_duration),
+		threshold: if ev.threshold > 0 {
+			Some(ev.threshold)
+		} else {
+			None
+		},
+		health_on_return: ev.health_on_return,
 	});
+	let health_on_unevict = h
+		.eviction
+		.as_ref()
+		.and_then(|ev| if ev.health_on_return { Some(1.0) } else { None });
 	Ok(health::Policy {
 		unhealthy_expression,
 		eviction,
 		health_threshold: None,
-		health_on_unevict: None,
+		health_on_unevict,
 	})
 }
 

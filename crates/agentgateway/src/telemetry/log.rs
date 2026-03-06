@@ -465,27 +465,55 @@ impl DropOnLog {
 	fn eviction_decision(
 		log: &RequestLog,
 		current_health: f64,
+		consecutive_failures: u64,
+		times_ejected: u64,
 		unhealthy: bool,
 	) -> (bool, Option<Duration>, Option<f64>) {
 		const DEFAULT_EVICTION_SECS: u64 = 30;
+		const MAX_EJECTION_SECS: u64 = 300;
 		let Some(policy) = &log.health_policy else {
 			let health = !unhealthy;
 			return (health, None, None);
 		};
 		let health = !unhealthy;
 		let eviction_duration = if unhealthy {
-			let duration = policy
+			let base_duration = policy
 				.eviction_duration()
 				.or(log.retry_after)
 				.or(log.retry_backoff)
 				.or(Some(Duration::from_secs(DEFAULT_EVICTION_SECS)));
-			// Apply health threshold: only evict when current health is below threshold
-			let below_threshold = policy.health_threshold.is_none_or(|t| current_health < t);
-			if below_threshold { duration } else { None }
+			// +1 because the current failure hasn't been recorded yet.
+			let failures_including_current = consecutive_failures + 1;
+			let below_threshold = if let Some(t) = policy.health_threshold {
+				current_health < t
+			} else if let Some(eviction) = &policy.eviction
+				&& let Some(threshold) = eviction.threshold
+				&& threshold > 0
+			{
+				failures_including_current >= threshold as u64
+			} else {
+				true
+			};
+			if below_threshold {
+				// Envoy-style multiplicative backoff: base_duration * (times_ejected + 1),
+				// capped at MAX_EJECTION_SECS.
+				let multiplier = times_ejected.saturating_add(1);
+				base_duration.map(|d| {
+					let scaled = d.saturating_mul(multiplier as u32);
+					scaled.min(Duration::from_secs(MAX_EJECTION_SECS))
+				})
+			} else {
+				None
+			}
 		} else {
 			None
 		};
-		let health_on_unevict = policy.health_on_unevict;
+		let health_on_unevict = policy.health_on_unevict.or_else(|| {
+			policy
+				.eviction
+				.as_ref()
+				.and_then(|ev| if ev.health_on_return { Some(1.0) } else { None })
+		});
 		(health, eviction_duration, health_on_unevict)
 	}
 
@@ -786,9 +814,16 @@ impl Drop for DropOnLog {
 
 		if let Some(rh) = log.request_handle.take() {
 			let current_health = rh.health_score();
+			let consecutive_failures = rh.consecutive_failures();
+			let times_ejected = rh.times_ejected();
 			let unhealthy = Self::eviction_unhealthy(&log, cel_exec.as_ref());
-			let (health, eviction_duration, health_on_unevict) =
-				Self::eviction_decision(&log, current_health, unhealthy);
+			let (health, eviction_duration, health_on_unevict) = Self::eviction_decision(
+				&log,
+				current_health,
+				consecutive_failures,
+				times_ejected,
+				unhealthy,
+			);
 			rh.finish_request(health, duration, eviction_duration, health_on_unevict);
 		}
 		if !maybe_enable_log && !enable_trace && !enable_custom_metrics {

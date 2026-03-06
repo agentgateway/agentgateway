@@ -2706,6 +2706,17 @@
             "string",
             "null"
           ]
+        },
+        "threshold": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "healthOnReturn": {
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false

@@ -407,6 +407,12 @@ pub struct EndpointInfo {
 	pending_requests: ActiveCounter,
 	/// total_requests keeps track of the total number of requests.
 	total_requests: AtomicU64,
+	/// Number of consecutive unhealthy responses (reset to 0 on success).
+	consecutive_failures: AtomicU64,
+	/// Number of times this endpoint has been ejected. Used as a multiplier on
+	/// the base ejection duration so repeatedly-failing hosts stay out longer.
+	/// Reset to 0 when the endpoint handles a successful request.
+	times_ejected: AtomicU64,
 	#[serde(with = "serde_instant_option")]
 	/// evicted_until is the time at which the endpoint will be evicted.
 	evicted_until: AtomicOption<Instant>,
@@ -420,6 +426,8 @@ impl Default for EndpointInfo {
 			request_latency: Default::default(),
 			pending_requests: Default::default(),
 			total_requests: Default::default(),
+			consecutive_failures: Default::default(),
+			times_ejected: Default::default(),
 			evicted_until: Arc::new(Default::default()),
 		}
 	}
@@ -432,6 +440,12 @@ impl EndpointInfo {
 	/// Current health score (0.0–1.0) for threshold-based eviction.
 	pub fn health_score(&self) -> f64 {
 		self.health.load()
+	}
+	pub fn consecutive_failures(&self) -> u64 {
+		self.consecutive_failures.load(AtomicOrdering::Relaxed)
+	}
+	pub fn times_ejected(&self) -> u64 {
+		self.times_ejected.load(AtomicOrdering::Relaxed)
 	}
 	// Todo: fine-tune the algorithm here
 	pub fn score(&self) -> f64 {
@@ -507,6 +521,12 @@ impl ActiveHandle {
 	pub fn health_score(&self) -> f64 {
 		self.info.health_score()
 	}
+	pub fn consecutive_failures(&self) -> u64 {
+		self.info.consecutive_failures()
+	}
+	pub fn times_ejected(&self) -> u64 {
+		self.info.times_ejected()
+	}
 	pub fn finish_request(
 		self,
 		success: bool,
@@ -517,11 +537,24 @@ impl ActiveHandle {
 		if success {
 			self.info.request_latency.record(latency.as_secs_f64());
 			self.info.health.record(1.0);
+			self
+				.info
+				.consecutive_failures
+				.store(0, AtomicOrdering::Relaxed);
+			self.info.times_ejected.store(0, AtomicOrdering::Relaxed);
 		} else {
 			// Do not record request_latency on failure; its common for failures to be fast and skew results.
-			self.info.health.record(0.0)
+			self.info.health.record(0.0);
+			self
+				.info
+				.consecutive_failures
+				.fetch_add(1, AtomicOrdering::Relaxed);
 		};
 		if let Some(eviction_time) = eviction_time {
+			self
+				.info
+				.times_ejected
+				.fetch_add(1, AtomicOrdering::Relaxed);
 			let time = Instant::now() + eviction_time;
 			// Immediately store in the endpoint the eviction time, if its not already been evicted
 			let prev = self

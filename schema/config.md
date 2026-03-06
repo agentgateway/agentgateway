@@ -266,6 +266,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
@@ -355,6 +357,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -444,6 +448,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection`||
@@ -560,6 +566,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -649,6 +657,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection`||
@@ -807,6 +817,8 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors`||
@@ -934,6 +946,8 @@
 |`binds[].listeners[].routes[].policies.extAuthz.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
@@ -1044,6 +1058,8 @@
 |`binds[].listeners[].routes[].policies.extProc.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].policies.extProc.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].policies.extProc.(any)policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].policies.extProc.(any)policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].policies.extProc.(any)policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].policies.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|
@@ -1185,6 +1201,8 @@
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.mcpAuthorization`|Authorization policies for MCP access.|
@@ -1299,6 +1317,8 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.mcpAuthorization`|Authorization policies for MCP access.|
@@ -1411,6 +1431,8 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
@@ -1500,6 +1522,8 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -1589,6 +1613,8 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].rejection`||
@@ -1705,6 +1731,8 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -1794,6 +1822,8 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].rejection`||
@@ -1929,6 +1959,8 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.mcpAuthorization`|Authorization policies for MCP access.|
@@ -2041,6 +2073,8 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
@@ -2130,6 +2164,8 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -2219,6 +2255,8 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].rejection`||
@@ -2335,6 +2373,8 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -2424,6 +2464,8 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].rejection`||
@@ -2538,6 +2580,8 @@
 |`binds[].listeners[].routes[].backends[].policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization`|Authorization policies for MCP access.|
@@ -2650,6 +2694,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
@@ -2739,6 +2785,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -2828,6 +2876,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection`||
@@ -2944,6 +2994,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -3033,6 +3085,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection`||
@@ -3203,6 +3257,8 @@
 |`binds[].listeners[].policies.extAuthz.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].policies.extAuthz.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].policies.extAuthz.(any)policies.health.eviction.duration`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.health.eviction.threshold`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].policies.extAuthz.(any)policies.health.healthThreshold`||
 |`binds[].listeners[].policies.extAuthz.(any)policies.health.healthOnUnevict`||
 |`binds[].listeners[].policies.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
@@ -3313,6 +3369,8 @@
 |`binds[].listeners[].policies.extProc.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`binds[].listeners[].policies.extProc.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`binds[].listeners[].policies.extProc.(any)policies.health.eviction.duration`||
+|`binds[].listeners[].policies.extProc.(any)policies.health.eviction.threshold`||
+|`binds[].listeners[].policies.extProc.(any)policies.health.eviction.healthOnReturn`||
 |`binds[].listeners[].policies.extProc.(any)policies.health.healthThreshold`||
 |`binds[].listeners[].policies.extProc.(any)policies.health.healthOnUnevict`||
 |`binds[].listeners[].policies.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|
@@ -3460,6 +3518,8 @@
 |`frontendPolicies.accessLog.otlp.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`frontendPolicies.accessLog.otlp.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`frontendPolicies.accessLog.otlp.(any)policies.health.eviction.duration`||
+|`frontendPolicies.accessLog.otlp.(any)policies.health.eviction.threshold`||
+|`frontendPolicies.accessLog.otlp.(any)policies.health.eviction.healthOnReturn`||
 |`frontendPolicies.accessLog.otlp.(any)policies.health.healthThreshold`||
 |`frontendPolicies.accessLog.otlp.(any)policies.health.healthOnUnevict`||
 |`frontendPolicies.accessLog.otlp.(any)protocol`||
@@ -3555,6 +3615,8 @@
 |`frontendPolicies.tracing.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`frontendPolicies.tracing.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`frontendPolicies.tracing.(any)policies.health.eviction.duration`||
+|`frontendPolicies.tracing.(any)policies.health.eviction.threshold`||
+|`frontendPolicies.tracing.(any)policies.health.eviction.healthOnReturn`||
 |`frontendPolicies.tracing.(any)policies.health.healthThreshold`||
 |`frontendPolicies.tracing.(any)policies.health.healthOnUnevict`||
 |`frontendPolicies.tracing.(any)attributes`|Span attributes to add, keyed by attribute name.|
@@ -3760,6 +3822,8 @@
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.duration`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.threshold`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.healthOnReturn`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.health.healthThreshold`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.health.healthOnUnevict`||
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
@@ -3849,6 +3913,8 @@
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -3938,6 +4004,8 @@
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`policies[].policy.ai.promptGuard.request[].rejection`||
@@ -4054,6 +4122,8 @@
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -4143,6 +4213,8 @@
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`policies[].policy.ai.promptGuard.response[].rejection`||
@@ -4301,6 +4373,8 @@
 |`policies[].policy.remoteRateLimit.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`policies[].policy.remoteRateLimit.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`policies[].policy.remoteRateLimit.(any)policies.health.eviction.duration`||
+|`policies[].policy.remoteRateLimit.(any)policies.health.eviction.threshold`||
+|`policies[].policy.remoteRateLimit.(any)policies.health.eviction.healthOnReturn`||
 |`policies[].policy.remoteRateLimit.(any)policies.health.healthThreshold`||
 |`policies[].policy.remoteRateLimit.(any)policies.health.healthOnUnevict`||
 |`policies[].policy.remoteRateLimit.(any)descriptors`||
@@ -4428,6 +4502,8 @@
 |`policies[].policy.extAuthz.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`policies[].policy.extAuthz.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`policies[].policy.extAuthz.(any)policies.health.eviction.duration`||
+|`policies[].policy.extAuthz.(any)policies.health.eviction.threshold`||
+|`policies[].policy.extAuthz.(any)policies.health.eviction.healthOnReturn`||
 |`policies[].policy.extAuthz.(any)policies.health.healthThreshold`||
 |`policies[].policy.extAuthz.(any)policies.health.healthOnUnevict`||
 |`policies[].policy.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
@@ -4538,6 +4614,8 @@
 |`policies[].policy.extProc.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`policies[].policy.extProc.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`policies[].policy.extProc.(any)policies.health.eviction.duration`||
+|`policies[].policy.extProc.(any)policies.health.eviction.threshold`||
+|`policies[].policy.extProc.(any)policies.health.eviction.healthOnReturn`||
 |`policies[].policy.extProc.(any)policies.health.healthThreshold`||
 |`policies[].policy.extProc.(any)policies.health.healthOnUnevict`||
 |`policies[].policy.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|
@@ -4654,6 +4732,8 @@
 |`backends[].policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`backends[].policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`backends[].policies.health.eviction.duration`||
+|`backends[].policies.health.eviction.threshold`||
+|`backends[].policies.health.eviction.healthOnReturn`||
 |`backends[].policies.health.healthThreshold`||
 |`backends[].policies.health.healthOnUnevict`||
 |`backends[].policies.mcpAuthorization`|Authorization policies for MCP access.|
@@ -4766,6 +4846,8 @@
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.duration`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.threshold`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.healthOnReturn`||
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.healthThreshold`||
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.healthOnUnevict`||
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
@@ -4855,6 +4937,8 @@
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -4944,6 +5028,8 @@
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`backends[].policies.ai.promptGuard.request[].rejection`||
@@ -5060,6 +5146,8 @@
 |`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -5149,6 +5237,8 @@
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`backends[].policies.ai.promptGuard.response[].rejection`||
@@ -5301,6 +5391,8 @@
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.health.eviction.duration`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.health.eviction.threshold`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.health.eviction.healthOnReturn`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.health.healthThreshold`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.health.healthOnUnevict`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
@@ -5390,6 +5482,8 @@
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -5479,6 +5573,8 @@
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`llm.models[].guardrails.request[].rejection`||
@@ -5595,6 +5691,8 @@
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -5684,6 +5782,8 @@
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`llm.models[].guardrails.response[].rejection`||
@@ -5809,6 +5909,8 @@
 |`llm.policies.extAuthz.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`llm.policies.extAuthz.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`llm.policies.extAuthz.(any)policies.health.eviction.duration`||
+|`llm.policies.extAuthz.(any)policies.health.eviction.threshold`||
+|`llm.policies.extAuthz.(any)policies.health.eviction.healthOnReturn`||
 |`llm.policies.extAuthz.(any)policies.health.healthThreshold`||
 |`llm.policies.extAuthz.(any)policies.health.healthOnUnevict`||
 |`llm.policies.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
@@ -5919,6 +6021,8 @@
 |`llm.policies.extProc.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`llm.policies.extProc.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`llm.policies.extProc.(any)policies.health.eviction.duration`||
+|`llm.policies.extProc.(any)policies.health.eviction.threshold`||
+|`llm.policies.extProc.(any)policies.health.eviction.healthOnReturn`||
 |`llm.policies.extProc.(any)policies.health.healthThreshold`||
 |`llm.policies.extProc.(any)policies.health.healthOnUnevict`||
 |`llm.policies.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|
@@ -6056,6 +6160,8 @@
 |`mcp.targets[].policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`mcp.targets[].policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`mcp.targets[].policies.health.eviction.duration`||
+|`mcp.targets[].policies.health.eviction.threshold`||
+|`mcp.targets[].policies.health.eviction.healthOnReturn`||
 |`mcp.targets[].policies.health.healthThreshold`||
 |`mcp.targets[].policies.health.healthOnUnevict`||
 |`mcp.targets[].policies.mcpAuthorization`|Authorization policies for MCP access.|
@@ -6234,6 +6340,8 @@
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.duration`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.threshold`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.healthOnReturn`||
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.healthThreshold`||
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.healthOnUnevict`||
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
@@ -6323,6 +6431,8 @@
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -6412,6 +6522,8 @@
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`mcp.policies.ai.promptGuard.request[].rejection`||
@@ -6528,6 +6640,8 @@
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.duration`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.threshold`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.healthOnReturn`||
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.healthThreshold`||
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.healthOnUnevict`||
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
@@ -6617,6 +6731,8 @@
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.duration`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.threshold`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.healthOnReturn`||
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.healthThreshold`||
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.healthOnUnevict`||
 |`mcp.policies.ai.promptGuard.response[].rejection`||
@@ -6775,6 +6891,8 @@
 |`mcp.policies.remoteRateLimit.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`mcp.policies.remoteRateLimit.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`mcp.policies.remoteRateLimit.(any)policies.health.eviction.duration`||
+|`mcp.policies.remoteRateLimit.(any)policies.health.eviction.threshold`||
+|`mcp.policies.remoteRateLimit.(any)policies.health.eviction.healthOnReturn`||
 |`mcp.policies.remoteRateLimit.(any)policies.health.healthThreshold`||
 |`mcp.policies.remoteRateLimit.(any)policies.health.healthOnUnevict`||
 |`mcp.policies.remoteRateLimit.(any)descriptors`||
@@ -6902,6 +7020,8 @@
 |`mcp.policies.extAuthz.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`mcp.policies.extAuthz.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`mcp.policies.extAuthz.(any)policies.health.eviction.duration`||
+|`mcp.policies.extAuthz.(any)policies.health.eviction.threshold`||
+|`mcp.policies.extAuthz.(any)policies.health.eviction.healthOnReturn`||
 |`mcp.policies.extAuthz.(any)policies.health.healthThreshold`||
 |`mcp.policies.extAuthz.(any)policies.health.healthOnUnevict`||
 |`mcp.policies.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
@@ -7012,6 +7132,8 @@
 |`mcp.policies.extProc.(any)policies.health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.|
 |`mcp.policies.extProc.(any)policies.health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
 |`mcp.policies.extProc.(any)policies.health.eviction.duration`||
+|`mcp.policies.extProc.(any)policies.health.eviction.threshold`||
+|`mcp.policies.extProc.(any)policies.health.eviction.healthOnReturn`||
 |`mcp.policies.extProc.(any)policies.health.healthThreshold`||
 |`mcp.policies.extProc.(any)policies.health.healthOnUnevict`||
 |`mcp.policies.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|

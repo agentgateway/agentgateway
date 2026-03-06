@@ -164,6 +164,15 @@ type BackendEviction struct {
 	// +kubebuilder:default="30s"
 	// +optional
 	Duration *metav1.Duration `json:"duration,omitempty"`
+
+	// Threshold defines the number of consecutive failures before the backend is evicted.
+	// +optional
+	Threshold *int32 `json:"threshold,omitempty"`
+
+	// HealthOnReturn defines if an evicted backend should be marked healthy immediately after returning a healthy response.
+	// If unset, defaults to false.
+	// +optional
+	HealthOnReturn *bool `json:"healthOnReturn,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
