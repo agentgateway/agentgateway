@@ -247,7 +247,7 @@
       "type": "object",
       "properties": {
         "key": {
-          "description": "The signing key to be used. If not set, sessions will not be encrypted.\nFor example, generated via `openssl rand -hex 32`.",
+          "description": "The AES-256-GCM key used to encrypt session ids.\nFor example, generated via `openssl rand -hex 32`.",
           "type": "string"
         }
       },
@@ -3915,6 +3915,14 @@
               "type": "null"
             }
           ]
+        },
+        "allowDegraded": {
+          "type": "boolean",
+          "default": false
+        },
+        "allowInsecureMultiplex": {
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,
@@ -5939,6 +5947,14 @@
               "type": "null"
             }
           ]
+        },
+        "allowDegraded": {
+          "type": "boolean",
+          "default": false
+        },
+        "allowInsecureMultiplex": {
+          "type": "boolean",
+          "default": false
         },
         "policies": {
           "anyOf": [

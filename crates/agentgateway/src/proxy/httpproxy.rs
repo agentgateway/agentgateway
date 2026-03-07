@@ -2104,7 +2104,7 @@ impl PolicyClient {
 	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
 		let mut req = Some(req);
 		Box::pin(async move {
-			make_backend_call(
+			let response = make_backend_call(
 				self.inputs.clone(),
 				Arc::new(LLMRequestPolicies::default()),
 				&backend,
@@ -2115,8 +2115,11 @@ impl PolicyClient {
 				None,
 				&mut Default::default(),
 			)
-			.await
-			.map_err(ProxyResponse::downcast)
+			.await;
+			match response {
+				Ok(resp) => Ok(resp),
+				Err(err) => Err(ProxyResponse::downcast(err)),
+			}
 		})
 	}
 

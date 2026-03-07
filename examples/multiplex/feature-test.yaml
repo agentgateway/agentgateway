@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=../../schema/config.json
+config:
+  adminAddr: localhost:15005
+  statsAddr: localhost:15025
+  readinessAddr: localhost:15026
+binds:
+- port: 3001
+  listeners:
+  - routes:
+    - matches:
+      - path:
+          pathPrefix: /mcp
+      backends:
+      - mcp:
+          # Full manual E2E matrix with feature diversity.
+          # One streamable HTTP + one legacy SSE "everything" server, plus stdio
+          # servers with distinct capability footprints.
+          # Includes one intentionally broken upstream to validate fail-open startup.
+          # Then run gateway with this file and connect MCP Inspector to:
+          #   http://localhost:3001/mcp
+          statefulMode: stateful
+          targets:
+          - name: everything_stream
+            mcp:
+              host: http://127.0.0.1:4101/mcp
+          - name: everything_sse
+            sse:
+              host: http://127.0.0.1:4201/sse
+          - name: time
+            stdio:
+              cmd: uvx
+              args: ["mcp-server-time"]
+          - name: fetch
+            stdio:
+              cmd: uvx
+              args: ["mcp-server-fetch"]
+          - name: git
+            stdio:
+              cmd: uvx
+              args: ["mcp-server-git", "--repository", "."]
+          - name: filesystem
+            stdio:
+              cmd: npx
+              args: ["-y", "@modelcontextprotocol/server-filesystem", "."]
+          - name: broken_upstream
+            mcp:
+              host: http://127.0.0.1:5999/mcp
+      policies:
+        mcpAuthorization:
+          rules:
+          - 'true'

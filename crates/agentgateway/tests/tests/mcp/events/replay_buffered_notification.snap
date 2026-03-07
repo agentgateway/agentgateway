@@ -1,0 +1,35 @@
+---
+source: crates/agentgateway/tests/tests/mcp.rs
+expression: report
+---
+{
+  "scenario": "events/replay_buffered_notification",
+  "steps": [
+    {
+      "action": "initialize",
+      "session_id": "[session_id]"
+    },
+    {
+      "action": "list_resources",
+      "selected_resource": {
+        "name": "s1__data",
+        "uri": "agw://s1/?u=memo%3A%2F%2Fdata"
+      }
+    },
+    {
+      "action": "subscribe",
+      "uri": "agw://s1/?u=memo%3A%2F%2Fdata"
+    },
+    {
+      "action": "first_event",
+      "event_id": "[event_id]",
+      "uri": "agw://s1/?u=memo%3A%2F%2Fdata"
+    },
+    {
+      "action": "replay_from_last_event_id",
+      "last_event_id": "[last_event_id]",
+      "replayed_event_id": "[replayed_event_id]",
+      "uri": "agw://s1/?u=memo%3A%2F%2Fdata"
+    }
+  ]
+}

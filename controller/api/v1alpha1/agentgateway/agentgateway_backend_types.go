@@ -335,6 +335,18 @@ type MCPBackend struct {
 	// Defaults to Stateful if not set.
 	// +optional
 	SessionRouting SessionRouting `json:"sessionRouting,omitempty"`
+
+	// AllowDegraded allows MCP backend initialization and runtime fanout to
+	// continue when some targets fail.
+	// +optional
+	AllowDegraded bool `json:"allowDegraded,omitempty"`
+
+	// AllowInsecureMultiplex explicitly allows insecure base64 multiplex session ids.
+	//
+	// This is unsafe and intended only for local or single-user development
+	// environments where clients are fully trusted.
+	// +optional
+	AllowInsecureMultiplex bool `json:"allowInsecureMultiplex,omitempty"`
 }
 
 // McpTargetSelector defines the MCPBackend target to use for this backend.

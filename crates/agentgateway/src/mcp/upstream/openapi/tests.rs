@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::sync::Arc;
 
 use agent_core::{metrics, strng};
@@ -55,14 +54,10 @@ async fn setup() -> (MockServer, Handler) {
 
 	let client = PolicyClient { inputs: pi.clone() };
 	// Define a sample tool for testing
-	let test_tool_get = Tool {
-		name: Cow::Borrowed("get_user"),
-		description: Some(Cow::Borrowed("Get user details")), // Added description
-		icons: None,
-		title: None,
-		meta: None,
-		execution: None,
-		input_schema: Arc::new(
+	let test_tool_get = Tool::new(
+		"get_user",
+		"Get user details",
+		Arc::new(
 			json!({ // Define a simple schema for testing
 					"type": "object",
 					"properties": {
@@ -92,23 +87,17 @@ async fn setup() -> (MockServer, Handler) {
 			.unwrap()
 			.clone(),
 		),
-		annotations: None,
-		output_schema: None,
-	};
+	);
 	let upstream_call_get = UpstreamOpenAPICall {
 		method: "GET".to_string(),
 		path: "/users/{user_id}".to_string(),
 		allowed_headers: HashSet::from(["X-Request-ID".to_string()]),
 	};
 
-	let test_tool_post = Tool {
-		name: Cow::Borrowed("create_user"),
-		description: Some(Cow::Borrowed("Create a new user")),
-		icons: None,
-		title: None,
-		meta: None,
-		execution: None,
-		input_schema: Arc::new(
+	let test_tool_post = Tool::new(
+		"create_user",
+		"Create a new user",
+		Arc::new(
 			json!({
 				"type": "object",
 				"properties": {
@@ -139,9 +128,7 @@ async fn setup() -> (MockServer, Handler) {
 			.unwrap()
 			.clone(),
 		),
-		output_schema: None,
-		annotations: None,
-	};
+	);
 	let upstream_call_post = UpstreamOpenAPICall {
 		method: "POST".to_string(),
 		path: "/users".to_string(),
@@ -842,21 +829,14 @@ async fn test_call_tool_structured_content_fallback() {
 	let request = JsonRpcRequest {
 		jsonrpc: JsonRpcVersion2_0,
 		id: RequestId::String("test-123".into()),
-		request: ClientRequest::CallToolRequest(CallToolRequest {
-			method: CallToolRequestMethod,
-			params: CallToolRequestParams {
-				meta: None,
-				task: None,
-				name: "get_user".into(),
-				arguments: Some(
-					json!({ "path": { "user_id": user_id } })
-						.as_object()
-						.unwrap()
-						.clone(),
-				),
-			},
-			extensions: Extensions::default(),
-		}),
+		request: ClientRequest::CallToolRequest(CallToolRequest::new(
+			CallToolRequestParams::new("get_user").with_arguments(
+				json!({ "path": { "user_id": user_id } })
+					.as_object()
+					.unwrap()
+					.clone(),
+			),
+		)),
 	};
 
 	let result = handler
@@ -1064,6 +1044,8 @@ async fn test_openapi_from_url() {
 		})],
 		stateful_mode: McpStatefulMode::Stateful,
 		prefix_mode: None,
+		allow_degraded: false,
+		allow_insecure_multiplex: false,
 	});
 
 	// Convert to runtime backends

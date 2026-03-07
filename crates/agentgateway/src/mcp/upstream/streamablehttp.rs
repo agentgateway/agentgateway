@@ -67,7 +67,32 @@ impl Client {
 		ctx: &IncomingRequestContext,
 	) -> Result<StreamableHttpPostResponse, ClientError> {
 		let message = ClientJsonRpcMessage::notification(req);
-		self.send_message(message, ctx).await
+		let response = self.send_message(message, ctx).await?;
+		Self::reject_jsonrpc_error("notification", response)
+	}
+	pub async fn send_client_message(
+		&self,
+		message: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), ClientError> {
+		let response = self.send_message(message, ctx).await?;
+		let _ = Self::reject_jsonrpc_error("client message", response)?;
+		Ok(())
+	}
+	fn reject_jsonrpc_error(
+		operation: &str,
+		response: StreamableHttpPostResponse,
+	) -> Result<StreamableHttpPostResponse, ClientError> {
+		match response {
+			StreamableHttpPostResponse::Json(ServerJsonRpcMessage::Error(err), _) => {
+				Err(ClientError::new(anyhow!(
+					"{operation}: upstream returned JSON-RPC error {:?}: {}",
+					err.error.code,
+					err.error.message
+				)))
+			},
+			other => Ok(other),
+		}
 	}
 	async fn send_message(
 		&self,
@@ -96,20 +121,19 @@ impl Client {
 		{
 			return Ok(StreamableHttpPostResponse::Accepted);
 		}
-
 		if !resp.status().is_success() {
 			return Err(ClientError::Status(Box::new(resp)));
 		}
 
-		let content_type = resp.headers().get(CONTENT_TYPE);
 		let session_id = resp
 			.headers()
 			.get(HEADER_SESSION_ID)
 			.and_then(|v| v.to_str().ok())
 			.map(|s| s.to_string());
+		let content_type = resp.headers().get(CONTENT_TYPE);
 
 		match content_type {
-			Some(ct) if ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) => {
+			Some(ct) if content_type_matches(ct, EVENT_STREAM_MIME_TYPE) => {
 				let content_encoding = resp.headers().typed_get::<headers::ContentEncoding>();
 				let (body, _encoding) =
 					crate::http::compression::decompress_body(resp.into_body(), content_encoding.as_ref())
@@ -117,7 +141,7 @@ impl Client {
 				let event_stream = SseStream::from_byte_stream(body.into_data_stream()).boxed();
 				Ok(StreamableHttpPostResponse::Sse(event_stream, session_id))
 			},
-			Some(ct) if ct.as_bytes().starts_with(JSON_MIME_TYPE.as_bytes()) => {
+			Some(ct) if content_type_matches(ct, JSON_MIME_TYPE) => {
 				let lim = crate::http::response_buffer_limit(&resp);
 				let content_encoding = resp.headers().typed_get::<headers::ContentEncoding>();
 				let body_bytes = crate::http::compression::to_bytes_with_decompression(
@@ -154,10 +178,10 @@ impl Client {
 		ctx.apply(&mut req);
 
 		let resp = self.http_client.call(req).await?;
-
 		if !resp.status().is_success() {
 			return Err(ClientError::Status(Box::new(resp)));
 		}
+
 		Ok(StreamableHttpPostResponse::Accepted)
 	}
 	pub async fn get_event_stream(
@@ -176,7 +200,6 @@ impl Client {
 		ctx.apply(&mut req);
 
 		let resp = self.http_client.call(req).await?;
-
 		if !resp.status().is_success() {
 			return Err(ClientError::Status(Box::new(resp)));
 		}
@@ -188,7 +211,7 @@ impl Client {
 			.and_then(|v| v.to_str().ok())
 			.map(|s| s.to_string());
 		match content_type {
-			Some(ct) if ct.as_bytes().starts_with(EVENT_STREAM_MIME_TYPE.as_bytes()) => {
+			Some(ct) if content_type_matches(ct, EVENT_STREAM_MIME_TYPE) => {
 				let content_encoding = resp.headers().typed_get::<headers::ContentEncoding>();
 				let (body, _encoding) =
 					crate::http::compression::decompress_body(resp.into_body(), content_encoding.as_ref())
@@ -211,5 +234,43 @@ impl Client {
 			);
 		}
 		Ok(())
+	}
+}
+
+fn content_type_matches(value: &http::HeaderValue, expected_mime: &str) -> bool {
+	let Ok(raw) = value.to_str() else {
+		return false;
+	};
+	let media_type = raw.split(';').next().unwrap_or_default().trim();
+	media_type.eq_ignore_ascii_case(expected_mime)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn reject_jsonrpc_error_returns_err_for_error_message() {
+		let message = serde_json::from_str::<ServerJsonRpcMessage>(
+			r#"{"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"boom"}}"#,
+		)
+		.expect("valid json-rpc error");
+		let response = StreamableHttpPostResponse::Json(message, None);
+
+		let result = Client::reject_jsonrpc_error("client message", response);
+
+		assert!(
+			result.is_err(),
+			"json-rpc error should be propagated as error"
+		);
+	}
+
+	#[test]
+	fn content_type_matches_accepts_parameters_but_rejects_other_json_types() {
+		let json = http::HeaderValue::from_static("application/json; charset=utf-8");
+		assert!(content_type_matches(&json, JSON_MIME_TYPE));
+
+		let patch_json = http::HeaderValue::from_static("application/json-patch+json");
+		assert!(!content_type_matches(&patch_json, JSON_MIME_TYPE));
 	}
 }

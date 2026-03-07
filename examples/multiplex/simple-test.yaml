@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=../../schema/config.json
+binds:
+- port: 3001
+  listeners:
+  - routes:
+    - matches:
+      - path:
+          pathPrefix: /
+      backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              cmd: npx
+              args: ["-y", "@modelcontextprotocol/server-everything"]

@@ -1151,6 +1151,14 @@ message MCPBackend {
   StatefulMode stateful_mode = 3;
   // Whether to always prefix the tool name using the target name
   PrefixMode prefix_mode = 4;
+  // Allow backend group initialization and runtime fanout to continue when
+  // some MCP targets fail.
+  bool allow_degraded = 5;
+  // Explicitly allows insecure base64 multiplex session ids.
+  //
+  // This is unsafe and intended only for local or single-user development
+  // environments where clients are fully trusted.
+  bool allow_insecure_multiplex = 6;
 }
 
 message MCPTarget {

@@ -1,0 +1,27 @@
+---
+source: crates/agentgateway/tests/tests/mcp.rs
+expression: report
+---
+{
+  "scenario": "elicitation/url_error_passthrough",
+  "steps": [
+    {
+      "action": "call_tool",
+      "tool": "s1__test_url_elicitation_required",
+      "outcome": "mcp_error"
+    },
+    {
+      "action": "error",
+      "code": -32042,
+      "message": "This request requires more information.",
+      "elicitations": [
+        {
+          "mode": "url",
+          "message": "Authenticate to continue",
+          "elicitationId": "elicit-1",
+          "url": "https://example.com/auth"
+        }
+      ]
+    }
+  ]
+}

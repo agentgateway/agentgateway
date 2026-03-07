@@ -5898,6 +5898,18 @@ spec:
               mcp:
                 description: mcp represents an MCP backend
                 properties:
+                  allowDegraded:
+                    description: |-
+                      AllowDegraded allows MCP backend initialization and runtime fanout to
+                      continue when some targets fail.
+                    type: boolean
+                  allowInsecureMultiplex:
+                    description: |-
+                      AllowInsecureMultiplex explicitly allows insecure base64 multiplex session ids.
+
+                      This is unsafe and intended only for local or single-user development
+                      environments where clients are fully trusted.
+                    type: boolean
                   sessionRouting:
                     description: |-
                       SessionRouting configures MCP session behavior for requests.

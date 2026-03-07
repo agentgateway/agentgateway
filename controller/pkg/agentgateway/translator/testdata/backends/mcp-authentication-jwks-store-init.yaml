@@ -34,8 +34,9 @@ status:
   status:
     conditions:
     - lastTransitionTime: fake
-      message: 'failed to translate backend: JwksUrlBuilderFactory must be initialized
-        before use'
+      message: |-
+        failed to translate backend: JwksUrlBuilderFactory must be initialized before use
+        no MCP targets resolved for backend default/mcp-backend
       reason: TranslationError
       status: "False"
       type: Accepted

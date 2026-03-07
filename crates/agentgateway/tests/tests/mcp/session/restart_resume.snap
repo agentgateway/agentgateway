@@ -1,0 +1,33 @@
+---
+source: crates/agentgateway/tests/tests/mcp.rs
+expression: report
+---
+{
+  "scenario": "session/restart_resume",
+  "steps": [
+    {
+      "gateway": "a",
+      "action": "initialize",
+      "session_id": "[session_id]",
+      "capabilities": {
+        "prompts": true,
+        "resources": true,
+        "tools": true,
+        "tasks": true
+      }
+    },
+    {
+      "gateway": "a",
+      "action": "initialized_notification",
+      "accepted": true
+    },
+    {
+      "gateway": "b",
+      "action": "list_prompts_after_resume",
+      "session_id": "[session_id]",
+      "prompt_names": [
+        "s2__test_prompt"
+      ]
+    }
+  ]
+}

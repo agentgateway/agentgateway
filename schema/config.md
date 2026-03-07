@@ -19,7 +19,7 @@
 |`config.statsAddr`|Stats/metrics server address in the format "ip:port"|
 |`config.readinessAddr`|Readiness probe server address in the format "ip:port"|
 |`config.session`|Configuration for stateful session management|
-|`config.session.key`|The signing key to be used. If not set, sessions will not be encrypted.<br>For example, generated via `openssl rand -hex 32`.|
+|`config.session.key`|The AES-256-GCM key used to encrypt session ids.<br>For example, generated via `openssl rand -hex 32`.|
 |`config.connectionTerminationDeadline`||
 |`config.connectionMinTerminationDeadline`||
 |`config.workerThreads`||
@@ -1191,6 +1191,8 @@
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.mcpAuthorization.rules`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.statefulMode`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.prefixMode`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.allowDegraded`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.allowInsecureMultiplex`||
 |`binds[].listeners[].routes[].backends[].(1)ai`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)name`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)provider`||
@@ -6062,6 +6064,8 @@
 |`mcp.targets[].policies.mcpAuthorization.rules`||
 |`mcp.statefulMode`||
 |`mcp.prefixMode`||
+|`mcp.allowDegraded`||
+|`mcp.allowInsecureMultiplex`||
 |`mcp.policies`||
 |`mcp.policies.requestHeaderModifier`|Headers to be modified in the request.|
 |`mcp.policies.requestHeaderModifier.add`||

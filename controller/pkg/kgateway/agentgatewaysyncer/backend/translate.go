@@ -267,6 +267,13 @@ func translateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 			}
 		}
 	}
+	if len(mcpTargets) == 0 {
+		return nil, fmt.Errorf(
+			"no MCP targets resolved for backend %s/%s",
+			be.Namespace,
+			be.Name,
+		)
+	}
 	// defaults to stateful session routing
 	sessionRouting := api.MCPBackend_STATEFUL
 	if mcp.SessionRouting == agentgateway.Stateless {
@@ -277,8 +284,10 @@ func translateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 		Name: plugins.ResourceName(be),
 		Kind: &api.Backend_Mcp{
 			Mcp: &api.MCPBackend{
-				Targets:      mcpTargets,
-				StatefulMode: sessionRouting,
+				Targets:                mcpTargets,
+				StatefulMode:           sessionRouting,
+				AllowDegraded:          mcp.AllowDegraded,
+				AllowInsecureMultiplex: mcp.AllowInsecureMultiplex,
 			},
 		},
 		InlinePolicies: inlinePolicies,

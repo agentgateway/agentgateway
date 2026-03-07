@@ -9,7 +9,6 @@ use agent_core::drain::{DrainUpgrader, DrainWatcher};
 use anyhow::anyhow;
 use bytes::Bytes;
 use futures::pin_mut;
-use futures_util::FutureExt;
 use http::StatusCode;
 use hyper_util::rt::TokioIo;
 use hyper_util::server::conn::auto;
@@ -539,7 +538,10 @@ impl Gateway {
 				let proxy = proxy.clone();
 				let connection = connection.clone();
 				req.extensions_mut().insert(BufferLimit::new(buffer));
-				async move { proxy.proxy(connection, req).map(Ok::<_, Infallible>).await }
+				async move {
+					let response = proxy.proxy(connection, req).await;
+					Ok::<_, Infallible>(response)
+				}
 			}),
 		);
 		// Wrap it in the graceful watcher, will ensure GOAWAY/Connect:clone when we shutdown

@@ -4,17 +4,17 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/test/e2e"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/common"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/tests/base"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
@@ -23,8 +23,9 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 	return &testingSuite{
 		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, map[string]*base.TestCase{
 			// Static tests
-			"TestMCPWorkflow": &staticSetup,
-			"TestSSEEndpoint": &staticSetup,
+			"TestMCPWorkflow":               &staticSetup,
+			"TestSSEEndpoint":               &staticSetup,
+			"TestMultiReplicaSessionResume": &multiReplicaSetup,
 			// Dynamic tests
 			"TestDynamicMCPAdminRouting":     &dynamicSetup,
 			"TestDynamicMCPUserRouting":      &dynamicSetup,
@@ -112,15 +113,36 @@ func (s *testingSuite) TestSSEEndpoint() {
 
 	initBody := buildInitializeRequest("sse-client", 0)
 	headers := mcpHeaders(nil)
+	sessionID := s.initializeSession(initBody, headers, "sse")
+	s.notifyInitialized(sessionID, nil)
 
+	toolsBody := buildToolsListRequest(1)
+	toolsHeaders := withSessionID(headers, sessionID)
 	s.sendMCP(&testmatchers.HttpResponse{
 		StatusCode: http.StatusOK,
 		Headers: map[string]any{
 			"Content-Type": gomega.MatchRegexp(`^text/event-stream(?:\s*;.*)?$`),
 		},
-	}, headers, initBody, "--max-time", "8")
+	}, toolsHeaders, toolsBody, "--max-time", "8")
+}
 
-	_ = s.initializeSession(initBody, headers, "sse")
+func (s *testingSuite) TestMultiReplicaSessionResume() {
+	s.waitMultiReplicaReady()
+
+	podNames, podAddresses, cleanup, err := common.StartGatewayPodForwards(s.Ctx, s.TestInstallation, types.NamespacedName{
+		Name:      multiReplicaGatewayName,
+		Namespace: multiReplicaGatewayNamespace,
+	}, 2)
+	s.Require().NoError(err, "failed to port-forward gateway pods")
+	defer cleanup()
+
+	s.T().Logf("Testing MCP resume across gateway pods %s -> %s", podNames[0], podNames[1])
+
+	sessionID := s.initializeAndGetSessionIDAtAddress(podAddresses[0], nil)
+	s.Require().NotEmpty(sessionID, "initialize on first gateway pod must return mcp-session-id")
+
+	s.notifyInitializedAtAddress(podAddresses[1], sessionID, nil)
+	s.testToolsListWithSessionAtAddress(podAddresses[1], sessionID, nil)
 }
 
 func (s *testingSuite) TestDynamicMCPAdminRouting() {
@@ -188,40 +210,15 @@ func (s *testingSuite) TestDynamicMCPAdminVsUserTools() {
 	}
 }
 
-// runDynamicRoutingCase initializes a session with optional route headers, asserts
-// initialize response correctness, warms the session, and returns the tool names.
+// runDynamicRoutingCase initializes a session with optional route headers via the
+// shared retrying initialize helper, warms the session, and returns the tool names.
 func (s *testingSuite) runDynamicRoutingCase(clientName string, routeHeaders map[string]string, label string) []string {
 	initBody := buildInitializeRequest(clientName, 0)
 	headers := withRouteHeaders(mcpHeaders(nil), routeHeaders)
 
-	// Deterministic 200 with retry/backoff
-	s.waitForMCP200(8080, headers, initBody, label,
-		100*time.Millisecond, 250*time.Millisecond, 500*time.Millisecond, 1*time.Second)
-
-	// Get full response for logging + session extraction
-	// nolint: bodyclose // false positive
-	resp, body, err := s.execCurlMCP(headers, initBody, "--max-time", "10")
-	s.Require().NoError(err, "%s initialize failed", label)
-	s.T().Logf("%s initialize body: %s", label, body)
-
-	sid := ExtractMCPSessionID(resp)
-	s.Require().NotEmpty(sid, "%s initialize must return mcp-session-id header", label)
+	// Reuse the shared initialize path so transient fanout/session startup races are retried consistently.
+	sid := s.initializeSession(initBody, headers, label)
 	s.notifyInitializedWithHeaders(sid, routeHeaders)
-
-	payload, ok := FirstSSEDataPayload(body)
-	s.Require().True(ok, "%s initialize must return SSE payload", label)
-
-	var initResp InitializeResponse
-	s.Require().NoError(json.Unmarshal([]byte(payload), &initResp), "%s initialize payload must be JSON", label)
-	s.Require().Nil(initResp.Error, "%s initialize returned error: %+v", label, initResp.Error)
-	s.Require().NotNil(initResp.Result, "%s initialize missing result", label)
-
-	// Update the global protocol version from the server response
-	updateProtocolVersion(payload)
-
-	// Now validate that the protocol version matches what we sent
-	s.Require().Equal(mcpProto, initResp.Result.ProtocolVersion, "protocolVersion mismatch")
-	s.Require().NotEmpty(initResp.Result.ServerInfo.Name, "serverInfo.name must be set")
 
 	tools := s.mustListTools(sid, label+" tools/list", routeHeaders)
 	return tools
@@ -249,6 +246,39 @@ func (s *testingSuite) waitStaticReady() {
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(s.Ctx, gatewayName, gatewayNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyAgwBackendCondition(s.Ctx, "mcp-backend", "default", "Accepted", metav1.ConditionTrue)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyHTTPRouteCondition(s.Ctx, "mcp-route", "default", gwv1.RouteConditionAccepted, metav1.ConditionTrue)
+}
+
+func (s *testingSuite) waitMultiReplicaReady() {
+	s.TestInstallation.AssertionsT(s.T()).EventuallyPodsRunning(
+		s.Ctx, "default",
+		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=testbox"},
+	)
+	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
+		s.Ctx,
+		multiReplicaGatewayName,
+		multiReplicaGatewayNamespace,
+		gwv1.GatewayConditionProgrammed,
+		metav1.ConditionTrue,
+	)
+	s.TestInstallation.AssertionsT(s.T()).EventuallyAgwBackendCondition(
+		s.Ctx,
+		"mcp-multireplica-backend",
+		"default",
+		"Accepted",
+		metav1.ConditionTrue,
+	)
+	s.TestInstallation.AssertionsT(s.T()).EventuallyHTTPRouteCondition(
+		s.Ctx,
+		"mcp-multireplica-route",
+		"default",
+		gwv1.RouteConditionAccepted,
+		metav1.ConditionTrue,
+	)
+	s.TestInstallation.AssertionsT(s.T()).EventuallyReadyReplicas(
+		s.Ctx,
+		metav1.ObjectMeta{Name: multiReplicaGatewayName, Namespace: multiReplicaGatewayNamespace},
+		gomega.Equal(2),
+	)
 }
 
 func (s *testingSuite) waitAuth0Ready() {

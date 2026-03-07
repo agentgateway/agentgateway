@@ -1,0 +1,20 @@
+- key: test-ns/static-mcp-backend-backend-flags/static-target
+  name:
+    name: static-mcp-backend-backend-flags
+    namespace: test-ns
+  static:
+    host: mcp-server.example.com
+    port: 8080
+- key: test-ns/static-mcp-backend-backend-flags
+  mcp:
+    allowDegraded: true
+    allowInsecureMultiplex: true
+    targets:
+    - backend:
+        backend: test-ns/static-mcp-backend-backend-flags/static-target
+      name: static-target
+      path: override-sse
+      protocol: SSE
+  name:
+    name: static-mcp-backend-backend-flags
+    namespace: test-ns

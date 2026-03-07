@@ -108,6 +108,31 @@ func TestBuildMCP(t *testing.T) {
 			inputs: append(createMockMultipleNamespaceServices(), createMockNamespaceCollectionWithLabels()...),
 		},
 		{
+			name: "Error case - selector resolves no MCP targets",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "empty-selector-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Selector: &agentgateway.McpSelector{
+									Service: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"app": "mcp-server",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
 			name: "Error case - invalid service selector",
 			backend: &agentgateway.AgentgatewayBackend{
 				ObjectMeta: metav1.ObjectMeta{
@@ -135,6 +160,32 @@ func TestBuildMCP(t *testing.T) {
 				},
 			},
 			expectError: true,
+		},
+		{
+			name: "Static MCPBackend target backend with backend flags",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "static-mcp-backend-backend-flags",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						AllowDegraded:          true,
+						AllowInsecureMultiplex: true,
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "static-target",
+								Static: &agentgateway.McpTarget{
+									Host:     "mcp-server.example.com",
+									Port:     8080,
+									Path:     stringPtr("override-sse"),
+									Protocol: ptr.Of(agentgateway.MCPProtocolSSE),
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 

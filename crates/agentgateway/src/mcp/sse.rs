@@ -94,7 +94,10 @@ impl LegacySSEService {
 
 		// GET requests establish an SSE stream.
 		// We will return the sessionId, and all future responses will get sent on the rx channel to send to this channel.
-		let (session, rx) = self.session_manager.create_legacy_session(relay);
+		let (session, rx) = self
+			.session_manager
+			.create_legacy_session(relay)
+			.map_err(|error| mcp::Error::StartSession(error.to_string()))?;
 		let mut base_url = request
 			.extensions()
 			.get::<filters::OriginalUrl>()

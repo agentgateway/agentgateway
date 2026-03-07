@@ -72,10 +72,9 @@ func (c *requestConfig) executeNative() (*http.Response, error) {
 
 	// Create context with timeout
 	ctx := context.Background()
+	var cancel context.CancelFunc
 	if c.connectionTimeout > 0 {
-		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(c.connectionTimeout)*time.Second)
-		defer cancel()
 	}
 	if method == "" {
 		method = "GET"
@@ -84,6 +83,9 @@ func (c *requestConfig) executeNative() (*http.Response, error) {
 	// Create request
 	req, err := http.NewRequestWithContext(ctx, method, fullURL, bodyReader)
 	if err != nil {
+		if cancel != nil {
+			cancel()
+		}
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
@@ -120,10 +122,21 @@ func (c *requestConfig) executeNative() (*http.Response, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		if cancel != nil {
+			cancel()
+		}
 		if c.verbose {
 			fmt.Printf("Request failed: %v\n", err)
 		}
 		return nil, err
+	}
+
+	// Keep timeout context alive while caller reads the body, then release it on close.
+	if cancel != nil {
+		resp.Body = &cancelOnCloseReadCloser{
+			ReadCloser: resp.Body,
+			cancel:     cancel,
+		}
 	}
 
 	if c.verbose {
@@ -134,6 +147,18 @@ func (c *requestConfig) executeNative() (*http.Response, error) {
 	}
 
 	return resp, nil
+}
+
+type cancelOnCloseReadCloser struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (r *cancelOnCloseReadCloser) Close() error {
+	if r.cancel != nil {
+		r.cancel()
+	}
+	return r.ReadCloser.Close()
 }
 
 func (c *requestConfig) buildURL() string {
