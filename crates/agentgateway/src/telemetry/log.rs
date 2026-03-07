@@ -698,13 +698,13 @@ pub struct RequestLog {
 	pub response_bytes: u64,
 }
 
-fn version_to_str(v: &::http::Version) -> ValueBag<'static> {
+fn version_to_str(v: &::http::Version) -> Option<&'static str> {
 	match *v {
-		::http::Version::HTTP_09 => "0.9".into(),
-		::http::Version::HTTP_10 => "1.0".into(),
-		::http::Version::HTTP_11 => "1.1".into(),
-		::http::Version::HTTP_2 => "2".into(),
-		::http::Version::HTTP_3 => "3".into(),
+		::http::Version::HTTP_09 => Some("0.9"),
+		::http::Version::HTTP_10 => Some("1.0"),
+		::http::Version::HTTP_11 => Some("1.1"),
+		::http::Version::HTTP_2 => Some("2"),
+		::http::Version::HTTP_3 => Some("3"),
 		_ => None,
 	}
 }
@@ -898,12 +898,19 @@ impl Drop for DropOnLog {
 			.as_deref()
 			.map(|p| {
 				if let Some(idx) = p.find('?') {
-					(&p[..idx], Some(&p[idx + 1..]))
+					(p[..idx].to_string(), Some(p[idx + 1..].to_string()))
 				} else {
-					(p, None)
+					(p.to_string(), None)
 				}
 			})
-			.unwrap_or(("", None));
+			.unwrap_or_default();
+
+		let client_ip = log.tcp_info.peer_addr.ip().to_string();
+		let protocol_version = log
+			.version
+			.as_ref()
+			.and_then(version_to_str)
+			.map(|v| v.to_string());
 
 		let mut kv = vec![
 			("gateway", route_identifier.gateway.as_deref().map(display)),
@@ -917,19 +924,18 @@ impl Drop for DropOnLog {
 			),
 			("route", route_identifier.route.as_deref().map(display)),
 			("endpoint", log.endpoint.display()),
-			(
-				"client.address",
-				Some(display(&log.tcp_info.peer_addr.ip())),
-			),
+			("client.address", Some(display(&client_ip))),
 			("client.port", Some(log.tcp_info.peer_addr.port().into())),
 			("http.request.method", log.method.display()),
 			("server.address", log.host.display()),
 			("url.path", Some(display(&url_path))),
-			("url.query", url_query.map(display)),
+			("url.query", url_query.as_ref().map(|q| display(q))),
 			// TODO: incoming vs outgoing
 			(
 				"network.protocol.version",
-				log.version.as_ref().map(version_to_str),
+				protocol_version
+					.as_ref()
+					.map(|v| ValueBag::from(v.as_str())),
 			),
 			(
 				"http.response.status_code",
