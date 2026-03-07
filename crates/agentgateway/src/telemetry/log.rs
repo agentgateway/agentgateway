@@ -698,6 +698,17 @@ pub struct RequestLog {
 	pub response_bytes: u64,
 }
 
+fn version_to_str(v: &::http::Version) -> Option<&'static str> {
+	match *v {
+		::http::Version::HTTP_09 => Some("0.9"),
+		::http::Version::HTTP_10 => Some("1.0"),
+		::http::Version::HTTP_11 => Some("1.1"),
+		::http::Version::HTTP_2 => Some("2"),
+		::http::Version::HTTP_3 => Some("3"),
+		_ => None,
+	}
+}
+
 impl Drop for DropOnLog {
 	fn drop(&mut self) {
 		let Some(mut log) = self.log.take() else {
@@ -882,6 +893,25 @@ impl Drop for DropOnLog {
 			_ => Some(r),
 		});
 
+		let (url_path, url_query) = log
+			.path
+			.as_deref()
+			.map(|p| {
+				if let Some((path, query)) = p.split_once('?') {
+					(Some(path), Some(query))
+				} else {
+					(Some(p), None)
+				}
+			})
+			.unwrap_or((None, None));
+
+		let client_ip = log.tcp_info.peer_addr.ip().to_string();
+		let protocol_version = log
+			.version
+			.as_ref()
+			.and_then(version_to_str)
+			.map(|v| v.to_string());
+
 		let mut kv = vec![
 			("gateway", route_identifier.gateway.as_deref().map(display)),
 			(
@@ -894,14 +924,21 @@ impl Drop for DropOnLog {
 			),
 			("route", route_identifier.route.as_deref().map(display)),
 			("endpoint", log.endpoint.display()),
-			("src.addr", Some(display(&log.tcp_info.peer_addr))),
-			("http.method", log.method.display()),
-			("http.host", log.host.display()),
-			("http.path", log.path.display()),
+			("client.address", Some(display(&client_ip))),
+			("client.port", Some(log.tcp_info.peer_addr.port().into())),
+			("http.request.method", log.method.display()),
+			("server.address", log.host.display()),
+			("url.path", Some(display(&url_path))),
+			("url.query", url_query.as_ref().map(|q| display(q))),
 			// TODO: incoming vs outgoing
-			("http.version", log.version.as_ref().map(debug)),
 			(
-				"http.status",
+				"network.protocol.version",
+				protocol_version
+					.as_ref()
+					.map(|v| ValueBag::from(v.as_str())),
+			),
+			(
+				"http.response.status_code",
 				log.status.as_ref().map(|s| s.as_u16().into()),
 			),
 			("grpc.status", grpc.map(Into::into)),
