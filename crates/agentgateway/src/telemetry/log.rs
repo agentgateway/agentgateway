@@ -897,13 +897,13 @@ impl Drop for DropOnLog {
 			.path
 			.as_deref()
 			.map(|p| {
-				if let Some(idx) = p.find('?') {
-					(p[..idx].to_string(), Some(p[idx + 1..].to_string()))
+				if let Some((path, query)) = p.split_once('?') {
+					(Some(path), Some(query))
 				} else {
-					(p.to_string(), None)
+					(Some(p), None)
 				}
 			})
-			.unwrap_or_default();
+			.unwrap_or((None, None));
 
 		let client_ip = log.tcp_info.peer_addr.ip().to_string();
 		let protocol_version = log
