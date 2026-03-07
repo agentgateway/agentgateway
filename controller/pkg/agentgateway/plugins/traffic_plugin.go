@@ -416,6 +416,24 @@ func translatePolicyToAgw(
 	return agwPolicies, errors.Join(errs...)
 }
 
+func TranslateInlineTrafficPolicy(
+	ctx PolicyCtx,
+	namespace string,
+	traffic *agentgateway.Traffic,
+) ([]*api.TrafficPolicySpec, error) {
+	dummy := &agentgateway.AgentgatewayPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "inline_policy",
+			Namespace: namespace,
+		},
+		Spec: agentgateway.AgentgatewayPolicySpec{Traffic: traffic},
+	}
+	res, err := translateTrafficPolicyToAgw(ctx, dummy, nil)
+	return slices.MapFilter(res, func(e AgwPolicy) **api.TrafficPolicySpec {
+		return ptr.Of(e.Policy.GetTraffic())
+	}), err
+}
+
 func translateTrafficPolicyToAgw(
 	ctx PolicyCtx,
 	policy *agentgateway.AgentgatewayPolicy,
