@@ -11,6 +11,7 @@ import (
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/slices"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -24,6 +25,7 @@ import (
 	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/status"
+	internaldeployer "github.com/agentgateway/agentgateway/controller/pkg/kgateway/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/stopwatch"
 )
@@ -347,6 +349,7 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 			if ok {
 				merged := *desired
 				merged.Addresses = mergeGatewayAddresses(curGw.Status.Addresses, desired.Addresses)
+				merged.Conditions = mergeGatewayConditions(curGw.Status.Conditions, desired.Conditions)
 				mergedAny = &merged
 			}
 		case *gwv1.HTTPRouteStatus:
@@ -507,6 +510,39 @@ func mergeGatewayAddresses(existing []gwv1.GatewayStatusAddress, desired []gwv1.
 	})
 
 	return out
+}
+
+func mergeGatewayConditions(existing []metav1.Condition, desired []metav1.Condition) []metav1.Condition {
+	out := append([]metav1.Condition(nil), desired...)
+
+	existingAccepted := meta.FindStatusCondition(existing, string(gwv1.GatewayConditionAccepted))
+	if !isControllerManagedGatewayAcceptedError(existingAccepted) {
+		return out
+	}
+
+	meta.SetStatusCondition(&out, *existingAccepted)
+
+	programmed := meta.FindStatusCondition(out, string(gwv1.GatewayConditionProgrammed))
+	if programmed != nil && programmed.Status == metav1.ConditionTrue {
+		meta.SetStatusCondition(&out, metav1.Condition{
+			Type:               string(gwv1.GatewayConditionProgrammed),
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: existingAccepted.ObservedGeneration,
+			Reason:             existingAccepted.Reason,
+			Message:            existingAccepted.Message,
+		})
+	}
+
+	return out
+}
+
+func isControllerManagedGatewayAcceptedError(condition *metav1.Condition) bool {
+	if condition == nil || condition.Status != metav1.ConditionFalse {
+		return false
+	}
+
+	return condition.Reason == string(gwv1.GatewayReasonInvalidParameters) ||
+		internaldeployer.IsSessionKeyConditionReason(condition.Reason)
 }
 
 func compareParentReference(a, b gwv1.ParentReference) int {

@@ -150,8 +150,9 @@ spec:
                   discouraged. `$$(VAR_NAME)` avoids expansion and results in a literal
                   `$(VAR_NAME)`.
 
-                  For controller-managed Gateways, `SESSION_KEY` is reserved for the
-                  per-Gateway session key Secret and will be ignored.
+                  For controller-managed Gateways, `SESSION_KEY` and
+                  `SESSION_KEYRING_FILE` are reserved for the per-Gateway managed
+                  session-key Secret and will be ignored.
                 items:
                   description: EnvVar represents an environment variable present in
                     a Container.
@@ -539,7 +540,9 @@ spec:
                   the agentgateway\nconfig file (the agentgateway binary has a '-f'
                   option to specify a\nconfig file, and this is that file).  This
                   will be merged with\nconfiguration derived from typed fields like\nAgentgatewayParametersLogging.Format,
-                  and those typed fields will take\nprecedence.\n\nExample:\n\n\trawConfig:\n\t
+                  and those typed fields will take\nprecedence.\n\nFor controller-managed
+                  Gateways, `config.session` is reserved for the\nper-Gateway managed
+                  session-key Secret and will be ignored.\n\nExample:\n\n\trawConfig:\n\t
                   \ binds:\n\t  - port: 3000\n\t    listeners:\n\t    - routes:\n\t
                   \     - policies:\n\t          cors:\n\t            allowOrigins:\n\t
                   \             - \"*\"\n\t            allowHeaders:\n\t              -

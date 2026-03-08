@@ -2,8 +2,6 @@ package deployer
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -157,8 +155,8 @@ func (gp *GatewayParameters) PostProcessObjects(ctx context.Context, obj client.
 				return nil, err
 			}
 		}
-		if err := addSessionKeyChecksumAnnotation(rendered, sessionKeySecret); err != nil {
-			return nil, fmt.Errorf("failed to annotate session key checksum for Gateway %s/%s: %w", gw.GetNamespace(), gw.GetName(), err)
+		if err := enforceManagedSessionKeyDeploymentWiring(rendered, sessionKeySecret); err != nil {
+			return nil, fmt.Errorf("failed to enforce managed session key wiring for Gateway %s/%s: %w", gw.GetNamespace(), gw.GetName(), err)
 		}
 		rendered = append(rendered, sessionKeySecret)
 	}
@@ -167,13 +165,10 @@ func (gp *GatewayParameters) PostProcessObjects(ctx context.Context, obj client.
 }
 
 func addSessionKeyChecksumAnnotation(rendered []client.Object, secret *corev1.Secret) error {
-	key, found := secret.Data["key"]
-	if !found || len(key) == 0 {
-		return fmt.Errorf("session key secret %s/%s missing key entry", secret.Namespace, secret.Name)
+	checksumHex, err := sessionKeyChecksum(secret)
+	if err != nil {
+		return err
 	}
-
-	checksum := sha256.Sum256(key)
-	checksumHex := hex.EncodeToString(checksum[:])
 
 	for _, obj := range rendered {
 		deployment, ok := obj.(*appsv1.Deployment)
@@ -187,6 +182,153 @@ func addSessionKeyChecksumAnnotation(rendered []client.Object, secret *corev1.Se
 	}
 
 	return nil
+}
+
+func enforceManagedSessionKeyDeploymentWiring(rendered []client.Object, secret *corev1.Secret) error {
+	if err := addSessionKeyChecksumAnnotation(rendered, secret); err != nil {
+		return err
+	}
+
+	for _, obj := range rendered {
+		deployment, ok := obj.(*appsv1.Deployment)
+		if !ok {
+			continue
+		}
+		if err := enforceManagedSessionKeyDeploymentSpec(deployment, secret.Name); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func enforceManagedSessionKeyDeploymentSpec(deployment *appsv1.Deployment, secretName string) error {
+	if err := enforceManagedSessionKeyVolume(deployment, secretName); err != nil {
+		return err
+	}
+
+	for containerIndex := range deployment.Spec.Template.Spec.Containers {
+		container := &deployment.Spec.Template.Spec.Containers[containerIndex]
+		if container.Name != "agentgateway" {
+			continue
+		}
+
+		managedEnv := corev1.EnvVar{
+			Name:  sessionKeyringFileEnvVar,
+			Value: managedSessionKeyMountPath + "/" + managedSessionKeyFileName,
+		}
+		managedMount := corev1.VolumeMount{
+			Name:      managedSessionKeyVolumeName,
+			MountPath: managedSessionKeyMountPath,
+			ReadOnly:  true,
+		}
+
+		container.Env = removeEnvVar(container.Env, sessionKeyEnvVar)
+		container.Env = replaceEnvVarPreservingPosition(container.Env, managedEnv)
+		container.VolumeMounts = replaceVolumeMountPreservingPosition(container.VolumeMounts, managedMount)
+		return nil
+	}
+
+	return fmt.Errorf("deployment %s/%s is missing the agentgateway container", deployment.Namespace, deployment.Name)
+}
+
+func replaceEnvVarPreservingPosition(envs []corev1.EnvVar, replacement corev1.EnvVar) []corev1.EnvVar {
+	insertIndex := len(envs)
+	filtered := make([]corev1.EnvVar, 0, len(envs)+1)
+	for _, env := range envs {
+		if env.Name == replacement.Name {
+			if insertIndex == len(envs) {
+				insertIndex = len(filtered)
+			}
+			continue
+		}
+		filtered = append(filtered, env)
+	}
+
+	if insertIndex > len(filtered) {
+		insertIndex = len(filtered)
+	}
+	filtered = append(filtered, corev1.EnvVar{})
+	copy(filtered[insertIndex+1:], filtered[insertIndex:])
+	filtered[insertIndex] = replacement
+	return filtered
+}
+
+func removeEnvVar(envs []corev1.EnvVar, name string) []corev1.EnvVar {
+	filtered := make([]corev1.EnvVar, 0, len(envs))
+	for _, env := range envs {
+		if env.Name == name {
+			continue
+		}
+		filtered = append(filtered, env)
+	}
+	return filtered
+}
+
+func enforceManagedSessionKeyVolume(deployment *appsv1.Deployment, secretName string) error {
+	managedVolume := corev1.Volume{
+		Name: managedSessionKeyVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: secretName,
+				Items: []corev1.KeyToPath{
+					{
+						Key:  managedSessionKeyDataKey,
+						Path: managedSessionKeyFileName,
+					},
+				},
+			},
+		},
+	}
+	deployment.Spec.Template.Spec.Volumes = replaceVolumePreservingPosition(
+		deployment.Spec.Template.Spec.Volumes,
+		managedVolume,
+	)
+	return nil
+}
+
+func replaceVolumeMountPreservingPosition(mounts []corev1.VolumeMount, replacement corev1.VolumeMount) []corev1.VolumeMount {
+	insertIndex := len(mounts)
+	filtered := make([]corev1.VolumeMount, 0, len(mounts)+1)
+	for _, mount := range mounts {
+		if mount.Name == replacement.Name {
+			if insertIndex == len(mounts) {
+				insertIndex = len(filtered)
+			}
+			continue
+		}
+		filtered = append(filtered, mount)
+	}
+
+	if insertIndex > len(filtered) {
+		insertIndex = len(filtered)
+	}
+	filtered = append(filtered, corev1.VolumeMount{})
+	copy(filtered[insertIndex+1:], filtered[insertIndex:])
+	filtered[insertIndex] = replacement
+	return filtered
+}
+
+func replaceVolumePreservingPosition(volumes []corev1.Volume, replacement corev1.Volume) []corev1.Volume {
+	insertIndex := len(volumes)
+	filtered := make([]corev1.Volume, 0, len(volumes)+1)
+	for _, volume := range volumes {
+		if volume.Name == replacement.Name {
+			if insertIndex == len(volumes) {
+				insertIndex = len(filtered)
+			}
+			continue
+		}
+		filtered = append(filtered, volume)
+	}
+
+	if insertIndex > len(filtered) {
+		insertIndex = len(filtered)
+	}
+	filtered = append(filtered, corev1.Volume{})
+	copy(filtered[insertIndex+1:], filtered[insertIndex:])
+	filtered[insertIndex] = replacement
+	return filtered
 }
 
 func GatewayReleaseNameAndNamespace(obj client.Object) (string, string) {

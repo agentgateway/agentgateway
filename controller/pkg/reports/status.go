@@ -15,6 +15,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
+	internaldeployer "github.com/agentgateway/agentgateway/controller/pkg/kgateway/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 )
@@ -373,8 +374,11 @@ func addMissingGatewayConditions(gwReport *GatewayReport, gw *gwv1.Gateway) {
 	// when the GatewayParameters are valid again. Otherwise there is a race condition between the controller and reporter.
 	// HACK: This is because both the controller and reporter set Accepted status.
 	existingAccepted := meta.FindStatusCondition(gw.Status.Conditions, string(gwv1.GatewayConditionAccepted))
-	hasInvalidParams := existingAccepted != nil && existingAccepted.Status == metav1.ConditionFalse && existingAccepted.Reason == string(gwv1.GatewayReasonInvalidParameters)
-	if !hasInvalidParams && meta.FindStatusCondition(gwReport.GetConditions(), string(gwv1.GatewayConditionAccepted)) == nil {
+	hasControllerManagedAcceptedError := existingAccepted != nil &&
+		existingAccepted.Status == metav1.ConditionFalse &&
+		(existingAccepted.Reason == string(gwv1.GatewayReasonInvalidParameters) ||
+			internaldeployer.IsSessionKeyConditionReason(existingAccepted.Reason))
+	if !hasControllerManagedAcceptedError && meta.FindStatusCondition(gwReport.GetConditions(), string(gwv1.GatewayConditionAccepted)) == nil {
 		gwReport.SetCondition(reporter.GatewayCondition{
 			Type:    gwv1.GatewayConditionAccepted,
 			Status:  metav1.ConditionTrue,

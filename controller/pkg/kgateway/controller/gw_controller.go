@@ -307,6 +307,10 @@ func (r *gatewayReconciler) Reconcile(req types.NamespacedName) (rErr error) {
 			// status is reported from translator, so return normally
 			return err
 		}
+		reason := string(gwv1.GatewayReasonInvalidParameters)
+		if sessionKeyReason, ok := internaldeployer.SessionKeyConditionReason(err); ok {
+			reason = sessionKeyReason
+		}
 		// if we fail to either reference a valid GatewayParameters or
 		// the GatewayParameters configuration leads to issues building the
 		// objects, we want to set the status to InvalidParameters.
@@ -314,7 +318,7 @@ func (r *gatewayReconciler) Reconcile(req types.NamespacedName) (rErr error) {
 			Type:               string(gwv1.GatewayConditionAccepted),
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: gw.Generation,
-			Reason:             string(gwv1.GatewayReasonInvalidParameters),
+			Reason:             reason,
 			Message:            err.Error(),
 		}
 		if statusErr := r.updateGatewayStatusWithRetry(ctx, gw, condition); statusErr != nil {
@@ -323,7 +327,7 @@ func (r *gatewayReconciler) Reconcile(req types.NamespacedName) (rErr error) {
 		return err
 	} else if existing := meta.FindStatusCondition(gw.Status.Conditions, string(gwv1.GatewayConditionAccepted)); existing != nil &&
 		existing.Status == metav1.ConditionFalse &&
-		existing.Reason == string(gwv1.GatewayReasonInvalidParameters) {
+		(existing.Reason == string(gwv1.GatewayReasonInvalidParameters) || internaldeployer.IsSessionKeyConditionReason(existing.Reason)) {
 		// set the status Accepted=true if it had been set to false due to InvalidParameters
 		condition := metav1.Condition{
 			Type:               string(gwv1.GatewayConditionAccepted),

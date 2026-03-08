@@ -1,13 +1,11 @@
 package deployer
 
 import (
-	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"istio.io/istio/pkg/kube"
-	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/test"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -20,21 +18,43 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
+	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 )
 
-func newSyncedSecretClient(t *testing.T, objects ...client.Object) kclient.Client[*corev1.Secret] {
+func newSessionKeyGeneratorForTest(
+	t *testing.T,
+	sessionKeyGen func() (string, error),
+	objects ...client.Object,
+) *agentgatewayParametersHelmValuesGenerator {
+	t.Helper()
+
+	_, generator := newSessionKeyGeneratorHarness(t, sessionKeyGen, objects...)
+	return generator
+}
+
+func newSessionKeyGeneratorHarness(
+	t *testing.T,
+	sessionKeyGen func() (string, error),
+	objects ...client.Object,
+) (apiclient.Client, *agentgatewayParametersHelmValuesGenerator) {
 	t.Helper()
 
 	fakeClient := fake.NewClient(t, objects...)
-	secretClient := kclient.NewFiltered[*corev1.Secret](fakeClient, kclient.Filter{
-		ObjectFilter: fakeClient.ObjectFilter(),
-	})
 	stop := test.NewStop(t)
 	fakeClient.RunAndWait(stop)
-	kube.WaitForCacheSync("test", stop, secretClient.HasSynced)
-	return secretClient
+	generator := newAgentgatewayParametersHelmValuesGenerator(fakeClient, &deployer.Inputs{})
+	generator.sessionKeyGen = sessionKeyGen
+	return fakeClient, generator
+}
+
+func mustManagedSessionKeyPayload(t *testing.T, keyring *managedSessionKeyring) []byte {
+	t.Helper()
+
+	payload, err := keyring.Serialize()
+	require.NoError(t, err)
+	return payload
 }
 
 func TestAgentgatewayParametersApplier_ApplyToHelmValues_Image(t *testing.T) {
@@ -123,6 +143,7 @@ func TestAgentgatewayParametersApplier_ApplyToHelmValues_FiltersReservedSessionK
 			AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
 				Env: []corev1.EnvVar{
 					{Name: "SESSION_KEY", Value: "inline-key"},
+					{Name: sessionKeyringFileEnvVar, Value: "/tmp/override"},
 					{Name: "CUSTOM_VAR", Value: "custom_value"},
 				},
 			},
@@ -138,6 +159,40 @@ func TestAgentgatewayParametersApplier_ApplyToHelmValues_FiltersReservedSessionK
 
 	require.Len(t, vals.Agentgateway.Env, 1)
 	assert.Equal(t, "CUSTOM_VAR", vals.Agentgateway.Env[0].Name)
+}
+
+func TestAgentgatewayParametersApplier_ApplyToHelmValues_StripsReservedSessionRawConfig(t *testing.T) {
+	params := &agentgateway.AgentgatewayParameters{
+		Spec: agentgateway.AgentgatewayParametersSpec{
+			AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
+				RawConfig: &apiextensionsv1.JSON{Raw: []byte(`{
+					"config": {
+						"session": {
+							"key": "should-be-ignored"
+						},
+						"tracing": {
+							"otlpEndpoint": "http://jaeger:4317"
+						}
+					}
+				}`)},
+			},
+		},
+	}
+
+	applier := NewAgentgatewayParametersApplier(params)
+	vals := &deployer.HelmConfig{
+		Agentgateway: &deployer.AgentgatewayHelmGateway{},
+	}
+
+	applier.ApplyToHelmValues(vals)
+	require.NotNil(t, vals.Agentgateway.RawConfig)
+
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(vals.Agentgateway.RawConfig.Raw, &doc))
+	config, ok := doc["config"].(map[string]any)
+	require.True(t, ok)
+	assert.NotContains(t, config, "session")
+	assert.Contains(t, config, "tracing")
 }
 
 func TestAgentgatewayParametersApplier_ApplyOverlaysToObjects(t *testing.T) {
@@ -330,67 +385,347 @@ func TestAgentgatewayParametersApplier_ApplyToHelmValues_RawConfigWithLogging(t 
 	assert.Equal(t, vals.Agentgateway.RawConfig.Raw, rawConfigJSON)
 }
 
-func TestBuildSessionKeySecret_UsesExistingValidKey(t *testing.T) {
+func TestBuildSessionKeySecret(t *testing.T) {
 	const existingKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "gw-session-key",
-			Namespace: "default",
-		},
-		Data: map[string][]byte{
-			"key": []byte(existingKey),
-		},
+	const nextKey = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100"
+	newGateway := func() *gwv1.Gateway {
+		return &gwv1.Gateway{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "gw",
+				Namespace: "default",
+				UID:       "gateway-uid",
+			},
+			Spec: gwv1.GatewaySpec{
+				GatewayClassName: "agentgateway",
+			},
+		}
 	}
-	generator := &agentgatewayParametersHelmValuesGenerator{
-		secretClient: newSyncedSecretClient(t, secret),
-		sessionKeyGen: func() (string, error) {
-			return "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100", nil
-		},
+	managedSecretForGateway := func(t *testing.T, gw *gwv1.Gateway, primary string) *corev1.Secret {
+		t.Helper()
+		return &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "gw-session-key",
+				Namespace: gw.Namespace,
+				Labels: map[string]string{
+					managedSessionKeyLabel: managedSessionKeyLabelValue,
+				},
+				Annotations: map[string]string{
+					managedSessionKeyGatewayNameAnnotation:      gw.Name,
+					managedSessionKeyGatewayNamespaceAnnotation: gw.Namespace,
+					managedSessionKeyGatewayUIDAnnotation:       string(gw.UID),
+				},
+			},
+			Data: map[string][]byte{
+				managedSessionKeyDataKey: mustManagedSessionKeyPayload(t, &managedSessionKeyring{
+					Version: managedSessionKeyVersion,
+					Primary: primary,
+				}),
+			},
+		}
 	}
-	gw := &gwv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "gw",
-			Namespace: "default",
+
+	tests := []struct {
+		name      string
+		setup     func(t *testing.T) (*gwv1.Gateway, []client.Object)
+		run       func(t *testing.T, generator *agentgatewayParametersHelmValuesGenerator, gw *gwv1.Gateway) (*corev1.Secret, error)
+		keys      []string
+		callCount int
+		assert    func(t *testing.T, secret *corev1.Secret, err error, callCount int)
+	}{
+		{
+			name: "reuses existing valid managed keyring",
+			setup: func(t *testing.T) (*gwv1.Gateway, []client.Object) {
+				gw := newGateway()
+				return gw, []client.Object{managedSecretForGateway(t, gw, existingKey)}
+			},
+			run: func(t *testing.T, generator *agentgatewayParametersHelmValuesGenerator, gw *gwv1.Gateway) (*corev1.Secret, error) {
+				return generator.buildSessionKeySecret(t.Context(), gw, "gw-session-key")
+			},
+			keys: []string{nextKey},
+			assert: func(t *testing.T, secret *corev1.Secret, err error, callCount int) {
+				require.NoError(t, err)
+				require.NotNil(t, secret)
+				keyring, parseErr := parseManagedSessionKeyring(secret.Data[managedSessionKeyDataKey])
+				require.NoError(t, parseErr)
+				assert.Equal(t, existingKey, keyring.Primary)
+				assert.Equal(t, corev1.SecretTypeOpaque, secret.Type)
+				assert.Equal(t, "gw-session-key", secret.Name)
+				assert.Zero(t, callCount)
+			},
 		},
-		Spec: gwv1.GatewaySpec{
-			GatewayClassName: "agentgateway",
+		{
+			name: "rejects foreign secret collision",
+			setup: func(t *testing.T) (*gwv1.Gateway, []client.Object) {
+				gw := newGateway()
+				return gw, []client.Object{
+					&corev1.Secret{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "gw-session-key",
+							Namespace: gw.Namespace,
+						},
+						Data: map[string][]byte{
+							managedSessionKeyDataKey: []byte(`{"version":"v1","primary":"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"}`),
+						},
+					},
+				}
+			},
+			run: func(t *testing.T, generator *agentgatewayParametersHelmValuesGenerator, gw *gwv1.Gateway) (*corev1.Secret, error) {
+				return generator.buildSessionKeySecret(t.Context(), gw, "gw-session-key")
+			},
+			keys: []string{nextKey},
+			assert: func(t *testing.T, secret *corev1.Secret, err error, callCount int) {
+				require.Error(t, err)
+				var conflictErr *SessionKeyConflictError
+				require.ErrorAs(t, err, &conflictErr)
+				assert.Nil(t, secret)
+				assert.Zero(t, callCount)
+			},
+		},
+		{
+			name: "repairs invalid managed secret",
+			setup: func(t *testing.T) (*gwv1.Gateway, []client.Object) {
+				gw := newGateway()
+				return gw, []client.Object{
+					&corev1.Secret{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "gw-session-key",
+							Namespace: gw.Namespace,
+							Labels: map[string]string{
+								managedSessionKeyLabel: managedSessionKeyLabelValue,
+							},
+							Annotations: map[string]string{
+								managedSessionKeyGatewayNameAnnotation:      gw.Name,
+								managedSessionKeyGatewayNamespaceAnnotation: gw.Namespace,
+								managedSessionKeyGatewayUIDAnnotation:       string(gw.UID),
+							},
+						},
+						Data: map[string][]byte{
+							managedSessionKeyDataKey: []byte("not-json"),
+						},
+					},
+				}
+			},
+			run: func(t *testing.T, generator *agentgatewayParametersHelmValuesGenerator, gw *gwv1.Gateway) (*corev1.Secret, error) {
+				return generator.buildSessionKeySecret(t.Context(), gw, "gw-session-key")
+			},
+			keys:      []string{existingKey},
+			callCount: 1,
+			assert: func(t *testing.T, secret *corev1.Secret, err error, callCount int) {
+				require.NoError(t, err)
+				keyring, parseErr := parseManagedSessionKeyring(secret.Data[managedSessionKeyDataKey])
+				require.NoError(t, parseErr)
+				assert.Equal(t, existingKey, keyring.Primary)
+				assert.Equal(t, 1, callCount)
+			},
+		},
+		{
+			name: "repeated reconcile is stable",
+			setup: func(t *testing.T) (*gwv1.Gateway, []client.Object) {
+				return newGateway(), nil
+			},
+			run: func(t *testing.T, generator *agentgatewayParametersHelmValuesGenerator, gw *gwv1.Gateway) (*corev1.Secret, error) {
+				if _, err := generator.buildSessionKeySecret(t.Context(), gw, "gw-session-key"); err != nil {
+					return nil, err
+				}
+				return generator.buildSessionKeySecret(t.Context(), gw, "gw-session-key")
+			},
+			keys:      []string{existingKey, nextKey},
+			callCount: 1,
+			assert: func(t *testing.T, secret *corev1.Secret, err error, callCount int) {
+				require.NoError(t, err)
+				keyring, parseErr := parseManagedSessionKeyring(secret.Data[managedSessionKeyDataKey])
+				require.NoError(t, parseErr)
+				assert.Equal(t, existingKey, keyring.Primary)
+				assert.Equal(t, 1, callCount)
+			},
+		},
+		{
+			name: "rotates managed keyring",
+			setup: func(t *testing.T) (*gwv1.Gateway, []client.Object) {
+				gw := newGateway()
+				gw.Annotations = map[string]string{
+					managedSessionKeyRotationAnnotation: "rotate-1",
+				}
+				return gw, []client.Object{managedSecretForGateway(t, gw, existingKey)}
+			},
+			run: func(t *testing.T, generator *agentgatewayParametersHelmValuesGenerator, gw *gwv1.Gateway) (*corev1.Secret, error) {
+				return generator.buildSessionKeySecret(t.Context(), gw, "gw-session-key")
+			},
+			keys:      []string{nextKey},
+			callCount: 1,
+			assert: func(t *testing.T, secret *corev1.Secret, err error, callCount int) {
+				require.NoError(t, err)
+				keyring, parseErr := parseManagedSessionKeyring(secret.Data[managedSessionKeyDataKey])
+				require.NoError(t, parseErr)
+				assert.Equal(t, nextKey, keyring.Primary)
+				assert.Equal(t, []string{existingKey}, keyring.Previous)
+				assert.Equal(t, "rotate-1", secret.Annotations[managedSessionKeyHandledRotationAnnotation])
+				assert.Equal(t, 1, callCount)
+			},
 		},
 	}
 
-	managedSecret, err := generator.buildSessionKeySecret(context.Background(), gw, "gw-session-key")
-	require.NoError(t, err)
-	require.NotNil(t, managedSecret)
-	assert.Equal(t, existingKey, string(managedSecret.Data["key"]))
-	assert.Equal(t, corev1.SecretTypeOpaque, managedSecret.Type)
-	assert.Equal(t, "gw-session-key", managedSecret.Name)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gw, objects := tt.setup(t)
+			callCount := 0
+			keys := tt.keys
+			if len(keys) == 0 {
+				keys = []string{existingKey}
+			}
+			generator := newSessionKeyGeneratorForTest(t, func() (string, error) {
+				key := keys[min(callCount, len(keys)-1)]
+				callCount++
+				return key, nil
+			}, objects...)
+			secret, err := tt.run(t, generator, gw)
+			tt.assert(t, secret, err, callCount)
+		})
+	}
 }
 
-func TestBuildSessionKeySecret_RejectsInvalidExistingKey(t *testing.T) {
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "gw-session-key",
-			Namespace: "default",
-		},
-		Data: map[string][]byte{
-			"key": []byte("not-a-valid-key"),
-		},
+func TestBuildSessionKeySecret_LiveAPIState(t *testing.T) {
+	const existingKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	const nextKey = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100"
+
+	newGateway := func() *gwv1.Gateway {
+		return &gwv1.Gateway{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "gw",
+				Namespace: "default",
+				UID:       "gateway-uid",
+			},
+			Spec: gwv1.GatewaySpec{
+				GatewayClassName: "agentgateway",
+			},
+		}
 	}
-	generator := &agentgatewayParametersHelmValuesGenerator{
-		secretClient: newSyncedSecretClient(t, secret),
-		sessionKeyGen: func() (string, error) {
-			return "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", nil
+
+	tests := []struct {
+		name    string
+		prepare func(t *testing.T, cli apiclient.Client, gw *gwv1.Gateway)
+		run     func(t *testing.T, generator *agentgatewayParametersHelmValuesGenerator, gw *gwv1.Gateway) (*corev1.Secret, error)
+		assert  func(t *testing.T, cli apiclient.Client, secret *corev1.Secret, err error)
+	}{
+		{
+			name: "create persists and second reconcile reuses api state",
+			run: func(t *testing.T, generator *agentgatewayParametersHelmValuesGenerator, gw *gwv1.Gateway) (*corev1.Secret, error) {
+				first, err := generator.buildSessionKeySecret(t.Context(), gw, "gw-session-key")
+				require.NoError(t, err)
+				generator.sessionKeyGen = func() (string, error) {
+					return nextKey, nil
+				}
+				second, err := generator.buildSessionKeySecret(t.Context(), gw, "gw-session-key")
+				require.NoError(t, err)
+
+				firstKeyring, parseErr := parseManagedSessionKeyring(first.Data[managedSessionKeyDataKey])
+				require.NoError(t, parseErr)
+				secondKeyring, parseErr := parseManagedSessionKeyring(second.Data[managedSessionKeyDataKey])
+				require.NoError(t, parseErr)
+				assert.Equal(t, firstKeyring.Primary, secondKeyring.Primary)
+				return second, nil
+			},
+			assert: func(t *testing.T, cli apiclient.Client, secret *corev1.Secret, err error) {
+				require.NoError(t, err)
+				assert.Equal(t, corev1.SchemeGroupVersion.String(), secret.APIVersion)
+				assert.Equal(t, "Secret", secret.Kind)
+				assert.Empty(t, secret.ResourceVersion)
+				assert.Empty(t, secret.UID)
+				assert.True(t, secret.CreationTimestamp.IsZero())
+				assert.Nil(t, secret.ManagedFields)
+				liveSecret, getErr := cli.Kube().CoreV1().Secrets("default").Get(t.Context(), "gw-session-key", metav1.GetOptions{})
+				require.NoError(t, getErr)
+				keyring, parseErr := parseManagedSessionKeyring(liveSecret.Data[managedSessionKeyDataKey])
+				require.NoError(t, parseErr)
+				assert.Equal(t, existingKey, keyring.Primary)
+				assert.Equal(t, secret.Data[managedSessionKeyDataKey], liveSecret.Data[managedSessionKeyDataKey])
+			},
 		},
-	}
-	gw := &gwv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "gw",
-			Namespace: "default",
+		{
+			name: "live api corruption is repaired",
+			prepare: func(t *testing.T, cli apiclient.Client, gw *gwv1.Gateway) {
+				_, err := cli.Kube().CoreV1().Secrets(gw.Namespace).Create(t.Context(), &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gw-session-key",
+						Namespace: gw.Namespace,
+						Labels: map[string]string{
+							managedSessionKeyLabel: managedSessionKeyLabelValue,
+						},
+						Annotations: map[string]string{
+							managedSessionKeyGatewayNameAnnotation:      gw.Name,
+							managedSessionKeyGatewayNamespaceAnnotation: gw.Namespace,
+							managedSessionKeyGatewayUIDAnnotation:       string(gw.UID),
+						},
+					},
+					Type: corev1.SecretTypeOpaque,
+					Data: map[string][]byte{
+						managedSessionKeyDataKey: []byte("corrupted"),
+					},
+				}, metav1.CreateOptions{})
+				require.NoError(t, err)
+			},
+			run: func(t *testing.T, generator *agentgatewayParametersHelmValuesGenerator, gw *gwv1.Gateway) (*corev1.Secret, error) {
+				return generator.buildSessionKeySecret(t.Context(), gw, "gw-session-key")
+			},
+			assert: func(t *testing.T, cli apiclient.Client, secret *corev1.Secret, err error) {
+				require.NoError(t, err)
+				assert.Equal(t, corev1.SchemeGroupVersion.String(), secret.APIVersion)
+				assert.Equal(t, "Secret", secret.Kind)
+				assert.Empty(t, secret.ResourceVersion)
+				assert.Empty(t, secret.UID)
+				assert.True(t, secret.CreationTimestamp.IsZero())
+				assert.Nil(t, secret.ManagedFields)
+				keyring, parseErr := parseManagedSessionKeyring(secret.Data[managedSessionKeyDataKey])
+				require.NoError(t, parseErr)
+				assert.Equal(t, existingKey, keyring.Primary)
+
+				liveSecret, getErr := cli.Kube().CoreV1().Secrets("default").Get(t.Context(), "gw-session-key", metav1.GetOptions{})
+				require.NoError(t, getErr)
+				liveKeyring, parseErr := parseManagedSessionKeyring(liveSecret.Data[managedSessionKeyDataKey])
+				require.NoError(t, parseErr)
+				assert.Equal(t, existingKey, liveKeyring.Primary)
+			},
+		},
+		{
+			name: "live api foreign collision fails",
+			prepare: func(t *testing.T, cli apiclient.Client, gw *gwv1.Gateway) {
+				_, err := cli.Kube().CoreV1().Secrets(gw.Namespace).Create(t.Context(), &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gw-session-key",
+						Namespace: gw.Namespace,
+					},
+					Type: corev1.SecretTypeOpaque,
+					Data: map[string][]byte{
+						managedSessionKeyDataKey: []byte(`{"version":"v1","primary":"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"}`),
+					},
+				}, metav1.CreateOptions{})
+				require.NoError(t, err)
+			},
+			run: func(t *testing.T, generator *agentgatewayParametersHelmValuesGenerator, gw *gwv1.Gateway) (*corev1.Secret, error) {
+				return generator.buildSessionKeySecret(t.Context(), gw, "gw-session-key")
+			},
+			assert: func(t *testing.T, cli apiclient.Client, secret *corev1.Secret, err error) {
+				require.Error(t, err)
+				var conflictErr *SessionKeyConflictError
+				require.ErrorAs(t, err, &conflictErr)
+				assert.Nil(t, secret)
+			},
 		},
 	}
 
-	_, err := generator.buildSessionKeySecret(context.Background(), gw, "gw-session-key")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "contains an invalid key")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cli, generator := newSessionKeyGeneratorHarness(t, func() (string, error) {
+				return existingKey, nil
+			})
+			gw := newGateway()
+			if tt.prepare != nil {
+				tt.prepare(t, cli, gw)
+			}
+			secret, err := tt.run(t, generator, gw)
+			tt.assert(t, cli, secret, err)
+		})
+	}
 }
 
 func TestAddSessionKeyChecksumAnnotation(t *testing.T) {
@@ -401,7 +736,10 @@ func TestAddSessionKeyChecksumAnnotation(t *testing.T) {
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
-			"key": []byte("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"),
+			managedSessionKeyDataKey: mustManagedSessionKeyPayload(t, &managedSessionKeyring{
+				Version: managedSessionKeyVersion,
+				Primary: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+			}),
 		},
 	}
 
@@ -409,7 +747,90 @@ func TestAddSessionKeyChecksumAnnotation(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, deployment.Spec.Template.Annotations)
 	assert.Equal(t,
-		"2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737",
+		"f8dc99f51dfac136be0f82b86b24b0bf9fb595c462bed19362eef8125a3ac0f8",
+		deployment.Spec.Template.Annotations[sessionKeyChecksumAnnotation],
+	)
+}
+
+func TestEnforceManagedSessionKeyDeploymentWiring_OverwritesOverlayMutations(t *testing.T) {
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw",
+			Namespace: "default",
+		},
+		Spec: appsv1.DeploymentSpec{
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						sessionKeyChecksumAnnotation: "stale",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name: "agentgateway",
+						Env: []corev1.EnvVar{
+							{
+								Name:  "SESSION_KEY",
+								Value: "inline-key",
+							},
+							{
+								Name:  sessionKeyringFileEnvVar,
+								Value: "/tmp/override",
+							},
+						},
+						VolumeMounts: []corev1.VolumeMount{{
+							Name:      managedSessionKeyVolumeName,
+							MountPath: "/tmp/override",
+						}},
+					}},
+					Volumes: []corev1.Volume{{
+						Name: "session-key",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: "stale",
+							},
+						},
+					}},
+				},
+			},
+		},
+	}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw-session-key",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			managedSessionKeyDataKey: mustManagedSessionKeyPayload(t, &managedSessionKeyring{
+				Version: managedSessionKeyVersion,
+				Primary: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+			}),
+		},
+	}
+
+	err := enforceManagedSessionKeyDeploymentWiring([]client.Object{deployment}, secret)
+	require.NoError(t, err)
+
+	env := deployment.Spec.Template.Spec.Containers[0].Env
+	require.Len(t, env, 1)
+	assert.Equal(t, sessionKeyringFileEnvVar, env[0].Name)
+	assert.Equal(t, managedSessionKeyMountPath+"/"+managedSessionKeyFileName, env[0].Value)
+	assert.Nil(t, env[0].ValueFrom)
+	mounts := deployment.Spec.Template.Spec.Containers[0].VolumeMounts
+	require.Len(t, mounts, 1)
+	assert.Equal(t, managedSessionKeyVolumeName, mounts[0].Name)
+	assert.Equal(t, managedSessionKeyMountPath, mounts[0].MountPath)
+	assert.True(t, mounts[0].ReadOnly)
+	volumes := deployment.Spec.Template.Spec.Volumes
+	require.Len(t, volumes, 1)
+	assert.Equal(t, managedSessionKeyVolumeName, volumes[0].Name)
+	require.NotNil(t, volumes[0].Secret)
+	assert.Equal(t, secret.Name, volumes[0].Secret.SecretName)
+	require.Len(t, volumes[0].Secret.Items, 1)
+	assert.Equal(t, managedSessionKeyDataKey, volumes[0].Secret.Items[0].Key)
+	assert.Equal(t, managedSessionKeyFileName, volumes[0].Secret.Items[0].Path)
+	assert.Equal(t,
+		"f8dc99f51dfac136be0f82b86b24b0bf9fb595c462bed19362eef8125a3ac0f8",
 		deployment.Spec.Template.Annotations[sessionKeyChecksumAnnotation],
 	)
 }

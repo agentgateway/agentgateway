@@ -87,7 +87,7 @@ spec:
     metadata:
       annotations:
         checksum/config: bb8bdc8cacbd1ae4af6e9f72baafbd5859e9422ade140b725464c0ec0d7fee9d
-        checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
+        checksum/session-key: f8dc99f51dfac136be0f82b86b24b0bf9fb595c462bed19362eef8125a3ac0f8
         gateway.kgateway.dev/gateway-full-name: gw
         prometheus.io/path: /metrics
         prometheus.io/port: "15020"
@@ -121,11 +121,8 @@ spec:
               fieldPath: metadata.name
         - name: RUST_BACKTRACE
           value: "1"
-        - name: SESSION_KEY
-          valueFrom:
-            secretKeyRef:
-              key: key
-              name: gw-session-key
+        - name: SESSION_KEYRING_FILE
+          value: /var/run/secrets/agentgateway/session-keyring.json
         - name: XDS_ADDRESS
           value: http://xds.cluster.local:9978
         - name: NAMESPACE
@@ -192,6 +189,9 @@ spec:
         - mountPath: /var/run/secrets/xds-tokens
           name: xds-token
           readOnly: true
+        - mountPath: /var/run/secrets/agentgateway
+          name: session-key
+          readOnly: true
       securityContext:
         sysctls:
         - name: net.ipv4.ip_unprivileged_port_start
@@ -202,14 +202,25 @@ spec:
       - configMap:
           name: my-custom-config
         name: custom-config
+      - name: session-key
+        secret:
+          items:
+          - key: keyring
+            path: session-keyring.json
+          secretName: gw-session-key
 status: {}
 ---
 apiVersion: v1
 data:
-  key: MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmYwMDExMjIzMzQ0NTU2Njc3ODg5OWFhYmJjY2RkZWVmZg==
+  keyring: eyJ2ZXJzaW9uIjoidjEiLCJwcmltYXJ5IjoiMDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmYwMDExMjIzMzQ0NTU2Njc3ODg5OWFhYmJjY2RkZWVmZiJ9
 kind: Secret
 metadata:
+  annotations:
+    agentgateway.dev/gateway-name: gw
+    agentgateway.dev/gateway-namespace: default
+    agentgateway.dev/gateway-uid: ""
   labels:
+    agentgateway.dev/managed: session-key
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: gw
   name: gw-session-key

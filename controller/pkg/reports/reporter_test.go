@@ -58,6 +58,28 @@ func TestBuildGatewayStatus(t *testing.T) {
 		assert.Equal(t, 4, len(status.Listeners[0].Conditions))
 	})
 
+	t.Run("preserves controller-managed session key accepted failure", func(t *testing.T) {
+		gw := gw()
+		gw.Status.Conditions = append(gw.Status.Conditions, metav1.Condition{
+			Type:    string(gwv1.GatewayConditionAccepted),
+			Status:  metav1.ConditionFalse,
+			Reason:  "SessionKeyConflict",
+			Message: "session key Secret already exists but is not controller-managed",
+		})
+		rm := reports.NewReportMap()
+
+		r := reports.NewReporter(&rm)
+		r.Gateway(gw)
+
+		status := rm.BuildGWStatus(context.Background(), *gw, 0)
+
+		assert.Equal(t, true, status != nil)
+		accepted := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionAccepted))
+		assert.Equal(t, true, accepted != nil)
+		assert.Equal(t, metav1.ConditionFalse, accepted.Status)
+		assert.Equal(t, "SessionKeyConflict", accepted.Reason)
+	})
+
 	t.Run("set negative gateway conditions from report and not add extra conditions", func(t *testing.T) {
 		gw := gw()
 		rm := reports.NewReportMap()

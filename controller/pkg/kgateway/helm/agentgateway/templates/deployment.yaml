@@ -122,11 +122,8 @@ spec:
             - name: RUST_LOG
               value: {{ ($gateway.logging).level | default "info" | quote }}
             {{- end }}
-            - name: SESSION_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ required "agentgateway.sessionKeySecretName is required" $gateway.sessionKeySecretName }}
-                  key: key
+            - name: SESSION_KEYRING_FILE
+              value: /var/run/secrets/agentgateway/session-keyring.json
             - name: XDS_ADDRESS
               {{- if and $gateway.xds.tls $gateway.xds.tls.enabled }}
               value: "https://{{ $gateway.xds.host }}:{{ $gateway.xds.port }}"
@@ -198,6 +195,9 @@ spec:
             - mountPath: /var/run/secrets/tokens
               name: istio-token
             {{- end }}
+            - name: session-key
+              mountPath: /var/run/secrets/agentgateway
+              readOnly: true
       volumes:
         - name: config-volume
           configMap:
@@ -231,4 +231,10 @@ spec:
                   expirationSeconds: 43200
                   path: istio-token
         {{- end }}
+        - name: session-key
+          secret:
+            secretName: {{ required "agentgateway.sessionKeySecretName is required" $gateway.sessionKeySecretName }}
+            items:
+            - key: keyring
+              path: session-keyring.json
       terminationGracePeriodSeconds: {{($gateway.shutdown).max|default 60|int}}

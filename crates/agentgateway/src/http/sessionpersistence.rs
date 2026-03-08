@@ -1,5 +1,7 @@
 use crate::*;
 
+const SESSION_KEYRING_VERSION: &str = "v1";
+
 #[apply(schema!)]
 pub struct Policy {}
 
@@ -80,6 +82,7 @@ pub enum Error {
 pub enum Encoder {
 	Base64(base64::Encoder),
 	Aes(Arc<aes::Encoder>),
+	KeyRing(Arc<SessionKeyringEncoder>),
 }
 
 impl Encoder {
@@ -87,17 +90,13 @@ impl Encoder {
 		Encoder::Base64(base64::Encoder)
 	}
 	pub fn aes(key: &str) -> anyhow::Result<Encoder> {
-		let key = hex::decode(key)?;
-		// AES-256-GCM requires a 32-byte key (64 hex characters when encoded with `openssl rand -hex 32`).
-		if key.len() != 32 {
-			anyhow::bail!(
-				"invalid AES-256-GCM key length: expected 32 bytes (64 hex characters), got {} bytes ({} hex characters)",
-				key.len(),
-				key.len() * 2,
-			);
-		}
-		let enc = aes::Encoder::new(key.as_ref())?;
-		Ok(Encoder::Aes(Arc::new(enc)))
+		Ok(Encoder::Aes(Arc::new(aes_encoder_from_hex(key)?)))
+	}
+
+	pub(crate) fn session_keyring(keyring: &SessionKeyring) -> anyhow::Result<Encoder> {
+		Ok(Encoder::KeyRing(Arc::new(SessionKeyringEncoder::new(
+			keyring,
+		)?)))
 	}
 }
 
@@ -109,6 +108,7 @@ impl Serialize for Encoder {
 		match self {
 			Encoder::Base64(_) => serializer.serialize_str("base64"),
 			Encoder::Aes(_) => serializer.serialize_str("aes"),
+			Encoder::KeyRing(_) => serializer.serialize_str("aes"),
 		}
 	}
 }
@@ -118,6 +118,7 @@ impl Encoder {
 		match self {
 			Encoder::Base64(e) => Ok(e.encrypt(plaintext)),
 			Encoder::Aes(e) => e.encrypt(plaintext).map_err(Into::into),
+			Encoder::KeyRing(e) => e.encrypt(plaintext).map_err(Into::into),
 		}
 	}
 	pub fn decrypt(&self, encoded: &str) -> Result<Vec<u8>, Error> {
@@ -126,8 +127,110 @@ impl Encoder {
 				.decrypt(encoded)
 				.map_err(|_| Error::InvalidSessionEncoding),
 			Encoder::Aes(e) => e.decrypt(encoded).map_err(Into::into),
+			Encoder::KeyRing(e) => e.decrypt(encoded),
 		}
 	}
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SessionKeyring {
+	pub version: String,
+	pub primary: String,
+	#[serde(default)]
+	pub previous: Vec<String>,
+	#[serde(default, rename = "rotatedAt")]
+	pub rotated_at: Option<String>,
+}
+
+impl SessionKeyring {
+	pub(crate) fn parse(encoded: &str) -> anyhow::Result<Self> {
+		let keyring: Self = serde_json::from_str(encoded)?;
+		keyring.validate()?;
+		Ok(keyring)
+	}
+
+	fn validate(&self) -> anyhow::Result<()> {
+		if self.version != SESSION_KEYRING_VERSION {
+			anyhow::bail!("unsupported session keyring version {}", self.version);
+		}
+
+		let mut seen = std::collections::HashSet::new();
+		validate_hex_key(&self.primary)?;
+		seen.insert(self.primary.as_str());
+
+		for previous in &self.previous {
+			validate_hex_key(previous)?;
+			if !seen.insert(previous.as_str()) {
+				anyhow::bail!("duplicate session key material");
+			}
+		}
+
+		if let Some(rotated_at) = &self.rotated_at {
+			rotated_at.parse::<chrono::DateTime<chrono::Utc>>()?;
+		}
+
+		Ok(())
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct SessionKeyringEncoder {
+	primary: Arc<aes::Encoder>,
+	active: Vec<Arc<aes::Encoder>>,
+}
+
+impl SessionKeyringEncoder {
+	fn new(keyring: &SessionKeyring) -> anyhow::Result<Self> {
+		keyring.validate()?;
+
+		let primary = Arc::new(aes_encoder_from_hex(&keyring.primary)?);
+		let mut active = Vec::with_capacity(1 + keyring.previous.len());
+		active.push(primary.clone());
+		for previous in &keyring.previous {
+			active.push(Arc::new(aes_encoder_from_hex(previous)?));
+		}
+
+		Ok(Self { primary, active })
+	}
+
+	fn encrypt(&self, plaintext: &str) -> Result<String, aes::Error> {
+		self.primary.encrypt(plaintext)
+	}
+
+	fn decrypt(&self, encoded: &str) -> Result<Vec<u8>, Error> {
+		let mut last_err: Option<aes::Error> = None;
+		for decoder in &self.active {
+			match decoder.decrypt(encoded) {
+				Ok(plaintext) => return Ok(plaintext),
+				Err(err) => last_err = Some(err),
+			}
+		}
+
+		Err(last_err.map_or_else(|| Error::InvalidSessionEncoding, Error::Encryption))
+	}
+}
+
+fn aes_encoder_from_hex(key: &str) -> anyhow::Result<aes::Encoder> {
+	let key = hex::decode(key)?;
+	validate_key_length(&key)?;
+	Ok(aes::Encoder::new(key.as_ref())?)
+}
+
+fn validate_hex_key(key: &str) -> anyhow::Result<()> {
+	let key = hex::decode(key)?;
+	validate_key_length(&key)
+}
+
+fn validate_key_length(key: &[u8]) -> anyhow::Result<()> {
+	if key.len() != 32 {
+		anyhow::bail!(
+			"invalid AES-256-GCM key length: expected 32 bytes (64 hex characters), got {} bytes ({} hex characters)",
+			key.len(),
+			key.len() * 2,
+		);
+	}
+	Ok(())
 }
 
 mod base64 {
@@ -208,5 +311,48 @@ mod aes {
 		DecryptionFailed,
 		#[error("invalid format")]
 		InvalidFormat,
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn session_keyring_encodes_with_primary_and_decodes_with_previous() {
+		let old_primary = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+		let new_primary = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100";
+
+		let old_encoder = Encoder::aes(old_primary).expect("old encoder");
+		let keyring = SessionKeyring {
+			version: SESSION_KEYRING_VERSION.to_string(),
+			primary: new_primary.to_string(),
+			previous: vec![old_primary.to_string()],
+			rotated_at: Some("2026-03-08T00:00:00Z".to_string()),
+		};
+		let new_encoder = Encoder::session_keyring(&keyring).expect("keyring encoder");
+
+		let previous_session = SessionState::HTTP(HTTPSessionState {
+			backend: "127.0.0.1:8080".parse().expect("socket addr"),
+		});
+		let previous_token = previous_session
+			.encode(&old_encoder)
+			.expect("encode old session");
+		assert!(SessionState::decode(&previous_token, &new_encoder).is_ok());
+
+		let rotated_token = previous_session
+			.encode(&new_encoder)
+			.expect("encode rotated session");
+		assert!(SessionState::decode(&rotated_token, &new_encoder).is_ok());
+		assert!(SessionState::decode(&rotated_token, &old_encoder).is_err());
+	}
+
+	#[test]
+	fn session_keyring_invalid_entries_fail_closed() {
+		let err = SessionKeyring::parse(
+			r#"{"version":"v1","primary":"00112233445566778899aabbccddeeff00112233445566778899aabbccddee","previous":[]}"#,
+		)
+		.expect_err("invalid keyring must fail");
+		assert!(err.to_string().contains("invalid AES-256-GCM key length"));
 	}
 }
