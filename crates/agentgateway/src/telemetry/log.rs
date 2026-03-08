@@ -699,14 +699,10 @@ pub struct RequestLog {
 }
 
 fn version_to_str(v: &::http::Version) -> Option<&'static str> {
-	match *v {
-		::http::Version::HTTP_09 => Some("0.9"),
-		::http::Version::HTTP_10 => Some("1.0"),
-		::http::Version::HTTP_11 => Some("1.1"),
-		::http::Version::HTTP_2 => Some("2"),
-		::http::Version::HTTP_3 => Some("3"),
-		_ => None,
-	}
+	// Delegate to the centralized HTTP version helper and derive the numeric form
+	// expected by semconv by stripping the "HTTP/" prefix.
+	crate::http::version_str(v).strip_prefix("HTTP/")
+}
 }
 
 impl Drop for DropOnLog {
