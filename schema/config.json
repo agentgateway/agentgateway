@@ -3839,6 +3839,17 @@
         {
           "type": "object",
           "properties": {
+            "backend": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "host": {
               "type": "string"
             }

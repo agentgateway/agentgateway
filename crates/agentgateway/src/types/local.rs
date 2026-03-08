@@ -443,7 +443,7 @@ pub struct LocalRouteName {
 }
 
 #[apply(schema_de!)]
-struct LocalRoute {
+pub struct LocalRoute {
 	#[serde(flatten)]
 	name: LocalRouteName,
 	/// Can be a wildcard
@@ -473,10 +473,10 @@ fn default_weight() -> usize {
 
 #[apply(schema_de!)]
 pub struct FullLocalBackend {
-	name: BackendKey,
-	host: Target,
+	pub name: BackendKey,
+	pub host: Target,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	policies: Option<LocalBackendPolicies>,
+	pub policies: Option<LocalBackendPolicies>,
 }
 
 #[apply(schema_de!)]
@@ -506,6 +506,7 @@ pub enum LocalBackend {
 		name: NamespacedHostname,
 		port: u16,
 	},
+	Backend(BackendKey),
 	// Rest are inlined
 	#[serde(rename = "host")]
 	Opaque(Target), // Hostname or IP
@@ -645,6 +646,7 @@ impl LocalBackend {
 	) -> anyhow::Result<Vec<BackendWithPolicies>> {
 		Ok(match self {
 			LocalBackend::Service { .. } => vec![], // These stay as references
+			LocalBackend::Backend(_) => vec![],     // These stay as references
 			LocalBackend::Opaque(tgt) => vec![Backend::Opaque(name, tgt.clone()).into()],
 			LocalBackend::Dynamic { .. } => vec![Backend::Dynamic(name, ()).into()],
 			LocalBackend::MCP(tgt) => {
@@ -1178,7 +1180,7 @@ struct LocalFrontendPolicies {
 
 #[apply(schema_de!)]
 #[derive(Default)]
-struct FilterOrPolicy {
+pub struct FilterOrPolicy {
 	// Filters. Keep in sync with RouteFilter
 	/// Headers to be modified in the request.
 	#[serde(default)]
@@ -1940,8 +1942,7 @@ async fn convert_listener(
 
 	let mut rs = RouteSet::default();
 	for (idx, l) in routes.into_iter().flatten().enumerate() {
-		let (route, policies, backends) = convert_route(client.clone(), l, idx, key.clone()).await?;
-		all_policies.extend_from_slice(&policies);
+		let (route, backends) = convert_route(client.clone(), l, idx, key.clone()).await?;
 		all_backends.extend_from_slice(&backends);
 		rs.insert(route)
 	}
@@ -1985,12 +1986,12 @@ async fn convert_listener(
 	Ok((l, all_policies, all_backends))
 }
 
-async fn convert_route(
+pub async fn convert_route(
 	client: client::Client,
 	lr: LocalRoute,
 	idx: usize,
 	listener_key: ListenerKey,
-) -> anyhow::Result<(Route, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
+) -> anyhow::Result<(Route, Vec<BackendWithPolicies>)> {
 	let LocalRoute {
 		name,
 		hostnames,
@@ -2019,6 +2020,7 @@ async fn convert_route(
 				name: name.clone(),
 				port: *port,
 			},
+			LocalBackend::Backend(n) => BackendReference::Backend(n.clone()),
 			LocalBackend::Invalid => BackendReference::Invalid,
 			LocalBackend::Dynamic {} => BackendReference::Backend("dynamic".into()),
 			_ => BackendReference::Backend(strng::format!("/{}", backend_key)),
@@ -2057,13 +2059,13 @@ async fn convert_route(
 		backends: backend_refs,
 		inline_policies: resolved.route_policies,
 	};
-	Ok((route, vec![], external_backends))
+	Ok((route, external_backends))
 }
 
 #[derive(Default)]
-struct ResolvedPolicies {
+pub struct ResolvedPolicies {
 	backend_policies: Vec<BackendPolicy>,
-	route_policies: Vec<TrafficPolicy>,
+	pub route_policies: Vec<TrafficPolicy>,
 }
 
 async fn split_frontend_policies(
@@ -2118,7 +2120,10 @@ async fn split_frontend_policies(
 	}
 	Ok(pols)
 }
-async fn split_policies(client: Client, pol: FilterOrPolicy) -> Result<ResolvedPolicies, Error> {
+pub async fn split_policies(
+	client: Client,
+	pol: FilterOrPolicy,
+) -> Result<ResolvedPolicies, Error> {
 	let mut resolved = ResolvedPolicies::default();
 	let ResolvedPolicies {
 		backend_policies,
@@ -2346,7 +2351,7 @@ impl TryInto<ServerTLSConfig> for LocalTLSServerConfig {
 	}
 }
 
-fn local_name(name: Strng) -> ResourceName {
+pub fn local_name(name: Strng) -> ResourceName {
 	ResourceName::new(name, "".into())
 }
 
