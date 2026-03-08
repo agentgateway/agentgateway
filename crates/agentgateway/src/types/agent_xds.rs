@@ -848,6 +848,8 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 						proto::agent::mcp_backend::PrefixMode::Always => true,
 						proto::agent::mcp_backend::PrefixMode::Conditional => false,
 					},
+					allow_degraded: m.allow_degraded,
+					allow_insecure_multiplex: m.allow_insecure_multiplex,
 				},
 			),
 			None => {
@@ -2158,10 +2160,74 @@ fn convert_header_match(h: &[proto::agent::HeaderMatch]) -> Result<Vec<HeaderMat
 
 #[cfg(test)]
 mod tests {
+	use assert_matches::assert_matches;
 	use serde_json::json;
 
 	use super::*;
 	use crate::types::proto::agent::backend_policy_spec::Ai;
+
+	fn mcp_backend(allow_degraded: bool, allow_insecure_multiplex: bool) -> proto::agent::Backend {
+		proto::agent::Backend {
+			key: "mcp-backend-key".to_string(),
+			name: Some(proto::agent::ResourceName {
+				name: "mcp-backend".to_string(),
+				namespace: "default".to_string(),
+			}),
+			kind: Some(proto::agent::backend::Kind::Mcp(proto::agent::McpBackend {
+				targets: vec![proto::agent::McpTarget {
+					name: "server-a".to_string(),
+					backend: Some(proto::agent::BackendReference {
+						kind: Some(proto::agent::backend_reference::Kind::Service(
+							proto::agent::backend_reference::Service {
+								namespace: "default".to_string(),
+								hostname: "mcp.default.svc.cluster.local".to_string(),
+							},
+						)),
+						port: 8080,
+					}),
+					path: "/mcp".to_string(),
+					protocol: proto::agent::mcp_target::Protocol::StreamableHttp as i32,
+				}],
+				stateful_mode: proto::agent::mcp_backend::StatefulMode::Stateful as i32,
+				prefix_mode: proto::agent::mcp_backend::PrefixMode::Conditional as i32,
+				allow_degraded,
+				allow_insecure_multiplex,
+			})),
+			inline_policies: vec![],
+		}
+	}
+
+	#[test]
+	fn test_backend_mcp_allow_degraded_from_proto() -> Result<(), ProtoError> {
+		let converted = BackendWithPolicies::try_from(&mcp_backend(true, false))?;
+		assert_matches!(
+			converted.backend,
+			Backend::MCP(_, mcp_backend) if mcp_backend.allow_degraded
+		);
+
+		let converted = BackendWithPolicies::try_from(&mcp_backend(false, false))?;
+		assert_matches!(
+			converted.backend,
+			Backend::MCP(_, mcp_backend) if !mcp_backend.allow_degraded
+		);
+		Ok(())
+	}
+
+	#[test]
+	fn test_backend_mcp_allow_insecure_multiplex_from_proto() -> Result<(), ProtoError> {
+		let converted = BackendWithPolicies::try_from(&mcp_backend(false, true))?;
+		assert_matches!(
+			converted.backend,
+			Backend::MCP(_, mcp_backend) if mcp_backend.allow_insecure_multiplex
+		);
+
+		let converted = BackendWithPolicies::try_from(&mcp_backend(false, false))?;
+		assert_matches!(
+			converted.backend,
+			Backend::MCP(_, mcp_backend) if !mcp_backend.allow_insecure_multiplex
+		);
+		Ok(())
+	}
 
 	#[test]
 	fn test_policy_spec_to_csrf_policy() -> Result<(), ProtoError> {

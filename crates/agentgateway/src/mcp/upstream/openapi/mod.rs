@@ -373,23 +373,16 @@ pub(crate) fn parse_openapi_schema(
 									"final schema is not an object".to_string(),
 								))?
 								.clone();
-							let tool = Tool {
-								execution: None,
-								meta: None,
-								annotations: None,
-								name: Cow::Owned(name.clone()),
-								description: Some(Cow::Owned(
+							let tool = Tool::new_with_raw(
+								name.clone(),
+								Some(Cow::Owned(
 									op.description
 										.as_ref()
 										.unwrap_or_else(|| op.summary.as_ref().unwrap_or(&name))
 										.to_string(),
 								)),
-								input_schema: Arc::new(final_json),
-								// TODO: support output_schema
-								output_schema: None,
-								icons: None,
-								title: None,
-							};
+								Arc::new(final_json),
+							);
 							let upstream = UpstreamOpenAPICall {
 								// method: Method::from_bytes(method.as_ref()).expect("todo"),
 								method: method.to_string(),
@@ -579,18 +572,9 @@ impl Handler {
 		let res = match request.request {
 			ClientRequest::InitializeRequest(_) => Messages::from_result(
 				id,
-				ServerInfo {
-					capabilities: ServerCapabilities::builder().enable_tools().build(),
-					..Default::default()
-				},
+				ServerInfo::new(ServerCapabilities::builder().enable_tools().build()),
 			),
-			ClientRequest::GetPromptRequest(_) => Messages::from_result(
-				id,
-				GetPromptResult {
-					description: None,
-					messages: vec![],
-				},
-			),
+			ClientRequest::GetPromptRequest(_) => Messages::from_result(id, GetPromptResult::new(vec![])),
 			ClientRequest::ListPromptsRequest(_) => Messages::from_result(
 				id,
 				ListPromptsResult {
@@ -615,27 +599,18 @@ impl Handler {
 					resource_templates: vec![],
 				},
 			),
-			ClientRequest::ListTasksRequest(_) => Messages::from_result(
-				id,
-				ListTasksResult {
-					next_cursor: None,
-					tasks: vec![],
-					total: None,
-				},
-			),
-			ClientRequest::GetTaskInfoRequest(_) => Messages::from_result(
-				id,
-				GetTaskResult {
-					task: Task::default(),
-					meta: None,
-				},
-			),
+			ClientRequest::ListTasksRequest(_) => Messages::from_result(id, ListTasksResult::new(vec![])),
+			ClientRequest::GetTaskInfoRequest(_) => {
+				return Err(UpstreamError::InvalidMethod(method.to_string()));
+			},
 			ClientRequest::GetTaskResultRequest(_) => {
 				return Err(UpstreamError::InvalidMethod(method.to_string()));
 			},
-			ClientRequest::CancelTaskRequest(_) => Messages::empty(),
+			ClientRequest::CancelTaskRequest(_) => {
+				return Err(UpstreamError::InvalidMethod(method.to_string()));
+			},
 			ClientRequest::ReadResourceRequest(_) => {
-				Messages::from_result(id, ReadResourceResult { contents: vec![] })
+				Messages::from_result(id, ReadResourceResult::new(vec![]))
 			},
 			ClientRequest::PingRequest(_)
 			| ClientRequest::CustomRequest(_)
@@ -657,15 +632,10 @@ impl Handler {
 				let serialized_content = serde_json::to_string(&res)
 					.map_err(|e| anyhow::anyhow!("Failed to serialize tool response: {}", e))?;
 
-				Messages::from_result(
-					id,
-					CallToolResult {
-						content: vec![Content::text(serialized_content)],
-						structured_content: Some(res),
-						is_error: None,
-						meta: None,
-					},
-				)
+				let mut result = CallToolResult::default();
+				result.content = vec![Content::text(serialized_content)];
+				result.structured_content = Some(res);
+				Messages::from_result(id, result)
 			},
 			ClientRequest::ListToolsRequest(_) => Messages::from_result(
 				id,

@@ -1,4 +1,5 @@
 use crate::*;
+use rmcp::model::ServerInfo;
 
 #[apply(schema!)]
 pub struct Policy {}
@@ -9,7 +10,9 @@ pub enum SessionState {
 	#[serde(rename = "http")]
 	HTTP(HTTPSessionState),
 	#[serde(rename = "mcp")]
-	MCP(MCPSessionState),
+	MCPSnapshot(MCPSnapshotState),
+	#[serde(rename = "mcpi")]
+	MCPInstanceRef(MCPInstanceRefState),
 }
 
 impl SessionState {
@@ -31,31 +34,70 @@ pub struct HTTPSessionState {
 }
 
 #[apply(schema!)]
-pub struct MCPSessionState {
+pub struct MCPInstanceRefState {
+	// Live-only MCP sessions use an instance ref instead of a full snapshot so
+	// another pod can classify the handle as stale rather than malformed.
+	#[serde(rename = "i")]
+	pub instance_id: String,
 	#[serde(rename = "s")]
-	pub sessions: Vec<MCPSession>,
+	pub session_id: String,
+}
+
+impl MCPInstanceRefState {
+	pub fn new(instance_id: impl Into<String>, session_id: impl Into<String>) -> Self {
+		Self {
+			instance_id: instance_id.into(),
+			session_id: session_id.into(),
+		}
+	}
+}
+
+#[apply(schema!)]
+/// Encodes the authoritative resume contract for multiplexed MCP sessions.
+///
+/// Snapshots are exact-by-name and carry both upstream session state and the
+/// downstream-visible routing shape. Older positional payloads are
+/// intentionally unsupported.
+pub struct MCPSnapshotState {
+	#[serde(rename = "m")]
+	pub members: Vec<MCPSnapshotMember>,
+	#[serde(rename = "h")]
+	pub routing: MCPSnapshotRouting,
 	/// When an upstream has no session, we need to add our own randomness to avoid session collisions.
 	/// This is mostly for logging/etc purposes
 	#[serde(default, rename = "r", skip_serializing_if = "Option::is_none")]
 	random_identifier: Option<String>,
 }
 
+#[apply(schema!)]
+pub struct MCPSnapshotRouting {
+	#[serde(default, rename = "d", skip_serializing_if = "Option::is_none")]
+	pub default_target_name: Option<String>,
+	#[serde(default, rename = "m", skip_serializing_if = "is_false")]
+	pub is_multiplexing: bool,
+}
+
 fn session_id() -> String {
 	uuid::Uuid::new_v4().to_string()
 }
 
-impl MCPSessionState {
-	pub fn new(sessions: Vec<MCPSession>) -> Self {
-		let random_identifier = if sessions.iter().any(|s| s.session.is_none()) {
+impl MCPSnapshotState {
+	pub fn new(members: Vec<MCPSnapshotMember>, routing: MCPSnapshotRouting) -> Self {
+		let random_identifier = if members.iter().any(|s| s.session.is_none()) {
 			Some(session_id())
 		} else {
 			None
 		};
 		Self {
-			sessions,
+			members,
+			routing,
 			random_identifier,
 		}
 	}
+}
+
+fn is_false(v: &bool) -> bool {
+	!*v
 }
 
 #[apply(schema!)]
@@ -66,16 +108,55 @@ pub struct MCPSession {
 	pub backend: Option<SocketAddr>,
 }
 
+#[apply(schema!)]
+pub struct MCPSnapshotMember {
+	#[serde(rename = "n")]
+	pub target: String,
+	#[serde(default, rename = "s", skip_serializing_if = "Option::is_none")]
+	pub session: Option<String>,
+	#[serde(default, rename = "b", skip_serializing_if = "Option::is_none")]
+	pub backend: Option<SocketAddr>,
+	#[cfg_attr(feature = "schema", schemars(with = "serde_json::Value"))]
+	#[serde(rename = "i")]
+	pub info: ServerInfo,
+	#[serde(rename = "f")]
+	pub target_fingerprint: String,
+}
+
+impl MCPSnapshotMember {
+	pub fn new(
+		target: impl Into<String>,
+		session: MCPSession,
+		info: ServerInfo,
+		target_fingerprint: impl Into<String>,
+	) -> Self {
+		Self {
+			target: target.into(),
+			session: session.session,
+			backend: session.backend,
+			info,
+			target_fingerprint: target_fingerprint.into(),
+		}
+	}
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	#[error("invalid session encoding")]
 	InvalidSessionEncoding,
 	#[error("invalid session format: {0}")]
 	InvalidSessionFormat(#[from] serde_json::Error),
+	#[error("multiplexed MCP sessions require encrypted session ids")]
+	EncryptedSessionIdsRequired,
 	#[error("encryption: {0}")]
 	Encryption(#[from] aes::Error),
 }
 
+/// Encodes client-visible MCP identifiers.
+///
+/// `Base64` keeps identifiers ASCII-safe without adding authenticity or
+/// confidentiality. `Aes` encrypts the payload so multiplex session state can be
+/// carried by the client without being forgeable or inspectable.
 #[derive(Debug, Clone)]
 pub enum Encoder {
 	Base64(base64::Encoder),
@@ -86,6 +167,7 @@ impl Encoder {
 	pub fn base64() -> Encoder {
 		Encoder::Base64(base64::Encoder)
 	}
+
 	pub fn aes(key: &str) -> anyhow::Result<Encoder> {
 		let key = hex::decode(key)?;
 		// AES-256-GCM requires a 32-byte key (64 hex characters when encoded with `openssl rand -hex 32`).
@@ -96,8 +178,12 @@ impl Encoder {
 				key.len() * 2,
 			);
 		}
-		let enc = aes::Encoder::new(key.as_ref())?;
-		Ok(Encoder::Aes(Arc::new(enc)))
+		let e = aes::Encoder::new(key.as_ref())?;
+		Ok(Encoder::Aes(Arc::new(e)))
+	}
+
+	pub const fn is_encrypted(&self) -> bool {
+		matches!(self, Encoder::Aes(_))
 	}
 }
 
@@ -120,6 +206,7 @@ impl Encoder {
 			Encoder::Aes(e) => e.encrypt(plaintext).map_err(Into::into),
 		}
 	}
+
 	pub fn decrypt(&self, encoded: &str) -> Result<Vec<u8>, Error> {
 		match self {
 			Encoder::Base64(e) => e

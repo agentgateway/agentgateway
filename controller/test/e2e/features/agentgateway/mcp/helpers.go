@@ -94,6 +94,14 @@ func (s *testingSuite) initializeAndGetSessionID(extraHeaders map[string]string)
 	return sid
 }
 
+func (s *testingSuite) initializeAndGetSessionIDAtAddress(address string, extraHeaders map[string]string) string {
+	initBody := buildInitializeRequest("test-client", 1)
+	headers := mcpHeaders(extraHeaders)
+	sid := s.initializeSessionAtAddress(address, initBody, headers, "cross-pod workflow")
+	s.notifyInitializedAtAddress(address, sid, extraHeaders)
+	return sid
+}
+
 func (s *testingSuite) testUnauthorizedToolsListWithSession(sessionID string, extraHeaders map[string]string, expectedStatus int) {
 	s.T().Log("Testing tools/list with session ID")
 
@@ -122,9 +130,9 @@ func (s *testingSuite) testUnauthorizedToolsListWithSession(sessionID string, ex
 	s.Require().True(IsJSONValid(payload), "tools/list SSE payload is not valid JSON")
 
 	var toolsResp ToolsListResponse
-	_ = json.Unmarshal([]byte(payload), &toolsResp)
-	if toolsResp.Error != nil && strings.Contains(toolsResp.Error.Message, "Session not found") {
-		// Re-init and retry once
+	s.Require().NoError(json.Unmarshal([]byte(payload), &toolsResp), "tools/list unmarshal failed")
+	if toolsResp.Error != nil && isRetryableToolsListError(toolsResp.Error.Message) {
+		// Re-init and retry once on retryable transient errors.
 		s.T().Log("Session expired; re-initializing and retrying tools/list")
 		newID := s.initializeAndGetSessionID(extraHeaders)
 		s.testToolsListWithSession(newID, extraHeaders)
@@ -137,10 +145,10 @@ func (s *testingSuite) testToolsListWithSession(sessionID string, extraHeaders m
 
 	mcpRequest := buildToolsListRequest(3)
 	headers := withSessionID(mcpHeaders(extraHeaders), sessionID)
-	s.sendMCP(&testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest, "--max-time", "10")
-
-	_, body, err := s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
+	resp, body, err := s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
 	s.Require().NoError(err, "tools/list request failed")
+	s.Require().NotNil(resp, "tools/list expected HTTP response")
+	s.Require().Equal(httpOKCode, resp.StatusCode, "tools/list unexpected status code")
 
 	// If session was replaced, some gateways emit a JSON error as SSE payload (HTTP 200).
 	// So parse SSE first, then decide.
@@ -148,22 +156,76 @@ func (s *testingSuite) testToolsListWithSession(sessionID string, extraHeaders m
 	if !ok {
 		s.T().Log("No SSE payload from tools/list; sending notifications/initialized and retrying once")
 		s.notifyInitialized(sessionID, extraHeaders)
-		s.sendMCP(&testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest, "--max-time", "10")
-		_, body, err = s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
+		resp, body, err = s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
 		s.Require().NoError(err, "tools/list retry request failed")
+		s.Require().NotNil(resp, "tools/list retry expected HTTP response")
+		s.Require().Equal(httpOKCode, resp.StatusCode, "tools/list retry unexpected status code")
 		payload, ok = FirstSSEDataPayload(body)
 	}
 	s.Require().True(ok, "expected SSE data payload in tools/list (after retry)")
 	s.Require().True(IsJSONValid(payload), "tools/list SSE payload is not valid JSON")
 
 	var toolsResp ToolsListResponse
-	_ = json.Unmarshal([]byte(payload), &toolsResp)
-	if toolsResp.Error != nil && strings.Contains(toolsResp.Error.Message, "Session not found") {
-		// Re-init and retry once
-		s.T().Log("Session expired; re-initializing and retrying tools/list")
-		newID := s.initializeAndGetSessionID(extraHeaders)
-		s.testToolsListWithSession(newID, extraHeaders)
-		return
+	s.Require().NoError(json.Unmarshal([]byte(payload), &toolsResp), "tools/list unmarshal failed")
+	if toolsResp.Error != nil {
+		if isRetryableToolsListError(toolsResp.Error.Message) {
+			// Re-init and retry once on transient legacy-SSE/session failures.
+			s.T().Logf("Transient tools/list error; re-initializing and retrying: %s", toolsResp.Error.Message)
+			newID := s.initializeAndGetSessionID(extraHeaders)
+			mcpRequest = buildToolsListRequest(4)
+			headers = withSessionID(mcpHeaders(extraHeaders), newID)
+			resp, body, err = s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
+			s.Require().NoError(err, "tools/list retry request failed")
+			s.Require().NotNil(resp, "tools/list reinit retry expected HTTP response")
+			s.Require().Equal(httpOKCode, resp.StatusCode, "tools/list reinit retry unexpected status code")
+			payload, ok = FirstSSEDataPayload(body)
+			s.Require().True(ok, "expected SSE data payload in tools/list (reinit retry)")
+			s.Require().True(IsJSONValid(payload), "tools/list SSE payload is not valid JSON (reinit retry)")
+			s.Require().NoError(json.Unmarshal([]byte(payload), &toolsResp), "tools/list reinit retry unmarshal failed")
+			if toolsResp.Error == nil {
+				s.Require().NotNil(toolsResp.Result, "tools/list missing result")
+				s.T().Logf("tools: %d", len(toolsResp.Result.Tools))
+				s.Require().GreaterOrEqual(len(toolsResp.Result.Tools), 1, "expected at least one tool")
+				return
+			}
+			s.Require().Failf("tools/list", "tools/list returned error after reinit: %d %s", toolsResp.Error.Code, toolsResp.Error.Message)
+			return
+		}
+		s.Require().Failf("tools/list", "tools/list returned error: %d %s", toolsResp.Error.Code, toolsResp.Error.Message)
+	}
+
+	s.Require().NotNil(toolsResp.Result, "tools/list missing result")
+	s.T().Logf("tools: %d", len(toolsResp.Result.Tools))
+	s.Require().GreaterOrEqual(len(toolsResp.Result.Tools), 1, "expected at least one tool")
+}
+
+func (s *testingSuite) testToolsListWithSessionAtAddress(address string, sessionID string, extraHeaders map[string]string) {
+	s.T().Logf("Testing tools/list with session ID against %s", address)
+
+	mcpRequest := buildToolsListRequest(3)
+	headers := withSessionID(mcpHeaders(extraHeaders), sessionID)
+	resp, body, err := s.execCurlMCPAtAddress(address, headers, mcpRequest, "--max-time", "10")
+	s.Require().NoError(err, "tools/list request failed")
+	s.Require().NotNil(resp, "tools/list expected HTTP response")
+	s.Require().Equal(httpOKCode, resp.StatusCode, "tools/list unexpected status code")
+
+	payload, ok := FirstSSEDataPayload(body)
+	if !ok {
+		s.T().Log("No SSE payload from tools/list; sending notifications/initialized and retrying once")
+		s.notifyInitializedAtAddress(address, sessionID, extraHeaders)
+		resp, body, err = s.execCurlMCPAtAddress(address, headers, mcpRequest, "--max-time", "10")
+		s.Require().NoError(err, "tools/list retry request failed")
+		s.Require().NotNil(resp, "tools/list retry expected HTTP response")
+		s.Require().Equal(httpOKCode, resp.StatusCode, "tools/list retry unexpected status code")
+		payload, ok = FirstSSEDataPayload(body)
+	}
+	s.Require().True(ok, "expected SSE data payload in tools/list (after retry)")
+	s.Require().True(IsJSONValid(payload), "tools/list SSE payload is not valid JSON")
+
+	var toolsResp ToolsListResponse
+	s.Require().NoError(json.Unmarshal([]byte(payload), &toolsResp), "tools/list unmarshal failed")
+	if toolsResp.Error != nil {
+		s.Require().Failf("tools/list", "tools/list returned error: %d %s", toolsResp.Error.Code, toolsResp.Error.Message)
 	}
 
 	s.Require().NotNil(toolsResp.Result, "tools/list missing result")
@@ -185,16 +247,27 @@ func (s *testingSuite) notifyInitialized(sessionID string, extraHeaders map[stri
 	time.Sleep(warmupTime)
 }
 
+func (s *testingSuite) notifyInitializedAtAddress(address string, sessionID string, extraHeaders map[string]string) {
+	mcpRequest := buildNotifyInitializedRequest()
+	headers := withSessionID(mcpHeaders(extraHeaders), sessionID)
+
+	resp, _, err := s.execCurlMCPAtAddress(address, headers, mcpRequest, "--max-time", "2")
+	if err == nil && resp != nil && resp.StatusCode == http.StatusUnauthorized {
+		s.T().Log("notifyInitialized hit 401; session likely already GC’d")
+	}
+
+	time.Sleep(warmupTime)
+}
+
 func (s *testingSuite) sendMCP(match *testmatchers.HttpResponse, headers map[string]string, body string, extraArgs ...string) {
 	common.BaseGateway.Send(s.T(), match, s.mcpCurlOptions(headers, body, extraArgs...)...)
 }
 
 func (s *testingSuite) mcpCurlOptions(headers map[string]string, body string, extraArgs ...string) []curl.Option {
-	return mcpCurlOptionsWithPort(80, headers, body, extraArgs...)
+	return mcpCurlOptionsForGateway(headers, body, extraArgs...)
 }
 
-func mcpCurlOptionsWithPort(port int, headers map[string]string, body string, extraArgs ...string) []curl.Option {
-	_ = port
+func mcpCurlOptionsForGateway(headers map[string]string, body string, extraArgs ...string) []curl.Option {
 	timeoutSec := parseMaxTimeSeconds(extraArgs, 10)
 
 	opts := []curl.Option{
@@ -242,9 +315,49 @@ func (s *testingSuite) execCurl(path string, headers map[string]string, body str
 	return resp, bodyText, nil
 }
 
+func (s *testingSuite) execCurlAtAddress(
+	address string,
+	path string,
+	headers map[string]string,
+	body string,
+	extraArgs ...string,
+) (*http.Response, string, error) {
+	timeoutSec := parseMaxTimeSeconds(extraArgs, 10)
+	opts := append(common.GatewayAddressOptions(address),
+		curl.WithPath(path),
+		curl.WithMethod(http.MethodPost),
+		curl.WithConnectionTimeout(timeoutSec),
+	)
+	for k, v := range headers {
+		opts = append(opts, curl.WithHeader(k, v))
+	}
+	if body != "" {
+		opts = append(opts, curl.WithBody(body))
+	}
+
+	resp, err := curl.ExecuteRequest(opts...)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, readErr := io.ReadAll(resp.Body)
+	if readErr != nil && !isTimeoutError(readErr) {
+		return nil, "", readErr
+	}
+
+	bodyText := string(bodyBytes)
+	s.T().Logf("mcp response address=%s status=%d content-type=%q body=%s", address, resp.StatusCode, resp.Header.Get("Content-Type"), bodyText)
+	return resp, bodyText, nil
+}
+
 // helper to run a POST to /mcp with optional headers and body
 func (s *testingSuite) execCurlMCP(headers map[string]string, body string, extraArgs ...string) (*http.Response, string, error) {
 	return s.execCurl("/mcp", headers, body, extraArgs...)
+}
+
+func (s *testingSuite) execCurlMCPAtAddress(address string, headers map[string]string, body string, extraArgs ...string) (*http.Response, string, error) {
+	return s.execCurlAtAddress(address, "/mcp", headers, body, extraArgs...)
 }
 
 func parseMaxTimeSeconds(extraArgs []string, defaultSeconds int) int {
@@ -307,6 +420,19 @@ func FirstSSEDataPayload(body string) (string, bool) {
 	return payload, true
 }
 
+// FirstMCPPayload returns the first JSON-RPC payload from either an SSE response body
+// or a direct JSON response body.
+func FirstMCPPayload(body string) (string, bool) {
+	if payload, ok := FirstSSEDataPayload(body); ok {
+		return payload, true
+	}
+	payload := strings.TrimSpace(body)
+	if payload == "" || !IsJSONValid(payload) {
+		return "", false
+	}
+	return payload, true
+}
+
 // IsJSONValid is a small helper to check the payload is valid JSON
 func IsJSONValid(s string) bool {
 	var js json.RawMessage
@@ -329,10 +455,10 @@ func updateProtocolVersion(payload string) {
 func (s *testingSuite) mustListTools(sessionID, label string, routeHeaders map[string]string) []string {
 	mcpRequest := buildToolsListRequest(999)
 	headers := withRouteHeaders(withSessionID(mcpHeaders(nil), sessionID), routeHeaders)
-	s.sendMCP(&testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest, "--max-time", "10")
-
-	_, body, err := s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
+	resp, body, err := s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
 	s.Require().NoError(err, "%s request failed", label)
+	s.Require().NotNil(resp, "%s expected HTTP response", label)
+	s.Require().Equal(httpOKCode, resp.StatusCode, "%s unexpected status code", label)
 
 	payload, ok := FirstSSEDataPayload(body)
 	s.Require().True(ok, "%s expected SSE data payload", label)
@@ -343,13 +469,13 @@ func (s *testingSuite) mustListTools(sessionID, label string, routeHeaders map[s
 	}
 
 	if toolsResp.Error != nil {
-		// Common transient: session not warm yet; give it one nudge and retry once.
-		if strings.Contains(strings.ToLower(toolsResp.Error.Message), "session not found") ||
-			strings.Contains(strings.ToLower(toolsResp.Error.Message), "start sse client") {
+		// Common transient: session not warm yet or legacy SSE stream was dropped.
+		if isRetryableToolsListError(toolsResp.Error.Message) {
 			s.notifyInitializedWithHeaders(sessionID, routeHeaders)
-			s.sendMCP(&testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest, "--max-time", "10")
-			_, body, err = s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
+			resp, body, err = s.execCurlMCP(headers, mcpRequest, "--max-time", "10")
 			s.Require().NoError(err, "%s retry request failed", label)
+			s.Require().NotNil(resp, "%s retry expected HTTP response", label)
+			s.Require().Equal(httpOKCode, resp.StatusCode, "%s retry unexpected status code", label)
 			payload, ok = FirstSSEDataPayload(body)
 			s.Require().True(ok, "%s expected SSE data payload (retry)", label)
 			s.Require().NoError(json.Unmarshal([]byte(payload), &toolsResp), "%s unmarshal failed (retry)", label)
@@ -367,6 +493,38 @@ func (s *testingSuite) mustListTools(sessionID, label string, routeHeaders map[s
 	return names
 }
 
+var (
+	retryableToolsListSubstrings = []string{
+		"session not found",
+		"start sse client",
+	}
+	retryableInitializeSubstrings = []string{
+		"start sse client",
+		"all upstreams failed to respond to fanout",
+	}
+)
+
+func containsAnySubstring(message string, substrings []string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(message))
+	if normalized == "" {
+		return false
+	}
+	for _, substring := range substrings {
+		if strings.Contains(normalized, substring) {
+			return true
+		}
+	}
+	return false
+}
+
+func isRetryableToolsListError(message string) bool {
+	return containsAnySubstring(message, retryableToolsListSubstrings)
+}
+
+func isRetryableInitializeError(message string) bool {
+	return containsAnySubstring(message, retryableInitializeSubstrings)
+}
+
 func (s *testingSuite) notifyInitializedWithHeaders(sessionID string, routeHeaders map[string]string) {
 	mcpRequest := buildNotifyInitializedRequest()
 	headers := withRouteHeaders(withSessionID(mcpHeaders(nil), sessionID), routeHeaders)
@@ -378,8 +536,7 @@ func (s *testingSuite) notifyInitializedWithHeaders(sessionID string, routeHeade
 
 func (s *testingSuite) initializeSession(initBody string, hdr map[string]string, label string) string {
 	// One deterministic probe with retry to ensure the endpoint is ready
-	s.waitForMCP200(8080, hdr, initBody, label,
-		100*time.Millisecond, 250*time.Millisecond, 500*time.Millisecond, 1*time.Second)
+	s.waitForMCP200(hdr, initBody, label)
 
 	backoffs := []time.Duration{
 		100 * time.Millisecond,
@@ -392,10 +549,10 @@ func (s *testingSuite) initializeSession(initBody string, hdr map[string]string,
 		resp, body, err := s.execCurlMCP(hdr, initBody, "--max-time", "10")
 		s.Require().NoError(err, "%s initialize failed", label)
 
-		payload, ok := FirstSSEDataPayload(body)
+		payload, ok := FirstMCPPayload(body)
 		if ok && strings.TrimSpace(payload) != "" {
 			var initResp InitializeResponse
-			_ = json.Unmarshal([]byte(payload), &initResp)
+			s.Require().NoError(json.Unmarshal([]byte(payload), &initResp), "%s initialize payload unmarshal failed", label)
 			if initResp.Error == nil && initResp.Result != nil {
 				// Update the global protocol version from the server response
 				updateProtocolVersion(payload)
@@ -403,34 +560,87 @@ func (s *testingSuite) initializeSession(initBody string, hdr map[string]string,
 				s.Require().NotEmpty(sid, "%s initialize must return mcp-session-id header", label)
 				return sid
 			}
-			if initResp.Error != nil && !strings.Contains(strings.ToLower(initResp.Error.Message), "start sse client") {
-				s.Require().Failf(label, "initialize returned error: %v", initResp.Error)
+			if initResp.Error != nil {
+				if !isRetryableInitializeError(initResp.Error.Message) {
+					s.Require().Failf(label, "initialize returned error: %v", initResp.Error)
+				}
+				s.T().Logf("%s initialize transient error (attempt %d/%d): %s", label, attempt+1, len(backoffs)+1, initResp.Error.Message)
 			}
 		}
 
 		if attempt < len(backoffs) {
 			time.Sleep(backoffs[attempt])
 		} else {
-			s.Require().Failf(label, "initialize returned no SSE payload")
+			s.Require().Failf(label, "initialize returned no MCP payload")
 		}
 	}
 	return "" // unreachable
 }
 
+func (s *testingSuite) initializeSessionAtAddress(address string, initBody string, hdr map[string]string, label string) string {
+	s.waitForMCP200AtAddress(address, hdr, initBody, label)
+
+	backoffs := []time.Duration{
+		100 * time.Millisecond,
+		250 * time.Millisecond,
+		500 * time.Millisecond,
+		1 * time.Second,
+	}
+	for attempt := 0; attempt <= len(backoffs); attempt++ {
+		resp, body, err := s.execCurlMCPAtAddress(address, hdr, initBody, "--max-time", "10")
+		s.Require().NoError(err, "%s initialize failed", label)
+
+		payload, ok := FirstMCPPayload(body)
+		if ok && strings.TrimSpace(payload) != "" {
+			var initResp InitializeResponse
+			s.Require().NoError(json.Unmarshal([]byte(payload), &initResp), "%s initialize payload unmarshal failed", label)
+			if initResp.Error == nil && initResp.Result != nil {
+				updateProtocolVersion(payload)
+				sid := ExtractMCPSessionID(resp)
+				s.Require().NotEmpty(sid, "%s initialize must return mcp-session-id header", label)
+				return sid
+			}
+			if initResp.Error != nil {
+				if !isRetryableInitializeError(initResp.Error.Message) {
+					s.Require().Failf(label, "initialize returned error: %v", initResp.Error)
+				}
+				s.T().Logf("%s initialize transient error (attempt %d/%d): %s", label, attempt+1, len(backoffs)+1, initResp.Error.Message)
+			}
+		}
+
+		if attempt < len(backoffs) {
+			time.Sleep(backoffs[attempt])
+		} else {
+			s.Require().Failf(label, "initialize returned no MCP payload")
+		}
+	}
+	return ""
+}
+
 func (s *testingSuite) waitForMCP200(
-	port int,
 	headers map[string]string,
 	body string,
 	label string,
-	backoffs ...time.Duration,
 ) {
-	_ = backoffs
 	opts := append(
 		common.GatewayAddressOptions(common.BaseGateway.ResolvedAddress()),
-		mcpCurlOptionsWithPort(port, headers, body, "--max-time", "10")...,
+		mcpCurlOptionsForGateway(headers, body, "--max-time", "10")...,
 	)
 	common.BaseGateway.Send(s.T(), &testmatchers.HttpResponse{StatusCode: httpOKCode}, opts...)
 	s.T().Logf("%s init ready (status=%d)", label, httpOKCode)
+}
+
+func (s *testingSuite) waitForMCP200AtAddress(
+	address string,
+	headers map[string]string,
+	body string,
+	label string,
+) {
+	resp, _, err := s.execCurlMCPAtAddress(address, headers, body, "--max-time", "10")
+	s.Require().NoError(err, "%s init probe failed", label)
+	s.Require().NotNil(resp, "%s init probe expected HTTP response", label)
+	s.Require().Equal(httpOKCode, resp.StatusCode, "%s init probe unexpected status code", label)
+	s.T().Logf("%s init ready at %s (status=%d)", label, address, httpOKCode)
 }
 
 func (s *testingSuite) testInitializeWithExpectedStatus(headers map[string]string, expectedStatus int, _ string) {

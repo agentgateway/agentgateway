@@ -1,0 +1,23 @@
+---
+source: crates/agentgateway/tests/tests/mcp/snapshots.rs
+assertion_line: 51
+expression: report
+---
+{
+  "scenario": "multiplex/prompts_list_all_targets_fail",
+  "steps": [
+    {
+      "action": "list_prompts",
+      "targets": [
+        "meta",
+        "dead"
+      ],
+      "outcome": "mcp_error"
+    },
+    {
+      "action": "error",
+      "code": -32600,
+      "message": "all eligible backends failed for method prompts/list"
+    }
+  ]
+}

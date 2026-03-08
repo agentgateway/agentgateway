@@ -1,0 +1,19 @@
+---
+source: crates/agentgateway/tests/tests/mcp.rs
+expression: report
+---
+{
+  "scenario": "elicitation/roundtrip",
+  "steps": [
+    {
+      "action": "call_tool",
+      "tool": "s1__elicitation"
+    },
+    {
+      "action": "elicitation_response",
+      "structured_content": {
+        "color": "diamond"
+      }
+    }
+  ]
+}

@@ -55,7 +55,7 @@ Once the inspector is running, it will present the port that it's running on, an
 
 ![Inspector](./img/connect.png)
 
-Agentgatway supports both SSE (served under `/sse`) and streamable HTTP (served under `/mcp`).
+Agentgateway supports both SSE (served under `/sse`) and streamable HTTP (served under `/mcp`).
 
 Once you're connected, you can navigate to the tools tab and see the available tools.
 

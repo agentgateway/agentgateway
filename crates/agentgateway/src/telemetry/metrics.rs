@@ -12,7 +12,7 @@ use prometheus_client::metrics::info::Info;
 use prometheus_client::registry::{Metric, Registry, Unit};
 use tracing::{debug, trace};
 
-use crate::mcp::MCPOperation;
+use crate::mcp::{MCPOperation, ResumeFailureReason};
 use crate::proxy::ProxyResponseReason;
 use crate::types::agent::TransportProtocol;
 
@@ -104,6 +104,18 @@ pub struct MCPCall {
 }
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct MCPResumeFailure {
+	pub reason: ResumeFailureReason,
+	pub method: DefaultedUnknown<RichStrng>,
+
+	#[prometheus(flatten)]
+	pub route: RouteIdentifier,
+
+	#[prometheus(flatten)]
+	pub custom: CustomField,
+}
+
+#[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct TCPLabels {
 	pub bind: DefaultedUnknown<RichStrng>,
 	pub gateway: DefaultedUnknown<RichStrng>,
@@ -132,6 +144,7 @@ pub struct Metrics {
 	pub response_bytes: Family<HTTPLabels, counter::Counter>,
 
 	pub mcp_requests: Family<MCPCall, counter::Counter>,
+	pub mcp_resume_failures: Family<MCPResumeFailure, counter::Counter>,
 
 	pub gen_ai_token_usage: Histogram<GenAILabelsTokenUsage>,
 	pub gen_ai_request_duration: Histogram<GenAILabels>,
@@ -290,6 +303,11 @@ impl Metrics {
 				&mut registry,
 				"mcp_requests",
 				"Total number of MCP tool calls",
+			),
+			mcp_resume_failures: build(
+				&mut registry,
+				"mcp_resume_failures",
+				"Total number of MCP session resume/recovery failures",
 			),
 
 			gen_ai_token_usage,

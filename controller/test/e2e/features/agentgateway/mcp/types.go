@@ -74,13 +74,16 @@ var (
 var (
 	_ e2e.NewSuiteFunc = NewTestingSuite
 	// Gateway defaults used by this feature suite
-	gatewayName      = "gateway"
-	gatewayNamespace = "agentgateway-base"
+	gatewayName                  = "gateway"
+	gatewayNamespace             = "agentgateway-base"
+	multiReplicaGatewayName      = "mcp-multireplica-gateway"
+	multiReplicaGatewayNamespace = "default"
 
 	// manifests
 	staticSetupManifest  = filepath.Join(fsutils.MustGetThisDir(), "testdata", "static.yaml")
 	dynamicSetupManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "dynamic.yaml")
 	authnPolicyManifest  = filepath.Join(fsutils.MustGetThisDir(), "testdata", "remote-authn-auth0.yaml")
+	multiReplicaManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "multireplica.yaml")
 
 	// Base test setup - common resources
 	setup = base.TestCase{
@@ -100,5 +103,9 @@ var (
 	// MCP authn keycloak test setup (resources needed for non-dynamic tests)
 	authnSetup = base.TestCase{
 		Manifests: []string{authnPolicyManifest},
+	}
+
+	multiReplicaSetup = base.TestCase{
+		Manifests: []string{multiReplicaManifest},
 	}
 )

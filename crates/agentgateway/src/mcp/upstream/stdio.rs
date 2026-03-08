@@ -12,7 +12,7 @@ use rmcp::model::{
 use rmcp::transport::{TokioChildProcess, Transport};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 use crate::mcp::mergestream::Messages;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
@@ -45,15 +45,23 @@ impl Process {
 		let req_id = req.id.clone();
 		let (sender, receiver) = oneshot::channel();
 
-		self.pending_requests.lock().unwrap().insert(req_id, sender);
-
 		self
+			.pending_requests
+			.lock()
+			.unwrap()
+			.insert(req_id.clone(), sender);
+
+		if self
 			.sender
 			.send((JsonRpcMessage::Request(req), ctx.clone()))
 			.await
-			.map_err(|_| UpstreamError::Send)?;
+			.is_err()
+		{
+			self.pending_requests.lock().unwrap().remove(&req_id);
+			return Err(UpstreamError::Send);
+		}
 
-		let response = receiver.await.map_err(|_| UpstreamError::Recv)?;
+		let response = receiver.await.map_err(|_| UpstreamError::Send)?;
 		Ok(response)
 	}
 	pub async fn get_event_stream(&self) -> Messages {
@@ -69,6 +77,19 @@ impl Process {
 		self
 			.sender
 			.send((JsonRpcMessage::notification(req), ctx.clone()))
+			.await
+			.map_err(|_| UpstreamError::Send)?;
+		Ok(())
+	}
+
+	pub async fn send_raw(
+		&self,
+		msg: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), UpstreamError> {
+		self
+			.sender
+			.send((msg, ctx.clone()))
 			.await
 			.map_err(|_| UpstreamError::Send)?;
 		Ok(())
@@ -106,9 +127,17 @@ impl Process {
 									let _ = sender.send(ServerJsonRpcMessage::Response(res));
 								}
 							},
+							JsonRpcMessage::Error(err) => {
+								let req_id = err.id.clone();
+								if let Some(sender) = pending_requests_clone.lock().unwrap().remove(&req_id) {
+									let _ = sender.send(ServerJsonRpcMessage::Error(err));
+								}
+							},
 							other => {
-								if let Some(sender) = event_stream_send.load().as_ref() {
-									let _ = sender.send(other).await;
+								if let Some(sender) = event_stream_send.load().as_ref()
+									&& sender.send(other).await.is_err()
+								{
+									debug!("dropping stdio server-initiated message after event stream closed");
 								}
 							}
 						}

@@ -268,9 +268,11 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::Stdio(_)) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::OpenAPI(_)) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::UpstreamError(e)) => return e.0.map(http::Body::from),
-			ProxyError::MCP(mcp::Error::SendError(_, _)) => StatusCode::INTERNAL_SERVER_ERROR,
-			// Note: we do not return a 401/403 here, as the obscure that it was rejected due to auth
-			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::INTERNAL_SERVER_ERROR,
+			// JSON-RPC request errors should stay in-protocol (HTTP 200).
+			ProxyError::MCP(mcp::Error::SendError(Some(_), _)) => StatusCode::OK,
+			ProxyError::MCP(mcp::Error::SendError(None, _)) => StatusCode::INTERNAL_SERVER_ERROR,
+			// Note: we do not return 401/403 here to avoid disclosing auth details.
+			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::OK,
 		};
 		let msg = self.to_string();
 		let mut rb = ::http::Response::builder().status(code);
