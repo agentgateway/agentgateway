@@ -924,8 +924,8 @@ impl Drop for DropOnLog {
 			("client.port", Some(log.tcp_info.peer_addr.port().into())),
 			("http.request.method", log.method.display()),
 			("server.address", log.host.display()),
-			("url.path", Some(display(&url_path))),
-			("url.query", url_query.as_ref().map(|q| display(q))),
+			("url.path", url_path.map(display)),
+			("url.query", url_query.map(display)),
 			// TODO: incoming vs outgoing
 			(
 				"network.protocol.version",
