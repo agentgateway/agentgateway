@@ -506,7 +506,6 @@ type Traffic struct {
 	// hostRewrite specifies how to rewrite the Host header for requests.
 	//
 	// If the HTTPRoute `urlRewrite` filter already specifies a host rewrite, this setting is ignored.
-	// +kubebuilder:validation:Enum=Auto;None
 	// +optional
 	HostnameRewrite *HostnameRewrite `json:"hostRewrite,omitempty"`
 
@@ -1348,6 +1347,7 @@ type HostnameRewrite struct {
 	//
 	// This setting defaults to Auto when connecting to hostname-based Backend types, and None otherwise (for Service or
 	// IP-based Backends).
+	// +kubebuilder:validation:Enum=Auto;None
 	// +required
 	Mode HostnameRewriteMode `json:"mode"`
 }
