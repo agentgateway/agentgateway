@@ -528,7 +528,7 @@ impl TestBind {
 				.stores
 				.binds
 				.write()
-				.insert_backend(b.backend.name(), b.into());
+				.insert_backend(b.backend.name(), b);
 		}
 		self
 			.pi
