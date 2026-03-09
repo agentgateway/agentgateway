@@ -302,14 +302,15 @@ spec:
       protocol: GRPC
       path: /v1/traces
 ---
-_err: 'hostRewrite: Unsupported value'
+_err: 'spec.traffic.hostRewrite.mode: Unsupported value'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
   name: traffic-hostrewrite-invalid
 spec:
   traffic:
-    hostRewrite: Custom
+    hostRewrite:
+      mode: Custom
 ---
 _err: ' exactly one of the fields in [targetRefs targetSelectors] must be set'
 apiVersion: agentgateway.dev/v1alpha1
