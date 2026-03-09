@@ -870,11 +870,17 @@ impl<'a> Value<'a> {
 						}
 						let tgt = Some(resolve(target)?);
 
-						// Try call_function first for opaque objects
+						// Try call_function first for opaque and dynamic objects.
 						if let Some(Value::Object(ob)) = &tgt {
 							let ob = ob.clone();
 							let mut fctx = FunctionContext::new(&call.func_name, None, ctx, &call.args, resolver);
 							if let Some(result) = ob.call_function(call.func_name.as_str(), &mut fctx) {
+								return result;
+							}
+						}
+						if let Some(Value::Dynamic(dynamic)) = &tgt {
+							let mut fctx = FunctionContext::new(&call.func_name, None, ctx, &call.args, resolver);
+							if let Some(result) = dynamic.call_function(call.func_name.as_str(), &mut fctx) {
 								return result;
 							}
 						}
@@ -1586,6 +1592,72 @@ mod tests {
 		let result = p.execute_with(&ctx, &vars);
 
 		assert!(result.is_err(), "Should error on missing map key");
+	}
+
+	mod dynamic {
+		use std::sync::Arc;
+
+		use crate::context::MapResolver;
+		use crate::objects::StringValue;
+		use crate::types::dynamic::{DynamicType, DynamicValue};
+		use crate::{Context, ExecutionError, FunctionContext, Program, Value};
+
+		#[derive(Debug)]
+		struct MyDynamic {
+			field: &'static str,
+		}
+
+		impl DynamicType for MyDynamic {
+			fn materialize(&self) -> Value<'_> {
+				let mut map = vector_map::VecMap::with_capacity(1);
+				map.insert(
+					crate::objects::KeyRef::from("field"),
+					Value::from(self.field),
+				);
+				Value::Map(crate::objects::MapValue::Borrow(map))
+			}
+
+			fn field(&self, field: &str) -> Option<Value<'_>> {
+				match field {
+					"field" => Some(Value::from(self.field)),
+					_ => None,
+				}
+			}
+
+			fn call_function<'a, 'rf>(
+				&self,
+				name: &str,
+				ftx: &mut FunctionContext<'a, 'rf>,
+			) -> Option<crate::ResolveResult<'a>>
+			where
+				Self: 'a,
+			{
+				match name {
+					"next" => Some(if ftx.args.is_empty() {
+						Ok(Value::Dynamic(DynamicValue::new_owned(MyDynamic {
+							field: "next",
+						})))
+					} else {
+						Err(ExecutionError::invalid_argument_count(0, ftx.args.len()))
+					}),
+					_ => None,
+				}
+			}
+		}
+
+		#[test]
+		fn test_dynamic_fn() {
+			let value = MyDynamic { field: "value" };
+
+			let mut vars = MapResolver::new();
+			vars.add_variable_from_value("mine", Value::Dynamic(DynamicValue::new(&value)));
+			let ctx = Context::default();
+			let prog = Program::compile("mine.next().field").unwrap();
+			assert_eq!(
+				Ok(Value::String(StringValue::Owned(Arc::from("next")))),
+				prog.execute_with(&ctx, &vars)
+			);
+		}
 	}
 
 	mod opaque {
