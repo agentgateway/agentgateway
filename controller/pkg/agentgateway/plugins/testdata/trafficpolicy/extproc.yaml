@@ -25,23 +25,24 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    key: traffic/default/http:extproc:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: http
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      key: traffic/default/http:extproc:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: http
         namespace: default
-    traffic:
-      extProc:
-        target:
-          port: 4444
-          service:
-            hostname: extproc-svc.default.svc.cluster.local
-            namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        extProc:
+          target:
+            port: 4444
+            service:
+              hostname: extproc-svc.default.svc.cluster.local
+              namespace: default
 status:
   ancestors:
   - ancestorRef:

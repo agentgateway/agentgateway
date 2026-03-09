@@ -20,25 +20,26 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    key: traffic/default/agw:retry:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      key: traffic/default/agw:retry:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
-    traffic:
-      retry:
-        attempts: 3
-        backoff: 10s
-        retryStatusCodes:
-        - 500
-        - 502
-        - 503
-        - 504
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        retry:
+          attempts: 3
+          backoff: 10s
+          retryStatusCodes:
+          - 500
+          - 502
+          - 503
+          - 504
 status:
   ancestors:
   - ancestorRef:

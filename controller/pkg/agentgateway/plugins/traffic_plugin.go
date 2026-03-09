@@ -41,22 +41,23 @@ import (
 )
 
 const (
-	extauthPolicySuffix         = ":extauth"
-	extprocPolicySuffix         = ":extproc"
-	rbacPolicySuffix            = ":rbac"
-	localRateLimitPolicySuffix  = ":rl-local"
-	globalRateLimitPolicySuffix = ":rl-global"
-	transformationPolicySuffix  = ":transformation"
-	csrfPolicySuffix            = ":csrf"
-	corsPolicySuffix            = ":cors"
-	headerModifierPolicySuffix  = ":header-modifier"
-	hostnameRewritePolicySuffix = ":hostname-rewrite"
-	retryPolicySuffix           = ":retry"
-	timeoutPolicySuffix         = ":timeout"
-	jwtPolicySuffix             = ":jwt"
-	basicAuthPolicySuffix       = ":basicauth"
-	apiKeyPolicySuffix          = ":apikeyauth" //nolint:gosec
-	directResponseSuffix        = ":direct-response"
+	extauthPolicySuffix            = ":extauth"
+	extprocPolicySuffix            = ":extproc"
+	rbacPolicySuffix               = ":rbac"
+	localRateLimitPolicySuffix     = ":rl-local"
+	globalRateLimitPolicySuffix    = ":rl-global"
+	transformationPolicySuffix     = ":transformation"
+	csrfPolicySuffix               = ":csrf"
+	corsPolicySuffix               = ":cors"
+	headerModifierPolicySuffix     = ":header-modifier"
+	respHeaderModifierPolicySuffix = ":resp-header-modifier"
+	hostnameRewritePolicySuffix    = ":hostname-rewrite"
+	retryPolicySuffix              = ":retry"
+	timeoutPolicySuffix            = ":timeout"
+	jwtPolicySuffix                = ":jwt"
+	basicAuthPolicySuffix          = ":basicauth"
+	apiKeyPolicySuffix             = ":apikeyauth" //nolint:gosec
+	directResponseSuffix           = ":direct-response"
 )
 
 var logger = logging.New("agentgateway/plugins")
@@ -888,7 +889,7 @@ func processHeaderModifierPolicy(headerModifier *shared.HeaderModifiers, basePol
 
 	if headerModifier.Response != nil {
 		headerModifierPolicyResponse = &api.Policy{
-			Key:    basePolicyName + headerModifierPolicySuffix + attachmentName(target),
+			Key:    basePolicyName + respHeaderModifierPolicySuffix + attachmentName(target),
 			Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 			Target: target,
 			Kind: &api.Policy_Traffic{

@@ -14,20 +14,21 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    key: traffic/default/agw:timeout:default/missing
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      route:
-        kind: HTTPRoute
-        name: missing
+- resource:
+    policy:
+      key: traffic/default/agw:timeout:default/missing
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
-    traffic:
-      timeout:
-        request: 5s
+      target:
+        route:
+          kind: HTTPRoute
+          name: missing
+          namespace: default
+      traffic:
+        timeout:
+          request: 5s
 status:
   ancestors:
   - ancestorRef:

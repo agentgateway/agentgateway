@@ -28,24 +28,25 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    frontend:
-      tracing:
-        path: /custom/v1/traces
-        providerBackend:
-          port: 4318
-          service:
-            hostname: otel-collector.default.svc.cluster.local
-            namespace: default
-    key: frontend/default/tracing-path-http:frontend-tracing:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: tracing-path-http
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      frontend:
+        tracing:
+          path: /custom/v1/traces
+          providerBackend:
+            port: 4318
+            service:
+              hostname: otel-collector.default.svc.cluster.local
+              namespace: default
+      key: frontend/default/tracing-path-http:frontend-tracing:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: tracing-path-http
         namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
 status:
   ancestors:
   - ancestorRef:

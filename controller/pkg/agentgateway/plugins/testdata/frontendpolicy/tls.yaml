@@ -34,28 +34,29 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    frontend:
-      tls:
-        alpn:
-          protocols:
-          - h2
-          - http/1.1
-        cipherSuites:
-        - TLS_AES_256_GCM_SHA384
-        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
-        handshakeTimeout: 15s
-        maxVersion: TLS_V1_3
-        minVersion: TLS_V1_2
-    key: frontend/default/tls-policy:frontend-tls:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: tls-policy
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      frontend:
+        tls:
+          alpn:
+            protocols:
+            - h2
+            - http/1.1
+          cipherSuites:
+          - TLS_AES_256_GCM_SHA384
+          - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+          handshakeTimeout: 15s
+          maxVersion: TLS_V1_3
+          minVersion: TLS_V1_2
+      key: frontend/default/tls-policy:frontend-tls:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: tls-policy
         namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
 status:
   ancestors:
   - ancestorRef:
