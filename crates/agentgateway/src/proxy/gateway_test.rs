@@ -1478,12 +1478,10 @@ async fn dfp_uses_host_port() {
 	assert_eq!(body.uri.path(), path);
 
 	// Also verify telemetry recorded the expected upstream endpoint with the explicit authority port.
-	let log = agent_core::telemetry::testing::eventually_find(&[
-		("scope", "request"),
-		("http.path", &path),
-	])
-	.await
-	.unwrap();
+	let log =
+		agent_core::telemetry::testing::eventually_find(&[("scope", "request"), ("http.path", &path)])
+			.await
+			.unwrap();
 	let expected_endpoint = mock_addr.to_string();
 	assert_eq!(log["endpoint"].as_str(), Some(expected_endpoint.as_str()));
 }
@@ -1498,12 +1496,10 @@ async fn dfp_defaults_to_port_80_for_http() {
 	// No port in URI — should default to 80 per HTTP scheme
 	let _res = send_request(io, Method::GET, &format!("http://127.0.0.1{path}")).await;
 
-	let log = agent_core::telemetry::testing::eventually_find(&[
-		("scope", "request"),
-		("http.path", &path),
-	])
-	.await
-	.unwrap();
+	let log =
+		agent_core::telemetry::testing::eventually_find(&[("scope", "request"), ("http.path", &path)])
+			.await
+			.unwrap();
 	assert_eq!(log["endpoint"].as_str(), Some("127.0.0.1:80"));
 }
 
@@ -1517,11 +1513,9 @@ async fn dfp_defaults_to_port_443_for_https() {
 	// No port in URI over HTTPS listener — should default to 443 per HTTPS scheme
 	let _res = send_request(io, Method::GET, &format!("http://127.0.0.1{path}")).await;
 
-	let log = agent_core::telemetry::testing::eventually_find(&[
-		("scope", "request"),
-		("http.path", &path),
-	])
-	.await
-	.unwrap();
+	let log =
+		agent_core::telemetry::testing::eventually_find(&[("scope", "request"), ("http.path", &path)])
+			.await
+			.unwrap();
 	assert_eq!(log["endpoint"].as_str(), Some("127.0.0.1:443"));
 }
