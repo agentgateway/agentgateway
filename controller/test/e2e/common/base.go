@@ -212,7 +212,7 @@ func (g *Gateway) SendWithResponse(t *testing.T, match *matchers.HttpResponse, o
 		}
 		passedRes = *r
 		return nil
-	}, retry.Timeout(time.Second*300))
+	}, retry.Timeout(time.Second*30))
 	return passedRes
 }
 
