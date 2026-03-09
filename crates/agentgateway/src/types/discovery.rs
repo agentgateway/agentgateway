@@ -464,6 +464,8 @@ pub enum AppProtocol {
 	Http11,
 	Http2,
 	Grpc,
+	Tls,
+	Tcp,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, serde::Serialize, serde::Deserialize)]
@@ -830,8 +832,10 @@ impl From<workload::AppProtocol> for Option<AppProtocol> {
 		match value {
 			workload::AppProtocol::Unknown => None,
 			workload::AppProtocol::Http11 => Some(AppProtocol::Http11),
+			workload::AppProtocol::Tls => Some(AppProtocol::Tls),
 			workload::AppProtocol::Http2 => Some(AppProtocol::Http2),
 			workload::AppProtocol::Grpc => Some(AppProtocol::Grpc),
+			workload::AppProtocol::Tcp => Some(AppProtocol::Tcp),
 		}
 	}
 }
