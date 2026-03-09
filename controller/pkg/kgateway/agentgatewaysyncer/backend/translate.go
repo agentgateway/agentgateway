@@ -236,7 +236,8 @@ func translateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 			for _, service := range matchingServices {
 				for _, port := range service.Spec.Ports {
 					appProtocol := ptr.OrEmpty(port.AppProtocol)
-					if appProtocol != mcpProtocol && appProtocol != mcpProtocolSSE {
+					if appProtocol != mcpProtocol && appProtocol != mcpProtocolSSE &&
+						appProtocol != mcpProtocolLegacy && appProtocol != mcpProtocolSSELegacy {
 						// not a valid MCPBackend protocol
 						continue
 					}
@@ -479,10 +480,10 @@ func translateAwsBackends(
 
 func toMCPProtocol(appProtocol string) api.MCPTarget_Protocol {
 	switch appProtocol {
-	case mcpProtocol:
+	case mcpProtocol, mcpProtocolLegacy:
 		return api.MCPTarget_STREAMABLE_HTTP
 
-	case mcpProtocolSSE:
+	case mcpProtocolSSE, mcpProtocolSSELegacy:
 		return api.MCPTarget_SSE
 
 	default:
