@@ -6583,9 +6583,6 @@ spec:
                       hostRewrite specifies how to rewrite the Host header for requests.
 
                       If the HTTPRoute `urlRewrite` filter already specifies a host rewrite, this setting is ignored.
-                    enum:
-                    - Auto
-                    - None
                     properties:
                       mode:
                         description: |-
@@ -6597,6 +6594,9 @@ spec:
 
                           This setting defaults to Auto when connecting to hostname-based Backend types, and None otherwise (for Service or
                           IP-based Backends).
+                        enum:
+                        - Auto
+                        - None
                         type: string
                     required:
                     - mode
