@@ -18,9 +18,6 @@ use crate::{
 	XDSConfig, cel, client, serdes, telemetry,
 };
 
-const SESSION_KEY_ENV_VAR: &str = "SESSION_KEY";
-const SESSION_KEYRING_FILE_ENV_VAR: &str = "SESSION_KEYRING_FILE";
-
 pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Result<Config> {
 	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents)?;
 	let raw = nested.config.unwrap_or_default();
@@ -228,7 +225,14 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		ThreadingMode::default()
 	};
 
-	let session_encoder = session_encoder(raw.session.as_ref())?;
+	let session_encoder = if let Some(key) = parse::<String>("SESSION_KEY")? {
+		crate::http::sessionpersistence::Encoder::aes(key.trim())?
+	} else {
+		match raw.session.as_ref() {
+			None => crate::http::sessionpersistence::Encoder::base64(),
+			Some(session) => crate::http::sessionpersistence::Encoder::aes(session.key.expose_secret())?,
+		}
+	};
 
 	Ok(crate::Config {
 		ipv6_enabled,
@@ -465,51 +469,6 @@ fn parse_duration(env: &str) -> anyhow::Result<Option<Duration>> {
 		.transpose()
 }
 
-fn session_encoder(
-	raw_session: Option<&crate::RawSession>,
-) -> anyhow::Result<crate::http::sessionpersistence::Encoder> {
-	let session_keyring_file = parse::<PathBuf>(SESSION_KEYRING_FILE_ENV_VAR)?;
-	let raw_session_key = parse::<String>(SESSION_KEY_ENV_VAR)?;
-
-	if session_keyring_file.is_some() && raw_session_key.is_some() {
-		anyhow::bail!(
-			"{SESSION_KEY_ENV_VAR} and {SESSION_KEYRING_FILE_ENV_VAR} are mutually exclusive"
-		);
-	}
-
-	if let Some(path) = session_keyring_file {
-		return session_encoder_from_keyring_file(&path);
-	}
-
-	if let Some(key) = raw_session_key {
-		return session_encoder_from_raw_key(&key);
-	}
-
-	match raw_session {
-		None => Ok(crate::http::sessionpersistence::Encoder::base64()),
-		Some(session) => session_encoder_from_raw_key(session.key.expose_secret()),
-	}
-}
-
-fn session_encoder_from_keyring_file(
-	path: &Path,
-) -> anyhow::Result<crate::http::sessionpersistence::Encoder> {
-	let encoded = std::fs::read_to_string(path).with_context(|| {
-		format!(
-			"failed to read {SESSION_KEYRING_FILE_ENV_VAR} at {}",
-			path.display()
-		)
-	})?;
-	let keyring = crate::http::sessionpersistence::SessionKeyring::parse(encoded.trim())?;
-	crate::http::sessionpersistence::Encoder::session_keyring(&keyring)
-}
-
-fn session_encoder_from_raw_key(
-	key: &str,
-) -> anyhow::Result<crate::http::sessionpersistence::Encoder> {
-	crate::http::sessionpersistence::Encoder::aes(key.trim())
-}
-
 pub fn empty_to_none<A: AsRef<str>>(inp: Option<A>) -> Option<A> {
 	if let Some(inner) = &inp
 		&& inner.as_ref().is_empty()
@@ -674,7 +633,7 @@ mod tests {
 		let inline_key = "f1e1d1c1b1a1918171615141312111000f0e0d0c0b0a09080706050403020100";
 
 		unsafe {
-			env::set_var(SESSION_KEY_ENV_VAR, env_key);
+			env::set_var("SESSION_KEY", env_key);
 		}
 
 		let config = parse_config(
@@ -707,7 +666,7 @@ config:
 		);
 
 		unsafe {
-			env::remove_var(SESSION_KEY_ENV_VAR);
+			env::remove_var("SESSION_KEY");
 		}
 	}
 
@@ -718,7 +677,7 @@ config:
 		let session_key = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
 
 		unsafe {
-			env::set_var(SESSION_KEY_ENV_VAR, session_key);
+			env::set_var("SESSION_KEY", session_key);
 		}
 
 		let config = parse_config("{}".to_string(), None).expect("config should parse");
@@ -728,67 +687,7 @@ config:
 		));
 
 		unsafe {
-			env::remove_var(SESSION_KEY_ENV_VAR);
-		}
-	}
-
-	#[test]
-	fn session_keyring_file_enables_managed_session_encoder() {
-		let _env_lock = lock_env();
-
-		let keyring = r#"{
-			"version":"v1",
-			"primary":"ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100",
-			"previous":["00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"],
-			"rotatedAt":"2026-03-08T00:00:00Z"
-		}"#;
-		let dir = tempfile::tempdir().expect("tempdir");
-		let keyring_path = dir.path().join("session-keyring.json");
-		std::fs::write(&keyring_path, keyring).expect("write keyring");
-
-		unsafe {
-			env::set_var(SESSION_KEYRING_FILE_ENV_VAR, &keyring_path);
-		}
-
-		let config = parse_config("{}".to_string(), None).expect("config should parse");
-		assert!(matches!(
-			config.session_encoder,
-			crate::http::sessionpersistence::Encoder::KeyRing(_)
-		));
-
-		unsafe {
-			env::remove_var(SESSION_KEYRING_FILE_ENV_VAR);
-		}
-	}
-
-	#[test]
-	fn session_key_and_keyring_file_are_mutually_exclusive() {
-		let _env_lock = lock_env();
-
-		let session_key = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
-		let dir = tempfile::tempdir().expect("tempdir");
-		let keyring_path = dir.path().join("session-keyring.json");
-		std::fs::write(
-			&keyring_path,
-			r#"{"version":"v1","primary":"ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100"}"#,
-		)
-		.expect("write keyring");
-
-		unsafe {
-			env::set_var(SESSION_KEY_ENV_VAR, session_key);
-			env::set_var(SESSION_KEYRING_FILE_ENV_VAR, &keyring_path);
-		}
-
-		let err = parse_config("{}".to_string(), None).expect_err("config should fail");
-		assert!(
-			err
-				.to_string()
-				.contains("SESSION_KEY and SESSION_KEYRING_FILE are mutually exclusive")
-		);
-
-		unsafe {
-			env::remove_var(SESSION_KEY_ENV_VAR);
-			env::remove_var(SESSION_KEYRING_FILE_ENV_VAR);
+			env::remove_var("SESSION_KEY");
 		}
 	}
 }

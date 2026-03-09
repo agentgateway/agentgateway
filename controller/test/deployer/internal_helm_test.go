@@ -87,19 +87,17 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 			InputFile: "agentgateway",
 			Validate: func(t *testing.T, outputYaml string) {
 				t.Helper()
-				assert.Contains(t, outputYaml, "name: SESSION_KEYRING_FILE",
-					"deployment should inject the managed session keyring file path via env")
-				assert.Contains(t, outputYaml, "value: /var/run/secrets/agentgateway/session-keyring.json",
-					"deployment should point to the controller-managed session keyring file")
-				assert.Contains(t, outputYaml, "mountPath: /var/run/secrets/agentgateway",
-					"deployment should mount the managed session key Secret as a file")
+				assert.Contains(t, outputYaml, "name: SESSION_KEY",
+					"deployment should inject the managed session key via env")
+				assert.Contains(t, outputYaml, "secretKeyRef:",
+					"deployment should reference the session key Secret from env")
 				assert.Contains(t, outputYaml, "name: gw-session-key",
 					"deployment should reference the controller-managed session key Secret")
 				assert.Contains(t, outputYaml, "kind: Secret",
 					"rendered objects should include the controller-managed session key Secret")
 				assert.Contains(t, outputYaml, "type: Opaque",
 					"session key Secret should use the opaque Secret type")
-				assert.Contains(t, outputYaml, "checksum/session-key: f8dc99f51dfac136be0f82b86b24b0bf9fb595c462bed19362eef8125a3ac0f8",
+				assert.Contains(t, outputYaml, "checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737",
 					"deployment pod template should roll when the managed session key changes")
 			},
 		},
@@ -229,11 +227,13 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 				assert.NotContains(t, outputYaml, "RUST_LOG",
 					"RUST_LOG env var should be deleted via $patch: delete")
 
-				// $patch: replace on volumes still preserves the controller-managed session-key volume.
+				// $patch: replace on volumes - only custom-config volume in volumes list
+				// (volumeMounts is a separate list that still has the original mounts)
 				assert.Contains(t, outputYaml, "name: my-custom-config",
 					"custom configmap from $patch: replace should be present")
-				assert.Contains(t, outputYaml, "name: session-key",
-					"controller-managed session key volume should be restored after overlays")
+				// Verify only one volume exists (the custom one) by checking volumes section structure
+				assert.Contains(t, outputYaml, "volumes:\n      - configMap:\n          name: my-custom-config\n        name: custom-config\nstatus:",
+					"volumes should be replaced with only custom-config")
 
 				// $patch: replace on service ports
 				assert.Contains(t, outputYaml, "port: 80",

@@ -4,8 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
@@ -88,40 +86,4 @@ func TestMergeGatewayAddresses_SortsOutput(t *testing.T) {
 	require.Len(t, out2, 2)
 	require.Equal(t, "a.example.com", out2[0].Value)
 	require.Equal(t, "b.example.com", out2[1].Value)
-}
-
-func TestMergeGatewayConditions_PreservesControllerManagedAcceptedFailures(t *testing.T) {
-	existing := []metav1.Condition{{
-		Type:               string(gwv1.GatewayConditionAccepted),
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: 7,
-		Reason:             "SessionKeyConflict",
-		Message:            "session key Secret already exists but is not controller-managed",
-	}}
-	desired := []metav1.Condition{
-		{
-			Type:    string(gwv1.GatewayConditionAccepted),
-			Status:  metav1.ConditionTrue,
-			Reason:  string(gwv1.GatewayReasonAccepted),
-			Message: "Successfully accepted Gateway",
-		},
-		{
-			Type:    string(gwv1.GatewayConditionProgrammed),
-			Status:  metav1.ConditionTrue,
-			Reason:  string(gwv1.GatewayReasonProgrammed),
-			Message: "Successfully programmed Gateway",
-		},
-	}
-
-	out := mergeGatewayConditions(existing, desired)
-
-	accepted := meta.FindStatusCondition(out, string(gwv1.GatewayConditionAccepted))
-	require.NotNil(t, accepted)
-	require.Equal(t, metav1.ConditionFalse, accepted.Status)
-	require.Equal(t, "SessionKeyConflict", accepted.Reason)
-
-	programmed := meta.FindStatusCondition(out, string(gwv1.GatewayConditionProgrammed))
-	require.NotNil(t, programmed)
-	require.Equal(t, metav1.ConditionFalse, programmed.Status)
-	require.Equal(t, "SessionKeyConflict", programmed.Reason)
 }

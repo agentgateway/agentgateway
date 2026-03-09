@@ -85,9 +85,6 @@ type AgentgatewayParametersConfigs struct {
 	// AgentgatewayParametersLogging.Format, and those typed fields will take
 	// precedence.
 	//
-	// For controller-managed Gateways, `config.session` is reserved for the
-	// per-Gateway managed session-key Secret and will be ignored.
-	//
 	// Example:
 	//
 	//	rawConfig:
@@ -140,9 +137,8 @@ type AgentgatewayParametersConfigs struct {
 	// discouraged. `$$(VAR_NAME)` avoids expansion and results in a literal
 	// `$(VAR_NAME)`.
 	//
-	// For controller-managed Gateways, `SESSION_KEY` and
-	// `SESSION_KEYRING_FILE` are reserved for the per-Gateway managed
-	// session-key Secret and will be ignored.
+	// If `SESSION_KEY` is specified, it takes precedence over the
+	// controller-managed per-Gateway session key Secret.
 	//
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`
