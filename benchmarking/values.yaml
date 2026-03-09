@@ -19,12 +19,6 @@ token:
     key: ""
   hfToken: ""
 
-token:
-  hfSecret:
-    name: ""
-    key: ""
-  hfToken: ""
-
 gcsCredentials:
   secretName: "" # secret containing GCP key (key.json)
 gcsProject: ""  # GCP project ID (sets GOOGLE_CLOUD_PROJECT in the pod)
