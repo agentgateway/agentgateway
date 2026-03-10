@@ -2,12 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::net::TcpListener as StdTcpListener;
 use std::sync::Arc;
 
-use agent_xds::{RejectedConfig, XdsUpdate};
-use anyhow::Context;
-use futures_core::Stream;
-use itertools::Itertools;
-use tracing::{Level, instrument, warn};
-
 use crate::cel::ContextBuilder;
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::{HTTPAuthorizationSet, NetworkAuthorizationSet};
@@ -22,7 +16,7 @@ use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendPolicy, BackendTargetRef, BackendWithPolicies, Bind,
 	BindKey, FrontendPolicy, JwtAuthentication, Listener, ListenerKey, ListenerName,
 	McpAuthentication, PolicyKey, PolicyTarget, Route, RouteKey, RouteName, RouteSet, TCPRoute,
-	TCPRouteSet, TargetedPolicy, TracingPolicy, TrafficPolicy,
+	TCPRouteSet, TargetedPolicy, TrafficPolicy,
 };
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::agent::resource::Kind as XdsKind;
@@ -32,6 +26,11 @@ use crate::types::proto::agent::{
 };
 use crate::types::{agent, frontend};
 use crate::*;
+use agent_xds::{RejectedConfig, XdsUpdate};
+use anyhow::Context;
+use futures_core::Stream;
+use itertools::Itertools;
+use tracing::{Level, instrument, warn};
 
 #[derive(Debug)]
 enum ResourceKind {
@@ -796,31 +795,35 @@ impl Store {
 		pol
 	}
 
-	pub fn all_shutdown_policies(&self) -> Vec<Arc<TracingPolicy>> {
+	pub fn all_shutdown_policies(&self) -> Vec<Box<dyn FnOnce() + Send + Sync + 'static>> {
+		type ShutdownPolicy = Box<dyn FnOnce() + Send + Sync + 'static>;
+
 		self
 			.policies_by_key
-			.iter()
-			.filter_map(|(_, v)| v.policy.as_frontend())
+			.values()
+			.filter_map(|v| v.policy.as_frontend())
 			.filter_map(|v| match v {
-				FrontendPolicy::Tracing(t) => Some(t.clone()),
+				FrontendPolicy::Tracing(t) => {
+					let tracer_policy = Arc::clone(t);
+					Some(Box::new(move || {
+						if let Some(t) = tracer_policy.tracer.get() {
+							t.shutdown()
+						}
+					}) as ShutdownPolicy)
+				},
+				FrontendPolicy::AccessLog(t) => {
+					let access_log_policy = t.access_log_policy.clone();
+					Some(Box::new(move || {
+						if let Some(t) = access_log_policy.as_ref().and_then(|l| l.logger.get()) {
+							t.shutdown()
+						}
+					}) as ShutdownPolicy)
+				},
 				_ => None,
 			})
 			.collect_vec()
 	}
-	pub fn all_access_log_policies(&self) -> Vec<Arc<crate::types::agent::AccessLogPolicy>> {
-		self
-			.binds
-			.values()
-			.flat_map(|bind| {
-				bind
-					.listeners
-					.iter()
-					.map(|listener| self.listener_frontend_policies(&listener.name))
-			})
-			.filter_map(|fp| fp.access_log_otlp)
-			.unique_by(|p| Arc::as_ptr(p) as usize)
-			.collect_vec()
-	}
+
 	pub fn frontend_policies(&self, gateway: PolicyTargetRef) -> FrontendPolices {
 		let gw_rules = self.policies_by_target.get(&gateway);
 		let rules = gw_rules
@@ -834,14 +837,19 @@ impl Store {
 		rules.for_each(|r| pol.set_if_empty(r));
 		pol
 	}
-
-	pub fn listener_frontend_policies(&self, name: &ListenerName) -> FrontendPolices {
+	pub fn listener_frontend_policies(
+		&self,
+		name: &ListenerName,
+		service: Option<PolicyTargetRef>,
+	) -> FrontendPolices {
 		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
 		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
-		let rules = listener
+		let svc = service.and_then(|s| self.policies_by_target.get(&s));
+		let rules = svc
 			.iter()
 			.copied()
 			.flatten()
+			.chain(listener.iter().copied().flatten())
 			.chain(gateway.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
 			.filter_map(|p| p.policy.as_frontend());
@@ -1308,10 +1316,16 @@ impl Store {
 pub struct StoreUpdater {
 	state: Arc<RwLock<Store>>,
 }
-
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutesDump {
+	http_mesh: HashMap<NamespacedHostname, RouteSet>,
+	tcp_mesh: HashMap<NamespacedHostname, TCPRouteSet>,
+}
 #[derive(serde::Serialize)]
 pub struct Dump {
 	binds: Vec<Arc<Bind>>,
+	routes: RoutesDump,
 	policies: Vec<Arc<TargetedPolicy>>,
 	backends: Vec<Arc<BackendWithPolicies>>,
 }
@@ -1328,6 +1342,7 @@ impl StoreUpdater {
 	}
 	pub fn dump(&self) -> Dump {
 		let store = self.state.read().expect("mutex");
+
 		// Services all have hostname, so use that as the key
 		let binds: Vec<_> = store
 			.binds
@@ -1351,6 +1366,10 @@ impl StoreUpdater {
 			binds,
 			policies,
 			backends,
+			routes: RoutesDump {
+				http_mesh: store.service_routes.clone(),
+				tcp_mesh: store.service_tcp_routes.clone(),
+			},
 		}
 	}
 	pub fn sync_local(
@@ -1636,7 +1655,7 @@ mod tests {
 		insert_gateway_level_frontend_policy(&mut store, &listener, "gw_remove");
 		insert_listener_level_frontend_policy(&mut store, &listener, "listener_remove");
 
-		let merged_pols = store.listener_frontend_policies(&listener);
+		let merged_pols = store.listener_frontend_policies(&listener, None);
 		// Verify that listener policy takes precedence over gateway policy
 		assert!(
 			merged_pols.access_log.is_some(),

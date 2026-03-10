@@ -11,9 +11,10 @@ use rmcp::model::{ErrorCode, JsonRpcError};
 
 use crate::http::{HeaderValue, Response, StatusCode, ext_proc};
 use crate::types::agent::{
-	Backend, BackendReference, BackendWithPolicies, ResourceName, SimpleBackend,
+	Backend, BackendReference, BackendTargetRef, BackendWithPolicies, ResourceName, SimpleBackend,
 	SimpleBackendReference, SimpleBackendWithPolicies,
 };
+use crate::types::discovery::Service;
 use crate::*;
 
 #[derive(thiserror::Error, Debug)]
@@ -385,6 +386,24 @@ impl ProxyError {
 	}
 }
 
+#[derive(Clone, Debug)]
+pub struct WaypointService(pub Arc<Service>);
+
+impl AsRef<Service> for WaypointService {
+	fn as_ref(&self) -> &Service {
+		self.0.as_ref()
+	}
+}
+
+impl WaypointService {
+	pub fn as_policy_ref(&self) -> PolicyTargetRef {
+		PolicyTargetRef::Backend(BackendTargetRef::Service {
+			hostname: self.0.hostname.as_str(),
+			namespace: self.0.namespace.as_str(),
+			port: None,
+		})
+	}
+}
 pub fn resolve_backend(
 	b: &BackendReference,
 	pi: &ProxyInputs,
