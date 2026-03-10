@@ -466,8 +466,11 @@ impl Gateway {
 				Self::proxy_bind(bind_name, bind_protocol, raw_stream, inputs, drain).await
 			},
 			TunnelProtocol::HboneWaypoint => {
-				let _ =
+				let err =
 					Self::terminate_waypoint_hbone(bind_name, inputs, raw_stream, policies, drain).await;
+				if let Err(e) = err {
+					warn!(src.addr = %peer_addr, "hbone error: {e}");
+				}
 			},
 			TunnelProtocol::HboneGateway => {
 				let _ = Self::terminate_gateway_hbone(inputs, raw_stream, policies, drain).await;
@@ -862,7 +865,7 @@ impl Gateway {
 
 		// Resolve the HBONE address to a socket address and detect the service protocol
 		// in a single discovery store lookup to avoid redundant read locks.
-		let (socket_addr, is_http) = {
+		let (socket_addr, is_http, should_sniff_tls) = {
 			let discovery = pi.stores.read_discovery();
 			let network = &pi.cfg.network;
 
@@ -909,12 +912,16 @@ impl Gateway {
 					network: network.clone(),
 					address: resolved_addr.ip(),
 				});
+			let should_sniff_tls = svc
+				.as_ref()
+				.map(|s| s.port_is_tls(resolved_addr.port()))
+				.unwrap_or_default();
 			let is_http = match svc {
 				Some(svc) => !svc.port_is_tcp(resolved_addr.port()),
 				None => true,
 			};
 
-			(resolved_addr, is_http)
+			(resolved_addr, is_http, should_sniff_tls)
 		};
 
 		let Ok(resp) = req.send_response(build_response(StatusCode::OK)).await else {
@@ -927,7 +934,7 @@ impl Gateway {
 			drain_tx: None,
 		};
 
-		let socket = Socket::from_hbone(ext, socket_addr, con);
+		let mut socket = Socket::from_hbone(ext, socket_addr, con);
 		if is_http {
 			let _ = Self::proxy(bind_name, pi, None, socket, policies.clone(), drain).await;
 		} else {
@@ -945,6 +952,10 @@ impl Gateway {
 				tcp_routes: Default::default(),
 				routes: Default::default(),
 			});
+			// For waypoint TCP traffic, only sniff TLS if the service port's appProtocol is TLS
+			socket
+				.ext_mut()
+				.insert(crate::transport::stream::WaypointTLSInfo { should_sniff_tls });
 			Self::proxy_tcp(bind_name, pi, Some(listener), socket, drain).await;
 		}
 	}
