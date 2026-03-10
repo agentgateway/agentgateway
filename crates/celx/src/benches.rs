@@ -41,21 +41,6 @@ fn borrow_map_expr(n: usize) -> String {
 }
 
 #[divan::bench(args = [2, 5, 10, 20, 50])]
-fn remove_keys(b: Bencher, n: usize) {
-	let ctx = make_ctx();
-	let expr = format!(
-		r#"{}.removeKeys(k, k.startsWith("x_"))"#,
-		borrow_map_expr(n)
-	);
-	let prog = Program::compile(&expr).unwrap();
-	b.bench(|| {
-		Value::resolve(black_box(prog.expression()), &ctx, &DefaultVariableResolver)
-			.unwrap()
-			.as_static()
-	});
-}
-
-#[divan::bench(args = [2, 5, 10, 20, 50])]
 fn filter_keys(b: Bencher, n: usize) {
 	let ctx = make_ctx();
 	let expr = format!(

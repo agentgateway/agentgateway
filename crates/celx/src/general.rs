@@ -19,7 +19,6 @@ pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("toJson", to_json);
 	ctx.add_function("with", with);
 	ctx.add_function("mapValues", map_values);
-	ctx.add_function("removeKeys", remove_keys);
 	ctx.add_function("filterKeys", filter_keys);
 	ctx.add_function("merge", map_merge);
 	ctx.add_function("variables", variables);
@@ -124,15 +123,11 @@ fn map_values<'a, 'rf, 'b>(
 	.into()
 }
 
-/// Shared implementation for removeKeys/filterKeys.
-/// When `keep_when_true` is true, entries matching the predicate are kept (filterKeys).
-/// When false, entries matching are removed (removeKeys).
-fn filter_map_keys<'a, 'rf, 'b>(
+fn filter_keys<'a, 'rf, 'b>(
 	ftx: &'b mut FunctionContext<'a, 'rf>,
 	this: This,
 	ident: Argument,
 	expr: Argument,
-	keep_when_true: bool,
 ) -> ResolveResult<'a> {
 	let this: Value<'a> = this.load_value(ftx)?;
 	let ident = ident.load_identifier(ftx)?;
@@ -143,11 +138,11 @@ fn filter_map_keys<'a, 'rf, 'b>(
 			let mut res = vector_map::VecMap::with_capacity(map.len());
 			for (k, v) in map.iter() {
 				let resolver = SingleVarResolver::<'a, 'rf>::new(x, ident, k.clone().into());
-				let matches = match Value::resolve(expr, ftx.ptx, &resolver)? {
+				let keep = match Value::resolve(expr, ftx.ptx, &resolver)? {
 					Value::Bool(b) => b,
 					_ => return Err(ExecutionError::NoSuchOverload),
 				};
-				if matches == keep_when_true {
+				if keep {
 					res.insert(k.clone(), v.clone().as_static());
 				}
 			}
@@ -156,24 +151,6 @@ fn filter_map_keys<'a, 'rf, 'b>(
 		_ => return Err(this.error_expected_type(ValueType::Map)),
 	}
 	.into()
-}
-
-fn remove_keys<'a, 'rf, 'b>(
-	ftx: &'b mut FunctionContext<'a, 'rf>,
-	this: This,
-	ident: Argument,
-	expr: Argument,
-) -> ResolveResult<'a> {
-	filter_map_keys(ftx, this, ident, expr, false)
-}
-
-fn filter_keys<'a, 'rf, 'b>(
-	ftx: &'b mut FunctionContext<'a, 'rf>,
-	this: This,
-	ident: Argument,
-	expr: Argument,
-) -> ResolveResult<'a> {
-	filter_map_keys(ftx, this, ident, expr, true)
 }
 
 pub fn map_merge<'a>(

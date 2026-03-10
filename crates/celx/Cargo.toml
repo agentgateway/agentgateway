@@ -9,7 +9,7 @@ publish = { workspace = true }
 path = "src/lib.rs"
 
 [[bench]]
-name = "filter_keys_bench"
+name = "cel_bench"
 harness = false
 required-features = ["internal_benches"]
 

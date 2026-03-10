@@ -110,46 +110,8 @@ fn map_values() {
 }
 
 #[test]
-fn remove_keys() {
-	// Basic: remove key "b"
-	assert(
-		json!({"a": 1}),
-		r#"{"a": 1, "b": 2}.removeKeys(k, k == "b")"#,
-	);
-	// Prefix removal (primary use case)
-	assert(
-		json!({"model": "y"}),
-		r#"{"anthropic_ver": "x", "model": "y"}.removeKeys(k, k.startsWith("anthropic_"))"#,
-	);
-	// No keys match predicate — all kept
-	assert(json!({"a": 1}), r#"{"a": 1}.removeKeys(k, k == "z")"#);
-	// All keys match — empty result
-	assert(json!({}), r#"{"a": 1, "b": 2}.removeKeys(k, true)"#);
-	// Nested values preserved
-	assert(
-		json!({"a": {"x": 1}}),
-		r#"{"a": {"x": 1}, "b": 2}.removeKeys(k, k == "b")"#,
-	);
-	// Chaining with mapValues
-	assert(
-		json!({"a": 2}),
-		r#"{"a": 1, "secret": 99}.removeKeys(k, k == "secret").mapValues(v, v * 2)"#,
-	);
-	// Empty map input
-	assert(json!({}), r#"{}.removeKeys(k, true)"#);
-	// Predicate that errors propagates failure
-	assert_fails(r#"{"a": 1}.removeKeys(k, k / 0)"#);
-	// Dynamic variable receiver
-	assert(json!({"bar": "world"}), r#"vars.removeKeys(k, k == "foo")"#);
-	// Non-bool predicate fails
-	assert_fails(r#"{"a": 1}.removeKeys(k, 42)"#);
-	// Non-map receiver fails
-	assert_fails(r#"[1, 2].removeKeys(k, true)"#);
-}
-
-#[test]
 fn filter_keys() {
-	// Basic: keep only key "a" (tests polarity inversion from removeKeys)
+	// Basic: keep only key "a"
 	assert(
 		json!({"a": 1}),
 		r#"{"a": 1, "b": 2}.filterKeys(k, k == "a")"#,
@@ -159,18 +121,45 @@ fn filter_keys() {
 		json!({"model": "gpt", "messages": []}),
 		r#"{"model": "gpt", "messages": [], "secret": "x"}.filterKeys(k, k == "model" || k == "messages")"#,
 	);
-	// No keys match — empty result (inverse of removeKeys "no match = all kept")
+	// Prefix removal via inverted predicate (replaces removeKeys)
+	assert(
+		json!({"model": "y"}),
+		r#"{"anthropic_ver": "x", "model": "y"}.filterKeys(k, !k.startsWith("anthropic_"))"#,
+	);
+	// No keys match — empty result
 	assert(json!({}), r#"{"a": 1}.filterKeys(k, k == "z")"#);
-	// All keys match — all kept (inverse of removeKeys "all match = empty")
+	// All keys match — all kept
 	assert(
 		json!({"a": 1, "b": 2}),
 		r#"{"a": 1, "b": 2}.filterKeys(k, true)"#,
 	);
-	// Chaining removeKeys then filterKeys
+	// None match (false) — empty result
+	assert(json!({}), r#"{"a": 1, "b": 2}.filterKeys(k, false)"#);
+	// Nested values preserved
+	assert(
+		json!({"a": {"x": 1}}),
+		r#"{"a": {"x": 1}, "b": 2}.filterKeys(k, k != "b")"#,
+	);
+	// Chaining filterKeys with itself
 	assert(
 		json!({"a": 1}),
-		r#"{"a": 1, "b": 2, "c": 3}.removeKeys(k, k == "c").filterKeys(k, k == "a")"#,
+		r#"{"a": 1, "b": 2, "c": 3}.filterKeys(k, k != "c").filterKeys(k, k == "a")"#,
 	);
+	// Chaining with mapValues
+	assert(
+		json!({"a": 2}),
+		r#"{"a": 1, "secret": 99}.filterKeys(k, k != "secret").mapValues(v, v * 2)"#,
+	);
+	// Empty map input
+	assert(json!({}), r#"{}.filterKeys(k, true)"#);
+	// Predicate that errors propagates failure
+	assert_fails(r#"{"a": 1}.filterKeys(k, k / 0)"#);
+	// Dynamic variable receiver
+	assert(json!({"bar": "world"}), r#"vars.filterKeys(k, k != "foo")"#);
+	// Non-bool predicate fails
+	assert_fails(r#"{"a": 1}.filterKeys(k, 42)"#);
+	// Non-map receiver fails
+	assert_fails(r#"[1, 2].filterKeys(k, true)"#);
 }
 
 #[test]
