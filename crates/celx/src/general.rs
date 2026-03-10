@@ -1,13 +1,15 @@
-use std::sync::Arc;
-
 use ::cel::extractors::{Argument, This};
 use ::cel::objects::{MapValue, StringValue, ValueType};
 use ::cel::{Context, FunctionContext, ResolveResult, Value};
+use base64::alphabet;
+use base64::engine::general_purpose::NO_PAD;
+use base64::engine::{Config, DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
 use cel::ExecutionError;
 use cel::context::{SingleVarResolver, VariableResolver};
 use cel::objects::KeyRef;
 use rand::random_range;
 use serde::Deserializer;
+use std::sync::Arc;
 use uuid::Uuid;
 
 pub fn insert_all(ctx: &mut Context) {
@@ -44,12 +46,18 @@ pub fn base64_encode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> Reso
 			.into(),
 	)
 }
-
+pub const STANDARD_MAYBE_PADDED: GeneralPurpose = GeneralPurpose::new(
+	&alphabet::STANDARD,
+	GeneralPurposeConfig::new()
+		.with_encode_padding(true)
+		.with_decode_allow_trailing_bits(false)
+		.with_decode_padding_mode(DecodePaddingMode::Indifferent),
+);
 pub fn base64_decode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
 	// The Go library requires strings, but we accept bytes too.
 	let v = v.load(ftx)?.always_materialize_owned();
 	use base64::Engine;
-	base64::prelude::BASE64_STANDARD
+	STANDARD_MAYBE_PADDED
 		.decode(v.as_bytes_pre_materialized()?)
 		.map(|v| v.into())
 		.map_err(|e| ftx.error(e))
