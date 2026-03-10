@@ -1,0 +1,139 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gw-one
+  namespace: default
+  labels:
+    app: edge
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: http
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gw-two
+  namespace: default
+  labels:
+    app: edge
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: http
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gw-three
+  namespace: default
+  labels:
+    app: internal
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: http
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gw-remote
+  namespace: other
+  labels:
+    app: edge
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: http
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetSelectors:
+    - kind: Gateway
+      group: gateway.networking.k8s.io
+      sectionName: http
+      matchLabels:
+        app: edge
+  traffic:
+    timeouts:
+      request: 5s
+
+---
+# Output
+output:
+- Policy:
+    key: traffic/default/agw:timeout:default/gw-one/http
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      gateway:
+        listener: http
+        name: gw-one
+        namespace: default
+    traffic:
+      timeout:
+        request: 5s
+- Policy:
+    key: traffic/default/agw:timeout:default/gw-two/http
+    name:
+      kind: AgentgatewayPolicy
+      name: agw
+      namespace: default
+    target:
+      gateway:
+        listener: http
+        name: gw-two
+        namespace: default
+    traffic:
+      timeout:
+        request: 5s
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: gw-one
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: gw-two
+      namespace: default
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Attached to all targets
+      reason: Attached
+      status: "True"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway
