@@ -585,35 +585,16 @@ impl HTTPProxy {
 
 		Self::detect_misdirected(log, bind, &req, &selected_listener).snapshot_on_err(log, &mut req)?;
 
-		let mut selected_route = http::route::select_best_route(
+		let (selected_route, path_match) = http::route::select_best_route(
 			inputs.stores.clone(),
 			inputs.cfg.network.clone(),
 			inputs.cfg.self_addr.as_ref(),
 			self.target_address,
 			&selected_listener,
 			&req,
-		);
-		if selected_route.is_none()
-			&& let Some(rewritten_uri) = crate::mcp::pre_route_rewrite_uri(&req)
-		{
-			let original_uri = req.uri().clone();
-			*req.uri_mut() = rewritten_uri;
-			let rewritten_selected = http::route::select_best_route(
-				inputs.stores.clone(),
-				inputs.cfg.network.clone(),
-				inputs.cfg.self_addr.as_ref(),
-				self.target_address,
-				&selected_listener,
-				&req,
-			);
-			*req.uri_mut() = original_uri;
-			selected_route = rewritten_selected.and_then(|(route, path_match)| {
-				route_has_mcp_backend(inputs.as_ref(), &route).then_some((route, path_match))
-			});
-		}
-		let (selected_route, path_match) = selected_route
-			.ok_or(ProxyError::RouteNotFound)
-			.snapshot_on_err(log, &mut req)?;
+		)
+		.ok_or(ProxyError::RouteNotFound)
+		.snapshot_on_err(log, &mut req)?;
 		log.route_name = Some(selected_route.name.clone());
 		// Record the matched path for tracing/logging span names
 		log.path_match = Some(match &path_match {
@@ -1035,15 +1016,6 @@ fn resolve_backend(b: RouteBackendReference, pi: &ProxyInputs) -> Result<RouteBa
 	})
 }
 
-fn route_has_mcp_backend(inputs: &ProxyInputs, route: &Route) -> bool {
-	route.backends.iter().any(|backend_ref| {
-		let Ok(backend) = resolve_backend(backend_ref.clone(), inputs) else {
-			return false;
-		};
-		matches!(backend.backend.backend, Backend::MCP(_, _))
-	})
-}
-
 async fn handle_upgrade(
 	req_upgrade_type: RequestUpgrade,
 	mut resp: Response,
@@ -1250,7 +1222,6 @@ async fn make_backend_call(
 	let policy_client = PolicyClient {
 		inputs: inputs.clone(),
 	};
-	let mut mcp_passthrough_rewrite: Option<crate::mcp::PassthroughProtectedResource> = None;
 
 	// The MCP backend aggregates multiple backends into a single backend.
 	// In some cases, we want to treat this as a normal backend, so we swap it out.
@@ -1262,20 +1233,6 @@ async fn make_backend_call(
 					.mcp_state
 					.should_passthrough(&base_policies, mcp_backend, &req)
 			{
-				if req.uri().path().contains("/.well-known/") {
-					req.headers_mut().remove(header::ACCEPT_ENCODING);
-				}
-				match crate::mcp::passthrough_well_known(&req) {
-					Some(crate::mcp::PassthroughWellKnown::UnsupportedAuthorizationServer) => {
-						return Err(ProxyResponse::from(ProxyError::RouteNotFound));
-					},
-					Some(crate::mcp::PassthroughWellKnown::ProtectedResource(rewrite)) => {
-						*req.uri_mut() = rewrite.upstream_uri.clone();
-						mcp_passthrough_rewrite = Some(rewrite);
-					},
-					None => {},
-				}
-
 				let target = super::resolve_simple_backend_with_policies(&be, inputs.as_ref())?;
 				let tgt = target.backend.target();
 				let policies = inputs
@@ -1675,13 +1632,6 @@ async fn make_backend_call(
 	};
 	// TODO: we currently do not support ImmediateResponse from inference router
 	let _ = maybe_inference.mutate_response(&mut resp).await?;
-	if let Some(rewrite) = &mcp_passthrough_rewrite {
-		crate::mcp::rewrite_passthrough_www_authenticate(&mut resp, rewrite)
-			.map_err(ProxyResponse::from)?;
-		crate::mcp::rewrite_passthrough_protected_resource_metadata(&mut resp, rewrite)
-			.await
-			.map_err(ProxyResponse::from)?;
-	}
 	Ok(resp)
 }
 
@@ -2016,7 +1966,6 @@ impl ResponsePolicies {
 		}
 
 		merge_in_headers(Some(self.response_headers.clone()), resp.headers_mut());
-
 		Ok(())
 	}
 }
