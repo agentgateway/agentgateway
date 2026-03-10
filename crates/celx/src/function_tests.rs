@@ -141,6 +141,8 @@ fn remove_keys() {
 	assert_fails(r#"{"a": 1}.removeKeys(k, k / 0)"#);
 	// Dynamic variable receiver
 	assert(json!({"bar": "world"}), r#"vars.removeKeys(k, k == "foo")"#);
+	// Non-bool predicate fails
+	assert_fails(r#"{"a": 1}.removeKeys(k, 42)"#);
 	// Non-map receiver fails
 	assert_fails(r#"[1, 2].removeKeys(k, true)"#);
 }

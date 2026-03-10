@@ -22,6 +22,11 @@ hashbrown.workspace = true
 serde_regex.workspace = true
 vector-map.workspace = true
 
+[[bench]]
+name = "filter_keys_bench"
+harness = false
+
 [dev-dependencies]
 anyhow.workspace = true
 assert_matches.workspace = true
+divan.workspace = true

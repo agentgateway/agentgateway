@@ -141,12 +141,14 @@ fn filter_map_keys<'a, 'rf, 'b>(
 	match this {
 		Value::Map(map) => {
 			let mut res = vector_map::VecMap::with_capacity(map.len());
-			for k in map.iter_keys() {
+			for (k, v) in map.iter() {
 				let resolver = SingleVarResolver::<'a, 'rf>::new(x, ident, k.clone().into());
-				let matches = Value::resolve(expr, ftx.ptx, &resolver)? == Value::Bool(true);
+				let matches = match Value::resolve(expr, ftx.ptx, &resolver)? {
+					Value::Bool(b) => b,
+					_ => return Err(ExecutionError::NoSuchOverload),
+				};
 				if matches == keep_when_true {
-					let v = map.get(&k).unwrap().clone();
-					res.insert(k.clone(), v.as_static());
+					res.insert(k.clone(), v.clone().as_static());
 				}
 			}
 			Value::Map(MapValue::Borrow(res))
