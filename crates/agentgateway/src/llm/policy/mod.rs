@@ -9,6 +9,7 @@ use crate::types::agent::{BackendPolicy, HeaderMatch, HeaderValueMatch, SimpleBa
 use crate::*;
 use ::http::HeaderMap;
 use bytes::Bytes;
+use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -835,15 +836,20 @@ impl Policy {
 								return Some(RegexResult::Reject);
 							},
 							Action::Mask => {
-								// Sort in reverse to avoid index shifting during replacement
-								let mut sorted_results = results;
-								sorted_results.sort_by(|a, b| b.start.cmp(&a.start));
-
-								for result in sorted_results {
-									current_content.replace_range(
-										result.start..result.end,
-										&format!("<{}>", result.entity_type.to_uppercase()),
-									);
+								// Replace matches in reverse order while also combining any overlapping ranges
+								let replacement = format!("<{}>", results[0].entity_type);
+								for range in results
+									.into_iter()
+									.map(|r| r.start..r.end)
+									.sorted_unstable_by(|a, b| b.start.cmp(&a.start).then_with(|| a.end.cmp(&b.end)))
+									.coalesce(|a, b| {
+										if b.end > a.start {
+											Ok(b.start..std::cmp::max(a.end, b.end))
+										} else {
+											Err((a, b))
+										}
+									}) {
+									current_content.replace_range(range, &replacement);
 								}
 								content_modified = true;
 							},
@@ -1365,4 +1371,47 @@ fn test_unmarshal_request_with_transformation_policy() {
 
 	assert_eq!(out.get("model"), Some(&json!("model")));
 	assert_eq!(out.get("max_tokens"), Some(&json!(50)));
+}
+
+#[cfg(test)]
+#[rstest::rstest]
+#[case::single_email(
+  vec![RegexRule::Builtin { builtin: Builtin::Email }],
+	"contact john.doe@example.com now",
+	"contact <EMAIL_ADDRESS> now",
+)]
+#[case::multiple_emails(
+  vec![RegexRule::Builtin { builtin: Builtin::Email }],
+	"contact john@example.com or jane@other.com for help",
+	"contact <EMAIL_ADDRESS> or <EMAIL_ADDRESS> for help",
+)]
+#[case::ssn_in_sentence(
+  vec![RegexRule::Builtin { builtin: Builtin::Ssn }],
+	"My ssn is 123-45-6789 ok",
+	"My ssn is <SSN> ok",
+)]
+#[case::builtin_credit_card_and_regex(
+  vec![
+    RegexRule::Builtin { builtin: Builtin::CreditCard },
+    RegexRule::Regex { pattern: regex::Regex::new(r"\d{2}").unwrap() },
+  ],
+	"Card number: 4111-1111-1111-1111 or id:12-34",
+	"Card number: <CREDIT_CARD> or id:<masked>-<masked>",
+)]
+fn test_apply_prompt_guard_regex_mask(
+	#[case] rules: Vec<RegexRule>,
+	#[case] input: &str,
+	#[case] expected: &str,
+) {
+	let result = Policy::apply_prompt_guard_regex(
+		input,
+		&RegexRules {
+			action: Action::Mask,
+			rules,
+		},
+	);
+	match result {
+		Some(RegexResult::Mask(masked)) => assert_eq!(masked, expected),
+		_ => panic!("expected masked result"),
+	}
 }
