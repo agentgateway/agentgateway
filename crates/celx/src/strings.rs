@@ -10,8 +10,8 @@ use cel::{ExecutionError, FunctionContext, ResolveResult, Value};
 pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("charAt", char_at);
 	ctx.add_function("indexOf", index_of);
-	ctx.add_function("join", join);
 	ctx.add_function("lastIndexOf", last_index_of);
+	ctx.add_function("join", join);
 	ctx.add_function("lowerAscii", lower_ascii);
 	ctx.add_function("stripPrefix", strip_prefix);
 	ctx.add_function("stripSuffix", strip_suffix);
@@ -45,27 +45,25 @@ pub fn index_of<'a>(
 ) -> ResolveResult<'a> {
 	let this: StringValue = this.load_value(ftx)?;
 	let arg: StringValue = arg.load_value(ftx)?;
-	match ftx.args.len() {
-		1 => match this.as_ref().find(arg.as_ref()) {
-			None => Ok((-1).into()),
-			Some(idx) => Ok((idx as u64).into()),
+	let this_str = this.as_ref();
+	let needle = arg.as_ref();
+	let base = match ftx.args.len() {
+		1 => 0,
+		2 => ftx.arg::<Value>(1)?.as_unsigned()?,
+		_ => {
+			return Err(ExecutionError::FunctionError {
+				function: "String.indexOf".to_owned(),
+				message: format!("Expects 2 arguments at most, got `{}`!", ftx.args.len()),
+			});
 		},
-		2 => {
-			let base_value: Value = ftx.arg(1)?;
-			let base = base_value.as_unsigned()?;
-			let this_str = this.as_ref();
-			if base >= this_str.len() {
-				return Ok((-1).into());
-			}
-			match this_str[base..].find(arg.as_ref()) {
-				None => Ok((-1).into()),
-				Some(idx) => Ok(Value::UInt((base + idx) as u64)),
-			}
-		},
-		_ => Err(ExecutionError::FunctionError {
-			function: "String.indexOf".to_owned(),
-			message: format!("Expects 2 arguments at most, got `{}`!", ftx.args.len()),
-		}),
+	};
+	let Some(base_byte) = char_to_byte_idx(this_str, base) else {
+		return Ok(Value::Int(-1));
+	};
+	let suffix = &this_str[base_byte..];
+	match suffix.find(needle) {
+		Some(idx) => Ok(Value::Int((base + suffix[..idx].chars().count()) as i64)),
+		None => Ok(Value::Int(-1)),
 	}
 }
 
@@ -76,28 +74,36 @@ pub fn last_index_of<'a>(
 ) -> ResolveResult<'a> {
 	let this: StringValue = this.load_value(ftx)?;
 	let arg: StringValue = arg.load_value(ftx)?;
-	match ftx.args.len() {
-		1 => match this.as_ref().rfind(arg.as_ref()) {
-			None => Ok((-1).into()),
-			Some(idx) => Ok((idx as u64).into()),
+	let this_str = this.as_ref();
+	let needle = arg.as_ref();
+	let (base, has_base) = match ftx.args.len() {
+		1 => (0, false),
+		2 => (ftx.arg::<Value>(1)?.as_unsigned()?, true),
+		_ => {
+			return Err(ExecutionError::FunctionError {
+				function: "String.lastIndexOf".to_owned(),
+				message: format!("Expects 2 arguments at most, got `{}`!", ftx.args.len()),
+			});
 		},
-		2 => {
-			let base_value: Value = ftx.arg(1)?;
-			let base = base_value.as_unsigned()?;
-			let this_str = this.as_ref();
-			if base >= this_str.len() {
-				return Ok((-1).into());
-			}
-			match this_str[base..].rfind(arg.as_ref()) {
-				None => Ok((-1).into()),
-				Some(idx) => Ok(Value::UInt(idx as u64)),
-			}
-		},
-		_ => Err(ExecutionError::FunctionError {
-			function: "String.lastIndexOf".to_owned(),
-			message: format!("Expects 2 arguments at most, got `{}`!", ftx.args.len()),
-		}),
+	};
+	let Some(base_byte) = char_to_byte_idx(this_str, base) else {
+		return Ok(Value::Int(-1));
+	};
+	if has_base && base_byte >= this_str.len() {
+		return Ok(Value::Int(-1));
 	}
+	let suffix = &this_str[base_byte..];
+	match suffix.rfind(needle) {
+		Some(idx) => Ok(Value::Int(suffix[..idx].chars().count() as i64)),
+		None => Ok(Value::Int(-1)),
+	}
+}
+
+fn char_to_byte_idx(s: &str, idx: usize) -> Option<usize> {
+	s.char_indices()
+		.map(|(byte_idx, _)| byte_idx)
+		.chain(std::iter::once(s.len()))
+		.nth(idx)
 }
 
 pub fn join<'a>(ftx: &mut FunctionContext<'a, '_>, this: This) -> ResolveResult<'a> {
@@ -303,6 +309,7 @@ pub fn substring<'a>(
 		}),
 	}
 }
+
 #[cfg(test)]
 mod tests {
 	use cel::{Context, Program};
@@ -411,5 +418,13 @@ mod tests {
 		assert_eq!(eval("'tacocat'.substring(4)"), json!("cat"));
 		assert_eq!(eval("'tacocat'.substring(0, 4)"), json!("taco"));
 		assert_eq!(eval("'ta©o©αT'.substring(2, 6)"), json!("©o©α"));
+
+		assert_eq!(eval("'café_query'.indexOf('query', 4)"), json!(5));
+		assert_eq!(eval("'café_query'.indexOf('query')"), json!(5));
+		assert_eq!(eval("'résumé'.indexOf('é', 2)"), json!(5));
+		assert_eq!(eval("'résumé'.lastIndexOf('é')"), json!(5));
+		assert_eq!(eval("'🎉hello'.indexOf('hello')"), json!(1));
+		assert_eq!(eval("'🎉hello🎉'.indexOf('🎉', 1)"), json!(6));
+		assert_eq!(eval("'hello🎉world🎉'.lastIndexOf('🎉')"), json!(11));
 	}
 }
