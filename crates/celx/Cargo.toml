@@ -8,6 +8,14 @@ publish = { workspace = true }
 [lib]
 path = "src/lib.rs"
 
+[[bench]]
+name = "filter_keys_bench"
+harness = false
+required-features = ["internal_benches"]
+
+[features]
+internal_benches = ["divan"]
+
 [dependencies]
 cel.workspace = true
 once_cell.workspace = true
@@ -21,12 +29,8 @@ uuid.workspace = true
 hashbrown.workspace = true
 serde_regex.workspace = true
 vector-map.workspace = true
-
-[[bench]]
-name = "filter_keys_bench"
-harness = false
+divan = { workspace = true, optional = true }
 
 [dev-dependencies]
 anyhow.workspace = true
 assert_matches.workspace = true
-divan.workspace = true

@@ -8,6 +8,9 @@ mod strings;
 #[cfg(test)]
 #[path = "function_tests.rs"]
 mod tests;
+#[cfg(feature = "internal_benches")]
+#[path = "benches.rs"]
+mod benches;
 
 pub use flatten::FlattenSignal;
 pub use optimize::DefaultOptimizer;
