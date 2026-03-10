@@ -257,6 +257,15 @@ func (d *Deployer) SetNamespaceAndOwnerWithGVK(owner client.Object, ownerGVK sch
 	return objs
 }
 
+func isOwnedByController(obj metav1.Object, ownerUID types.UID) bool {
+	for _, ref := range obj.GetOwnerReferences() {
+		if ref.UID == ownerUID && ref.Controller != nil && *ref.Controller {
+			return true
+		}
+	}
+	return false
+}
+
 func (d *Deployer) DeployObjs(ctx context.Context, objs []client.Object) error {
 	return d.DeployObjsWithSource(ctx, objs, nil)
 }
@@ -327,6 +336,81 @@ func (d *Deployer) DeployObjsWithSource(ctx context.Context, objs []client.Objec
 			return fmt.Errorf("failed to apply object %s %s/%s: %w", u.GetObjectKind().GroupVersionKind().String(), u.GetNamespace(), u.GetName(), err)
 		}
 	}
+	return nil
+}
+
+// PruneRemovedResources deletes PDB/HPA/VPA resources that are owned by the owner
+// but are no longer in the desired set of objects. This prevents stale autoscaling
+// resources from persisting when configuration changes.
+func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Object, desiredObjs []client.Object) error {
+	ownerUID := owner.GetUID()
+	ownerNamespace := owner.GetNamespace()
+
+	// Build map of desired resources by GVK
+	desiredByGVK := make(map[schema.GroupVersionKind]map[string]bool)
+	for _, obj := range desiredObjs {
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		if _, exists := desiredByGVK[gvk]; !exists {
+			desiredByGVK[gvk] = make(map[string]bool)
+		}
+		desiredByGVK[gvk][obj.GetName()] = true
+	}
+
+	// Check each target GVK for resources to prune
+	targetGVKs := []schema.GroupVersionKind{
+		wellknown.PodDisruptionBudgetGVK,
+		wellknown.HorizontalPodAutoscalerGVK,
+		wellknown.VerticalPodAutoscalerGVK,
+	}
+
+	for _, gvk := range targetGVKs {
+		// Convert GVK to GVR
+		gvr, err := d.gvkToGVR(gvk)
+		if err != nil {
+			logger.Debug("skipping pruning for unknown GVK", "gvk", gvk.String(), "error", err)
+			continue
+		}
+
+		// List all resources of this type in the namespace
+		client := d.client.Dynamic().Resource(gvr).Namespace(ownerNamespace)
+		list, err := client.List(ctx, metav1.ListOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				// Resource type doesn't exist (e.g., VPA CRD not installed)
+				logger.Debug("resource type not found, skipping pruning", "gvk", gvk.String())
+				continue
+			}
+			return fmt.Errorf("failed to list resources for pruning %s: %w", gvk.String(), err)
+		}
+
+		// Check each resource for pruning
+		for _, item := range list.Items {
+			// Only process resources owned by this controller
+			if !isOwnedByController(&item, ownerUID) {
+				continue
+			}
+
+			// Check if resource is in desired set
+			resourceName := item.GetName()
+			if desiredSet, exists := desiredByGVK[gvk]; exists && desiredSet[resourceName] {
+				// Resource is desired, keep it
+				continue
+			}
+
+			// Resource is not desired, delete it
+			logger.Info("pruning removed resource",
+				"gvk", gvk.String(),
+				"namespace", ownerNamespace,
+				"name", resourceName,
+				"owner", owner.GetName())
+
+			err := client.Delete(ctx, resourceName, metav1.DeleteOptions{})
+			if err != nil && !apierrors.IsNotFound(err) {
+				return fmt.Errorf("failed to delete resource %s/%s: %w", gvk.String(), resourceName, err)
+			}
+		}
+	}
+
 	return nil
 }
 
