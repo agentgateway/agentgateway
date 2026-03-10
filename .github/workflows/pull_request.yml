@@ -32,8 +32,6 @@ jobs:
           validate: false
     runs-on: ${{ matrix.os }}
     steps:
-    - if: ${{ startsWith(matrix.os, 'windows-') }}
-      run: git config --global core.autocrlf true
     - uses: actions/checkout@v6
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
