@@ -57,9 +57,10 @@ pub fn index_of<'a>(
 			});
 		},
 	};
-	let Some(base_byte) = char_to_byte_idx(this_str, base) else {
+	if base >= this_str.chars().count() {
 		return Ok(Value::Int(-1));
-	};
+	}
+	let base_byte = char_to_byte_idx(this_str, base);
 	let suffix = &this_str[base_byte..];
 	match suffix.find(needle) {
 		Some(idx) => Ok(Value::Int((base + suffix[..idx].chars().count()) as i64)),
@@ -76,9 +77,17 @@ pub fn last_index_of<'a>(
 	let arg: StringValue = arg.load_value(ftx)?;
 	let this_str = this.as_ref();
 	let needle = arg.as_ref();
-	let (base, has_base) = match ftx.args.len() {
-		1 => (0, false),
-		2 => (ftx.arg::<Value>(1)?.as_unsigned()?, true),
+	let suffix = match ftx.args.len() {
+		1 => this_str,
+		2 => {
+			let base = ftx.arg::<Value>(1)?.as_unsigned()?;
+			if base >= this_str.chars().count() {
+				return Ok(Value::Int(-1));
+			}
+			let end_char = base.saturating_add(needle.chars().count());
+			let end_byte = char_to_byte_idx(this_str, end_char);
+			&this_str[..end_byte]
+		},
 		_ => {
 			return Err(ExecutionError::FunctionError {
 				function: "String.lastIndexOf".to_owned(),
@@ -86,24 +95,10 @@ pub fn last_index_of<'a>(
 			});
 		},
 	};
-	let Some(base_byte) = char_to_byte_idx(this_str, base) else {
-		return Ok(Value::Int(-1));
-	};
-	if has_base && base_byte >= this_str.len() {
-		return Ok(Value::Int(-1));
-	}
-	let suffix = &this_str[base_byte..];
 	match suffix.rfind(needle) {
 		Some(idx) => Ok(Value::Int(suffix[..idx].chars().count() as i64)),
 		None => Ok(Value::Int(-1)),
 	}
-}
-
-fn char_to_byte_idx(s: &str, idx: usize) -> Option<usize> {
-	s.char_indices()
-		.map(|(byte_idx, _)| byte_idx)
-		.chain(std::iter::once(s.len()))
-		.nth(idx)
 }
 
 pub fn join<'a>(ftx: &mut FunctionContext<'a, '_>, this: This) -> ResolveResult<'a> {
@@ -310,6 +305,14 @@ pub fn substring<'a>(
 	}
 }
 
+fn char_to_byte_idx(s: &str, idx: usize) -> usize {
+	s.char_indices()
+		.map(|(byte_idx, _)| byte_idx)
+		.chain(std::iter::once(s.len()))
+		.nth(idx)
+		.unwrap_or(s.len()) // idx beyond string length → clamp to end
+}
+
 #[cfg(test)]
 mod tests {
 	use cel::{Context, Program};
@@ -343,6 +346,9 @@ mod tests {
 		assert_eq!(eval("'hello mellow'.lastIndexOf('jello')"), json!((-1)));
 		assert_eq!(eval("'hello mellow'.lastIndexOf('ello', 6)"), json!(1));
 		assert_eq!(eval("'hello mellow'.lastIndexOf('ello', 20)"), json!((-1)));
+		assert_eq!(eval("'abcabc'.lastIndexOf('bc', 5)"), json!(4));
+		assert_eq!(eval("'abcabc'.lastIndexOf('abc', 0)"), json!(0));
+		assert_eq!(eval("'abcabc'.lastIndexOf('abc', 4)"), json!(3));
 
 		assert_eq!(eval("['hello', 'mellow'].join()"), json!("hellomellow"));
 		assert_eq!(eval("[].join()"), json!(""));
