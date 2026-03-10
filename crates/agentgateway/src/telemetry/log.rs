@@ -402,7 +402,7 @@ impl CelLogging {
 		resp: Option<&'a cel::ResponseSnapshot>,
 		llm_response: Option<&'a LLMContext>,
 		mcp: Option<&'a ResourceType>,
-		end_time: Option<&'a str>,
+		end_time: Option<&'a cel::RequestTime>,
 		source_context: Option<&'a cel::SourceContext>,
 	) -> Result<CelLoggingExecutor<'a>, cel::Error> {
 		let CelLogging {
@@ -786,8 +786,8 @@ impl Drop for DropOnLog {
 			.health_policy
 			.as_ref()
 			.is_some_and(|p| p.unhealthy_expression.is_some());
-		let end_time_str = (needs_cel_for_outputs || needs_cel_for_eviction)
-			.then(agent_core::telemetry::render_current_time);
+		let cel_end_time = (needs_cel_for_outputs || needs_cel_for_eviction)
+			.then(|| cel::RequestTime(chrono::Utc::now().fixed_offset()));
 		let cel_exec = if needs_cel_for_outputs || needs_cel_for_eviction {
 			log
 				.cel
@@ -796,7 +796,7 @@ impl Drop for DropOnLog {
 					log.response_snapshot.as_ref(),
 					llm_response.as_ref(),
 					mcp_cel.as_ref(),
-					end_time_str.as_deref(),
+					cel_end_time.as_ref(),
 					log.source_context.as_ref(),
 				)
 				.ok()
