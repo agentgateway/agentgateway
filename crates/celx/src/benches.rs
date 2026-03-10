@@ -77,8 +77,7 @@ fn map_eq_owned(b: Bencher, n: usize) {
 	let map = owned_map(n);
 	let prog = Program::compile("m == m").unwrap();
 	b.with_inputs(|| map.clone()).bench_refs(|map| {
-		let resolver =
-			cel::context::SingleVarResolver::new(&DefaultVariableResolver, "m", map.clone());
+		let resolver = cel::context::SingleVarResolver::new(&DefaultVariableResolver, "m", map.clone());
 		Value::resolve(black_box(prog.expression()), &ctx, &resolver)
 			.unwrap()
 			.as_static()
