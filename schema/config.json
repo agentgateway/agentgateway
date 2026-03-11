@@ -2468,6 +2468,20 @@
             "developerImplicit"
           ],
           "additionalProperties": false
+        },
+        {
+          "description": "Automatically detect authentication method based on environment.\nUses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.",
+          "type": "object",
+          "properties": {
+            "implicit": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "implicit"
+          ],
+          "additionalProperties": false
         }
       ]
     },

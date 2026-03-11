@@ -239,6 +239,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.http`|Specify HTTP settings for the backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.http.version`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.http.requestTimeout`||
@@ -313,6 +314,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.http`|Specify HTTP settings for the backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.http.version`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.http.requestTimeout`||
@@ -387,6 +389,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.http`|Specify HTTP settings for the backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.http.version`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.http.requestTimeout`||
@@ -488,6 +491,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.http`|Specify HTTP settings for the backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.http.version`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.http.requestTimeout`||
@@ -562,6 +566,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.http`|Specify HTTP settings for the backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.http.version`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.http.requestTimeout`||
@@ -632,6 +637,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`binds[].listeners[].routes[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`binds[].listeners[].routes[].policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`binds[].listeners[].routes[].policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`binds[].listeners[].routes[].policies.localRateLimit`|Rate limit incoming requests. State is kept local.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].maxTokens`||
 |`binds[].listeners[].routes[].policies.localRateLimit[].tokensPerFill`||
@@ -914,6 +920,7 @@
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.http`|Specify HTTP settings for the backend|
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.http.version`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.http.requestTimeout`||
@@ -1105,6 +1112,7 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.http`|Specify HTTP settings for the backend|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.http.version`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.http.requestTimeout`||
@@ -1295,6 +1303,7 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.http`|Specify HTTP settings for the backend|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.http.version`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.http.requestTimeout`||
@@ -1460,6 +1469,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`binds[].listeners[].routes[].backends[].policies.http`|Specify HTTP settings for the backend|
 |`binds[].listeners[].routes[].backends[].policies.http.version`||
 |`binds[].listeners[].routes[].backends[].policies.http.requestTimeout`||
@@ -1791,6 +1801,7 @@
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.http`|Specify HTTP settings for the backend|
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.http.version`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.http.requestTimeout`||
@@ -1865,6 +1876,7 @@
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.http`|Specify HTTP settings for the backend|
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.http.version`||
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.http.requestTimeout`||
@@ -1939,6 +1951,7 @@
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.http`|Specify HTTP settings for the backend|
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.http.version`||
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.http.requestTimeout`||
@@ -2040,6 +2053,7 @@
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.http`|Specify HTTP settings for the backend|
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.http.version`||
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.http.requestTimeout`||
@@ -2114,6 +2128,7 @@
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.http`|Specify HTTP settings for the backend|
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.http.version`||
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.http.requestTimeout`||
@@ -2184,6 +2199,7 @@
 |`policies[].policy.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`policies[].policy.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`policies[].policy.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`policies[].policy.backendAuth.(any)(1)azure.(1)implicit`||
 |`policies[].policy.localRateLimit`|Rate limit incoming requests. State is kept local.|
 |`policies[].policy.localRateLimit[].maxTokens`||
 |`policies[].policy.localRateLimit[].tokensPerFill`||
@@ -2443,6 +2459,7 @@
 |`backends[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`backends[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`backends[].policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`backends[].policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`backends[].policies.http`|Specify HTTP settings for the backend|
 |`backends[].policies.http.version`||
 |`backends[].policies.http.requestTimeout`||
@@ -2571,6 +2588,7 @@
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.http`|Specify HTTP settings for the backend|
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.http.version`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.http.requestTimeout`||
@@ -2662,6 +2680,7 @@
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.http`|Specify HTTP settings for the backend|
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.http.version`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.http.requestTimeout`||
@@ -2753,6 +2772,7 @@
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.http`|Specify HTTP settings for the backend|
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.http.version`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.http.requestTimeout`||
@@ -2871,6 +2891,7 @@
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.http`|Specify HTTP settings for the backend|
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.http.version`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.http.requestTimeout`||
@@ -2962,6 +2983,7 @@
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.http`|Specify HTTP settings for the backend|
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.http.version`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.http.requestTimeout`||
@@ -3236,6 +3258,7 @@
 |`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`mcp.targets[].policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`mcp.targets[].policies.http`|Specify HTTP settings for the backend|
 |`mcp.targets[].policies.http.version`||
 |`mcp.targets[].policies.http.requestTimeout`||
@@ -3395,6 +3418,7 @@
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.http`|Specify HTTP settings for the backend|
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.http.version`||
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.http.requestTimeout`||
@@ -3469,6 +3493,7 @@
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.http`|Specify HTTP settings for the backend|
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.http.version`||
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.http.requestTimeout`||
@@ -3543,6 +3568,7 @@
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.http`|Specify HTTP settings for the backend|
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.http.version`||
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.http.requestTimeout`||
@@ -3644,6 +3670,7 @@
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.http`|Specify HTTP settings for the backend|
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.http.version`||
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.http.requestTimeout`||
@@ -3718,6 +3745,7 @@
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.http`|Specify HTTP settings for the backend|
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.http.version`||
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.http.requestTimeout`||
@@ -3788,6 +3816,7 @@
 |`mcp.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)managedIdentity.userAssignedIdentity.(any)(1)resourceId`||
 |`mcp.policies.backendAuth.(any)(1)azure.(1)explicitConfig.(1)workloadIdentity`||
 |`mcp.policies.backendAuth.(any)(1)azure.(1)developerImplicit`||
+|`mcp.policies.backendAuth.(any)(1)azure.(1)implicit`||
 |`mcp.policies.localRateLimit`|Rate limit incoming requests. State is kept local.|
 |`mcp.policies.localRateLimit[].maxTokens`||
 |`mcp.policies.localRateLimit[].tokensPerFill`||

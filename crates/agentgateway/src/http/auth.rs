@@ -559,8 +559,8 @@ mod aws {
 }
 
 mod azure {
-	use std::sync::atomic::{AtomicUsize, Ordering};
 	use std::sync::Arc;
+	use std::sync::atomic::{AtomicUsize, Ordering};
 
 	use azure_core::credentials::{AccessToken, TokenCredential, TokenRequestOptions};
 	use azure_identity::UserAssignedId;
@@ -695,8 +695,7 @@ mod azure {
 	/// skip the IMDS probe because the SDK will use the env-var endpoint
 	/// instead.
 	fn has_managed_identity_env_vars() -> bool {
-		std::env::var_os("IDENTITY_ENDPOINT").is_some()
-			|| std::env::var_os("MSI_ENDPOINT").is_some()
+		std::env::var_os("IDENTITY_ENDPOINT").is_some() || std::env::var_os("MSI_ENDPOINT").is_some()
 	}
 
 	async fn build_credential(
@@ -754,7 +753,9 @@ mod azure {
 					))?)
 				},
 			},
-			AzureAuth::DeveloperImplicit { .. } => Ok(azure_identity::DeveloperToolsCredential::new(None)?),
+			AzureAuth::DeveloperImplicit { .. } => {
+				Ok(azure_identity::DeveloperToolsCredential::new(None)?)
+			},
 			AzureAuth::Implicit { .. } => {
 				// Build a DefaultAzureCredential chain following the Azure Go SDK pattern.
 				// Each credential is tried in order; the first to succeed is cached and
@@ -791,9 +792,7 @@ mod azure {
 							sources.push(("EnvironmentCredential", cred));
 						},
 						Err(e) => {
-							trace!(
-								"DefaultAzureCredential: EnvironmentCredential construction failed: {e}"
-							);
+							trace!("DefaultAzureCredential: EnvironmentCredential construction failed: {e}");
 							errors.push(format!("EnvironmentCredential: {e}"));
 						},
 					}
@@ -811,15 +810,11 @@ mod azure {
 					},
 				)) {
 					Ok(cred) => {
-						trace!(
-							"DefaultAzureCredential: added WorkloadIdentityCredential to chain"
-						);
+						trace!("DefaultAzureCredential: added WorkloadIdentityCredential to chain");
 						sources.push(("WorkloadIdentityCredential", cred));
 					},
 					Err(e) => {
-						trace!(
-							"DefaultAzureCredential: WorkloadIdentityCredential not available: {e}"
-						);
+						trace!("DefaultAzureCredential: WorkloadIdentityCredential not available: {e}");
 						errors.push(format!("WorkloadIdentityCredential: {e}"));
 					},
 				}
@@ -837,14 +832,18 @@ mod azure {
 					let should_try_mi = if has_managed_identity_env_vars() {
 						// A known endpoint is set (App Service, Service Fabric, etc.).
 						// Skip the IMDS probe — the SDK will use the env-var endpoint.
-						trace!("DefaultAzureCredential: managed-identity env vars detected, skipping IMDS probe");
+						trace!(
+							"DefaultAzureCredential: managed-identity env vars detected, skipping IMDS probe"
+						);
 						true
 					} else {
 						let reachable = imds_is_reachable().await;
 						if reachable {
 							trace!("DefaultAzureCredential: IMDS is reachable");
 						} else {
-							trace!("DefaultAzureCredential: IMDS not reachable within {IMDS_PROBE_TIMEOUT:?}, skipping ManagedIdentityCredential");
+							trace!(
+								"DefaultAzureCredential: IMDS not reachable within {IMDS_PROBE_TIMEOUT:?}, skipping ManagedIdentityCredential"
+							);
 						}
 						reachable
 					};
@@ -858,20 +857,17 @@ mod azure {
 						};
 						match azure_identity::ManagedIdentityCredential::new(Some(mi_options)) {
 							Ok(cred) => {
-								trace!(
-									"DefaultAzureCredential: added ManagedIdentityCredential to chain"
-								);
+								trace!("DefaultAzureCredential: added ManagedIdentityCredential to chain");
 								sources.push(("ManagedIdentityCredential", cred));
 							},
 							Err(e) => {
-								trace!(
-									"DefaultAzureCredential: ManagedIdentityCredential not available: {e}"
-								);
+								trace!("DefaultAzureCredential: ManagedIdentityCredential not available: {e}");
 								errors.push(format!("ManagedIdentityCredential: {e}"));
 							},
 						}
 					} else {
-						errors.push("ManagedIdentityCredential: IMDS not reachable (probe timed out)".to_string());
+						errors
+							.push("ManagedIdentityCredential: IMDS not reachable (probe timed out)".to_string());
 					}
 				}
 
@@ -880,15 +876,11 @@ mod azure {
 				// `az account get-access-token` or `azd auth token` under the hood.
 				match azure_identity::DeveloperToolsCredential::new(None) {
 					Ok(cred) => {
-						trace!(
-							"DefaultAzureCredential: added DeveloperToolsCredential to chain"
-						);
+						trace!("DefaultAzureCredential: added DeveloperToolsCredential to chain");
 						sources.push(("DeveloperToolsCredential", cred));
 					},
 					Err(e) => {
-						trace!(
-							"DefaultAzureCredential: DeveloperToolsCredential construction failed: {e}"
-						);
+						trace!("DefaultAzureCredential: DeveloperToolsCredential construction failed: {e}");
 						errors.push(format!("DeveloperToolsCredential: {e}"));
 					},
 				}
