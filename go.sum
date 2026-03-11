@@ -1225,10 +1225,10 @@ sigs.k8s.io/controller-tools v0.20.1 h1:gkfMt9YodI0K85oT8rVi80NTXO/kDmabKR5Ajn5G
 sigs.k8s.io/controller-tools v0.20.1/go.mod h1:b4qPmjGU3iZwqn34alUU5tILhNa9+VXK+J3QV0fT/uU=
 sigs.k8s.io/gateway-api v1.5.0 h1:duoo14Ky/fJXpjpmyMISE2RTBGnfCg8zICfTYLTnBJA=
 sigs.k8s.io/gateway-api v1.5.0/go.mod h1:GvCETiaMAlLym5CovLxGjS0NysqFk3+Yuq3/rh6QL2o=
-sigs.k8s.io/gateway-api-inference-extension v1.4.0-rc.1 h1:j0mbz140/+rLWLTgNQBKMu12CyXwKJ8CPXiGrAK9As4=
-sigs.k8s.io/gateway-api-inference-extension v1.4.0-rc.1/go.mod h1:Z9MZpf6wdjn9iCT5Xu6Ugqh88zSa0zuDra0VqJXT7eM=
-sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260303210102-8f057d769fa6 h1:XTVeNHMsq8SE+qyH/yacB2aFigwCCc645/YOje5rx50=
-sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260303210102-8f057d769fa6/go.mod h1:n+dkKGgLEdvx6W08kTQKPMbQDW5AtlayFAipEIgv4RA=
+sigs.k8s.io/gateway-api-inference-extension v1.4.0-rc.2 h1:M0EniqRq7wE8dVl6AHsQ6nr7iwHzoa8R8u2HyCkL1t8=
+sigs.k8s.io/gateway-api-inference-extension v1.4.0-rc.2/go.mod h1:Z9MZpf6wdjn9iCT5Xu6Ugqh88zSa0zuDra0VqJXT7eM=
+sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260310170806-b32dfd041324 h1:ZuPG2eR+Dkw+P0lBhFtObneHltX1XyLemIcaM9YvasU=
+sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260310170806-b32dfd041324/go.mod h1:ql30Yb8tsl1tE3VOvPcLda5DXxAJS3Z3LjAyDbCBV0c=
 sigs.k8s.io/gateway-api/conformance v1.5.1-0.20260302214453-c33c5449a202 h1:h+CiyT4ClVNky6kqqU8L6dy+VZ48JoVlviSkeV1KQK0=
 sigs.k8s.io/gateway-api/conformance v1.5.1-0.20260302214453-c33c5449a202/go.mod h1:mcvYR0Zll1i5hmcKn+jNbWdZTBls6s5GU+FPUFIceXw=
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 h1:IpInykpT6ceI+QxKBbEflcR5EXP7sU1kvOlxwZh5txg=

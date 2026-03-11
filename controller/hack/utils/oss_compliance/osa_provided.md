@@ -47,8 +47,8 @@ Name|Version|License
 [sigs.k8s.io/controller-runtime](https://sigs.k8s.io/controller-runtime)|v0.23.1|Apache License 2.0
 [sigs.k8s.io/controller-tools](https://sigs.k8s.io/controller-tools)|v0.20.1|Apache License 2.0
 [sigs.k8s.io/gateway-api](https://sigs.k8s.io/gateway-api)|v1.5.0|Apache License 2.0
-[sigs.k8s.io/gateway-api-inference-extension](https://sigs.k8s.io/gateway-api-inference-extension)|v1.4.0-rc.1|Apache License 2.0
-[gateway-api-inference-extension/conformance](https://sigs.k8s.io/gateway-api-inference-extension/conformance)|v0.0.0-20260303210102-8f057d769fa6|Apache License 2.0
+[sigs.k8s.io/gateway-api-inference-extension](https://sigs.k8s.io/gateway-api-inference-extension)|v1.4.0-rc.2|Apache License 2.0
+[gateway-api-inference-extension/conformance](https://sigs.k8s.io/gateway-api-inference-extension/conformance)|v0.0.0-20260310170806-b32dfd041324|Apache License 2.0
 [gateway-api/conformance](https://sigs.k8s.io/gateway-api/conformance)|v1.5.1-0.20260302214453-c33c5449a202|Apache License 2.0
 [sigs.k8s.io/yaml](https://sigs.k8s.io/yaml)|v1.6.0|MIT License
 [cmd/goimports](https://golang.org/x/tools/cmd/goimports)|latest|MIT License
