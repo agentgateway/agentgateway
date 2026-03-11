@@ -11,7 +11,6 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 )
 
@@ -19,7 +18,7 @@ import (
 type AgwResourceStatusSyncHandler func(ctx context.Context, client apiclient.Client, namespacedName types.NamespacedName, status any) error
 
 type PolicyPluginInput struct {
-	Ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend]
+	References ReferenceIndex
 }
 
 type PolicyPlugin struct {

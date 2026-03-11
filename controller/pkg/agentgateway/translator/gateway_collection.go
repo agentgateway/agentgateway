@@ -164,7 +164,7 @@ type GatewayListener struct {
 	// The Gateway this listener is bound to
 	ParentGateway types.NamespacedName
 	// The actual real parent (could be a ListenerSet)
-	ParentObject ParentKey
+	ParentObject utils.TypedNamespacedName
 	ParentInfo   ParentInfo
 	TLSInfo      *TLSInfo
 	Valid        bool
@@ -316,10 +316,12 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 				Valid:         programmed,
 				TLSInfo:       tlsInfo,
 				ParentGateway: config.NamespacedName(obj),
-				ParentObject: ParentKey{
-					Kind:      wellknown.GatewayGVK,
-					Name:      obj.Name,
-					Namespace: obj.Namespace,
+				ParentObject: utils.TypedNamespacedName{
+					Kind: wellknown.GatewayGVK.Kind,
+					NamespacedName: types.NamespacedName{
+						Name:      obj.Name,
+						Namespace: obj.Namespace,
+					},
 				},
 				ParentInfo: pri,
 			}
@@ -348,10 +350,12 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			result = append(result, &GatewayListener{
 				Name:          ls.Name,
 				ParentGateway: config.NamespacedName(obj),
-				ParentObject: ParentKey{
-					Kind:      wellknown.ListenerSetGVK,
-					Name:      ls.Parent.Name,
-					Namespace: ls.Parent.Namespace,
+				ParentObject: utils.TypedNamespacedName{
+					Kind: wellknown.ListenerSetGVK.Kind,
+					NamespacedName: types.NamespacedName{
+						Name:      ls.Parent.Name,
+						Namespace: ls.Parent.Namespace,
+					},
 				},
 				TLSInfo:    ls.TLSInfo,
 				ParentInfo: ls.ParentInfo,
@@ -359,9 +363,9 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			})
 		}
 		validateListenerConflicts(result)
-		uniqueListenerSets := sets.New[ParentKey]()
+		uniqueListenerSets := sets.New[utils.TypedNamespacedName]()
 		for _, ls := range result {
-			if !(ls.Valid && ls.Conflict == "" && ls.ParentObject.Kind == wellknown.ListenerSetGVK) {
+			if !(ls.Valid && ls.Conflict == "" && ls.ParentObject.Kind == wellknown.ListenerSetGVK.Kind) {
 				continue
 			}
 
@@ -556,11 +560,11 @@ func reportNotAllowedListenerSet(status *gwv1.ListenerSetStatus, obj *gwv1.Liste
 // RouteParents holds information about things Routes can reference as parents.
 type RouteParents struct {
 	Gateways     krt.Collection[*GatewayListener]
-	GatewayIndex krt.Index[ParentKey, *GatewayListener]
+	GatewayIndex krt.Index[utils.TypedNamespacedName, *GatewayListener]
 }
 
 // Fetch returns the parents for a given parent key.
-func (p RouteParents) Fetch(ctx krt.HandlerContext, pk ParentKey) []*ParentInfo {
+func (p RouteParents) Fetch(ctx krt.HandlerContext, pk utils.TypedNamespacedName) []*ParentInfo {
 	return slices.Map(krt.Fetch(ctx, p.Gateways, krt.FilterIndex(p.GatewayIndex, pk)), func(gw *GatewayListener) *ParentInfo {
 		return &gw.ParentInfo
 	})
@@ -570,8 +574,8 @@ func (p RouteParents) Fetch(ctx krt.HandlerContext, pk ParentKey) []*ParentInfo 
 func BuildRouteParents(
 	gateways krt.Collection[*GatewayListener],
 ) RouteParents {
-	idx := krt.NewIndex(gateways, "Parent", func(o *GatewayListener) []ParentKey {
-		return []ParentKey{o.ParentObject}
+	idx := krt.NewIndex(gateways, "Parent", func(o *GatewayListener) []utils.TypedNamespacedName {
+		return []utils.TypedNamespacedName{o.ParentObject}
 	})
 	return RouteParents{
 		Gateways:     gateways,

@@ -10,7 +10,7 @@ require (
 	github.com/anthropics/anthropic-sdk-go v1.26.0
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2
-	github.com/envoyproxy/go-control-plane/envoy v1.37.1-0.20260227072845-439e4fd5530c
+	github.com/envoyproxy/go-control-plane/envoy v1.37.1-0.20260308004542-b60714bc2ea3
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
 	github.com/go-logr/logr v1.4.3
 	github.com/golang/mock v1.7.0-rc.1
@@ -34,9 +34,9 @@ require (
 	google.golang.org/grpc v1.79.1
 	google.golang.org/protobuf v1.36.11
 	helm.sh/helm/v3 v3.20.0
-	istio.io/api v1.29.0-alpha.0.0.20260302212057-b10ab91e9ded
-	istio.io/client-go v1.29.0-alpha.0.0.20260302212359-b21b30ec7057
-	istio.io/istio v0.0.0-20260304223159-1086b9070383
+	istio.io/api v1.29.0-alpha.0.0.20260310163805-1e4fee88597d
+	istio.io/client-go v1.29.0-alpha.0.0.20260310170739-44d7c6ab3a5b
+	istio.io/istio v0.0.0-20260311173339-67ad6fb5ba6a
 	k8s.io/api v0.35.2
 	k8s.io/apiextensions-apiserver v0.35.2
 	k8s.io/apimachinery v0.35.2
@@ -61,7 +61,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.6.0 // indirect
 	github.com/creack/pty v1.1.24 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
-	github.com/envoyproxy/go-control-plane/contrib v1.36.1-0.20260227072845-439e4fd5530c // indirect
+	github.com/envoyproxy/go-control-plane/contrib v1.36.1-0.20260308004542-b60714bc2ea3 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/swag/cmdutils v0.25.4 // indirect
