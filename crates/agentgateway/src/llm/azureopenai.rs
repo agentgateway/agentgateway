@@ -1,6 +1,7 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
 
+use crate::http::auth::AzureCredentialCache;
 use crate::llm::RouteType;
 use crate::*;
 
@@ -11,6 +12,10 @@ pub struct Provider {
 	pub host: Strng, // required
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub api_version: Option<Strng>, // optional, defaults to "v1"
+	/// Per-provider credential cache, shared across requests via Arc.
+	#[serde(skip)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub cached_cred: AzureCredentialCache,
 }
 
 impl super::Provider for Provider {

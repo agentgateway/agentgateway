@@ -1551,6 +1551,7 @@ json(request.body).model
 					model,
 					host: p.azure_host.context("azure requires azure_host")?,
 					api_version: p.azure_api_version,
+					cached_cred: Default::default(),
 				})
 			},
 		};

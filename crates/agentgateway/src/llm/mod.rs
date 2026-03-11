@@ -312,7 +312,9 @@ impl AIProvider {
 			AIProvider::AzureOpenAI(p) => {
 				let bp = BackendPolicies {
 					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
-					backend_auth: Some(BackendAuth::Azure(AzureAuth::default())),
+					backend_auth: Some(BackendAuth::Azure(AzureAuth::Implicit {
+						cached_cred: p.cached_cred.clone(),
+					})),
 					..Default::default()
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
