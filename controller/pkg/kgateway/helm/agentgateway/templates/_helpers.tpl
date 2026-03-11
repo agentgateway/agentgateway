@@ -51,8 +51,7 @@ All labels including selector labels, standard labels, and custom gateway labels
 {{- define "kgateway.gateway.allLabels" -}}
 {{- $gateway := .Values.agentgateway -}}
 {{- $labels := merge (dict
-  "kgateway" "kube-gateway"
-  "app.kubernetes.io/managed-by" "kgateway"
+  "app.kubernetes.io/managed-by" "agentgateway"
   "gateway.networking.k8s.io/gateway-class-name" .Values.agentgateway.gatewayClassName
   )
   (include "kgateway.gateway.selectorLabels" . | fromYaml)

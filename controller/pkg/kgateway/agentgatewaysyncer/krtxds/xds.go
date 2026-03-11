@@ -47,7 +47,7 @@ import (
 
 var (
 	log                 = logging.New("krtxds")
-	agentGwXdsSubsystem = "agentgateway_xds"
+	agentGwXdsSubsystem = "xds"
 	xdsRejectsTotal     = metrics.NewCounter(
 		metrics.CounterOpts{
 			Subsystem: agentGwXdsSubsystem,

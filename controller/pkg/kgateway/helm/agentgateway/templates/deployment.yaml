@@ -208,7 +208,7 @@ spec:
           projected:
             sources:
             - serviceAccountToken:
-                audience: kgateway
+                audience: agentgateway
                 expirationSeconds: 43200
                 path: xds-token
         - name: tmp
