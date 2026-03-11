@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
-	"errors"
 
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart"
@@ -410,12 +410,12 @@ func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Objec
 			err := client.Delete(ctx, resourceName, metav1.DeleteOptions{})
 			if err != nil && !apierrors.IsNotFound(err) {
 				pruningErrors = append(pruningErrors, fmt.Errorf("failed to delete resource %s/%s: %w", gvk.String(), resourceName, err))
-				logger.Debug("error pruning removed resource", 
+				logger.Debug("error pruning removed resource",
 					"gvk", gvk.String(),
 					"namespace", ownerNamespace,
 					"name", resourceName,
-					"owner", owner.GetName(), 
-				  "error", err.Error(),
+					"owner", owner.GetName(),
+					"error", err.Error(),
 				)
 			}
 		}
