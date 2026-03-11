@@ -5,6 +5,9 @@ use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
 use rand::RngExt;
 use serde_json::{Value, json};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::oneshot;
 use x509_parser::nom::AsBytes;
 
 use crate::http::tests_common::*;
@@ -912,6 +915,131 @@ async fn inline_backend_policies() {
 		body.headers.get("x-backend-route-req").unwrap().as_bytes(),
 		b"backend-route-req"
 	);
+}
+
+#[tokio::test]
+async fn tunnel_absolute_form() {
+	let mock = simple_mock().await;
+	let tunnel_mock = simple_mock().await;
+	let mut bind = base_gateway(&mock).with_backend(*tunnel_mock.address());
+	bind
+		.attached_backend_policy(
+			mock.address(),
+			json!({
+				"backendTunnel": {
+					"proxy": {
+						"host": tunnel_mock.address(),
+					}
+				}
+			}),
+		)
+		.await;
+	bind
+		.attached_backend_policy(
+			tunnel_mock.address(),
+			json!({
+				"backendAuth": {
+					"key": "my-key"
+				}
+			}),
+		)
+		.await;
+	let io = bind.serve_http(BIND_KEY);
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/foo").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body(res.into_body()).await;
+	// Unfortunately, wiremock obscures whether it is an absolute form or not and makes the typical case hardcoded
+	// to "http://localhost". But our assertion here is good enough.
+	assert_eq!(&body.uri.to_string(), "http://lo/foo");
+	assert_eq!(
+		body.headers.get("proxy-authorization").unwrap().as_bytes(),
+		b"Basic my-key"
+	);
+}
+
+#[tokio::test]
+async fn tunnel_connect() {
+	let (mock, certs) = tls_mock().await;
+	let _backend_tls = http::backendtls::ResolvedBackendTLS {
+		root: Some(certs.root_cert.pem().into_bytes()),
+		hostname: Some("localhost".to_string()),
+		..Default::default()
+	}
+	.try_into()
+	.unwrap();
+
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let tunnel_addr = listener.local_addr().unwrap();
+	let upstream_addr = *mock.address();
+	let (connect_tx, connect_rx) = oneshot::channel();
+	let tunnel = tokio::spawn(async move {
+		let (mut downstream, _) = listener.accept().await.unwrap();
+		let mut buf = Vec::new();
+		loop {
+			let mut chunk = [0; 1024];
+			let n = downstream.read(&mut chunk).await.unwrap();
+			assert!(n > 0, "CONNECT request unexpectedly closed");
+			buf.extend_from_slice(&chunk[..n]);
+			if buf.windows(4).any(|w| w == b"\r\n\r\n") {
+				break;
+			}
+		}
+		let header_end = buf.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+		connect_tx
+			.send(String::from_utf8(buf[..header_end].to_vec()).unwrap())
+			.unwrap();
+
+		let mut upstream = TcpStream::connect(upstream_addr).await.unwrap();
+		downstream
+			.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+			.await
+			.unwrap();
+		tokio::io::copy_bidirectional(&mut downstream, &mut upstream)
+			.await
+			.unwrap();
+	});
+
+	let mut bind = base_gateway(&mock).with_backend(tunnel_addr);
+	bind
+		.attached_backend_policy(
+			mock.address(),
+			json!({
+				"backendTunnel": {
+					"proxy": {
+						"host": tunnel_addr,
+					}
+				},
+				"backendTLS": {
+					"insecure": true
+				}
+			}),
+		)
+		.await;
+	bind
+		.attached_backend_policy(
+			&tunnel_addr,
+			json!({
+				"backendAuth": {
+					"key": "my-key"
+				}
+			}),
+		)
+		.await;
+	let io = bind.serve_http(BIND_KEY);
+
+	let res = send_request(io, Method::GET, "http://lo/foo").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body(res.into_body()).await;
+	assert_eq!(body.method, Method::GET);
+	assert_eq!(&body.uri.to_string(), "https://lo/foo");
+
+	let connect_req = connect_rx.await.unwrap();
+	assert!(connect_req.starts_with(&format!("CONNECT {} HTTP/1.1\r\n", mock.address())));
+	assert!(connect_req.contains(&format!("Host: {}\r\n", mock.address())));
+	assert!(connect_req.contains("Proxy-Authorization: Basic my-key\r\n"));
+
+	tunnel.abort();
 }
 
 #[tokio::test]

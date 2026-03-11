@@ -1,12 +1,11 @@
 use crate::cel::SourceContext;
-use futures::pin_mut;
 use rand::prelude::IndexedRandom;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::proxy::httpproxy::BackendCall;
 use crate::proxy::{ProxyError, httpproxy};
-use crate::store::{BackendPolicies, FrontendPolices, RoutePath};
+use crate::store::{BackendPolicies, RoutePath};
 use crate::telemetry::log;
 use crate::telemetry::log::{DropOnLog, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
@@ -17,7 +16,7 @@ use crate::types::agent::{
 	TransportProtocol,
 };
 use crate::types::discovery::{NetworkAddress, WaypointIdentity, gatewayaddress::Destination};
-use crate::types::{agent, frontend};
+use crate::types::agent;
 use crate::{ProxyInputs, Stores, *};
 
 #[derive(Clone)]
@@ -178,14 +177,9 @@ impl TCPProxy {
 		backend_policies: BackendPolicies,
 	) -> Result<BackendCall, ProxyError> {
 		let backend_call = match &selected_backend {
-			SimpleBackend::Service(svc, port) => httpproxy::build_service_call(
-				inputs,
-				backend_policies,
-				log,
-				None,
-				svc,
-				port,
-			)?,
+			SimpleBackend::Service(svc, port) => {
+				httpproxy::build_service_call(inputs, backend_policies, log, None, svc, port)?
+			},
 			SimpleBackend::Opaque(_, target) => BackendCall {
 				target: target.clone(),
 				http_version_override: None,

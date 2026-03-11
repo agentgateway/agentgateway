@@ -2084,7 +2084,7 @@ pub async fn convert_route(
 
 #[derive(Default)]
 pub struct ResolvedPolicies {
-	backend_policies: Vec<BackendPolicy>,
+	pub backend_policies: Vec<BackendPolicy>,
 	pub route_policies: Vec<TrafficPolicy>,
 }
 

@@ -1392,14 +1392,9 @@ async fn make_backend_call(
 				network_gateway: None,
 			}
 		},
-		Backend::Service(svc, port) => build_service_call(
-			&inputs,
-			policies,
-			&mut log,
-			override_dest,
-			svc,
-			port,
-		)?,
+		Backend::Service(svc, port) => {
+			build_service_call(&inputs, policies, &mut log, override_dest, svc, port)?
+		},
 		Backend::Opaque(_, target) => BackendCall {
 			target: target.clone(),
 			http_version_override: None,
