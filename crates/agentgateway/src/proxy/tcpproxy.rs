@@ -10,13 +10,13 @@ use crate::telemetry::log;
 use crate::telemetry::log::{DropOnLog, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
 use crate::transport::stream::{Socket, TCPConnectionInfo, TLSConnectionInfo};
+use crate::types::agent;
 use crate::types::agent::{
 	BackendPolicy, BindKey, Listener, ListenerProtocol, SimpleBackend, SimpleBackendReference,
 	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference,
 	TransportProtocol,
 };
 use crate::types::discovery::{NetworkAddress, WaypointIdentity, gatewayaddress::Destination};
-use crate::types::agent;
 use crate::{ProxyInputs, Stores, *};
 
 #[derive(Clone)]

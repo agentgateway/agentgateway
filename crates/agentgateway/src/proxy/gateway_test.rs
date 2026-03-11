@@ -960,15 +960,7 @@ async fn tunnel_absolute_form() {
 
 #[tokio::test]
 async fn tunnel_connect() {
-	let (mock, certs) = tls_mock().await;
-	let _backend_tls = http::backendtls::ResolvedBackendTLS {
-		root: Some(certs.root_cert.pem().into_bytes()),
-		hostname: Some("localhost".to_string()),
-		..Default::default()
-	}
-	.try_into()
-	.unwrap();
-
+	let (mock, _certs) = tls_mock().await;
 	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let tunnel_addr = listener.local_addr().unwrap();
 	let upstream_addr = *mock.address();

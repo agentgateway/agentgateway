@@ -171,7 +171,7 @@ where
 {
     let mut buf = format!(
         "\
-{host}:{port} HTTP/1.1\r\n\
+         CONNECT {host}:{port} HTTP/1.1\r\n\
          Host: {host}:{port}\r\n\
          "
     )
