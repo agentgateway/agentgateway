@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -23,7 +24,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
-	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 	"sigs.k8s.io/yaml"
 
 	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
@@ -111,7 +111,12 @@ func RunForDirectory[Status any, Output any](t *testing.T, base string, run func
 		if name == "_defaults.yaml" {
 			continue
 		}
+		runOnly := os.Getenv("GOLDEN_TEST")
 		t.Run(name, func(t *testing.T) {
+			if runOnly != "" && name != runOnly+".yaml" {
+				t.Skipf("only running %v, skipped", runOnly)
+				return
+			}
 			data := file.AsStringOrFail(t, f)
 			inputData := data
 			idx := strings.Index(data, "---\n# Output")
@@ -216,15 +221,15 @@ func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 		HTTPRoutes:           krttest.GetMockCollection[*gwv1.HTTPRoute](mock),
 		GRPCRoutes:           krttest.GetMockCollection[*gwv1.GRPCRoute](mock),
 		TCPRoutes:            krttest.GetMockCollection[*gwv1a2.TCPRoute](mock),
-		TLSRoutes:            krttest.GetMockCollection[*gwv1a2.TLSRoute](mock),
+		TLSRoutes:            krttest.GetMockCollection[*gwv1.TLSRoute](mock),
 		ReferenceGrants:      krttest.GetMockCollection[*gwv1b1.ReferenceGrant](mock),
 		BackendTLSPolicies:   krttest.GetMockCollection[*gwv1.BackendTLSPolicy](mock),
-		XListenerSets:        krttest.GetMockCollection[*gwxv1a1.XListenerSet](mock),
+		ListenerSets:         krttest.GetMockCollection[*gwv1.ListenerSet](mock),
 		InferencePools:       krttest.GetMockCollection[*inf.InferencePool](mock),
 		Backends:             krttest.GetMockCollection[*agwv1alpha1.AgentgatewayBackend](mock),
 		AgentgatewayPolicies: krttest.GetMockCollection[*agwv1alpha1.AgentgatewayPolicy](mock),
 		ControllerName:       wellknown.DefaultAgwControllerName,
-		SystemNamespace:      "kgateway-system",
+		SystemNamespace:      "agentgateway-system",
 		IstioNamespace:       "istio-system",
 		ClusterID:            "Kubernetes",
 	}

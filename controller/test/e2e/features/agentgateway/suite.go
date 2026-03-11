@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
@@ -52,10 +53,17 @@ func (s *testingSuite) TestAgentgatewayTCPRoute() {
 	)
 
 	gateway := common.Gateway{
-		Address: s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayAddress(
+		NamespacedName: types.NamespacedName{
+			Name:      sharedGatewayObjectMeta.Name,
+			Namespace: sharedGatewayObjectMeta.Namespace,
+		},
+		Address: common.ResolveGatewayAddress(
 			s.Ctx,
-			sharedGatewayObjectMeta.Name,
-			sharedGatewayObjectMeta.Namespace,
+			s.TestInstallation,
+			types.NamespacedName{
+				Name:      sharedGatewayObjectMeta.Name,
+				Namespace: sharedGatewayObjectMeta.Namespace,
+			},
 		),
 	}
 	gateway.Send(
@@ -63,7 +71,7 @@ func (s *testingSuite) TestAgentgatewayTCPRoute() {
 		&matchers.HttpResponse{
 			StatusCode: http.StatusOK,
 		},
-		curl.WithPort(9090),
+		curl.WithPort(gateway.PortForRemote(9090)),
 	)
 }
 
@@ -91,10 +99,17 @@ func (s *testingSuite) TestAgentgatewayHTTPRoute() {
 	)
 
 	gateway := common.Gateway{
-		Address: s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayAddress(
+		NamespacedName: types.NamespacedName{
+			Name:      sharedGatewayObjectMeta.Name,
+			Namespace: sharedGatewayObjectMeta.Namespace,
+		},
+		Address: common.ResolveGatewayAddress(
 			s.Ctx,
-			sharedGatewayObjectMeta.Name,
-			sharedGatewayObjectMeta.Namespace,
+			s.TestInstallation,
+			types.NamespacedName{
+				Name:      sharedGatewayObjectMeta.Name,
+				Namespace: sharedGatewayObjectMeta.Namespace,
+			},
 		),
 	}
 	gateway.Send(

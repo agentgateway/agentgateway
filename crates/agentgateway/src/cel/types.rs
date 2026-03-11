@@ -21,6 +21,7 @@ use serde_json::json;
 use crate::cel::{Error, Expression, ROOT_CONTEXT};
 use crate::http::ext_authz::ExtAuthzDynamicMetadata;
 use crate::http::ext_proc::ExtProcDynamicMetadata;
+use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{apikey, basicauth, jwt};
 use crate::llm::{LLMInfo, LLMRequest};
 use crate::mcp::{ResourceId, ResourceType};
@@ -55,6 +56,9 @@ pub struct Executor<'a> {
 	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub llm: ExtensionOrDirect<'a, LLMContext>,
 
+	#[dynamic(rename = "llmRequest", skip_serializing_if = "Option::is_none")]
+	pub llm_request: Option<&'a serde_json::Value>,
+
 	#[dynamic(skip_serializing_if = "Option::is_none")]
 	pub mcp: Option<&'a ResourceType>,
 
@@ -66,6 +70,9 @@ pub struct Executor<'a> {
 
 	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub extproc: ExtensionOrDirect<'a, ExtProcDynamicMetadata>,
+
+	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
+	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
 }
 
 fn is_extension_or_direct_none<T: Send + Sync + 'static>(e: &ExtensionOrDirect<T>) -> bool {
@@ -217,6 +224,8 @@ impl<'a> Executor<'a> {
 		self.llm = ExtensionOrDirect::Extension(ext);
 		self.basic_auth = ExtensionOrDirect::Extension(ext);
 		self.extauthz = ExtensionOrDirect::Extension(ext);
+		self.extproc = ExtensionOrDirect::Extension(ext);
+		self.metadata = ExtensionOrDirect::Extension(ext);
 		self.backend = ExtensionOrDirect::Extension(ext);
 		self.source = ExtensionOrDirect::Extension(ext);
 	}
@@ -224,11 +233,12 @@ impl<'a> Executor<'a> {
 		self.request = Some(req.into());
 		self.api_key = ExtensionOrDirect::Direct(req.api_key.as_ref());
 		self.jwt = ExtensionOrDirect::Direct(req.jwt.as_ref());
+		self.llm = ExtensionOrDirect::Direct(req.llm.as_ref());
 		self.basic_auth = ExtensionOrDirect::Direct(req.basic_auth.as_ref());
 		self.extauthz = ExtensionOrDirect::Direct(req.extauthz.as_ref());
+		self.extproc = ExtensionOrDirect::Direct(req.extproc.as_ref());
+		self.metadata = ExtensionOrDirect::Direct(req.metadata.as_ref());
 		self.backend = ExtensionOrDirect::Direct(req.backend.as_ref());
-		// self.extproc = ExtensionOrDirect::Direct(req.basic_auth.as_ref());
-		self.llm = ExtensionOrDirect::Direct(req.llm.as_ref());
 		self.source = ExtensionOrDirect::Direct(req.source.as_ref());
 	}
 	fn set_response(&mut self, resp: &'a crate::http::Response) {
@@ -246,6 +256,14 @@ impl<'a> Executor<'a> {
 			this.set_request_snapshot(req);
 		}
 		this.mcp = Some(mcp);
+		this
+	}
+	pub fn new_llm(req: Option<&'a RequestSnapshot>, llm_body: &'a serde_json::Value) -> Self {
+		let mut this = Self::new_empty();
+		if let Some(req) = req {
+			this.set_request_snapshot(req);
+		}
+		this.llm_request = Some(llm_body);
 		this
 	}
 	pub fn new_logger(
@@ -359,13 +377,16 @@ pub fn snapshot_request(req: &mut crate::http::Request) -> RequestSnapshot {
 		version: req.version(),
 		headers: req.headers().clone(),
 		body: req.extensions_mut().remove::<BufferedBody>(),
-		jwt: req.extensions_mut().remove::<jwt::Claims>(),
+		// This one we do not remove, as it's used downstream of the snapshot for auth in MCP case
+		// TODO: structure this better
+		jwt: req.extensions_mut().get::<jwt::Claims>().cloned(),
 		api_key: req.extensions_mut().remove::<apikey::Claims>(),
 		basic_auth: req.extensions_mut().remove::<basicauth::Claims>(),
 		backend: req.extensions_mut().remove::<BackendContext>(),
 		source: req.extensions_mut().remove::<SourceContext>(),
 		extauthz: req.extensions_mut().remove::<ExtAuthzDynamicMetadata>(),
 		extproc: req.extensions_mut().remove::<ExtProcDynamicMetadata>(),
+		metadata: req.extensions_mut().remove::<TransformationMetadata>(),
 		llm: req.extensions_mut().remove::<LLMContext>(),
 		start_time: req.extensions_mut().remove::<RequestStartTime>(),
 	}
@@ -416,6 +437,7 @@ pub struct RequestSnapshot {
 
 	pub extauthz: Option<ExtAuthzDynamicMetadata>,
 	pub extproc: Option<ExtProcDynamicMetadata>,
+	pub metadata: Option<TransformationMetadata>,
 
 	pub llm: Option<LLMContext>,
 }
@@ -920,6 +942,11 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub llm: Option<LLMContext>,
 
+	/// `llm_request` contains the raw LLM request before processing. This is only present *during* LLM policies;
+	/// policies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests.
+	#[serde(rename = "llmRequest", skip_serializing_if = "Option::is_none")]
+	pub llm_request: Option<serde_json::Value>,
+
 	/// `source` contains attributes about the source of the request.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub source: Option<SourceContext>,
@@ -940,6 +967,17 @@ pub struct ExecutorSerde {
 	/// `extproc` contains dynamic metadata from ext_proc filters
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub extproc: Option<ExtProcDynamicMetadata>,
+
+	/// `metadata` contains values set by transformation metadata expressions.
+	#[serde(
+		default,
+		skip_serializing_if = "is_transformation_metadata_none_or_empty"
+	)]
+	pub metadata: Option<TransformationMetadata>,
+}
+
+fn is_transformation_metadata_none_or_empty(metadata: &Option<TransformationMetadata>) -> bool {
+	metadata.as_ref().is_none_or(|m| m.0.is_empty())
 }
 
 impl ExecutorSerde {
@@ -999,6 +1037,7 @@ impl ExecutorSerde {
 				body: ExtensionOrDirect::Direct(resp.body.as_ref()),
 			});
 		}
+		exec.llm_request = self.llm_request.as_ref();
 
 		// Set all the ExtensionOrDirect fields
 		exec.source = ExtensionOrDirect::Direct(self.source.as_ref());
@@ -1009,6 +1048,7 @@ impl ExecutorSerde {
 		exec.backend = ExtensionOrDirect::Direct(self.backend.as_ref());
 		exec.extauthz = ExtensionOrDirect::Direct(self.extauthz.as_ref());
 		exec.extproc = ExtensionOrDirect::Direct(self.extproc.as_ref());
+		exec.metadata = ExtensionOrDirect::Direct(self.metadata.as_ref());
 		exec.mcp = self.mcp.as_ref();
 
 		exec
@@ -1067,6 +1107,9 @@ pub fn full_example_executor() -> ExecutorSerde {
 		basic_auth: Some(basicauth::Claims {
 			username: "alice".into(),
 		}),
+		llm_request: Some(json!({
+			"model": "provider/model"
+		})),
 		llm: Some(LLMContext {
 			streaming: false,
 			request_model: "gpt-4".into(),
@@ -1105,6 +1148,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 		}),
 		extauthz: Some(ExtAuthzDynamicMetadata::default()),
 		extproc: Some(ExtProcDynamicMetadata::default()),
+		metadata: Some(TransformationMetadata::default()),
 	}
 }
 

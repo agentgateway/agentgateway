@@ -171,7 +171,7 @@ type StringMatcher struct {
 }
 
 // HeaderModifiers can be used to define the policy to modify request and response headers.
-// +kubebuilder:validation:AtLeastOneOf=request;response
+// +kubebuilder:validation:AtLeastOneFieldSet
 type HeaderModifiers struct {
 	// Request modifies request headers.
 	// +optional

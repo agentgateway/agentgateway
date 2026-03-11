@@ -184,7 +184,8 @@ fn generate_test_certs(name: &str) -> rustls::ServerConfig {
 		CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, Issuer, KeyPair,
 		KeyUsagePurpose, SanType, SerialNumber,
 	};
-	use rustls::pki_types::CertificateDer;
+	use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+	use rustls_pki_types::pem::PemObject;
 
 	// Generate random serial number (159 bits)
 	let serial_number = {
@@ -231,16 +232,10 @@ fn generate_test_certs(name: &str) -> rustls::ServerConfig {
 
 	// Convert to DER for rustls
 	let cert_der = CertificateDer::from(server_cert.der().to_vec());
-	let key_der = rustls_pemfile::private_key(&mut key_pem.as_bytes())
-		.unwrap()
-		.unwrap();
+	let key_der = PrivateKeyDer::from_pem_slice(key_pem.as_bytes()).unwrap();
 
 	// Load CA cert for trust store
-	let mut root_cursor = std::io::Cursor::new(super::shared_ca::TEST_ROOT);
-	let ca_der = rustls_pemfile::certs(&mut root_cursor)
-		.next()
-		.unwrap()
-		.unwrap();
+	let ca_der = CertificateDer::from_pem_slice(super::shared_ca::TEST_ROOT).unwrap();
 
 	let mut root_store = rustls::RootCertStore::empty();
 	root_store.add(ca_der).unwrap();

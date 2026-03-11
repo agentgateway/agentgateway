@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"istio.io/istio/pilot/pkg/model/kstatus"
+	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
@@ -18,6 +19,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
@@ -69,12 +71,20 @@ func BuildAgwBackend(
 		}
 		return []*api.Backend{be}, errors.Join(errs...)
 	}
+	if b := backend.Spec.Aws; b != nil {
+		be, err := translateAwsBackends(backend, pols)
+		if err != nil {
+			return nil, errors.Join(append(errs, err)...)
+		}
+		return be, errors.Join(errs...)
+	}
 	return nil, errors.Join(append(errs, errors.New("unknown backend"))...)
 }
 
 func TranslateAgwBackend(
 	ctx plugins.PolicyCtx,
 	backend *agentgateway.AgentgatewayBackend,
+	ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend],
 ) (*agentgateway.AgentgatewayBackendStatus, []agwir.AgwResource) {
 	var results []agwir.AgwResource
 	backends, err := BuildAgwBackend(ctx, backend)
@@ -92,15 +102,21 @@ func TranslateAgwBackend(
 		}, results
 	}
 
+	gtws := krt.FetchOne(ctx.Krt, ancestors, krt.FilterKey(utils.TypedNamespacedName{
+		NamespacedName: config.NamespacedName(backend),
+		Kind:           wellknown.AgentgatewayBackendGVK.Kind,
+	}.String()))
 	// handle all backends created as an MCPBackend backend may create multiple backends
-	for _, backend := range backends {
-		logger.Debug("creating backend", "backend", backend.Name)
-		resourceWrapper := translator.ToResourceGlobal(&api.Resource{
-			Kind: &api.Resource_Backend{
-				Backend: backend,
-			},
-		})
-		results = append(results, resourceWrapper)
+	for _, gateways := range gtws.Objects {
+		for _, backend := range backends {
+			logger.Debug("creating backend", "backend", backend.Name)
+			resourceWrapper := translator.ToResourceForGateway(gateways.Gateway, &api.Resource{
+				Kind: &api.Resource_Backend{
+					Backend: backend,
+				},
+			})
+			results = append(results, resourceWrapper)
+		}
 	}
 
 	return &agentgateway.AgentgatewayBackendStatus{
@@ -220,7 +236,8 @@ func translateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 			for _, service := range matchingServices {
 				for _, port := range service.Spec.Ports {
 					appProtocol := ptr.OrEmpty(port.AppProtocol)
-					if appProtocol != mcpProtocol && appProtocol != mcpProtocolSSE {
+					if appProtocol != mcpProtocol && appProtocol != mcpProtocolSSE &&
+						appProtocol != mcpProtocolLegacy && appProtocol != mcpProtocolSSELegacy {
 						// not a valid MCPBackend protocol
 						continue
 					}
@@ -325,7 +342,8 @@ func translateAIBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBac
 func translateBackendPolicies(
 	ctx plugins.PolicyCtx,
 	namespace string,
-	policies *agentgateway.BackendFull) ([]*api.BackendPolicySpec, error) {
+	policies *agentgateway.BackendFull,
+) ([]*api.BackendPolicySpec, error) {
 	if policies == nil {
 		return nil, nil
 	}
@@ -334,7 +352,8 @@ func translateBackendPolicies(
 
 func translateMCPBackendPolicies(
 	ctx plugins.PolicyCtx,
-	namespace string, policies *agentgateway.BackendWithMCP) ([]*api.BackendPolicySpec, error) {
+	namespace string, policies *agentgateway.BackendWithMCP,
+) ([]*api.BackendPolicySpec, error) {
 	if policies == nil {
 		return nil, nil
 	}
@@ -346,7 +365,8 @@ func translateMCPBackendPolicies(
 
 func translateAIBackendPolicies(
 	ctx plugins.PolicyCtx,
-	namespace string, policies *agentgateway.BackendWithAI) ([]*api.BackendPolicySpec, error) {
+	namespace string, policies *agentgateway.BackendWithAI,
+) ([]*api.BackendPolicySpec, error) {
 	if policies == nil {
 		return nil, nil
 	}
@@ -431,12 +451,39 @@ func translateLLMProvider(llm *agentgateway.LLMProvider, providerName string) (*
 	return provider, nil
 }
 
+func translateAwsBackends(
+	be *agentgateway.AgentgatewayBackend,
+	inlinePolicies []*api.BackendPolicySpec,
+) ([]*api.Backend, error) {
+	aws := be.Spec.Aws
+	if aws == nil || aws.AgentCore == nil {
+		return nil, errors.New("AwsBackend: agentCore is required")
+	}
+	ac := aws.AgentCore
+	awsBackend := &api.AwsBackend{
+		Service: &api.AwsBackend_AgentCore{
+			AgentCore: &api.AwsAgentCoreBackend{
+				AgentRuntimeArn: ac.AgentRuntimeArn,
+				Qualifier:       ac.Qualifier,
+			},
+		},
+	}
+	return []*api.Backend{{
+		Key:  be.Namespace + "/" + be.Name,
+		Name: plugins.ResourceName(be),
+		Kind: &api.Backend_Aws{
+			Aws: awsBackend,
+		},
+		InlinePolicies: inlinePolicies,
+	}}, nil
+}
+
 func toMCPProtocol(appProtocol string) api.MCPTarget_Protocol {
 	switch appProtocol {
-	case mcpProtocol:
+	case mcpProtocol, mcpProtocolLegacy:
 		return api.MCPTarget_STREAMABLE_HTTP
 
-	case mcpProtocolSSE:
+	case mcpProtocolSSE, mcpProtocolSSELegacy:
 		return api.MCPTarget_SSE
 
 	default:

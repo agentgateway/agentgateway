@@ -8,6 +8,15 @@ pub struct AwsRegion {
 	pub region: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct AwsServiceName {
+	pub name: &'static str,
+}
+
+pub const SERVICE_BEDROCK_AGENTCORE: AwsServiceName = AwsServiceName {
+	name: "bedrock-agentcore",
+};
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -26,6 +35,16 @@ impl super::Provider for Provider {
 }
 
 impl Provider {
+	pub fn is_anthropic_model(&self, request_model: Option<&str>) -> bool {
+		let model = self
+			.model
+			.as_deref()
+			.or(request_model)
+			.unwrap_or_default()
+			.to_ascii_lowercase();
+		model.contains("anthropic.claude")
+	}
+
 	pub fn get_path_for_route(
 		&self,
 		route_type: super::RouteType,

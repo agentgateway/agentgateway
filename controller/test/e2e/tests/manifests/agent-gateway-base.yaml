@@ -43,47 +43,56 @@ spec:
     - name: grpc
       port: 7070
   selector:
-    app.kubernetes.io/name: backend
+    app.kubernetes.io/name: testbox
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: backend
+  name: testbox
   namespace: agentgateway-base
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: backend
+      app.kubernetes.io/name: testbox
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: backend
+        app: testbox
+        app.kubernetes.io/name: testbox
     spec:
       securityContext:
         sysctls:
         - name: net.ipv4.ip_unprivileged_port_start
           value: "0"
       containers:
-      - image: gcr.io/istio-testing/app:latest
+      - image: ghcr.io/agentgateway/testbox:0.0.1
         imagePullPolicy: IfNotPresent
-        name: backend
+        name: testbox
         resources:
           requests:
             cpu: "50m"
             memory: "64Mi"
-        args:
-          - --tcp=9090
-          - --port=80
-          - --grpc=7070
-          - --port=443
-          - --tls=443
-          - --crt=/tls/tls.crt
-          - --key=/tls/tls.key
         env:
         - name: INSTANCE_IP
           valueFrom:
             fieldRef:
               fieldPath: status.podIP
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        startupProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 1
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 5
+          failureThreshold: 3
         volumeMounts:
           - mountPath: /tls
             name: certs
@@ -92,6 +101,51 @@ spec:
         secret:
           secretName: certs
           optional: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: testbox
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: testbox
+  template:
+    metadata:
+      labels:
+        app: testbox
+        app.kubernetes.io/name: testbox
+    spec:
+      securityContext:
+        sysctls:
+        - name: net.ipv4.ip_unprivileged_port_start
+          value: "0"
+      containers:
+      - image: ghcr.io/agentgateway/testbox:0.0.1
+        imagePullPolicy: IfNotPresent
+        name: testbox
+        env:
+        - name: INSTANCE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        startupProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 1
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 5
+          failureThreshold: 3
 ---
 # From https://github.com/agentgateway/agentgateway/tree/main/examples/tls/certs
 # We use this since Istio's builtin cert is self signed which is not supported (https://github.com/agentgateway/agentgateway/issues/680)
@@ -104,3 +158,108 @@ data:
 metadata:
   name: certs
   namespace: agentgateway-base
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ext-authz
+  namespace: agentgateway-base
+  labels:
+    app: ext-authz
+spec:
+  ports:
+    - port: 4444
+      targetPort: 9000
+      protocol: TCP
+      appProtocol: kubernetes.io/h2c
+  selector:
+    app.kubernetes.io/name: testbox
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: a2a-helloworld
+  namespace: agentgateway-base
+spec:
+  selector:
+    app.kubernetes.io/name: testbox
+  type: ClusterIP
+  ports:
+    - protocol: TCP
+      port: 9999
+      targetPort: 9999
+      appProtocol: kgateway.dev/a2a
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ext-proc-grpc
+  namespace: agentgateway-base
+  labels:
+    app: ext-proc-grpc
+spec:
+  ports:
+    - port: 4444
+      targetPort: 18080
+      protocol: TCP
+      appProtocol: kubernetes.io/h2c
+  selector:
+    app.kubernetes.io/name: testbox
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth0-mock
+spec:
+  selector:
+    app.kubernetes.io/name: testbox
+  ports:
+    - protocol: TCP
+      port: 8443
+      targetPort: 8443
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-website-fetcher
+  labels:
+    app: mcp-website-fetcher
+spec:
+  selector:
+    app.kubernetes.io/name: testbox
+  ports:
+    - port: 80
+      targetPort: 8000
+      appProtocol: kgateway.dev/mcp
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-admin-server
+  labels:
+    app: mcp-admin-server
+spec:
+  selector:
+    app.kubernetes.io/name: testbox
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3001
+      appProtocol: kgateway.dev/mcp
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dummy-idp
+  namespace: default
+  labels:
+    app: dummy-idp
+spec:
+  ports:
+    - name: http
+      port: 8443
+      targetPort: 8443
+  selector:
+    app.kubernetes.io/name: testbox

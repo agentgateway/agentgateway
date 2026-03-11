@@ -9,7 +9,6 @@ import (
 )
 
 var (
-	extProcManifest                  = getTestFile("ext-proc-server.yaml")
 	routeWithTargetReferenceManifest = getTestFile("httproute-targetref.yaml")
 	gatewayTargetReferenceManifest   = getTestFile("gateway-targetref.yaml")
 )

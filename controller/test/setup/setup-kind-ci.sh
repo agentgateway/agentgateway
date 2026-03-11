@@ -40,6 +40,14 @@ get-tag () {
 }
 export TAG="$(get-tag)"
 
+maybe-prefix () {
+  if command -v ts > /dev/null; then
+    ts "$1:"
+  else
+    cat
+  fi
+}
+
 run_step() {
   local step_name="$1"
   shift
@@ -52,7 +60,7 @@ run_step() {
   start_seconds="$(date +%s)"
   echo "==> Step started: ${step_name}" >&2
 
-  if "$@"; then
+  if "$@" |& maybe-prefix "$step_name"; then
     rc=0
   else
     rc=$?
@@ -72,6 +80,11 @@ run_step() {
 }
 
 step_create_kind_cluster() {
+  if kind get clusters 2>/dev/null | grep -Fxq "${CLUSTER_NAME}"; then
+    echo "kind cluster '${CLUSTER_NAME}' already exists; skipping create" >&2
+    return 0
+  fi
+
   cat <<EOF | kind create cluster --name "${CLUSTER_NAME}" --image "${KIND_NODE_IMAGE}" --config=-
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -206,11 +219,20 @@ function step_push_go_controller_to_local_registry() {
 }
 
 function step_build_proxy_binary() {
-   (cd "${REPO_ROOT}" && TIMINGS=true DRY_RUN=true ./tools/proxy-dev-build ci)
+   if [[ "$(uname -s)" == "Darwin" ]]; then
+      make -C "${REPO_ROOT}" docker-ci IMAGE_TAG="${TAG}"
+   else
+      (cd "${REPO_ROOT}" && TIMINGS=true DRY_RUN=true ./tools/proxy-dev-build ci)
+   fi
 }
 
 function step_push_proxy_to_local_registry() {
-   (cd "${REPO_ROOT}" && ./tools/proxy-dev-build ci)
+   if [[ "$(uname -s)" == "Darwin" ]]; then
+      docker tag "ghcr.io/agentgateway/agentgateway:${TAG}" "${LOCAL_REGISTRY}/agentgateway:${TAG}"
+      docker push "${LOCAL_REGISTRY}/agentgateway:${TAG}"
+   else
+      (cd "${REPO_ROOT}" && ./tools/proxy-dev-build ci)
+   fi
 }
 
 function step_deploy_helm() {
@@ -227,14 +249,8 @@ function step_setup_gateway_api() {
 }
 function step_preload_images() {(
   if [[ "${TEST_MODE}" == "e2e" ]]; then
-    make --no-print-directory -C controller dummy-idp-docker kind-load-dummy-idp &
-    make --no-print-directory -C controller extproc-server-docker kind-load-extproc-server &
-    docker exec "${CLUSTER_NAME}-control-plane" crictl pull gcr.io/istio-testing/app:latest &
-    docker exec "${CLUSTER_NAME}-control-plane" crictl pull gcr.io/istio-testing/ext-authz:1.25-dev &
+    make --no-print-directory -C controller testbox-docker kind-load-testbox &
     docker exec "${CLUSTER_NAME}-control-plane" crictl pull gcr.io/solo-public/docs/ai-guardrail-webhook@sha256:01f81b20ae016d123f018841c62daff7f6f44d0dec9189ecf591b3e99753c6b1 &
-    docker exec "${CLUSTER_NAME}-control-plane" crictl pull ghcr.io/kgateway-dev/mcp-admin-server:0.0.1 &
-    docker exec "${CLUSTER_NAME}-control-plane" crictl pull ghcr.io/kgateway-dev/mcp-website-fetcher:0.0.1 &
-    docker exec "${CLUSTER_NAME}-control-plane" crictl pull ghcr.io/kgateway-dev/test-a2a-server:0.0.11 &
     docker exec "${CLUSTER_NAME}-control-plane" crictl pull docker.io/otel/opentelemetry-collector-contrib:0.143.0 &
     docker exec "${CLUSTER_NAME}-control-plane" crictl pull docker.io/library/redis:7.4.3 &
     docker exec "${CLUSTER_NAME}-control-plane" crictl pull docker.io/envoyproxy/ratelimit:3e085e5b &
@@ -256,9 +272,27 @@ function step_warm_test() {
 }
 
 function await() {
-    for pid in "$@"; do
-        tail --pid="$pid" -f /dev/null
+  for pid in "$@"; do
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+      # GNU tail can block on an arbitrary pid without polling.
+      tail --pid="$pid" -f /dev/null
+      continue
+    fi
+
+    while true; do
+      if ! state="$(ps -o stat= -p "$pid" 2>/dev/null)"; then
+        break
+      fi
+
+      # `wait` cannot be used on sibling pids from subshells.
+      # Treat zombie processes as completed to avoid hanging forever.
+      if [[ "$state" == Z* ]]; then
+        break
+      fi
+
+      sleep 0.2
     done
+  done
 }
 function main() {
   echo "Timings will be written to: ${TIMINGS_FILE}"

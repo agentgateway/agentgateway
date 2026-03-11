@@ -114,6 +114,7 @@ flagset::flags! {
 
 		Extauthz,
 		Extproc,
+		Metadata,
 	}
 }
 
@@ -171,6 +172,7 @@ impl ContextBuilder {
 			|| self.any_has(Attributes::BasicAuth)
 			|| self.any_has(Attributes::Extauthz)
 			|| self.any_has(Attributes::Extproc)
+			|| self.any_has(Attributes::Metadata)
 		{
 			// TODO: support partial snapshots based on what is requested
 			Some(types::snapshot_request(res))
@@ -295,6 +297,9 @@ impl Expression {
 				},
 				["extproc", ..] => {
 					attributes |= Attributes::Extproc;
+				},
+				["metadata", ..] => {
+					attributes |= Attributes::Metadata;
 				},
 				_ => {},
 			}

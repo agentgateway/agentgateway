@@ -1,0 +1,45 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: static-backend
+spec:
+  static:
+    host: example.com
+    port: 8888
+  policies:
+    auth:
+      # TODO: kubebuilder:validate allows this but `translateBackendAuth` exepects "inline key or secretRef"
+      passthrough: {}
+---
+# Output
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      inlinePolicies:
+      - auth:
+          passthrough: {}
+      key: default/static-backend
+      name:
+        name: static-backend
+        namespace: default
+      static:
+        host: example.com
+        port: 8888
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: static-backend
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

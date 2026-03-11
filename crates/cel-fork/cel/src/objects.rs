@@ -1,3 +1,8 @@
+use bytes::Bytes;
+use cel::types::dynamic::{DynamicType, DynamicValue};
+use serde::de::Error as DeError;
+use serde::ser::Error;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::convert::{TryFrom, TryInto};
@@ -5,11 +10,6 @@ use std::fmt::{Debug, Display, Formatter};
 use std::ops;
 use std::ops::Deref;
 use std::sync::Arc;
-
-use cel::types::dynamic::{DynamicType, DynamicValue};
-use serde::de::Error as DeError;
-use serde::ser::Error;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::common::ast::{EntryExpr, Expr, OptimizedExpr, operators};
 use crate::common::value::CelVal;
@@ -114,31 +114,69 @@ impl Value<'_> {
 			Value::UInt(u) => {
 				usize::try_from(*u).map_err(|_e| ExecutionError::Conversion("usize", self.as_static()))
 			},
+			Value::Dynamic(d) => {
+				let res = d.materialize().as_unsigned();
+				debug_assert!(res.is_err(), "numbers should be auto_materialized");
+				res
+			},
 			_ => Err(ExecutionError::Conversion("usize", self.as_static())),
 		}
 	}
+
 	pub fn as_signed(&self) -> Result<i64, ExecutionError> {
 		match self {
 			Value::Int(i) => Ok(*i),
 			Value::UInt(u) => {
 				i64::try_from(*u).map_err(|_e| ExecutionError::Conversion("i64", self.as_static()))
 			},
+			Value::Dynamic(d) => {
+				let res = d.materialize().as_signed();
+				debug_assert!(res.is_err(), "numbers should be auto_materialized");
+				res
+			},
 			_ => Err(ExecutionError::Conversion("i64", self.as_static())),
 		}
 	}
+
 	pub fn as_bool(&self) -> Result<bool, ExecutionError> {
 		match self {
 			Value::Bool(b) => Ok(*b),
+			Value::Dynamic(d) => {
+				let res = d.materialize().as_bool();
+				debug_assert!(res.is_err(), "bools should be auto_materialized");
+				res
+			},
 			_ => Err(ExecutionError::Conversion("bool", self.as_static())),
 		}
 	}
-	pub fn as_bytes(&self) -> Result<&[u8], ExecutionError> {
+
+	/// as_bytes converts a Value into bytes
+	/// warning: callers are responsible for materializing values due to ownership
+	pub fn as_bytes_pre_materialized(&self) -> Result<&[u8], ExecutionError> {
 		match self {
 			Value::String(b) => Ok(b.as_ref().as_bytes()),
 			Value::Bytes(b) => Ok(b.as_ref()),
 			_ => Err(ExecutionError::Conversion("bytes", self.as_static())),
 		}
 	}
+	/// warning: callers are responsible for materializing values due to ownership
+	pub fn as_bytes_owned(&self) -> Result<Bytes, ExecutionError> {
+		match self {
+			Value::String(s) => Ok(Bytes::copy_from_slice(s.as_ref().as_bytes())),
+			Value::Bytes(BytesValue::Bytes(b)) => Ok(b.clone()),
+			Value::Bytes(b) => Ok(Bytes::copy_from_slice(b.as_ref())),
+			Value::Dynamic(d) => {
+				// No assertion here as there are viable cases for not auto materializing bytes/string
+				d.materialize().as_bytes_owned()
+			},
+			_ => Err(ExecutionError::Conversion("bytes", self.as_static())),
+		}
+	}
+
+	pub fn as_string(&self) -> Result<String, ExecutionError> {
+		self.as_str().map(|s| s.into_owned())
+	}
+
 	// Note: may allocate
 	pub fn as_str(&self) -> Result<Cow<'_, str>, ExecutionError> {
 		match self {
@@ -654,7 +692,7 @@ impl<'a> Value<'a> {
 							return if Ok(true) == left {
 								Ok(true.into())
 							} else {
-								let right = if let Value::Bool(b) = resolve(&call.args[1])? {
+								let right = if let Value::Bool(b) = resolve_materialized(&call.args[1])? {
 									Some(b)
 								} else {
 									None
@@ -671,7 +709,7 @@ impl<'a> Value<'a> {
 							return if Ok(false) == left {
 								Ok(false.into())
 							} else {
-								let right = if let Value::Bool(b) = resolve(&call.args[1])? {
+								let right = if let Value::Bool(b) = resolve_materialized(&call.args[1])? {
 									Some(b)
 								} else {
 									None
@@ -685,7 +723,7 @@ impl<'a> Value<'a> {
 						},
 						operators::INDEX | operators::OPT_INDEX => {
 							let mut value: Value<'a> = resolve(&call.args[0])?;
-							let idx = resolve(&call.args[1])?;
+							let idx = resolve_materialized(&call.args[1])?;
 							let mut is_optional = call.func_name == operators::OPT_INDEX;
 
 							if let Ok(opt_val) = <&OptionalValue>::try_from(&value) {
@@ -759,7 +797,7 @@ impl<'a> Value<'a> {
 						},
 						operators::OPT_SELECT => {
 							let operand = resolve(&call.args[0])?;
-							let field_literal = resolve(&call.args[1])?;
+							let field_literal = resolve_materialized(&call.args[1])?;
 							let field = match field_literal {
 								Value::String(s) => s,
 								_ => {
@@ -871,7 +909,7 @@ impl<'a> Value<'a> {
 				}
 				let left: Value<'a> = resolve(left_op)?;
 				if select.test {
-					match &left {
+					match left.always_materialize().as_ref() {
 						Value::Map(map) => {
 							let b = map.contains_key(&KeyRef::String(select.field.as_str().into()));
 							Ok(Value::Bool(b))
@@ -933,7 +971,7 @@ impl<'a> Value<'a> {
 			},
 			Expr::Comprehension(comprehension) => {
 				let accu_init = resolve(&comprehension.accu_init)?;
-				let iter = resolve(&comprehension.iter_range)?;
+				let iter = resolve_materialized(&comprehension.iter_range)?;
 				let mut accu = accu_init;
 				match iter {
 					Value::List(items) => {

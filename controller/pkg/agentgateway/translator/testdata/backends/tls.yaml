@@ -223,7 +223,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       ai:
         providerGroups:
@@ -246,7 +249,10 @@ output:
       name:
         name: ai-groups
         namespace: default
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       ai:
         providerGroups:
@@ -262,7 +268,10 @@ output:
       name:
         name: anthropic-single
         namespace: default
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       key: default/mcp-backend
       mcp:
@@ -282,7 +291,10 @@ output:
       name:
         name: mcp-backend
         namespace: default
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       key: default/mcp-backend/mcp-static
       name:
@@ -291,7 +303,10 @@ output:
       static:
         host: mcp-app.foo
         port: 8000
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       ai:
         providerGroups:
@@ -422,7 +437,23 @@ status:
     namespace: default
   spec: null
   status:
-    ancestors: null
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: basic
+      conditions:
+      - lastTransitionTime: fake
+        message: Configuration is valid
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Configuration is valid
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
 - apiVersion: gateway.networking.k8s.io/v1
   kind: BackendTLSPolicy
   metadata:
@@ -430,7 +461,23 @@ status:
     namespace: default
   spec: null
   status:
-    ancestors: null
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: basic
+      conditions:
+      - lastTransitionTime: fake
+        message: Configuration is valid
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Configuration is valid
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayBackend
   metadata:
@@ -464,7 +511,23 @@ status:
     namespace: default
   spec: null
   status:
-    ancestors: null
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: basic
+      conditions:
+      - lastTransitionTime: fake
+        message: Configuration is valid
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Configuration is valid
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
 - apiVersion: gateway.networking.k8s.io/v1
   kind: BackendTLSPolicy
   metadata:
@@ -472,7 +535,23 @@ status:
     namespace: default
   spec: null
   status:
-    ancestors: null
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: basic
+      conditions:
+      - lastTransitionTime: fake
+        message: Configuration is valid
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Configuration is valid
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayBackend
   metadata:

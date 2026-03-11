@@ -1,0 +1,41 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: mcp-backend
+spec:
+  mcp:
+    targets:
+    - name: mcp-example
+      selector:
+        namespaces:
+          matchLabels:
+            kubernetes.io/metadata.name: mcp-servers
+  policies:
+    mcp:
+      authentication:
+        jwks:
+          jwksPath: /
+          backendRef:
+              group: ""
+              kind: Service
+              name: store-uninitialized
+              port: 8080
+---
+# Output
+output: []
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: mcp-backend
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: 'failed to translate backend: JwksUrlBuilderFactory must be initialized
+        before use'
+      reason: TranslationError
+      status: "False"
+      type: Accepted

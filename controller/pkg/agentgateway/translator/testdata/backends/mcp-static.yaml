@@ -16,7 +16,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       key: default/mcp-backend
       mcp:
@@ -29,7 +32,10 @@ output:
       name:
         name: mcp-backend
         namespace: default
-- resource:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
     backend:
       key: default/mcp-backend/mcp-target
       name:

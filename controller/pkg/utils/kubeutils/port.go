@@ -4,10 +4,9 @@ import (
 	"fmt"
 
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 )
 
-func DetectListenerPortNumber(protocol gwv1.ProtocolType, port gwv1.PortNumber) (gwxv1a1.PortNumber, error) {
+func DetectListenerPortNumber(protocol gwv1.ProtocolType, port gwv1.PortNumber) (gwv1.PortNumber, error) {
 	if port != 0 {
 		return port, nil
 	}

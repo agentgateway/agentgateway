@@ -12,6 +12,7 @@ impl Default for ExtAuthz {
 	fn default() -> Self {
 		Self {
 			target: Arc::new(SimpleBackendReference::Invalid),
+			policies: Default::default(),
 			failure_mode: FailureMode::default(),
 			include_request_headers: Vec::new(),
 			include_request_body: None,
@@ -19,7 +20,6 @@ impl Default for ExtAuthz {
 				context: None,
 				metadata: None,
 			},
-			timeout: None,
 		}
 	}
 }

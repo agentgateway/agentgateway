@@ -1,0 +1,8 @@
+aws:
+  agentCore:
+    agentRuntimeArn: arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123
+    qualifier: v1
+key: test-ns/aws-agentcore-backend
+name:
+  name: aws-agentcore-backend
+  namespace: test-ns

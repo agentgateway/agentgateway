@@ -18,17 +18,25 @@ if [[ $tgt == "dev" ]]; then
   tgt=debug
 fi
 
+if [[ "$(uname -s)" != "Linux" ]]; then
+  echo "Error: proxy-dev-build only supports Linux. Use 'make docker-ci' on Mac." >&2
+  exit 1
+fi
+
 cargo build --profile "${profile}" ${platform:+--target $platform} ${TIMINGS+--timings} || exit 1
-if [[ "${DRY_RUN}" == "" ]]; then
+if [[ -n "${DRY_RUN:-}" ]]; then
   exit 0
 fi
 tag="$(get-tag)"
 dest="localhost:5000/agentgateway:${tag}"
-crane mutate --platform linux/amd64 $(
-  crane append --platform linux/amd64 \
-    -f <(tar -f - -c ./target/${platform:+$platform/}${tgt}/agentgateway --transform "s|./target/${platform:+$platform/}${tgt}/|/usr/bin/|") \
-    -t ${dest} \
-    -b istio/base
-) --entrypoint /usr/bin/agentgateway -t ${dest} 1>&2
+
+{
+  crane mutate --platform linux/amd64 $(
+    crane append --platform linux/amd64 \
+      -f <(tar -f - -c --transform "s|./target/${platform:+$platform/}${tgt}/|/usr/bin/|" ./target/${platform:+$platform/}${tgt}/agentgateway) \
+      -t ${dest} \
+      -b istio/base
+  ) --entrypoint /usr/bin/agentgateway -t ${dest} 1>&2
+}
 echo ${tag}
 echo ${dest} 1>&2

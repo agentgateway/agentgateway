@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::io;
 
 use ::http::HeaderMap;
+use bytes::BytesMut;
 use http_body_util::BodyExt;
 use tokio_sse_codec::{Event, Frame, SseDecoder};
+use tokio_util::codec::Decoder;
 
 use super::*;
 use crate::*;
@@ -87,6 +90,42 @@ async fn test_sse_json() {
 }
 
 #[tokio::test]
+async fn test_full_passthrough_parser_flushes_decoder_on_eof() {
+	struct EofOnlyDecoder;
+
+	impl Decoder for EofOnlyDecoder {
+		type Item = Bytes;
+		type Error = io::Error;
+
+		fn decode(&mut self, _src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+			Ok(None)
+		}
+
+		fn decode_eof(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+			if src.is_empty() {
+				Ok(None)
+			} else {
+				Ok(Some(src.split().freeze()))
+			}
+		}
+	}
+
+	let msg = Bytes::from_static(b"tail");
+	let body = http::Body::from_stream(futures_util::stream::iter(vec![Ok::<_, io::Error>(
+		msg.clone(),
+	)]));
+
+	let events = Arc::new(Mutex::new(vec![]));
+	let ev_clone = events.clone();
+	let body = passthrough::full_passthrough_parser(body, EofOnlyDecoder, move |o| {
+		events.clone().lock().unwrap().push(o)
+	});
+	let got = body.collect().await.map(|col| col.to_bytes()).unwrap();
+	assert_eq!(got, msg);
+	assert_eq!(ev_clone.lock().unwrap().clone(), vec![msg]);
+}
+
+#[tokio::test]
 async fn test_sse_json_transform() {
 	let msg1 = "data: {\"msg\": 1, \"type\": \"input\"}\n\n";
 	let msg2 = "data: {\"msg\": 2, \"type\": \"input\"}\n\n";
@@ -152,5 +191,126 @@ event:
 data: [DONE]
 
 "#
+	);
+}
+
+#[tokio::test]
+async fn test_sse_json_transform_multi_named_events_and_done() {
+	let msg1 = "data: {\"msg\": 1}\n\n";
+	let msg2 = "data: {\"msg\": 2}\n\n";
+	let done = "data: [DONE]\n\n";
+	let body = http::Body::from_stream(futures_util::stream::iter(vec![
+		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg1.as_bytes())),
+		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg2.as_bytes())),
+		Ok::<_, std::io::Error>(Bytes::copy_from_slice(done.as_bytes())),
+	]));
+
+	#[derive(Deserialize)]
+	struct Input {
+		msg: u8,
+	}
+	#[derive(Serialize)]
+	struct Output {
+		message: u8,
+		status: &'static str,
+	}
+
+	let transformed =
+		sse::json_transform_multi::<Input, Output, _>(body, 1024, |event| match event {
+			sse::SseJsonEvent::Data(Ok(input)) => vec![(
+				"delta",
+				Output {
+					message: input.msg,
+					status: "ok",
+				},
+			)],
+			sse::SseJsonEvent::Data(Err(_)) => vec![(
+				"error",
+				Output {
+					message: 0,
+					status: "parse_error",
+				},
+			)],
+			sse::SseJsonEvent::Done => vec![(
+				"done",
+				Output {
+					message: 0,
+					status: "done",
+				},
+			)],
+		});
+
+	let result = transformed.collect().await.unwrap().to_bytes();
+	let result = String::from_utf8_lossy(&result);
+	assert!(
+		result.contains("event: delta"),
+		"missing named delta event:\n{result}"
+	);
+	assert!(
+		result.contains("data: {\"message\":1,\"status\":\"ok\"}"),
+		"missing translated payload for first event:\n{result}"
+	);
+	assert!(
+		result.contains("data: {\"message\":2,\"status\":\"ok\"}"),
+		"missing translated payload for second event:\n{result}"
+	);
+	assert!(
+		result.contains("event: done"),
+		"missing done event from [DONE] translation:\n{result}"
+	);
+	assert!(
+		result.contains("data: {\"message\":0,\"status\":\"done\"}"),
+		"missing done payload:\n{result}"
+	);
+}
+
+#[tokio::test]
+async fn test_sse_json_transform_multi_parse_error_path() {
+	let msg1 = "data: {\"msg\": 1}\n\n";
+	let msg2 = "data: {\"msg\": \"bad\"}\n\n";
+	let done = "data: [DONE]\n\n";
+	let body = http::Body::from_stream(futures_util::stream::iter(vec![
+		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg1.as_bytes())),
+		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg2.as_bytes())),
+		Ok::<_, std::io::Error>(Bytes::copy_from_slice(done.as_bytes())),
+	]));
+
+	#[derive(Deserialize)]
+	struct Input {
+		msg: u8,
+	}
+	#[derive(Serialize)]
+	struct Output {
+		status: &'static str,
+	}
+
+	let transformed =
+		sse::json_transform_multi::<Input, Output, _>(body, 1024, |event| match event {
+			sse::SseJsonEvent::Data(Ok(input)) => {
+				let _ = input.msg;
+				vec![("delta", Output { status: "ok" })]
+			},
+			sse::SseJsonEvent::Data(Err(_)) => vec![(
+				"error",
+				Output {
+					status: "parse_error",
+				},
+			)],
+			sse::SseJsonEvent::Done => vec![("done", Output { status: "done" })],
+		});
+
+	let result = transformed.collect().await.unwrap().to_bytes();
+	let result = String::from_utf8_lossy(&result);
+	assert!(
+		result.contains("event: error"),
+		"missing parse error event:\n{result}"
+	);
+	assert!(
+		result.contains("data: {\"status\":\"parse_error\"}"),
+		"missing parse error payload:\n{result}"
+	);
+	assert!(
+		result.contains("event: done"),
+		"missing done event after parse error:\n{result}"
 	);
 }

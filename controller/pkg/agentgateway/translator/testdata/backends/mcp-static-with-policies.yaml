@@ -1,0 +1,64 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: mcp-static-with-auth
+spec:
+  mcp:
+    targets:
+    - name: auth-target
+      static:
+        host: mcp-server.example.com
+        port: 8080
+        protocol: SSE
+        policies:
+          auth:
+            key: mcp-api-token
+---
+# Output
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: default/mcp-static-with-auth
+      mcp:
+        targets:
+        - backend:
+            backend: default/mcp-static-with-auth/auth-target
+          name: auth-target
+          protocol: SSE
+      name:
+        name: mcp-static-with-auth
+        namespace: default
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      inlinePolicies:
+      - auth:
+          key:
+            secret: mcp-api-token
+      key: default/mcp-static-with-auth/auth-target
+      name:
+        name: mcp-static-with-auth
+        namespace: default
+      static:
+        host: mcp-server.example.com
+        port: 8080
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: mcp-static-with-auth
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

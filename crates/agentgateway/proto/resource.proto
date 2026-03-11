@@ -132,6 +132,7 @@ message Backend {
     AIBackend ai = 4;
     MCPBackend mcp = 5;
     DynamicForwardProxy dynamic = 6;
+    AwsBackend aws = 8;
   }
   repeated BackendPolicySpec inline_policies = 7;
 }
@@ -148,6 +149,13 @@ message TLSConfig {
     reserved 2;
     TLS_V1_2 = 3;
     TLS_V1_3 = 4;
+  }
+
+  enum MTLSMode {
+    STRICT = 0;
+
+    // Request a TLS certificate, but if one is not presented or invalid, allow the connection.
+    ALLOW_INSECURE_FALLBACK = 1;
   }
 
   // Cipher suites supported by agentgateway
@@ -176,6 +184,7 @@ message TLSConfig {
   repeated CipherSuite cipher_suites = 4;
   optional TLSVersion min_version = 5;
   optional TLSVersion max_version = 6;
+  MTLSMode mtls_mode = 7;
 }
 
 enum Protocol {
@@ -526,7 +535,7 @@ message FrontendPolicySpec {
     // or a boolean (true/false). If unspecified, client sampling is 100% enabled.
     optional string client_sampling = 5;
 
-    // OTLP path. Default is /v1/traces
+    // OTLP/HTTP path. Only applicable when protocol is HTTP. Default is /v1/traces
     optional string path = 6;
 
     // protocol specifies the OTLP protocol variant to use. Default is HTTP
@@ -552,6 +561,15 @@ message FrontendPolicySpec {
   }
 }
 
+// JWT validation options controlling which claims must be present in a token.
+// Recognized values: "exp", "nbf", "aud", "iss", "sub".
+// Claims present in the token are still validated even if not listed as required.
+message JWTValidationOptions {
+  // Claims that must be present in the token before validation.
+  // Defaults to ["exp"]. Use an empty list to require no claims.
+  repeated string required_claims = 1;
+}
+
 message TrafficPolicySpec {
   message RemoteRateLimit {
     string domain = 1;
@@ -562,6 +580,12 @@ message TrafficPolicySpec {
       REQUESTS = 0;
       TOKENS = 1;
     }
+    // Defines how the proxy behaves when the remote rate limit service is
+    // unavailable or returns an error. Defaults to FAIL_CLOSED
+    enum FailureMode {
+      FAIL_CLOSED = 0;
+      FAIL_OPEN = 1;
+    }
     message Descriptor {
       repeated Entry entries = 1;
       Type type = 2;
@@ -570,6 +594,7 @@ message TrafficPolicySpec {
       string key = 1;
       string value = 2; // CEL expr
     }
+    FailureMode failure_mode = 4;
   }
   message LocalRateLimit {
     enum Type {
@@ -612,7 +637,8 @@ message TrafficPolicySpec {
     optional uint32 status_on_error = 5;
     repeated string include_request_headers = 6;
     BodyOptions include_request_body = 7;
-    google.protobuf.Duration timeout = 8;
+    reserved 8;
+    reserved "timeout";
   }
   message RBAC {
     repeated string allow = 1;
@@ -630,6 +656,9 @@ message TrafficPolicySpec {
       // Inline JWKS as a JSON string
       string inline = 3;
     }
+
+    // JWT validation options controlling which claims must be present.
+    JWTValidationOptions jwt_validation_options = 4;
   }
   // JWT authentication configuration
   message JWT {
@@ -695,6 +724,7 @@ message TrafficPolicySpec {
       repeated HeaderTransformation add = 2;
       repeated string remove = 3;
       BodyTransformation body = 4;
+      map<string, string> metadata = 5;
     }
     Transform request = 1;
     Transform response = 2;
@@ -890,6 +920,9 @@ message BackendPolicySpec {
     map<string, string> defaults = 2;
     // Override JSON key-value pairs to set in the LLM request regardless of whether they are set in the request.
     map<string, string> overrides = 3;
+    // CEL transformation expressions to evaluate and set in the LLM request.
+    // Expressions are evaluated against the current request body and behave like overrides.
+    map<string, string> transformations = 8;
     PromptEnrichment prompts = 4;
     // Model aliases - map from alias name to actual model name
     map<string, string> model_aliases = 5;
@@ -908,6 +941,8 @@ message BackendPolicySpec {
       MODELS = 3;
       // Sends requests to upstream as-is without LLM processing
       PASSTHROUGH = 4;
+      // Sends requests upstream as-is but attempts to detect usage/metadata for telemetry/rate limiting
+      DETECT = 9;
       // Processes OpenAI /responses format requests
       RESPONSES = 5;
       // Processes Anthropic /v1/messages/count_tokens format requests
@@ -933,6 +968,49 @@ message BackendPolicySpec {
     }
     BackendReference endpoint_picker = 1;
     FailureMode failure_mode = 2;
+  }
+  message Eviction {
+    // Base time to evict (e.g. 3s, 10s). The actual ejection time equals
+    // base * times_ejected, growing without cap via multiplicative backoff.
+    // If all endpoints are evicted, the loadbalancer falls back to returning
+    // evicted endpoints rather than failing entirely.
+    google.protobuf.Duration duration = 1;
+
+    reserved 2;
+    reserved "max_eviction_time";
+
+    // Health score (0.0–1.0) to assign to a backend when it returns from eviction.
+    // For example, 0.5 brings the backend back at half-health so it recovers gradually,
+    // while 1.0 restores it to full health immediately.
+    // When unset, the health score is left unchanged on recovery (i.e. the backend
+    // returns at whatever score it had when it was evicted).
+    optional double restore_health = 3;
+
+    reserved 4;
+    reserved "max_eviction_percent";
+
+    // Number of consecutive unhealthy responses required before evicting the backend.
+    // For example, 3 means the backend must fail 3 times in a row before being evicted.
+    // When both consecutive_failures and health_threshold are set, eviction triggers when
+    // either condition is met. When neither is set, a single unhealthy response triggers eviction.
+    optional int32 consecutive_failures = 5;
+
+    // EWMA health score threshold (0.0–1.0) below which an unhealthy backend is evicted.
+    // When set, the backend is only evicted if its exponentially-weighted moving average health
+    // score drops below this value. Unlike consecutive_failures (which counts consecutive failures),
+    // this uses a sliding-window average so a single success can delay eviction.
+    // When both health_threshold and consecutive_failures are set, eviction triggers when
+    // either condition is met. When neither is set, a single unhealthy response triggers eviction.
+    optional double health_threshold = 6;
+  }
+  message Health {
+    // cel expression evaluated per request to determine if eviction should be triggered
+    // `true`: treat this response as **unhealthy** (candidate for eviction).
+    // `false`: treat as healthy (no eviction from this response alone).
+    // When empty, any 5xx response, or a connection failure, is treated as unhealthy.
+    // This default lowers the backend's health score but does not trigger eviction on its own.
+    string unhealthy_condition = 1;
+    Eviction eviction = 2;
   }
   message BackendTLS {
     enum VerificationMode {
@@ -1002,6 +1080,8 @@ message BackendPolicySpec {
     ResourceMetadata resource_metadata = 5;
     // How the JWT validation should behave
     Mode mode = 6;
+    // JWT validation options controlling which claims must be present.
+    JWTValidationOptions jwt_validation_options = 7;
   }
 
   oneof kind {
@@ -1018,6 +1098,8 @@ message BackendPolicySpec {
     RequestMirrors request_mirror = 11;
     BackendHTTP backend_http = 12;
     BackendTCP backend_tcp = 13;
+    TrafficPolicySpec.TransformationPolicy transformation = 14;
+    Health health = 15;
   }
 }
 
@@ -1027,6 +1109,17 @@ message StaticBackend {
 }
 
 message DynamicForwardProxy {}
+
+message AwsBackend {
+  oneof service {
+    AwsAgentCoreBackend agent_core = 1;
+  }
+}
+
+message AwsAgentCoreBackend {
+  string agent_runtime_arn = 1;
+  optional string qualifier = 2;
+}
 
 message AIBackend {
   message HostOverride {

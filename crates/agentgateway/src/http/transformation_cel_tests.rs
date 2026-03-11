@@ -78,3 +78,33 @@ fn test_transformation_pseudoheader() {
 	assert_eq!(req.method().as_str(), "POST");
 	assert_eq!(req.uri().to_string().as_str(), "https://example.com/https");
 }
+
+#[test]
+fn test_transformation_metadata() {
+	let mut req = ::http::Request::builder()
+		.method("GET")
+		.uri("https://www.rust-lang.org/example")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let c = super::LocalTransformationConfig {
+		request: Some(super::LocalTransform {
+			metadata: vec![
+				("originalPath".into(), "request.path".into()),
+				("isGet".into(), "request.method == 'GET'".into()),
+			],
+			..Default::default()
+		}),
+		response: None,
+	};
+	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	xfm.apply_request(&mut req);
+	let md = req
+		.extensions()
+		.get::<TransformationMetadata>()
+		.expect("metadata extension should be present");
+	assert_eq!(
+		md.0.get("originalPath").unwrap(),
+		&serde_json::Value::String("/example".to_string())
+	);
+	assert_eq!(md.0.get("isGet").unwrap(), &serde_json::Value::Bool(true));
+}

@@ -28,10 +28,12 @@ const (
 	aiPolicySuffix                = ":ai"
 	backendTlsPolicySuffix        = ":backend-tls"
 	backendauthPolicySuffix       = ":backend-auth"
+	backendTransformationSuffix   = ":backend-transformation"
 	tlsPolicySuffix               = ":tls"
 	backendHttpPolicySuffix       = ":backend-http"
 	mcpAuthorizationPolicySuffix  = ":mcp-authorization"
 	mcpAuthenticationPolicySuffix = ":mcp-authentication"
+	healthPolicySuffix            = ":health"
 )
 
 func TranslateInlineBackendPolicy(
@@ -89,6 +91,24 @@ func translateBackendPolicyToAgw(
 		agwPolicies = append(agwPolicies, pol...)
 	}
 
+	if s := backend.Health; s != nil {
+		pol, err := translateBackendHealthPolicy(policy, policyTarget)
+		if err != nil {
+			logger.Error("error processing backend health policy", "err", err)
+			errs = append(errs, err)
+		}
+		agwPolicies = append(agwPolicies, pol...)
+	}
+
+	if s := backend.Transformation; s != nil {
+		pol, err := translateBackendTransformation(policy, policyTarget)
+		if err != nil {
+			logger.Error("error processing backend transformation", "err", err)
+			errs = append(errs, err)
+		}
+		agwPolicies = append(agwPolicies, pol...)
+	}
+
 	if s := backend.MCP; s != nil {
 		if backend.MCP.Authorization != nil {
 			pol := translateBackendMCPAuthorization(policy, policyTarget)
@@ -126,9 +146,103 @@ func translateBackendPolicyToAgw(
 	return agwPolicies, errors.Join(errs...)
 }
 
+func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) ([]AgwPolicy, error) {
+	var errs []error
+
+	healthPolicy := policy.Spec.Backend.Health
+
+	var evictionProto *api.BackendPolicySpec_Eviction
+	if healthPolicy.Eviction != nil {
+		var duration *durationpb.Duration
+		if healthPolicy.Eviction.Duration != nil {
+			duration = durationpb.New(healthPolicy.Eviction.Duration.Duration)
+		}
+
+		// Convert 0–100 integer scores into 0.0–1.0 doubles for proto
+		var healthThreshold *float64
+		if healthPolicy.Eviction.HealthThreshold != nil {
+			val := float64(*healthPolicy.Eviction.HealthThreshold) / 100.0
+			healthThreshold = &val
+		}
+		var restoreHealth *float64
+		if healthPolicy.Eviction.RestoreHealth != nil {
+			val := float64(*healthPolicy.Eviction.RestoreHealth) / 100.0
+			restoreHealth = &val
+		}
+
+		evictionProto = &api.BackendPolicySpec_Eviction{
+			Duration:            duration,
+			RestoreHealth:       restoreHealth,
+			ConsecutiveFailures: healthPolicy.Eviction.ConsecutiveFailures,
+			HealthThreshold:     healthThreshold,
+		}
+	}
+
+	var unhealthyCondition string
+	if healthPolicy.UnhealthyCondition != nil {
+		unhealthyCondition = string(*healthPolicy.UnhealthyCondition)
+	}
+
+	p := &api.BackendPolicySpec_Health{
+		UnhealthyCondition: unhealthyCondition,
+		Eviction:           evictionProto,
+	}
+	evictPolicy := &api.Policy{
+		Key:    policy.Namespace + "/" + policy.Name + healthPolicySuffix + attachmentName(target),
+		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Target: target,
+		Kind: &api.Policy_Backend{
+			Backend: &api.BackendPolicySpec{
+				Kind: &api.BackendPolicySpec_Health_{
+					Health: p,
+				},
+			},
+		},
+	}
+
+	return []AgwPolicy{{Policy: evictPolicy}}, errors.Join(errs...)
+}
+
 func translateBackendTCP(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) ([]AgwPolicy, error) {
 	// TODO
 	return nil, nil
+}
+
+func translateBackendTransformation(
+	policy *agentgateway.AgentgatewayPolicy,
+	target *api.PolicyTarget,
+) ([]AgwPolicy, error) {
+	var errs []error
+	transformation := policy.Spec.Backend.Transformation
+
+	convertedReq, err := convertTransformSpec(transformation.Request)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	convertedResp, err := convertTransformSpec(transformation.Response)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	tp := &api.Policy{
+		Key:    policy.Namespace + "/" + policy.Name + backendTransformationSuffix + attachmentName(target),
+		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Target: target,
+		Kind: &api.Policy_Backend{
+			Backend: &api.BackendPolicySpec{
+				Kind: &api.BackendPolicySpec_Transformation{
+					Transformation: &api.TrafficPolicySpec_TransformationPolicy{
+						Request:  convertedReq,
+						Response: convertedResp,
+					},
+				},
+			},
+		},
+	}
+	logger.Debug("generated backend transformation policy",
+		"policy", policy.Name,
+		"agentgateway_policy", tp.Name)
+	return []AgwPolicy{{Policy: tp}}, errors.Join(errs...)
 }
 
 func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) ([]AgwPolicy, error) {
@@ -416,6 +530,18 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 		}
 		translatedAIPolicy.Overrides[def.Field] = val
 	}
+	for _, xfm := range aiSpec.Transformations {
+		if translatedAIPolicy.Transformations == nil {
+			translatedAIPolicy.Transformations = make(map[string]string)
+		}
+
+		if !isCEL(xfm.Expression) {
+			errs = append(errs, fmt.Errorf("transformation %q is not a valid CEL expression: %v", xfm.Field, xfm.Expression))
+		}
+
+		// Still set it so it wipes out the value on error, mirroring the header value.
+		translatedAIPolicy.Transformations[xfm.Field] = string(xfm.Expression)
+	}
 
 	if aiSpec.PromptGuard != nil {
 		if translatedAIPolicy.PromptGuard == nil {
@@ -567,6 +693,8 @@ func translateRouteType(rt agentgateway.RouteType) api.BackendPolicySpec_Ai_Rout
 		return api.BackendPolicySpec_Ai_MODELS
 	case agentgateway.RouteTypePassthrough:
 		return api.BackendPolicySpec_Ai_PASSTHROUGH
+	case agentgateway.RouteTypeDetect:
+		return api.BackendPolicySpec_Ai_DETECT
 	case agentgateway.RouteTypeResponses:
 		return api.BackendPolicySpec_Ai_RESPONSES
 	case agentgateway.RouteTypeAnthropicTokenCount:

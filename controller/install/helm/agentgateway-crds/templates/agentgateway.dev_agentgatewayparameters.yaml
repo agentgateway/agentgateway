@@ -5,15 +5,15 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.20.0
   labels:
-    app: kgateway
-    app.kubernetes.io/name: kgateway
+    app: agentgateway
+    app.kubernetes.io/name: agentgateway
     gateway.networking.k8s.io/policy: Direct
   name: agentgatewayparameters.agentgateway.dev
 spec:
   group: agentgateway.dev
   names:
     categories:
-    - kgateway
+    - agentgateway
     kind: AgentgatewayParameters
     listKind: AgentgatewayParametersList
     plural: agentgatewayparameters
@@ -149,6 +149,9 @@ spec:
                   variables, you can use $(VAR_NAME), but it's highly
                   discouraged. `$$(VAR_NAME)` avoids expansion and results in a literal
                   `$(VAR_NAME)`.
+
+                  If `SESSION_KEY` is specified, it takes precedence over the
+                  controller-managed per-Gateway session key Secret.
                 items:
                   description: EnvVar represents an environment variable present in
                     a Container.

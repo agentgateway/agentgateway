@@ -1,0 +1,20 @@
+# AgentCore with JWT auth and user-id header forwarding.
+# JWT auth runs at the route level; validated claims (e.g. jwt.sub) are passed to AgentCore
+# via X-Amzn-Bedrock-AgentCore-Runtime-User-Id when using IAM/SigV4.
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - matches:
+      - path:
+          pathPrefix: /supply-chain-agent
+      backends:
+      - aws:
+          agentCore:
+            agentRuntimeArn: "arn:aws:bedrock-agentcore:us-west-2:606469916935:runtime/a2a_sca_iam-4rLvS1BRqq"
+        policies:
+          transformations:
+            request:
+              set:
+                X-Amzn-Bedrock-AgentCore-Runtime-User-Id: "user-foo"
+                X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: "user-foo"

@@ -165,7 +165,6 @@ linters:
       - third_party$
       - builtin$
       - examples$
-      - hack/dummy-idp
     rules:
       # Forbid t.Cleanup only in e2e tests (exclude the rule from non-e2e paths)
       - path-except: test/e2e/

@@ -112,6 +112,11 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 		clientSampling = ptr.Of(string(*tracing.ClientSampling))
 	}
 
+	var path *string
+	if tracing.Path != nil {
+		path = ptr.Of(string(*tracing.Path))
+	}
+
 	var protocol api.FrontendPolicySpec_Tracing_Protocol
 	switch tracing.Protocol {
 	case agentgateway.TracingProtocolGrpc:
@@ -135,6 +140,7 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 					Remove:          rmAttributes,
 					Resources:       addResources,
 					Protocol:        protocol,
+					Path:            path,
 					RandomSampling:  randomSampling,
 					ClientSampling:  clientSampling,
 				}},

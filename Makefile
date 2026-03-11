@@ -19,6 +19,14 @@ else
 	$(DOCKER_BUILDER) build $(DOCKER_BUILD_ARGS) -t $(IMAGE_FULL_NAME) . --progress=plain
 endif
 
+.PHONY: docker-ci
+docker-ci:
+ifeq ($(OS),Windows_NT)
+	$(DOCKER_BUILDER) build $(DOCKER_BUILD_ARGS) --build-arg PROFILE=ci -f Dockerfile.windows -t $(IMAGE_FULL_NAME) .
+else
+	$(DOCKER_BUILDER) build $(DOCKER_BUILD_ARGS) --build-arg PROFILE=ci -t $(IMAGE_FULL_NAME) . --progress=plain
+endif
+
 .PHONY: docker-musl
 docker-musl:
 	$(DOCKER_BUILDER) build $(DOCKER_BUILD_ARGS) -t $(IMAGE_FULL_NAME)-musl --build-arg=BUILDER=musl . --progress=plain

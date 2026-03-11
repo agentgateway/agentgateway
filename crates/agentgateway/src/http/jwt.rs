@@ -1,5 +1,5 @@
 // Inspired by https://github.com/cdriehuys/axum-jwks/blob/main/axum-jwks/src/jwks.rs (MIT license)
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use ::cel::types::dynamic::DynamicType;
@@ -115,20 +115,24 @@ impl Debug for Jwt {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
-#[serde(untagged, rename_all = "camelCase", deny_unknown_fields)]
+#[serde(untagged, deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum LocalJwtConfig {
+	#[serde(rename_all = "camelCase")]
 	Multi {
 		#[serde(default)]
 		mode: Mode,
 		providers: Vec<ProviderConfig>,
 	},
+	#[serde(rename_all = "camelCase")]
 	Single {
 		#[serde(default)]
 		mode: Mode,
 		issuer: String,
 		audiences: Option<Vec<String>>,
 		jwks: serdes::FileInlineOrRemote,
+		#[serde(default)]
+		jwt_validation_options: JWTValidationOptions,
 	},
 }
 
@@ -139,6 +143,8 @@ pub struct ProviderConfig {
 	pub issuer: String,
 	pub audiences: Option<Vec<String>>,
 	pub jwks: serdes::FileInlineOrRemote,
+	#[serde(default)]
+	pub jwt_validation_options: JWTValidationOptions,
 }
 
 #[apply(schema_enum!)]
@@ -156,6 +162,59 @@ pub enum Mode {
 	Permissive,
 }
 
+/// JWT validation options controlling which claims must be present in a token.
+///
+/// The `required_claims` set specifies which RFC 7519 registered claims must
+/// exist in the token payload before validation proceeds. Only the following
+/// values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered
+/// claims such as `iat` and `jti` are **not** enforced by the underlying
+/// `jsonwebtoken` library and will be silently ignored.
+///
+/// This only enforces **presence**. Standard claims like `exp` and `nbf`
+/// have their values validated independently (e.g., expiry is always checked
+/// when the `exp` claim is present, regardless of this setting).
+///
+/// Defaults to `["exp"]`.
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct JWTValidationOptions {
+	/// Claims that must be present in the token before validation.
+	/// Only "exp", "nbf", "aud", "iss", "sub" are enforced; others
+	/// (including "iat" and "jti") are ignored.
+	/// Defaults to ["exp"]. Use an empty list to require no claims.
+	#[serde(default = "default_required_claims")]
+	pub required_claims: HashSet<String>,
+}
+
+fn default_required_claims() -> HashSet<String> {
+	HashSet::from(["exp".to_owned()])
+}
+
+/// The only claim names the jsonwebtoken library actually enforces.
+const SUPPORTED_REQUIRED_CLAIMS: &[&str] = &["exp", "nbf", "aud", "iss", "sub"];
+
+/// Log a warning for each claim in `required_claims` that the library silently ignores.
+fn warn_unsupported_claims(required_claims: &HashSet<String>) {
+	for claim in required_claims {
+		if !SUPPORTED_REQUIRED_CLAIMS.contains(&claim.as_str()) {
+			tracing::warn!(
+				claim = %claim,
+				supported = ?SUPPORTED_REQUIRED_CLAIMS,
+				"ignoring unrecognized required claim"
+			);
+		}
+	}
+}
+
+impl Default for JWTValidationOptions {
+	fn default() -> Self {
+		Self {
+			required_claims: default_required_claims(),
+		}
+	}
+}
+
 impl LocalJwtConfig {
 	pub async fn try_into(self, client: Client) -> Result<Jwt, JwkError> {
 		let (mode, providers_cfg) = match self {
@@ -165,12 +224,14 @@ impl LocalJwtConfig {
 				issuer,
 				audiences,
 				jwks,
+				jwt_validation_options,
 			} => (
 				mode,
 				vec![ProviderConfig {
 					issuer,
 					audiences,
 					jwks,
+					jwt_validation_options,
 				}],
 			),
 		};
@@ -182,7 +243,7 @@ impl LocalJwtConfig {
 				.load::<JwkSet>(client.clone())
 				.await
 				.map_err(JwkError::JwkLoadError)?;
-			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences)?;
+			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
 			providers.push(provider);
 		}
 		Ok(Jwt { mode, providers })
@@ -194,7 +255,10 @@ impl Provider {
 		jwks: JwkSet,
 		issuer: String,
 		audiences: Option<Vec<String>>,
+		jwt_validation_options: JWTValidationOptions,
 	) -> Result<Provider, JwkError> {
+		warn_unsupported_claims(&jwt_validation_options.required_claims);
+
 		let mut keys = HashMap::new();
 		let to_supported_alg = |key_algorithm: Option<KeyAlgorithm>| match key_algorithm {
 			Some(key_alg) => jsonwebtoken::Algorithm::from_str(key_alg.to_string().as_str()).ok(),
@@ -254,6 +318,10 @@ impl Provider {
 				validation.validate_aud = false;
 			}
 			validation.set_issuer(std::slice::from_ref(&issuer));
+
+			// Override required_spec_claims with the user-configured set.
+			// validate_exp remains true, so exp is still validated if present.
+			validation.required_spec_claims = jwt_validation_options.required_claims.clone();
 
 			keys.insert(
 				kid,

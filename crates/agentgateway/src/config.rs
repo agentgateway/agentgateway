@@ -12,7 +12,7 @@ use serde::de::DeserializeOwned;
 use crate::control::caclient;
 use crate::telemetry::log::{LoggingFields, MetricFields};
 use crate::telemetry::trc;
-use crate::types::discovery::Identity;
+use crate::types::discovery::{Identity, WaypointIdentity};
 use crate::{
 	Address, Config, ConfigSource, NestedRawConfig, RawLoggingLevel, StringOrInt, ThreadingMode,
 	XDSConfig, cel, client, serdes, telemetry,
@@ -110,12 +110,10 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 	};
 
 	let self_addr = if !xds.namespace.is_empty() && !xds.gateway.is_empty() {
-		// TODO: this is bad
-		Some(strng::format!(
-			"{}.{}.svc.cluster.local",
-			xds.gateway,
-			xds.namespace
-		))
+		Some(WaypointIdentity {
+			gateway: xds.gateway.clone(),
+			namespace: xds.namespace.clone(),
+		})
 	} else {
 		None
 	};
@@ -225,9 +223,13 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		ThreadingMode::default()
 	};
 
-	let session_encoder = match raw.session {
-		None => crate::http::sessionpersistence::Encoder::base64(),
-		Some(s) => crate::http::sessionpersistence::Encoder::aes(s.key.expose_secret())?,
+	let session_encoder = if let Some(key) = parse::<String>("SESSION_KEY")? {
+		crate::http::sessionpersistence::Encoder::aes(key.trim())?
+	} else {
+		match raw.session.as_ref() {
+			None => crate::http::sessionpersistence::Encoder::base64(),
+			Some(session) => crate::http::sessionpersistence::Encoder::aes(session.key.expose_secret())?,
+		}
 	};
 
 	Ok(crate::Config {
@@ -264,48 +266,77 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				None => Duration::from_secs(5),
 			},
 		},
-		tracing: trc::Config {
-			endpoint: otlp,
-			headers: otlp_headers,
-			protocol: otlp_protocol,
+		tracing: raw
+			.tracing
+			.clone()
+			.map(|t| {
+				Ok::<_, anyhow::Error>(trc::DeprecatedConfig {
+					endpoint: otlp.clone(),
+					headers: otlp_headers.clone(),
+					protocol: otlp_protocol,
 
-			fields: raw
-				.tracing
+					fields: t
+						.fields
+						.clone()
+						.map(|fields| {
+							Ok::<_, anyhow::Error>(LoggingFields {
+								remove: Arc::new(fields.remove.into_iter().collect()),
+								add: Arc::new(
+									fields
+										.add
+										.iter()
+										.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
+										.collect::<Result<_, _>>()?,
+								),
+							})
+						})
+						.transpose()?
+						.unwrap_or_default(),
+					random_sampling: t
+						.random_sampling
+						.as_ref()
+						.map(|c| c.0.as_str())
+						.map(cel::Expression::new_strict)
+						.transpose()?
+						.map(Arc::new),
+					client_sampling: t
+						.client_sampling
+						.as_ref()
+						.map(|c| c.0.as_str())
+						.map(cel::Expression::new_strict)
+						.transpose()?
+						.map(Arc::new),
+					path: t.path.clone().unwrap_or_else(|| "/v1/traces".to_string()),
+				})
+			})
+			.transpose()?,
+		metrics: telemetry::log::MetricsConfig {
+			excluded_metrics: raw
+				.metrics
 				.as_ref()
-				.and_then(|f| f.fields.clone())
-				.map(|fields| {
-					Ok::<_, anyhow::Error>(LoggingFields {
-						remove: Arc::new(fields.remove.into_iter().collect()),
-						add: Arc::new(
-							fields
+				.map(|f| {
+					f.remove
+						.clone()
+						.into_iter()
+						.collect::<frozen_collections::FzHashSet<String>>()
+				})
+				.unwrap_or_default(),
+			metric_fields: Arc::new(
+				raw
+					.metrics
+					.and_then(|f| f.fields)
+					.map(|fields| {
+						Ok::<_, anyhow::Error>(MetricFields {
+							add: fields
 								.add
 								.iter()
 								.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
 								.collect::<Result<_, _>>()?,
-						),
+						})
 					})
-				})
-				.transpose()?
-				.unwrap_or_default(),
-			random_sampling: raw
-				.tracing
-				.as_ref()
-				.and_then(|t| t.random_sampling.as_ref().map(|c| c.0.as_str()))
-				.map(cel::Expression::new_strict)
-				.transpose()?
-				.map(Arc::new),
-			client_sampling: raw
-				.tracing
-				.as_ref()
-				.and_then(|t| t.client_sampling.as_ref().map(|c| c.0.as_str()))
-				.map(cel::Expression::new_strict)
-				.transpose()?
-				.map(Arc::new),
-			path: raw
-				.tracing
-				.as_ref()
-				.and_then(|t| t.path.clone())
-				.unwrap_or_else(|| "/v1/traces".to_string()),
+					.transpose()?
+					.unwrap_or_default(),
+			),
 		},
 		logging: telemetry::log::Config {
 			filter: raw
@@ -342,32 +373,6 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				})
 				.transpose()?
 				.unwrap_or_default(),
-			excluded_metrics: raw
-				.metrics
-				.as_ref()
-				.map(|f| {
-					f.remove
-						.clone()
-						.into_iter()
-						.collect::<frozen_collections::FzHashSet<String>>()
-				})
-				.unwrap_or_default(),
-			metric_fields: Arc::new(
-				raw
-					.metrics
-					.and_then(|f| f.fields)
-					.map(|fields| {
-						Ok::<_, anyhow::Error>(MetricFields {
-							add: fields
-								.add
-								.iter()
-								.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
-								.collect::<Result<_, _>>()?,
-						})
-					})
-					.transpose()?
-					.unwrap_or_default(),
-			),
 		},
 		dns: client::Config {
 			// TODO: read from file
@@ -408,11 +413,9 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			frame_size: parse("HTTP2_FRAME_SIZE")?
 				.or(raw.hbone.as_ref().and_then(|h| h.frame_size))
 				.unwrap_or(1024u32 * 1024),
-
 			pool_max_streams_per_conn: parse("POOL_MAX_STREAMS_PER_CONNECTION")?
 				.or(raw.hbone.as_ref().and_then(|h| h.pool_max_streams_per_conn))
 				.unwrap_or(100u16),
-
 			pool_unused_release_timeout: parse_duration("POOL_UNUSED_RELEASE_TIMEOUT")?
 				.or(
 					raw
@@ -560,10 +563,18 @@ fn get_cpu_count() -> anyhow::Result<usize> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::env;
+	use std::sync::{LazyLock, Mutex};
+
+	static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+	fn lock_env() -> std::sync::MutexGuard<'static, ()> {
+		ENV_LOCK.lock().expect("env mutex poisoned")
+	}
 
 	#[test]
 	fn test_parse_otlp_headers() {
-		use std::env;
+		let _env_lock = lock_env();
 
 		unsafe {
 			// Test JSON format
@@ -610,5 +621,71 @@ mod tests {
 
 		// Test missing env var
 		assert_eq!(parse_otlp_headers("NONEXISTENT_VAR").unwrap(), None);
+	}
+
+	#[test]
+	fn session_key_env_overrides_inline_session_config() {
+		let _env_lock = lock_env();
+
+		let env_key = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+		let inline_key = "f1e1d1c1b1a1918171615141312111000f0e0d0c0b0a09080706050403020100";
+
+		unsafe {
+			env::set_var("SESSION_KEY", env_key);
+		}
+
+		let config = parse_config(
+			format!(
+				r#"
+config:
+  session:
+    key: "{inline_key}"
+"#
+			),
+			None,
+		)
+		.expect("config should parse");
+
+		let state = crate::http::sessionpersistence::SessionState::HTTP(
+			crate::http::sessionpersistence::HTTPSessionState {
+				backend: "127.0.0.1:8080".parse().expect("socket addr"),
+			},
+		);
+		let encoded = state.encode(&config.session_encoder).expect("encode state");
+
+		let env_encoder =
+			crate::http::sessionpersistence::Encoder::aes(env_key).expect("encoder from env");
+		let inline_encoder =
+			crate::http::sessionpersistence::Encoder::aes(inline_key).expect("inline encoder");
+
+		assert!(crate::http::sessionpersistence::SessionState::decode(&encoded, &env_encoder).is_ok());
+		assert!(
+			crate::http::sessionpersistence::SessionState::decode(&encoded, &inline_encoder).is_err()
+		);
+
+		unsafe {
+			env::remove_var("SESSION_KEY");
+		}
+	}
+
+	#[test]
+	fn session_key_env_enables_aes_session_encoder() {
+		let _env_lock = lock_env();
+
+		let session_key = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+
+		unsafe {
+			env::set_var("SESSION_KEY", session_key);
+		}
+
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+		assert!(matches!(
+			config.session_encoder,
+			crate::http::sessionpersistence::Encoder::Aes(_)
+		));
+
+		unsafe {
+			env::remove_var("SESSION_KEY");
+		}
 	}
 }

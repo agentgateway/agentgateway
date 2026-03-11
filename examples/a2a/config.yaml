@@ -1,11 +1,10 @@
-# yaml-language-server: $schema=https://agentgateway.dev/schema/config
 config:
   logging:
     format: json
-    #    filter: 'response.code != 500'
-    fields:
-      add:
-        backend: backend
+frontendPolicies:
+  accessLog:
+    add:
+      backend: backend
 binds:
 - port: 3000
   listeners:
@@ -13,7 +12,7 @@ binds:
     - policies:
         cors:
           allowOrigins:
-          - "*"
+          - '*'
           allowHeaders:
           - content-type
           - cache-control

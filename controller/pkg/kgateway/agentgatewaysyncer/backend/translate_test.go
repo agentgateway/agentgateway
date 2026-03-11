@@ -1,12 +1,10 @@
 package agentgatewaybackend_test
 
 import (
-	"crypto/tls"
 	"fmt"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/test/util/assert"
@@ -17,30 +15,11 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	agwir "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	agentgatewaybackend "github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/backend"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
-
-type jwksUrlFactoryForTesting struct{}
-
-func (f *jwksUrlFactoryForTesting) BuildJwksUrlAndTlsConfig(_ krt.HandlerContext, _, _ string, _ *agentgateway.RemoteJWKS) (string, *tls.Config, error) {
-	return "http://store-uninitialized/", nil, nil
-}
-
-func TestTranslateAgwBackend(t *testing.T) {
-	testutils.RunForDirectory(t, "testdata/backend", func(t *testing.T, ctx plugins.PolicyCtx) (*agentgateway.AgentgatewayBackendStatus, []*api.Resource) {
-		backend := testutils.GetTestResource(t, ctx.Collections.Backends)
-		jwks_url.JwksUrlBuilderFactory = func() jwks_url.JwksUrlBuilder { return &jwksUrlFactoryForTesting{} }
-		status, results := agentgatewaybackend.TranslateAgwBackend(ctx, backend)
-		return status, slices.Map(results, func(r agwir.AgwResource) *api.Resource {
-			return r.Resource
-		})
-	})
-}
 
 func TestBuildMCP(t *testing.T) {
 	tests := []struct {
@@ -127,6 +106,31 @@ func TestBuildMCP(t *testing.T) {
 				},
 			},
 			inputs: append(createMockMultipleNamespaceServices(), createMockNamespaceCollectionWithLabels()...),
+		},
+		{
+			name: "Service selector MCPBackend backend - agentgateway.dev appProtocol",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "service-mcp-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Selector: &agentgateway.McpSelector{
+									Service: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"app": "mcp-server",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			inputs: []any{createMockMCPServiceWithProtocol("test-ns", "mcp-service", "app=mcp-server", "agentgateway.dev/mcp")},
 		},
 		{
 			name: "Error case - invalid service selector",
@@ -484,6 +488,23 @@ func TestBuildAIBackend(t *testing.T) {
 			},
 		},
 		{
+			name: "Valid AWS AgentCore backend",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "aws-agentcore-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					Aws: &agentgateway.AwsBackend{
+						AgentCore: &agentgateway.AwsAgentCoreBackend{
+							AgentRuntimeArn: "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123",
+							Qualifier:       stringPtr("v1"),
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "Bedrock backend with new route types (responses and anthropic_token_count)",
 			backend: &agentgateway.AgentgatewayBackend{
 				ObjectMeta: metav1.ObjectMeta{
@@ -700,6 +721,26 @@ func TestGetSecretValue(t *testing.T) {
 				t.Errorf("value = %v, expected %v", val, tt.expectedVal)
 			}
 		})
+	}
+}
+
+// createMockMCPServiceWithProtocol creates a mock service with a configurable appProtocol
+func createMockMCPServiceWithProtocol(namespace, serviceName, _ /* labels */, appProtocol string) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: namespace,
+			Labels:    map[string]string{"app": "mcp-server"},
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name:        "mcp",
+					Port:        8080,
+					AppProtocol: ptr.Of(appProtocol),
+				},
+			},
+		},
 	}
 }
 

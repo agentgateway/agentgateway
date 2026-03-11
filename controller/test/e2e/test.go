@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/helmutils"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/actions"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
@@ -157,6 +158,8 @@ func (i *TestInstallation) InstallAgentgatewayCRDsFromLocalChart(ctx context.Con
 		}
 	}
 
+	// Use absolute chart paths so tests work regardless of current working directory.
+	crdChartPath := filepath.Join(fsutils.GetModuleRoot(), "controller", "install", "helm", "agentgateway-crds")
 	// install the CRD chart first
 	err := i.Actions.Helm().WithReceiver(os.Stdout).Upgrade(
 		ctx,
@@ -164,7 +167,7 @@ func (i *TestInstallation) InstallAgentgatewayCRDsFromLocalChart(ctx context.Con
 			CreateNamespace: true,
 			ReleaseName:     helmutils.AgentgatewayCRDChartName,
 			Namespace:       i.Metadata.InstallNamespace,
-			Chart:           "install/helm/agentgateway-crds",
+			Chart:           crdChartPath,
 		})
 	i.AssertionsT(t).Require.NoError(err)
 }
@@ -182,6 +185,8 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 		}
 	}
 
+	// Use absolute chart paths so tests work regardless of current working directory.
+	coreChartPath := filepath.Join(fsutils.GetModuleRoot(), "controller", "install", "helm", "agentgateway")
 	// and then install the main chart
 	err := i.Actions.Helm().WithReceiver(os.Stdout).Upgrade(
 		ctx,
@@ -194,7 +199,7 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 				ManifestPath("agent-gateway-integration.yaml"),
 			},
 			ReleaseName: helmutils.AgentgatewayChartName,
-			Chart:       "install/helm/agentgateway",
+			Chart:       coreChartPath,
 			ExtraArgs:   i.Metadata.ExtraHelmArgs,
 		})
 	i.AssertionsT(t).Require.NoError(err)

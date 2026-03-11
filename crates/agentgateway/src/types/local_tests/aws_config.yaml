@@ -1,0 +1,8 @@
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - aws:
+          agentCore:
+            agentRuntimeArn: "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123"

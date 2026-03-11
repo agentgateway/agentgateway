@@ -3,25 +3,20 @@ use std::sync::Arc;
 
 use crate::cel::RequestSnapshot;
 use crate::http::Response;
-use crate::http::jwt::Claims;
 use crate::http::sessionpersistence::MCPSession;
+use crate::mcp;
 use crate::mcp::mergestream::MergeFn;
-use crate::mcp::rbac::{CelExecWrapper, Identity, McpAuthorizationSet};
+use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
 use crate::mcp::streamablehttp::ServerSseMessage;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, MCPInfo, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::log::AsyncLog;
-use crate::telemetry::trc::TraceParent;
-use agent_core::trcng;
+use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
 use futures_core::Stream;
 use http::StatusCode;
 use http::request::Parts;
 use itertools::Itertools;
-use opentelemetry::global::BoxedSpan;
-use opentelemetry::trace::{SpanContext, SpanKind, TraceContextExt, TraceState};
-use opentelemetry::{Context, TraceFlags};
 use rmcp::ErrorData;
 use rmcp::model::{
 	ClientNotification, ClientRequest, Implementation, JsonRpcNotification, JsonRpcRequest,
@@ -44,10 +39,18 @@ fn resource_name(default_target_name: Option<&String>, target: &str, name: &str)
 pub struct Relay {
 	upstreams: Arc<upstream::UpstreamGroup>,
 	pub policies: McpAuthorizationSet,
-	// If we have 1 target only, we don't prefix everything with 'target_'.
-	// Else this is empty
-	default_target_name: Option<String>,
-	is_multiplexing: bool,
+}
+
+pub struct RelayInputs {
+	pub backend: McpBackendGroup,
+	pub policies: McpAuthorizationSet,
+	pub client: PolicyClient,
+}
+
+impl RelayInputs {
+	pub fn build_new_connections(self) -> Result<Relay, mcp::Error> {
+		Relay::new(self.backend, self.policies, self.client)
+	}
 }
 
 impl Relay {
@@ -55,29 +58,24 @@ impl Relay {
 		backend: McpBackendGroup,
 		policies: McpAuthorizationSet,
 		client: PolicyClient,
-	) -> anyhow::Result<Self> {
-		let mut is_multiplexing = false;
-		let default_target_name = if backend.targets.len() != 1 {
-			is_multiplexing = true;
-			None
-		} else if backend.targets[0].always_use_prefix {
-			None
-		} else {
-			Some(backend.targets[0].name.to_string())
-		};
+	) -> Result<Self, mcp::Error> {
 		Ok(Self {
 			upstreams: Arc::new(upstream::UpstreamGroup::new(client, backend)?),
 			policies,
-			default_target_name,
-			is_multiplexing,
 		})
+	}
+	pub fn with_policies(&self, policies: McpAuthorizationSet) -> Self {
+		Self {
+			upstreams: self.upstreams.clone(),
+			policies,
+		}
 	}
 
 	pub fn parse_resource_name<'a, 'b: 'a>(
 		&'a self,
 		res: &'b str,
 	) -> Result<(&'a str, &'b str), UpstreamError> {
-		if let Some(default) = self.default_target_name.as_ref() {
+		if let Some(default) = self.upstreams.default_target_name.as_ref() {
 			Ok((default.as_str(), res))
 		} else {
 			res
@@ -87,9 +85,7 @@ impl Relay {
 				))
 		}
 	}
-}
 
-impl Relay {
 	pub fn get_sessions(&self) -> Option<Vec<MCPSession>> {
 		let mut sessions = Vec::with_capacity(self.upstreams.size());
 		for (_, us) in self.upstreams.iter_named() {
@@ -100,7 +96,7 @@ impl Relay {
 
 	pub fn set_sessions(&self, sessions: Vec<MCPSession>) {
 		for ((_, us), session) in self.upstreams.iter_named().zip(sessions) {
-			us.set_session_id(&session.session, session.backend);
+			us.set_session_id(session.session.as_deref(), session.backend);
 		}
 	}
 	pub fn count(&self) -> usize {
@@ -108,15 +104,15 @@ impl Relay {
 	}
 
 	pub fn is_multiplexing(&self) -> bool {
-		self.is_multiplexing
+		self.upstreams.is_multiplexing
 	}
 	pub fn default_target_name(&self) -> Option<String> {
-		self.default_target_name.clone()
+		self.upstreams.default_target_name.clone()
 	}
 
 	pub fn merge_tools(&self, cel: CelExecWrapper) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let default_target_name = self.default_target_name.clone();
+		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams| {
 			let tools = streams
 				.into_iter()
@@ -186,7 +182,7 @@ impl Relay {
 
 	pub fn merge_prompts(&self, cel: CelExecWrapper) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let default_target_name = self.default_target_name.clone();
+		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams| {
 			let prompts = streams
 				.into_iter()
@@ -321,7 +317,7 @@ impl Relay {
 		r: JsonRpcRequest<ClientRequest>,
 		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
-		let Some(service_name) = &self.default_target_name else {
+		let Some(service_name) = &self.upstreams.default_target_name else {
 			return Err(UpstreamError::InvalidMethod(r.request.method().to_string()));
 		};
 		self.send_single(r, ctx, service_name).await
@@ -419,20 +415,7 @@ impl Relay {
 pub fn setup_request_log(
 	http: Parts,
 	span_name: &str,
-) -> (BoxedSpan, AsyncLog<MCPInfo>, CelExecWrapper) {
-	let traceparent = http.extensions.get::<TraceParent>();
-	let mut ctx = Context::new();
-	if let Some(tp) = traceparent {
-		ctx = ctx.with_remote_span_context(SpanContext::new(
-			tp.trace_id.into(),
-			tp.span_id.into(),
-			TraceFlags::new(tp.flags),
-			true,
-			TraceState::default(),
-		));
-	}
-	let claims = http.extensions.get::<Claims>().cloned();
-
+) -> (SpanWriteOnDrop, AsyncLog<MCPInfo>, CelExecWrapper) {
 	let log = http
 		.extensions
 		.get::<AsyncLog<MCPInfo>>()
@@ -447,10 +430,12 @@ pub fn setup_request_log(
 
 	let cel = CelExecWrapper::new(snap);
 
-	let tracer = trcng::get_tracer();
-	let _span = trcng::start_span(span_name.to_string(), &Identity::new(claims))
-		.with_kind(SpanKind::Server)
-		.start_with_context(tracer, &ctx);
+	let tracer = http
+		.extensions
+		.get::<SpanWriter>()
+		.cloned()
+		.unwrap_or_default();
+	let _span = tracer.start(span_name.to_string());
 	(_span, log, cel)
 }
 
@@ -473,7 +458,7 @@ fn messages_to_response(
 			message: Arc::new(r),
 		}
 	});
-	Ok(crate::mcp::session::sse_stream_response(stream, None))
+	Ok(mcp::session::sse_stream_response(stream, None))
 }
 
 fn accepted_response() -> Response {

@@ -27,25 +27,26 @@ data:
 ---
 # Output
 output:
-- Policy:
-    key: traffic/default/apikey-pre-routing:apikeyauth:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: apikey-pre-routing
-      namespace: default
-    target:
-      gateway:
-        name: test
+- resource:
+    policy:
+      key: traffic/default/apikey-pre-routing:apikeyauth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: apikey-pre-routing
         namespace: default
-    traffic:
-      apiKeyAuth:
-        apiKeys:
-        - key: test-api-key-123
-          metadata: {}
-        - key: test-api-key-456
-          metadata:
-            user: admin
-      phase: GATEWAY
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        apiKeyAuth:
+          apiKeys:
+          - key: test-api-key-123
+            metadata: {}
+          - key: test-api-key-456
+            metadata:
+              user: admin
+        phase: GATEWAY
 status:
   ancestors:
   - ancestorRef:

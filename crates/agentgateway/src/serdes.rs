@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt::{Debug, Display};
 use std::io;
 use std::path::PathBuf;
@@ -13,6 +14,7 @@ pub use serde_with;
 
 use crate::client::Client;
 use crate::http::Body;
+use openapiv3::OpenAPI;
 
 /// Serde yaml represents things different than just as "JSON in YAML format".
 /// We don't want this. Instead, we transcode YAML via the JSON module.
@@ -245,28 +247,28 @@ pub fn ser_bytes<S: Serializer, T: AsRef<[u8]>>(t: &T, serializer: S) -> Result<
 	}
 }
 
-pub fn de_parse<'de: 'a, 'a, D, T>(deserializer: D) -> Result<T, D::Error>
+pub fn de_parse<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
 	D: Deserializer<'de>,
-	T: TryFrom<&'a str>,
-	<T as TryFrom<&'a str>>::Error: Display,
+	for<'a> T: TryFrom<&'a str>,
+	for<'a> <T as TryFrom<&'a str>>::Error: Display,
 {
-	let s: &'a str = <&str>::deserialize(deserializer)?;
-	match T::try_from(s) {
+	let s: Cow<'de, str> = Cow::<str>::deserialize(deserializer)?;
+	match T::try_from(s.as_ref()) {
 		Ok(t) => Ok(t),
 		Err(e) => Err(serde::de::Error::custom(e)),
 	}
 }
 
-pub fn de_parse_option<'de: 'a, 'a, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+pub fn de_parse_option<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
 	D: Deserializer<'de>,
-	T: TryFrom<&'a str>,
-	<T as TryFrom<&'a str>>::Error: Display,
+	for<'a> T: TryFrom<&'a str>,
+	for<'a> <T as TryFrom<&'a str>>::Error: Display,
 {
-	let s: Option<&'a str> = Option::deserialize(deserializer)?;
+	let s: Option<Cow<'de, str>> = Option::deserialize(deserializer)?;
 	let Some(s) = s else { return Ok(None) };
-	match T::try_from(s) {
+	match T::try_from(s.as_ref()) {
 		Ok(t) => Ok(Some(t)),
 		Err(e) => Err(serde::de::Error::custom(e)),
 	}
@@ -380,6 +382,29 @@ impl FileInlineOrRemote {
 			},
 		};
 		serde_json::from_str(&s).map_err(Into::into)
+	}
+
+	pub async fn load_openapi_schema(&self, client: Client) -> anyhow::Result<OpenAPI> {
+		let s = match self {
+			FileInlineOrRemote::File { file } => fs_err::tokio::read_to_string(file).await?,
+			FileInlineOrRemote::Inline(s) => s.clone(),
+			FileInlineOrRemote::Remote { url } => {
+				let resp = client
+					.simple_call(
+						::http::Request::builder()
+							.uri(url)
+							.body(Body::empty())
+							.expect("builder should succeed"),
+					)
+					.await
+					.context(format!("fetch {url}"))?;
+				let body_bytes = crate::http::read_resp_body(resp).await?;
+				String::from_utf8(body_bytes.to_vec())?
+			},
+		};
+		stacker::grow(2 * 1024 * 1024, || {
+			yamlviajson::from_str::<OpenAPI>(s.as_str())
+		})
 	}
 }
 

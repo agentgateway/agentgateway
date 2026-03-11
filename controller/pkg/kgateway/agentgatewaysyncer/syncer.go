@@ -10,7 +10,6 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube/controller/ambient"
 	"istio.io/istio/pkg/cluster"
-	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/network"
@@ -19,12 +18,12 @@ import (
 	"istio.io/istio/pkg/util/sets"
 	"istio.io/istio/pkg/workloadapi"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gatewayx "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -38,6 +37,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/krtxds"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/nack"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/status"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	krtpkg "github.com/agentgateway/agentgateway/controller/pkg/utils/krtutil"
@@ -104,7 +104,8 @@ func NewAgwSyncer(
 		statusCollections:        status.NewStatusCollections(extraGVKs),
 		NackPublisher:            nack.NewPublisher(client),
 		gatewayCollectionOptions: []translator.GatewayCollectionConfigOption{
-			translator.WithGatewayTransformationFunc(cfg.GatewayTransformationFunc)},
+			translator.WithGatewayTransformationFunc(cfg.GatewayTransformationFunc),
+		},
 		customResourceCollections:   cfg.CustomResourceCollections,
 		workloadAddressProviderFunc: cfg.WorkloadAddressProviderFunc,
 		serviceAddressProviderFunc:  cfg.ServiceAddressProviderFunc,
@@ -141,8 +142,7 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	// Build core collections for irs
 	gatewayClasses := translator.GatewayClassesCollection(s.agwCollections.GatewayClasses, krtopts)
 	refGrants := translator.BuildReferenceGrants(translator.ReferenceGrantsCollection(s.agwCollections.ReferenceGrants, krtopts))
-	listenerSetStatus, listenerSets := s.buildListenerSetCollection(gatewayClasses, refGrants, krtopts)
-	status.RegisterStatus(s.statusCollections, listenerSetStatus, translator.GetStatus)
+	listenerSetInitialStatus, listenerSets := s.buildListenerSetCollection(gatewayClasses, refGrants, krtopts)
 	if s.customResourceCollections != nil {
 		s.customResourceCollections(CustomResourceCollectionsConfig{
 			ControllerName:    s.controllerName,
@@ -170,6 +170,9 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	gatewayFinalStatus := s.buildFinalGatewayStatus(gatewayInitialStatus, routeAttachments, krtopts)
 	status.RegisterStatus(s.statusCollections, gatewayFinalStatus, translator.GetStatus)
 
+	listenerSetFinalStatus := s.buildFinalListenerSetStatus(gateways, listenerSetInitialStatus, routeAttachments, krtopts)
+	status.RegisterStatus(s.statusCollections, listenerSetFinalStatus, translator.GetStatus)
+
 	// Build address collections
 	addresses := s.buildAddressCollections(krtopts)
 
@@ -188,15 +191,19 @@ func (s *Syncer) buildFinalGatewayStatus(
 	routeAttachments krt.Collection[*translator.RouteAttachment],
 	krtopts krtutil.KrtOptions,
 ) krt.StatusCollection[*gwv1.Gateway, gwv1.GatewayStatus] {
-	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "to", func(o *translator.RouteAttachment) []types.NamespacedName {
-		return []types.NamespacedName{o.To}
+	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "to", func(o *translator.RouteAttachment) []translator.ParentKey {
+		return []translator.ParentKey{o.To}
 	})
 	return krt.NewCollection(
 		gatewayStatuses,
 		func(ctx krt.HandlerContext, i krt.ObjectWithStatus[*gwv1.Gateway, gwv1.GatewayStatus]) *krt.ObjectWithStatus[*gwv1.Gateway, gwv1.GatewayStatus] {
-			tcpRoutes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, config.NamespacedName(i.Obj)))
+			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, translator.ParentKey{
+				Kind:      wellknown.GatewayGVK,
+				Namespace: i.Obj.Namespace,
+				Name:      i.Obj.Name,
+			}))
 			counts := map[string]int32{}
-			for _, r := range tcpRoutes {
+			for _, r := range routes {
 				counts[r.ListenerName]++
 			}
 			status := i.Status.DeepCopy()
@@ -209,6 +216,130 @@ func (s *Syncer) buildFinalGatewayStatus(
 				Status: *status,
 			}
 		}, krtopts.ToOptions("GatewayFinalStatus")...)
+}
+
+func (s *Syncer) buildFinalListenerSetStatus(
+	gateways krt.Collection[*translator.GatewayListener],
+	listenerSetStatus krt.StatusCollection[*gwv1.ListenerSet, gwv1.ListenerSetStatus],
+	routeAttachments krt.Collection[*translator.RouteAttachment],
+	krtopts krtutil.KrtOptions,
+) krt.StatusCollection[*gwv1.ListenerSet, gwv1.ListenerSetStatus] {
+	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "to", func(o *translator.RouteAttachment) []translator.ParentKey {
+		return []translator.ParentKey{o.To}
+	})
+
+	gatewayIndex := krt.NewIndex(gateways, "gateway-parent-section-name", func(gwl *translator.GatewayListener) []utils.SectionedNamespacedName {
+		return []utils.SectionedNamespacedName{{
+			NamespacedName: types.NamespacedName{
+				Namespace: gwl.ParentObject.Namespace,
+				Name:      gwl.ParentObject.Name,
+			},
+			SectionName: gwl.ParentInfo.SectionName,
+		}}
+	}).AsCollection(append(krtopts.ToOptions("gatewayIndex"), utils.SectionedNamespacedNameIndexCollectionFunc)...)
+	return krt.NewCollection(listenerSetStatus,
+		func(ctx krt.HandlerContext, i krt.ObjectWithStatus[*gwv1.ListenerSet, gwv1.ListenerSetStatus]) *krt.ObjectWithStatus[*gwv1.ListenerSet, gwv1.ListenerSetStatus] {
+			// Skip if listenerset not allowed
+			if len(i.Status.Conditions) == 0 || i.Status.Conditions[0].Reason == string(gwv1.ListenerSetReasonNotAllowed) {
+				return &i
+			}
+
+			invalidListenerCount := 0
+			lsStatus := i.Status.DeepCopy()
+			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, translator.ParentKey{
+				Kind:      wellknown.ListenerSetGVK,
+				Namespace: i.Obj.Namespace,
+				Name:      i.Obj.Name,
+			}))
+			counts := map[string]int32{}
+			for _, r := range routes {
+				counts[r.ListenerName]++
+			}
+			for idx, l := range i.Obj.Spec.Listeners {
+				gatewayListener := krt.FetchOne(ctx, gatewayIndex, krt.FilterKey(utils.SectionedNamespacedName{
+					NamespacedName: types.NamespacedName{
+						Namespace: i.Obj.Namespace,
+						Name:      string(i.Obj.Name),
+					},
+					SectionName: l.Name,
+				}.String()))
+				if len(gatewayListener.Objects) == 0 {
+					continue
+				}
+
+				obj := gatewayListener.Objects[0]
+				if !obj.Valid {
+					invalidListenerCount++
+				} else {
+					if obj.Conflict == translator.ListenerConflictHostname {
+						invalidListenerCount++
+						ListenerMessageHostnameConflict := "Found conflicting hostnames on listeners, all listeners on a single port must have unique hostnames"
+						ReportListenerSetListenerConflicts(&lsStatus.Listeners[idx], i.Obj, string(gwv1.ListenerReasonHostnameConflict), ListenerMessageHostnameConflict)
+					} else if obj.Conflict == translator.ListenerConflictProtocol {
+						invalidListenerCount++
+						ListenerMessageProtocolConflict := "Found conflicting protocols on listeners, a single port can only contain listeners with compatible protocols"
+						ReportListenerSetListenerConflicts(&lsStatus.Listeners[idx], i.Obj, string(gwv1.ListenerReasonProtocolConflict), ListenerMessageProtocolConflict)
+					}
+				}
+				lsStatus.Listeners[idx].AttachedRoutes = counts[string(l.Name)]
+			}
+
+			if invalidListenerCount > 0 {
+				listenerSetAccepted := invalidListenerCount < len(i.Obj.Spec.Listeners)
+				ReportListenerSetWithConflicts(lsStatus, i.Obj, listenerSetAccepted)
+			}
+			return &krt.ObjectWithStatus[*gwv1.ListenerSet, gwv1.ListenerSetStatus]{
+				Obj:    i.Obj,
+				Status: *lsStatus,
+			}
+		}, krtopts.ToOptions("ListenerSetFinalStatus")...)
+}
+
+func ReportListenerSetWithConflicts(status *gwv1.ListenerSetStatus, obj *gwv1.ListenerSet, accepted bool) {
+	condition := metav1.ConditionFalse
+	if accepted {
+		condition = metav1.ConditionTrue
+	}
+	programmedReason := gwv1.ListenerSetReasonListenersNotValid
+	if accepted {
+		programmedReason = gwv1.ListenerSetReasonProgrammed
+	}
+	// In case any listeners are invalid, this status should be set even if the gateway / listenerset is accepted
+	// https://github.com/kubernetes-sigs/gateway-api/blob/8fe8316f5792a7830a49c800f89fe689e0df042e/apisx/v1alpha1/xlistenerset_types.go#L396
+	gatewayConditions := map[string]*translator.Condition{
+		string(gwv1.GatewayConditionAccepted): {
+			Status: condition,
+			Reason: string(gwv1.ListenerSetReasonListenersNotValid),
+		},
+		string(gwv1.GatewayConditionProgrammed): {
+			Status: condition,
+			Reason: string(programmedReason),
+		},
+	}
+
+	status.Conditions = translator.SetConditions(obj.Generation, status.Conditions, gatewayConditions)
+}
+
+func ReportListenerSetListenerConflicts(status *gwv1.ListenerEntryStatus, obj *gwv1.ListenerSet, reason string, message string) {
+	gatewayConditions := map[string]*translator.Condition{
+		string(gwv1.ListenerConditionConflicted): {
+			Status:  metav1.ConditionTrue,
+			Reason:  reason,
+			Message: message,
+		},
+		string(gwv1.GatewayConditionAccepted): {
+			Status:  metav1.ConditionFalse,
+			Reason:  reason,
+			Message: message,
+		},
+		string(gwv1.GatewayConditionProgrammed): {
+			Status:  metav1.ConditionFalse,
+			Reason:  reason,
+			Message: message,
+		},
+	}
+
+	status.Conditions = translator.SetConditions(obj.Generation, status.Conditions, gatewayConditions)
 }
 
 func (s *Syncer) buildGatewayCollection(
@@ -238,12 +369,12 @@ func (s *Syncer) buildListenerSetCollection(
 	refGrants translator.ReferenceGrants,
 	krtopts krtutil.KrtOptions,
 ) (
-	krt.StatusCollection[*gatewayx.XListenerSet, gatewayx.ListenerSetStatus],
+	krt.StatusCollection[*gwv1.ListenerSet, gwv1.ListenerSetStatus],
 	krt.Collection[translator.ListenerSet],
 ) {
 	return translator.ListenerSetCollection(
 		s.controllerName,
-		s.agwCollections.XListenerSets,
+		s.agwCollections.ListenerSets,
 		s.agwCollections.Gateways,
 		gatewayClasses,
 		s.agwCollections.Namespaces,
@@ -281,14 +412,14 @@ func (s *Syncer) buildAgwResources(
 	binds := krt.NewManyCollection(ports, func(ctx krt.HandlerContext, object krt.IndexObject[string, *translator.GatewayListener]) []agwir.AgwResource {
 		port, _ := strconv.Atoi(object.Key)
 		uniq := sets.New[types.NamespacedName]()
-		var protocol = api.Bind_Protocol(0)
+		protocol := api.Bind_Protocol(0)
 		for _, gw := range object.Objects {
 			uniq.Insert(types.NamespacedName{
 				Namespace: gw.ParentGateway.Namespace,
 				Name:      gw.ParentGateway.Name,
 			})
 			// TODO: better handle conflicts of protocols. For now, we arbitrarily treat TLS > plain
-			if gw.Valid {
+			if gw.Conflict == "" {
 				protocol = max(protocol, s.getBindProtocol(gw))
 			}
 		}
@@ -334,10 +465,14 @@ func (s *Syncer) buildAgwResources(
 		agwRoutes = krt.JoinCollection([]krt.Collection[agwir.AgwResource]{agwRoutes, s.agwPlugins.AddResourceExtension.Routes})
 	}
 
-	agwPolicies, policyStatuses := AgwPolicyCollection(s.agwPlugins, ancestorBackends, krtopts)
+	ancestorsIndex := krt.NewIndex(ancestorBackends, "ancestors", func(o *utils.AncestorBackend) []utils.TypedNamespacedName {
+		return []utils.TypedNamespacedName{o.Backend}
+	})
+	ancestorCollection := ancestorsIndex.AsCollection(append(krtopts.ToOptions("AncestorBackend"), utils.TypedNamespacedNameIndexCollectionFunc)...)
+	agwPolicies, policyStatuses := AgwPolicyCollection(s.agwPlugins, ancestorCollection, krtopts)
 
 	// Create an agentgateway backend collection from the kgateway backend resources
-	agwBackendStatus, agwBackends := s.newAgwBackendCollection(s.agwCollections.Backends, krtopts)
+	agwBackendStatus, agwBackends := s.newAgwBackendCollection(s.agwCollections.Backends, ancestorCollection, krtopts)
 
 	// Join all Agw resources
 	allAgwResources := krt.JoinCollection([]krt.Collection[agwir.AgwResource]{binds, listeners, agwRoutes, agwPolicies, agwBackends}, krtopts.ToOptions("Resources")...)
@@ -370,7 +505,11 @@ func (s *Syncer) buildListenerFromGateway(obj *translator.GatewayListener) *agwi
 }
 
 // newAgwBackendCollection creates the ADP backend collection for agent gateway resources
-func (s *Syncer) newAgwBackendCollection(finalBackends krt.Collection[*agentgateway.AgentgatewayBackend], krtopts krtutil.KrtOptions) (
+func (s *Syncer) newAgwBackendCollection(
+	finalBackends krt.Collection[*agentgateway.AgentgatewayBackend],
+	ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend],
+	krtopts krtutil.KrtOptions,
+) (
 	krt.StatusCollection[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus],
 	krt.Collection[agwir.AgwResource],
 ) {
@@ -382,7 +521,7 @@ func (s *Syncer) newAgwBackendCollection(finalBackends krt.Collection[*agentgate
 			Krt:         ctx,
 			Collections: s.agwCollections,
 		}
-		return agentgatewaybackend.TranslateAgwBackend(pc, backend)
+		return agentgatewaybackend.TranslateAgwBackend(pc, backend, ancestors)
 	}, krtopts.ToOptions("Backends")...)
 }
 
@@ -398,6 +537,9 @@ func (s *Syncer) getProtocolAndTLSConfig(obj *translator.GatewayListener) (api.P
 		}
 		if len(obj.TLSInfo.CaCert) > 0 {
 			tlsConfig.Root = obj.TLSInfo.CaCert
+		}
+		if obj.TLSInfo.MtlsFallbackEnabled {
+			tlsConfig.MtlsMode = api.TLSConfig_ALLOW_INSECURE_FALLBACK
 		}
 	}
 
@@ -464,8 +606,17 @@ func (s *Syncer) buildAddressCollections(krtopts krtutil.KrtOptions) krt.Collect
 			return ""
 		},
 	}
-	// Dummy empty mesh config
-	meshConfig := krt.NewStatic[ambient.MeshConfig](&ambient.MeshConfig{MeshConfig: mesh.DefaultMeshConfig()}, true, krtopts.ToOptions("MeshConfig")...)
+
+	meshConfigMapName := GetMeshConfigMapName(cols.IstioRevision)
+	meshConfig := krt.NewSingleton(func(ctx krt.HandlerContext) *ambient.MeshConfig {
+		cm := krt.FetchOne(ctx, cols.ConfigMaps, krt.FilterObjectName(types.NamespacedName{Namespace: cols.IstioNamespace, Name: meshConfigMapName}))
+		if flattened := ptr.Flatten(cm); flattened != nil {
+			if mc := ParseMeshConfigFromConfigMap(flattened); mc != nil {
+				return &ambient.MeshConfig{MeshConfig: mc}
+			}
+		}
+		return &ambient.MeshConfig{MeshConfig: mesh.DefaultMeshConfig()}
+	}, krtopts.ToOptions("IstioMeshConfig")...)
 
 	waypoints := builder.WaypointsCollection(clusterId, cols.Gateways, cols.GatewayClasses, cols.Pods, opts)
 	services := builder.ServicesCollection(

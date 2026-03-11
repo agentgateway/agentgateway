@@ -30,7 +30,14 @@ pub struct LocalTransform {
 	pub remove: Vec<Strng>,
 	#[serde(default)]
 	pub body: Option<Strng>,
+	#[serde(default)]
+	#[serde_as(as = "serde_with::Map<_, _>")]
+	pub metadata: Vec<(Strng, Strng)>,
 }
+
+#[apply(schema!)]
+#[derive(Default, ::cel::DynamicType)]
+pub struct TransformationMetadata(pub serde_json::Map<String, serde_json::Value>);
 
 impl TransformerConfig {
 	fn try_from_local_config(req: LocalTransform, strict: bool) -> anyhow::Result<Self> {
@@ -65,11 +72,17 @@ impl TransformerConfig {
 			.map(|k| HeaderName::try_from(k.as_str()))
 			.collect::<Result<_, _>>()?;
 		let body = req.body.map(|b| compile(b.as_str())).transpose()?;
+		let metadata = req
+			.metadata
+			.into_iter()
+			.map(|(k, v)| Ok::<_, anyhow::Error>((k, compile(v.as_str())?)))
+			.collect::<Result<_, _>>()?;
 		Ok(TransformerConfig {
 			set,
 			add,
 			remove,
 			body,
+			metadata,
 		})
 	}
 }
@@ -112,20 +125,28 @@ impl Transformation {
 			.map(|v| &v.1)
 			.chain(self.request.set.iter().map(|v| &v.1))
 			.chain(self.request.body.as_ref())
+			.chain(self.request.metadata.iter().map(|v| &v.1))
 			.chain(self.response.add.iter().map(|v| &v.1))
 			.chain(self.response.set.iter().map(|v| &v.1))
 			.chain(self.response.body.as_ref())
+			.chain(self.response.metadata.iter().map(|v| &v.1))
 	}
 }
 
 #[serde_as]
 #[derive(Debug, Default, Serialize)]
 pub struct TransformerConfig {
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub add: Vec<(HeaderOrPseudo, cel::Expression)>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub set: Vec<(HeaderOrPseudo, cel::Expression)>,
 	#[serde_as(serialize_as = "Vec<SerAsStr>")]
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub remove: Vec<HeaderName>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub body: Option<cel::Expression>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub metadata: Vec<(Strng, cel::Expression)>,
 }
 
 pub struct SerAsStr;
@@ -173,6 +194,29 @@ fn eval_body(
 	}
 }
 
+fn eval_metadata(
+	r: &RequestOrResponse,
+	expr: &Expression,
+	request: Option<&cel::RequestSnapshot>,
+) -> anyhow::Result<serde_json::Value> {
+	match r {
+		RequestOrResponse::Request(r) => {
+			let exec = cel::Executor::new_request(r);
+			exec
+				.eval(expr)
+				.and_then(|v| v.json().map_err(|e| cel::Error::Variable(e.to_string())))
+				.map_err(anyhow::Error::from)
+		},
+		RequestOrResponse::Response(r) => {
+			let exec = cel::Executor::new_response(request, r);
+			exec
+				.eval(expr)
+				.and_then(|v| v.json().map_err(|e| cel::Error::Variable(e.to_string())))
+				.map_err(anyhow::Error::from)
+		},
+	}
+}
+
 impl Transformation {
 	pub fn apply_request(&self, req: &mut crate::http::Request) {
 		Self::apply(req.into(), self.request.as_ref(), None)
@@ -211,6 +255,14 @@ impl Transformation {
 		cfg: &TransformerConfig,
 		request: Option<&'a RequestSnapshot>,
 	) {
+		if !cfg.metadata.is_empty() {
+			for (name, expr) in &cfg.metadata {
+				if let Ok(v) = eval_metadata(&r, expr, request) {
+					let metadata = Self::get_meta(&mut r);
+					metadata.0.insert(name.to_string(), v);
+				}
+			}
+		}
 		for (k, v) in &cfg.add {
 			let val = Self::exec_header(&r, v, k, request);
 			r.apply_header(k, val, true);
@@ -228,6 +280,21 @@ impl Transformation {
 			*r.body() = http::Body::from(b);
 			r.headers().remove(&header::CONTENT_LENGTH);
 		}
+	}
+
+	fn get_meta<'a>(r: &'a mut RequestOrResponse<'_>) -> &'a mut TransformationMetadata {
+		let ext = match r {
+			RequestOrResponse::Request(req) => req.extensions_mut(),
+			RequestOrResponse::Response(resp) => resp.extensions_mut(),
+		};
+
+		if ext.get::<TransformationMetadata>().is_none() {
+			ext.insert(TransformationMetadata::default());
+		}
+
+		ext
+			.get_mut::<TransformationMetadata>()
+			.expect("we just put this there!")
 	}
 }
 

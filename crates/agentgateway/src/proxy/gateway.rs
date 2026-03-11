@@ -19,6 +19,8 @@ use tokio::task::{AbortHandle, JoinSet};
 use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, event, info, info_span, warn};
 
+use agent_core::strng;
+
 use crate::proxy::ProxyError;
 use crate::store::{Event, FrontendPolices};
 use crate::telemetry::metrics::TCPLabels;
@@ -660,7 +662,16 @@ impl Gateway {
 							protocol,
 						})
 						.observe(tls_dur.as_secs_f64());
-					Ok((best, Socket::from_tls(ext, counter, tls.into())?))
+					let (_, ssl) = tls.get_ref();
+					// Rustls doesn't give us a way to say "The client certificate was present, but not verifier,
+					// but should be allowed, but should not be used"
+					// which is the behavior we want for insecure fallback.
+					// So we check again...
+					let include_src_identity = best.protocol.include_src_identity_for_connection(ssl);
+					Ok((
+						best,
+						Socket::from_tls_with_identity(ext, counter, tls.into(), include_src_identity)?,
+					))
 				},
 				None => {
 					let sni = sni.to_string();
@@ -849,41 +860,61 @@ impl Gateway {
 			},
 		};
 
-		let hbone_addr = match parsed_addr {
-			HboneAddress::SocketAddr(addr) => HboneAddress::from(addr),
-			HboneAddress::SvcHostname(hostname, port) => {
-				// Try service registry lookup
-				let hostname_str = hostname.to_string();
-				let svc = find_service_by_hostname(&pi.stores.read_discovery(), &hostname_str);
+		// Resolve the HBONE address to a socket address and detect the service protocol
+		// in a single discovery store lookup to avoid redundant read locks.
+		let (socket_addr, is_http) = {
+			let discovery = pi.stores.read_discovery();
+			let network = &pi.cfg.network;
 
-				let vip = if let Some(svc) = svc {
-					// Found in service registry, get VIP for current network
-					let network = &pi.cfg.network;
-					if let Some(vip) = svc
-						.vips
-						.iter()
-						.find(|vip| vip.network == *network)
-						.or_else(|| svc.vips.first())
-					{
-						vip.address
+			let resolved_addr = match parsed_addr {
+				HboneAddress::SocketAddr(addr) => addr,
+				HboneAddress::SvcHostname(hostname, port) => {
+					let hostname_str = hostname.to_string();
+					let svc = find_service_by_hostname(&discovery, &hostname_str);
+
+					let vip = if let Some(svc) = svc {
+						if let Some(vip) = svc
+							.vips
+							.iter()
+							.find(|vip| vip.network == *network)
+							.or_else(|| svc.vips.first())
+						{
+							vip.address
+						} else {
+							warn!(
+								bind=?bind_name,
+								hostname=%hostname_str,
+								"serve_waypoint_connect: no VIP found for service"
+							);
+							return;
+						}
 					} else {
 						warn!(
 							bind=?bind_name,
 							hostname=%hostname_str,
-							"serve_waypoint_connect: no VIP found for service"
+							"serve_waypoint_connect: no service found for hostname"
 						);
 						return;
-					}
-				} else {
-					warn!(
-						bind=?bind_name,
-						hostname=%hostname_str,
-						"serve_waypoint_connect: no service found for hostname"
-					);
-					return;
-				};
-				HboneAddress::from(SocketAddr::from((vip, port)))
-			},
+					};
+					SocketAddr::from((vip, port))
+				},
+			};
+
+			// Determine protocol from service discovery. Default to HTTP since the vast
+			// majority of waypoint traffic is HTTP; only use TCP when there is a positive
+			// signal via explicit AppProtocol::Tcp/Tls (from istio/istio#59259).
+			let svc = discovery
+				.services
+				.get_by_vip(&crate::types::discovery::NetworkAddress {
+					network: network.clone(),
+					address: resolved_addr.ip(),
+				});
+			let is_http = match svc {
+				Some(svc) => !svc.port_is_tcp(resolved_addr.port()),
+				None => true,
+			};
+
+			(resolved_addr, is_http)
 		};
 
 		let Ok(resp) = req.send_response(build_response(StatusCode::OK)).await else {
@@ -896,22 +927,26 @@ impl Gateway {
 			drain_tx: None,
 		};
 
-		// TODO: for now, we only handle HTTP for waypoints. In the future, we should support other protocols.
-		// This could be done by sniffing at this layer, but is probably better handled by doing service-selection here
-		// and only falling back to sniffing when there is not an explicit protocol declaration
-		let socket_addr = hbone_addr
-			.socket_addr()
-			.ok_or_else(|| anyhow::anyhow!("hbone_addr should be resolved to SocketAddr"))
-			.unwrap();
-		let _ = Self::proxy(
-			bind_name,
-			pi,
-			None,
-			Socket::from_hbone(ext, socket_addr, con),
-			policies.clone(),
-			drain,
-		)
-		.await;
+		let socket = Socket::from_hbone(ext, socket_addr, con);
+		if is_http {
+			let _ = Self::proxy(bind_name, pi, None, socket, policies.clone(), drain).await;
+		} else {
+			// TCP: create a synthetic HBONE listener for the TCP proxy path
+			let listener = Arc::new(Listener {
+				key: Default::default(),
+				name: crate::types::agent::ListenerName {
+					gateway_name: strng::EMPTY,
+					gateway_namespace: strng::EMPTY,
+					listener_name: strng::literal!("_waypoint-tcp"),
+					listener_set: None,
+				},
+				hostname: Default::default(),
+				protocol: ListenerProtocol::HBONE,
+				tcp_routes: Default::default(),
+				routes: Default::default(),
+			});
+			Self::proxy_tcp(bind_name, pi, Some(listener), socket, drain).await;
+		}
 	}
 
 	/// serve_gateway_connect handles a single connection from a client.

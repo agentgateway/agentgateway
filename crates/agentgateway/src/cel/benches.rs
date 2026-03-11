@@ -58,7 +58,7 @@ fn test_cases() -> Vec<TestCase> {
 						.uri("http://example.com")
 						.header("content-type", "application/json")
 						.body(Body::from(
-							include_bytes!("../llm/tests/request_full.json").to_vec(),
+							include_bytes!("../llm/tests/requests/completions/full.json").to_vec(),
 						))
 						.unwrap(),
 				)

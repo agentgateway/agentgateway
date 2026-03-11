@@ -16,7 +16,7 @@ llm:
   - name: claude-3-haiku
     provider: anthropic
     params:
-      model: claude-3-5-haiku-20241022
+      model: claude-haiku-4-5-20251001
       apiKey: "sk-123"
     matches:
     - headers:
@@ -26,7 +26,7 @@ llm:
   - name: gemini-0.5-pro
     provider: vertex
     params:
-      model: claude-3-5-haiku-20241022
+      model: claude-haiku-4-5-20251001
       apiKey: "sk-123"
       vertexRegion: global
       vertexProject: my-vertex-project

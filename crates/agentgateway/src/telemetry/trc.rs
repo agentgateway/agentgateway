@@ -16,7 +16,7 @@ pub use traceparent::TraceParent;
 
 use crate::cel;
 use crate::telemetry::log::{CelLoggingExecutor, LoggingFields, RequestLog};
-use crate::types::agent::{SimpleBackendReference, TracingConfig};
+use crate::types::agent::{BackendPolicy, SimpleBackendReference, TracingConfig};
 
 #[derive(Clone, Debug)]
 pub struct Tracer {
@@ -35,7 +35,7 @@ pub enum Protocol {
 }
 
 #[derive(serde::Serialize, Clone, Debug)]
-pub struct Config {
+pub struct DeprecatedConfig {
 	pub endpoint: Option<String>,
 	pub headers: HashMap<String, String>,
 	pub protocol: Protocol,
@@ -53,7 +53,7 @@ mod semconv {
 }
 
 impl Tracer {
-	pub fn create_tracer_from_config_with_client(
+	pub fn new(
 		config: &TracingConfig,
 		fields: Arc<LoggingFields>,
 		policy_client: crate::proxy::httpproxy::PolicyClient,
@@ -124,6 +124,7 @@ impl Tracer {
 			let exporter = PolicyGrpcSpanExporter::new(
 				policy_client.inputs.clone(),
 				Arc::new(config.provider_backend.clone()),
+				config.policies.clone(),
 				exporter_runtime.clone(),
 			);
 			opentelemetry_sdk::trace::SdkTracerProvider::builder()
@@ -131,22 +132,11 @@ impl Tracer {
 				.with_batch_exporter(exporter)
 				.build()
 		} else {
-			// Use HTTP exporter via PolicyClient by default.
-			// Resolve the OTLP/HTTP path from global defaults; if not set, use the per-policy path (default "/v1/traces").
-			let endpoint_path = GLOBAL_RESOURCE_DEFAULTS
-				.get()
-				.and_then(|d| d.otlp_http_path.clone())
-				.unwrap_or_else(|| {
-					let p = config.path.clone();
-					if p.starts_with('/') {
-						p
-					} else {
-						format!("/{}", p)
-					}
-				});
+			let path = config.path.clone();
 			let http_client = PolicyOtelHttpClient {
 				policy_client,
 				backend_ref: config.provider_backend.clone(),
+				policies: config.policies.clone(),
 				runtime: exporter_runtime,
 			};
 			opentelemetry_sdk::trace::SdkTracerProvider::builder()
@@ -155,7 +145,7 @@ impl Tracer {
 					opentelemetry_otlp::SpanExporter::builder()
 						.with_http()
 						.with_http_client(http_client)
-						.with_endpoint(endpoint_path)
+						.with_endpoint(path)
 						.build()?,
 				)
 				.build()
@@ -166,69 +156,6 @@ impl Tracer {
 			provider,
 			fields,
 		})
-	}
-
-	pub fn new(cfg: &Config) -> anyhow::Result<Option<Tracer>> {
-		let Some(ep) = &cfg.endpoint else {
-			return Ok(None);
-		};
-		// Apply global defaults (gateway-derived if initialized)
-		let defaults = GLOBAL_RESOURCE_DEFAULTS.get();
-		let result = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-			.with_resource({
-				let mut rb = Resource::builder()
-					.with_service_name(
-						defaults
-							.and_then(|d| d.service_name.clone())
-							.unwrap_or_else(|| "agentgateway".to_string()),
-					)
-					.with_attribute(KeyValue::new(
-						"service.version",
-						agent_core::version::BuildInfo::new().version,
-					));
-				if let Some(d) = defaults {
-					for kv in &d.attrs {
-						rb = rb.with_attribute(kv.clone());
-					}
-				}
-				rb.build()
-			})
-			// TODO: this should be integrated with PolicyClient
-			.with_batch_exporter(if cfg.protocol == Protocol::Grpc {
-				// TODO: otel is using an old tonic version that mismatches with the one we have
-				// let metadata = MetadataMap::from_headers(HeaderMap::from_iter(
-				// 	cfg
-				// 		.headers
-				// 		.clone()
-				// 		.into_iter()
-				// 		.map(|(k, v)| Ok((HeaderName::try_from(k)?, HeaderValue::try_from(v)?)))
-				// 		.collect::<Result<_, _>>()?
-				// 		.iter(),
-				// ));
-				opentelemetry_otlp::SpanExporter::builder()
-					.with_tonic()
-					.with_endpoint(ep)
-					// .with_metadata(metadata)
-					.build()?
-			} else {
-				opentelemetry_otlp::SpanExporter::builder()
-					.with_http()
-					// For HTTP, we add the suffix ourselves
-					.with_endpoint(format!(
-						"{}/{}",
-						ep.strip_suffix("/").unwrap_or(ep),
-						cfg.path.clone()
-					))
-					.with_headers(cfg.headers.clone())
-					.build()?
-			})
-			.build();
-		let tracer = result.tracer("agentgateway");
-		Ok(Some(Tracer {
-			tracer: Arc::new(tracer),
-			provider: result,
-			fields: Arc::new(cfg.fields.clone()),
-		}))
 	}
 
 	pub fn shutdown(&self) {
@@ -343,13 +270,14 @@ impl PolicyGrpcSpanExporter {
 	fn new(
 		inputs: Arc<crate::ProxyInputs>,
 		target: Arc<SimpleBackendReference>,
+		policies: Vec<BackendPolicy>,
 		runtime: tokio::runtime::Handle,
 	) -> Self {
 		use crate::http::ext_proc::GrpcReferenceChannel;
 		let channel = GrpcReferenceChannel {
 			target,
+			policies: Arc::new(policies),
 			client: crate::proxy::httpproxy::PolicyClient { inputs },
-			timeout: None,
 		};
 		let tonic_client = opentelemetry_proto::tonic::collector::trace::v1::trace_service_client::TraceServiceClient::new(
 			channel,
@@ -403,7 +331,7 @@ impl opentelemetry_sdk::trace::SpanExporter for PolicyGrpcSpanExporter {
 	}
 }
 
-fn to_otel(v: &ValueBag) -> opentelemetry::Value {
+pub(crate) fn to_otel(v: &ValueBag) -> opentelemetry::Value {
 	if let Some(b) = v.to_str() {
 		opentelemetry::Value::String(b.to_string().into())
 	} else if let Some(b) = v.to_i64() {
@@ -416,10 +344,11 @@ fn to_otel(v: &ValueBag) -> opentelemetry::Value {
 }
 
 #[derive(Clone, Debug)]
-struct PolicyOtelHttpClient {
-	policy_client: crate::proxy::httpproxy::PolicyClient,
-	backend_ref: SimpleBackendReference,
-	runtime: tokio::runtime::Handle,
+pub(crate) struct PolicyOtelHttpClient {
+	pub(crate) policy_client: crate::proxy::httpproxy::PolicyClient,
+	pub(crate) backend_ref: SimpleBackendReference,
+	pub(crate) runtime: tokio::runtime::Handle,
+	pub(crate) policies: Vec<BackendPolicy>,
 }
 
 #[async_trait::async_trait]
@@ -430,6 +359,7 @@ impl opentelemetry_http::HttpClient for PolicyOtelHttpClient {
 	) -> Result<http::Response<bytes::Bytes>, Box<dyn std::error::Error + Send + Sync + 'static>> {
 		let client = self.policy_client.clone();
 		let backend_ref = self.backend_ref.clone();
+		let policies = self.policies.clone();
 		let handle = self.runtime.clone();
 
 		let (mut head, body_bytes) = request.into_parts();
@@ -442,7 +372,7 @@ impl opentelemetry_http::HttpClient for PolicyOtelHttpClient {
 		let resp = handle
 			.spawn(async move {
 				client
-					.call_reference(req, &backend_ref)
+					.call_reference_with_policies(req, &backend_ref, &policies)
 					.await
 					.map_err(Box::new)
 			})
@@ -458,14 +388,16 @@ impl opentelemetry_http::HttpClient for PolicyOtelHttpClient {
 }
 
 #[derive(Clone, Debug)]
-struct GlobalResourceDefaults {
-	service_name: Option<String>,
-	attrs: Vec<KeyValue>,
-	// If set, the OTLP/HTTP path (e.g., "/v1/traces") derived from cfg.tracing.endpoint or per-policy TracingConfig.path
-	otlp_http_path: Option<String>,
+pub(crate) struct GlobalResourceDefaults {
+	pub(crate) service_name: Option<String>,
+	pub(crate) attrs: Vec<KeyValue>,
 }
 
 static GLOBAL_RESOURCE_DEFAULTS: OnceCell<GlobalResourceDefaults> = OnceCell::new();
+
+pub(crate) fn global_resource_defaults() -> Option<&'static GlobalResourceDefaults> {
+	GLOBAL_RESOURCE_DEFAULTS.get()
+}
 
 /// Build a tonic ResourceSpans payload from SDK SpanData.
 /// Unblock exports for our custom exporter until https://github.com/open-telemetry/opentelemetry-rust/issues/3147 is addressed.
@@ -540,47 +472,17 @@ pub fn set_resource_defaults_from_config(cfg: &crate::Config) {
 	if !pm.node_id.is_empty() && !pm.pod_name.is_empty() && !pm.pod_namespace.is_empty() {
 		attrs.push(KeyValue::new("service.instance.id", pm.node_id.clone()));
 	}
-	if let Some(host) = cfg.self_addr.as_deref()
-		&& !host.is_empty()
-	{
-		attrs.push(KeyValue::new("host.name", host.to_string()));
+	if let Some(ref self_id) = cfg.self_addr {
+		attrs.push(KeyValue::new("host.name", self_id.hostname().to_string()));
 	}
 	// Use gateway name/namespace as authoritative service identity
 	let service_name = cfg.xds.gateway.to_string();
 	let service_namespace = cfg.xds.namespace.to_string();
 	attrs.push(KeyValue::new("service.namespace", service_namespace));
 
-	// Derive OTLP/HTTP path from cfg.tracing.endpoint if provided and protocol is HTTP.
-	// We only need the path component; the actual authority is resolved via backend policies.
-	let mut otlp_http_path: Option<String> = None;
-	if let Some(ep) = cfg.tracing.endpoint.as_deref()
-		&& cfg.tracing.protocol == Protocol::Http
-	{
-		// Try to parse as a URI to extract the path component
-		if let Ok(uri) = http::Uri::try_from(ep) {
-			let base_path = uri.path().to_string();
-			let path = if base_path.is_empty() || base_path == "/" {
-				cfg.tracing.path.clone()
-			} else if base_path.ends_with(cfg.tracing.path.as_str()) {
-				base_path
-			} else {
-				format!(
-					"{}/{}",
-					base_path.trim_end_matches('/'),
-					cfg.tracing.path.as_str()
-				)
-			};
-			otlp_http_path = Some(path);
-		} else {
-			// Fallback to default if parsing fails
-			otlp_http_path = Some("/v1/traces".to_string());
-		}
-	}
-
 	let _ = GLOBAL_RESOURCE_DEFAULTS.set(GlobalResourceDefaults {
 		service_name: Some(service_name),
 		attrs,
-		otlp_http_path,
 	});
 }
 

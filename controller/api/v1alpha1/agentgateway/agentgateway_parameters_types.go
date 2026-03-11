@@ -19,8 +19,8 @@ import (
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +genclient
 // +kubebuilder:object:root=true
-// +kubebuilder:metadata:labels={app=kgateway,app.kubernetes.io/name=kgateway}
-// +kubebuilder:resource:categories=kgateway,shortName=agpar,path=agentgatewayparameters
+// +kubebuilder:metadata:labels={app=agentgateway,app.kubernetes.io/name=agentgateway}
+// +kubebuilder:resource:categories=agentgateway,shortName=agpar,path=agentgatewayparameters
 // +kubebuilder:subresource:status
 // +kubebuilder:metadata:labels="gateway.networking.k8s.io/policy=Direct"
 type AgentgatewayParameters struct {
@@ -136,6 +136,9 @@ type AgentgatewayParametersConfigs struct {
 	// variables, you can use $(VAR_NAME), but it's highly
 	// discouraged. `$$(VAR_NAME)` avoids expansion and results in a literal
 	// `$(VAR_NAME)`.
+	//
+	// If `SESSION_KEY` is specified, it takes precedence over the
+	// controller-managed per-Gateway session key Secret.
 	//
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`

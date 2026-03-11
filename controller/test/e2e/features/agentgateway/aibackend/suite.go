@@ -46,7 +46,8 @@ var _ e2e.NewSuiteFunc = NewTestingSuite
 
 var (
 	// manifests
-	setupManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup.yaml")
+	setupManifest            = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup.yaml")
+	failoverEvictionManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "failover_eviction.yaml")
 
 	// test cases
 	setup = base.TestCase{
@@ -62,7 +63,11 @@ var (
 			},
 		},
 	}
-	testCases = map[string]*base.TestCase{}
+	testCases = map[string]*base.TestCase{
+		"TestFailover": {
+			Manifests: []string{failoverEvictionManifest},
+		},
+	}
 )
 
 // testingSuite is a suite of basic AI backend tests
@@ -196,6 +201,35 @@ func (s *testingSuite) TestWebhook() {
 			"x-api-key":         "fake",
 			"anthropic-version": "fake",
 		}),
+	)
+
+	s.Require().NoError(server.Stop(s.T().Context()))
+}
+
+func (s *testingSuite) TestFailover() {
+	expectedResponse := "The name of this project is kgateway"
+
+	server := s.NewMockReqRespServer(MockReqResp{
+		Req:  "What is the name of this project?",
+		Resp: expectedResponse,
+	})
+
+	// The failover backend has two groups:
+	//   Priority 0 (primary): mock-llm-primary Service with replicas=0 (no endpoints → connection error)
+	//   Priority 1 (fallback): local mock server
+	//
+	// The health policy evicts the primary after 3 consecutive unhealthy responses (threshold: 3).
+	// Send will retry until the primary is evicted and the fallback returns the expected response.
+	common.BaseGateway.Send(
+		s.T(),
+		&testmatchers.HttpResponse{
+			StatusCode: http.StatusOK,
+			Body:       gomega.ContainSubstring(expectedResponse),
+		},
+		curl.WithPath("/v1/chat/completions"),
+		curl.WithPostBody(`{"messages": [{"role": "user", "content": "What is the name of this project?"}]}`),
+		curl.WithHeader("Content-Type", "application/json"),
+		curl.WithHeader("x-test-failover", "1"),
 	)
 
 	s.Require().NoError(server.Stop(s.T().Context()))

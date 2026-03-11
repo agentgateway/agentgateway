@@ -1,0 +1,49 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/messages/tools.json
+info:
+  model: claude-opus-4-6
+  max_tokens: 1024
+  tools:
+    - name: get_weather
+      description: Get the current weather in a given location
+      input_schema:
+        type: object
+        properties:
+          location:
+            type: string
+            description: "The city and state, e.g. San Francisco, CA"
+        required:
+          - location
+  messages:
+    - role: user
+      content: What is the weather like in San Francisco?
+---
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is the weather like in San Francisco?"
+    }
+  ],
+  "anthropic_version": "vertex-2023-10-16",
+  "max_tokens": 1024,
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Get the current weather in a given location",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string",
+            "description": "The city and state, e.g. San Francisco, CA"
+          }
+        },
+        "required": [
+          "location"
+        ]
+      }
+    }
+  ]
+}

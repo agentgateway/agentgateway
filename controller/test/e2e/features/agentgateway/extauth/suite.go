@@ -28,7 +28,6 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 	setupTestCase := base.TestCase{
 		Manifests: []string{
 			simpleServiceManifest,
-			extAuthManifest,
 		},
 	}
 

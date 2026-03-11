@@ -18,24 +18,25 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    backend:
-      auth:
-        azure:
-          explicitConfig:
-            managedIdentityCredential:
-              userAssignedIdentity:
-                clientId: my-client-id
-    key: backend/default/agw:backend-auth:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      route:
-        kind: HTTPRoute
-        name: test
+- resource:
+    policy:
+      backend:
+        auth:
+          azure:
+            explicitConfig:
+              managedIdentityCredential:
+                userAssignedIdentity:
+                  clientId: my-client-id
+      key: backend/default/agw:backend-auth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
 status:
   ancestors:
   - ancestorRef:

@@ -19,6 +19,16 @@ fn create_policy_set(policies: Vec<&str>) -> PolicySet {
 	policy_set
 }
 
+fn create_deny_policy_set(policies: Vec<&str>) -> PolicySet {
+	let mut policy_set = PolicySet::default();
+	for p in policies.into_iter() {
+		policy_set
+			.deny
+			.push(Arc::new(cel::Expression::new_strict(p).unwrap()));
+	}
+	policy_set
+}
+
 #[test]
 fn test_rbac_reject_exact_match() {
 	let policies = vec![r#"mcp.tool.name == "increment" && jwt.user == "admin""#];
@@ -133,6 +143,126 @@ fn test_rbac_check_array_contains_match() {
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec), true);
+}
+
+#[test]
+fn test_deny_only_non_matching_allows() {
+	// A deny-only policy targeting "increment" should allow other tools
+	let deny_policies = vec![r#"mcp.tool.name == "increment""#];
+	let rbac = RuleSet::new(create_deny_policy_set(deny_policies));
+	let mut ctx = ContextBuilder::new();
+	let rs = RuleSets::from(vec![rbac.clone()]);
+	rs.register(&mut ctx);
+
+	let req = req(json!({"sub": "1234567890"}));
+	let mcp = ResourceType::Tool(ResourceId::new(
+		"server".to_string(),
+		"decrement".to_string(),
+	));
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
+
+	// "decrement" does not match the deny rule, so it should be allowed
+	assert_matches!(rs.validate(&exec), true);
+}
+
+#[test]
+fn test_deny_only_matching_denies() {
+	// A deny-only policy targeting "increment" should deny that tool
+	let deny_policies = vec![r#"mcp.tool.name == "increment""#];
+	let rbac = RuleSet::new(create_deny_policy_set(deny_policies));
+	let mut ctx = ContextBuilder::new();
+	let rs = RuleSets::from(vec![rbac.clone()]);
+	rs.register(&mut ctx);
+
+	let req = req(json!({"sub": "1234567890"}));
+	let mcp = ResourceType::Tool(ResourceId::new(
+		"server".to_string(),
+		"increment".to_string(),
+	));
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
+
+	assert_matches!(rs.validate(&exec), false);
+}
+
+#[test]
+fn test_stacked_deny_policies() {
+	// Two deny-only RuleSets: one denies "increment", another denies "decrement"
+	// Other tools should still be allowed
+	let rbac1 = RuleSet::new(create_deny_policy_set(vec![
+		r#"mcp.tool.name == "increment""#,
+	]));
+	let rbac2 = RuleSet::new(create_deny_policy_set(vec![
+		r#"mcp.tool.name == "decrement""#,
+	]));
+	let mut ctx = ContextBuilder::new();
+	let rs = RuleSets::from(vec![rbac1, rbac2]);
+	rs.register(&mut ctx);
+
+	let req = req(json!({"sub": "1234567890"}));
+
+	// "increment" is denied by first policy
+	let mcp = ResourceType::Tool(ResourceId::new(
+		"server".to_string(),
+		"increment".to_string(),
+	));
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
+	assert_matches!(rs.validate(&exec), false);
+
+	// "decrement" is denied by second policy
+	let mcp = ResourceType::Tool(ResourceId::new(
+		"server".to_string(),
+		"decrement".to_string(),
+	));
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
+	assert_matches!(rs.validate(&exec), false);
+
+	// "echo" is not denied by either policy, so it should be allowed
+	let mcp = ResourceType::Tool(ResourceId::new("server".to_string(), "echo".to_string()));
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
+	assert_matches!(rs.validate(&exec), true);
+}
+
+#[test]
+fn test_mixed_allow_deny_default_deny() {
+	// When both allow and deny rules exist, unmatched resources default to deny
+	let policy_set = PolicySet::new(
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.tool.name == "allowed_tool""#).unwrap(),
+		)],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.tool.name == "denied_tool""#).unwrap(),
+		)],
+	);
+	let rbac = RuleSet::new(policy_set);
+	let mut ctx = ContextBuilder::new();
+	let rs = RuleSets::from(vec![rbac]);
+	rs.register(&mut ctx);
+
+	let req = req(json!({"sub": "1234567890"}));
+
+	// "allowed_tool" matches allow rule → allowed
+	let mcp = ResourceType::Tool(ResourceId::new(
+		"server".to_string(),
+		"allowed_tool".to_string(),
+	));
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
+	assert_matches!(rs.validate(&exec), true);
+
+	// "denied_tool" matches deny rule → denied (deny takes precedence)
+	let mcp = ResourceType::Tool(ResourceId::new(
+		"server".to_string(),
+		"denied_tool".to_string(),
+	));
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
+	assert_matches!(rs.validate(&exec), false);
+
+	// "other_tool" matches neither → denied (allowlist semantics when allow rules exist)
+	let mcp = ResourceType::Tool(ResourceId::new(
+		"server".to_string(),
+		"other_tool".to_string(),
+	));
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
+	assert_matches!(rs.validate(&exec), false);
 }
 
 #[divan::bench]

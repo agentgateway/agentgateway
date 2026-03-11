@@ -3,6 +3,8 @@ package agentgateway
 import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 )
 
 // AIPromptEnrichment defines the config to enrich requests sent to the LLM provider by appending and prepending system prompts.
@@ -19,7 +21,7 @@ import (
 // ```yaml
 //
 //	name: openai-opt
-//	namespace: kgateway-system
+//	namespace: agentgateway-system
 //
 // spec:
 //
@@ -134,7 +136,7 @@ type Webhook struct {
 
 // CustomResponse configures a response to return to the client if request content
 // is matched against a regex pattern and the action is `REJECT`.
-// +kubebuilder:validation:AtLeastOneOf=message;statusCode
+// +kubebuilder:validation:AtLeastOneFieldSet
 type CustomResponse struct {
 	// A custom response message to return to the client. If not specified, defaults to
 	// "The request was rejected due to inappropriate content".
@@ -155,7 +157,7 @@ type OpenAIModeration struct {
 	// +optional
 	Model *string `json:"model,omitempty"`
 	// policies controls policies for communicating with OpenAI.
-	// +kubebuilder:validation:AtLeastOneOf=tcp;tls;http;auth
+	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
 	Policies *BackendSimple `json:"policies,omitempty"`
 }
@@ -174,7 +176,7 @@ type BedrockGuardrails struct {
 	Region ShortString `json:"region"`
 
 	// policies controls policies for communicating with AWS Bedrock Guardrails.
-	// +kubebuilder:validation:AtLeastOneOf=tcp;tls;http;auth
+	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
 	Policies *BackendSimple `json:"policies,omitempty"`
 }
@@ -195,7 +197,7 @@ type GoogleModelArmor struct {
 	Location *ShortString `json:"location,omitempty"`
 
 	// policies controls policies for communicating with Google Model Armor.
-	// +kubebuilder:validation:AtLeastOneOf=tcp;tls;http;auth
+	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
 	Policies *BackendSimple `json:"policies,omitempty"`
 }
@@ -279,7 +281,7 @@ type PromptguardResponse struct {
 //	    action: MASK
 //
 // ```
-// +kubebuilder:validation:AtLeastOneOf=request;response
+// +kubebuilder:validation:AtLeastOneFieldSet
 type AIPromptGuard struct {
 	// Prompt guards to apply to requests sent by the client.
 	// +kubebuilder:validation:MinItems=1
@@ -342,6 +344,20 @@ type FieldDefault struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +required
 	Value apiextensionsv1.JSON `json:"value"`
+}
+
+// FieldTransformation maps a request JSON field to a CEL expression string.
+// The expression is evaluated against the current request body and its result
+// is assigned to the configured field.
+type FieldTransformation struct {
+	// The name of the field to set.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Field ShortString `json:"field"`
+
+	// CEL expression used to compute the field value.
+	// +required
+	Expression shared.CELExpression `json:"expression"`
 }
 
 // PromptCachingConfig configures automatic prompt caching for supported LLM providers.

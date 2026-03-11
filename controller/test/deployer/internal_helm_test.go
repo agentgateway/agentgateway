@@ -85,6 +85,21 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 		{
 			Name:      "agentgateway",
 			InputFile: "agentgateway",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "name: SESSION_KEY",
+					"deployment should inject the managed session key via env")
+				assert.Contains(t, outputYaml, "secretKeyRef:",
+					"deployment should reference the session key Secret from env")
+				assert.Contains(t, outputYaml, "name: gw-session-key",
+					"deployment should reference the controller-managed session key Secret")
+				assert.Contains(t, outputYaml, "kind: Secret",
+					"rendered objects should include the controller-managed session key Secret")
+				assert.Contains(t, outputYaml, "type: Opaque",
+					"session key Secret should use the opaque Secret type")
+				assert.Contains(t, outputYaml, "checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737",
+					"deployment pod template should roll when the managed session key changes")
+			},
 		},
 		{
 			// Uses $patch: delete for pod-level and null for container-level securityContext

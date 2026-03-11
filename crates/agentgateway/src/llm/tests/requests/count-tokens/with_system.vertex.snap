@@ -1,0 +1,21 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/count-tokens/with_system.json
+info:
+  model: claude-3-5-sonnet-20241022
+  system: You are a helpful assistant.
+  messages:
+    - role: user
+      content: What is the weather today?
+---
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is the weather today?"
+    }
+  ],
+  "model": "anthropic/claude-sonnet-4-5",
+  "system": "You are a helpful assistant.",
+  "anthropic_version": "vertex-2023-10-16"
+}

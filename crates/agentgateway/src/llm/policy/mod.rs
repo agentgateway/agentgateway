@@ -1,17 +1,17 @@
-use ::http::HeaderMap;
-use bytes::Bytes;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
 use crate::http::filters::HeaderModifier;
 use crate::http::jwt::Claims;
 use crate::http::{Response, StatusCode, auth};
 use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction};
 use crate::llm::{AIError, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::RequestLog;
 use crate::types::agent::{BackendPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference};
-use crate::types::local::LocalBackendPolicies;
 use crate::*;
+use ::http::HeaderMap;
+use bytes::Bytes;
+use itertools::Itertools;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod webhook;
 
@@ -110,6 +110,8 @@ pub struct Policy {
 	pub defaults: Option<HashMap<String, serde_json::Value>>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub overrides: Option<HashMap<String, serde_json::Value>>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub transformations: Option<HashMap<String, Arc<cel::Expression>>>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompts: Option<PromptEnrichment>,
 	#[serde(
@@ -307,24 +309,53 @@ impl Policy {
 		wildcard.unwrap_or(crate::llm::RouteType::Completions)
 	}
 
-	pub fn unmarshal_request<T: DeserializeOwned>(&self, bytes: &Bytes) -> Result<T, AIError> {
-		if self.defaults.is_none() && self.overrides.is_none() {
+	pub fn unmarshal_request<T: DeserializeOwned>(
+		&self,
+		bytes: &Bytes,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<T, AIError> {
+		if self.defaults.is_none() && self.overrides.is_none() && self.transformations.is_none() {
 			// Fast path: directly bytes to typed
 			return serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing);
 		}
 		// Slow path: bytes --> json (transform) --> typed
 		let v: serde_json::Value =
 			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?;
+		let exec = cel::Executor::new_llm(log.as_ref().and_then(|x| x.request_snapshot.as_ref()), &v);
+		let to_set: Vec<_> = self
+			.transformations
+			.iter()
+			.flatten()
+			.map(|(k, expr)| (k, Self::eval_transformation_expression(expr, &exec)))
+			.collect();
+
 		let serde_json::Value::Object(mut map) = v else {
 			return Err(AIError::MissingField("request must be an object".into()));
 		};
 		for (k, v) in self.overrides.iter().flatten() {
 			map.insert(k.clone(), v.clone());
 		}
+		for (k, v) in to_set.into_iter() {
+			match v {
+				Some(v) => {
+					map.insert(k.clone(), v);
+				},
+				None => {
+					map.remove(k);
+				},
+			}
+		}
 		for (k, v) in self.defaults.iter().flatten() {
 			map.entry(k.clone()).or_insert_with(|| v.clone());
 		}
 		serde_json::from_value(serde_json::Value::Object(map)).map_err(AIError::RequestParsing)
+	}
+
+	fn eval_transformation_expression(
+		expression: &cel::Expression,
+		exec: &cel::Executor<'_>,
+	) -> Option<serde_json::Value> {
+		exec.eval(expression).ok()?.json().ok()
 	}
 
 	pub async fn apply_prompt_guard(
@@ -805,15 +836,20 @@ impl Policy {
 								return Some(RegexResult::Reject);
 							},
 							Action::Mask => {
-								// Sort in reverse to avoid index shifting during replacement
-								let mut sorted_results = results;
-								sorted_results.sort_by(|a, b| b.start.cmp(&a.start));
-
-								for result in sorted_results {
-									current_content.replace_range(
-										result.start..result.end,
-										&format!("<{}>", result.entity_type.to_uppercase()),
-									);
+								// Replace matches in reverse order while also combining any overlapping ranges
+								let replacement = format!("<{}>", results[0].entity_type);
+								for range in results
+									.into_iter()
+									.map(|r| r.start..r.end)
+									.sorted_unstable_by(|a, b| b.start.cmp(&a.start).then_with(|| a.end.cmp(&b.end)))
+									.coalesce(|a, b| {
+										if b.end > a.start {
+											Ok(b.start..std::cmp::max(a.end, b.end))
+										} else {
+											Err((a, b))
+										}
+									}) {
+									current_content.replace_range(range, &replacement);
 								}
 								content_modified = true;
 							},
@@ -1030,8 +1066,11 @@ pub struct Moderation {
 	/// Model to use. Defaults to `omni-moderation-latest`
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
-	#[serde(deserialize_with = "de_from_local_backend_policy")]
-	#[cfg_attr(feature = "schema", schemars(with = "LocalBackendPolicies"))]
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+	)]
 	pub policies: Vec<BackendPolicy>,
 }
 
@@ -1045,12 +1084,11 @@ pub struct BedrockGuardrails {
 	/// AWS region where the guardrail is deployed
 	pub region: Strng,
 	/// Backend policies for AWS authentication (optional, defaults to implicit AWS auth)
-	#[serde(
-		default,
-		deserialize_with = "de_from_local_backend_policy_opt",
-		skip_serializing_if = "Vec::is_empty"
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
-	#[cfg_attr(feature = "schema", schemars(with = "Option<LocalBackendPolicies>"))]
 	pub policies: Vec<BackendPolicy>,
 }
 
@@ -1065,36 +1103,12 @@ pub struct GoogleModelArmor {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub location: Option<Strng>,
 	/// Backend policies for GCP authentication (optional, defaults to implicit GCP auth)
-	#[serde(
-		default,
-		deserialize_with = "de_from_local_backend_policy_opt",
-		skip_serializing_if = "Vec::is_empty"
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
-	#[cfg_attr(feature = "schema", schemars(with = "Option<LocalBackendPolicies>"))]
 	pub policies: Vec<BackendPolicy>,
-}
-
-pub fn de_from_local_backend_policy<'de: 'a, 'a, D>(
-	deserializer: D,
-) -> Result<Vec<BackendPolicy>, D::Error>
-where
-	D: Deserializer<'de>,
-{
-	let s = LocalBackendPolicies::deserialize(deserializer)?;
-	s.translate().map_err(serde::de::Error::custom)
-}
-
-pub fn de_from_local_backend_policy_opt<'de: 'a, 'a, D>(
-	deserializer: D,
-) -> Result<Vec<BackendPolicy>, D::Error>
-where
-	D: Deserializer<'de>,
-{
-	let s = Option::<LocalBackendPolicies>::deserialize(deserializer)?;
-	match s {
-		Some(policies) => policies.translate().map_err(serde::de::Error::custom),
-		None => Ok(Vec::new()),
-	}
 }
 
 #[apply(schema!)]
@@ -1318,4 +1332,86 @@ fn test_model_alias_pattern_validation() {
 	let pattern = ModelAliasPattern::from_wildcard("test.*").unwrap();
 	assert!(pattern.matches("test.v1"));
 	assert!(!pattern.matches("testXv1")); // X doesn't match literal dot
+}
+
+#[test]
+fn test_unmarshal_request_with_transformation_policy() {
+	use serde_json::json;
+
+	let policy = Policy {
+		transformations: Some(
+			[
+				(
+					"max_tokens".to_string(),
+					Arc::new(cel::Expression::new_strict("min(llmRequest.max_tokens, 50)").unwrap()),
+				),
+				(
+					"model".to_string(),
+					Arc::new(
+						cel::Expression::new_strict(
+							r#"
+				llmRequest.model.split("/").with(m,
+					m.size() == 2 ? m[1] : m[0]
+				)"#,
+						)
+						.unwrap(),
+					),
+				),
+			]
+			.into_iter()
+			.collect(),
+		),
+		..Default::default()
+	};
+
+	let input = Bytes::from_static(br#"{"model":"provider/model","max_tokens":999}"#);
+	let out: serde_json::Value = policy
+		.unmarshal_request(&input, &mut None)
+		.expect("request should unmarshal");
+
+	assert_eq!(out.get("model"), Some(&json!("model")));
+	assert_eq!(out.get("max_tokens"), Some(&json!(50)));
+}
+
+#[cfg(test)]
+#[rstest::rstest]
+#[case::single_email(
+  vec![RegexRule::Builtin { builtin: Builtin::Email }],
+	"contact john.doe@example.com now",
+	"contact <EMAIL_ADDRESS> now",
+)]
+#[case::multiple_emails(
+  vec![RegexRule::Builtin { builtin: Builtin::Email }],
+	"contact john@example.com or jane@other.com for help",
+	"contact <EMAIL_ADDRESS> or <EMAIL_ADDRESS> for help",
+)]
+#[case::ssn_in_sentence(
+  vec![RegexRule::Builtin { builtin: Builtin::Ssn }],
+	"My ssn is 123-45-6789 ok",
+	"My ssn is <SSN> ok",
+)]
+#[case::builtin_credit_card_and_regex(
+  vec![
+    RegexRule::Builtin { builtin: Builtin::CreditCard },
+    RegexRule::Regex { pattern: regex::Regex::new(r"\d{2}").unwrap() },
+  ],
+	"Card number: 4111-1111-1111-1111 or id:12-34",
+	"Card number: <CREDIT_CARD> or id:<masked>-<masked>",
+)]
+fn test_apply_prompt_guard_regex_mask(
+	#[case] rules: Vec<RegexRule>,
+	#[case] input: &str,
+	#[case] expected: &str,
+) {
+	let result = Policy::apply_prompt_guard_regex(
+		input,
+		&RegexRules {
+			action: Action::Mask,
+			rules,
+		},
+	);
+	match result {
+		Some(RegexResult::Mask(masked)) => assert_eq!(masked, expected),
+		_ => panic!("expected masked result"),
+	}
 }

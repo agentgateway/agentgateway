@@ -1,0 +1,26 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/responses/input-list.json
+info:
+  input:
+    - role: user
+      content: Hello
+  model: gpt-4o
+  stream: true
+---
+{
+  "modelId": "gpt-4o",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "Hello"
+        }
+      ]
+    }
+  ],
+  "inferenceConfig": {
+    "maxTokens": 4096
+  }
+}

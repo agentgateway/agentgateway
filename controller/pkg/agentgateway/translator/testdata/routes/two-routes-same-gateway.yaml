@@ -52,7 +52,7 @@ output:
         weight: 1
       hostnames:
       - example.com
-      key: default/test-route-1.0.0.http
+      key: default/test-route-1.0.http
       listenerKey: default/test-gateway.http
       matches:
       - path:
@@ -75,7 +75,7 @@ output:
         weight: 1
       hostnames:
       - example2.com
-      key: default/test-route-2.0.0.http
+      key: default/test-route-2.0.http
       listenerKey: default/test-gateway.http
       matches:
       - path:

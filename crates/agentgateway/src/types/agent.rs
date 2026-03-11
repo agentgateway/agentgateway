@@ -2,10 +2,10 @@ use std::cmp;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Display, Formatter};
-use std::io::Cursor;
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::{Arc, RwLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::anyhow;
 use hashbrown::Equivalent;
@@ -16,17 +16,20 @@ use openapiv3::OpenAPI;
 use prometheus_client::encoding::EncodeLabelValue;
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
-use rustls_pemfile::Item;
-use serde::{Deserialize, Serialize, Serializer};
+use rustls::server::danger::ClientCertVerifier;
+use rustls_pki_types::pem::{PemObject, SectionKind};
+use serde::{Serialize, Serializer};
 use serde_json::Value;
 
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::RuleSet;
 use crate::http::{
-	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, remoteratelimit, retry, timeout,
+	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, health, remoteratelimit, retry,
+	timeout,
 };
 use crate::mcp::McpAuthorization;
 use crate::telemetry::log::OrderedStringMap;
+use crate::transport::tls;
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::local::SimpleLocalBackend;
 use crate::types::{agent, backend, frontend};
@@ -75,6 +78,8 @@ struct ServerTlsInputs {
 	key_pem: Vec<u8>,
 	// If present, require and verify client certificates using these roots.
 	root_pem: Option<Vec<u8>>,
+	// If true, request client certs but allow absent or invalid certs as insecure fallback.
+	allow_insecure_mtls: bool,
 	// Default ALPNs configured at creation time.
 	default_alpns: Alpns,
 }
@@ -124,6 +129,8 @@ pub struct ServerTLSConfig {
 	base_config: Option<Arc<ServerConfig>>,
 	/// Original inputs required to rebuild a fresh `ServerConfig` for a given profile.
 	inputs: Option<Arc<ServerTlsInputs>>,
+	/// Original strict verifier used when ALLOW_INSECURE_FALLBACK is enabled.
+	insecure_fallback_verifier: Option<Arc<dyn ClientCertVerifier>>,
 	per_profile_config: Arc<RwLock<HashMap<ServerTlsProfileKey, Arc<ServerConfig>>>>,
 }
 
@@ -141,6 +148,7 @@ impl ServerTLSConfig {
 		Self {
 			base_config: Some(config),
 			inputs: None,
+			insecure_fallback_verifier: None,
 			per_profile_config: Arc::new(Default::default()),
 		}
 	}
@@ -151,9 +159,19 @@ impl ServerTLSConfig {
 		root_pem: Option<Vec<u8>>,
 		default_alpns: Alpns,
 	) -> anyhow::Result<Self> {
-		Self::from_pem_with_profile(cert_pem, key_pem, root_pem, default_alpns, None, None, None)
+		Self::from_pem_with_profile(
+			cert_pem,
+			key_pem,
+			root_pem,
+			default_alpns,
+			None,
+			None,
+			None,
+			false,
+		)
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	pub fn from_pem_with_profile(
 		cert_pem: Vec<u8>,
 		key_pem: Vec<u8>,
@@ -162,24 +180,27 @@ impl ServerTLSConfig {
 		min_version: Option<TLSVersion>,
 		max_version: Option<TLSVersion>,
 		cipher_suites: Option<Vec<crate::transport::tls::CipherSuite>>,
+		allow_insecure_mtls: bool,
 	) -> anyhow::Result<Self> {
 		let inputs = Arc::new(ServerTlsInputs {
 			cert_pem,
 			key_pem,
 			root_pem,
+			allow_insecure_mtls,
 			default_alpns,
 		});
 		let suites = cipher_suites.as_deref().filter(|s| !s.is_empty());
-		let base = Arc::new(Self::build_server_config(
+		let (base, insecure_fallback_verifier) = Self::build_server_config(
 			&inputs,
 			None,
 			min_version,
 			max_version,
 			suites.unwrap_or(&[]),
-		)?);
+		)?;
 		Ok(Self {
-			base_config: Some(base),
+			base_config: Some(Arc::new(base)),
 			inputs: Some(inputs),
+			insecure_fallback_verifier,
 			per_profile_config: Arc::new(Default::default()),
 		})
 	}
@@ -189,6 +210,7 @@ impl ServerTLSConfig {
 		Self {
 			base_config: None,
 			inputs: None,
+			insecure_fallback_verifier: None,
 			per_profile_config: Arc::new(Default::default()),
 		}
 	}
@@ -233,15 +255,49 @@ impl ServerTLSConfig {
 			return Ok(Arc::clone(cached_config));
 		}
 
-		let built = Arc::new(Self::build_server_config(
+		let (base, _insecure_fallback_verifier) = Self::build_server_config(
 			&inputs,
 			Some(&key.alpns),
 			key.min_version,
 			key.max_version,
 			&key.cipher_suites,
-		)?);
-		writer.insert(key, Arc::clone(&built));
-		Ok(built)
+		)?;
+		let base = Arc::new(base);
+		writer.insert(key.clone(), Arc::clone(&base));
+		Ok(base)
+	}
+
+	pub fn allow_insecure_mtls(&self) -> bool {
+		self
+			.inputs
+			.as_ref()
+			.is_some_and(|inputs| inputs.allow_insecure_mtls)
+	}
+
+	pub fn include_src_identity_for_connection(&self, conn: &rustls::ServerConnection) -> bool {
+		if !self.allow_insecure_mtls() {
+			return true;
+		}
+
+		let Some(peer_certs) = conn.peer_certificates() else {
+			return false;
+		};
+		let Some((end_entity, intermediates)) = peer_certs.split_first() else {
+			return false;
+		};
+
+		let Some(verifier) = self.insecure_fallback_verifier.as_ref() else {
+			return false;
+		};
+
+		let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
+			Ok(duration) => rustls::pki_types::UnixTime::since_unix_epoch(duration),
+			Err(_) => return false,
+		};
+
+		verifier
+			.verify_client_cert(end_entity, intermediates, now)
+			.is_ok()
 	}
 
 	fn build_server_config(
@@ -250,7 +306,7 @@ impl ServerTLSConfig {
 		min_version: Option<TLSVersion>,
 		max_version: Option<TLSVersion>,
 		cipher_suites: &[crate::transport::tls::CipherSuite],
-	) -> anyhow::Result<ServerConfig> {
+	) -> anyhow::Result<(ServerConfig, Option<Arc<dyn ClientCertVerifier>>)> {
 		let provider = if cipher_suites.is_empty() {
 			crate::transport::tls::provider()
 		} else {
@@ -262,16 +318,23 @@ impl ServerTLSConfig {
 			.with_protocol_versions(&versions)
 			.expect("server config must be valid");
 
+		let mut insecure_fallback_verifier = None;
+
 		let scb = if let Some(root) = &inputs.root_pem {
 			let mut roots_store = rustls::RootCertStore::empty();
-			let mut reader = std::io::BufReader::new(Cursor::new(root.as_slice()));
-			let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
+			let certs = CertificateDer::pem_slice_iter(root).collect::<Result<Vec<_>, _>>()?;
 			roots_store.add_parsable_certificates(certs);
 			let verify = rustls::server::WebPkiClientVerifier::builder_with_provider(
 				Arc::new(roots_store),
 				provider,
 			)
 			.build()?;
+			let verify: Arc<dyn ClientCertVerifier> = if inputs.allow_insecure_mtls {
+				insecure_fallback_verifier = Some(verify.clone());
+				tls::insecure::AllowInsecureMtlsVerifier::new(verify)
+			} else {
+				verify
+			};
 			scb.with_client_cert_verifier(verify)
 		} else {
 			scb.with_no_client_auth()
@@ -283,7 +346,7 @@ impl ServerTLSConfig {
 		sc.alpn_protocols = alpns
 			.map(|a| a.to_vec())
 			.unwrap_or_else(|| inputs.default_alpns.clone());
-		Ok(sc)
+		Ok((sc, insecure_fallback_verifier))
 	}
 }
 
@@ -335,28 +398,32 @@ impl serde::Serialize for ServerTLSConfig {
 	}
 }
 
-pub fn parse_cert(mut cert: &[u8]) -> Result<Vec<CertificateDer<'static>>, anyhow::Error> {
-	let mut reader = std::io::BufReader::new(Cursor::new(&mut cert));
-	let parsed: Result<Vec<_>, _> = rustls_pemfile::read_all(&mut reader).collect();
-	parsed?
+pub fn parse_cert(cert: &[u8]) -> Result<Vec<CertificateDer<'static>>, anyhow::Error> {
+	let parsed = <(SectionKind, Vec<u8>)>::pem_slice_iter(cert).collect::<Result<Vec<_>, _>>()?;
+	if parsed.is_empty() {
+		return Err(anyhow!("no certificate"));
+	}
+
+	parsed
 		.into_iter()
-		.map(|p| {
-			let Item::X509Certificate(der) = p else {
+		.map(|(kind, der)| {
+			if kind != SectionKind::Certificate {
 				return Err(anyhow!("no certificate"));
-			};
-			Ok(der)
+			}
+			Ok(CertificateDer::from(der))
 		})
-		.collect::<Result<Vec<_>, _>>()
+		.collect()
 }
 
-pub fn parse_key(mut key: &[u8]) -> Result<PrivateKeyDer<'static>, anyhow::Error> {
-	let mut reader = std::io::BufReader::new(Cursor::new(&mut key));
-	let parsed = rustls_pemfile::read_one(&mut reader)?;
-	let parsed = parsed.ok_or_else(|| anyhow!("no key"))?;
-	match parsed {
-		Item::Pkcs8Key(c) => Ok(PrivateKeyDer::Pkcs8(c)),
-		Item::Pkcs1Key(c) => Ok(PrivateKeyDer::Pkcs1(c)),
-		Item::Sec1Key(c) => Ok(PrivateKeyDer::Sec1(c)),
+pub fn parse_key(key: &[u8]) -> Result<PrivateKeyDer<'static>, anyhow::Error> {
+	let (kind, der) = <(SectionKind, Vec<u8>)>::from_pem_slice(key).map_err(|e| match e {
+		rustls_pki_types::pem::Error::NoItemsFound => anyhow!("no key"),
+		_ => anyhow!(e),
+	})?;
+	match kind {
+		SectionKind::PrivateKey => Ok(PrivateKeyDer::Pkcs8(der.into())),
+		SectionKind::RsaPrivateKey => Ok(PrivateKeyDer::Pkcs1(der.into())),
+		SectionKind::EcPrivateKey => Ok(PrivateKeyDer::Sec1(der.into())),
 		_ => Err(anyhow!("unsupported key")),
 	}
 }
@@ -382,6 +449,22 @@ impl ListenerProtocol {
 			ListenerProtocol::HTTPS(t) => Some(t.config_for(tls)),
 			ListenerProtocol::TLS(t) => t.as_ref().map(|t| t.config_for(tls)),
 			_ => None,
+		}
+	}
+
+	pub fn allow_insecure_mtls(&self) -> bool {
+		match self {
+			ListenerProtocol::HTTPS(t) => t.allow_insecure_mtls(),
+			ListenerProtocol::TLS(Some(t)) => t.allow_insecure_mtls(),
+			_ => false,
+		}
+	}
+
+	pub fn include_src_identity_for_connection(&self, conn: &rustls::ServerConnection) -> bool {
+		match self {
+			ListenerProtocol::HTTPS(t) => t.include_src_identity_for_connection(conn),
+			ListenerProtocol::TLS(Some(t)) => t.include_src_identity_for_connection(conn),
+			_ => true,
 		}
 	}
 }
@@ -834,6 +917,8 @@ pub enum Backend {
 	MCP(ResourceName, McpBackend),
 	#[serde(rename = "ai", serialize_with = "serialize_backend_tuple")]
 	AI(ResourceName, crate::llm::AIBackend),
+	#[serde(rename = "aws", serialize_with = "serialize_backend_tuple")]
+	Aws(ResourceName, crate::aws::AwsBackendConfig),
 	#[serde(serialize_with = "serialize_backend_tuple")]
 	Dynamic(ResourceName, ()),
 	Invalid,
@@ -1012,6 +1097,7 @@ impl Backend {
 			Backend::Opaque(name, _)
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
+			| Backend::Aws(name, _)
 			| Backend::Dynamic(name, _) => BackendTarget::Backend {
 				name: name.name.clone(),
 				namespace: name.namespace.clone(),
@@ -1031,6 +1117,7 @@ impl Backend {
 			Backend::Opaque(name, _)
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
+			| Backend::Aws(name, _)
 			| Backend::Dynamic(name, _) => BackendTargetRef::Backend {
 				name: name.name.as_ref(),
 				namespace: name.namespace.as_ref(),
@@ -1046,7 +1133,14 @@ impl Backend {
 			Backend::Opaque(name, _)
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
-			| Backend::Dynamic(name, _) => strng::format!("{}", name),
+			| Backend::Aws(name, _)
+			| Backend::Dynamic(name, _) => {
+				let mut s = String::with_capacity(name.namespace.len() + name.name.len() + 1);
+				s.push_str(&name.namespace);
+				s.push('/');
+				s.push_str(&name.name);
+				strng::new(&s)
+			},
 			Backend::Invalid => strng::literal!("invalid"),
 		}
 	}
@@ -1057,7 +1151,8 @@ impl Backend {
 			Backend::Opaque(_, _) => cel::BackendType::Static,
 			Backend::MCP(_, _) => cel::BackendType::MCP,
 			Backend::AI(_, _) => cel::BackendType::AI,
-			Backend::Dynamic { .. } => cel::BackendType::Dynamic,
+			Backend::Aws(_, _) => cel::BackendType::Unknown,
+			Backend::Dynamic(_, _) => cel::BackendType::Dynamic,
 			Backend::Invalid => cel::BackendType::Unknown,
 		}
 	}
@@ -1166,37 +1261,9 @@ pub struct StreamableHTTPTargetSpec {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct OpenAPITarget {
 	pub backend: SimpleBackendReference,
-	#[serde(deserialize_with = "de_openapi")]
+	#[serde(skip_serializing)]
 	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
 	pub schema: Arc<OpenAPI>,
-}
-
-pub fn de_openapi<'a, D>(deserializer: D) -> Result<Arc<OpenAPI>, D::Error>
-where
-	D: serde::Deserializer<'a>,
-{
-	#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-	#[serde(rename_all = "camelCase", deny_unknown_fields)]
-	enum Serde {
-		File(PathBuf),
-		Inline(String),
-		// Remote()
-	}
-	let s = Serde::deserialize(deserializer)?;
-
-	let s = match s {
-		Serde::File(f) => {
-			let f = std::fs::read(f).map_err(serde::de::Error::custom)?;
-			String::from_utf8(f).map_err(serde::de::Error::custom)?
-		},
-		Serde::Inline(s) => s,
-	};
-	// OpenAPI can be huge, so grow our stack
-	let schema: OpenAPI = stacker::grow(2 * 1024 * 1024, || {
-		yamlviajson::from_str(s.as_str()).map_err(serde::de::Error::custom)
-	})?;
-
-	Ok(Arc::new(schema))
 }
 
 #[derive(Debug, Clone, Default)]
@@ -1643,6 +1710,14 @@ pub struct TargetedPolicy {
 pub struct TracingConfig {
 	#[serde(flatten)]
 	pub provider_backend: SimpleBackendReference,
+	/// Policies to connect to the backend
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+	)]
+	pub policies: Vec<BackendPolicy>,
 	/// Span attributes to add, keyed by attribute name.
 	#[serde(default)]
 	pub attributes: OrderedStringMap<Arc<cel::Expression>>,
@@ -1694,8 +1769,8 @@ where
 #[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 pub enum TracingProtocol {
 	#[default]
-	Http,
 	Grpc,
+	Http,
 }
 
 /// TracingPolicy holds both the configuration and the compiled OpenTelemetry tracer
@@ -1725,13 +1800,43 @@ impl TracingPolicy {
 		policy_client: crate::proxy::httpproxy::PolicyClient,
 	) -> anyhow::Result<&Arc<crate::telemetry::trc::Tracer>> {
 		self.tracer.get_or_try_init(|| {
-			let tracer = crate::telemetry::trc::Tracer::create_tracer_from_config_with_client(
-				&self.config,
-				self.fields.clone(),
-				policy_client,
-			)?;
+			let tracer =
+				crate::telemetry::trc::Tracer::new(&self.config, self.fields.clone(), policy_client)?;
 			Ok(Arc::new(tracer))
 		})
+	}
+}
+
+#[derive(Clone, Debug)]
+pub struct AccessLogPolicy {
+	pub config: crate::types::frontend::OtlpLoggingConfig,
+	pub logger: once_cell::sync::OnceCell<Arc<crate::telemetry::log::OtelAccessLogger>>,
+}
+
+impl AccessLogPolicy {
+	pub fn get_or_init(
+		&self,
+		policy_client: crate::proxy::httpproxy::PolicyClient,
+	) -> anyhow::Result<&Arc<crate::telemetry::log::OtelAccessLogger>> {
+		self.logger.get_or_try_init(|| {
+			let logger = crate::telemetry::log::OtelAccessLogger::new(
+				policy_client,
+				self.config.provider_backend.clone(),
+				self.config.policies.clone(),
+				self.config.protocol,
+				self.config.path.clone(),
+			)?;
+			Ok(Arc::new(logger))
+		})
+	}
+}
+
+impl serde::Serialize for AccessLogPolicy {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		self.config.serialize(serializer)
 	}
 }
 
@@ -1917,6 +2022,8 @@ pub enum BackendPolicy {
 	#[serde(rename = "ai")]
 	AI(Arc<llm::Policy>),
 	SessionPersistence(http::sessionpersistence::Policy),
+	Transformation(crate::http::transformation_cel::Transformation),
+	Health(health::Policy),
 
 	RequestHeaderModifier(filters::HeaderModifier),
 	ResponseHeaderModifier(filters::HeaderModifier),
@@ -2019,6 +2126,8 @@ pub struct LocalMcpAuthentication {
 	pub jwks: FileInlineOrRemote,
 	#[serde(default)]
 	pub mode: McpAuthenticationMode,
+	#[serde(default)]
+	pub jwt_validation_options: http::jwt::JWTValidationOptions,
 }
 
 impl LocalMcpAuthentication {
@@ -2046,6 +2155,7 @@ impl LocalMcpAuthentication {
 			issuer: self.issuer.clone(),
 			audiences: Some(self.audiences.clone()),
 			jwks,
+			jwt_validation_options: self.jwt_validation_options.clone(),
 		})
 	}
 
@@ -2317,13 +2427,8 @@ InvalidKeyData
 
 		let result = parse_key(invalid_key);
 		assert!(result.is_err());
-		// Check for actual error message that rustls_pemfile returns
 		let error_msg = result.unwrap_err().to_string();
-		assert!(
-			error_msg.contains("failed to fill whole buffer")
-				|| error_msg.contains("no key")
-				|| error_msg.contains("unsupported key")
-		);
+		assert!(error_msg.contains("base64 decode error") || error_msg.contains("no key"));
 	}
 
 	#[test]
@@ -2369,6 +2474,12 @@ InvalidKeyData
 		// Ensure hostname:port still works
 		let target = Target::try_from("example.com:443").unwrap();
 		assert!(matches!(target, Target::Hostname(h, 443) if h.as_str() == "example.com"));
+	}
+
+	#[test]
+	fn test_target_deserializes_from_json_value() {
+		let target: Target = serde_json::from_value(serde_json::json!("127.0.0.1:8080")).unwrap();
+		assert!(matches!(target, Target::Address(addr) if addr.to_string() == "127.0.0.1:8080"));
 	}
 
 	#[test]
@@ -2473,5 +2584,104 @@ InvalidKeyData
 			.get_hostname(&HostnameMatchRef::Exact("old.example.com"))
 			.expect("route should be present");
 		assert_eq!(got.key, strng::new("tcp-2"));
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_default_jwt_validation_options() {
+		let yaml = r#"
+issuer: "https://example.com"
+audiences: ["aud1"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+"#;
+		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		assert_eq!(
+			auth.jwt_validation_options.required_claims,
+			std::collections::HashSet::from(["exp".to_owned()]),
+			"default required_claims should be [\"exp\"]"
+		);
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_jwt_validation_options_present_but_required_claims_missing() {
+		let yaml = r#"
+issuer: "https://example.com"
+audiences: ["aud1"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+jwtValidationOptions: {}
+"#;
+		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		assert_eq!(
+			auth.jwt_validation_options.required_claims,
+			std::collections::HashSet::from(["exp".to_owned()]),
+			"omitted requiredClaims should default to [\"exp\"]"
+		);
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_with_empty_required_claims() {
+		let yaml = r#"
+issuer: "https://enterprise-idp.example.com"
+audiences: ["enterprise-aud"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+jwtValidationOptions:
+  requiredClaims: []
+"#;
+		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		assert!(
+			auth.jwt_validation_options.required_claims.is_empty(),
+			"required_claims should be empty"
+		);
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_with_custom_required_claims() {
+		let yaml = r#"
+issuer: "https://enterprise-idp.example.com"
+audiences: ["enterprise-aud"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+jwtValidationOptions:
+  requiredClaims: ["exp", "nbf"]
+"#;
+		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		assert_eq!(
+			auth.jwt_validation_options.required_claims,
+			std::collections::HashSet::from(["exp".to_owned(), "nbf".to_owned()])
+		);
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_as_jwt_propagates_jwt_validation_options() {
+		let yaml = r#"
+issuer: "https://enterprise-idp.example.com"
+audiences: ["enterprise-aud"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+jwtValidationOptions:
+  requiredClaims: []
+"#;
+		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let jwt_config = auth.as_jwt().unwrap();
+
+		match jwt_config {
+			http::jwt::LocalJwtConfig::Single {
+				jwt_validation_options,
+				..
+			} => {
+				assert!(
+					jwt_validation_options.required_claims.is_empty(),
+					"jwt_validation_options should be propagated to LocalJwtConfig"
+				);
+			},
+			_ => panic!("Expected LocalJwtConfig::Single"),
+		}
 	}
 }

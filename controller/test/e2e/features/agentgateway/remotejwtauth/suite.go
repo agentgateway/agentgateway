@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
@@ -40,7 +41,6 @@ var (
 	setup = base.TestCase{
 		Manifests: []string{
 			getTestFile("common.yaml"),
-			getTestFile("service.yaml"),
 		},
 	}
 
@@ -238,7 +238,8 @@ func (s *testingSuite) TestGatewayPolicyWithRbac() {
 }
 
 func (s *testingSuite) assertResponse(hostHeader, authHeader string, expectedStatus int) {
-	common.BaseGateway.Send(
+	gw := s.gateway()
+	gw.Send(
 		s.T(),
 		&testmatchers.HttpResponse{
 			StatusCode: expectedStatus,
@@ -249,13 +250,25 @@ func (s *testingSuite) assertResponse(hostHeader, authHeader string, expectedSta
 }
 
 func (s *testingSuite) assertResponseWithoutAuth(hostHeader string, expectedStatus int) {
-	common.BaseGateway.Send(
+	gw := s.gateway()
+	gw.Send(
 		s.T(),
 		&testmatchers.HttpResponse{
 			StatusCode: expectedStatus,
 		},
 		curl.WithHostHeader(hostHeader),
 	)
+}
+
+func (s *testingSuite) gateway() common.Gateway {
+	name := types.NamespacedName{
+		Namespace: namespace,
+		Name:      "gateway",
+	}
+	return common.Gateway{
+		NamespacedName: name,
+		Address:        common.ResolveGatewayAddress(s.Ctx, s.TestInstallation, name),
+	}
 }
 
 func getTestFile(filename string) string {

@@ -194,13 +194,10 @@ func (s *testingSuite) mcpCurlOptions(headers map[string]string, body string, ex
 }
 
 func mcpCurlOptionsWithPort(port int, headers map[string]string, body string, extraArgs ...string) []curl.Option {
+	_ = port
 	timeoutSec := parseMaxTimeSeconds(extraArgs, 10)
-	if port == 8080 {
-		port = 80
-	}
 
 	opts := []curl.Option{
-		curl.WithPort(port),
 		curl.WithPath("/mcp"),
 		curl.WithMethod(http.MethodPost),
 		curl.WithConnectionTimeout(timeoutSec),
@@ -217,13 +214,11 @@ func mcpCurlOptionsWithPort(port int, headers map[string]string, body string, ex
 // helper to run a request to a given path and return response and body text.
 func (s *testingSuite) execCurl(path string, headers map[string]string, body string, extraArgs ...string) (*http.Response, string, error) {
 	timeoutSec := parseMaxTimeSeconds(extraArgs, 10)
-	opts := []curl.Option{
-		curl.WithHost(common.BaseGateway.Address),
-		curl.WithPort(80),
+	opts := append(common.GatewayAddressOptions(common.BaseGateway.ResolvedAddress()),
 		curl.WithPath(path),
 		curl.WithMethod(http.MethodPost),
 		curl.WithConnectionTimeout(timeoutSec),
-	}
+	)
 	for k, v := range headers {
 		opts = append(opts, curl.WithHeader(k, v))
 	}
@@ -431,7 +426,7 @@ func (s *testingSuite) waitForMCP200(
 ) {
 	_ = backoffs
 	opts := append(
-		[]curl.Option{curl.WithHost(common.BaseGateway.Address)},
+		common.GatewayAddressOptions(common.BaseGateway.ResolvedAddress()),
 		mcpCurlOptionsWithPort(port, headers, body, "--max-time", "10")...,
 	)
 	common.BaseGateway.Send(s.T(), &testmatchers.HttpResponse{StatusCode: httpOKCode}, opts...)

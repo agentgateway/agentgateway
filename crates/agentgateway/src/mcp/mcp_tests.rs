@@ -347,6 +347,174 @@ async fn authorization_denied_returns_unknown_resource_error() {
 	}
 }
 
+/// Test that a deny policy targeting a specific tool filters only that tool from list_tools,
+/// while leaving all other tools accessible.
+#[tokio::test]
+async fn authorization_deny_specific_tool_filters_only_that_tool() {
+	let mock = mock_streamable_http_server(true).await;
+
+	// Create a deny policy that only denies the "echo" tool
+	let deny_echo_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.tool.name == "echo""#).unwrap(),
+		)],
+	)));
+
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendPolicy::McpAuthorization(deny_echo_policy)],
+	)
+	.await;
+
+	let client = mcp_streamable_client(io).await;
+
+	// List tools - "echo" should be filtered out, all others should remain
+	let tools = client.list_tools(None).await.unwrap();
+	let tool_names: Vec<String> = tools
+		.tools
+		.into_iter()
+		.map(|t| t.name.to_string())
+		.sorted()
+		.collect();
+
+	// The mock server has: increment, decrement, get_value, say_hello, echo, sum, echo_http
+	// After denying "echo", we should have all except "echo"
+	assert!(
+		!tool_names.contains(&"echo".to_string()),
+		"echo should be denied but was found in tools: {:?}",
+		tool_names
+	);
+	assert!(
+		tool_names.contains(&"increment".to_string()),
+		"increment should be allowed but was not found in tools: {:?}",
+		tool_names
+	);
+	assert!(
+		tool_names.contains(&"decrement".to_string()),
+		"decrement should be allowed but was not found in tools: {:?}",
+		tool_names
+	);
+	assert!(
+		tool_names.len() >= 5,
+		"Expected at least 5 tools after denying 1, got {}: {:?}",
+		tool_names.len(),
+		tool_names
+	);
+}
+
+/// Test that a deny policy using request.headers correctly filters tools per-agent.
+/// This exercises the router.rs fix that registers authorization policies on the log's
+/// CEL context so the request snapshot includes headers needed by CEL expressions.
+#[tokio::test]
+async fn authorization_deny_with_request_header_filters_per_agent() {
+	use std::collections::HashMap;
+
+	use ::http::{HeaderName, HeaderValue};
+	use rmcp::ServiceExt;
+	use rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
+	use rmcp::transport::StreamableHttpClientTransport;
+	use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
+
+	let mock = mock_streamable_http_server(true).await;
+
+	// Deny "echo" only when request header x-agent-name == "agent-one"
+	let deny_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(
+				r#"mcp.tool.name == "echo" && request.headers["x-agent-name"] == "agent-one""#,
+			)
+			.unwrap(),
+		)],
+	)));
+
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendPolicy::McpAuthorization(deny_policy)],
+	)
+	.await;
+
+	// Helper to create a client with custom headers
+	let make_client = |addr: SocketAddr, agent_name: &'static str| async move {
+		let mut headers = HashMap::new();
+		headers.insert(
+			HeaderName::from_static("x-agent-name"),
+			HeaderValue::from_static(agent_name),
+		);
+		let config = StreamableHttpClientTransportConfig::with_uri(format!("http://{addr}/mcp"))
+			.custom_headers(headers);
+		let transport = StreamableHttpClientTransport::from_config(config);
+		let client_info = ClientInfo {
+			meta: None,
+			protocol_version: Default::default(),
+			capabilities: ClientCapabilities::default(),
+			client_info: Implementation {
+				name: format!("test-{agent_name}"),
+				version: "0.0.1".to_string(),
+				title: None,
+				website_url: None,
+				icons: None,
+				description: None,
+			},
+		};
+		client_info
+			.serve(transport)
+			.await
+			.expect("client should connect")
+	};
+
+	// Agent-one: "echo" should be denied
+	let client1 = make_client(io, "agent-one").await;
+	let tools1: Vec<String> = client1
+		.list_tools(None)
+		.await
+		.unwrap()
+		.tools
+		.into_iter()
+		.map(|t| t.name.to_string())
+		.sorted()
+		.collect();
+
+	assert!(
+		!tools1.contains(&"echo".to_string()),
+		"agent-one should NOT see 'echo' but tools were: {:?}",
+		tools1
+	);
+	assert!(
+		tools1.contains(&"increment".to_string()),
+		"agent-one should still see 'increment' but tools were: {:?}",
+		tools1
+	);
+
+	// Agent-two: "echo" should be allowed (header doesn't match deny rule)
+	let client2 = make_client(io, "agent-two").await;
+	let tools2: Vec<String> = client2
+		.list_tools(None)
+		.await
+		.unwrap()
+		.tools
+		.into_iter()
+		.map(|t| t.name.to_string())
+		.sorted()
+		.collect();
+
+	assert!(
+		tools2.contains(&"echo".to_string()),
+		"agent-two SHOULD see 'echo' but tools were: {:?}",
+		tools2
+	);
+	assert!(
+		tools2.contains(&"increment".to_string()),
+		"agent-two should still see 'increment' but tools were: {:?}",
+		tools2
+	);
+}
+
 async fn standard_assertions(client: RunningService<RoleClient, InitializeRequestParams>) {
 	let tools = client.list_tools(None).await.unwrap();
 	let t = tools

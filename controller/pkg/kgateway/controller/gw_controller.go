@@ -14,6 +14,7 @@ import (
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/kclient"
+	"istio.io/istio/pkg/kube/krt"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -35,6 +36,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
@@ -57,6 +59,7 @@ type gatewayReconciler struct {
 	deploymentClient kclient.Client[*appsv1.Deployment]
 	svcAccountClient kclient.Client[*corev1.ServiceAccount]
 	configMapClient  kclient.Client[*corev1.ConfigMap]
+	secretClient     kclient.Client[*corev1.Secret]
 
 	controllerExtension pluginsdk.GatewayControllerExtension
 
@@ -84,6 +87,7 @@ func NewGatewayReconciler(
 		deploymentClient: kclient.NewFiltered[*appsv1.Deployment](cfg.Client, filter),
 		svcAccountClient: kclient.NewFiltered[*corev1.ServiceAccount](cfg.Client, filter),
 		configMapClient:  kclient.NewFiltered[*corev1.ConfigMap](cfg.Client, filter),
+		secretClient:     kclient.NewFiltered[*corev1.Secret](cfg.Client, filter),
 	}
 
 	// Reuse the parameter clients from the deployer to avoid duplicate watches
@@ -197,6 +201,22 @@ func NewGatewayReconciler(
 	r.svcAccountClient.AddEventHandler(parentHandler)
 	r.svcClient.AddEventHandler(parentHandler)
 	r.configMapClient.AddEventHandler(parentHandler)
+	r.secretClient.AddEventHandler(parentHandler)
+
+	// add handler to reconcile the parent Gateway when the GatewayForDeployer changes
+	// this is necessary for two reasons:
+	// 1. we don't Fetch() the GatewayForDeployer, so we must reconcile to prevent a stale reference
+	// 2. if a ListenerSet adds a port to a GatewayForDeployer, we need to deploy the new ports
+	cfg.CommonCollections.GatewaysForDeployer.Register(func(o krt.Event[collections.GatewayForDeployer]) {
+		gw := o.Latest()
+		ref := types.NamespacedName{Namespace: gw.Namespace, Name: gw.Name}
+		logger.Debug("explicitly reconciling Gateway for deployer due to GatewayForDeployer change", "ref", ref)
+		r.queue.Add(ref)
+	})
+
+	if controllerExtension != nil {
+		controllerExtension.Register(r.queue, agwParamEventHandler)
+	}
 
 	// Add a handler to reconcile the Gateways when the xDS TLS certificate changes
 	r.setupTLSCertificateWatch(cfg.CertWatcher)
@@ -220,6 +240,7 @@ func (r *gatewayReconciler) Start(ctx context.Context) error {
 		r.svcAccountClient.HasSynced,
 		r.svcClient.HasSynced,
 		r.configMapClient.HasSynced,
+		r.secretClient.HasSynced,
 	}
 	// Add GatewayParameters cache sync handlers (includes both gwParamClient and agwParamClient)
 	hasSynced = append(hasSynced, r.gwParams.GetCacheSyncHandlers()...)
@@ -240,6 +261,7 @@ func (r *gatewayReconciler) Start(ctx context.Context) error {
 		r.svcAccountClient,
 		r.svcClient,
 		r.configMapClient,
+		r.secretClient,
 	}
 	if r.agwParamClient != nil {
 		clients = append(clients, r.agwParamClient)

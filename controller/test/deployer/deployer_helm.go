@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 	"sigs.k8s.io/yaml"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -25,6 +24,8 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/envutils"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
+
+const testSessionKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 
 type HelmTestCase struct {
 	Name   string
@@ -126,7 +127,7 @@ func ExtractCommonObjs(t *testing.T, objs []client.Object) ([]client.Object, *gw
 			commonObjs = append(commonObjs, gtw)
 		case *gwv1.GatewayClass:
 			commonObjs = append(commonObjs, obj)
-		case *gwxv1a1.XListenerSet:
+		case *gwv1.ListenerSet:
 			commonObjs = append(commonObjs, obj)
 		}
 	}
@@ -180,6 +181,9 @@ func (dt DeployerTester) RunHelmChartTest(
 		fakeClient,
 		inputs,
 	)
+	gwParams.WithSessionKeyGenerator(func() (string, error) {
+		return testSessionKey, nil
+	})
 	if tt.HelmValuesGeneratorOverride != nil {
 		gwParams.WithHelmValuesGeneratorOverride(tt.HelmValuesGeneratorOverride(inputs))
 	}

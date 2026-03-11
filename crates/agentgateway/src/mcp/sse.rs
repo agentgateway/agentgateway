@@ -10,7 +10,7 @@ use rmcp::model::{ClientJsonRpcMessage, ClientRequest};
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::http::{DropBody, Request, Response, filters};
-use crate::mcp::handler::Relay;
+use crate::mcp::handler::RelayInputs;
 use crate::mcp::session;
 use crate::mcp::session::SessionManager;
 use crate::proxy::ProxyError;
@@ -18,7 +18,6 @@ use crate::*;
 
 pub struct LegacySSEService {
 	session_manager: Arc<SessionManager>,
-	service_factory: Arc<dyn Fn() -> Result<Relay, http::Error> + Send + Sync>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -28,27 +27,29 @@ pub struct PostEventQuery {
 }
 
 impl LegacySSEService {
-	pub fn new(
-		service_factory: impl Fn() -> Result<Relay, http::Error> + Send + Sync + 'static,
-		session_manager: Arc<SessionManager>,
-	) -> Self {
-		Self {
-			session_manager,
-			service_factory: Arc::new(service_factory),
-		}
+	pub fn new(session_manager: Arc<SessionManager>) -> Self {
+		Self { session_manager }
 	}
 
-	pub async fn handle(&self, request: Request) -> Result<Response, ProxyError> {
+	pub async fn handle(
+		&self,
+		request: Request,
+		inputs: RelayInputs,
+	) -> Result<Response, ProxyError> {
 		let method = request.method().clone();
 
 		match method {
-			http::Method::POST => self.handle_post(request).await,
-			http::Method::GET => self.handle_get(request).await,
+			http::Method::POST => self.handle_post(request, inputs).await,
+			http::Method::GET => self.handle_get(request, inputs).await,
 			_ => Err(ProxyError::MCP(mcp::Error::MethodNotAllowed)),
 		}
 	}
 
-	pub async fn handle_post(&self, request: Request) -> Result<Response, ProxyError> {
+	pub async fn handle_post(
+		&self,
+		request: Request,
+		inputs: RelayInputs,
+	) -> Result<Response, ProxyError> {
 		// Extract query parameters
 		let Ok(Query(PostEventQuery { session_id })) =
 			Query::<PostEventQuery>::try_from_uri(request.uri())
@@ -61,7 +62,7 @@ impl LegacySSEService {
 			.await
 			.map_err(mcp::Error::Deserialize)?;
 
-		let Some(mut session) = self.session_manager.get_session(&session_id) else {
+		let Some(mut session) = self.session_manager.get_session(&session_id, inputs) else {
 			return mcp::Error::UnknownSession.into();
 		};
 
@@ -84,8 +85,12 @@ impl LegacySSEService {
 		Ok(accepted_response())
 	}
 
-	pub async fn handle_get(&self, request: Request) -> Result<Response, ProxyError> {
-		let relay = (self.service_factory)().map_err(mcp::Error::StartSession)?;
+	pub async fn handle_get(
+		&self,
+		request: Request,
+		inputs: RelayInputs,
+	) -> Result<Response, ProxyError> {
+		let relay = inputs.build_new_connections()?;
 
 		// GET requests establish an SSE stream.
 		// We will return the sessionId, and all future responses will get sent on the rx channel to send to this channel.

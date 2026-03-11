@@ -143,14 +143,14 @@ impl ClientCore {
 	}
 }
 impl Client {
-	pub fn new(http_client: super::McpHttpClient, path: Strng) -> anyhow::Result<Self> {
+	pub fn new(http_client: super::McpHttpClient, path: Strng) -> Self {
 		let hp = http_client.backend().hostport();
 		let uri = format!("http://{}{}", hp, path);
 		let uri = uri.parse().expect("invalid URI");
-		Ok(Self {
+		Self {
 			client: ClientCore { http_client, uri },
 			active_stream: Default::default(),
-		})
+		}
 	}
 	pub async fn stop(&self) -> Result<(), UpstreamError> {
 		let mut stream = self.active_stream.lock().await;

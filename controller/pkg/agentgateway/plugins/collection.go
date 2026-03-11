@@ -13,7 +13,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
-	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
@@ -49,10 +48,10 @@ type AgwCollections struct {
 	HTTPRoutes         krt.Collection[*gwv1.HTTPRoute]
 	GRPCRoutes         krt.Collection[*gwv1.GRPCRoute]
 	TCPRoutes          krt.Collection[*gwv1a2.TCPRoute]
-	TLSRoutes          krt.Collection[*gwv1a2.TLSRoute]
+	TLSRoutes          krt.Collection[*gwv1.TLSRoute]
 	ReferenceGrants    krt.Collection[*gwv1b1.ReferenceGrant]
 	BackendTLSPolicies krt.Collection[*gwv1.BackendTLSPolicy]
-	XListenerSets      krt.Collection[*gwxv1a1.XListenerSet]
+	ListenerSets       krt.Collection[*gwv1.ListenerSet]
 
 	// Extended resources
 	InferencePools krt.Collection[*inf.InferencePool]
@@ -63,10 +62,12 @@ type AgwCollections struct {
 
 	// ControllerName is the name of the Gateway controller.
 	ControllerName string
-	// SystemNamespace is control plane system namespace (default is kgateway-system)
+	// SystemNamespace is control plane system namespace (default is agentgateway-system)
 	SystemNamespace string
 	// IstioNamespace is the Istio control plane namespace (default is istio-system)
 	IstioNamespace string
+	// IstioRevision is the Istio revision of the Istio control plane (default is "default").
+	IstioRevision string
 	// ClusterID is the cluster ID of the cluster the proxy is running in.
 	ClusterID string
 }
@@ -86,10 +87,11 @@ func NewAgwCollections(
 		ControllerName:  agwControllerName,
 		SystemNamespace: systemNamespace,
 		IstioNamespace:  commoncol.Settings.IstioNamespace,
+		IstioRevision:   commoncol.Settings.IstioRevision,
 		ClusterID:       clusterID,
 
 		// Core Kubernetes resources
-		Namespaces: krt.NewInformer[*corev1.Namespace](commoncol.Client),
+		Namespaces: krt.NewInformer[*corev1.Namespace](commoncol.Client, commoncol.KrtOpts.ToOptions("informer/Namespaces")...),
 		Nodes: krt.NewFilteredInformer[*corev1.Node](commoncol.Client, kclient.Filter{
 			ObjectFilter: commoncol.Client.ObjectFilter(),
 		}, commoncol.KrtOpts.ToOptions("informer/Nodes")...),
@@ -129,13 +131,13 @@ func NewAgwCollections(
 		Gateways:           krt.WrapClient(kclient.NewFilteredDelayed[*gwv1.Gateway](commoncol.Client, wellknown.GatewayGVR, kubetypes.Filter{ObjectFilter: commoncol.Client.ObjectFilter()}), commoncol.KrtOpts.ToOptions("informer/Gateways")...),
 		HTTPRoutes:         krt.WrapClient(kclient.NewFilteredDelayed[*gwv1.HTTPRoute](commoncol.Client, wellknown.HTTPRouteGVR, kubetypes.Filter{ObjectFilter: commoncol.Client.ObjectFilter()}), commoncol.KrtOpts.ToOptions("informer/HTTPRoutes")...),
 		GRPCRoutes:         krt.WrapClient(kclient.NewFilteredDelayed[*gwv1.GRPCRoute](commoncol.Client, wellknown.GRPCRouteGVR, kubetypes.Filter{ObjectFilter: commoncol.Client.ObjectFilter()}), commoncol.KrtOpts.ToOptions("informer/GRPCRoutes")...),
+		TLSRoutes:          krt.WrapClient(kclient.NewDelayedInformer[*gwv1.TLSRoute](commoncol.Client, gvr.TLSRoute, kubetypes.StandardInformer, kubetypes.Filter{ObjectFilter: commoncol.Client.ObjectFilter()}), commoncol.KrtOpts.ToOptions("informer/TLSRoutes")...),
 		BackendTLSPolicies: krt.WrapClient(kclient.NewDelayedInformer[*gwv1.BackendTLSPolicy](commoncol.Client, gvr.BackendTLSPolicy, kubetypes.StandardInformer, kubetypes.Filter{ObjectFilter: commoncol.Client.ObjectFilter()}), commoncol.KrtOpts.ToOptions("informer/BackendTLSPolicies")...),
+		ListenerSets:       krt.WrapClient(kclient.NewDelayedInformer[*gwv1.ListenerSet](commoncol.Client, gvr.ListenerSet, kubetypes.StandardInformer, kubetypes.Filter{ObjectFilter: commoncol.Client.ObjectFilter()}), commoncol.KrtOpts.ToOptions("informer/ListenerSets")...),
 
 		// Gateway API alpha
 		TCPRoutes:       krt.WrapClient(kclient.NewDelayedInformer[*gwv1a2.TCPRoute](commoncol.Client, gvr.TCPRoute, kubetypes.StandardInformer, kubetypes.Filter{ObjectFilter: commoncol.Client.ObjectFilter()}), commoncol.KrtOpts.ToOptions("informer/TCPRoutes")...),
-		TLSRoutes:       krt.WrapClient(kclient.NewDelayedInformer[*gwv1a2.TLSRoute](commoncol.Client, gvr.TLSRoute, kubetypes.StandardInformer, kubetypes.Filter{ObjectFilter: commoncol.Client.ObjectFilter()}), commoncol.KrtOpts.ToOptions("informer/TLSRoutes")...),
 		ReferenceGrants: krt.WrapClient(kclient.NewFilteredDelayed[*gwv1b1.ReferenceGrant](commoncol.Client, wellknown.ReferenceGrantGVR, kubetypes.Filter{ObjectFilter: commoncol.Client.ObjectFilter()}), commoncol.KrtOpts.ToOptions("informer/ReferenceGrants")...),
-		XListenerSets:   krt.WrapClient(kclient.NewDelayedInformer[*gwxv1a1.XListenerSet](commoncol.Client, gvr.XListenerSet, kubetypes.StandardInformer, kubetypes.Filter{ObjectFilter: commoncol.Client.ObjectFilter()}), commoncol.KrtOpts.ToOptions("informer/XListenerSets")...),
 		// BackendTrafficPolicy?
 
 		// inference extensions need to be enabled so control plane has permissions to watch resource. Disable by default

@@ -191,8 +191,8 @@ FAIL_FAST_AND_PERSIST=true go test -failfast -tags=e2e ./test/e2e/tests -run ^Te
 FAIL_FAST_AND_PERSIST=true go test -failfast -tags=e2e ./test/e2e/tests -run ^TestKgateway$
 
 # Inspect the failure state
-kubectl get pods -n kgateway-system
-kubectl logs -n kgateway-system deployment/kgateway
+kubectl get pods -n agentgateway-system
+kubectl logs -n agentgateway-system deployment/kgateway
 
 # Fix the issue and re-run - reuses installation, cleans up on success
 FAIL_FAST_AND_PERSIST=true go test -failfast -tags=e2e ./test/e2e/tests -run ^TestKgateway$

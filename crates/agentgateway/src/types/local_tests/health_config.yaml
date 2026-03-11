@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=../../schema/local.json
+# Route with eviction policy: CEL unhealthy expression and eviction duration.
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              cmd: npx
+              args: ["@modelcontextprotocol/server-everything"]
+        policies:
+          health:
+            unhealthyExpression: "response.code >= 500 || response.code == 429"
+            eviction:
+              duration: 30s

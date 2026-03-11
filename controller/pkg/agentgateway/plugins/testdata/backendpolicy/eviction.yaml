@@ -1,0 +1,66 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+    - kind: AgentgatewayBackend
+      name: be
+      group: agentgateway.dev
+  backend:
+    health:
+      unhealthyCondition: "response.code >= 500"
+      eviction:
+         duration: 60s
+         restoreHealth: 100
+         consecutiveFailures: 3
+         healthThreshold: 50
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook
+  namespace: default
+spec:
+  ports:
+    - port: 80
+---
+# Output
+output:
+- resource:
+    policy:
+      backend:
+        health:
+          eviction:
+            consecutiveFailures: 3
+            duration: 60s
+            healthThreshold: 0.5
+            restoreHealth: 1
+          unhealthyCondition: response.code >= 500
+      key: default/agw:health:default/be
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        backend:
+          name: be
+          namespace: default
+status:
+  ancestors:
+  - ancestorRef:
+      group: agentgateway.dev
+      name: StatusSummary
+    conditions:
+    - lastTransitionTime: fake
+      message: Policy accepted
+      reason: Valid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: 'Policy is not attached: AgentgatewayBackend default/be not found'
+      reason: Pending
+      status: "False"
+      type: Attached
+    controllerName: agentgateway.dev/agentgateway

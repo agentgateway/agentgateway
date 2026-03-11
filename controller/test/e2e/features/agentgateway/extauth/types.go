@@ -11,7 +11,6 @@ import (
 var (
 	// Manifest files
 	simpleServiceManifest          = getTestFile("service.yaml")
-	extAuthManifest                = getTestFile("ext-authz-server.yaml")
 	securedGatewayPolicyManifest   = getTestFile("secured-gateway-policy.yaml")
 	securedRouteManifest           = getTestFile("secured-route.yaml")
 	insecureRouteManifest          = getTestFile("insecure-route.yaml")

@@ -9,6 +9,7 @@ mod streamablehttp;
 mod upstream;
 
 use std::fmt::{Display, Write};
+use std::io;
 use std::sync::Arc;
 
 use crate::http::SendDirectResponse;
@@ -44,6 +45,8 @@ pub enum Error {
 	SessionIdRequired,
 	#[error("invalid session ID header")]
 	InvalidSessionIdHeader,
+	#[error("failed to start stdio server: {0}")]
+	Stdio(io::Error),
 	#[error("upstream error: {}", .0.status())]
 	UpstreamError(Box<SendDirectResponse>),
 	#[error("send error: {}", .1)]
@@ -59,6 +62,8 @@ pub enum Error {
 	ForwardLegacySse(String),
 	#[error("failed to create SSE url: {0}")]
 	CreateSseUrl(String),
+	#[error("failed to parse openapi: {0}")]
+	OpenAPI(upstream::OpenAPIParseError),
 }
 
 impl From<Error> for ProxyError {

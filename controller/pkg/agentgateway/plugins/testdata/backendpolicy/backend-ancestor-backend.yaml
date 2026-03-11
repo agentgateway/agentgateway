@@ -25,18 +25,19 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    backend:
-      backendTls: {}
-    key: default/agw:tls:default/be
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
+- resource:
+    policy:
       backend:
-        name: be
+        backendTls: {}
+      key: default/agw:tls:default/be
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
+      target:
+        backend:
+          name: be
+          namespace: default
 status:
   ancestors:
   - ancestorRef:

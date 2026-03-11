@@ -1,0 +1,43 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+description: "Config normalization test for aws: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/3000
+    address: "[::]:3000"
+    protocol: http
+    tunnelProtocol: direct
+    listeners:
+      ns/name/bind/3000/listener0:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: ""
+        key: ns/name/bind/3000/listener0
+        listenerName: listener0
+        protocol: HTTP
+        routes:
+          ns/name/bind/3000/listener0/default/route0:
+            backends:
+              - backend: /ns/name/bind/3000/listener0/default/route0/backend0
+                weight: 1
+            key: ns/name/bind/3000/listener0/default/route0
+            matches:
+              - path:
+                  pathPrefix: /
+            name: route0
+            namespace: default
+        tcpRoutes: {}
+policies: []
+backends:
+  - backend:
+      aws:
+        name: ns/name/bind/3000/listener0/default/route0/backend0
+        namespace: ""
+        target:
+          agentCore:
+            agentRuntimeArn: "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123"
+            qualifier: ~
+            region: us-east-1
+            accountId: "123456789012"
+workloads: []
+services: []

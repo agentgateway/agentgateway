@@ -230,11 +230,7 @@ func (s *testingSuite) runDynamicRoutingCase(clientName string, routeHeaders map
 func (s *testingSuite) waitDynamicReady() {
 	s.TestInstallation.AssertionsT(s.T()).EventuallyPodsRunning(
 		s.Ctx, "default",
-		metav1.ListOptions{LabelSelector: "app=mcp-admin-server"},
-	)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyPodsRunning(
-		s.Ctx, "default",
-		metav1.ListOptions{LabelSelector: "app=mcp-website-fetcher"},
+		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=testbox"},
 	)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(s.Ctx, gatewayName, gatewayNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyAgwBackendCondition(s.Ctx, "admin-mcp-backend", "default", "Accepted", metav1.ConditionTrue)
@@ -248,7 +244,7 @@ func (s *testingSuite) waitDynamicReady() {
 func (s *testingSuite) waitStaticReady() {
 	s.TestInstallation.AssertionsT(s.T()).EventuallyPodsRunning(
 		s.Ctx, "default",
-		metav1.ListOptions{LabelSelector: "app=mcp-website-fetcher"},
+		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=testbox"},
 	)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(s.Ctx, gatewayName, gatewayNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyAgwBackendCondition(s.Ctx, "mcp-backend", "default", "Accepted", metav1.ConditionTrue)
@@ -258,6 +254,6 @@ func (s *testingSuite) waitStaticReady() {
 func (s *testingSuite) waitAuth0Ready() {
 	s.TestInstallation.AssertionsT(s.T()).EventuallyPodsRunning(
 		s.Ctx, "default",
-		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=auth0-mock"},
+		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=testbox"},
 	)
 }

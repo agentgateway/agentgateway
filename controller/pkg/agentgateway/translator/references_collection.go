@@ -55,6 +55,8 @@ func ReferenceGrantsCollection(referenceGrants krt.Collection[*gwv1b1.ReferenceG
 				fromKey.Kind = wellknown.TLSRouteGVK
 			} else if string(from.Group) == wellknown.TCPRouteGVK.Group && string(from.Kind) == wellknown.TCPRouteKind {
 				fromKey.Kind = wellknown.TCPRouteGVK
+			} else if string(from.Group) == wellknown.ListenerSetGVK.Group && string(from.Kind) == wellknown.ListenerSetKind {
+				fromKey.Kind = wellknown.ListenerSetGVK
 			} else {
 				// Not supported type. Not an error; may be for another controller
 				continue
@@ -114,7 +116,11 @@ type ReferenceGrant struct {
 }
 
 func (g ReferenceGrant) ResourceName() string {
-	return g.Source.String() + "/" + g.From.String() + "/" + g.To.String()
+	nameKey := "*"
+	if !g.AllowAll {
+		nameKey = g.AllowedName
+	}
+	return g.Source.String() + "/" + g.From.String() + "/" + g.To.String() + "/" + nameKey
 }
 
 // SecretAllowed checks if a secret is allowed to be used by a gateway

@@ -1,6 +1,8 @@
+.cursor
 /target
 .vscode
 .idea
+.run
 .DS_Store
 .venv
 *.local

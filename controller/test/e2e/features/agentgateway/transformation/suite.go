@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/stretchr/testify/suite"
@@ -244,7 +245,11 @@ func sendH2CGrpcRequest(address, authority, methodPath string, protobufPayload [
 	binary.BigEndian.PutUint32(grpcFrame[1:5], uint32(len(protobufPayload)))
 	copy(grpcFrame[5:], protobufPayload)
 
-	url := fmt.Sprintf("http://%s:80%s", address, methodPath)
+	targetAddress := address
+	if !strings.Contains(address, ":") {
+		targetAddress = fmt.Sprintf("%s:80", address)
+	}
+	url := fmt.Sprintf("http://%s%s", targetAddress, methodPath)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(grpcFrame))
 	if err != nil {
 		return nil, nil, err

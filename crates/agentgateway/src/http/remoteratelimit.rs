@@ -9,7 +9,7 @@ use crate::http::remoteratelimit::proto::{RateLimitDescriptor, RateLimitRequest}
 use crate::http::{HeaderName, HeaderValue, PolicyResponse, Request};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::SimpleBackendReference;
+use crate::types::agent::{BackendPolicy, SimpleBackendReference};
 use crate::*;
 
 #[cfg(test)]
@@ -22,20 +22,47 @@ pub mod proto {
 	tonic::include_proto!("envoy.service.ratelimit.v3");
 }
 
+/// Defines how the proxy behaves when the remote rate limit service is
+/// unavailable or returns an error.
+///
+/// Defaults to `FailClosed`. When failing closed, a 500 Internal Server Error
+/// is returned when the service is unavailable. When failing open, requests are
+/// allowed through despite the service failure.
+///
+/// # Configuration
+///
+/// Both camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`,
+/// `FailClosed`) are accepted in configuration files
+#[apply(schema!)]
+#[derive(Default, Copy, PartialEq, Eq)]
+pub enum FailureMode {
+	/// Deny the request with a 500 status when the rate limit service is unavailable (default).
+	#[default]
+	#[serde(rename = "failClosed", alias = "FailClosed")]
+	FailClosed,
+	/// Allow the request through when the rate limit service is unavailable.
+	#[serde(rename = "failOpen", alias = "FailOpen")]
+	FailOpen,
+}
+
 #[apply(schema!)]
 pub struct RemoteRateLimit {
 	pub domain: String,
 	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
-	pub descriptors: Arc<DescriptorSet>,
-	/// Timeout for the request
-	#[serde(
-		default,
-		skip_serializing_if = "Option::is_none",
-		with = "serde_dur_option"
+	/// Policies to connect to the backend
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
-	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
-	pub timeout: Option<Duration>,
+	pub policies: Vec<BackendPolicy>,
+	pub descriptors: Arc<DescriptorSet>,
+	/// Behavior when the remote rate limit service is unavailable or returns an error.
+	/// Defaults to failClosed, denying requests with a 500 status on service failure.
+	#[serde(default)]
+	pub failure_mode: FailureMode,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -134,6 +161,14 @@ impl RemoteRateLimit {
 			.filter(|e| e.limit_type == limit_type)
 		{
 			if let Some(rl_entries) = Self::eval_descriptor(req, &desc_entry.entries) {
+				// Rate limit servers require each descriptor to have at least one entry.
+				if rl_entries.is_empty() {
+					trace!(
+						"ratelimit skipping descriptor with no entries for domain={}, type={:?}",
+						self.domain, limit_type,
+					);
+					continue;
+				}
 				// Trace evaluated descriptor key/value pairs for visibility
 				let kv_pairs: Vec<String> = rl_entries
 					.iter()
@@ -216,7 +251,16 @@ impl RemoteRateLimit {
 			request,
 		};
 
-		cr.and_then(|pr| Self::apply(req, pr).map(|x| (x, Some(r))))
+		match cr {
+			Ok(resp) => Self::apply(req, resp).map(|x| (x, Some(r))),
+			Err(e) => {
+				if self.failure_mode == FailureMode::FailOpen {
+					Ok((PolicyResponse::default(), Some(r)))
+				} else {
+					Err(e)
+				}
+			},
+		}
 	}
 
 	pub async fn check(
@@ -241,8 +285,16 @@ impl RemoteRateLimit {
 		let Some(request) = self.build_request(req, RateLimitType::Requests, None) else {
 			return Ok(PolicyResponse::default());
 		};
-		let cr = self.check_internal(client, request).await?;
-		Self::apply(req, cr)
+		match self.check_internal(client, request).await {
+			Ok(cr) => Self::apply(req, cr),
+			Err(e) => {
+				if self.failure_mode == FailureMode::FailOpen {
+					Ok(PolicyResponse::default())
+				} else {
+					Err(e)
+				}
+			},
+		}
 	}
 
 	async fn check_internal(
@@ -271,14 +323,24 @@ impl RemoteRateLimit {
 		);
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
+			policies: Arc::new(self.policies.clone()),
 			client,
-			timeout: self.timeout,
 		};
 		let mut client = RateLimitServiceClient::new(chan);
 		let resp = client.should_rate_limit(request).await;
 		trace!("check response: {:?}", resp);
 		if let Err(ref error) = resp {
-			warn!("rate limit request failed: {:?}", error);
+			let ignore = self.failure_mode == FailureMode::FailOpen;
+			warn!(
+				"ratelimit service failed (domain: {}): {:?}; {}",
+				self.domain,
+				error,
+				if ignore {
+					"failure will be ignored (failure_mode: failOpen)"
+				} else {
+					"denying request (failure_mode: failClosed)"
+				}
+			);
 		}
 		let cr = resp.map_err(|_| ProxyError::RateLimitFailed)?;
 
@@ -317,7 +379,7 @@ impl RemoteRateLimit {
 			// We drop the entire set if we cannot eval one; emit trace to aid debugging
 			match exec.eval(lookup) {
 				Ok(value) => {
-					let Some(string_value) = cel::value_as_string(&value) else {
+					let Ok(string_value) = value.as_string() else {
 						trace!(
 							"ratelimit descriptor value not convertible to string: key={}, expr={:?}",
 							k, lookup

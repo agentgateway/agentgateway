@@ -1,0 +1,59 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: mcp-static-sse
+spec:
+  mcp:
+    targets:
+    - name: sse-target
+      static:
+        host: mcp-server.example.com
+        port: 8080
+        path: /custom-sse
+        protocol: SSE
+---
+# Output
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: default/mcp-static-sse
+      mcp:
+        targets:
+        - backend:
+            backend: default/mcp-static-sse/sse-target
+          name: sse-target
+          path: /custom-sse
+          protocol: SSE
+      name:
+        name: mcp-static-sse
+        namespace: default
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: default/mcp-static-sse/sse-target
+      name:
+        name: mcp-static-sse
+        namespace: default
+      static:
+        host: mcp-server.example.com
+        port: 8080
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: mcp-static-sse
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

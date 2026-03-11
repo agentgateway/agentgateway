@@ -20,7 +20,9 @@ use crate::store::Stores;
 use crate::types::discovery::Identity;
 
 pub mod a2a;
+pub mod agentcore;
 pub mod app;
+pub mod aws;
 pub mod cel;
 pub mod client;
 pub mod config;
@@ -198,7 +200,8 @@ pub struct RawHBONE {
 
 #[apply(schema_de!)]
 pub struct RawSession {
-	/// The signing key to be used. If not set, sessions will not be encrypted.
+	/// The AES-256-GCM session protection key to be used for session tokens.
+	/// If not set, sessions will not be encrypted.
 	/// For example, generated via `openssl rand -hex 32`.
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(serialize_with = "ser_redact", deserialize_with = "deser_key")]
@@ -382,13 +385,16 @@ pub struct Config {
 	pub stats_addr: Address,
 	pub readiness_addr: Address,
 	// For waypoint identification
-	pub self_addr: Option<Strng>,
+	pub self_addr: Option<types::discovery::WaypointIdentity>,
 	pub hbone: Arc<agent_hbone::Config>,
 	/// XDS address to use. If unset, XDS will not be used.
 	pub xds: XDSConfig,
 	pub ca: Option<caclient::Config>,
-	pub tracing: trc::Config,
+
+	pub tracing: Option<trc::DeprecatedConfig>,
+	pub metrics: crate::telemetry::log::MetricsConfig,
 	pub logging: crate::telemetry::log::Config,
+
 	pub dns: client::Config,
 	pub proxy_metadata: ProxyMetadata,
 	pub threading_mode: ThreadingMode,
@@ -480,7 +486,6 @@ pub struct ProxyInputs {
 	upstream: client::Client,
 
 	metrics: Arc<metrics::Metrics>,
-	tracer: Option<std::sync::Arc<trc::Tracer>>,
 
 	mcp_state: mcp::App,
 	ca: Option<Arc<CaClient>>,

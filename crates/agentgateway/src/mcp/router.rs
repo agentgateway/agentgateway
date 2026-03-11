@@ -4,12 +4,11 @@ use agent_core::prelude::Strng;
 use axum::response::Response;
 
 use crate::ProxyInputs;
-use crate::cel::ContextBuilder;
 use crate::http::authorization::RuleSets;
 use crate::http::sessionpersistence::Encoder;
 use crate::http::*;
 use crate::mcp::auth;
-use crate::mcp::handler::Relay;
+use crate::mcp::handler::RelayInputs;
 use crate::mcp::session::SessionManager;
 use crate::mcp::sse::LegacySSEService;
 use crate::mcp::streamablehttp::{StreamableHttpServerConfig, StreamableHttpService};
@@ -113,10 +112,11 @@ impl App {
 		let logy = log.mcp_status.clone();
 		logy.store(Some(MCPInfo::default()));
 		req.extensions_mut().insert(logy);
+		let tracer = log.span_writer();
+		req.extensions_mut().insert(tracer);
 
-		let mut ctx = ContextBuilder::new();
-		authorization_policies.register(&mut ctx);
-		ctx.maybe_buffer_request_body(&mut req).await;
+		authorization_policies.register(log.cel.ctx());
+		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
 		// `response` is not valid here, since we run authz first
 		// MCP context is added later. The context is inserted after
@@ -137,35 +137,32 @@ impl App {
 		if req.uri().path() == "/sse" {
 			// Legacy handling
 			// Assume this is streamable HTTP otherwise
-			let sse = LegacySSEService::new(
-				move || {
-					Relay::new(
-						backends.clone(),
-						authorization_policies.clone(),
-						client.clone(),
-					)
-					.map_err(|e| Error::new(e.to_string()))
+			let sse = LegacySSEService::new(sm);
+			Box::pin(sse.handle(
+				req,
+				RelayInputs {
+					backend: backends.clone(),
+					policies: authorization_policies.clone(),
+					client: client.clone(),
 				},
-				sm,
-			);
-
-			Box::pin(sse.handle(req)).await
+			))
+			.await
 		} else {
 			let streamable = StreamableHttpService::new(
-				move || {
-					Relay::new(
-						backends.clone(),
-						authorization_policies.clone(),
-						client.clone(),
-					)
-					.map_err(|e| Error::new(e.to_string()))
-				},
 				sm,
 				StreamableHttpServerConfig {
 					stateful_mode: backend.stateful,
 				},
 			);
-			streamable.handle(req).await
+			Box::pin(streamable.handle(
+				req,
+				RelayInputs {
+					backend: backends.clone(),
+					policies: authorization_policies.clone(),
+					client: client.clone(),
+				},
+			))
+			.await
 		}
 	}
 }

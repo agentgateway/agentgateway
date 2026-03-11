@@ -2,9 +2,11 @@ name: Branch
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - "main"
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - "main"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
@@ -14,14 +16,20 @@ env:
   CARGO_TERM_COLOR: always
   CI: true
   RUST_VERSION: "1.93.1"
-  GO_VERSION: "1.25.7"
+  GO_VERSION: "1.26.1"
 
 jobs:
   #### Proxy jobs ####
-  test:
+  proxy-test:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+        - os: ubuntu-24.04
+          validate: true
+        - os: windows-2025
+          validate: false
+        - os: macos-15
+          validate: false
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6
@@ -31,7 +39,7 @@ jobs:
         toolchain: "${{ env.RUST_VERSION }}"
     - uses: Swatinem/rust-cache@v2
       # Github cache is too tiny to handle the full matrix :-(
-      if: ${{ matrix.os == 'ubuntu-latest' }}
+      if: ${{ startsWith(matrix.os, 'ubuntu-') }}
       with:
         # Github cache will restore from 'main' OR the current branch.
         # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
@@ -40,16 +48,13 @@ jobs:
     - name: Test
       run: make test
     - name: Validate
-      if: ${{ matrix.os == 'ubuntu-latest' }}
+      if: ${{ matrix.validate }}
       run: make validate
 
-  lint:
-    runs-on: ubuntu-latest
+  proxy-lint:
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
-    - uses: actions/setup-node@v4
-      with:
-        node-version: 23
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -60,8 +65,6 @@ jobs:
         # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
         # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
         save-if: ${{ github.ref == 'refs/heads/main' }}
-    - name: Add Go bin to PATH
-      run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
     - name: Generation
       run: make generate-schema check-clean-repo
     - name: Lint
@@ -69,15 +72,15 @@ jobs:
 
   #### UI jobs ####
   ui-lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ui
     steps:
     - uses: actions/checkout@v6
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v6
       with:
-        node-version: 23
+        node-version: 24
     - name: Lint
       run: |
         npm ci
@@ -85,7 +88,7 @@ jobs:
 
   #### Controller jobs ####
   controller-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
     - uses: actions/setup-go@v6
@@ -98,7 +101,7 @@ jobs:
       run: go test -race ./...
 
   controller-lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
     - uses: actions/setup-go@v6
@@ -109,12 +112,16 @@ jobs:
           .github/workflows/cache-test
     - name: Lint
       run: make -C controller analyze
+    - name: go mod tidy
+      run: |
+        go mod tidy
+        git diff --exit-code go.mod go.sum
     - name: Gen
       # TODO: the rest of codegen
       run: make generate-apis check-clean-repo
 
   controller-e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
     - name: Install Rust
@@ -143,13 +150,13 @@ jobs:
         CGO_ENABLED=0 PERSIST_INSTALL=true go test -tags=e2e -v ./controller/test/e2e/tests -run '^TestAgentgatewayIntegration'
     - name: Archive bug report directory on failure
       if: ${{ failure() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: bug-report
         path: ./controller/_test/bug_report/kind
         retention-days: 2
     - name: Upload cargo timings
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: cargo-timings-e2e
         path: target/cargo-timings/cargo-timing*.html
@@ -160,7 +167,7 @@ jobs:
         cat controller/_test/ci-step-timings.log >> $GITHUB_STEP_SUMMARY
 
   controller-conformance:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
     - name: Install Rust
@@ -186,8 +193,14 @@ jobs:
     - name: Conformance
       run: |
         make -C controller all-conformance
+    - name: Debug Info
+      if: ${{ failure() }}
+      run: |
+        kubectl describe deployment -n agentgateway-system
+        kubectl get pods -n agentgateway-system
+        kubectl logs -n agentgateway-system -l app.kubernetes.io/name=agentgateway
     - name: Upload cargo timings
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: cargo-timings-conformance
         path: target/cargo-timings/cargo-timing*.html
@@ -197,12 +210,12 @@ jobs:
         cat-yamls () {
           local files=("$@")
           local count=$#
-          
+
           for ((i=0; i<count-1; i++)); do
           cat "${files[i]}"
           echo -e "\n---"
           done
-          
+
           if [ $count -gt 0 ]; then
           cat "${files[count-1]}"
           fi

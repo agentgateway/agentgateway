@@ -319,7 +319,7 @@ func (s *setup) Start(ctx context.Context) error {
 	agwCollections, err := agwplugins.NewAgwCollections(
 		commoncol,
 		s.agwControllerName,
-		// control plane system namespace (default is kgateway-system)
+		// control plane system namespace (default is agentgateway-system)
 		namespaces.GetPodNamespace(),
 		s.apiClient.ClusterID().String(),
 	)

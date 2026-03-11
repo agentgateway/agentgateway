@@ -14,19 +14,20 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    key: traffic/default/agw:timeout:default/fake-gw
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      gateway:
-        name: fake-gw
+- resource:
+    policy:
+      key: traffic/default/agw:timeout:default/fake-gw
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
-    traffic:
-      timeout:
-        request: 5s
+      target:
+        gateway:
+          name: fake-gw
+          namespace: default
+      traffic:
+        timeout:
+          request: 5s
 status:
   ancestors:
   - ancestorRef:

@@ -218,7 +218,7 @@ For example, to run the `Deployer` feature suite in the `TestKgateway` test:
 You can either set environment variables inline with the command:
 
 ```bash
-PERSIST_INSTALL=true CLUSTER_NAME=kind INSTALL_NAMESPACE=kgateway-system go test -v -timeout 600s -tags e2e ./test/e2e/tests -run ^TestKgateway$/^Deployer$
+PERSIST_INSTALL=true CLUSTER_NAME=kind INSTALL_NAMESPACE=agentgateway-system go test -v -timeout 600s -tags e2e ./test/e2e/tests -run ^TestKgateway$/^Deployer$
 ```
 
 Or export the environment variables first and then run the test:
@@ -226,7 +226,7 @@ Or export the environment variables first and then run the test:
 ```bash
 export PERSIST_INSTALL=true
 export CLUSTER_NAME=kind
-export INSTALL_NAMESPACE=kgateway-system
+export INSTALL_NAMESPACE=agentgateway-system
 go test -v -timeout 600s -tags e2e ./test/e2e/tests -run ^TestKgateway$/^Deployer$
 ```
 
@@ -257,7 +257,7 @@ You can use a custom debugger launch config that sets the `test.run` flag to run
   "env": {
     "FAIL_FAST_AND_PERSIST": "true",
     "CLUSTER_NAME": "kind",
-    "INSTALL_NAMESPACE": "kgateway-system"
+    "INSTALL_NAMESPACE": "agentgateway-system"
   },
 }
 ```
@@ -269,7 +269,7 @@ to.
 
 `CLUSTER_NAME` specifies the name of the cluster used for e2e tests (corresponds to the cluster name used when creating the kind cluster).
 
-`INSTALL_NAMESPACE` specifies the namespace in which kgateway is installed (typically `kgateway-system` when using Tilt).
+`INSTALL_NAMESPACE` specifies the namespace in which kgateway is installed (typically `agentgateway-system` when using Tilt).
 
 When invoking tests using VSCode's `run test` option, remember to set `"go.testTimeout": "600s"` in the user `settings.json` file as this may default to a lower value such as `30s` which may not be enough time for the e2e test to complete.
 
@@ -289,7 +289,7 @@ PERSIST_INSTALL=true ./hack/run-e2e-test.sh TestProvisionDeploymentAndService
 
 For example, to run `TestProvisionDeploymentAndService` in `Deployer` feature suite that is a part of `TestKgateway`:
 ```bash
-FAIL_FAST_AND_PERSIST=true CLUSTER_NAME=kind INSTALL_NAMESPACE=kgateway-system go test -v -timeout 600s -failfast ./test/e2e/tests -run ^TestKgateway$/^Deployer$/^TestProvisionDeploymentAndService$
+FAIL_FAST_AND_PERSIST=true CLUSTER_NAME=kind INSTALL_NAMESPACE=agentgateway-system go test -v -timeout 600s -failfast ./test/e2e/tests -run ^TestKgateway$/^Deployer$/^TestProvisionDeploymentAndService$
 ```
 
 **For IDE debugging:** Use `./hack/run-e2e-test.sh --dry-run TestProvisionDeploymentAndService` to see the exact pattern, then use it in your IDE config.
@@ -311,7 +311,7 @@ With VSCode you can use a custom debugger launch config that sets the `test.run`
   "env": {
     "FAIL_FAST_AND_PERSIST": "true",
     "CLUSTER_NAME": "kind",
-    "INSTALL_NAMESPACE": "kgateway-system"
+    "INSTALL_NAMESPACE": "agentgateway-system"
   },
 }
 ```

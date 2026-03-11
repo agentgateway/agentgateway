@@ -40,28 +40,18 @@ func AgwRouteCollection(
 	httpRouteCol krt.Collection[*gwv1.HTTPRoute],
 	grpcRouteCol krt.Collection[*gwv1.GRPCRoute],
 	tcpRouteCol krt.Collection[*gwv1a2.TCPRoute],
-	tlsRouteCol krt.Collection[*gwv1a2.TLSRoute],
+	tlsRouteCol krt.Collection[*gwv1.TLSRoute],
 	inputs RouteContextInputs,
 	krtopts krtutil.KrtOptions,
 ) (krt.Collection[agwir.AgwResource], krt.Collection[*RouteAttachment], krt.Collection[*utils.AncestorBackend]) {
 	httpRouteStatus, httpRoutes := createRouteCollection(httpRouteCol, inputs, krtopts, "HTTPRoutes",
-		func(ctx RouteContext, obj *gwv1.HTTPRoute, rep reporter.Reporter) (RouteContext, iter.Seq2[AgwRoute, *reporter.RouteCondition]) {
+		func(ctx RouteContext, obj *gwv1.HTTPRoute) (RouteContext, iter.Seq2[AgwRoute, *reporter.RouteCondition]) {
 			route := obj.Spec
 			return ctx, func(yield func(AgwRoute, *reporter.RouteCondition) bool) {
 				for n, r := range route.Rules {
-					// split the rule to make sure each rule has up to one match
-					matches := slices.Reference(r.Matches)
-					if len(matches) == 0 {
-						matches = append(matches, nil)
-					}
-					for idx, m := range matches {
-						if m != nil {
-							r.Matches = []gwv1.HTTPRouteMatch{*m}
-						}
-						res, err := ConvertHTTPRouteToAgw(ctx, r, obj, n, idx)
-						if !yield(AgwRoute{Route: res}, err) {
-							return
-						}
+					res, err := ConvertHTTPRouteToAgw(ctx, r, obj, n)
+					if !yield(AgwRoute{Route: res}, err) {
+						return
 					}
 				}
 			}
@@ -71,7 +61,7 @@ func AgwRouteCollection(
 	status.RegisterStatus(queue, httpRouteStatus, GetStatus)
 
 	grpcRouteStatus, grpcRoutes := createRouteCollection(grpcRouteCol, inputs, krtopts, "GRPCRoutes",
-		func(ctx RouteContext, obj *gwv1.GRPCRoute, rep reporter.Reporter) (RouteContext, iter.Seq2[AgwRoute, *reporter.RouteCondition]) {
+		func(ctx RouteContext, obj *gwv1.GRPCRoute) (RouteContext, iter.Seq2[AgwRoute, *reporter.RouteCondition]) {
 			route := obj.Spec
 			return ctx, func(yield func(AgwRoute, *reporter.RouteCondition) bool) {
 				for n, r := range route.Rules {
@@ -88,7 +78,7 @@ func AgwRouteCollection(
 	status.RegisterStatus(queue, grpcRouteStatus, GetStatus)
 
 	tcpRouteStatus, tcpRoutes := createTCPRouteCollection(tcpRouteCol, inputs, krtopts, "TCPRoutes",
-		func(ctx RouteContext, obj *gwv1a2.TCPRoute, rep reporter.Reporter) (RouteContext, iter.Seq2[AgwTCPRoute, *reporter.RouteCondition]) {
+		func(ctx RouteContext, obj *gwv1a2.TCPRoute) (RouteContext, iter.Seq2[AgwTCPRoute, *reporter.RouteCondition]) {
 			route := obj.Spec
 			return ctx, func(yield func(AgwTCPRoute, *reporter.RouteCondition) bool) {
 				for n, r := range route.Rules {
@@ -105,7 +95,7 @@ func AgwRouteCollection(
 	status.RegisterStatus(queue, tcpRouteStatus, GetStatus)
 
 	tlsRouteStatus, tlsRoutes := createTCPRouteCollection(tlsRouteCol, inputs, krtopts, "TLSRoutes",
-		func(ctx RouteContext, obj *gwv1a2.TLSRoute, rep reporter.Reporter) (RouteContext, iter.Seq2[AgwTCPRoute, *reporter.RouteCondition]) {
+		func(ctx RouteContext, obj *gwv1.TLSRoute) (RouteContext, iter.Seq2[AgwTCPRoute, *reporter.RouteCondition]) {
 			route := obj.Spec
 			return ctx, func(yield func(AgwTCPRoute, *reporter.RouteCondition) bool) {
 				for n, r := range route.Rules {
@@ -116,8 +106,8 @@ func AgwRouteCollection(
 					}
 				}
 			}
-		}, func(status gwv1.RouteStatus) gwv1a2.TLSRouteStatus {
-			return gwv1a2.TLSRouteStatus{RouteStatus: status}
+		}, func(status gwv1.RouteStatus) gwv1.TLSRouteStatus {
+			return gwv1.TLSRouteStatus{RouteStatus: status}
 		})
 	status.RegisterStatus(queue, tlsRouteStatus, GetStatus)
 
@@ -141,8 +131,8 @@ func AgwRouteCollection(
 				return r.BackendRefs
 			})
 		}, krtopts.ToOptions("GRPCAncestors")...),
-		krt.NewManyCollection(tlsRouteCol, func(krtctx krt.HandlerContext, obj *gwv1a2.TLSRoute) []*utils.AncestorBackend {
-			return extractAncestorBackends(obj.ObjectMeta, "TLSRoute", obj.Spec.ParentRefs, obj.Spec.Rules, func(r gwv1a2.TLSRouteRule) []gwv1a2.BackendRef {
+		krt.NewManyCollection(tlsRouteCol, func(krtctx krt.HandlerContext, obj *gwv1.TLSRoute) []*utils.AncestorBackend {
+			return extractAncestorBackends(obj.ObjectMeta, "TLSRoute", obj.Spec.ParentRefs, obj.Spec.Rules, func(r gwv1.TLSRouteRule) []gwv1a2.BackendRef {
 				return r.BackendRefs
 			})
 		}, krtopts.ToOptions("TLSAncestors")...),
@@ -180,7 +170,7 @@ func ProcessParentReferences[T any](
 	// Aggregate per Gateway for status; also track whether any raw parent was cross-namespace.
 	type gwAgg struct {
 		anyAllowed bool
-		rep        RouteParentReference
+		parentRefs []RouteParentReference
 	}
 	agg := make(map[types.NamespacedName]*gwAgg)
 	crossNS := sets.New[types.NamespacedName]()
@@ -189,7 +179,9 @@ func ProcessParentReferences[T any](
 	for _, p := range parentRefs {
 		gwNN := p.ParentGateway
 		if _, ok := agg[gwNN]; !ok {
-			agg[gwNN] = &gwAgg{anyAllowed: false, rep: p}
+			agg[gwNN] = &gwAgg{anyAllowed: false, parentRefs: []RouteParentReference{p}}
+		} else {
+			agg[gwNN].parentRefs = append(agg[gwNN].parentRefs, p)
 		}
 		if p.ParentKey.Namespace != routeNN.Namespace {
 			crossNS.Insert(gwNN)
@@ -229,70 +221,71 @@ func ProcessParentReferences[T any](
 
 	// Emit exactly ONE ParentStatus per Gateway (aggregate across listeners; no SectionName).
 	for gwNN, a := range agg {
-		parent := a.rep
-		prStatusRef := parent.OriginalReference
-		{
-			stringPtr := func(s string) *string { return &s }
-			prStatusRef.Group = (*gwv1.Group)(stringPtr(wellknown.GatewayGVK.Group))
-			prStatusRef.Kind = (*gwv1.Kind)(stringPtr(wellknown.GatewayGVK.Kind))
-			prStatusRef.Namespace = (*gwv1.Namespace)(stringPtr(parent.ParentKey.Namespace))
-			prStatusRef.Name = gwv1.ObjectName(parent.ParentKey.Name)
-			prStatusRef.SectionName = nil
-		}
-		pr := routeReporter.ParentRef(&prStatusRef)
-		resolvedReason := reasonResolvedRefs(gwResult.Error, resolvedOK)
-
-		if a.anyAllowed {
-			pr.SetCondition(reporter.RouteCondition{
-				Type:   gwv1.RouteConditionAccepted,
-				Status: metav1.ConditionTrue,
-				Reason: gwv1.RouteReasonAccepted,
-			})
-		} else {
-			// Nothing attached: choose reason based on *why* it wasn't allowed.
-			// Priority:
-			// 1) Denied
-			// 2) Cross-namespace and listeners don’t allow it -> NotAllowedByListeners
-			// 3) sectionName specified but no such listener on the parent -> NoMatchingParent
-			// 4) Otherwise, no hostname intersection -> NoMatchingListenerHostname
-			reason := gwv1.RouteConditionReason("NoMatchingListenerHostname")
-			msg := "No route hostnames intersect any listener hostname"
-			if dr := denied[gwNN]; dr != nil {
-				reason = gwv1.RouteConditionReason(dr.Reason)
-				msg = dr.Message
+		for _, parent := range a.parentRefs {
+			prStatusRef := parent.OriginalReference
+			{
+				stringPtr := func(s string) *string { return &s }
+				prStatusRef.Group = (*gwv1.Group)(stringPtr(parent.ParentKey.Kind.Group))
+				prStatusRef.Kind = (*gwv1.Kind)(stringPtr(parent.ParentKey.Kind.Kind))
+				prStatusRef.Namespace = (*gwv1.Namespace)(stringPtr(parent.ParentKey.Namespace))
+				prStatusRef.Name = gwv1.ObjectName(parent.ParentKey.Name)
+				prStatusRef.SectionName = nil
 			}
-			if crossNS.Contains(gwNN) {
-				reason = gwv1.RouteReasonNotAllowedByListeners
-				msg = "Parent listener not usable or not permitted"
-			} else if a.rep.OriginalReference.SectionName != nil || a.rep.OriginalReference.Port != nil {
-				// Use string literal to avoid compile issues if the constant name differs.
-				reason = gwv1.RouteConditionReason("NoMatchingParent")
-				msg = "No listener with the specified sectionName on the parent Gateway"
+			pr := routeReporter.ParentRef(&prStatusRef)
+			resolvedReason := reasonResolvedRefs(gwResult.Error, resolvedOK)
+
+			if a.anyAllowed {
+				pr.SetCondition(reporter.RouteCondition{
+					Type:   gwv1.RouteConditionAccepted,
+					Status: metav1.ConditionTrue,
+					Reason: gwv1.RouteReasonAccepted,
+				})
+			} else {
+				// Nothing attached: choose reason based on *why* it wasn't allowed.
+				// Priority:
+				// 1) Denied
+				// 2) Cross-namespace and listeners don’t allow it -> NotAllowedByListeners
+				// 3) sectionName specified but no such listener on the parent -> NoMatchingParent
+				// 4) Otherwise, no hostname intersection -> NoMatchingListenerHostname
+				reason := gwv1.RouteConditionReason("NoMatchingListenerHostname")
+				msg := "No route hostnames intersect any listener hostname"
+				if dr := denied[gwNN]; dr != nil {
+					reason = gwv1.RouteConditionReason(dr.Reason)
+					msg = dr.Message
+				}
+				if crossNS.Contains(gwNN) {
+					reason = gwv1.RouteReasonNotAllowedByListeners
+					msg = "Parent listener not usable or not permitted"
+				} else if parent.OriginalReference.SectionName != nil || parent.OriginalReference.Port != nil {
+					// Use string literal to avoid compile issues if the constant name differs.
+					reason = gwv1.RouteConditionReason("NoMatchingParent")
+					msg = "No listener with the specified sectionName on the parent Gateway"
+				}
+				pr.SetCondition(reporter.RouteCondition{
+					Type:    gwv1.RouteConditionAccepted,
+					Status:  metav1.ConditionFalse,
+					Reason:  reason,
+					Message: msg,
+				})
 			}
+
 			pr.SetCondition(reporter.RouteCondition{
-				Type:    gwv1.RouteConditionAccepted,
-				Status:  metav1.ConditionFalse,
-				Reason:  reason,
-				Message: msg,
+				Type: gwv1.RouteConditionResolvedRefs,
+				Status: func() metav1.ConditionStatus {
+					if resolvedOK {
+						return metav1.ConditionTrue
+					}
+					return metav1.ConditionFalse
+				}(),
+				Reason: resolvedReason,
+				Message: func() string {
+					if gwResult.Error != nil {
+						return gwResult.Error.Message
+					}
+					return ""
+				}(),
 			})
 		}
-
-		pr.SetCondition(reporter.RouteCondition{
-			Type: gwv1.RouteConditionResolvedRefs,
-			Status: func() metav1.ConditionStatus {
-				if resolvedOK {
-					return metav1.ConditionTrue
-				}
-				return metav1.ConditionFalse
-			}(),
-			Reason: resolvedReason,
-			Message: func() string {
-				if gwResult.Error != nil {
-					return gwResult.Error.Message
-				}
-				return ""
-			}(),
-		})
 	}
 	return resources
 }
@@ -350,7 +343,7 @@ func createRouteCollectionGeneric[T controllers.Object, R comparable, ST any](
 	inputs RouteContextInputs,
 	krtopts krtutil.KrtOptions,
 	collectionName string,
-	translator func(ctx RouteContext, obj T, rep reporter.Reporter) (RouteContext, iter.Seq2[R, *reporter.RouteCondition]),
+	translator func(ctx RouteContext, obj T) (RouteContext, iter.Seq2[R, *reporter.RouteCondition]),
 	resourceTransformer func(route R, parent RouteParentReference) *api.Resource,
 	buildStatus func(status gwv1.RouteStatus) ST,
 ) (
@@ -366,7 +359,7 @@ func createRouteCollectionGeneric[T controllers.Object, R comparable, ST any](
 		routeReporter := rep.Route(obj)
 
 		// Apply route-specific preprocessing and get the translator
-		ctx, translatorSeq := translator(ctx, obj, rep)
+		ctx, translatorSeq := translator(ctx, obj)
 
 		parentRefs, gwResult := computeRoute(ctx, obj, func(obj T) iter.Seq2[R, *reporter.RouteCondition] {
 			return translatorSeq
@@ -397,7 +390,7 @@ func createRouteCollection[T controllers.Object, ST any](
 	inputs RouteContextInputs,
 	krtopts krtutil.KrtOptions,
 	collectionName string,
-	translator func(ctx RouteContext, obj T, rep reporter.Reporter) (RouteContext, iter.Seq2[AgwRoute, *reporter.RouteCondition]),
+	translator func(ctx RouteContext, obj T) (RouteContext, iter.Seq2[AgwRoute, *reporter.RouteCondition]),
 	buildStatus func(status gwv1.RouteStatus) ST,
 ) (
 	krt.StatusCollection[T, ST],
@@ -431,7 +424,7 @@ func createTCPRouteCollection[T controllers.Object, ST any](
 	inputs RouteContextInputs,
 	krtopts krtutil.KrtOptions,
 	collectionName string,
-	translator func(ctx RouteContext, obj T, rep reporter.Reporter) (RouteContext, iter.Seq2[AgwTCPRoute, *reporter.RouteCondition]),
+	translator func(ctx RouteContext, obj T) (RouteContext, iter.Seq2[AgwTCPRoute, *reporter.RouteCondition]),
 	buildStatus func(status gwv1.RouteStatus) ST,
 ) (
 	krt.StatusCollection[T, ST],
@@ -594,15 +587,12 @@ func gatewayRouteAttachmentCountCollection[T controllers.Object](
 
 		parentRefs := extractParentReferenceInfo(ctx, inputs.RouteParents, obj)
 		return slices.MapFilter(FilteredReferences(parentRefs), func(e RouteParentReference) **RouteAttachment {
-			if e.ParentKey.Kind != wellknown.GatewayGVK {
+			if e.ParentKey.Kind != wellknown.GatewayGVK && e.ParentKey.Kind != wellknown.ListenerSetGVK {
 				return nil
 			}
 			return ptr.Of(&RouteAttachment{
-				From: from,
-				To: types.NamespacedName{
-					Name:      e.ParentKey.Name,
-					Namespace: e.ParentKey.Namespace,
-				},
+				From:         from,
+				To:           e.ParentKey,
 				ListenerName: string(e.ParentSection),
 			})
 		})
@@ -610,14 +600,13 @@ func gatewayRouteAttachmentCountCollection[T controllers.Object](
 }
 
 type RouteAttachment struct {
-	From TypedResource
-	// To is assumed to be a Gateway
-	To           types.NamespacedName
+	From         TypedResource
+	To           ParentKey
 	ListenerName string
 }
 
 func (r RouteAttachment) ResourceName() string {
-	return r.From.Kind.String() + "/" + r.From.Name.String() + "/" + r.To.String() + "/" + r.ListenerName
+	return r.From.Kind.Kind + "/" + r.From.Name.String() + "->" + r.To.String() + "/" + r.ListenerName
 }
 
 func (r RouteAttachment) Equals(other RouteAttachment) bool {

@@ -1,4 +1,5 @@
 pub mod filters;
+pub mod health;
 pub mod timeout;
 
 mod buflist;
@@ -212,9 +213,9 @@ pub enum HeaderOrPseudoValue {
 
 impl HeaderOrPseudoValue {
 	pub fn from_cel_result(k: &HeaderOrPseudo, res: Option<Value>) -> Option<HeaderOrPseudoValue> {
-		match (res?, k) {
+		match (res?.always_materialize_owned(), k) {
 			(v, HeaderOrPseudo::Header(_)) => v
-				.as_bytes()
+				.as_bytes_pre_materialized()
 				.ok()
 				.and_then(|b| HeaderValue::from_bytes(b).ok())
 				.map(HeaderOrPseudoValue::Header),
@@ -225,22 +226,22 @@ impl HeaderOrPseudoValue {
 				.and_then(|v| StatusCode::from_u16(v).ok())
 				.map(HeaderOrPseudoValue::Status),
 			(v, HeaderOrPseudo::Method) => v
-				.as_bytes()
+				.as_bytes_pre_materialized()
 				.ok()
 				.and_then(|b| ::http::Method::from_bytes(b).ok())
 				.map(HeaderOrPseudoValue::Method),
 			(v, HeaderOrPseudo::Scheme) => v
-				.as_bytes()
+				.as_bytes_pre_materialized()
 				.ok()
 				.and_then(|b| ::http::uri::Scheme::try_from(b).ok())
 				.map(HeaderOrPseudoValue::Scheme),
 			(v, HeaderOrPseudo::Authority) => v
-				.as_bytes()
+				.as_bytes_pre_materialized()
 				.ok()
 				.and_then(|b| ::http::uri::Authority::try_from(b).ok())
 				.map(HeaderOrPseudoValue::Authority),
 			(v, HeaderOrPseudo::Path) => v
-				.as_bytes()
+				.as_bytes_pre_materialized()
 				.ok()
 				.and_then(|b| ::http::uri::PathAndQuery::try_from(b).ok())
 				.map(HeaderOrPseudoValue::Path),
@@ -601,9 +602,14 @@ pub fn response_buffer_limit(resp: &Response) -> usize {
 		.unwrap_or(2_097_152)
 }
 
-pub async fn read_body(req: Request) -> Result<Bytes, axum_core::Error> {
+pub async fn read_req_body(req: Request) -> Result<Bytes, axum_core::Error> {
 	let lim = buffer_limit(&req);
 	read_body_with_limit(req.into_body(), lim).await
+}
+
+pub async fn read_resp_body(resp: Response) -> Result<Bytes, axum_core::Error> {
+	let lim = response_buffer_limit(&resp);
+	read_body_with_limit(resp.into_body(), lim).await
 }
 
 pub async fn read_response_body(
@@ -756,6 +762,9 @@ impl Debug for DebugExtensions<'_> {
 		}
 		if let Some(e) = ext.get::<crate::llm::bedrock::AwsRegion>() {
 			d.field("AwsRegion", e);
+		}
+		if let Some(e) = ext.get::<crate::llm::bedrock::AwsServiceName>() {
+			d.field("AwsServiceName", e);
 		}
 		if let Some(e) = ext.get::<crate::client::ResolvedDestination>() {
 			d.field("ResolvedDestination", e);

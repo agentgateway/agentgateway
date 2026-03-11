@@ -29,7 +29,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
-	gatewayx "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/api"
 	v1alpha2 "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -41,9 +40,9 @@ import (
 
 // ConvertHTTPRouteToAgw converts a HTTPRouteRule to an agentgateway HTTPRoute
 func ConvertHTTPRouteToAgw(ctx RouteContext, r gwv1.HTTPRouteRule,
-	obj *gwv1.HTTPRoute, pos int, matchPos int,
+	obj *gwv1.HTTPRoute, pos int,
 ) (*api.Route, *reporter.RouteCondition) {
-	routeRuleKey := strconv.Itoa(pos) + "." + strconv.Itoa(matchPos)
+	routeRuleKey := strconv.Itoa(pos)
 	res := &api.Route{
 		// unique for route rule
 		Key:  utils.InternalRouteRuleKey(obj.Namespace, obj.Name, routeRuleKey),
@@ -181,7 +180,8 @@ func ConvertGRPCRouteToAgw(ctx RouteContext, r gwv1.GRPCRouteRule,
 	routeRuleKey := strconv.Itoa(pos)
 	res := &api.Route{
 		// unique for route rule
-		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, routeRuleKey),
+		// Add .grpc suffix to distinguish from HTTP
+		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, routeRuleKey) + ".grpc",
 		Name:        utils.RouteName(wellknown.GRPCRouteKind, obj.Namespace, obj.Name, r.Name),
 		ListenerKey: "",
 	}
@@ -243,8 +243,8 @@ func ConvertGRPCRouteToAgw(ctx RouteContext, r gwv1.GRPCRouteRule,
 }
 
 // ConvertTLSRouteToAgw converts a TLSRouteRule to an agentgateway TCPRoute
-func ConvertTLSRouteToAgw(ctx RouteContext, r gwv1a2.TLSRouteRule,
-	obj *gwv1a2.TLSRoute, pos int,
+func ConvertTLSRouteToAgw(ctx RouteContext, r gwv1.TLSRouteRule,
+	obj *gwv1.TLSRoute, pos int,
 ) (*api.TCPRoute, *reporter.RouteCondition) {
 	routeRuleKey := strconv.Itoa(pos)
 	res := &api.TCPRoute{
@@ -776,7 +776,7 @@ func buildAgwDestination(
 
 var knownReferences = sets.New(
 	wellknown.GatewayGVK,
-	wellknown.XListenerSetGVK,
+	wellknown.ListenerSetGVK,
 	wellknown.ServiceGVK,
 	wellknown.ServiceEntryGVK,
 	wellknown.SecretGVK,
@@ -784,7 +784,7 @@ var knownReferences = sets.New(
 )
 var allowedParentReferences = sets.New(
 	wellknown.GatewayGVK,
-	wellknown.XListenerSetGVK,
+	wellknown.ListenerSetGVK,
 	wellknown.ServiceGVK,
 	wellknown.ServiceEntryGVK,
 )
@@ -820,7 +820,7 @@ func NormalizeReference(group *gwv1.Group, kind *gwv1.Kind, defaultGVK schema.Gr
 // ToInternalParentReference converts a gwv1.ParentReference to a ParentKey.
 func ToInternalParentReference(p gwv1.ParentReference, localNamespace string) (ParentKey, error) {
 	ref := NormalizeReference(p.Group, p.Kind, wellknown.GatewayGVK)
-	if !allowedParentReferences.Contains(wellknown.GatewayGVK) {
+	if !allowedParentReferences.Contains(ref) {
 		return ParentKey{}, fmt.Errorf("unsupported Parent: %v/%v", p.Group, p.Kind)
 	}
 	return ParentKey{
@@ -1021,7 +1021,7 @@ type ParentKey struct {
 }
 
 func (p ParentKey) String() string {
-	return p.Kind.String() + "/" + p.Namespace + "/" + p.Name
+	return p.Kind.Kind + "/" + p.Namespace + "/" + p.Name
 }
 
 // ParentReference holds the parent key, section name and port for a parent reference.
@@ -1051,6 +1051,8 @@ type ParentInfo struct {
 	Hostnames []string
 	// OriginalHostname is the unprocessed form of Hostnames; how it appeared in users' config
 	OriginalHostname string
+	// Timestamp the parent was created - used in determining listener precedence
+	CreationTimestamp metav1.Time
 
 	SectionName    gwv1.SectionName
 	Port           gwv1.PortNumber
@@ -1188,6 +1190,7 @@ func BuildListener(
 	l gwv1.Listener,
 	listenerIndex int,
 	portErr error,
+	forListenerSet bool,
 ) ([]string, *TLSInfo, []gwv1.ListenerStatus, bool) {
 	listenerConditions := map[string]*Condition{
 		string(gwv1.ListenerConditionAccepted): {
@@ -1210,13 +1213,35 @@ func BuildListener(
 	}
 
 	ok := true
-	gwTls := resolveGatewayTLS(l.Port, gw.TLS)
-	tlsInfo, err := buildTLS(ctx, secrets, configMaps, grants, gwTls, l.TLS, obj)
+	gwFrontendTLS, gwBackendTLS := resolveGatewayTLS(l.Port, gw.TLS)
+	tlsInfo, err := buildTLS(ctx, secrets, configMaps, grants, gwFrontendTLS, l.TLS, obj)
+	var backendTLSErr *ConfigError
+	if err == nil {
+		// Resolve backend client cert references for status/reporting. Actual backend TLS behavior
+		// is implemented outside this repo.
+		backendTLSErr = resolveGatewayBackendTLS(ctx, secrets, grants, gwBackendTLS, obj)
+		if backendTLSErr != nil {
+			listenerConditions[string(gwv1.ListenerConditionResolvedRefs)].Error = backendTLSErr
+		}
+	}
 	if err == nil && tlsInfo != nil {
 		// If there were no other errors, also check the Key/Cert are actually valid
 		err = validateTLS(tlsInfo)
 	}
 	if err != nil {
+		if forListenerSet {
+			listenerConditions[string(gwv1.ListenerConditionAccepted)].Error = &ConfigError{
+				Reason:  string(gwv1.ListenerSetReasonListenersNotValid),
+				Message: err.Message,
+			}
+		} else if err.Reason == InvalidTLSCA ||
+			err.Reason == InvalidTLSCAKind ||
+			(err.Reason == string(gwv1.GatewayReasonRefNotPermitted) && strings.HasPrefix(err.Message, "caCertificateRef")) {
+			listenerConditions[string(gwv1.ListenerConditionAccepted)].Error = &ConfigError{
+				Reason:  string(gwv1.ListenerReasonNoValidCACertificate),
+				Message: err.Message,
+			}
+		}
 		listenerConditions[string(gwv1.ListenerConditionResolvedRefs)].Error = err
 		listenerConditions[string(gwv1.GatewayConditionProgrammed)].Error = &ConfigError{
 			Reason:  string(gwv1.GatewayReasonInvalid),
@@ -1247,18 +1272,23 @@ func BuildListener(
 	return hostnames, tlsInfo, updatedStatus, ok
 }
 
-func resolveGatewayTLS(port gwv1.PortNumber, gw *gwv1.GatewayTLSConfig) *gwv1.TLSConfig {
-	if gw == nil || gw.Frontend == nil {
-		return nil
+func resolveGatewayTLS(port gwv1.PortNumber, gw *gwv1.GatewayTLSConfig) (*gwv1.TLSConfig, *gwv1.GatewayBackendTLS) {
+	if gw == nil {
+		return nil, nil
 	}
-	f := gw.Frontend
-	pp := slices.FindFunc(f.PerPort, func(portConfig gwv1.TLSPortConfig) bool {
-		return portConfig.Port == port
-	})
-	if pp != nil {
-		return &pp.TLS
+	var frontendTLS *gwv1.TLSConfig
+	if gw.Frontend != nil {
+		f := gw.Frontend
+		pp := slices.FindFunc(f.PerPort, func(portConfig gwv1.TLSPortConfig) bool {
+			return portConfig.Port == port
+		})
+		if pp != nil {
+			frontendTLS = &pp.TLS
+		} else {
+			frontendTLS = &f.Default
+		}
 	}
-	return &f.Default
+	return frontendTLS, gw.Backend
 }
 
 var supportedProtocols = sets.New(
@@ -1305,7 +1335,7 @@ func validateTLS(certInfo *TLSInfo) *ConfigError {
 	if certInfo.CaCert != nil {
 		if !x509.NewCertPool().AppendCertsFromPEM(certInfo.Cert) {
 			return &ConfigError{
-				Reason:  InvalidTLS,
+				Reason:  InvalidTLSCA,
 				Message: fmt.Sprintf("invalid CA certificate reference, the bundle is malformed"),
 			}
 		}
@@ -1368,8 +1398,7 @@ func buildTLS(
 				return dummyTls, err
 			}
 			sameNamespace := cred.Source.Namespace == namespace
-			isSecret := cred.Kind == wellknown.SecretGVK.Kind
-			if isSecret && !sameNamespace && !grants.SecretAllowed(ctx, GvkFromObject(gw), cred.Source, namespace) {
+			if !sameNamespace && !grants.SecretAllowed(ctx, GvkFromObject(gw), cred.Source, namespace) {
 				return dummyTls, &ConfigError{
 					Reason: InvalidListenerRefNotPermitted,
 					Message: fmt.Sprintf(
@@ -1379,6 +1408,9 @@ func buildTLS(
 				}
 			}
 			tlsRes.Info.CaCert = cred.Info.CaCert
+			if gatewayTLS.Validation.Mode == gwv1.AllowInsecureFallback {
+				tlsRes.Info.MtlsFallbackEnabled = true
+			}
 		}
 		return &tlsRes.Info, nil
 	case gwv1.TLSModePassthrough:
@@ -1386,6 +1418,37 @@ func buildTLS(
 		return nil, nil
 	}
 	return nil, nil
+}
+
+func resolveGatewayBackendTLS(
+	ctx krt.HandlerContext,
+	secrets krt.Collection[*corev1.Secret],
+	grants ReferenceGrants,
+	backendTLS *gwv1.GatewayBackendTLS,
+	gw controllers.Object,
+) *ConfigError {
+	if backendTLS == nil || backendTLS.ClientCertificateRef == nil {
+		return nil
+	}
+	tlsRes, err := buildSecretReference(ctx, *backendTLS.ClientCertificateRef, gw, secrets)
+	if err != nil {
+		return &ConfigError{
+			Reason:  string(gwv1.GatewayReasonInvalidClientCertificateRef),
+			Message: err.Message,
+		}
+	}
+
+	namespace := gw.GetNamespace()
+	if tlsRes.Source.Namespace != namespace && !grants.SecretAllowed(ctx, GvkFromObject(gw), tlsRes.Source, namespace) {
+		return &ConfigError{
+			Reason: string(gwv1.GatewayReasonRefNotPermitted),
+			Message: fmt.Sprintf(
+				"clientCertificateRef %v/%v not accessible to a Gateway in namespace %q (missing a ReferenceGrant?)",
+				backendTLS.ClientCertificateRef.Name, tlsRes.Source.Namespace, namespace,
+			),
+		}
+	}
+	return nil
 }
 
 func buildCaCertificateReference(
@@ -1411,14 +1474,14 @@ func buildCaCertificateReference(
 		cm := ptr.Flatten(krt.FetchOne(ctx, configMaps, krt.FilterObjectName(res.Source)))
 		if cm == nil {
 			return nil, &ConfigError{
-				Reason:  InvalidTLS,
+				Reason:  InvalidTLSCA,
 				Message: fmt.Sprintf("invalid CA certificate reference, configmap %v not found", res.Source),
 			}
 		}
 		certInfo, err := ExtractRootFromString(cm.Data)
 		if err != nil {
 			return nil, &ConfigError{
-				Reason:  InvalidTLS,
+				Reason:  InvalidTLSCA,
 				Message: fmt.Sprintf("invalid CA certificate reference %v, %v", plainObjectReferenceString(ref), err),
 			}
 		}
@@ -1428,21 +1491,21 @@ func buildCaCertificateReference(
 		scrt := ptr.Flatten(krt.FetchOne(ctx, secrets, krt.FilterObjectName(res.Source)))
 		if scrt == nil {
 			return nil, &ConfigError{
-				Reason:  InvalidTLS,
+				Reason:  InvalidTLSCA,
 				Message: fmt.Sprintf("invalid CA certificate reference, secret %v not found", res.Source),
 			}
 		}
 		certInfo, err := ExtractRoot(scrt.Data)
 		if err != nil {
 			return nil, &ConfigError{
-				Reason:  InvalidTLS,
+				Reason:  InvalidTLSCA,
 				Message: fmt.Sprintf("invalid CA certificate reference %v, %v", plainObjectReferenceString(ref), err),
 			}
 		}
 		res.Info.CaCert = certInfo.Cert
 	default:
 		return nil, &ConfigError{
-			Reason:  InvalidTLS,
+			Reason:  InvalidTLSCAKind,
 			Message: fmt.Sprintf("invalid CA certificate reference %v, only secret and configmap are allowed", plainObjectReferenceString(ref)),
 		}
 	}
@@ -1598,7 +1661,7 @@ func GetCommonRouteInfo(spec any) ([]gwv1.ParentReference, []gwv1.Hostname, sche
 	switch t := spec.(type) {
 	case *gwv1a2.TCPRoute:
 		return t.Spec.ParentRefs, nil, wellknown.TCPRouteGVK
-	case *gwv1a2.TLSRoute:
+	case *gwv1.TLSRoute:
 		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown.TLSRouteGVK
 	case *gwv1.HTTPRoute:
 		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown.HTTPRouteGVK
@@ -1655,8 +1718,8 @@ func GvkFromObject(obj any) schema.GroupVersionKind {
 	switch obj.(type) {
 	case *gwv1.Gateway:
 		return wellknown.GatewayGVK
-	case *gatewayx.XListenerSet:
-		return wellknown.XListenerSetGVK
+	case *gwv1.ListenerSet:
+		return wellknown.ListenerSetGVK
 	default:
 		panic("Uknown GVK")
 	}

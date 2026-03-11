@@ -9,6 +9,8 @@ fn main() {
 	eprintln!("Benchmarking...");
 	#[cfg(all(not(test), not(feature = "internal_benches")))]
 	panic!("benches must have -F internal_benches");
+	#[allow(unused)]
+	use agentgateway as _;
 	with_profiling(divan::main);
 }
 #[divan::bench()]

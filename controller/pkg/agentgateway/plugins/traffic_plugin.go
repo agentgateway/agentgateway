@@ -41,22 +41,23 @@ import (
 )
 
 const (
-	extauthPolicySuffix         = ":extauth"
-	extprocPolicySuffix         = ":extproc"
-	rbacPolicySuffix            = ":rbac"
-	localRateLimitPolicySuffix  = ":rl-local"
-	globalRateLimitPolicySuffix = ":rl-global"
-	transformationPolicySuffix  = ":transformation"
-	csrfPolicySuffix            = ":csrf"
-	corsPolicySuffix            = ":cors"
-	headerModifierPolicySuffix  = ":header-modifier"
-	hostnameRewritePolicySuffix = ":hostname-rewrite"
-	retryPolicySuffix           = ":retry"
-	timeoutPolicySuffix         = ":timeout"
-	jwtPolicySuffix             = ":jwt"
-	basicAuthPolicySuffix       = ":basicauth"
-	apiKeyPolicySuffix          = ":apikeyauth" //nolint:gosec
-	directResponseSuffix        = ":direct-response"
+	extauthPolicySuffix            = ":extauth"
+	extprocPolicySuffix            = ":extproc"
+	rbacPolicySuffix               = ":rbac"
+	localRateLimitPolicySuffix     = ":rl-local"
+	globalRateLimitPolicySuffix    = ":rl-global"
+	transformationPolicySuffix     = ":transformation"
+	csrfPolicySuffix               = ":csrf"
+	corsPolicySuffix               = ":cors"
+	headerModifierPolicySuffix     = ":header-modifier"
+	respHeaderModifierPolicySuffix = ":resp-header-modifier"
+	hostnameRewritePolicySuffix    = ":hostname-rewrite"
+	retryPolicySuffix              = ":retry"
+	timeoutPolicySuffix            = ":timeout"
+	jwtPolicySuffix                = ":jwt"
+	basicAuthPolicySuffix          = ":basicauth"
+	apiKeyPolicySuffix             = ":apikeyauth" //nolint:gosec
+	directResponseSuffix           = ":direct-response"
 )
 
 var logger = logging.New("agentgateway/plugins")
@@ -154,7 +155,7 @@ func TranslateAgentgatewayPolicy(
 				Kind: utils.ServiceTarget(policy.Namespace, string(target.Name), target.SectionName),
 			}
 			// TODO: add support for inferencepool https://github.com/kgateway-dev/kgateway/issues/13295
-			// TODO: add support for XListenerSet https://github.com/kgateway-dev/kgateway/issues/13296
+			// TODO: add support for ListenerSet https://github.com/kgateway-dev/kgateway/issues/13296
 
 		default:
 			// TODO(npolshak): support attaching policies to k8s services, serviceentries, and other backends
@@ -888,7 +889,7 @@ func processHeaderModifierPolicy(headerModifier *shared.HeaderModifiers, basePol
 
 	if headerModifier.Response != nil {
 		headerModifierPolicyResponse = &api.Policy{
-			Key:    basePolicyName + headerModifierPolicySuffix + attachmentName(target),
+			Key:    basePolicyName + respHeaderModifierPolicySuffix + attachmentName(target),
 			Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 			Target: target,
 			Kind: &api.Policy_Traffic{
@@ -1484,6 +1485,20 @@ func convertTransformSpec(spec *agentgateway.Transform) (*api.TrafficPolicySpec_
 			}
 		} else {
 			errs = append(errs, fmt.Errorf("body value is not a valid CEL expression: %s", bodyValue))
+		}
+	}
+
+	if len(spec.Metadata) > 0 {
+		if transform == nil {
+			transform = &api.TrafficPolicySpec_TransformationPolicy_Transform{}
+		}
+		transform.Metadata = make(map[string]string, len(spec.Metadata))
+		for key, value := range spec.Metadata {
+			if isCEL(value) {
+				transform.Metadata[key] = string(value)
+			} else {
+				errs = append(errs, fmt.Errorf("metadata value is not a valid CEL expression: %s", value))
+			}
 		}
 	}
 

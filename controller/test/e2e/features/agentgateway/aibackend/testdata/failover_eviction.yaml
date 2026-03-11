@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-llm-primary
+  namespace: default
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: mock-llm-primary
+  template:
+    metadata:
+      labels:
+        app: mock-llm-primary
+    spec:
+      containers:
+      - name: mock
+        image: busybox
+        ports:
+        - containerPort: 9234
+        command: ["sleep", "infinity"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-llm-primary
+  namespace: default
+spec:
+  selector:
+    app: mock-llm-primary
+  ports:
+  - port: 9234
+    targetPort: 9234
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: llm-failover
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gateway
+    namespace: agentgateway-base
+  rules:
+  - name: openai-failover
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: openai-failover
+    matches:
+    - path:
+        type: PathPrefix
+        value: /v1/chat/completions
+      headers:
+      - type: Exact
+        name: x-test-failover
+        value: "1"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openai-failover
+  namespace: default
+spec:
+  ai:
+    groups:
+    # Priority 0 – primary: scaled-down deployment (no endpoints -> 503, then evicted)
+    - providers:
+      - name: openai
+        openai:
+          model: gpt-4o-mini
+        host: mock-llm-primary.default.svc.cluster.local
+        port: 9234
+    # Priority 1 – fallback: test mock
+    - providers:
+      - name: openai-fallback
+        openai:
+          model: gpt-4o-mini
+        host: 172.17.0.1
+        port: 9234
+  policies:
+    auth:
+      key: openai-key
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: openai-failover-eviction
+  namespace: default
+spec:
+  targetRefs:
+  - group: agentgateway.dev
+    kind: AgentgatewayBackend
+    name: openai-failover
+  backend:
+    health:
+      unhealthyCondition: "response.code >= 500"
+      eviction:
+        duration: 60s
+        consecutiveFailures: 3
+        restoreHealth: 100

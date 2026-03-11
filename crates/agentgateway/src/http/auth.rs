@@ -443,7 +443,7 @@ mod aws {
 	use tokio::sync::OnceCell;
 
 	use crate::http::auth::AwsAuth;
-	use crate::llm::bedrock::AwsRegion;
+	use crate::llm::bedrock::{AwsRegion, AwsServiceName};
 	use crate::*;
 
 	pub async fn sign_request(req: &mut http::Request, aws_auth: &AwsAuth) -> anyhow::Result<()> {
@@ -469,13 +469,18 @@ mod aws {
 			},
 		};
 
-		trace!("AWS signing with region: {}, service: bedrock", region);
+		let service = req
+			.extensions()
+			.get::<AwsServiceName>()
+			.map(|s| s.name)
+			.unwrap_or("bedrock");
+		trace!("AWS signing with region: {}, service: {}", region, service);
 
 		// Sign the request
 		let signing_params = SigningParams::builder()
 			.identity(&creds)
 			.region(region)
-			.name("bedrock")
+			.name(service)
 			.time(std::time::SystemTime::now())
 			.settings(aws_sigv4::http_request::SigningSettings::default())
 			.build()?

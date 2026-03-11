@@ -1,5 +1,8 @@
 use cel::Context;
 
+#[cfg(feature = "internal_benches")]
+#[path = "benches.rs"]
+mod benches;
 mod cidr;
 mod flatten;
 mod general;

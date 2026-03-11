@@ -3,8 +3,9 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use rand::RngExt;
 use serde::ser::SerializeSeq;
+use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use tokio::sync::mpsc;
 use tokio::time::sleep_until;
 
@@ -163,7 +164,33 @@ pub enum EndpointEvent<T> {
 
 #[derive(Debug)]
 pub enum EvictionEvent {
-	Evict(EndpointKey, Instant),
+	Evict {
+		key: EndpointKey,
+		until: Instant,
+		restore_health: Option<f64>,
+	},
+}
+
+/// Entry for the uneviction heap. Ordered so the earliest `until` is popped first (min-heap via reversed Ord).
+#[derive(Debug)]
+struct UnevictEntry(Instant, EndpointKey, Option<f64>);
+
+impl PartialEq for UnevictEntry {
+	fn eq(&self, other: &Self) -> bool {
+		self.0 == other.0 && self.1 == other.1
+	}
+}
+impl Eq for UnevictEntry {}
+impl PartialOrd for UnevictEntry {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+impl Ord for UnevictEntry {
+	fn cmp(&self, other: &Self) -> Ordering {
+		// Reverse so earliest instant is "greater" and gets popped first from BinaryHeap (max-heap).
+		other.0.cmp(&self.0).then_with(|| self.1.cmp(&other.1))
+	}
 }
 
 impl<T: Clone + Sync + Send + 'static> Default for EndpointSet<T> {
@@ -301,9 +328,10 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		buckets: Vec<Atomic<EndpointGroup<T>>>,
 	) {
 		tokio::task::spawn(async move {
-			let mut uneviction_heap: BinaryHeap<(Instant, EndpointKey)> = Default::default();
-			let handle_eviction = |uneviction_heap: &mut BinaryHeap<(Instant, EndpointKey)>| {
-				let (_, key) = uneviction_heap.pop().expect("heap is empty");
+			let mut uneviction_heap: BinaryHeap<UnevictEntry> = Default::default();
+			let handle_eviction = |uneviction_heap: &mut BinaryHeap<UnevictEntry>| {
+				let UnevictEntry(_until, key, restore_health) =
+					uneviction_heap.pop().expect("heap is empty");
 
 				trace!(%key, "unevict");
 				let Some(bucket) = Self::find_bucket_atomic(buckets.as_slice(), &key) else {
@@ -312,30 +340,39 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
 				if let Some(ep) = eps.rejected.swap_remove(&key) {
 					ep.info.evicted_until.store(None);
+					if let Some(h) = restore_health {
+						// Health scoring assumes normalized values in [0.0, 1.0].
+						ep.info.health.set(h.clamp(0.0, 1.0));
+					}
 					eps.active.insert(key, ep);
 				}
 				bucket.store(Arc::new(eps));
 			};
-			let handle_recv_evict = |uneviction_heap: &mut BinaryHeap<(Instant, EndpointKey)>,
+			let handle_recv_evict = |uneviction_heap: &mut BinaryHeap<UnevictEntry>,
 			                         o: Option<EvictionEvent>| {
 				let Some(item) = o else {
 					return;
 				};
 
-				let EvictionEvent::Evict(key, timer) = item;
+				let EvictionEvent::Evict {
+					key,
+					until,
+					restore_health,
+				} = item;
 
 				let Some(bucket) = Self::find_bucket_atomic(buckets.as_slice(), &key) else {
 					return;
 				};
 				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
-				uneviction_heap.push((timer, key.clone()));
+
+				uneviction_heap.push(UnevictEntry(until, key.clone(), restore_health));
 				if let Some(ep) = eps.active.swap_remove(&key) {
 					eps.rejected.insert(key, ep);
 				}
 				bucket.store(Arc::new(eps));
 			};
 			loop {
-				let evict_at = uneviction_heap.peek().map(|x| x.0);
+				let evict_at = uneviction_heap.peek().map(|e| e.0);
 				tokio::select! {
 					true = maybe_sleep_until(evict_at) => handle_eviction(&mut uneviction_heap),
 					item = eviction_events.recv() => {
@@ -351,16 +388,20 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 			return;
 		};
 		if let Some(cur) = bucket.active.get(&key) {
-			// Immediately store in the endpoint the eviction time, if its not already been evicted
 			let prev = cur
 				.info
 				.evicted_until
 				.compare_and_swap(&None::<Arc<_>>, Some(Arc::new(time)));
 			if prev.is_none() {
 				let tx = self.tx_eviction.clone();
-				// If we were the one to evict it, trigger the real eviction async
 				tokio::spawn(async move {
-					let _ = tx.send(EvictionEvent::Evict(key, time)).await;
+					let _ = tx
+						.send(EvictionEvent::Evict {
+							key,
+							until: time,
+							restore_health: None,
+						})
+						.await;
 				});
 			}
 		}
@@ -379,6 +420,12 @@ pub struct EndpointInfo {
 	pending_requests: ActiveCounter,
 	/// total_requests keeps track of the total number of requests.
 	total_requests: AtomicU64,
+	/// Number of consecutive unhealthy responses (reset to 0 on success).
+	consecutive_failures: AtomicU64,
+	/// Number of times this endpoint has been ejected. Used as a multiplier on
+	/// the base ejection duration so repeatedly-failing hosts stay out longer.
+	/// Reset to 0 when the endpoint handles a successful request.
+	times_ejected: AtomicU64,
 	#[serde(with = "serde_instant_option")]
 	/// evicted_until is the time at which the endpoint will be evicted.
 	evicted_until: AtomicOption<Instant>,
@@ -392,6 +439,8 @@ impl Default for EndpointInfo {
 			request_latency: Default::default(),
 			pending_requests: Default::default(),
 			total_requests: Default::default(),
+			consecutive_failures: Default::default(),
+			times_ejected: Default::default(),
 			evicted_until: Arc::new(Default::default()),
 		}
 	}
@@ -400,6 +449,16 @@ impl Default for EndpointInfo {
 impl EndpointInfo {
 	pub fn new() -> Self {
 		Self::default()
+	}
+	/// Current health score (0.0–1.0) for threshold-based eviction.
+	pub fn health_score(&self) -> f64 {
+		self.health.load()
+	}
+	pub fn consecutive_failures(&self) -> u64 {
+		self.consecutive_failures.load(AtomicOrdering::Relaxed)
+	}
+	pub fn times_ejected(&self) -> u64 {
+		self.times_ejected.load(AtomicOrdering::Relaxed)
 	}
 	// Todo: fine-tune the algorithm here
 	pub fn score(&self) -> f64 {
@@ -412,7 +471,7 @@ impl EndpointInfo {
 		key: Strng,
 		tx_sender: mpsc::Sender<EvictionEvent>,
 	) -> ActiveHandle {
-		self.total_requests.fetch_add(1, Ordering::Relaxed);
+		self.total_requests.fetch_add(1, AtomicOrdering::Relaxed);
 		ActiveHandle {
 			info: self.clone(),
 			key,
@@ -430,12 +489,16 @@ impl Ewma {
 		Ewma(atomic_float::AtomicF64::new(f))
 	}
 	pub fn load(&self) -> f64 {
-		self.0.load(Ordering::Relaxed)
+		self.0.load(AtomicOrdering::Relaxed)
+	}
+	/// Set the value directly (e.g. when unevicting to give the endpoint a recovery score).
+	pub fn set(&self, value: f64) {
+		self.0.store(value, AtomicOrdering::Relaxed);
 	}
 	pub fn record(&self, nv: f64) {
 		let _ = self
 			.0
-			.fetch_update(Ordering::SeqCst, Ordering::Relaxed, |old| {
+			.fetch_update(AtomicOrdering::SeqCst, AtomicOrdering::Relaxed, |old| {
 				Some(if old == 0.0 {
 					nv
 				} else {
@@ -467,17 +530,44 @@ pub struct ActiveHandle {
 }
 
 impl ActiveHandle {
-	pub fn finish_request(self, success: bool, latency: Duration, eviction_time: Option<Duration>) {
+	/// Current endpoint health score (0.0–1.0) for eviction threshold checks.
+	pub fn health_score(&self) -> f64 {
+		self.info.health_score()
+	}
+	pub fn consecutive_failures(&self) -> u64 {
+		self.info.consecutive_failures()
+	}
+	pub fn times_ejected(&self) -> u64 {
+		self.info.times_ejected()
+	}
+	pub fn finish_request(
+		self,
+		success: bool,
+		latency: Duration,
+		eviction_time: Option<Duration>,
+		restore_health: Option<f64>,
+	) {
 		if success {
 			self.info.request_latency.record(latency.as_secs_f64());
 			self.info.health.record(1.0);
+			self
+				.info
+				.consecutive_failures
+				.store(0, AtomicOrdering::Relaxed);
+			self.info.times_ejected.store(0, AtomicOrdering::Relaxed);
 		} else {
-			// Do not record request_latency on failure; its common for failures to be fast and skew results.
-			self.info.health.record(0.0)
+			self.info.health.record(0.0);
+			self
+				.info
+				.consecutive_failures
+				.fetch_add(1, AtomicOrdering::Relaxed);
 		};
 		if let Some(eviction_time) = eviction_time {
+			self
+				.info
+				.times_ejected
+				.fetch_add(1, AtomicOrdering::Relaxed);
 			let time = Instant::now() + eviction_time;
-			// Immediately store in the endpoint the eviction time, if its not already been evicted
 			let prev = self
 				.info
 				.evicted_until
@@ -485,9 +575,14 @@ impl ActiveHandle {
 			if prev.is_none() {
 				let tx = self.tx.clone();
 				let key = self.key.clone();
-				// If we were the one to evict it, trigger the real eviction async
 				tokio::spawn(async move {
-					let _ = tx.send(EvictionEvent::Evict(key, time)).await;
+					let _ = tx
+						.send(EvictionEvent::Evict {
+							key,
+							until: time,
+							restore_health,
+						})
+						.await;
 				});
 			}
 		}
@@ -549,5 +644,263 @@ impl<T> ActiveEndpointsIter<T> {
 		} else {
 			&self.0.active
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	// --- Ewma ---
+
+	#[test]
+	fn ewma_initial_value() {
+		let ewma = Ewma::new(1.0);
+		assert_eq!(ewma.load(), 1.0);
+	}
+
+	#[test]
+	fn ewma_default_is_zero() {
+		let ewma = Ewma::default();
+		assert_eq!(ewma.load(), 0.0);
+	}
+
+	#[test]
+	fn ewma_set_overwrites() {
+		let ewma = Ewma::new(1.0);
+		ewma.set(0.42);
+		assert_eq!(ewma.load(), 0.42);
+	}
+
+	#[test]
+	fn ewma_first_record_from_zero_sets_directly() {
+		let ewma = Ewma::default(); // 0.0
+		ewma.record(1.0);
+		// When old==0.0, result is nv directly
+		assert_eq!(ewma.load(), 1.0);
+	}
+
+	#[test]
+	fn ewma_record_sequence_failures() {
+		let ewma = Ewma::new(1.0);
+		// ALPHA = 0.3, record(0.0) simulates a failure
+		ewma.record(0.0); // 0.3*0 + 0.7*1.0 = 0.7
+		assert!((ewma.load() - 0.7).abs() < 1e-10);
+		ewma.record(0.0); // 0.3*0 + 0.7*0.7 = 0.49
+		assert!((ewma.load() - 0.49).abs() < 1e-10);
+		ewma.record(0.0); // 0.3*0 + 0.7*0.49 = 0.343
+		assert!((ewma.load() - 0.343).abs() < 1e-10);
+	}
+
+	#[test]
+	fn ewma_recovery_after_failures() {
+		let ewma = Ewma::new(0.343);
+		ewma.record(1.0); // 0.3*1.0 + 0.7*0.343 = 0.5401
+		assert!((ewma.load() - 0.5401).abs() < 1e-10);
+	}
+
+	#[test]
+	fn ewma_restore_health_full_reset() {
+		let ewma = Ewma::new(1.0);
+		// 3 failures: 1.0 → 0.7 → 0.49 → 0.343
+		ewma.record(0.0);
+		ewma.record(0.0);
+		ewma.record(0.0);
+		assert!((ewma.load() - 0.343).abs() < 1e-10);
+
+		// Simulate uneviction with restoreHealth = 1.0
+		ewma.set(1.0);
+		assert_eq!(ewma.load(), 1.0);
+
+		// Failures start fresh from 1.0
+		ewma.record(0.0); // 0.7
+		assert!((ewma.load() - 0.7).abs() < 1e-10);
+		ewma.record(0.0); // 0.49
+		assert!((ewma.load() - 0.49).abs() < 1e-10);
+	}
+
+	#[test]
+	fn ewma_restore_health_zero() {
+		let ewma = Ewma::new(1.0);
+		ewma.record(0.0);
+		ewma.record(0.0);
+		ewma.record(0.0);
+
+		// Simulate uneviction with restoreHealth = 0.0
+		ewma.set(0.0);
+		assert_eq!(ewma.load(), 0.0);
+
+		// record(0.0) when old==0.0: result = nv = 0.0 (stays at zero)
+		ewma.record(0.0);
+		assert_eq!(ewma.load(), 0.0);
+	}
+
+	#[test]
+	fn ewma_restore_health_partial() {
+		let ewma = Ewma::new(1.0);
+		ewma.record(0.0);
+		ewma.record(0.0);
+		ewma.record(0.0);
+
+		// Simulate uneviction with restoreHealth = 0.5
+		ewma.set(0.5);
+		assert_eq!(ewma.load(), 0.5);
+
+		// Next failure: 0.3*0 + 0.7*0.5 = 0.35
+		ewma.record(0.0);
+		assert!((ewma.load() - 0.35).abs() < 1e-10);
+	}
+
+	// --- EndpointInfo ---
+
+	#[test]
+	fn endpoint_info_default_health() {
+		let info = EndpointInfo::default();
+		assert_eq!(info.health_score(), 1.0);
+		assert_eq!(info.consecutive_failures(), 0);
+		assert_eq!(info.times_ejected(), 0);
+	}
+
+	// --- EndpointSet eviction integration ---
+
+	#[tokio::test]
+	async fn endpoint_set_eviction_and_uneviction() {
+		let key: Strng = "ep1".into();
+		let eps = EndpointSet::new(vec![vec![(key.clone(), "backend1")]]);
+
+		// Endpoint is initially in the active set
+		let group = eps.best_bucket();
+		assert!(group.active.contains_key(&key));
+		assert!(!group.rejected.contains_key(&key));
+
+		// Start a request and finish with eviction
+		let info = group.active.get(&key).unwrap().info.clone();
+		let handle = eps.start_request(key.clone(), &info);
+		handle.finish_request(
+			false,
+			Duration::from_millis(10),
+			Some(Duration::from_millis(100)),
+			Some(1.0),
+		);
+
+		// Give the eviction event time to be processed
+		tokio::time::sleep(Duration::from_millis(50)).await;
+
+		// Endpoint should now be rejected
+		let group = eps.best_bucket();
+		assert!(
+			group.rejected.contains_key(&key),
+			"endpoint should be evicted"
+		);
+
+		// Wait for uneviction (100ms eviction duration + buffer)
+		tokio::time::sleep(Duration::from_millis(150)).await;
+
+		// Endpoint should be back in active with health reset to 1.0
+		let group = eps.best_bucket();
+		assert!(
+			group.active.contains_key(&key),
+			"endpoint should be unevicted"
+		);
+		let ep_info = &group.active.get(&key).unwrap().info;
+		assert_eq!(ep_info.health_score(), 1.0, "health should be reset to 1.0");
+	}
+
+	#[tokio::test]
+	async fn endpoint_set_uneviction_restore_health_zero() {
+		let key: Strng = "ep1".into();
+		let eps = EndpointSet::new(vec![vec![(key.clone(), "backend1")]]);
+
+		let group = eps.best_bucket();
+		let info = group.active.get(&key).unwrap().info.clone();
+		let handle = eps.start_request(key.clone(), &info);
+		handle.finish_request(
+			false,
+			Duration::from_millis(10),
+			Some(Duration::from_millis(100)),
+			Some(0.0),
+		);
+
+		tokio::time::sleep(Duration::from_millis(50)).await;
+		let group = eps.best_bucket();
+		assert!(group.rejected.contains_key(&key));
+
+		// Wait for uneviction
+		tokio::time::sleep(Duration::from_millis(150)).await;
+
+		let group = eps.best_bucket();
+		assert!(group.active.contains_key(&key));
+		let ep_info = &group.active.get(&key).unwrap().info;
+		assert_eq!(
+			ep_info.health_score(),
+			0.0,
+			"health should be set to 0.0 on uneviction"
+		);
+	}
+
+	#[tokio::test]
+	async fn endpoint_set_uneviction_no_restore_health() {
+		let key: Strng = "ep1".into();
+		let eps = EndpointSet::new(vec![vec![(key.clone(), "backend1")]]);
+
+		let group = eps.best_bucket();
+		let info = group.active.get(&key).unwrap().info.clone();
+
+		// Record a failure to lower health before eviction
+		info.health.record(0.0); // 0.3*0 + 0.7*1.0 = 0.7
+
+		let handle = eps.start_request(key.clone(), &info);
+		handle.finish_request(
+			false,
+			Duration::from_millis(10),
+			Some(Duration::from_millis(100)),
+			None,
+		);
+
+		tokio::time::sleep(Duration::from_millis(50)).await;
+
+		// Wait for uneviction
+		tokio::time::sleep(Duration::from_millis(150)).await;
+
+		let group = eps.best_bucket();
+		assert!(group.active.contains_key(&key));
+		let ep_info = &group.active.get(&key).unwrap().info;
+		// Health was recorded as 0.0 in finish_request (failure),
+		// starting from 0.7: 0.3*0 + 0.7*0.7 = 0.49
+		assert!(
+			(ep_info.health_score() - 0.49).abs() < 1e-10,
+			"health should be unchanged from pre-eviction EWMA, got {}",
+			ep_info.health_score()
+		);
+	}
+
+	#[test]
+	fn consecutive_failures_increments_on_failure() {
+		let info = EndpointInfo::default();
+		assert_eq!(info.consecutive_failures(), 0);
+
+		info
+			.consecutive_failures
+			.fetch_add(1, AtomicOrdering::Relaxed);
+		assert_eq!(info.consecutive_failures(), 1);
+
+		info
+			.consecutive_failures
+			.fetch_add(1, AtomicOrdering::Relaxed);
+		assert_eq!(info.consecutive_failures(), 2);
+	}
+
+	#[test]
+	fn consecutive_failures_not_reset_by_uneviction() {
+		let info = EndpointInfo::default();
+		// Simulate 3 failures
+		info.consecutive_failures.store(3, AtomicOrdering::Relaxed);
+		// Simulate what uneviction does: only resets health, not consecutive_failures
+		info.health.set(1.0);
+		assert_eq!(
+			info.consecutive_failures(),
+			3,
+			"consecutive_failures should NOT be reset on uneviction"
+		);
 	}
 }

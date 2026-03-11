@@ -61,7 +61,7 @@ output:
         weight: 50
       hostnames:
       - grpc.example.com
-      key: default/grpc-header-route.0.http
+      key: default/grpc-header-route.0.grpc.http
       listenerKey: default/test-gateway.http
       matches:
       - path:

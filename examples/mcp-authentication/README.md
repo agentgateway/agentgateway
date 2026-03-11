@@ -195,6 +195,44 @@ Notes:
 
 ---
 
+### Customizing required claims
+
+By default, the `exp` (expiration) claim is required. You can customize which
+claims must be present via `jwtValidationOptions.requiredClaims`. Only the
+five RFC 7519 registered claims are recognized: `exp`, `nbf`, `aud`, `iss`,
+`sub`. Any other value is silently ignored by the underlying library. This
+only enforces **presence**; standard claims like `exp` have their values
+validated independently.
+
+```yaml
+# Allow tokens without exp (e.g., enterprise IDPs that omit it)
+mcpAuthentication:
+  issuer: https://enterprise-idp.example.com
+  audiences:
+    - https://api.mycompany.com/mcp
+  jwks:
+    url: https://enterprise-idp.example.com/.well-known/jwks.json
+  jwtValidationOptions:
+    requiredClaims: []
+
+# Require both exp and nbf
+mcpAuthentication:
+  issuer: https://strict-idp.example.com
+  audiences:
+    - https://api.mycompany.com/mcp
+  jwks:
+    url: https://strict-idp.example.com/.well-known/jwks.json
+  jwtValidationOptions:
+    requiredClaims: ["exp", "nbf"]
+```
+
+Claims present in the token are still validated even if not listed as required.
+For example, an expired `exp` is rejected regardless of `requiredClaims`.
+
+> **Note:** Tokens without `exp` remain valid until the signing key is rotated.
+
+---
+
 ### Troubleshooting
 - Ensure `issuer` and `jwksUrl` match your Authorization Server.
 - Ensure `audience` equals the resource URL clients will request.
