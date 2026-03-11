@@ -859,7 +859,7 @@ message BackendPolicySpec {
       string template_id = 1;
       string project_id = 2;
 
-      // default: us-central1 
+      // default: us-central1
       optional string location = 3;
 
       repeated BackendPolicySpec inline_policies = 4;
@@ -1038,6 +1038,9 @@ message BackendPolicySpec {
     HttpVersion version = 1;
     google.protobuf.Duration request_timeout = 2;
   }
+  message BackendTunnel {
+    BackendReference proxy = 1;
+  }
   message BackendTCP {
     KeepaliveConfig keepalive = 1;
     google.protobuf.Duration connect_timeout = 2;
@@ -1095,6 +1098,7 @@ message BackendPolicySpec {
     BackendTCP backend_tcp = 13;
     TrafficPolicySpec.TransformationPolicy transformation = 14;
     Health health = 15;
+    BackendTunnel backend_tunnel = 16;
   }
 }
 

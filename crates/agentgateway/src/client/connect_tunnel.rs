@@ -1,20 +1,31 @@
+use http::HeaderValue;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::transport::stream::Socket;
 
-pub async fn handshake(conn: &mut Socket, dest: &str) -> Result<(), anyhow::Error> {
+pub async fn handshake(
+	conn: &mut Socket,
+	dest: &str,
+	auth: Option<HeaderValue>,
+) -> Result<(), anyhow::Error> {
 	// While the raw HTTP/1 usage here looks pretty sketchy, hyper itself is doing this so its probably sufficient
 	// for our simple needs here.
 	// If we need to add TLS (which implies ALPN negotiation, etc) then we will want to make this more robust.
-	let buf = format!(
+	let mut buf = format!(
 		"\
          CONNECT {dest} HTTP/1.1\r\n\
          Host: {dest}\r\n\
-         \r\n\
          "
 	)
 	.into_bytes();
 
+	if let Some(auth) = auth {
+		buf.extend_from_slice(b"Proxy-Authorization: ");
+		buf.extend_from_slice(auth.as_bytes());
+		buf.extend_from_slice(b"\r\n");
+	}
+	// headers end
+	buf.extend_from_slice(b"\r\n");
 	conn.write_all(&buf).await?;
 
 	let mut buf = [0; 8192];

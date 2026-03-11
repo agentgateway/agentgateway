@@ -269,6 +269,15 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailIdentifier`|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailVersion`|The version of the guardrail|
@@ -359,6 +368,15 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -449,6 +467,15 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection.body`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection.status`||
@@ -566,6 +593,15 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -656,6 +692,15 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection.body`||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection.status`||
@@ -689,6 +734,15 @@
 |`binds[].listeners[].routes[].policies.backendTLS.insecureHost`||
 |`binds[].listeners[].routes[].policies.backendTLS.alpn`||
 |`binds[].listeners[].routes[].policies.backendTLS.subjectAltNames`||
+|`binds[].listeners[].routes[].policies.backendTunnel`|Tunnel to the backend.|
+|`binds[].listeners[].routes[].policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.backendAuth`|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.(any)(1)passthrough`||
 |`binds[].listeners[].routes[].policies.backendAuth.(any)(1)key`||
@@ -815,6 +869,15 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors[].entries`||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.(any)descriptors[].entries[].key`||
@@ -943,6 +1006,15 @@
 |`binds[].listeners[].routes[].policies.extAuthz.(any)policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extAuthz.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)protocol.(1)grpc`||
 |`binds[].listeners[].routes[].policies.extAuthz.(any)protocol.(1)grpc.context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
@@ -1054,6 +1126,15 @@
 |`binds[].listeners[].routes[].policies.extProc.(any)policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].policies.extProc.(any)policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].policies.extProc.(any)policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extProc.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|
 |`binds[].listeners[].routes[].policies.extProc.(any)metadataContext`|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.(any)requestAttributes`|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -1197,6 +1278,15 @@
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.mcpAuthorization`|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].(1)mcp.targets[].policies.mcpAuthorization.rules`||
 |`binds[].listeners[].routes[].backends[].(1)mcp.statefulMode`||
@@ -1312,6 +1402,15 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.mcpAuthorization`|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.mcpAuthorization.rules`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -1425,6 +1524,15 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailIdentifier`|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailVersion`|The version of the guardrail|
@@ -1515,6 +1623,15 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -1605,6 +1722,15 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].rejection`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].rejection.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.request[].rejection.status`||
@@ -1722,6 +1848,15 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -1812,6 +1947,15 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].rejection`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].rejection.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)policies.ai.promptGuard.response[].rejection.status`||
@@ -1948,6 +2092,15 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.mcpAuthorization`|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.mcpAuthorization.rules`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -2061,6 +2214,15 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailIdentifier`|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailVersion`|The version of the guardrail|
@@ -2151,6 +2313,15 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -2241,6 +2412,15 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].rejection`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].rejection.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.request[].rejection.status`||
@@ -2358,6 +2538,15 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -2448,6 +2637,15 @@
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].rejection`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].rejection.body`||
 |`binds[].listeners[].routes[].backends[].(1)ai.(any)groups[].providers[].policies.ai.promptGuard.response[].rejection.status`||
@@ -2563,6 +2761,15 @@
 |`binds[].listeners[].routes[].backends[].policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization`|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules`||
 |`binds[].listeners[].routes[].backends[].policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -2676,6 +2883,15 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailIdentifier`|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailVersion`|The version of the guardrail|
@@ -2766,6 +2982,15 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -2856,6 +3081,15 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection.body`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection.status`||
@@ -2973,6 +3207,15 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -3063,6 +3306,15 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection.body`||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection.status`||
@@ -3121,6 +3373,15 @@
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.insecureHost`||
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.alpn`||
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.subjectAltNames`||
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel`|Tunnel to the backend.|
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].policies`||
 |`binds[].listeners[].policies.jwtAuth`|Authenticate incoming JWT requests.|
 |`binds[].listeners[].policies.jwtAuth.(any)(any)mode`||
@@ -3234,6 +3495,15 @@
 |`binds[].listeners[].policies.extAuthz.(any)policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].policies.extAuthz.(any)policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].policies.extAuthz.(any)policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].policies.extAuthz.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].policies.extAuthz.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].policies.extAuthz.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].policies.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
 |`binds[].listeners[].policies.extAuthz.(any)protocol.(1)grpc`||
 |`binds[].listeners[].policies.extAuthz.(any)protocol.(1)grpc.context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
@@ -3345,6 +3615,15 @@
 |`binds[].listeners[].policies.extProc.(any)policies.health.eviction.restoreHealth`||
 |`binds[].listeners[].policies.extProc.(any)policies.health.eviction.consecutiveFailures`||
 |`binds[].listeners[].policies.extProc.(any)policies.health.eviction.healthThreshold`||
+|`binds[].listeners[].policies.extProc.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].policies.extProc.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`binds[].listeners[].policies.extProc.(any)policies.backendTunnel.proxy.(1)service`||
+|`binds[].listeners[].policies.extProc.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`binds[].listeners[].policies.extProc.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`binds[].listeners[].policies.extProc.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`binds[].listeners[].policies.extProc.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`binds[].listeners[].policies.extProc.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`binds[].listeners[].policies.extProc.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].policies.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|
 |`binds[].listeners[].policies.extProc.(any)metadataContext`|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].policies.extProc.(any)requestAttributes`|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -3493,6 +3772,15 @@
 |`frontendPolicies.accessLog.otlp.(any)policies.health.eviction.restoreHealth`||
 |`frontendPolicies.accessLog.otlp.(any)policies.health.eviction.consecutiveFailures`||
 |`frontendPolicies.accessLog.otlp.(any)policies.health.eviction.healthThreshold`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTunnel.proxy.(1)service`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`frontendPolicies.accessLog.otlp.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`frontendPolicies.accessLog.otlp.(any)protocol`||
 |`frontendPolicies.accessLog.otlp.(any)path`||
 |`frontendPolicies.tracing`||
@@ -3589,6 +3877,15 @@
 |`frontendPolicies.tracing.(any)policies.health.eviction.restoreHealth`||
 |`frontendPolicies.tracing.(any)policies.health.eviction.consecutiveFailures`||
 |`frontendPolicies.tracing.(any)policies.health.eviction.healthThreshold`||
+|`frontendPolicies.tracing.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`frontendPolicies.tracing.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`frontendPolicies.tracing.(any)policies.backendTunnel.proxy.(1)service`||
+|`frontendPolicies.tracing.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`frontendPolicies.tracing.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`frontendPolicies.tracing.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`frontendPolicies.tracing.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`frontendPolicies.tracing.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`frontendPolicies.tracing.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`frontendPolicies.tracing.(any)attributes`|Span attributes to add, keyed by attribute name.|
 |`frontendPolicies.tracing.(any)resources`|Resource attributes to add to the tracer provider (OTel `Resource`).<br>This can be used to set things like `service.name` dynamically.|
 |`frontendPolicies.tracing.(any)remove`|Attribute keys to remove from the emitted span attributes.<br><br>This is applied before `attributes` are evaluated/added, so it can be used to drop<br>default attributes or avoid duplication.|
@@ -3795,6 +4092,15 @@
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.restoreHealth`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.consecutiveFailures`||
 |`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.healthThreshold`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.port`||
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`policies[].policy.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailIdentifier`|The unique identifier of the guardrail|
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailVersion`|The version of the guardrail|
@@ -3885,6 +4191,15 @@
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`policies[].policy.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -3975,6 +4290,15 @@
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`policies[].policy.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.ai.promptGuard.request[].rejection`||
 |`policies[].policy.ai.promptGuard.request[].rejection.body`||
 |`policies[].policy.ai.promptGuard.request[].rejection.status`||
@@ -4092,6 +4416,15 @@
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`policies[].policy.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -4182,6 +4515,15 @@
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`policies[].policy.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.ai.promptGuard.response[].rejection`||
 |`policies[].policy.ai.promptGuard.response[].rejection.body`||
 |`policies[].policy.ai.promptGuard.response[].rejection.status`||
@@ -4215,6 +4557,15 @@
 |`policies[].policy.backendTLS.insecureHost`||
 |`policies[].policy.backendTLS.alpn`||
 |`policies[].policy.backendTLS.subjectAltNames`||
+|`policies[].policy.backendTunnel`|Tunnel to the backend.|
+|`policies[].policy.backendTunnel.proxy`|Reference to the proxy address|
+|`policies[].policy.backendTunnel.proxy.(1)service`||
+|`policies[].policy.backendTunnel.proxy.(1)service.name`||
+|`policies[].policy.backendTunnel.proxy.(1)service.name.namespace`||
+|`policies[].policy.backendTunnel.proxy.(1)service.name.hostname`||
+|`policies[].policy.backendTunnel.proxy.(1)service.port`||
+|`policies[].policy.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`policies[].policy.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.backendAuth`|Authenticate to the backend.|
 |`policies[].policy.backendAuth.(any)(1)passthrough`||
 |`policies[].policy.backendAuth.(any)(1)key`||
@@ -4341,6 +4692,15 @@
 |`policies[].policy.remoteRateLimit.(any)policies.health.eviction.restoreHealth`||
 |`policies[].policy.remoteRateLimit.(any)policies.health.eviction.consecutiveFailures`||
 |`policies[].policy.remoteRateLimit.(any)policies.health.eviction.healthThreshold`||
+|`policies[].policy.remoteRateLimit.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`policies[].policy.remoteRateLimit.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`policies[].policy.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)service`||
+|`policies[].policy.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`policies[].policy.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`policies[].policy.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`policies[].policy.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`policies[].policy.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`policies[].policy.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.remoteRateLimit.(any)descriptors`||
 |`policies[].policy.remoteRateLimit.(any)descriptors[].entries`||
 |`policies[].policy.remoteRateLimit.(any)descriptors[].entries[].key`||
@@ -4469,6 +4829,15 @@
 |`policies[].policy.extAuthz.(any)policies.health.eviction.restoreHealth`||
 |`policies[].policy.extAuthz.(any)policies.health.eviction.consecutiveFailures`||
 |`policies[].policy.extAuthz.(any)policies.health.eviction.healthThreshold`||
+|`policies[].policy.extAuthz.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`policies[].policy.extAuthz.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`policies[].policy.extAuthz.(any)policies.backendTunnel.proxy.(1)service`||
+|`policies[].policy.extAuthz.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`policies[].policy.extAuthz.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`policies[].policy.extAuthz.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`policies[].policy.extAuthz.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`policies[].policy.extAuthz.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`policies[].policy.extAuthz.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
 |`policies[].policy.extAuthz.(any)protocol.(1)grpc`||
 |`policies[].policy.extAuthz.(any)protocol.(1)grpc.context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
@@ -4580,6 +4949,15 @@
 |`policies[].policy.extProc.(any)policies.health.eviction.restoreHealth`||
 |`policies[].policy.extProc.(any)policies.health.eviction.consecutiveFailures`||
 |`policies[].policy.extProc.(any)policies.health.eviction.healthThreshold`||
+|`policies[].policy.extProc.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`policies[].policy.extProc.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`policies[].policy.extProc.(any)policies.backendTunnel.proxy.(1)service`||
+|`policies[].policy.extProc.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`policies[].policy.extProc.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`policies[].policy.extProc.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`policies[].policy.extProc.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`policies[].policy.extProc.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`policies[].policy.extProc.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|
 |`policies[].policy.extProc.(any)metadataContext`|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`policies[].policy.extProc.(any)requestAttributes`|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -4697,6 +5075,15 @@
 |`backends[].policies.health.eviction.restoreHealth`||
 |`backends[].policies.health.eviction.consecutiveFailures`||
 |`backends[].policies.health.eviction.healthThreshold`||
+|`backends[].policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`backends[].policies.backendTunnel.proxy`|Reference to the proxy address|
+|`backends[].policies.backendTunnel.proxy.(1)service`||
+|`backends[].policies.backendTunnel.proxy.(1)service.name`||
+|`backends[].policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`backends[].policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`backends[].policies.backendTunnel.proxy.(1)service.port`||
+|`backends[].policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`backends[].policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`backends[].policies.mcpAuthorization`|Authorization policies for MCP access.|
 |`backends[].policies.mcpAuthorization.rules`||
 |`backends[].policies.a2a`|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -4810,6 +5197,15 @@
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.restoreHealth`||
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.consecutiveFailures`||
 |`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.healthThreshold`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.port`||
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`backends[].policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailIdentifier`|The unique identifier of the guardrail|
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailVersion`|The version of the guardrail|
@@ -4900,6 +5296,15 @@
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`backends[].policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -4990,6 +5395,15 @@
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`backends[].policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`backends[].policies.ai.promptGuard.request[].rejection`||
 |`backends[].policies.ai.promptGuard.request[].rejection.body`||
 |`backends[].policies.ai.promptGuard.request[].rejection.status`||
@@ -5107,6 +5521,15 @@
 |`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`backends[].policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -5197,6 +5620,15 @@
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`backends[].policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`backends[].policies.ai.promptGuard.response[].rejection`||
 |`backends[].policies.ai.promptGuard.response[].rejection.body`||
 |`backends[].policies.ai.promptGuard.response[].rejection.status`||
@@ -5350,6 +5782,15 @@
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.health.eviction.restoreHealth`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.health.eviction.consecutiveFailures`||
 |`llm.models[].guardrails.request[].(1)openAIModeration.policies.health.eviction.healthThreshold`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.port`||
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`llm.models[].guardrails.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.guardrailIdentifier`|The unique identifier of the guardrail|
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.guardrailVersion`|The version of the guardrail|
@@ -5440,6 +5881,15 @@
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`llm.models[].guardrails.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`llm.models[].guardrails.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`llm.models[].guardrails.request[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`llm.models[].guardrails.request[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -5530,6 +5980,15 @@
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`llm.models[].guardrails.request[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`llm.models[].guardrails.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`llm.models[].guardrails.request[].rejection`||
 |`llm.models[].guardrails.request[].rejection.body`||
 |`llm.models[].guardrails.request[].rejection.status`||
@@ -5647,6 +6106,15 @@
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`llm.models[].guardrails.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`llm.models[].guardrails.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`llm.models[].guardrails.response[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`llm.models[].guardrails.response[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -5737,6 +6205,15 @@
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`llm.models[].guardrails.response[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`llm.models[].guardrails.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`llm.models[].guardrails.response[].rejection`||
 |`llm.models[].guardrails.response[].rejection.body`||
 |`llm.models[].guardrails.response[].rejection.status`||
@@ -5863,6 +6340,15 @@
 |`llm.policies.extAuthz.(any)policies.health.eviction.restoreHealth`||
 |`llm.policies.extAuthz.(any)policies.health.eviction.consecutiveFailures`||
 |`llm.policies.extAuthz.(any)policies.health.eviction.healthThreshold`||
+|`llm.policies.extAuthz.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`llm.policies.extAuthz.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`llm.policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service`||
+|`llm.policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`llm.policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`llm.policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`llm.policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`llm.policies.extAuthz.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`llm.policies.extAuthz.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`llm.policies.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
 |`llm.policies.extAuthz.(any)protocol.(1)grpc`||
 |`llm.policies.extAuthz.(any)protocol.(1)grpc.context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
@@ -5974,6 +6460,15 @@
 |`llm.policies.extProc.(any)policies.health.eviction.restoreHealth`||
 |`llm.policies.extProc.(any)policies.health.eviction.consecutiveFailures`||
 |`llm.policies.extProc.(any)policies.health.eviction.healthThreshold`||
+|`llm.policies.extProc.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`llm.policies.extProc.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`llm.policies.extProc.(any)policies.backendTunnel.proxy.(1)service`||
+|`llm.policies.extProc.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`llm.policies.extProc.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`llm.policies.extProc.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`llm.policies.extProc.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`llm.policies.extProc.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`llm.policies.extProc.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`llm.policies.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|
 |`llm.policies.extProc.(any)metadataContext`|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`llm.policies.extProc.(any)requestAttributes`|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -6112,6 +6607,15 @@
 |`mcp.targets[].policies.health.eviction.restoreHealth`||
 |`mcp.targets[].policies.health.eviction.consecutiveFailures`||
 |`mcp.targets[].policies.health.eviction.healthThreshold`||
+|`mcp.targets[].policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`mcp.targets[].policies.backendTunnel.proxy`|Reference to the proxy address|
+|`mcp.targets[].policies.backendTunnel.proxy.(1)service`||
+|`mcp.targets[].policies.backendTunnel.proxy.(1)service.name`||
+|`mcp.targets[].policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`mcp.targets[].policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`mcp.targets[].policies.backendTunnel.proxy.(1)service.port`||
+|`mcp.targets[].policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`mcp.targets[].policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.targets[].policies.mcpAuthorization`|Authorization policies for MCP access.|
 |`mcp.targets[].policies.mcpAuthorization.rules`||
 |`mcp.statefulMode`||
@@ -6291,6 +6795,15 @@
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.restoreHealth`||
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.consecutiveFailures`||
 |`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.health.eviction.healthThreshold`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)service.port`||
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.request[].(1)openAIModeration.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails`|Configuration for AWS Bedrock Guardrails integration.|
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailIdentifier`|The unique identifier of the guardrail|
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.guardrailVersion`|The version of the guardrail|
@@ -6381,6 +6894,15 @@
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.request[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -6471,6 +6993,15 @@
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.request[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.ai.promptGuard.request[].rejection`||
 |`mcp.policies.ai.promptGuard.request[].rejection.body`||
 |`mcp.policies.ai.promptGuard.request[].rejection.status`||
@@ -6588,6 +7119,15 @@
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.restoreHealth`||
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.consecutiveFailures`||
 |`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.health.eviction.healthThreshold`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)service.port`||
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.response[].(1)bedrockGuardrails.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor`|Configuration for Google Cloud Model Armor integration.|
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.templateId`|The template ID for the Model Armor configuration|
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.projectId`|The GCP project ID|
@@ -6678,6 +7218,15 @@
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.restoreHealth`||
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.consecutiveFailures`||
 |`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.health.eviction.healthThreshold`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)service.port`||
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.response[].(1)googleModelArmor.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.ai.promptGuard.response[].rejection`||
 |`mcp.policies.ai.promptGuard.response[].rejection.body`||
 |`mcp.policies.ai.promptGuard.response[].rejection.status`||
@@ -6711,6 +7260,15 @@
 |`mcp.policies.backendTLS.insecureHost`||
 |`mcp.policies.backendTLS.alpn`||
 |`mcp.policies.backendTLS.subjectAltNames`||
+|`mcp.policies.backendTunnel`|Tunnel to the backend.|
+|`mcp.policies.backendTunnel.proxy`|Reference to the proxy address|
+|`mcp.policies.backendTunnel.proxy.(1)service`||
+|`mcp.policies.backendTunnel.proxy.(1)service.name`||
+|`mcp.policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`mcp.policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`mcp.policies.backendTunnel.proxy.(1)service.port`||
+|`mcp.policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`mcp.policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.backendAuth`|Authenticate to the backend.|
 |`mcp.policies.backendAuth.(any)(1)passthrough`||
 |`mcp.policies.backendAuth.(any)(1)key`||
@@ -6837,6 +7395,15 @@
 |`mcp.policies.remoteRateLimit.(any)policies.health.eviction.restoreHealth`||
 |`mcp.policies.remoteRateLimit.(any)policies.health.eviction.consecutiveFailures`||
 |`mcp.policies.remoteRateLimit.(any)policies.health.eviction.healthThreshold`||
+|`mcp.policies.remoteRateLimit.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`mcp.policies.remoteRateLimit.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`mcp.policies.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)service`||
+|`mcp.policies.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`mcp.policies.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`mcp.policies.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`mcp.policies.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`mcp.policies.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`mcp.policies.remoteRateLimit.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.remoteRateLimit.(any)descriptors`||
 |`mcp.policies.remoteRateLimit.(any)descriptors[].entries`||
 |`mcp.policies.remoteRateLimit.(any)descriptors[].entries[].key`||
@@ -6965,6 +7532,15 @@
 |`mcp.policies.extAuthz.(any)policies.health.eviction.restoreHealth`||
 |`mcp.policies.extAuthz.(any)policies.health.eviction.consecutiveFailures`||
 |`mcp.policies.extAuthz.(any)policies.health.eviction.healthThreshold`||
+|`mcp.policies.extAuthz.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`mcp.policies.extAuthz.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`mcp.policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service`||
+|`mcp.policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`mcp.policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`mcp.policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`mcp.policies.extAuthz.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`mcp.policies.extAuthz.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`mcp.policies.extAuthz.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.extAuthz.(any)protocol`|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.|
 |`mcp.policies.extAuthz.(any)protocol.(1)grpc`||
 |`mcp.policies.extAuthz.(any)protocol.(1)grpc.context`|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
@@ -7076,6 +7652,15 @@
 |`mcp.policies.extProc.(any)policies.health.eviction.restoreHealth`||
 |`mcp.policies.extProc.(any)policies.health.eviction.consecutiveFailures`||
 |`mcp.policies.extProc.(any)policies.health.eviction.healthThreshold`||
+|`mcp.policies.extProc.(any)policies.backendTunnel`|Specify a tunnel to use when connecting to the backend|
+|`mcp.policies.extProc.(any)policies.backendTunnel.proxy`|Reference to the proxy address|
+|`mcp.policies.extProc.(any)policies.backendTunnel.proxy.(1)service`||
+|`mcp.policies.extProc.(any)policies.backendTunnel.proxy.(1)service.name`||
+|`mcp.policies.extProc.(any)policies.backendTunnel.proxy.(1)service.name.namespace`||
+|`mcp.policies.extProc.(any)policies.backendTunnel.proxy.(1)service.name.hostname`||
+|`mcp.policies.extProc.(any)policies.backendTunnel.proxy.(1)service.port`||
+|`mcp.policies.extProc.(any)policies.backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`mcp.policies.extProc.(any)policies.backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.extProc.(any)failureMode`|Behavior when the ext_proc service is unavailable or returns an error|
 |`mcp.policies.extProc.(any)metadataContext`|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.policies.extProc.(any)requestAttributes`|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|

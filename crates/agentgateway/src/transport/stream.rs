@@ -116,9 +116,16 @@ impl Connection for Socket {
 	}
 }
 
+// Signal we are HttpProxying
+#[derive(Debug, Clone, Default)]
+pub struct HttpProxy;
+
 impl hyper_util_fork::client::legacy::connect::Connection for Socket {
 	fn connected(&self) -> hyper_util_fork::client::legacy::connect::Connected {
 		let mut con = hyper_util_fork::client::legacy::connect::Connected::new();
+		if self.ext.get::<HttpProxy>().is_some() {
+			con = con.proxy(true);
+		}
 		match self
 			.ext
 			.get::<TLSConnectionInfo>()

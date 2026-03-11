@@ -1069,6 +1069,9 @@ impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 					.transpose()?
 					.unwrap_or_default(),
 			}),
+			Some(bps::Kind::BackendTunnel(bt)) => BackendPolicy::Tunnel(backend::Tunnel {
+				proxy: Arc::new(resolve_simple_reference(bt.proxy.as_ref())?),
+			}),
 			Some(bps::Kind::BackendTls(btls)) => {
 				let mode = bps::backend_tls::VerificationMode::try_from(btls.verification)?;
 				let tls = http::backendtls::ResolvedBackendTLS {
