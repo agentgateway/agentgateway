@@ -484,6 +484,7 @@ func allJSONFieldNamesForType(
 				continue
 			}
 
+			parser.NeedPackage(embeddedType.Package)
 			embeddedInfo := parser.LookupType(embeddedType.Package, embeddedType.Name)
 			if embeddedInfo == nil {
 				continue
