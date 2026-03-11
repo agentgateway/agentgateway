@@ -2476,6 +2476,9 @@
 |`binds[].listeners[].routes[].backends[].(1)aws.(1)agentCore`||
 |`binds[].listeners[].routes[].backends[].(1)aws.(1)agentCore.agentRuntimeArn`||
 |`binds[].listeners[].routes[].backends[].(1)aws.(1)agentCore.qualifier`||
+|`binds[].listeners[].routes[].backends[].(1)endpointGroup`||
+|`binds[].listeners[].routes[].backends[].(1)endpointGroup.endpoints`||
+|`binds[].listeners[].routes[].backends[].(1)endpointGroup.endpoints[].address`||
 |`binds[].listeners[].routes[].backends[].weight`||
 |`binds[].listeners[].routes[].backends[].policies`||
 |`binds[].listeners[].routes[].backends[].policies.requestHeaderModifier`|Headers to be modified in the request.|

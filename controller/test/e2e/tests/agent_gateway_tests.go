@@ -22,6 +22,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/remotejwtauth"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/tracing"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/transformation"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/features/priorityrouting"
 )
 
 func AgentgatewaySuiteRunner() e2e.SuiteRunner {
@@ -45,6 +46,7 @@ func AgentgatewaySuiteRunner() e2e.SuiteRunner {
 	agentgatewaySuiteRunner.Register("RemoteJwtAuth", remotejwtauth.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("Tracing", tracing.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("PolicyStatus", policystatus.NewTestingSuite)
+	agentgatewaySuiteRunner.Register("PriorityRouting", priorityrouting.NewTestingSuite)
 
 	return agentgatewaySuiteRunner
 }

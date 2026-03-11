@@ -51,13 +51,17 @@ type AgentgatewayBackendList struct {
 	Items           []AgentgatewayBackend `json:"items"`
 }
 
-// +kubebuilder:validation:ExactlyOneOf=ai;static;dynamicForwardProxy;mcp;aws
+// +kubebuilder:validation:ExactlyOneOf=ai;static;endpointGroup;dynamicForwardProxy;mcp;aws
 // +kubebuilder:validation:XValidation:rule="has(self.policies) && has(self.policies.ai) ? has(self.ai) : true",message="AI policies require AI backend"
 // +kubebuilder:validation:XValidation:rule="has(self.policies) && has(self.policies.mcp) ? has(self.mcp) : true",message="MCP policies require MCP backend"
 type AgentgatewayBackendSpec struct {
 	// static represents a static hostname.
 	// +optional
 	Static *StaticBackend `json:"static,omitempty"`
+
+	// endpointGroup represents a priority-ordered list of endpoints.
+	// +optional
+	EndpointGroup *EndpointGroup `json:"endpointGroup,omitempty"`
 
 	// ai represents a LLM backend.
 	// +optional
@@ -115,6 +119,26 @@ type StaticBackend struct {
 	// +kubebuilder:validation:Maximum=65535
 	// +required
 	Port int32 `json:"port"`
+}
+
+// EndpointGroup represents a priority-ordered list of endpoints.
+//
+// Example:
+//
+//	endpointGroup:
+//	  endpoints:
+//	  - host: primary.example.com
+//	    port: 1234
+//	  - host: fallback.example.com
+//	    port: 1234
+type EndpointGroup struct {
+	// Endpoints is a priority-ordered list. The first endpoint is preferred;
+	// later endpoints are used as fallbacks if higher-priority endpoints
+	// become unhealthy and an eviction policy is configured.
+	// +kubebuilder:validation:MinItems=2
+	// +kubebuilder:validation:MaxItems=32
+	// +required
+	Endpoints []StaticBackend `json:"endpoints"`
 }
 
 // AIBackend specifies the AI backend configuration

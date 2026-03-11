@@ -505,6 +505,27 @@ func TestBuildAIBackend(t *testing.T) {
 			},
 		},
 		{
+			name: "Valid EndpointGroup backend",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "endpointgroup-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					EndpointGroup: &agentgateway.EndpointGroup{
+						Endpoints: []agentgateway.StaticBackend{
+							{
+								Host: "api.example.com", Port: 443,
+							},
+							{
+								Host: "api.example2.com", Port: 443,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "Bedrock backend with new route types (responses and anthropic_token_count)",
 			backend: &agentgateway.AgentgatewayBackend{
 				ObjectMeta: metav1.ObjectMeta{

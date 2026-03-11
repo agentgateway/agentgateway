@@ -1,0 +1,10 @@
+endpointGroup:
+  endpoints:
+  - host: api.example.com
+    port: 443
+  - host: api.example2.com
+    port: 443
+key: test-ns/endpointgroup-backend
+name:
+  name: endpointgroup-backend
+  namespace: test-ns

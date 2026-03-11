@@ -78,6 +78,25 @@ func BuildAgwBackend(
 		}
 		return be, errors.Join(errs...)
 	}
+	if b := backend.Spec.EndpointGroup; b != nil {
+		endpoints := make([]*api.EndpointGroupBackend_Endpoint, 0, len(b.Endpoints))
+		for _, ep := range b.Endpoints {
+			endpoints = append(endpoints, &api.EndpointGroupBackend_Endpoint{
+				Host: ep.Host,
+				Port: ep.Port,
+			})
+		}
+		return []*api.Backend{{
+			Key:  backend.Namespace + "/" + backend.Name,
+			Name: plugins.ResourceName(backend),
+			Kind: &api.Backend_EndpointGroup{
+				EndpointGroup: &api.EndpointGroupBackend{
+					Endpoints: endpoints,
+				},
+			},
+			InlinePolicies: pols,
+		}}, errors.Join(errs...)
+	}
 	return nil, errors.Join(append(errs, errors.New("unknown backend"))...)
 }
 

@@ -5,6 +5,7 @@ use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
 use rand::RngExt;
 use serde_json::{Value, json};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 use x509_parser::nom::AsBytes;
 
 use crate::http::tests_common::*;
@@ -1289,4 +1290,87 @@ async fn dfp_defaults_to_port_443_for_https() {
 			.await
 			.unwrap();
 	assert_eq!(log["endpoint"].as_str(), Some("127.0.0.1:443"));
+}
+
+/// Verifies EndpointGroup failover: when the primary endpoint returns 500
+/// it is evicted, and all subsequent traffic goes to the fallback (200).
+#[tokio::test]
+async fn endpoint_group_failover() {
+	// Primary endpoint: always returns 500 (simulates unhealthy upstream)
+	let primary = MockServer::start().await;
+	Mock::given(wiremock::matchers::path_regex("/.*"))
+		.respond_with(ResponseTemplate::new(500))
+		.mount(&primary)
+		.await;
+
+	// Fallback endpoint: returns 200
+	let fallback = simple_mock().await;
+
+	let (_default_mock, mut bind, _) = basic_setup().await;
+	bind
+		.attach_route(json!({
+			"name": "failover-route",
+			"backends": [
+				{
+					"endpointGroup": {
+						"endpoints": [
+							{ "address": primary.address().to_string() },
+							{ "address": fallback.address().to_string() }
+						]
+					},
+					"policies": {
+						"health": {
+							"unhealthyExpression": "response.code >= 500",
+							"eviction": {
+								"duration": "5s"
+							}
+						}
+					}
+				}
+			]
+		}))
+		.await;
+	let io = bind.serve_http(BIND_KEY);
+
+	// Phase 1: The primary endpoint has the highest priority and should be
+	// selected first. Send requests until it gets evicted.
+	let mut saw_primary = false;
+	for _ in 0..20 {
+		let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+		if res.status() == 500 {
+			saw_primary = true;
+			break;
+		}
+	}
+	assert!(
+		saw_primary,
+		"should have hit the primary (500) at least once"
+	);
+
+	// Give the eviction event time to be processed.
+	tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+	// Phase 2: After eviction, the primary is removed from the active set.
+	// All traffic must go to the fallback (200).
+	let result = check_eventually(
+		std::time::Duration::from_secs(2),
+		|| async {
+			let mut all_200 = true;
+			for _ in 0..5 {
+				let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+				if res.status() != 200 {
+					all_200 = false;
+					break;
+				}
+			}
+			all_200
+		},
+		|ok| *ok,
+	)
+	.await;
+	assert_eq!(
+		result,
+		Ok(true),
+		"after eviction, all requests should go to fallback (200)"
+	);
 }

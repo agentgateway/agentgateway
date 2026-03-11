@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: httpbin
+  namespace: agentgateway-base
+  labels:
+    app.kubernetes.io/name: httpbin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: httpbin
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: httpbin
+    spec:
+      containers:
+      - name: httpbin
+        image: mccutchen/go-httpbin:v2.15.0
+        ports:
+        - containerPort: 8080
+        env:
+        - name: USE_REAL_HOSTNAME
+          value: "true"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: httpbin
+  namespace: agentgateway-base
+spec:
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  selector:
+    app.kubernetes.io/name: httpbin
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: priority-backend
+  namespace: agentgateway-base
+spec:
+  endpointGroup:
+    endpoints:
+    - host: httpbin.agentgateway-base.svc.cluster.local
+      port: 8080
+    - host: backend.agentgateway-base.svc.cluster.local
+      port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: priority-route
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+  - name: gateway
+  hostnames:
+  - "priority.example.com"
+  rules:
+  - backendRefs:
+    - name: priority-backend
+      kind: AgentgatewayBackend
+      group: agentgateway.dev

@@ -3914,6 +3914,17 @@
           "required": [
             "aws"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "endpointGroup": {
+              "$ref": "#/$defs/LocalEndpointGroup"
+            }
+          },
+          "required": [
+            "endpointGroup"
+          ]
         }
       ]
     },
@@ -4699,6 +4710,33 @@
       "additionalProperties": false,
       "required": [
         "agentRuntimeArn"
+      ]
+    },
+    "LocalEndpointGroup": {
+      "type": "object",
+      "properties": {
+        "endpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalEndpointGroupEntry"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "endpoints"
+      ]
+    },
+    "LocalEndpointGroupEntry": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "address"
       ]
     },
     "LocalTCPRoute": {

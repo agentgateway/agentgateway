@@ -6080,6 +6080,37 @@ spec:
                   Note: this Backend type enables users to send trigger the proxy to send requests to arbitrary destinations. Proper
                   access controls must be put in place when using this backend type.
                 type: object
+              endpointGroup:
+                description: endpointGroup represents a priority-ordered list of endpoints.
+                properties:
+                  endpoints:
+                    description: |-
+                      Endpoints is a priority-ordered list. The first endpoint is preferred;
+                      later endpoints are used as fallbacks if higher-priority endpoints
+                      become unhealthy and an eviction policy is configured.
+                    items:
+                      properties:
+                        host:
+                          description: host to connect to.
+                          maxLength: 256
+                          minLength: 1
+                          type: string
+                        port:
+                          description: port to connect to.
+                          format: int32
+                          maximum: 65535
+                          minimum: 1
+                          type: integer
+                      required:
+                      - host
+                      - port
+                      type: object
+                    maxItems: 32
+                    minItems: 2
+                    type: array
+                required:
+                - endpoints
+                type: object
               mcp:
                 description: mcp represents an MCP backend
                 properties:
@@ -12194,9 +12225,9 @@ spec:
             - message: MCP policies require MCP backend
               rule: 'has(self.policies) && has(self.policies.mcp) ? has(self.mcp)
                 : true'
-            - message: exactly one of the fields in [ai static dynamicForwardProxy
+            - message: exactly one of the fields in [ai static endpointGroup dynamicForwardProxy
                 mcp aws] must be set
-              rule: '[has(self.ai),has(self.static),has(self.dynamicForwardProxy),has(self.mcp),has(self.aws)].filter(x,x==true).size()
+              rule: '[has(self.ai),has(self.static),has(self.endpointGroup),has(self.dynamicForwardProxy),has(self.mcp),has(self.aws)].filter(x,x==true).size()
                 == 1'
           status:
             description: status defines the current state of AgentgatewayBackend.

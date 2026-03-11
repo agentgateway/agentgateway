@@ -851,6 +851,20 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 					},
 				},
 			),
+			Some(proto::agent::backend::Kind::EndpointGroup(eg)) => {
+				let priority_buckets: Vec<Vec<(Strng, Target)>> = eg
+					.endpoints
+					.iter()
+					.enumerate()
+					.map(|(i, ep)| {
+						let target = Target::try_from((ep.host.as_str(), ep.port as u16))
+							.map_err(|e| ProtoError::Generic(e.to_string()))?;
+						Ok(vec![(strng::format!("ep{i}"), target)])
+					})
+					.collect::<Result<Vec<_>, ProtoError>>()?;
+				let es = crate::types::loadbalancer::EndpointSet::new(priority_buckets);
+				Backend::EndpointGroup(name.into(), EndpointGroupBackend { endpoints: es })
+			},
 			None => {
 				return Err(ProtoError::Generic("unknown backend".to_string()));
 			},

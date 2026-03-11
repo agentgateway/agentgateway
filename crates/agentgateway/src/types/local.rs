@@ -20,14 +20,14 @@ use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendPolicy, BackendReference,
-	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch, Listener,
-	ListenerKey, ListenerName, ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication,
-	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
-	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch,
-	RouteName, RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
-	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig, TrafficPolicy,
-	TunnelProtocol, TypedResourceName,
+	BackendWithPolicies, Bind, BindProtocol, EndpointGroupBackend, FrontendPolicy, HeaderMatch,
+	HeaderValueMatch, Listener, ListenerKey, ListenerName, ListenerProtocol, ListenerSet,
+	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpTarget, McpTargetName,
+	McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType, ResourceName,
+	Route, RouteBackendReference, RouteMatch, RouteName, RouteSet, ServerTLSConfig, SimpleBackend,
+	SimpleBackendReference, SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec,
+	TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig,
+	TrafficPolicy, TunnelProtocol, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
@@ -517,7 +517,19 @@ pub enum LocalBackend {
 	AI(LocalAIBackend),
 	#[serde(rename = "aws")]
 	Aws(LocalAwsBackend),
+	#[serde(rename = "endpointGroup")]
+	EndpointGroup(LocalEndpointGroup),
 	Invalid,
+}
+
+#[apply(schema_de!)]
+pub struct LocalEndpointGroupEntry {
+	pub address: Target,
+}
+
+#[apply(schema_de!)]
+pub struct LocalEndpointGroup {
+	pub endpoints: Vec<LocalEndpointGroupEntry>,
 }
 
 #[derive(Debug, Clone)]
@@ -727,6 +739,16 @@ impl LocalBackend {
 					},
 				};
 				vec![Backend::Aws(name, config).into()]
+			},
+			LocalBackend::EndpointGroup(eg) => {
+				let priority_buckets: Vec<Vec<(Strng, Target)>> = eg
+					.endpoints
+					.iter()
+					.enumerate()
+					.map(|(i, e)| vec![(strng::format!("ep{i}"), e.address.clone())])
+					.collect();
+				let es = types::loadbalancer::EndpointSet::new(priority_buckets);
+				vec![Backend::EndpointGroup(name, EndpointGroupBackend { endpoints: es }).into()]
 			},
 			LocalBackend::Invalid => vec![Backend::Invalid.into()],
 		})

@@ -1355,6 +1355,17 @@ async fn make_backend_call(
 				network_gateway: None,
 			}
 		},
+		Backend::EndpointGroup(_, eg) => {
+			let (target, handle) = eg.select_endpoint().ok_or(ProxyError::NoHealthyEndpoints)?;
+			log.add(move |l| l.request_handle = Some(handle));
+			BackendCall {
+				target: (*target).clone(),
+				http_version_override: None,
+				transport_override: None,
+				network_gateway: None,
+				backend_policies: policies,
+			}
+		},
 		Backend::Dynamic(_, _) => {
 			let host = http::get_host(&req)?;
 			let port = req

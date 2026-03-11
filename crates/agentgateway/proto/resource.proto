@@ -133,6 +133,7 @@ message Backend {
     MCPBackend mcp = 5;
     DynamicForwardProxy dynamic = 6;
     AwsBackend aws = 8;
+    EndpointGroupBackend endpoint_group = 9;
   }
   repeated BackendPolicySpec inline_policies = 7;
 }
@@ -1101,6 +1102,17 @@ message BackendPolicySpec {
 message StaticBackend {
   string host = 1;
   int32 port = 2;
+}
+
+// EndpointGroupBackend defines a priority-ordered set of endpoints.
+// Endpoints are listed in priority order (first = highest priority);
+// the gateway falls back to lower-priority endpoints when higher ones are unhealthy.
+message EndpointGroupBackend {
+  message Endpoint {
+    string host = 1;
+    int32 port = 2;
+  }
+  repeated Endpoint endpoints = 1;
 }
 
 message DynamicForwardProxy {}
