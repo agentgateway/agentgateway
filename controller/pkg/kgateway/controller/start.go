@@ -122,7 +122,6 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 	}
 
 	agwSyncer := agentgatewaysyncer.NewAgwSyncer(
-		ctx,
 		cfg.AgwControllerName,
 		cfg.Client,
 		cfg.AgwCollections,

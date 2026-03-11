@@ -9,20 +9,19 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 )
 
 type PolicyStatusCollections = map[schema.GroupKind]krt.StatusCollection[controllers.Object, any]
 
-func AgwPolicyCollection(agwPlugins plugins.AgwPlugin, ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend], krtopts krtutil.KrtOptions) (krt.Collection[ir.AgwResource], PolicyStatusCollections) {
+func AgwPolicyCollection(agwPlugins plugins.AgwPlugin, references plugins.ReferenceIndex, krtopts krtutil.KrtOptions) (krt.Collection[ir.AgwResource], PolicyStatusCollections) {
 	var allPolicies []krt.Collection[plugins.AgwPolicy]
 	policyStatusMap := PolicyStatusCollections{}
 	// Collect all policies from registered plugins.
 	// Note: Only one plugin should be used per source GVK.
 	// Avoid joining collections per-GVK before passing them to a plugin.
 	for gvk, plugin := range agwPlugins.ContributesPolicies {
-		policy, policyStatus := plugin.ApplyPolicies(plugins.PolicyPluginInput{Ancestors: ancestors})
+		policy, policyStatus := plugin.ApplyPolicies(plugins.PolicyPluginInput{References: references})
 		allPolicies = append(allPolicies, policy)
 		if policyStatus != nil {
 			// some plugins may not have a status collection (a2a services, etc.)

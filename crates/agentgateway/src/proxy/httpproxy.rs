@@ -27,6 +27,7 @@ use crate::http::{
 	auth, filters, merge_in_headers, retry,
 };
 use crate::llm::{InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType};
+use crate::proxy::tcpproxy::TCPProxy;
 use crate::proxy::{ProxyError, ProxyResponse, ProxyResponseReason, resolve_simple_backend};
 use crate::store::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
@@ -177,6 +178,8 @@ async fn apply_backend_policies(
 		http,
 		// Doesn't currently have any options to set, todo
 		tcp: _,
+		// Applied elsewhere
+		tunnel: _,
 		// Applied elsewhere
 		llm_provider: _,
 		// Applied elsewhere
@@ -1079,6 +1082,7 @@ pub async fn build_transport(
 	inputs: &ProxyInputs,
 	backend_call: &BackendCall,
 	backend_tls: Option<BackendTLS>,
+	backend_tunnel: Option<&backend::Tunnel>,
 	backend_http_version_override: Option<::http::Version>,
 ) -> Result<Transport, ProxyError> {
 	let backend_tls = backend_tls.map(|btls| btls.config_for(backend_http_version_override));
@@ -1087,6 +1091,36 @@ pub async fn build_transport(
 	} else {
 		ApplicationTransport::Plaintext
 	};
+	if let Some(tun) = backend_tunnel {
+		let backend = super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?;
+		let pols = crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &[], None);
+		let call = TCPProxy::build_backend_call(&mut None, inputs, &backend.backend, pols)?;
+		let tunnel_backend_tls = call.backend_policies.backend_tls.clone();
+		let tunnel_auth = call.backend_policies.backend_auth.clone();
+		// This is a bounded recursion; this code is only called when backend_tunnel is set, and in this call
+		// we never set it.
+		let transport = Box::pin(build_transport(
+			inputs,
+			&call,
+			tunnel_backend_tls,
+			None,
+			// Currently we only support HTTP/1.1
+			Some(::http::Version::HTTP_11),
+		))
+		.await?;
+		trace!("built tunnel to {:?}", call.target);
+		let token = if let Some(auth) = tunnel_auth {
+			Some(auth::apply_tunnel_auth(&auth)?)
+		} else {
+			None
+		};
+		let tc = client::TunnelConfig {
+			transport: Box::new(transport),
+			target: call.target,
+			token,
+		};
+		return Ok(Transport::Tunnel(app_transport, tc));
+	}
 
 	// Check if we need double hbone
 	if let (
@@ -1583,6 +1617,7 @@ async fn make_backend_call(
 		&inputs,
 		&backend_call,
 		backend_call.backend_policies.backend_tls.clone(),
+		backend_call.backend_policies.tunnel.as_ref(),
 		backend_call
 			.backend_policies
 			.http
@@ -1970,6 +2005,10 @@ impl ResponsePolicies {
 	}
 }
 
+#[derive(Debug, Clone)]
+pub struct TunnelClient {
+	pub inputs: Arc<ProxyInputs>,
+}
 #[derive(Debug, Clone)]
 pub struct PolicyClient {
 	pub inputs: Arc<ProxyInputs>,

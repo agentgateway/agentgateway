@@ -129,6 +129,10 @@ type BackendSimple struct {
 	// +optional
 	HTTP *BackendHTTP `json:"http,omitempty"`
 
+	// tunnel defines settings for managing tunnel connections (like HTTPS_PROXY) to the backend.
+	// +optional
+	Tunnel *BackendTunnel `json:"tunnel,omitempty"`
+
 	// transformation is used to mutate and transform requests and responses sent to and from the backend.
 	// +optional
 	Transformation *Transformation `json:"transformation,omitempty"`
@@ -1049,6 +1053,13 @@ const (
 	Auth0    McpIDP = "Auth0"
 	Keycloak McpIDP = "Keycloak"
 )
+
+type BackendTunnel struct {
+	// backendRef references the proxy server to reach.
+	// Supported types: Service and Backend.
+	// +required
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+}
 
 type BackendHTTP struct {
 	// version specifies the HTTP protocol version to use when connecting to the backend.

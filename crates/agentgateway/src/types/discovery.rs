@@ -489,6 +489,9 @@ impl Service {
 			Some(AppProtocol::Tcp | AppProtocol::Tls)
 		)
 	}
+	pub fn port_is_tls(&self, port: u16) -> bool {
+		matches!(self.app_protocols.get(&port), Some(AppProtocol::Tls))
+	}
 	pub fn namespaced_hostname(&self) -> NamespacedHostname {
 		NamespacedHostname {
 			namespace: self.namespace.clone(),

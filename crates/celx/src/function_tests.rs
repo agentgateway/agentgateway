@@ -97,8 +97,25 @@ fn random() {
 fn base64() {
 	let expr = r#"base64.encode('hello')"#;
 	assert(json!("aGVsbG8="), expr);
+	// Test old format
+	let expr = r#"base64Encode('hello')"#;
+	assert(json!("aGVsbG8="), expr);
+
+	let expr = r#"string(base64.decode("aGVsbG8="))"#;
+	assert(json!("hello"), expr);
+
 	let expr = r#"string(base64.decode(base64.encode("hello")))"#;
 	assert(json!("hello"), expr);
+	// Test old format as well
+	let expr = r#"string(base64Decode(base64Encode("hello")))"#;
+	assert(json!("hello"), expr);
+
+	// Unadded
+	let expr = r#"string(base64.decode('Zg=='))"#;
+	assert(json!("f"), expr);
+	// Padded
+	let expr = r#"string(base64.decode('Zg'))"#;
+	assert(json!("f"), expr);
 }
 
 #[test]
@@ -389,7 +406,7 @@ fn assert(want: serde_json::Value, expr: &str) {
 	assert_eq!(
 		want,
 		eval(expr)
-			.unwrap_or_else(|_| panic!("{expr}"))
+			.unwrap_or_else(|e| panic!("{expr}: {e}"))
 			.json()
 			.unwrap(),
 		"expression: {expr}"

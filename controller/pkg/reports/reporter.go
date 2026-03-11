@@ -337,6 +337,8 @@ func getParentRefKey(parentRef *gwv1.ParentReference) ParentRefKey {
 	var group string
 	if parentRef.Group != nil {
 		group = string(*parentRef.Group)
+	} else {
+		group = canonicalGroup(parentRef.Kind)
 	}
 	var kind string
 	if parentRef.Kind != nil {
@@ -354,6 +356,13 @@ func getParentRefKey(parentRef *gwv1.ParentReference) ParentRefKey {
 			Name:      string(parentRef.Name),
 		},
 	}
+}
+
+func canonicalGroup(kind *gwv1.Kind) string {
+	if kind == nil {
+		return ""
+	}
+	return wellknown.KnownGvkByKind[string(*kind)].Group
 }
 
 // getParentRefOrNil returns a ParentRefReport for the given parentRef if and only if

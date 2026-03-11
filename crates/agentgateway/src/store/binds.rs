@@ -130,6 +130,7 @@ pub struct BackendPolicies {
 
 	pub http: Option<types::backend::HTTP>,
 	pub tcp: Option<types::backend::TCP>,
+	pub tunnel: Option<types::backend::Tunnel>,
 
 	pub request_header_modifier: Option<filters::HeaderModifier>,
 	pub response_header_modifier: Option<filters::HeaderModifier>,
@@ -161,6 +162,7 @@ impl BackendPolicies {
 			inference_routing: other.inference_routing.or(self.inference_routing),
 			http: other.http.or(self.http),
 			tcp: other.tcp.or(self.tcp),
+			tunnel: other.tunnel.or(self.tunnel),
 			request_header_modifier: other
 				.request_header_modifier
 				.or(self.request_header_modifier),
@@ -656,6 +658,9 @@ impl Store {
 				},
 				BackendPolicy::TCP(p) => {
 					pol.tcp.get_or_insert_with(|| p.clone());
+				},
+				BackendPolicy::Tunnel(p) => {
+					pol.tunnel.get_or_insert_with(|| p.clone());
 				},
 
 				BackendPolicy::RequestHeaderModifier(p) => {

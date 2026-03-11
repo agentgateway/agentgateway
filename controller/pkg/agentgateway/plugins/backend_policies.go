@@ -27,6 +27,7 @@ import (
 const (
 	aiPolicySuffix                = ":ai"
 	backendTlsPolicySuffix        = ":backend-tls"
+	backendTunnelPolicySuffix     = ":backend-tunnel"
 	backendauthPolicySuffix       = ":backend-auth"
 	backendTransformationSuffix   = ":backend-transformation"
 	tlsPolicySuffix               = ":tls"
@@ -70,6 +71,15 @@ func translateBackendPolicyToAgw(
 
 	if s := backend.HTTP; s != nil {
 		pol := translateBackendHTTP(policy, policyTarget)
+		agwPolicies = append(agwPolicies, pol...)
+	}
+
+	if s := backend.Tunnel; s != nil {
+		pol, err := translateBackendTunnel(ctx, policy, policyTarget)
+		if err != nil {
+			logger.Error("error processing backend tunnel", "err", err)
+			errs = append(errs, err)
+		}
 		agwPolicies = append(agwPolicies, pol...)
 	}
 
@@ -369,6 +379,36 @@ func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy, target *api.P
 		"agentgateway_policy", tp.Name)
 
 	return []AgwPolicy{{Policy: tp}}
+}
+
+func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) ([]AgwPolicy, error) {
+	tunnel := policy.Spec.Backend.Tunnel
+
+	proxy, err := buildBackendRef(ctx, tunnel.BackendRef, policy.Namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	tunnelPolicy := &api.Policy{
+		Key:    policy.Namespace + "/" + policy.Name + backendTunnelPolicySuffix + attachmentName(target),
+		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Target: target,
+		Kind: &api.Policy_Backend{
+			Backend: &api.BackendPolicySpec{
+				Kind: &api.BackendPolicySpec_BackendTunnel_{
+					BackendTunnel: &api.BackendPolicySpec_BackendTunnel{
+						Proxy: proxy,
+					},
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated backend tunnel policy",
+		"policy", policy.Name,
+		"agentgateway_policy", tunnelPolicy.Name)
+
+	return []AgwPolicy{{Policy: tunnelPolicy}}, nil
 }
 
 func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) []AgwPolicy {

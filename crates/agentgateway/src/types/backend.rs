@@ -1,5 +1,6 @@
 use crate::http::filters::BackendRequestTimeout;
 use crate::transport::stream::TLSConnectionInfo;
+use crate::types::agent::SimpleBackendReference;
 use crate::{apply, *};
 
 #[apply(schema!)]
@@ -68,6 +69,12 @@ fn is_grpc(req: &http::Request) -> bool {
 }
 
 #[apply(schema!)]
+pub struct Tunnel {
+	/// Reference to the proxy address
+	pub proxy: Arc<SimpleBackendReference>,
+}
+
+#[apply(schema!)]
 pub struct TCP {
 	pub keepalives: super::agent::KeepaliveConfig,
 	pub connect_timeout: Duration,
@@ -81,6 +88,7 @@ impl Default for TCP {
 		}
 	}
 }
+
 pub mod defaults {
 	use std::time::Duration;
 

@@ -1048,6 +1048,10 @@ pub struct SimpleLocalBackendPolicies {
 	/// Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.
 	#[serde(default)]
 	pub health: Option<health::LocalHealthPolicy>,
+
+	/// Specify a tunnel to use when connecting to the backend
+	#[serde(default)]
+	pub backend_tunnel: Option<backend::Tunnel>,
 }
 
 #[apply(schema_de!)]
@@ -1091,6 +1095,7 @@ impl LocalBackendPolicies {
 					http,
 					tcp,
 					health,
+					backend_tunnel,
 				},
 			mcp_authorization,
 			a2a,
@@ -1099,6 +1104,9 @@ impl LocalBackendPolicies {
 		let mut pols = vec![];
 		if let Some(p) = tcp {
 			pols.push(BackendPolicy::TCP(p));
+		}
+		if let Some(p) = backend_tunnel {
+			pols.push(BackendPolicy::Tunnel(p));
 		}
 		if let Some(p) = http {
 			pols.push(BackendPolicy::HTTP(p));
@@ -1146,14 +1154,23 @@ pub struct LocalTCPBackendPolicies {
 	/// Send TLS to the backend.
 	#[serde(rename = "backendTLS", default)]
 	pub backend_tls: Option<http::backendtls::LocalBackendTLS>,
+	/// Tunnel to the backend.
+	#[serde(default)]
+	pub backend_tunnel: Option<backend::Tunnel>,
 }
 
 impl LocalTCPBackendPolicies {
 	pub fn translate(self) -> anyhow::Result<Vec<BackendPolicy>> {
-		let LocalTCPBackendPolicies { backend_tls } = self;
+		let LocalTCPBackendPolicies {
+			backend_tls,
+			backend_tunnel,
+		} = self;
 		let mut pols = vec![];
 		if let Some(p) = backend_tls {
 			pols.push(BackendPolicy::BackendTLS(p.try_into()?))
+		}
+		if let Some(p) = backend_tunnel {
+			pols.push(BackendPolicy::Tunnel(p))
 		}
 		Ok(pols)
 	}
@@ -1229,6 +1246,9 @@ pub struct FilterOrPolicy {
 	/// Send TLS to the backend.
 	#[serde(rename = "backendTLS", default)]
 	backend_tls: Option<http::backendtls::LocalBackendTLS>,
+	/// Tunnel to the backend.
+	#[serde(rename = "backendTunnel", default)]
+	backend_tunnel: Option<backend::Tunnel>,
 	/// Authenticate to the backend.
 	#[serde(default)]
 	backend_auth: Option<BackendAuth>,
@@ -2065,7 +2085,7 @@ pub async fn convert_route(
 
 #[derive(Default)]
 pub struct ResolvedPolicies {
-	backend_policies: Vec<BackendPolicy>,
+	pub backend_policies: Vec<BackendPolicy>,
 	pub route_policies: Vec<TrafficPolicy>,
 }
 
@@ -2143,6 +2163,7 @@ pub async fn split_policies(
 		a2a,
 		ai,
 		backend_tls,
+		backend_tunnel,
 		backend_auth,
 		authorization,
 		local_rate_limit,
@@ -2196,6 +2217,9 @@ pub async fn split_policies(
 	}
 	if let Some(p) = backend_tls {
 		backend_policies.push(BackendPolicy::BackendTLS(p.try_into()?))
+	}
+	if let Some(p) = backend_tunnel {
+		backend_policies.push(BackendPolicy::Tunnel(p))
 	}
 	if let Some(p) = backend_auth {
 		backend_policies.push(BackendPolicy::BackendAuth(p))

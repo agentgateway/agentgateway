@@ -33,10 +33,10 @@ use crate::store::Stores;
 use crate::transport::stream::{Socket, TCPConnectionInfo};
 use crate::transport::tls;
 use crate::types::agent::{
-	Backend, BackendPolicy, BackendReference, BackendWithPolicies, Bind, BindKey, BindProtocol,
-	Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget, McpTargetSpec, PathMatch,
-	PolicyTarget, ResourceName, Route, RouteBackendReference, RouteMatch, RouteName, RouteSet,
-	SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	Backend, BackendPolicy, BackendReference, BackendTarget, BackendWithPolicies, Bind, BindKey,
+	BindProtocol, Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget, McpTargetSpec,
+	PathMatch, PolicyTarget, ResourceName, Route, RouteBackendReference, RouteMatch, RouteName,
+	RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
 	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy,
 };
 use crate::types::local;
@@ -552,6 +552,25 @@ impl TestBind {
 					namespace: "".into(),
 					rule_name: None,
 					kind: None,
+				}),
+				policy: v.into(),
+			});
+		}
+	}
+	pub async fn attached_backend_policy(&mut self, addr: &SocketAddr, p: serde_json::Value) {
+		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
+		let pols = local::split_policies(self.pi.upstream.clone(), pol)
+			.await
+			.unwrap();
+		for v in pols.backend_policies.into_iter() {
+			self.policies += 1;
+			self.with_policy(TargetedPolicy {
+				key: strng::format!("pol-{}", self.policies),
+				name: None,
+				target: PolicyTarget::Backend(BackendTarget::Backend {
+					name: addr.to_string().into(),
+					namespace: Default::default(),
+					section: None,
 				}),
 				policy: v.into(),
 			});

@@ -1107,6 +1107,18 @@
             }
           ]
         },
+        "backendTunnel": {
+          "description": "Tunnel to the backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "backendAuth": {
           "description": "Authenticate to the backend.",
           "anyOf": [
@@ -2165,6 +2177,18 @@
             }
           ],
           "default": null
+        },
+        "backendTunnel": {
+          "description": "Specify a tunnel to use when connecting to the backend",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
@@ -2730,6 +2754,19 @@
         }
       },
       "additionalProperties": false
+    },
+    "Tunnel": {
+      "type": "object",
+      "properties": {
+        "proxy": {
+          "description": "Reference to the proxy address",
+          "$ref": "#/$defs/SimpleLocalBackend"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "proxy"
+      ]
     },
     "BedrockGuardrails": {
       "description": "Configuration for AWS Bedrock Guardrails integration.",
@@ -4234,6 +4271,18 @@
           ],
           "default": null
         },
+        "backendTunnel": {
+          "description": "Specify a tunnel to use when connecting to the backend",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "mcpAuthorization": {
           "description": "Authorization policies for MCP access.",
           "anyOf": [
@@ -4626,6 +4675,18 @@
           ],
           "default": null
         },
+        "backendTunnel": {
+          "description": "Specify a tunnel to use when connecting to the backend",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "mcpAuthorization": {
           "description": "Authorization policies for MCP access.",
           "anyOf": [
@@ -4877,6 +4938,18 @@
               "type": "null"
             }
           ]
+        },
+        "backendTunnel": {
+          "description": "Tunnel to the backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false

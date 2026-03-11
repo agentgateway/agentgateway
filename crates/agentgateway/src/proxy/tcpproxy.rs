@@ -1,8 +1,7 @@
-use std::net::SocketAddr;
-use std::sync::Arc;
-
 use crate::cel::SourceContext;
 use rand::prelude::IndexedRandom;
+use std::net::SocketAddr;
+use std::sync::Arc;
 
 use crate::proxy::httpproxy::BackendCall;
 use crate::proxy::{ProxyError, httpproxy};
@@ -132,27 +131,15 @@ impl TCPProxy {
 			&self.inputs,
 			&selected_backend.backend,
 			&selected_backend.inline_policies,
-			route_path,
+			Some(route_path),
 		);
 
-		let backend_call = match &selected_backend.backend.backend {
-			SimpleBackend::Service(svc, port) => httpproxy::build_service_call(
-				inputs.as_ref(),
-				backend_policies,
-				&mut Some(log),
-				None,
-				svc,
-				port,
-			)?,
-			SimpleBackend::Opaque(_, target) => BackendCall {
-				target: target.clone(),
-				http_version_override: None,
-				transport_override: None,
-				network_gateway: None,
-				backend_policies,
-			},
-			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
-		};
+		let backend_call = Self::build_backend_call(
+			&mut Some(log),
+			&inputs,
+			&selected_backend.backend.backend,
+			backend_policies,
+		)?;
 
 		let bi = selected_backend.backend.backend.backend_info();
 		log.endpoint = Some(backend_call.target.clone());
@@ -162,6 +149,7 @@ impl TCPProxy {
 			&inputs,
 			&backend_call,
 			backend_call.backend_policies.backend_tls.clone(),
+			backend_call.backend_policies.tunnel.as_ref(),
 			// TODO: for TCP we should actually probably do something here: telling it to not use ALPN at all?
 			None,
 		)
@@ -180,6 +168,28 @@ impl TCPProxy {
 			})
 			.await?;
 		Ok(())
+	}
+
+	pub fn build_backend_call(
+		log: &mut Option<&mut RequestLog>,
+		inputs: &ProxyInputs,
+		selected_backend: &SimpleBackend,
+		backend_policies: BackendPolicies,
+	) -> Result<BackendCall, ProxyError> {
+		let backend_call = match &selected_backend {
+			SimpleBackend::Service(svc, port) => {
+				httpproxy::build_service_call(inputs, backend_policies, log, None, svc, port)?
+			},
+			SimpleBackend::Opaque(_, target) => BackendCall {
+				target: target.clone(),
+				http_version_override: None,
+				transport_override: None,
+				network_gateway: None,
+				backend_policies,
+			},
+			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
+		};
+		Ok(backend_call)
 	}
 }
 
@@ -306,12 +316,12 @@ pub fn get_backend_policies(
 	inputs: &ProxyInputs,
 	backend: &SimpleBackendWithPolicies,
 	inline_policies: &[BackendPolicy],
-	route_path: RoutePath,
+	route_path: Option<RoutePath>,
 ) -> BackendPolicies {
 	inputs.stores.read_binds().backend_policies(
 		backend.backend.target(),
 		&[&backend.inline_policies, inline_policies],
-		Some(route_path),
+		route_path,
 	)
 }
 

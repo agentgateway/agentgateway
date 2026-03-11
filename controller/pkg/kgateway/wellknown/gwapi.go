@@ -146,3 +146,18 @@ var (
 		Resource: "listenersets",
 	}
 )
+
+var KnownGvkByKind = map[string]schema.GroupVersionKind{
+	GatewayGVK.Kind:          GatewayGVK,
+	GatewayClassGVK.Kind:     GatewayClassGVK,
+	HTTPRouteGVK.Kind:        HTTPRouteGVK,
+	TLSRouteGVK.Kind:         TLSRouteGVK,
+	TCPRouteGVK.Kind:         TCPRouteGVK,
+	GRPCRouteGVK.Kind:        GRPCRouteGVK,
+	ReferenceGrantGVK.Kind:   ReferenceGrantGVK,
+	BackendTLSPolicyGVK.Kind: BackendTLSPolicyGVK,
+	InferencePoolGVK.Kind:    InferencePoolGVK,
+	ListenerSetGVK.Kind:      ListenerSetGVK,
+	ServiceEntryGVK.Kind:     ServiceEntryGVK,
+	HostnameGVK.Kind:         HostnameGVK,
+}
