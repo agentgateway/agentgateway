@@ -1267,7 +1267,8 @@ impl opentelemetry_sdk::logs::LogExporter for PolicyGrpcLogExporter {
 				.await
 				.map_err(|e| OTelSdkError::InternalFailure(e.to_string()))?
 				.map(|_| ())
-				.map_err(|e| OTelSdkError::InternalFailure(e.to_string())) as OTelSdkResult
+				.map_err(|e: tonic::Status| OTelSdkError::InternalFailure(e.message().to_string()))
+				as OTelSdkResult
 		}
 	}
 
