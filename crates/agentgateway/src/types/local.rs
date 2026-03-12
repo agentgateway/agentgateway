@@ -356,6 +356,15 @@ pub struct LocalLLMParams {
 	azure_host: Option<Strng>,
 	/// For Azure: the API version to use
 	azure_api_version: Option<Strng>,
+	/// Override the upstream host for this provider.
+	#[serde(default)]
+	host_override: Option<Target>,
+	/// Override the upstream path for this provider.
+	#[serde(default)]
+	path_override: Option<Strng>,
+	/// Whether to tokenize the request before forwarding it upstream.
+	#[serde(default)]
+	tokenize: bool,
 }
 
 #[apply(schema_de!)]
@@ -1586,9 +1595,9 @@ json(request.body).model
 		let named_provider = NamedAIProvider {
 			name: model_name.clone(),
 			provider,
-			host_override: None,
-			path_override: None,
-			tokenize: false,
+			host_override: p.host_override,
+			path_override: p.path_override,
+			tokenize: p.tokenize,
 			inline_policies: pols,
 		};
 

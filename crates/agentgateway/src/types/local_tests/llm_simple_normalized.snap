@@ -207,9 +207,9 @@ backends:
                     provider:
                       anthropic:
                         model: claude-haiku-4-5-20251001
-                    hostOverride: ~
-                    pathOverride: ~
-                    tokenize: false
+                    hostOverride: "anthropic.internal:8443"
+                    pathOverride: /v1/messages
+                    tokenize: true
                     inlinePolicies:
                       - backendAuth:
                           key: "<redacted>"

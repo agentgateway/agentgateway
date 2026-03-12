@@ -18,6 +18,9 @@ llm:
     params:
       model: claude-haiku-4-5-20251001
       apiKey: "sk-123"
+      hostOverride: anthropic.internal:8443
+      pathOverride: /v1/messages
+      tokenize: true
     matches:
     - headers:
       - name: "X-Org"
