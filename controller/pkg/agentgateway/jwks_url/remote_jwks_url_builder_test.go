@@ -164,7 +164,7 @@ func TestRemoteJwksUrlBuilder(t *testing.T) {
 }
 
 func setup(t *testing.T, paths []string) plugins.PolicyCtx {
-	val := apitests.NewKgatewayValidator(t)
+	val := apitests.NewAgentgatewayValidator(t)
 	val.SkipMissing = true
 	mockObjs := []any{}
 	for _, f := range paths {

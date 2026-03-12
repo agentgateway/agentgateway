@@ -86,7 +86,7 @@ spec:
   {{end}}
   {{.policy|nindent 2}}
 `
-	v := NewKgatewayValidator(t)
+	v := NewAgentgatewayValidator(t)
 	for _, tt := range cases {
 		for _, ref := range []bool{true, false} {
 			sn := "ref"

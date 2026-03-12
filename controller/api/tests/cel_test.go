@@ -34,7 +34,7 @@ type TestExpectation struct {
 }
 
 func TestCRDs(t *testing.T) {
-	v := NewKgatewayValidator(t)
+	v := NewAgentgatewayValidator(t)
 	base := "testdata"
 	d, err := os.ReadDir(base)
 	if err != nil {
