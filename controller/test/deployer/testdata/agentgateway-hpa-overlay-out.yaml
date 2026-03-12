@@ -199,13 +199,12 @@ metadata:
     hpa-annotation: from-overlay
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: gw
     hpa-label: from-overlay
-    kgateway: kube-gateway
   name: gw
 spec:
   maxReplicas: 10
