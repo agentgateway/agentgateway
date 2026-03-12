@@ -306,7 +306,7 @@ impl Gateway {
 			let wait = drain_watch.wait_for_drain();
 			tokio::pin!(wait);
 			// First, accept new connections until a drain is triggered
-			// NOTE: Do not use `Ok(…) = listener.accept()` as a select! pattern.
+			// NOTE: Do not use `Ok(...) = listener.accept()` as a select! pattern.
 			// If accept() returns Err, select! permanently disables that branch,
 			// hanging the loop. Match on the full Result instead.
 			let drain_mode = loop {
@@ -315,7 +315,10 @@ impl Gateway {
 						Ok((stream, _peer)) => handle_stream(stream, &upgrader),
 						Err(e) => {
 							warn!(bind=?name, "accept error: {e}");
-							tokio::time::sleep(Duration::from_millis(50)).await;
+							tokio::select! {
+								_ = tokio::time::sleep(Duration::from_millis(50)) => {},
+								res = &mut wait => { break res; }
+							}
 							continue;
 						}
 					},
@@ -343,7 +346,10 @@ impl Gateway {
 						Ok((stream, _peer)) => handle_stream(stream, &upgrader),
 						Err(e) => {
 							warn!(bind=?name, "accept error during drain: {e}");
-							tokio::time::sleep(Duration::from_millis(50)).await;
+							tokio::select! {
+								_ = tokio::time::sleep(Duration::from_millis(50)) => {},
+								_ = &mut drained_for_minimum => { return; }
+							}
 							continue;
 						}
 					},
