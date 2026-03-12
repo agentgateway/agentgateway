@@ -1115,10 +1115,16 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 	b
 }
 
-/// The listening socket itself is broken (EBADF, EINVAL, ENOTSOCK); retrying won't help.
+/// The listening socket itself is broken; retrying won't help.
+/// EBADF/ENOTSOCK: fd is dead on all platforms.
+/// EINVAL: permanent on Linux (socket not listening), transient on macOS (can recover).
 fn is_accept_error_permanent(e: &std::io::Error) -> bool {
-	matches!(e.kind(), std::io::ErrorKind::InvalidInput)
-		|| matches!(e.raw_os_error(), Some(libc::EBADF | libc::ENOTSOCK))
+	match e.raw_os_error() {
+		Some(libc::EBADF | libc::ENOTSOCK) => true,
+		#[cfg(target_os = "linux")]
+		Some(libc::EINVAL) => true,
+		_ => false,
+	}
 }
 
 /// Per-connection failure (client gone during handshake); harmless, no backoff needed.
