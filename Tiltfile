@@ -1,6 +1,7 @@
 # Tiltfile for AgentGateway development
 # This deploys both control plane (Go) and data plane (Rust) to Kind with live updates
 load('ext://restart_process', 'docker_build_with_restart')
+load('ext://helm_resource', 'helm_resource', 'helm_repo')
 
 # Configuration
 version = 'v1.0.1-dev'
@@ -33,14 +34,12 @@ run_controller_make('gie-crds')
 
 # Install CRDs
 print('Installing AgentGateway CRDs...')
-k8s_yaml(helm(
-    'controller/install/helm/agentgateway-crds',
-    name='agentgateway-crds',
-    namespace=install_namespace,
-    set=[
-        'version=' + version,
-    ]
-))
+helm_resource(
+  'agentgateway-crds',
+  'controller/install/helm/agentgateway-crds',
+  namespace=install_namespace,
+  flags=['--set=version=' + version],
+)
 
 # =============================================================================
 # Control Plane (Go-based controller)
