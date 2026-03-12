@@ -193,6 +193,7 @@ dependencies = [
  "jemalloc_pprof",
  "jsonwebtoken",
  "lazy_static",
+ "libc",
  "macro_rules_attribute",
  "notify",
  "notify-debouncer-full",
