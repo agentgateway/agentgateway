@@ -223,9 +223,17 @@ backends:
                     evicted_until: ~
               rejected: {}
     inlinePolicies:
+      - backendTLS: ~
       - requestHeaderModifier:
           remove:
             - x-gateway-model-name
+      - responseHeaderModifier:
+          remove:
+            - server
+      - health:
+          unhealthyExpression: response.code >= 500 || response.code == 429
+          eviction:
+            duration: 30s
       - ai: {}
   - backend:
       ai:

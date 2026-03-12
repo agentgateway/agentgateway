@@ -5816,6 +5816,53 @@
           ],
           "default": null
         },
+        "responseHeaders": {
+          "description": "responseHeaders modifies headers in responses from the LLM provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeaderModifier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "backendTLS": {
+          "description": "backendTLS configures TLS when connecting to the LLM provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBackendTLS"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "health": {
+          "description": "health configures outlier detection for this model backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalHealthPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "backendTunnel": {
+          "description": "backendTunnel configures tunneling when connecting to the LLM provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "guardrails": {
           "description": "guardrails to apply to the request or response",
           "anyOf": [
@@ -5891,6 +5938,27 @@
             "string",
             "null"
           ]
+        },
+        "hostOverride": {
+          "description": "Override the upstream host for this provider.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "pathOverride": {
+          "description": "Override the upstream path for this provider.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "tokenize": {
+          "description": "Whether to tokenize the request before forwarding it upstream.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false
