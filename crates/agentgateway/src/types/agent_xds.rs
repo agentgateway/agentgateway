@@ -540,10 +540,16 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
                         };
 						crate::http::auth::AzureAuth::ExplicitConfig {
 							credential_source: src,
+							cached_cred: Default::default(),
 						}
 					},
 					Some(proto::agent::azure::Kind::DeveloperImplicit(_)) => {
-						crate::http::auth::AzureAuth::DeveloperImplicit {}
+						crate::http::auth::AzureAuth::DeveloperImplicit {
+							cached_cred: Default::default(),
+						}
+					},
+					Some(proto::agent::azure::Kind::Implicit(_)) => crate::http::auth::AzureAuth::Implicit {
+						cached_cred: Default::default(),
 					},
 					None => return Err(ProtoError::MissingRequiredField),
 				};
@@ -786,6 +792,7 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 									model: azureopenai.model.as_deref().map(strng::new),
 									host: strng::new(&azureopenai.host),
 									api_version: azureopenai.api_version.as_deref().map(strng::new),
+									cached_cred: Default::default(),
 								})
 							},
 							None => {
