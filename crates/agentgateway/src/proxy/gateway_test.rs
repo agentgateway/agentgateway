@@ -1424,9 +1424,14 @@ fn accept_error_classification() {
 	assert!(is_accept_error_permanent(&Error::from_raw_os_error(
 		libc::ENOTSOCK
 	)));
-	assert!(is_accept_error_permanent(&Error::new(
-		ErrorKind::InvalidInput,
-		"bad"
+	// EINVAL is permanent on Linux (socket not listening), but transient on macOS
+	#[cfg(target_os = "linux")]
+	assert!(is_accept_error_permanent(&Error::from_raw_os_error(
+		libc::EINVAL
+	)));
+	#[cfg(not(target_os = "linux"))]
+	assert!(!is_accept_error_permanent(&Error::from_raw_os_error(
+		libc::EINVAL
 	)));
 
 	// Per-connection errors: harmless, no backoff needed
