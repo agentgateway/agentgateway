@@ -377,17 +377,19 @@ func (s *Syncer) buildListenerSetCollection(
 	krt.StatusCollection[*gwv1.ListenerSet, gwv1.ListenerSetStatus],
 	krt.Collection[translator.ListenerSet],
 ) {
-	return translator.ListenerSetCollection(
-		s.controllerName,
-		s.agwCollections.ListenerSets,
-		s.agwCollections.Gateways,
-		gatewayClasses,
-		s.agwCollections.Namespaces,
-		refGrants,
-		s.agwCollections.Secrets,
-		s.agwCollections.ConfigMaps,
-		krtopts,
-	)
+	return krt.NewStatusManyCollection(s.agwCollections.ListenerSets,
+		func(ctx krt.HandlerContext, obj *gwv1.ListenerSet) (*gwv1.ListenerSetStatus, []translator.ListenerSet) {
+			return translator.ListenerSetBuilder(
+				ctx, obj,
+				s.controllerName,
+				s.agwCollections.Gateways,
+				gatewayClasses,
+				s.agwCollections.Namespaces,
+				refGrants,
+				s.agwCollections.Secrets,
+				s.agwCollections.ConfigMaps,
+			)
+		}, krtopts.ToOptions("ListenerSets")...)
 }
 
 func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayListener], refGrants translator.ReferenceGrants, krtopts krtutil.KrtOptions) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], plugins.ReferenceIndex, PolicyStatusCollections, krt.StatusCollection[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus]) {
