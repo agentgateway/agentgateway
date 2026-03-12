@@ -774,11 +774,16 @@ pub struct TCPRouteBackend {
 pub struct RouteMatch {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub headers: Vec<HeaderMatch>,
+	#[serde(default = "default_route_match_path")]
 	pub path: PathMatch,
 	#[serde(default, flatten, skip_serializing_if = "Option::is_none")]
 	pub method: Option<MethodMatch>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub query: Vec<QueryMatch>,
+}
+
+fn default_route_match_path() -> PathMatch {
+	PathMatch::PathPrefix("/".into())
 }
 
 #[apply(schema!)]
