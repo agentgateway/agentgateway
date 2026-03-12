@@ -335,11 +335,11 @@ func TestOverlayApplier_ApplyOverlays_MultipleObjects(t *testing.T) {
 // deploymentWithLabels returns a Deployment carrying the given labels and a
 // matching label selector, suitable for use as the base object when testing
 // PDB / HPA / VPA creation.
-func deploymentWithLabels(name string, labels map[string]string) *appsv1.Deployment {
+func deploymentWithLabels(labels map[string]string) *appsv1.Deployment {
 	return &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
+			Name:      "gw",
 			Namespace: "default",
 			Labels:    labels,
 		},
@@ -360,7 +360,7 @@ var gatewayLabels = map[string]string{
 }
 
 func TestCreatePodDisruptionBudget_InheritsDeploymentLabels(t *testing.T) {
-	dep := deploymentWithLabels("gw", gatewayLabels)
+	dep := deploymentWithLabels(gatewayLabels)
 	overlay := &shared.KubernetesResourceOverlay{}
 
 	obj, err := createPodDisruptionBudget(dep, overlay)
@@ -371,7 +371,7 @@ func TestCreatePodDisruptionBudget_InheritsDeploymentLabels(t *testing.T) {
 }
 
 func TestCreatePodDisruptionBudget_OverlayLabelsMergeOnTop(t *testing.T) {
-	dep := deploymentWithLabels("gw", gatewayLabels)
+	dep := deploymentWithLabels(gatewayLabels)
 	overlay := &shared.KubernetesResourceOverlay{
 		Metadata: &shared.ObjectMetadata{
 			Labels: map[string]string{"extra": "label"},
@@ -389,7 +389,7 @@ func TestCreatePodDisruptionBudget_OverlayLabelsMergeOnTop(t *testing.T) {
 }
 
 func TestCreateHorizontalPodAutoscaler_InheritsDeploymentLabels(t *testing.T) {
-	dep := deploymentWithLabels("gw", gatewayLabels)
+	dep := deploymentWithLabels(gatewayLabels)
 	overlay := &shared.KubernetesResourceOverlay{}
 
 	obj, err := createHorizontalPodAutoscaler(dep, overlay)
@@ -400,7 +400,7 @@ func TestCreateHorizontalPodAutoscaler_InheritsDeploymentLabels(t *testing.T) {
 }
 
 func TestCreateHorizontalPodAutoscaler_OverlayLabelsMergeOnTop(t *testing.T) {
-	dep := deploymentWithLabels("gw", gatewayLabels)
+	dep := deploymentWithLabels(gatewayLabels)
 	overlay := &shared.KubernetesResourceOverlay{
 		Metadata: &shared.ObjectMetadata{
 			Labels: map[string]string{"extra": "label"},
@@ -418,7 +418,7 @@ func TestCreateHorizontalPodAutoscaler_OverlayLabelsMergeOnTop(t *testing.T) {
 }
 
 func TestCreateVerticalPodAutoscaler_InheritsDeploymentLabels(t *testing.T) {
-	dep := deploymentWithLabels("gw", gatewayLabels)
+	dep := deploymentWithLabels(gatewayLabels)
 	overlay := &shared.KubernetesResourceOverlay{}
 
 	obj, err := createVerticalPodAutoscaler(dep, overlay)
@@ -429,7 +429,7 @@ func TestCreateVerticalPodAutoscaler_InheritsDeploymentLabels(t *testing.T) {
 }
 
 func TestCreateVerticalPodAutoscaler_OverlayLabelsMergeOnTop(t *testing.T) {
-	dep := deploymentWithLabels("gw", gatewayLabels)
+	dep := deploymentWithLabels(gatewayLabels)
 	overlay := &shared.KubernetesResourceOverlay{
 		Metadata: &shared.ObjectMetadata{
 			Labels: map[string]string{"extra": "label"},
@@ -447,7 +447,7 @@ func TestCreateVerticalPodAutoscaler_OverlayLabelsMergeOnTop(t *testing.T) {
 }
 
 func TestCreatePodDisruptionBudget_DeploymentLabelsNotMutated(t *testing.T) {
-	dep := deploymentWithLabels("gw", gatewayLabels)
+	dep := deploymentWithLabels(gatewayLabels)
 	overlay := &shared.KubernetesResourceOverlay{
 		Metadata: &shared.ObjectMetadata{
 			Labels: map[string]string{"extra": "label"},

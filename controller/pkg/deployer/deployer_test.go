@@ -12,7 +12,6 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -191,8 +190,6 @@ func TestPruneRemovedResources(t *testing.T) {
 	var (
 		ns         = "test-ns"
 		gwName     = "test-gateway"
-		gwUID      = types.UID("gateway-uid-123")
-		otherUID   = types.UID("other-uid-456")
 		ctx        = context.Background()
 		deployName = "test-deploy"
 		pdbName    = "test-pdb"
@@ -212,12 +209,11 @@ func TestPruneRemovedResources(t *testing.T) {
 		return d
 	}
 
-	createGateway := func(uid types.UID) *gwv1.Gateway {
+	createGateway := func() *gwv1.Gateway {
 		gw := &gwv1.Gateway{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      gwName,
 				Namespace: ns,
-				UID:       uid,
 			},
 			Spec: gwv1.GatewaySpec{
 				GatewayClassName: wellknown.DefaultAgwClassName,
@@ -227,7 +223,7 @@ func TestPruneRemovedResources(t *testing.T) {
 		return gw
 	}
 
-	createPDB := func(name string, ownerUID types.UID, controller bool) *policyv1.PodDisruptionBudget {
+	createPDB := func(name string, gatewayName string) *policyv1.PodDisruptionBudget {
 		pdb := &policyv1.PodDisruptionBudget{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       wellknown.PodDisruptionBudgetGVK.Kind,
@@ -236,13 +232,9 @@ func TestPruneRemovedResources(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: ns,
-				OwnerReferences: []metav1.OwnerReference{{
-					APIVersion: wellknown.GatewayGVK.GroupVersion().String(),
-					Kind:       wellknown.GatewayGVK.Kind,
-					Name:       gwName,
-					UID:        ownerUID,
-					Controller: ptr.To(controller),
-				}},
+				Labels: map[string]string{
+					wellknown.GatewayNameLabel: gatewayName,
+				},
 			},
 			Spec: policyv1.PodDisruptionBudgetSpec{
 				Selector: &metav1.LabelSelector{
@@ -253,7 +245,7 @@ func TestPruneRemovedResources(t *testing.T) {
 		return pdb
 	}
 
-	createHPA := func(name string, ownerUID types.UID, controller bool) *autoscalingv2.HorizontalPodAutoscaler {
+	createHPA := func(name string, gatewayName string) *autoscalingv2.HorizontalPodAutoscaler {
 		hpa := &autoscalingv2.HorizontalPodAutoscaler{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       wellknown.HorizontalPodAutoscalerGVK.Kind,
@@ -262,13 +254,9 @@ func TestPruneRemovedResources(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: ns,
-				OwnerReferences: []metav1.OwnerReference{{
-					APIVersion: wellknown.GatewayGVK.GroupVersion().String(),
-					Kind:       wellknown.GatewayGVK.Kind,
-					Name:       gwName,
-					UID:        ownerUID,
-					Controller: ptr.To(controller),
-				}},
+				Labels: map[string]string{
+					wellknown.GatewayNameLabel: gatewayName,
+				},
 			},
 			Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
 				ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
@@ -283,8 +271,8 @@ func TestPruneRemovedResources(t *testing.T) {
 	}
 
 	t.Run("prunes PDB when not in desired set", func(t *testing.T) {
-		gw := createGateway(gwUID)
-		pdb := createPDB(pdbName, gwUID, true)
+		gw := createGateway()
+		pdb := createPDB(pdbName, gwName)
 
 		fc := fake.NewClient(t, gw, pdb)
 		d := getDeployer(t, fc)
@@ -303,15 +291,15 @@ func TestPruneRemovedResources(t *testing.T) {
 	})
 
 	t.Run("keeps PDB when in desired set", func(t *testing.T) {
-		gw := createGateway(gwUID)
-		pdb := createPDB(pdbName, gwUID, true)
+		gw := createGateway()
+		pdb := createPDB(pdbName, gwName)
 
 		fc := fake.NewClient(t, gw, pdb)
 		d := getDeployer(t, fc)
 		fc.RunAndWait(ctx.Done())
 
 		// PDB is in desired set - should be kept
-		desiredPDB := createPDB(pdbName, gwUID, true)
+		desiredPDB := createPDB(pdbName, gwName)
 		err := d.PruneRemovedResources(ctx, gw, []client.Object{desiredPDB})
 		assert.NoError(t, err)
 
@@ -324,41 +312,20 @@ func TestPruneRemovedResources(t *testing.T) {
 		assert.Equal(t, pdbName, list.Items[0].GetName())
 	})
 
-	t.Run("skips resources not owned by this Gateway", func(t *testing.T) {
-		gw := createGateway(gwUID)
-		// PDB owned by a different Gateway
-		pdb := createPDB(pdbName, otherUID, true)
+	t.Run("skips resources belonging to a different Gateway", func(t *testing.T) {
+		gw := createGateway()
+		// PDB labeled for a different Gateway
+		pdb := createPDB(pdbName, "other-gateway")
 
 		fc := fake.NewClient(t, gw, pdb)
 		d := getDeployer(t, fc)
 		fc.RunAndWait(ctx.Done())
 
-		// Empty desired set, but PDB owned by different Gateway
+		// Empty desired set, but PDB belongs to a different Gateway
 		err := d.PruneRemovedResources(ctx, gw, []client.Object{})
 		assert.NoError(t, err)
 
-		// Verify PDB was NOT deleted (different owner)
-		gvr, err := wellknown.GVKToGVR(wellknown.PodDisruptionBudgetGVK)
-		assert.NoError(t, err)
-		list, err := fc.Dynamic().Resource(gvr).Namespace(ns).List(ctx, metav1.ListOptions{})
-		assert.NoError(t, err)
-		assert.Equal(t, 1, len(list.Items))
-	})
-
-	t.Run("skips resources owned but not controller", func(t *testing.T) {
-		gw := createGateway(gwUID)
-		// PDB owned by Gateway but controller=false
-		pdb := createPDB(pdbName, gwUID, false)
-
-		fc := fake.NewClient(t, gw, pdb)
-		d := getDeployer(t, fc)
-		fc.RunAndWait(ctx.Done())
-
-		// Empty desired set
-		err := d.PruneRemovedResources(ctx, gw, []client.Object{})
-		assert.NoError(t, err)
-
-		// Verify PDB was NOT deleted (not controller)
+		// Verify PDB was NOT deleted (different gateway label)
 		gvr, err := wellknown.GVKToGVR(wellknown.PodDisruptionBudgetGVK)
 		assert.NoError(t, err)
 		list, err := fc.Dynamic().Resource(gvr).Namespace(ns).List(ctx, metav1.ListOptions{})
@@ -367,9 +334,9 @@ func TestPruneRemovedResources(t *testing.T) {
 	})
 
 	t.Run("prunes multiple resources in one call", func(t *testing.T) {
-		gw := createGateway(gwUID)
-		pdb := createPDB(pdbName, gwUID, true)
-		hpa := createHPA(hpaName, gwUID, true)
+		gw := createGateway()
+		pdb := createPDB(pdbName, gwName)
+		hpa := createHPA(hpaName, gwName)
 
 		fc := fake.NewClient(t, gw, pdb, hpa)
 		d := getDeployer(t, fc)
@@ -394,16 +361,16 @@ func TestPruneRemovedResources(t *testing.T) {
 	})
 
 	t.Run("prunes some resources while keeping others", func(t *testing.T) {
-		gw := createGateway(gwUID)
-		pdb := createPDB(pdbName, gwUID, true)
-		hpa := createHPA(hpaName, gwUID, true)
+		gw := createGateway()
+		pdb := createPDB(pdbName, gwName)
+		hpa := createHPA(hpaName, gwName)
 
 		fc := fake.NewClient(t, gw, pdb, hpa)
 		d := getDeployer(t, fc)
 		fc.RunAndWait(ctx.Done())
 
 		// Only PDB in desired set - HPA should be pruned
-		desiredPDB := createPDB(pdbName, gwUID, true)
+		desiredPDB := createPDB(pdbName, gwName)
 		err := d.PruneRemovedResources(ctx, gw, []client.Object{desiredPDB})
 		assert.NoError(t, err)
 
@@ -423,7 +390,7 @@ func TestPruneRemovedResources(t *testing.T) {
 	})
 
 	t.Run("handles no existing resources gracefully", func(t *testing.T) {
-		gw := createGateway(gwUID)
+		gw := createGateway()
 
 		fc := fake.NewClient(t, gw)
 		d := getDeployer(t, fc)
@@ -435,9 +402,9 @@ func TestPruneRemovedResources(t *testing.T) {
 	})
 
 	t.Run("handles empty desired set", func(t *testing.T) {
-		gw := createGateway(gwUID)
-		pdb := createPDB(pdbName, gwUID, true)
-		hpa := createHPA(hpaName, gwUID, true)
+		gw := createGateway()
+		pdb := createPDB(pdbName, gwName)
+		hpa := createHPA(hpaName, gwName)
 
 		fc := fake.NewClient(t, gw, pdb, hpa)
 		d := getDeployer(t, fc)

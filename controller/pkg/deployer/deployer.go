@@ -258,15 +258,6 @@ func (d *Deployer) SetNamespaceAndOwnerWithGVK(owner client.Object, ownerGVK sch
 	return objs
 }
 
-func isOwnedByController(obj metav1.Object, ownerUID types.UID) bool {
-	for _, ref := range obj.GetOwnerReferences() {
-		if ref.UID == ownerUID && ref.Controller != nil && *ref.Controller {
-			return true
-		}
-	}
-	return false
-}
-
 func (d *Deployer) DeployObjs(ctx context.Context, objs []client.Object) error {
 	return d.DeployObjsWithSource(ctx, objs, nil)
 }
@@ -344,8 +335,8 @@ func (d *Deployer) DeployObjsWithSource(ctx context.Context, objs []client.Objec
 // but are no longer in the desired set of objects. This prevents stale autoscaling
 // resources from persisting when configuration changes.
 func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Object, desiredObjs []client.Object) error {
-	ownerUID := owner.GetUID()
 	ownerNamespace := owner.GetNamespace()
+	labelSelector := fmt.Sprintf("%s=%s", wellknown.GatewayNameLabel, owner.GetName())
 
 	// Build map of desired resources by GVK
 	desiredByGVK := make(map[schema.GroupVersionKind]map[string]bool)
@@ -374,9 +365,9 @@ func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Objec
 			continue
 		}
 
-		// List all resources of this type in the namespace
+		// List resources of this type in the namespace owned by this gateway
 		client := d.client.Dynamic().Resource(gvr).Namespace(ownerNamespace)
-		list, err := client.List(ctx, metav1.ListOptions{})
+		list, err := client.List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				// Resource type doesn't exist (e.g., VPA CRD not installed)
@@ -388,11 +379,6 @@ func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Objec
 
 		// Check each resource for pruning
 		for _, item := range list.Items {
-			// Only process resources owned by this controller
-			if !isOwnedByController(&item, ownerUID) {
-				continue
-			}
-
 			// Check if resource is in desired set
 			resourceName := item.GetName()
 			if desiredSet, exists := desiredByGVK[gvk]; exists && desiredSet[resourceName] {
