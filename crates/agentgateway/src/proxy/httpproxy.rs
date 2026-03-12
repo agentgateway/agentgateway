@@ -229,9 +229,9 @@ async fn apply_backend_policies(
 
 	if let Some(a2a) = a2a {
 		let a2a_type = a2a::apply_to_request(a2a, req).await;
-		if let a2a::RequestType::Call(method) = a2a_type {
+		if let a2a::RequestType::Call(method) = &a2a_type {
 			log.add(|l| {
-				l.a2a_method = Some(method);
+				l.a2a_method = Some(method.clone());
 			});
 		}
 		if matches!(

@@ -700,7 +700,7 @@ pub struct RequestLog {
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
 
-	pub a2a_method: Option<&'static str>,
+	pub a2a_method: Option<Strng>,
 
 	pub inference_pool: Option<SocketAddr>,
 
