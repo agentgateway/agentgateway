@@ -24,13 +24,18 @@ type PolicyPluginInput struct {
 }
 
 type PolicyPlugin struct {
-	Build func(PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy])
+	Build           func(PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy])
+	BuildReferences func(input PolicyPluginInput) krt.Collection[*PolicyAttachment]
 }
 
 // ApplyPolicies extracts all policies from the collection
-func (p *PolicyPlugin) ApplyPolicies(inputs PolicyPluginInput) (krt.Collection[AgwPolicy], krt.StatusCollection[controllers.Object, any]) {
+func (p *PolicyPlugin) ApplyPolicies(inputs PolicyPluginInput) (krt.Collection[AgwPolicy], krt.StatusCollection[controllers.Object, any], krt.Collection[*PolicyAttachment]) {
 	status, col := p.Build(inputs)
-	return col, status
+	var refs krt.Collection[*PolicyAttachment]
+	if p.BuildReferences != nil {
+		refs = p.BuildReferences(inputs)
+	}
+	return col, status, refs
 }
 
 // AgwPolicy wraps an Agw policy for collection handling

@@ -84,7 +84,7 @@ func BuildAgwBackend(
 func TranslateAgwBackend(
 	ctx plugins.PolicyCtx,
 	backend *agentgateway.AgentgatewayBackend,
-	ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend],
+	references plugins.ReferenceIndex,
 ) (*agentgateway.AgentgatewayBackendStatus, []agwir.AgwResource) {
 	var results []agwir.AgwResource
 	backends, err := BuildAgwBackend(ctx, backend)
@@ -102,15 +102,15 @@ func TranslateAgwBackend(
 		}, results
 	}
 
-	gtws := krt.FetchOne(ctx.Krt, ancestors, krt.FilterKey(utils.TypedNamespacedName{
+	gtws := references.LookupGatewaysForBackend(ctx.Krt, utils.TypedNamespacedName{
 		NamespacedName: config.NamespacedName(backend),
 		Kind:           wellknown.AgentgatewayBackendGVK.Kind,
-	}.String()))
+	})
 	// handle all backends created as an MCPBackend backend may create multiple backends
-	for _, gateways := range gtws.Objects {
+	for gateway := range gtws {
 		for _, backend := range backends {
 			logger.Debug("creating backend", "backend", backend.Name)
-			resourceWrapper := translator.ToResourceForGateway(gateways.Gateway, &api.Resource{
+			resourceWrapper := translator.ToResourceForGateway(gateway, &api.Resource{
 				Kind: &api.Resource_Backend{
 					Backend: backend,
 				},

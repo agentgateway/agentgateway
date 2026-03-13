@@ -14,14 +14,18 @@ import (
 
 type PolicyStatusCollections = map[schema.GroupKind]krt.StatusCollection[controllers.Object, any]
 
-func AgwPolicyCollection(agwPlugins plugins.AgwPlugin, references plugins.ReferenceIndex, krtopts krtutil.KrtOptions) (krt.Collection[ir.AgwResource], PolicyStatusCollections) {
+func AgwPolicyCollection(agwPlugins plugins.AgwPlugin, references plugins.ReferenceIndex, krtopts krtutil.KrtOptions) (krt.Collection[ir.AgwResource], krt.Collection[*plugins.PolicyAttachment], PolicyStatusCollections) {
 	var allPolicies []krt.Collection[plugins.AgwPolicy]
+	var allReferences []krt.Collection[*plugins.PolicyAttachment]
 	policyStatusMap := PolicyStatusCollections{}
 	// Collect all policies from registered plugins.
 	// Note: Only one plugin should be used per source GVK.
 	// Avoid joining collections per-GVK before passing them to a plugin.
 	for gvk, plugin := range agwPlugins.ContributesPolicies {
-		policy, policyStatus := plugin.ApplyPolicies(plugins.PolicyPluginInput{References: references})
+		policy, policyStatus, refs := plugin.ApplyPolicies(plugins.PolicyPluginInput{References: references})
+		if refs != nil {
+			allReferences = append(allReferences, refs)
+		}
 		allPolicies = append(allPolicies, policy)
 		if policyStatus != nil {
 			// some plugins may not have a status collection (a2a services, etc.)
@@ -34,5 +38,7 @@ func AgwPolicyCollection(agwPlugins plugins.AgwPlugin, references plugins.Refere
 		return ptr.Of(translator.ToResourceForGateway(*i.Gateway, i))
 	}, krtopts.ToOptions("AllPolicies")...)
 
-	return allPoliciesCol, policyStatusMap
+	allRefsCol := krt.JoinCollection(allReferences, krtopts.ToOptions("PolicyReferences")...)
+
+	return allPoliciesCol, allRefsCol, policyStatusMap
 }

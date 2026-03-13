@@ -18,6 +18,20 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer"
 )
 
+func TestReferences(t *testing.T) {
+	testutils.RunForDirectory(t, "testdata/references", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
+		sq, ri := testutils.Syncer(t, ctx, "")
+		r := ri.Outputs.Resources.List()
+		r = slices.FilterInPlace(r, func(resource ir.AgwResource) bool {
+			x := ir.GetAgwResourceName(resource.Resource)
+			return strings.HasPrefix(x, "policy/") || strings.HasPrefix(x, "backend/")
+		})
+		return sq.Dump(), slices.SortBy(r, func(a ir.AgwResource) string {
+			return a.ResourceName()
+		})
+	})
+}
+
 func TestRouteCollection(t *testing.T) {
 	testutils.RunForDirectory(t, "testdata/routes", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
 		sq, ri := testutils.Syncer(t, ctx, "HTTPRoute", "GRPCRoute", "TCPRoute", "TLSRoute", "InferencePool")

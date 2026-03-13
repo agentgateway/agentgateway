@@ -1,0 +1,54 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: agentgateway
+spec:
+  controllerName: agentgateway.dev/agentgateway
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: test
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: test
+  namespace: default
+spec:
+  parentRefs:
+    - name: test
+  hostnames:
+    - "www.example.com"
+  rules:
+    - backendRefs:
+        - name: reviews
+          port: 8080
+        - name: be
+          group: agentgateway.dev
+          kind: AgentgatewayBackend
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-secret
+  namespace: default
+type: Opaque
+data:
+  test: test
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hello
+  namespace: default
+type: Opaque
+data:
+  test: test

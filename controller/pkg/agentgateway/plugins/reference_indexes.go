@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"istio.io/istio/pkg/kube/krt"
+	"istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -43,9 +44,25 @@ func BuildReferenceIndex(
 	}
 }
 
+type PolicyAttachment struct {
+	Target  utils.TypedNamespacedName
+	Backend utils.TypedNamespacedName
+	Source  utils.TypedNamespacedName
+}
+
+func (a PolicyAttachment) Equals(other PolicyAttachment) bool {
+	return a.Target == other.Target && a.Backend == other.Backend && a.Source == other.Source
+}
+
+func (a PolicyAttachment) ResourceName() string {
+	return a.Source.String() + "/" + a.Target.String() + "/" + a.Backend.String()
+}
+
 type ReferenceIndex struct {
-	// Backend --> Gateway
+	// Backend --> Gateway via Route
 	Ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend]
+	// Backend --> Target via Policy
+	PolicyAttachments krt.IndexCollection[utils.TypedNamespacedName, *PolicyAttachment]
 	// Route --> Gateway
 	attachments krt.IndexCollection[utils.TypedNamespacedName, *RouteAttachment]
 	// Gateway --> Gateway: trivial, no collection needed
@@ -73,5 +90,19 @@ func (p ReferenceIndex) LookupGatewaysForTarget(ctx krt.HandlerContext, object u
 }
 
 func (p ReferenceIndex) LookupGatewaysForBackend(ctx krt.HandlerContext, object utils.TypedNamespacedName) sets.Set[types.NamespacedName] {
-	return p.LookupGatewaysForTarget(ctx, object)
+	base := p.LookupGatewaysForTarget(ctx, object)
+	log.Errorf("howardjohn: LOOKup %+v", object)
+	if p.PolicyAttachments != nil {
+		log.Errorf("howardjohn: LOOKup more %+v %v", object, p.PolicyAttachments.List())
+		for _, pref := range krt.FetchOne(ctx, p.PolicyAttachments, krt.FilterKey(object.String())).Objects {
+			log.Errorf("howardjohn: pref.. %+v", object)
+			base = base.Union(p.LookupGatewaysForTarget(ctx, pref.Target))
+		}
+	}
+	return base
+}
+
+func (p ReferenceIndex) WithPolicyAttachments(references krt.IndexCollection[utils.TypedNamespacedName, *PolicyAttachment]) ReferenceIndex {
+	p.PolicyAttachments = references
+	return p
 }
