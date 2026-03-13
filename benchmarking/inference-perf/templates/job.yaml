@@ -1,0 +1,106 @@
+# inference-perf/templates/job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "inference-perf.fullname" . }}-job
+  labels:
+    {{- include "inference-perf.labels" . | nindent 4 }}
+    app: inference-perf
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "inference-perf.selectorLabels" . | nindent 8 }}
+        app: inference-perf
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ .Values.job.serviceAccountName }}
+      {{- with .Values.job.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- if .Values.gcsPath}}
+      initContainers:
+        - name: fetch-gcs-dataset
+          image: google/cloud-sdk:latest
+          command: ["sh", "-c", "gsutil cp gs://{{ .Values.gcsPath }} /gcsDataset/gcs-dataset.json"]
+          volumeMounts:
+            - name: gcs-dataset-volume
+              mountPath: /gcsDataset
+{{- end }}
+{{- if .Values.s3Path}}
+      initContainers:
+        - name: fetch-s3-dataset
+          image: google/cloud-sdk:latest
+          command: ["sh", "-c", "aws s3 cp s3://{{ .Values.s3Path }} /s3Dataset/s3-dataset.json"]
+          volumeMounts:
+            - name: s3-dataset-volume
+              mountPath: /s3Dataset
+{{- end }}
+      containers:
+        - name: inference-perf-container
+          image: "{{ .Values.job.image.repository }}:{{ .Values.job.image.tag | default .Chart.AppVersion }}"
+          command: ["inference-perf"]
+          args:
+            - "--config_file"
+            - "{{ include "inference-perf.configMount" . }}/config.yml"
+            - "--log-level"
+            - {{ .Values.logLevel }}
+          env:
+{{- if and .Values.token.hfSecret.name .Values.token.hfSecret.key }}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.token.hfSecret.name }}
+                  key: {{ .Values.token.hfSecret.key }}
+{{- else if .Values.token.hfToken }}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "inference-perf.hfSecret" . }}
+                  key: {{ include "inference-perf.hfKey" . }}
+{{- end }}
+{{- if .Values.gcsCredentials.secretName }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /etc/gcs/key.json
+{{- end }}
+{{- if .Values.gcsProject }}
+            - name: GOOGLE_CLOUD_PROJECT
+              value: {{ .Values.gcsProject }}
+{{- end }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: {{ include "inference-perf.configMount" . }}
+              readOnly: true
+{{- if .Values.gcsPath}}
+            - name: gcs-dataset-volume
+              mountPath: /gcsDataset
+{{- end }}
+{{- if .Values.s3Path}}
+            - name: s3-dataset-volume
+              mountPath: /s3Dataset
+{{- end }}
+{{- if .Values.gcsCredentials.secretName }}
+            - name: gcs-credentials-volume
+              mountPath: /etc/gcs
+              readOnly: true
+{{- end }}
+          resources:
+            {{- toYaml .Values.job.resources | nindent 12 }}
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ include "inference-perf.fullname" . }}-config
+{{- if .Values.gcsPath}}
+        - name: gcs-dataset-volume
+          emptyDir: {}
+{{- end }}
+{{- if .Values.s3Path}}
+        - name: s3-dataset-volume
+          emptyDir: {}
+{{- end }}
+{{- if .Values.gcsCredentials.secretName }}
+        - name: gcs-credentials-volume
+          secret:
+            secretName: {{ .Values.gcsCredentials.secretName }}
+{{- end }}
