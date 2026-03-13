@@ -1,0 +1,99 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: extensionref-inline-policy
+  namespace: default
+spec:
+  parentRefs:
+  - name: test-gateway
+  hostnames:
+  - example.com
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /inline
+    filters:
+    - type: ExtensionRef
+      extensionRef:
+        group: agentgateway.dev
+        kind: AgentgatewayPolicy
+        name: inline-csrf
+    backendRefs:
+    - name: infra-backend-v1
+      port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: inline-csrf
+  namespace: default
+spec:
+  targetSelectors:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    matchLabels:
+      app: ignored
+  traffic:
+    csrf:
+      additionalOrigins:
+      - https://example.com
+      - https://app.example.com
+
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: infra-backend-v1.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      hostnames:
+      - example.com
+      key: default/extensionref-inline-policy.0.0.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          pathPrefix: /inline
+      name:
+        kind: HTTPRoute
+        name: extensionref-inline-policy
+        namespace: default
+      trafficPolicies:
+      - csrf:
+          additionalOrigins:
+          - https://example.com
+          - https://app.example.com
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: extensionref-inline-policy
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default
