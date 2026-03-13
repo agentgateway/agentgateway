@@ -1126,11 +1126,9 @@ impl tower::Service<::http::Request<tonic::body::Body>> for GrpcReferenceChannel
 		let policies = self.policies.clone();
 		let req = req.map(http::Body::new);
 		Box::pin(async move {
-			Ok(
-				client
-					.call_reference_with_policies(req, &target, policies.as_slice())
-					.await?,
-			)
+			client
+				.call_reference_with_policies(req, &target, policies.as_slice())
+				.await
 		})
 	}
 }
