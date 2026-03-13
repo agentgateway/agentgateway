@@ -407,7 +407,7 @@ impl ExtAuthz {
 		let cr = match resp {
 			Ok(response) => response,
 			Err(e) => {
-				warn!("ext_authz request failed: {}", e.message());
+				warn!("ext_authz request failed: {}", e);
 				return self.handle_auth_failure("Authorization service unavailable");
 			},
 		};
