@@ -434,26 +434,8 @@ impl AIProvider {
 						// When detected: keep Authorization: Bearer as-is and ensure the
 						// oauth-2025-04-20 beta flag is present (required for OAuth auth).
 						// Otherwise: move the Bearer token to x-api-key (standard API key auth).
-						if authz.token().starts_with("sk-ant-oat") {
-							// Ensure oauth-2025-04-20 is in anthropic-beta
-							let has_oauth_flag = req
-								.headers
-								.get("anthropic-beta")
-								.and_then(|v| v.to_str().ok())
-								.is_some_and(|v| v.split(',').any(|f| f.trim() == "oauth-2025-04-20"));
-							if !has_oauth_flag {
-								let new_val = match req
-									.headers
-									.get("anthropic-beta")
-									.and_then(|v| v.to_str().ok())
-								{
-									Some(existing) => format!("{existing},oauth-2025-04-20"),
-									None => "oauth-2025-04-20".to_string(),
-								};
-								req
-									.headers
-									.insert("anthropic-beta", HeaderValue::from_str(&new_val)?);
-							}
+						if authz.token().starts_with(anthropic::OAUTH_TOKEN_PREFIX) {
+							anthropic::ensure_beta_flag(&mut req.headers, anthropic::OAUTH_BETA_FLAG)?;
 						} else {
 							// Move bearer token to x-api-key for standard API-key auth
 							req.headers.remove(http::header::AUTHORIZATION);
