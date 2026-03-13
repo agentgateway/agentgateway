@@ -142,6 +142,31 @@ func TestAgentgatewayParametersApplier_ApplyToHelmValues_PreservesSessionKeyEnvV
 	assert.Equal(t, "CUSTOM_VAR", vals.Agentgateway.Env[1].Name)
 }
 
+func TestAgentgatewayParametersApplier_ApplyToHelmValues_PreservesOAuthCookieSecretEnvVar(t *testing.T) {
+	params := &agentgateway.AgentgatewayParameters{
+		Spec: agentgateway.AgentgatewayParametersSpec{
+			AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
+				Env: []corev1.EnvVar{
+					{Name: "OAUTH_COOKIE_SECRET", Value: "inline-key"},
+					{Name: "CUSTOM_VAR", Value: "custom_value"},
+				},
+			},
+		},
+	}
+
+	applier := NewAgentgatewayParametersApplier(params)
+	vals := &deployer.HelmConfig{
+		Agentgateway: &deployer.AgentgatewayHelmGateway{},
+	}
+
+	applier.ApplyToHelmValues(vals)
+
+	require.Len(t, vals.Agentgateway.Env, 2)
+	assert.Equal(t, "OAUTH_COOKIE_SECRET", vals.Agentgateway.Env[0].Name)
+	assert.Equal(t, "inline-key", vals.Agentgateway.Env[0].Value)
+	assert.Equal(t, "CUSTOM_VAR", vals.Agentgateway.Env[1].Name)
+}
+
 func TestApplyManagedSessionKeyDefaults_UsesUserProvidedSessionKey(t *testing.T) {
 	vals := &deployer.AgentgatewayHelmGateway{
 		AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
@@ -154,6 +179,20 @@ func TestApplyManagedSessionKeyDefaults_UsesUserProvidedSessionKey(t *testing.T)
 	applyManagedSessionKeyDefaults(vals, "gw")
 
 	assert.Nil(t, vals.SessionKeySecretName)
+}
+
+func TestApplyManagedOAuthCookieSecretDefaults_UsesUserProvidedOAuthCookieSecret(t *testing.T) {
+	vals := &deployer.AgentgatewayHelmGateway{
+		AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
+			Env: []corev1.EnvVar{
+				{Name: "OAUTH_COOKIE_SECRET", Value: "inline-key"},
+			},
+		},
+	}
+
+	applyManagedOAuthCookieSecretDefaults(vals, "gw")
+
+	assert.Nil(t, vals.OAuthCookieSecretName)
 }
 
 func TestUsesManagedSessionKeyResolvedParameters_GatewayEnvDisablesManagedSecret(t *testing.T) {
@@ -175,6 +214,27 @@ func TestUsesManagedSessionKeyResolvedParameters_GatewayEnvDisablesManagedSecret
 	}
 
 	assert.False(t, usesManagedSessionKeyResolvedParameters(resolved))
+}
+
+func TestUsesManagedOAuthCookieSecretResolvedParameters_GatewayEnvDisablesManagedSecret(t *testing.T) {
+	resolved := &resolvedParameters{
+		gatewayClassAGWP: &agentgateway.AgentgatewayParameters{
+			Spec: agentgateway.AgentgatewayParametersSpec{
+				AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
+					Env: []corev1.EnvVar{{Name: "RUST_LOG", Value: "info"}},
+				},
+			},
+		},
+		gatewayAGWP: &agentgateway.AgentgatewayParameters{
+			Spec: agentgateway.AgentgatewayParametersSpec{
+				AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
+					Env: []corev1.EnvVar{{Name: "OAUTH_COOKIE_SECRET", Value: "inline-key"}},
+				},
+			},
+		},
+	}
+
+	assert.False(t, usesManagedOAuthCookieSecretResolvedParameters(resolved))
 }
 
 func TestAgentgatewayParametersApplier_ApplyOverlaysToObjects(t *testing.T) {
@@ -380,7 +440,7 @@ func TestBuildSessionKeySecret_UsesExistingValidKey(t *testing.T) {
 	}
 	generator := &agentgatewayParametersHelmValuesGenerator{
 		secretClient: newSyncedSecretClient(t, secret),
-		sessionKeyGen: func() (string, error) {
+		keyGen: func() (string, error) {
 			return "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100", nil
 		},
 	}
@@ -414,7 +474,7 @@ func TestBuildSessionKeySecret_RejectsInvalidExistingKey(t *testing.T) {
 	}
 	generator := &agentgatewayParametersHelmValuesGenerator{
 		secretClient: newSyncedSecretClient(t, secret),
-		sessionKeyGen: func() (string, error) {
+		keyGen: func() (string, error) {
 			return "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", nil
 		},
 	}
@@ -426,6 +486,69 @@ func TestBuildSessionKeySecret_RejectsInvalidExistingKey(t *testing.T) {
 	}
 
 	_, err := generator.buildSessionKeySecret(context.Background(), gw, "gw-session-key")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "contains an invalid key")
+}
+
+func TestBuildOAuthCookieSecret_UsesExistingValidKey(t *testing.T) {
+	const existingKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw-oauth-cookie-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"key": []byte(existingKey),
+		},
+	}
+	generator := &agentgatewayParametersHelmValuesGenerator{
+		secretClient: newSyncedSecretClient(t, secret),
+		keyGen: func() (string, error) {
+			return "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100", nil
+		},
+	}
+	gw := &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw",
+			Namespace: "default",
+		},
+		Spec: gwv1.GatewaySpec{
+			GatewayClassName: "agentgateway",
+		},
+	}
+
+	managedSecret, err := generator.buildOAuthCookieSecret(context.Background(), gw, "gw-oauth-cookie-secret")
+	require.NoError(t, err)
+	require.NotNil(t, managedSecret)
+	assert.Equal(t, existingKey, string(managedSecret.Data["key"]))
+	assert.Equal(t, corev1.SecretTypeOpaque, managedSecret.Type)
+	assert.Equal(t, "gw-oauth-cookie-secret", managedSecret.Name)
+}
+
+func TestBuildOAuthCookieSecret_RejectsInvalidExistingKey(t *testing.T) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw-oauth-cookie-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"key": []byte("not-a-valid-key"),
+		},
+	}
+	generator := &agentgatewayParametersHelmValuesGenerator{
+		secretClient: newSyncedSecretClient(t, secret),
+		keyGen: func() (string, error) {
+			return "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", nil
+		},
+	}
+	gw := &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw",
+			Namespace: "default",
+		},
+	}
+
+	_, err := generator.buildOAuthCookieSecret(context.Background(), gw, "gw-oauth-cookie-secret")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "contains an invalid key")
 }
@@ -448,5 +571,26 @@ func TestAddSessionKeyChecksumAnnotation(t *testing.T) {
 	assert.Equal(t,
 		"2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737",
 		deployment.Spec.Template.Annotations[sessionKeyChecksumAnnotation],
+	)
+}
+
+func TestAddOAuthCookieSecretChecksumAnnotation(t *testing.T) {
+	deployment := &appsv1.Deployment{}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw-oauth-cookie-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"key": []byte("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"),
+		},
+	}
+
+	err := addSecretChecksumAnnotation([]client.Object{deployment}, secret, oauthCookieSecretChecksumAnnotation)
+	require.NoError(t, err)
+	require.NotNil(t, deployment.Spec.Template.Annotations)
+	assert.Equal(t,
+		"2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737",
+		deployment.Spec.Template.Annotations[oauthCookieSecretChecksumAnnotation],
 	)
 }

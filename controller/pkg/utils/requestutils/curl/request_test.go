@@ -26,6 +26,11 @@ func TestBuildArgs(t *testing.T) {
 			expected: []string{"-s"},
 		},
 		{
+			name:     "WithInsecureSkipVerify",
+			option:   curl.WithInsecureSkipVerify(),
+			expected: []string{"-k"},
+		},
+		{
 			name:     "WithBody",
 			option:   curl.WithBody("body"),
 			expected: []string{"--data-binary"},

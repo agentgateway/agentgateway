@@ -10,7 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks/mocks"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/identity/jwks/mocks"
 )
 
 func TestAddKeysetToFetcher(t *testing.T) {
@@ -38,6 +38,32 @@ func TestRemoveKeysetFromFetcher(t *testing.T) {
 	assert.NotContains(t, f.keysetSources, "https://test/jwks")
 	assert.NotContains(t, f.cache.jwks, "https://test/jwks")
 	assert.True(t, keysetSource.Deleted)
+}
+
+func TestRemoveKeysetDoesNotBlockWithoutSubscriberReceiver(t *testing.T) {
+	f := NewJwksFetcher(NewJwksCache())
+	f.AddOrUpdateKeyset(JwksSource{JwksURL: "https://test/jwks", Ttl: 5 * time.Minute})
+	f.SubscribeToUpdates()
+
+	done := make(chan struct{})
+	go func() {
+		f.RemoveKeyset(JwksSource{JwksURL: "https://test/jwks"})
+		close(done)
+	}()
+
+	assert.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond)
+}
+
+func TestMakeClientSetsTimeout(t *testing.T) {
+	client := makeClient(nil)
+	assert.Equal(t, jwksFetchTimeout, client.Timeout)
 }
 
 func TestFetcherWithEmptyJwksFetchSchedule(t *testing.T) {

@@ -20,6 +20,8 @@
 |`config.readinessAddr`|Readiness probe server address in the format "ip:port"|
 |`config.session`|Configuration for stateful session management|
 |`config.session.key`|The AES-256-GCM session protection key to be used for session tokens.<br>If not set, sessions will not be encrypted.<br>For example, generated via `openssl rand -hex 32`.|
+|`config.oauth2`|Configuration for OAuth2 browser-state protection.|
+|`config.oauth2.cookieSecret`|The AES-256-GCM key used to protect OAuth2 browser state and cookies.<br>For example, generated via `openssl rand -hex 32`.|
 |`config.connectionTerminationDeadline`||
 |`config.connectionMinTerminationDeadline`||
 |`config.workerThreads`||
@@ -902,6 +904,9 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwks.(any)url`||
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)issuer`||
+|`binds[].listeners[].routes[].policies.jwtAuth.(any)(any)audiences`||
 |`binds[].listeners[].routes[].policies.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|.htpasswd file contents/reference|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.(any)file`||
@@ -1032,6 +1037,25 @@
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].routes[].policies.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
+|`binds[].listeners[].routes[].policies.oauth2.issuer`|OIDC issuer URL. When set, endpoints are resolved using OIDC discovery.|
+|`binds[].listeners[].routes[].policies.oauth2.authorizationEndpoint`|Explicit authorization endpoint for non-discovery OAuth2 providers.|
+|`binds[].listeners[].routes[].policies.oauth2.tokenEndpoint`|Explicit token endpoint for non-discovery OAuth2 providers.|
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend`|Optional provider backend used for provider back-channel calls.|
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)service`||
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)service.name`||
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)service.name.namespace`||
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)service.name.hostname`||
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)service.port`||
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)host`|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.oauth2.providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.oauth2.endSessionEndpoint`|Optional end-session endpoint for explicit OAuth2 providers.|
+|`binds[].listeners[].routes[].policies.oauth2.tokenEndpointAuthMethodsSupported`|Optional token endpoint auth methods supported by explicit OAuth2 providers.|
+|`binds[].listeners[].routes[].policies.oauth2.clientId`|OAuth2 client ID.|
+|`binds[].listeners[].routes[].policies.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
+|`binds[].listeners[].routes[].policies.oauth2.clientSecret.(any)file`||
+|`binds[].listeners[].routes[].policies.oauth2.redirectUri`|Explicit callback URL configured with the upstream provider.|
+|`binds[].listeners[].routes[].policies.oauth2.scopes`|OAuth scopes requested during browser login flow.|
 |`binds[].listeners[].routes[].policies.extProc`|Extend agentgateway with an external processor|
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service`||
 |`binds[].listeners[].routes[].policies.extProc.(any)(1)service.name`||
@@ -3401,6 +3425,9 @@
 |`binds[].listeners[].policies.jwtAuth.(any)(any)jwks.(any)url`||
 |`binds[].listeners[].policies.jwtAuth.(any)(any)jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].policies.jwtAuth.(any)(any)jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`binds[].listeners[].policies.jwtAuth.(any)(any)mode`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)issuer`||
+|`binds[].listeners[].policies.jwtAuth.(any)(any)audiences`||
 |`binds[].listeners[].policies.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
 |`binds[].listeners[].policies.extAuthz.(any)(1)service`||
 |`binds[].listeners[].policies.extAuthz.(any)(1)service.name`||
@@ -3521,6 +3548,25 @@
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].policies.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
+|`binds[].listeners[].policies.oauth2.issuer`|OIDC issuer URL. When set, endpoints are resolved using OIDC discovery.|
+|`binds[].listeners[].policies.oauth2.authorizationEndpoint`|Explicit authorization endpoint for non-discovery OAuth2 providers.|
+|`binds[].listeners[].policies.oauth2.tokenEndpoint`|Explicit token endpoint for non-discovery OAuth2 providers.|
+|`binds[].listeners[].policies.oauth2.providerBackend`|Optional provider backend used for provider back-channel calls.|
+|`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)service`||
+|`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)service.name`||
+|`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)service.name.namespace`||
+|`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)service.name.hostname`||
+|`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)service.port`||
+|`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)host`|Hostname or IP address|
+|`binds[].listeners[].policies.oauth2.providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.oauth2.endSessionEndpoint`|Optional end-session endpoint for explicit OAuth2 providers.|
+|`binds[].listeners[].policies.oauth2.tokenEndpointAuthMethodsSupported`|Optional token endpoint auth methods supported by explicit OAuth2 providers.|
+|`binds[].listeners[].policies.oauth2.clientId`|OAuth2 client ID.|
+|`binds[].listeners[].policies.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
+|`binds[].listeners[].policies.oauth2.clientSecret.(any)file`||
+|`binds[].listeners[].policies.oauth2.redirectUri`|Explicit callback URL configured with the upstream provider.|
+|`binds[].listeners[].policies.oauth2.scopes`|OAuth scopes requested during browser login flow.|
 |`binds[].listeners[].policies.extProc`|Extend agentgateway with an external processor|
 |`binds[].listeners[].policies.extProc.(any)(1)service`||
 |`binds[].listeners[].policies.extProc.(any)(1)service.name`||
@@ -4725,6 +4771,9 @@
 |`policies[].policy.jwtAuth.(any)(any)jwks.(any)url`||
 |`policies[].policy.jwtAuth.(any)(any)jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`policies[].policy.jwtAuth.(any)(any)jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`policies[].policy.jwtAuth.(any)(any)mode`||
+|`policies[].policy.jwtAuth.(any)(any)issuer`||
+|`policies[].policy.jwtAuth.(any)(any)audiences`||
 |`policies[].policy.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`policies[].policy.basicAuth.htpasswd`|.htpasswd file contents/reference|
 |`policies[].policy.basicAuth.htpasswd.(any)file`||
@@ -4855,6 +4904,25 @@
 |`policies[].policy.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
 |`policies[].policy.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`policies[].policy.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
+|`policies[].policy.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
+|`policies[].policy.oauth2.issuer`|OIDC issuer URL. When set, endpoints are resolved using OIDC discovery.|
+|`policies[].policy.oauth2.authorizationEndpoint`|Explicit authorization endpoint for non-discovery OAuth2 providers.|
+|`policies[].policy.oauth2.tokenEndpoint`|Explicit token endpoint for non-discovery OAuth2 providers.|
+|`policies[].policy.oauth2.providerBackend`|Optional provider backend used for provider back-channel calls.|
+|`policies[].policy.oauth2.providerBackend.(any)(1)service`||
+|`policies[].policy.oauth2.providerBackend.(any)(1)service.name`||
+|`policies[].policy.oauth2.providerBackend.(any)(1)service.name.namespace`||
+|`policies[].policy.oauth2.providerBackend.(any)(1)service.name.hostname`||
+|`policies[].policy.oauth2.providerBackend.(any)(1)service.port`||
+|`policies[].policy.oauth2.providerBackend.(any)(1)host`|Hostname or IP address|
+|`policies[].policy.oauth2.providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.oauth2.endSessionEndpoint`|Optional end-session endpoint for explicit OAuth2 providers.|
+|`policies[].policy.oauth2.tokenEndpointAuthMethodsSupported`|Optional token endpoint auth methods supported by explicit OAuth2 providers.|
+|`policies[].policy.oauth2.clientId`|OAuth2 client ID.|
+|`policies[].policy.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
+|`policies[].policy.oauth2.clientSecret.(any)file`||
+|`policies[].policy.oauth2.redirectUri`|Explicit callback URL configured with the upstream provider.|
+|`policies[].policy.oauth2.scopes`|OAuth scopes requested during browser login flow.|
 |`policies[].policy.extProc`|Extend agentgateway with an external processor|
 |`policies[].policy.extProc.(any)(1)service`||
 |`policies[].policy.extProc.(any)(1)service.name`||
@@ -6278,6 +6346,9 @@
 |`llm.policies.jwtAuth.(any)(any)jwks.(any)url`||
 |`llm.policies.jwtAuth.(any)(any)jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`llm.policies.jwtAuth.(any)(any)jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`llm.policies.jwtAuth.(any)(any)mode`||
+|`llm.policies.jwtAuth.(any)(any)issuer`||
+|`llm.policies.jwtAuth.(any)(any)audiences`||
 |`llm.policies.extAuthz`|Authenticate incoming requests by calling an external authorization server.|
 |`llm.policies.extAuthz.(any)(1)service`||
 |`llm.policies.extAuthz.(any)(1)service.name`||
@@ -6398,6 +6469,25 @@
 |`llm.policies.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
 |`llm.policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`llm.policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
+|`llm.policies.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
+|`llm.policies.oauth2.issuer`|OIDC issuer URL. When set, endpoints are resolved using OIDC discovery.|
+|`llm.policies.oauth2.authorizationEndpoint`|Explicit authorization endpoint for non-discovery OAuth2 providers.|
+|`llm.policies.oauth2.tokenEndpoint`|Explicit token endpoint for non-discovery OAuth2 providers.|
+|`llm.policies.oauth2.providerBackend`|Optional provider backend used for provider back-channel calls.|
+|`llm.policies.oauth2.providerBackend.(any)(1)service`||
+|`llm.policies.oauth2.providerBackend.(any)(1)service.name`||
+|`llm.policies.oauth2.providerBackend.(any)(1)service.name.namespace`||
+|`llm.policies.oauth2.providerBackend.(any)(1)service.name.hostname`||
+|`llm.policies.oauth2.providerBackend.(any)(1)service.port`||
+|`llm.policies.oauth2.providerBackend.(any)(1)host`|Hostname or IP address|
+|`llm.policies.oauth2.providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.oauth2.endSessionEndpoint`|Optional end-session endpoint for explicit OAuth2 providers.|
+|`llm.policies.oauth2.tokenEndpointAuthMethodsSupported`|Optional token endpoint auth methods supported by explicit OAuth2 providers.|
+|`llm.policies.oauth2.clientId`|OAuth2 client ID.|
+|`llm.policies.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
+|`llm.policies.oauth2.clientSecret.(any)file`||
+|`llm.policies.oauth2.redirectUri`|Explicit callback URL configured with the upstream provider.|
+|`llm.policies.oauth2.scopes`|OAuth scopes requested during browser login flow.|
 |`llm.policies.extProc`|Extend agentgateway with an external processor|
 |`llm.policies.extProc.(any)(1)service`||
 |`llm.policies.extProc.(any)(1)service.name`||
@@ -7460,6 +7550,9 @@
 |`mcp.policies.jwtAuth.(any)(any)jwks.(any)url`||
 |`mcp.policies.jwtAuth.(any)(any)jwtValidationOptions`|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`mcp.policies.jwtAuth.(any)(any)jwtValidationOptions.requiredClaims`|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`mcp.policies.jwtAuth.(any)(any)mode`||
+|`mcp.policies.jwtAuth.(any)(any)issuer`||
+|`mcp.policies.jwtAuth.(any)(any)audiences`||
 |`mcp.policies.basicAuth`|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`mcp.policies.basicAuth.htpasswd`|.htpasswd file contents/reference|
 |`mcp.policies.basicAuth.htpasswd.(any)file`||
@@ -7590,6 +7683,25 @@
 |`mcp.policies.extAuthz.(any)includeRequestBody.maxRequestBytes`|Maximum size of request body to buffer (default: 8192)|
 |`mcp.policies.extAuthz.(any)includeRequestBody.allowPartialMessage`|If true, send partial body when max_request_bytes is reached|
 |`mcp.policies.extAuthz.(any)includeRequestBody.packAsBytes`|If true, pack body as raw bytes in gRPC|
+|`mcp.policies.oauth2`|Authenticate incoming requests using OAuth2/OIDC.|
+|`mcp.policies.oauth2.issuer`|OIDC issuer URL. When set, endpoints are resolved using OIDC discovery.|
+|`mcp.policies.oauth2.authorizationEndpoint`|Explicit authorization endpoint for non-discovery OAuth2 providers.|
+|`mcp.policies.oauth2.tokenEndpoint`|Explicit token endpoint for non-discovery OAuth2 providers.|
+|`mcp.policies.oauth2.providerBackend`|Optional provider backend used for provider back-channel calls.|
+|`mcp.policies.oauth2.providerBackend.(any)(1)service`||
+|`mcp.policies.oauth2.providerBackend.(any)(1)service.name`||
+|`mcp.policies.oauth2.providerBackend.(any)(1)service.name.namespace`||
+|`mcp.policies.oauth2.providerBackend.(any)(1)service.name.hostname`||
+|`mcp.policies.oauth2.providerBackend.(any)(1)service.port`||
+|`mcp.policies.oauth2.providerBackend.(any)(1)host`|Hostname or IP address|
+|`mcp.policies.oauth2.providerBackend.(any)(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.oauth2.endSessionEndpoint`|Optional end-session endpoint for explicit OAuth2 providers.|
+|`mcp.policies.oauth2.tokenEndpointAuthMethodsSupported`|Optional token endpoint auth methods supported by explicit OAuth2 providers.|
+|`mcp.policies.oauth2.clientId`|OAuth2 client ID.|
+|`mcp.policies.oauth2.clientSecret`|OAuth2 client secret value or file reference.|
+|`mcp.policies.oauth2.clientSecret.(any)file`||
+|`mcp.policies.oauth2.redirectUri`|Explicit callback URL configured with the upstream provider.|
+|`mcp.policies.oauth2.scopes`|OAuth scopes requested during browser login flow.|
 |`mcp.policies.extProc`|Extend agentgateway with an external processor|
 |`mcp.policies.extProc.(any)(1)service`||
 |`mcp.policies.extProc.(any)(1)service.name`||

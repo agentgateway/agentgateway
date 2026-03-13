@@ -24,8 +24,8 @@ use crate::types::agent::{
 };
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
-	Backend as XdsBackend, Bind as XdsBind, Listener as XdsListener, Policy as XdsPolicy,
-	Resource as ADPResource, Route as XdsRoute, TcpRoute as XdsTcpRoute,
+	Backend as XdsBackend, Bind as XdsBind, Listener as XdsListener, Resource as ADPResource,
+	TcpRoute as XdsTcpRoute,
 };
 use crate::types::{agent, frontend};
 use crate::*;
@@ -354,9 +354,20 @@ pub struct LLMResponsePolicies {
 	pub prompt_guard: Vec<ResponseGuard>,
 }
 
+#[derive(Clone)]
+pub struct StoreInit {
+	pub ipv6_enabled: bool,
+}
+
+impl Default for StoreInit {
+	fn default() -> Self {
+		Self { ipv6_enabled: true }
+	}
+}
+
 impl Default for Store {
 	fn default() -> Self {
-		Self::with_ipv6_enabled(true)
+		Self::from_init(StoreInit::default())
 	}
 }
 
@@ -368,7 +379,119 @@ pub struct RoutePath<'a> {
 }
 
 impl Store {
-	pub fn with_ipv6_enabled(ipv6_enabled: bool) -> Self {
+	fn validate_target_auth_conflicts_maps(
+		policies_by_key: &HashMap<PolicyKey, Arc<TargetedPolicy>>,
+		policies_by_target: &hashbrown::HashMap<PolicyTarget, HashSet<PolicyKey>>,
+	) -> anyhow::Result<()> {
+		for (target, keys) in policies_by_target {
+			let mut jwt_source: Option<&PolicyKey> = None;
+			let mut oauth2_source: Option<&PolicyKey> = None;
+			for key in keys {
+				let Some(policy) = policies_by_key.get(key) else {
+					continue;
+				};
+				let crate::types::agent::PolicyType::Traffic(traffic) = &policy.policy else {
+					continue;
+				};
+				match &traffic.policy {
+					TrafficPolicy::JwtAuth(_) if jwt_source.is_none() => jwt_source = Some(key),
+					TrafficPolicy::OAuth2(_) if oauth2_source.is_none() => oauth2_source = Some(key),
+					_ => {},
+				}
+				if let (Some(jwt), Some(oauth2)) = (&jwt_source, &oauth2_source) {
+					anyhow::bail!(
+						"`jwtAuth` and `oauth2` cannot both apply to target {:?} (jwt policy `{}`, oauth2 policy `{}`)",
+						target,
+						jwt,
+						oauth2
+					);
+				}
+			}
+		}
+		Ok(())
+	}
+
+	fn rebuild_policies_by_target(
+		policies_by_key: &HashMap<PolicyKey, Arc<TargetedPolicy>>,
+	) -> hashbrown::HashMap<PolicyTarget, HashSet<PolicyKey>> {
+		let mut policies_by_target: hashbrown::HashMap<PolicyTarget, HashSet<PolicyKey>> =
+			hashbrown::HashMap::new();
+		for (key, policy) in policies_by_key {
+			policies_by_target
+				.entry(policy.target.clone())
+				.or_default()
+				.insert(key.clone());
+		}
+		policies_by_target
+	}
+
+	fn preflight_sync_local(
+		&self,
+		incoming_binds: &[Bind],
+		incoming_policies: &[TargetedPolicy],
+		previous_bind_keys: &HashSet<BindKey>,
+		previous_policy_keys: &HashSet<PolicyKey>,
+	) -> anyhow::Result<()> {
+		let mut projected_binds = self.binds.clone();
+		for key in previous_bind_keys {
+			projected_binds.remove(key);
+		}
+		for bind in incoming_binds {
+			projected_binds.insert(bind.key.clone(), Arc::new(bind.clone()));
+		}
+		let mut projected_policies_by_key = self.policies_by_key.clone();
+		for key in previous_policy_keys {
+			projected_policies_by_key.remove(key);
+		}
+		for policy in incoming_policies {
+			projected_policies_by_key.insert(policy.key.clone(), Arc::new(policy.clone()));
+		}
+		Self::validate_projected_policy_state(
+			projected_binds.values().map(Arc::as_ref),
+			&projected_policies_by_key,
+		)
+		.map(|_| ())
+	}
+
+	fn validate_projected_policy_state<'a>(
+		_binds: impl Iterator<Item = &'a Bind>,
+		policies_by_key: &HashMap<PolicyKey, Arc<TargetedPolicy>>,
+	) -> anyhow::Result<hashbrown::HashMap<PolicyTarget, HashSet<PolicyKey>>> {
+		let policies_by_target = Self::rebuild_policies_by_target(policies_by_key);
+		Self::validate_target_auth_conflicts_maps(policies_by_key, &policies_by_target)?;
+		Ok(policies_by_target)
+	}
+
+	fn bind_with_consumed_staged_listeners(&self, mut bind: Bind) -> (Bind, Vec<ListenerKey>) {
+		let Some(staged_listeners) = self.staged_listeners.get(&bind.key) else {
+			return (bind, Vec::new());
+		};
+
+		let mut consumed_listener_keys = Vec::with_capacity(staged_listeners.len());
+		for (listener_key, listener) in staged_listeners {
+			debug!("adding staged listener {} to {}", listener_key, bind.key);
+			let mut listener = listener.clone();
+			if let Some(staged_routes) = self.staged_routes.get(listener_key) {
+				for (route_key, route) in staged_routes {
+					debug!("adding staged route {} to {}", route_key, listener_key);
+					listener.routes.insert(route.clone());
+				}
+			}
+			if let Some(staged_tcp_routes) = self.staged_tcp_routes.get(listener_key) {
+				for (route_key, route) in staged_tcp_routes {
+					debug!("adding staged tcp route {} to {}", route_key, listener_key);
+					listener.tcp_routes.insert(route.clone());
+				}
+			}
+			consumed_listener_keys.push(listener_key.clone());
+			bind.listeners.insert(listener);
+		}
+
+		(bind, consumed_listener_keys)
+	}
+
+	pub fn from_init(init: StoreInit) -> Self {
+		let StoreInit { ipv6_enabled } = init;
 		let (tx, _) = tokio::sync::broadcast::channel(1000);
 		Self {
 			ipv6_enabled,
@@ -382,6 +505,15 @@ impl Store {
 			staged_tcp_routes: Default::default(),
 			tx,
 		}
+	}
+
+	fn commit_policy_projection(
+		&mut self,
+		policies_by_key: HashMap<PolicyKey, Arc<TargetedPolicy>>,
+		policies_by_target: hashbrown::HashMap<PolicyTarget, HashSet<PolicyKey>>,
+	) {
+		self.policies_by_key = policies_by_key;
+		self.policies_by_target = policies_by_target;
 	}
 	pub fn subscribe(
 		&self,
@@ -402,115 +534,140 @@ impl Store {
 			.policies_by_target
 			.get(&route.as_route_rule_target_ref());
 		let route = self.policies_by_target.get(&route.as_route_target_ref());
-		let rules = route_rule
+
+		let mut authz = Vec::new();
+		let mut pol = RoutePolicies::default();
+
+		// Apply inline policies first
+		for rule in inline {
+			self.apply_traffic_policy(&mut pol, &mut authz, rule);
+		}
+
+		// Apply stored policies.
+		let stored_keys = route_rule
 			.iter()
 			.copied()
 			.flatten()
 			.chain(route.iter().copied().flatten())
 			.chain(listener.iter().copied().flatten())
-			.chain(gateway.iter().copied().flatten())
-			.filter_map(|n| self.policies_by_key.get(n))
-			.filter_map(|p| p.policy.as_traffic_route_phase());
-		let rules = inline.iter().chain(rules);
+			.chain(gateway.iter().copied().flatten());
 
-		let mut authz = Vec::new();
-		let mut pol = RoutePolicies::default();
-		for rule in rules {
-			match &rule {
-				TrafficPolicy::LocalRateLimit(p) => {
-					if pol.local_rate_limit.is_empty() {
-						pol.local_rate_limit = p.clone();
-					}
-				},
-				TrafficPolicy::ExtAuthz(p) => {
-					pol.ext_authz.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::ExtProc(p) => {
-					pol.ext_proc.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::RemoteRateLimit(p) => {
-					pol.remote_rate_limit.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::JwtAuth(p) => {
-					pol.jwt.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::BasicAuth(p) => {
-					pol.basic_auth.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::APIKey(p) => {
-					pol.api_key.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::Transformation(p) => {
-					pol.transformation.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::Authorization(p) => {
-					// Authorization policies merge, unlike others
-					authz.push(p.clone().0);
-				},
-				TrafficPolicy::AI(p) => {
-					pol.llm.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::Csrf(p) => {
-					pol.csrf.get_or_insert_with(|| p.clone());
-				},
+		for key in stored_keys {
+			let Some(policy_obj) = self.policies_by_key.get(key) else {
+				continue;
+			};
+			let Some(rule) = policy_obj.policy.as_traffic_route_phase() else {
+				continue;
+			};
 
-				TrafficPolicy::Timeout(p) => {
-					pol.timeout.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::Retry(p) => {
-					pol.retry.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::RequestHeaderModifier(p) => {
-					pol.request_header_modifier.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::ResponseHeaderModifier(p) => {
-					pol
-						.response_header_modifier
-						.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::RequestRedirect(p) => {
-					pol.request_redirect.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::UrlRewrite(p) => {
-					pol.url_rewrite.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::HostRewrite(p) => {
-					pol.hostname_rewrite.get_or_insert(*p);
-				},
-				TrafficPolicy::RequestMirror(p) => {
-					if pol.request_mirror.is_empty() {
-						pol.request_mirror = p.clone();
-					}
-				},
-				TrafficPolicy::DirectResponse(p) => {
-					pol.direct_response.get_or_insert_with(|| p.clone());
-				},
-				TrafficPolicy::CORS(p) => {
-					pol.cors.get_or_insert_with(|| p.clone());
-				},
-			}
+			self.apply_traffic_policy(&mut pol, &mut authz, rule);
 		}
+
 		if !authz.is_empty() {
 			pol.authorization = Some(HTTPAuthorizationSet::new(authz.into()));
 		}
-
 		pol
+	}
+
+	fn apply_traffic_policy(
+		&self,
+		pol: &mut RoutePolicies,
+		authz: &mut Vec<http::authorization::RuleSet>,
+		rule: &TrafficPolicy,
+	) {
+		match rule {
+			TrafficPolicy::LocalRateLimit(p) => {
+				if pol.local_rate_limit.is_empty() {
+					pol.local_rate_limit = p.clone();
+				}
+			},
+			TrafficPolicy::ExtAuthz(p) => {
+				pol.ext_authz.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::ExtProc(p) => {
+				pol.ext_proc.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::RemoteRateLimit(p) => {
+				pol.remote_rate_limit.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::JwtAuth(p) => {
+				pol.jwt.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::BasicAuth(p) => {
+				pol.basic_auth.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::APIKey(p) => {
+				pol.api_key.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::OAuth2(_) => {},
+			TrafficPolicy::Transformation(p) => {
+				pol.transformation.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::Authorization(p) => {
+				authz.push(p.clone().0);
+			},
+			TrafficPolicy::AI(p) => {
+				pol.llm.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::Csrf(p) => {
+				pol.csrf.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::Timeout(p) => {
+				pol.timeout.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::Retry(p) => {
+				pol.retry.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::RequestHeaderModifier(p) => {
+				pol.request_header_modifier.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::ResponseHeaderModifier(p) => {
+				pol
+					.response_header_modifier
+					.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::RequestRedirect(p) => {
+				pol.request_redirect.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::UrlRewrite(p) => {
+				pol.url_rewrite.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::HostRewrite(p) => {
+				pol.hostname_rewrite.get_or_insert(*p);
+			},
+			TrafficPolicy::RequestMirror(p) => {
+				if pol.request_mirror.is_empty() {
+					pol.request_mirror = p.clone();
+				}
+			},
+			TrafficPolicy::DirectResponse(p) => {
+				pol.direct_response.get_or_insert_with(|| p.clone());
+			},
+			TrafficPolicy::CORS(p) => {
+				pol.cors.get_or_insert_with(|| p.clone());
+			},
+		}
 	}
 
 	pub fn gateway_policies(&self, name: &ListenerName) -> GatewayPolicies {
 		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
 		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
-		let rules = listener
+		let keys = listener
 			.iter()
 			.copied()
 			.flatten()
-			.chain(gateway.iter().copied().flatten())
-			.filter_map(|n| self.policies_by_key.get(n))
-			.filter_map(|p| p.policy.as_traffic_gateway_phase());
+			.chain(gateway.iter().copied().flatten());
 
 		let mut pol = GatewayPolicies::default();
-		for rule in rules {
-			match &rule {
+		for key in keys {
+			let Some(policy_obj) = self.policies_by_key.get(key) else {
+				continue;
+			};
+			let Some(rule) = policy_obj.policy.as_traffic_gateway_phase() else {
+				continue;
+			};
+
+			match rule {
 				TrafficPolicy::JwtAuth(p) => {
 					pol.jwt.get_or_insert_with(|| p.clone());
 				},
@@ -526,6 +683,7 @@ impl Store {
 				TrafficPolicy::ExtProc(p) => {
 					pol.ext_proc.get_or_insert_with(|| p.clone());
 				},
+				TrafficPolicy::OAuth2(_) => {},
 				TrafficPolicy::Transformation(p) => {
 					pol.transformation.get_or_insert_with(|| p.clone());
 				},
@@ -534,8 +692,76 @@ impl Store {
 				},
 			}
 		}
-
 		pol
+	}
+
+	pub fn route_oauth2_binding(
+		&self,
+		path: &RoutePath<'_>,
+		inline: &[TrafficPolicy],
+	) -> Option<Arc<http::oauth2::StoredOAuth2Policy>> {
+		let &RoutePath { listener, route } = path;
+		let gateway = self
+			.policies_by_target
+			.get(&listener.as_gateway_target_ref());
+		let listener = self
+			.policies_by_target
+			.get(&listener.as_listener_target_ref());
+		let route_rule = self
+			.policies_by_target
+			.get(&route.as_route_rule_target_ref());
+		let route = self.policies_by_target.get(&route.as_route_target_ref());
+
+		for rule in inline {
+			if let TrafficPolicy::OAuth2(p) = rule {
+				return Some(p.clone());
+			}
+		}
+
+		let stored_keys = route_rule
+			.iter()
+			.copied()
+			.flatten()
+			.chain(route.iter().copied().flatten())
+			.chain(listener.iter().copied().flatten())
+			.chain(gateway.iter().copied().flatten());
+
+		for key in stored_keys {
+			let Some(policy_obj) = self.policies_by_key.get(key) else {
+				continue;
+			};
+			let Some(TrafficPolicy::OAuth2(p)) = policy_obj.policy.as_traffic_route_phase() else {
+				continue;
+			};
+			return Some(p.clone());
+		}
+
+		None
+	}
+
+	pub fn gateway_oauth2_binding(
+		&self,
+		name: &ListenerName,
+	) -> Option<Arc<http::oauth2::StoredOAuth2Policy>> {
+		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
+		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
+		let keys = listener
+			.iter()
+			.copied()
+			.flatten()
+			.chain(gateway.iter().copied().flatten());
+
+		for key in keys {
+			let Some(policy_obj) = self.policies_by_key.get(key) else {
+				continue;
+			};
+			let Some(TrafficPolicy::OAuth2(p)) = policy_obj.policy.as_traffic_gateway_phase() else {
+				continue;
+			};
+			return Some(p.clone());
+		}
+
+		None
 	}
 
 	// sub_backend_policies looks up the sub-backends policies. Generally, these will be queried separately
@@ -836,7 +1062,9 @@ impl Store {
 		};
 		let mut bind = Arc::unwrap_or_clone(bind.clone());
 		bind.listeners.remove(&listener);
-		self.insert_bind(bind);
+		self
+			.insert_bind(bind)
+			.expect("listener removal must leave a valid bind projection");
 	}
 
 	#[instrument(
@@ -856,7 +1084,9 @@ impl Store {
 		let mut lis = listener.clone();
 		lis.routes.remove(&route);
 		bind.listeners.insert(lis);
-		self.insert_bind(bind);
+		self
+			.insert_bind(bind)
+			.expect("route removal must leave a valid bind projection");
 	}
 
 	#[instrument(
@@ -879,7 +1109,9 @@ impl Store {
 		let mut lis = listener.clone();
 		lis.tcp_routes.remove(&tcp_route);
 		bind.listeners.insert(lis);
-		self.insert_bind(bind);
+		self
+			.insert_bind(bind)
+			.expect("tcp route removal must leave a valid bind projection");
 	}
 
 	#[instrument(
@@ -888,31 +1120,23 @@ impl Store {
         skip_all,
         fields(bind=%bind.key),
     )]
-	pub fn insert_bind(&mut self, mut bind: Bind) {
+	pub fn insert_bind(&mut self, mut bind: Bind) -> anyhow::Result<()> {
 		debug!(bind=%bind.key, "insert bind");
+		let (bind_with_staged, consumed_listener_keys) = self.bind_with_consumed_staged_listeners(bind);
+		bind = bind_with_staged;
 
-		// Insert any staged listeners
-		for (k, mut v) in self
-			.staged_listeners
-			.remove(&bind.key)
-			.into_iter()
-			.flatten()
-		{
-			debug!("adding staged listener {} to {}", k, bind.key);
-			for (rk, r) in self.staged_routes.remove(&k).into_iter().flatten() {
-				debug!("adding staged route {} to {}", rk, k);
-				v.routes.insert(r)
+		if !consumed_listener_keys.is_empty() {
+			self.staged_listeners.remove(&bind.key);
+			for listener_key in &consumed_listener_keys {
+				self.staged_routes.remove(listener_key);
+				self.staged_tcp_routes.remove(listener_key);
 			}
-			for (rk, r) in self.staged_tcp_routes.remove(&k).into_iter().flatten() {
-				debug!("adding staged tcp route {} to {}", rk, k);
-				v.tcp_routes.insert(r)
-			}
-			bind.listeners.insert(v)
 		}
 		let arc = Arc::new(bind);
 		self.binds.insert(arc.key.clone(), arc.clone());
 		// ok to have no subs
 		let _ = self.tx.send(Event::Add(arc));
+		Ok(())
 	}
 
 	pub fn insert_backend(&mut self, key: BackendKey, b: BackendWithPolicies) {
@@ -925,25 +1149,23 @@ impl Store {
 		self.backends.insert(key, arc);
 	}
 
-	pub fn insert_policy(&mut self, pol: TargetedPolicy) {
+	pub fn insert_policy(&mut self, pol: TargetedPolicy) -> anyhow::Result<()> {
 		let pol = Arc::new(pol);
-		if let Some(old) = self.policies_by_key.insert(pol.key.clone(), pol.clone()) {
-			// Remove the old target. We may add it back, though.
-			if let Some(o) = self.policies_by_target.get_mut(&old.target) {
-				o.remove(&pol.key);
-			}
-		}
-		self
-			.policies_by_target
-			.entry(pol.target.clone())
-			.or_default()
-			.insert(pol.key.clone());
+		let mut projected_policies_by_key = self.policies_by_key.clone();
+		projected_policies_by_key.insert(pol.key.clone(), pol);
+		let projected_policies_by_target = Self::validate_projected_policy_state(
+			self.binds.values().map(Arc::as_ref),
+			&projected_policies_by_key,
+		)?;
+		self.commit_policy_projection(projected_policies_by_key, projected_policies_by_target);
+		Ok(())
 	}
 
-	pub fn insert_listener(&mut self, mut lis: Listener, bind_name: BindKey) {
+	pub fn insert_listener(&mut self, mut lis: Listener, bind_name: BindKey) -> anyhow::Result<()> {
 		debug!(listener=%lis.key,bind=%bind_name, "insert listener");
 		if let Some(b) = self.binds.get(&bind_name) {
 			let mut bind = Arc::unwrap_or_clone(b.clone());
+			let listener_key = lis.key.clone();
 			// If this is a listener update, copy things over
 			if let Some(old) = bind.listeners.remove(&lis.key) {
 				debug!("listener update, copy old routes and tcp routes over");
@@ -952,21 +1174,18 @@ impl Store {
 				lis.tcp_routes = old.tcp_routes;
 			}
 			// Insert any staged routes
-			for (k, v) in self.staged_routes.remove(&lis.key).into_iter().flatten() {
+			for (k, v) in self.staged_routes.get(&lis.key).into_iter().flatten() {
 				debug!("adding staged route {} to {}", k, lis.key);
-				lis.routes.insert(v)
+				lis.routes.insert(v.clone())
 			}
-			for (k, v) in self
-				.staged_tcp_routes
-				.remove(&lis.key)
-				.into_iter()
-				.flatten()
-			{
+			for (k, v) in self.staged_tcp_routes.get(&lis.key).into_iter().flatten() {
 				debug!("adding staged tcp route {} to {}", k, lis.key);
-				lis.tcp_routes.insert(v)
+				lis.tcp_routes.insert(v.clone())
 			}
 			bind.listeners.insert(lis);
-			self.insert_bind(bind);
+			self.insert_bind(bind)?;
+			self.staged_routes.remove(&listener_key);
+			self.staged_tcp_routes.remove(&listener_key);
 		} else {
 			// Insert any staged routes
 			for (k, v) in self.staged_routes.remove(&lis.key).into_iter().flatten() {
@@ -989,9 +1208,10 @@ impl Store {
 				.or_default()
 				.insert(lis.key.clone(), lis);
 		}
+		Ok(())
 	}
 
-	pub fn insert_route(&mut self, r: Route, ln: ListenerKey) {
+	pub fn insert_route(&mut self, r: Route, ln: ListenerKey) -> anyhow::Result<()> {
 		debug!(listener=%ln, route=%r.key, "insert route");
 		let Some((bind, lis)) = self
 			.binds
@@ -1004,16 +1224,16 @@ impl Store {
 				.entry(ln)
 				.or_default()
 				.insert(r.key.clone(), r);
-			return;
+			return Ok(());
 		};
 		let mut bind = Arc::unwrap_or_clone(bind.clone());
 		let mut lis = lis.clone();
 		lis.routes.insert(r);
 		bind.listeners.insert(lis);
-		self.insert_bind(bind);
+		self.insert_bind(bind)
 	}
 
-	pub fn insert_tcp_route(&mut self, r: TCPRoute, ln: ListenerKey) {
+	pub fn insert_tcp_route(&mut self, r: TCPRoute, ln: ListenerKey) -> anyhow::Result<()> {
 		debug!(listener=%ln,route=%r.key, "insert tcp route");
 		let Some((bind, lis)) = self
 			.binds
@@ -1026,13 +1246,13 @@ impl Store {
 				.entry(ln)
 				.or_default()
 				.insert(r.key.clone(), r);
-			return;
+			return Ok(());
 		};
 		let mut bind = Arc::unwrap_or_clone(bind.clone());
 		let mut lis = lis.clone();
 		lis.tcp_routes.insert(r);
 		bind.listeners.insert(lis);
-		self.insert_bind(bind);
+		self.insert_bind(bind)
 	}
 
 	fn remove_resource(&mut self, res: &Strng) {
@@ -1051,84 +1271,29 @@ impl Store {
 		}
 	}
 
-	fn insert_xds(&mut self, name: Strng, res: ADPResource) -> anyhow::Result<()> {
-		trace!(%name, "insert resource {res:?}");
-		match res.kind {
-			Some(XdsKind::Bind(w)) => {
-				self
-					.resources
-					.insert(name, ResourceKind::Bind(strng::new(&w.key)));
-				self.insert_xds_bind(w)
-			},
-			Some(XdsKind::Listener(w)) => {
-				self
-					.resources
-					.insert(name, ResourceKind::Listener(strng::new(&w.key)));
-				self.insert_xds_listener(w)
-			},
-			Some(XdsKind::Route(w)) => {
-				self
-					.resources
-					.insert(name, ResourceKind::Route(strng::new(&w.key)));
-				self.insert_xds_route(w)
-			},
-			Some(XdsKind::TcpRoute(w)) => {
-				self
-					.resources
-					.insert(name, ResourceKind::TcpRoute(strng::new(&w.key)));
-				self.insert_xds_tcp_route(w)
-			},
-			Some(XdsKind::Backend(w)) => {
-				self
-					.resources
-					.insert(name, ResourceKind::Backend(strng::new(&w.key)));
-				self.insert_xds_backend(w)
-			},
-			Some(XdsKind::Policy(w)) => {
-				self
-					.resources
-					.insert(name, ResourceKind::Policy(strng::new(&w.key)));
-				self.insert_xds_policy(w)
-			},
-			_ => Err(anyhow::anyhow!("unknown resource type")),
-		}
-	}
-
 	fn insert_xds_bind(&mut self, raw: XdsBind) -> anyhow::Result<()> {
 		let mut bind = Bind::try_from_xds(&raw, self.ipv6_enabled)?;
 		// If XDS server pushes the same bind twice (which it shouldn't really do, but oh well),
 		// we need to copy the listeners over.
-		if let Some(old) = self.binds.remove(&bind.key) {
+		if let Some(old) = self.binds.get(&bind.key) {
 			debug!("bind update, copy old listeners over");
-			bind.listeners = Arc::unwrap_or_clone(old).listeners;
+			bind.listeners = Arc::unwrap_or_clone(old.clone()).listeners;
 		}
-		self.insert_bind(bind);
+		self.insert_bind(bind)?;
 		Ok(())
 	}
 	fn insert_xds_listener(&mut self, raw: XdsListener) -> anyhow::Result<()> {
 		let (lis, bind_name): (Listener, BindKey) = (&raw).try_into()?;
-		self.insert_listener(lis, bind_name);
-		Ok(())
-	}
-	fn insert_xds_route(&mut self, raw: XdsRoute) -> anyhow::Result<()> {
-		let (route, listener_name): (Route, ListenerKey) = (&raw).try_into()?;
-		self.insert_route(route, listener_name);
-		Ok(())
+		self.insert_listener(lis, bind_name)
 	}
 	fn insert_xds_tcp_route(&mut self, raw: XdsTcpRoute) -> anyhow::Result<()> {
 		let (route, listener_name): (TCPRoute, ListenerKey) = (&raw).try_into()?;
-		self.insert_tcp_route(route, listener_name);
-		Ok(())
+		self.insert_tcp_route(route, listener_name)
 	}
 	fn insert_xds_backend(&mut self, raw: XdsBackend) -> anyhow::Result<()> {
 		let key = strng::new(&raw.key);
 		let backend: BackendWithPolicies = (&raw).try_into()?;
 		self.insert_backend(key, backend);
-		Ok(())
-	}
-	fn insert_xds_policy(&mut self, raw: XdsPolicy) -> anyhow::Result<()> {
-		let policy: TargetedPolicy = (&raw).try_into()?;
-		self.insert_policy(policy);
 		Ok(())
 	}
 }
@@ -1182,14 +1347,63 @@ impl StoreUpdater {
 			backends,
 		}
 	}
+
+	fn insert_xds(&self, state: &mut Store, name: Strng, res: ADPResource) -> anyhow::Result<()> {
+		trace!(%name, "insert resource {res:?}");
+		match res.kind {
+			Some(XdsKind::Bind(w)) => {
+				let key = strng::new(&w.key);
+				state.insert_xds_bind(w)?;
+				state.resources.insert(name, ResourceKind::Bind(key));
+				Ok(())
+			},
+			Some(XdsKind::Listener(w)) => {
+				let key = strng::new(&w.key);
+				state.insert_xds_listener(w)?;
+				state.resources.insert(name, ResourceKind::Listener(key));
+				Ok(())
+			},
+			Some(XdsKind::Route(w)) => {
+				let key = strng::new(&w.key);
+				let (route, listener_name): (Route, ListenerKey) =
+					crate::types::agent_xds::route_from_xds(&w)?;
+				state.insert_route(route, listener_name)?;
+				state.resources.insert(name, ResourceKind::Route(key));
+				Ok(())
+			},
+			Some(XdsKind::TcpRoute(w)) => {
+				let key = strng::new(&w.key);
+				state.insert_xds_tcp_route(w)?;
+				state.resources.insert(name, ResourceKind::TcpRoute(key));
+				Ok(())
+			},
+			Some(XdsKind::Backend(w)) => {
+				let key = strng::new(&w.key);
+				state.insert_xds_backend(w)?;
+				state.resources.insert(name, ResourceKind::Backend(key));
+				Ok(())
+			},
+			Some(XdsKind::Policy(w)) => {
+				let key = strng::new(&w.key);
+				let policy = crate::types::agent_xds::targeted_policy_from_xds(&w)?;
+				state.insert_policy(policy)?;
+				state.resources.insert(name, ResourceKind::Policy(key));
+				Ok(())
+			},
+			_ => Err(anyhow::anyhow!("unknown resource type")),
+		}
+	}
+
 	pub fn sync_local(
 		&self,
 		binds: Vec<Bind>,
 		policies: Vec<TargetedPolicy>,
 		backends: Vec<BackendWithPolicies>,
 		prev: PreviousState,
-	) -> PreviousState {
+	) -> anyhow::Result<PreviousState> {
 		let mut s = self.state.write().expect("mutex acquired");
+		s.preflight_sync_local(&binds, &policies, &prev.binds, &prev.policies)?;
+
 		let mut old_binds = prev.binds;
 		let mut old_pols = prev.policies;
 		let mut old_backends = prev.backends;
@@ -1201,7 +1415,7 @@ impl StoreUpdater {
 		for b in binds {
 			old_binds.remove(&b.key);
 			next_state.binds.insert(b.key.clone());
-			s.insert_bind(b);
+			s.insert_bind(b)?;
 		}
 		for b in backends {
 			// Here we use the 'name' as the key. This is appropriate for local case only
@@ -1212,7 +1426,7 @@ impl StoreUpdater {
 		for p in policies {
 			old_pols.remove(&p.key);
 			next_state.policies.insert(p.key.clone());
-			s.insert_policy(p);
+			s.insert_policy(p)?;
 		}
 		for remaining_bind in old_binds {
 			s.remove_bind(remaining_bind);
@@ -1223,7 +1437,7 @@ impl StoreUpdater {
 		for remaining_backend in old_backends {
 			s.remove_backend(remaining_backend);
 		}
-		next_state
+		Ok(next_state)
 	}
 }
 
@@ -1242,7 +1456,7 @@ impl agent_xds::Handler<ADPResource> for StoreUpdater {
 		let mut state = self.state.write().unwrap();
 		let handle = |res: XdsUpdate<ADPResource>| {
 			match res {
-				XdsUpdate::Update(w) => state.insert_xds(w.name, w.resource)?,
+				XdsUpdate::Update(w) => self.insert_xds(&mut state, w.name, w.resource)?,
 				XdsUpdate::Remove(name) => {
 					debug!("handling delete {}", name);
 					state.remove_resource(&strng::new(name))
@@ -1268,12 +1482,15 @@ fn preload_tokenizers() {
 
 #[cfg(test)]
 mod tests {
+	use std::sync::{Arc, RwLock};
 	use std::time::Duration;
 
 	use frozen_collections::FzHashSet;
+	use secrecy::SecretString;
 
 	use super::*;
 	use crate::telemetry::log::OrderedStringMap;
+	use crate::types::agent::{OAuth2AttachmentKey, OAuth2Policy, PolicyPhase};
 	use crate::types::frontend::LoggingPolicy;
 
 	fn listener() -> ListenerName {
@@ -1332,6 +1549,74 @@ mod tests {
 			otlp: None,
 			access_log_policy: None,
 		})
+	}
+
+	fn test_oauth2_policy() -> OAuth2Policy {
+		OAuth2Policy {
+			provider_id: "https://issuer.example.com".to_string(),
+			oidc_issuer: Some("https://issuer.example.com".to_string()),
+			provider_backend: None,
+			client_id: "client-id".to_string(),
+			client_secret: SecretString::new("secret".into()),
+			resolved_provider: Some(Box::new(crate::types::agent::ResolvedOAuth2Provider {
+				authorization_endpoint: "https://issuer.example.com/authorize".to_string(),
+				token_endpoint: "https://issuer.example.com/token".to_string(),
+				jwks_inline: Some(
+					serde_json::json!({
+						"keys": [{
+							"kty": "EC",
+							"crv": "P-256",
+							"kid": "test-kid",
+							"alg": "ES256",
+							"x": "WfUSsBlmKtTX8Rfmo9K-6PsKG1Ysw1j3St-ZUZSq4HU",
+							"y": "vO_R0kjX3d1oz-2aUtpoWfBp-wu7YxO_XjGSHv40tgM",
+							"use": "sig",
+						}]
+					})
+					.to_string(),
+				),
+				end_session_endpoint: Some("https://issuer.example.com/logout".to_string()),
+				token_endpoint_auth_methods_supported: vec!["client_secret_post".to_string()],
+			})),
+			redirect_uri: Some("https://example.com/_gateway/callback".to_string()),
+			scopes: vec!["openid".to_string()],
+		}
+	}
+
+	fn test_stored_oauth2() -> http::oauth2::StoredOAuth2Policy {
+		http::oauth2::StoredOAuth2Policy::new(
+			test_oauth2_policy(),
+			OAuth2AttachmentKey::targeted_policy("test-policy"),
+		)
+		.expect("test oauth2 policy should build")
+	}
+
+	fn test_jwt() -> http::jwt::Jwt {
+		http::jwt::Jwt::from_providers(vec![], http::jwt::Mode::Optional)
+	}
+
+	fn gateway_traffic_policy(
+		listener: &ListenerName,
+		key: &str,
+		policy: TrafficPolicy,
+		for_listener: bool,
+	) -> TargetedPolicy {
+		let policy_key: PolicyKey = strng::new(key);
+		let target = PolicyTarget::Gateway(ListenerTarget {
+			gateway_name: listener.gateway_name.clone(),
+			gateway_namespace: listener.gateway_namespace.clone(),
+			listener_name: if for_listener {
+				Some(listener.listener_name.clone())
+			} else {
+				None
+			},
+		});
+		TargetedPolicy {
+			key: policy_key,
+			name: None,
+			target,
+			policy: (policy, PolicyPhase::Gateway).into(),
+		}
 	}
 
 	fn insert_policy_at_level(
@@ -1480,5 +1765,201 @@ mod tests {
 		let bind = Bind::try_from_xds(&xds_bind, true).unwrap();
 		assert_eq!(bind.address.port(), 9090);
 		assert_eq!(bind.address.ip(), IpAddr::V6(Ipv6Addr::UNSPECIFIED));
+	}
+
+	#[test]
+	fn insert_policy_rejects_route_target_with_oauth2_and_jwt() {
+		let mut store = Store::from_init(StoreInit::default());
+		let target = PolicyTarget::Route(route("r", "ns", Some("HTTPRoute")));
+
+		let jwt_key: PolicyKey = strng::new("route-jwt");
+		store
+			.insert_policy(TargetedPolicy {
+				key: jwt_key.clone(),
+				name: None,
+				target: target.clone(),
+				policy: TrafficPolicy::JwtAuth(test_jwt()).into(),
+			})
+			.expect("first policy should insert");
+
+		let oauth2_key: PolicyKey = strng::new("route-oauth2");
+		let err = store
+			.insert_policy(TargetedPolicy {
+				key: oauth2_key.clone(),
+				name: None,
+				target,
+				policy: TrafficPolicy::OAuth2(Arc::new(test_stored_oauth2())).into(),
+			})
+			.expect_err("mixed jwt+oauth2 on the same target must be rejected");
+		assert!(err.to_string().contains("cannot both apply to target"));
+		assert!(store.policies_by_key.contains_key(&jwt_key));
+		assert!(!store.policies_by_key.contains_key(&oauth2_key));
+	}
+
+	#[test]
+	fn insert_policy_accepts_stored_oauth2() {
+		let mut store = Store::from_init(StoreInit::default());
+		let key: PolicyKey = strng::new("valid-oauth2");
+		let policy = TargetedPolicy {
+			key: key.clone(),
+			name: None,
+			target: PolicyTarget::Route(route("r", "ns", Some("HTTPRoute"))),
+			policy: TrafficPolicy::OAuth2(Arc::new(test_stored_oauth2())).into(),
+		};
+
+		store
+			.insert_policy(policy)
+			.expect("oauth2 policy binding should be inserted");
+		assert!(store.policies_by_key.contains_key(&key));
+	}
+
+	#[test]
+	fn insert_policy_rejects_gateway_target_with_oauth2_and_jwt() {
+		let listener = listener();
+
+		let mut store = Store::from_init(StoreInit::default());
+		store
+			.insert_policy(gateway_traffic_policy(
+				&listener,
+				"listener-jwt",
+				TrafficPolicy::JwtAuth(test_jwt()),
+				true,
+			))
+			.expect("first policy should insert");
+		let err = store
+			.insert_policy(gateway_traffic_policy(
+				&listener,
+				"listener-oauth2",
+				TrafficPolicy::OAuth2(Arc::new(test_stored_oauth2())),
+				true,
+			))
+			.expect_err("mixed jwt+oauth2 on the same gateway target must be rejected");
+		assert!(err.to_string().contains("cannot both apply to target"));
+
+		let mut store = Store::from_init(StoreInit::default());
+		store
+			.insert_policy(gateway_traffic_policy(
+				&listener,
+				"listener-oauth2",
+				TrafficPolicy::OAuth2(Arc::new(test_stored_oauth2())),
+				true,
+			))
+			.expect("first policy should insert");
+		let err = store
+			.insert_policy(gateway_traffic_policy(
+				&listener,
+				"listener-jwt",
+				TrafficPolicy::JwtAuth(test_jwt()),
+				true,
+			))
+			.expect_err("mixed jwt+oauth2 on the same gateway target must be rejected");
+		assert!(err.to_string().contains("cannot both apply to target"));
+	}
+
+	#[test]
+	fn insert_policy_rejects_conflicting_replacement_atomically() {
+		let mut store = Store::from_init(StoreInit::default());
+		let target = PolicyTarget::Route(route("r", "ns", Some("HTTPRoute")));
+		let preserved_key: PolicyKey = strng::new("preserved-jwt");
+		let replacement_key: PolicyKey = strng::new("replace-me");
+
+		store
+			.insert_policy(TargetedPolicy {
+				key: preserved_key.clone(),
+				name: None,
+				target: target.clone(),
+				policy: TrafficPolicy::JwtAuth(test_jwt()).into(),
+			})
+			.expect("baseline jwt policy should insert");
+		store
+			.insert_policy(TargetedPolicy {
+				key: replacement_key.clone(),
+				name: None,
+				target: target.clone(),
+				policy: TrafficPolicy::Timeout(timeout::Policy {
+					request_timeout: Some(Duration::from_secs(5)),
+					backend_request_timeout: None,
+				})
+				.into(),
+			})
+			.expect("baseline timeout policy should insert");
+
+		let err = store
+			.insert_policy(TargetedPolicy {
+				key: replacement_key.clone(),
+				name: None,
+				target: target.clone(),
+				policy: TrafficPolicy::OAuth2(Arc::new(test_stored_oauth2())).into(),
+			})
+			.expect_err("conflicting replacement should be rejected");
+		assert!(err.to_string().contains("cannot both apply to target"));
+
+		let preserved = store
+			.policies_by_key
+			.get(&preserved_key)
+			.expect("preserved policy should remain");
+		assert!(matches!(
+			&preserved.policy,
+			agent::PolicyType::Traffic(traffic)
+				if matches!(traffic.policy, TrafficPolicy::JwtAuth(_))
+		));
+
+		let replacement = store
+			.policies_by_key
+			.get(&replacement_key)
+			.expect("replaced policy should remain on its old value");
+		assert!(matches!(
+			&replacement.policy,
+			agent::PolicyType::Traffic(traffic)
+				if matches!(traffic.policy, TrafficPolicy::Timeout(_))
+		));
+	}
+
+	#[test]
+	fn sync_local_conflicting_policy_batch_is_atomic() {
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(
+			Store::from_init(StoreInit::default()),
+		)));
+		let bind = Bind::try_from_xds(
+			&XdsBind {
+				key: "atomic-bind".to_string(),
+				port: 8080,
+				protocol: 0,        // HTTP
+				tunnel_protocol: 0, // Direct
+			},
+			false,
+		)
+		.expect("test bind should parse");
+		let target = PolicyTarget::Route(route("r", "ns", Some("HTTPRoute")));
+		let policies = vec![
+			TargetedPolicy {
+				key: strng::new("atomic-jwt"),
+				name: None,
+				target: target.clone(),
+				policy: TrafficPolicy::JwtAuth(test_jwt()).into(),
+			},
+			TargetedPolicy {
+				key: strng::new("atomic-oauth2"),
+				name: None,
+				target,
+				policy: TrafficPolicy::OAuth2(Arc::new(test_stored_oauth2())).into(),
+			},
+		];
+
+		let err = updater
+			.sync_local(vec![bind], policies, vec![], PreviousState::default())
+			.expect_err("sync_local should reject conflicting auth policies");
+		assert!(err.to_string().contains("cannot both apply to target"));
+
+		let dump = updater.dump();
+		assert!(dump.binds.is_empty(), "failed sync should not insert binds");
+		assert!(
+			dump.policies.is_empty(),
+			"failed sync should not insert policies"
+		);
+		assert!(
+			dump.backends.is_empty(),
+			"failed sync should not insert backends"
+		);
 	}
 }

@@ -20,10 +20,6 @@ var logger = logging.New("jwks_store")
 const DefaultJwksStorePrefix = "jwks-store"
 const RunnableName = "jwks-store"
 
-var JwksConfigMapNamespacedName = func(jwksUri string) *types.NamespacedName {
-	return nil
-}
-
 type JwksStore struct {
 	storePrefix     string
 	jwksCache       *jwksCache
@@ -46,13 +42,13 @@ func BuildJwksStore(ctx context.Context, cli apiclient.Client, commonCols *colle
 		configMapSyncer: NewConfigMapSyncer(cli, storePrefix, deploymentNamespace, commonCols.KrtOpts),
 		cmNameToJwks:    make(map[string]string),
 	}
-	BuildJwksConfigMapNamespacedNameFunc(storePrefix, deploymentNamespace)
 	return jwksStore
 }
 
-func BuildJwksConfigMapNamespacedNameFunc(storePrefix, deploymentNamespace string) {
-	JwksConfigMapNamespacedName = func(jwksUri string) *types.NamespacedName {
-		return &types.NamespacedName{Namespace: deploymentNamespace, Name: JwksConfigMapName(storePrefix, jwksUri)}
+func JwksConfigMapNamespacedName(storePrefix, deploymentNamespace, jwksURI string) types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: deploymentNamespace,
+		Name:      JwksConfigMapName(storePrefix, jwksURI),
 	}
 }
 

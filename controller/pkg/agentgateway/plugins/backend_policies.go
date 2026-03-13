@@ -18,7 +18,6 @@ import (
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/translator/sslutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
@@ -494,7 +493,12 @@ func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.Agent
 		mode = api.BackendPolicySpec_McpAuthentication_OPTIONAL
 	}
 
-	jwksUrl, _, err := jwks_url.JwksUrlBuilderFactory().BuildJwksUrlAndTlsConfig(ctx.Krt, policy.Name, policy.Namespace, &authnPolicy.JWKS)
+	if ctx.JWKSURLBuilder == nil {
+		err := errors.New("jwks url builder is not initialized")
+		logger.Error("failed resolving jwks url", "error", err)
+		return nil, err
+	}
+	jwksUrl, _, err := ctx.JWKSURLBuilder.BuildJwksUrlAndTlsConfig(ctx.Krt, policy.Name, policy.Namespace, &authnPolicy.JWKS)
 	if err != nil {
 		logger.Error("failed resolving jwks url", "error", err)
 		return nil, err

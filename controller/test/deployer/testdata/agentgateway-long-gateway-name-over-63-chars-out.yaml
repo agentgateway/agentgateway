@@ -73,6 +73,7 @@ spec:
     metadata:
       annotations:
         checksum/config: 20e03375ff2a736462894456b982110ca3e7b8ba58eab83c6f2e936be3e714ba
+        checksum/oauth-cookie-secret: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         gateway.kgateway.dev/gateway-full-name: extremely-long-gateway-name-that-exceeds-the-sixty-three-character-limit-imposed-by-kubernetes-dns-naming-requirements
         prometheus.io/path: /metrics
@@ -114,6 +115,11 @@ spec:
             secretKeyRef:
               key: key
               name: extremely-long-gateway-name-that-exceeds-the-sixty-961030199626
+        - name: OAUTH_COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: key
+              name: extremely-long-gateway-name-that-exceeds-the-sixty-24ecf8157a22
         - name: XDS_ADDRESS
           value: http://xds.cluster.local:9978
         - name: NAMESPACE
@@ -201,5 +207,17 @@ metadata:
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
   name: extremely-long-gateway-name-that-exceeds-the-sixty-961030199626
+  namespace: default
+type: Opaque
+---
+apiVersion: v1
+data:
+  key: MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmYwMDExMjIzMzQ0NTU2Njc3ODg5OWFhYmJjY2RkZWVmZg==
+kind: Secret
+metadata:
+  labels:
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
+  name: extremely-long-gateway-name-that-exceeds-the-sixty-24ecf8157a22
   namespace: default
 type: Opaque

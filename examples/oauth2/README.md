@@ -1,0 +1,144 @@
+## OAuth2 Example
+
+This example shows how to protect a route with agentgateway's built-in OAuth2/OIDC policy.
+
+It supports `clientSecret` as inline or file-based local configuration, and flat provider settings using either `issuer` or explicit endpoint fields.
+
+### Running the example
+
+1. Create an OAuth2/OIDC app in your identity provider.
+2. Configure an allowed callback/redirect URI of:
+
+```text
+http://localhost:3000/oauth2/callback
+```
+
+3. Update `examples/oauth2/config.yaml` with your provider values.
+   The checked-in sample defaults to explicit endpoints so `--validate-only`
+   works without external OIDC discovery.
+
+- `issuer` or `authorizationEndpoint`/`tokenEndpoint`
+- optionally `providerBackend` (for private IdP/back-channel routing)
+- `clientId`
+- `clientSecret` (inline or file)
+- `redirectUri` (required; should be explicit and deterministic in production)
+
+4. Start a local upstream app:
+
+```bash
+python3 -m http.server 8080
+```
+
+5. Run agentgateway:
+
+```bash
+cargo run -- -f examples/oauth2/config.yaml
+```
+
+6. Open `http://localhost:3000` in your browser. You should be redirected to your IdP login flow.
+
+### Secret options
+
+Local/dev file-based:
+
+```yaml
+clientSecret:
+  file: ./examples/oauth2/client-secret.example.txt
+```
+
+Inline:
+
+```yaml
+clientSecret: "your-client-secret"
+```
+
+### Private IdP Connectivity
+
+Local config can route OIDC discovery/token/JWKS calls through a dedicated backend:
+
+```yaml
+policies:
+  oauth2:
+    issuer: "https://issuer.example.com"
+    clientId: "replace-with-client-id"
+    clientSecret:
+      file: ./examples/oauth2/client-secret.example.txt
+    redirectUri: "http://localhost:3000/oauth2/callback"
+    providerBackend:
+      host: "idp.internal.example.com:443"
+```
+
+Controller/XDS (`AgentgatewayPolicy`) uses `backendRef` for the same behavior:
+
+```yaml
+traffic:
+  oauth2:
+    issuer: https://issuer.example.com
+    clientId: replace-with-client-id
+    clientSecret:
+      secretRef:
+        name: oauth2-client
+        key: client-secret
+    redirectUri: https://gateway.example.com/oauth2/callback
+    backendRef:
+      kind: Service
+      name: oauth2-discovery
+      port: 8080
+```
+
+Explicit non-OIDC OAuth2 providers can be configured without discovery:
+
+```yaml
+traffic:
+  oauth2:
+    authorizationEndpoint: https://provider.example.com/oauth/authorize
+    tokenEndpoint: https://provider.example.com/oauth/token
+    tokenEndpointAuthMethodsSupported:
+    - client_secret_post
+    clientId: replace-with-client-id
+    clientSecret:
+      secretRef:
+        name: oauth2-client
+        key: client-secret
+    redirectUri: https://gateway.example.com/oauth2/callback
+```
+
+### CEL identity claim examples
+
+OAuth2 can inject verified `id_token` claims into the CEL `jwt` object.
+You can use that in `authorization` and `transformations` policies.
+
+### Optional hardening knobs
+
+- `providerBackend` (local config) when provider back-channel calls must go through a specific internal backend path.
+- `backendRef` (controller/XDS `AgentgatewayPolicy`) for the same provider back-channel routing behavior.
+- `backendAuth.passthrough` forwards the OAuth2 access token upstream when your backend requires it.
+
+Allow only one user (`sub`) on a protected route:
+
+```yaml
+policies:
+  oauth2:
+    issuer: "https://issuer.example.com"
+    clientId: "replace-with-client-id"
+    clientSecret:
+      file: ./examples/oauth2/client-secret.example.txt
+  authorization:
+    rules:
+    - 'jwt.sub == "user-123"'
+```
+
+Extract identity into upstream headers with CEL:
+
+```yaml
+policies:
+  oauth2:
+    issuer: "https://issuer.example.com"
+    clientId: "replace-with-client-id"
+    clientSecret:
+      file: ./examples/oauth2/client-secret.example.txt
+  transformations:
+    request:
+      set:
+        x-user-sub: "jwt.sub"
+```

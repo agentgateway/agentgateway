@@ -166,6 +166,17 @@
             }
           ]
         },
+        "oauth2": {
+          "description": "Configuration for OAuth2 browser-state protection.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawOAuth2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "connectionTerminationDeadline": {
           "type": [
             "string",
@@ -254,6 +265,19 @@
       "additionalProperties": false,
       "required": [
         "key"
+      ]
+    },
+    "RawOAuth2": {
+      "type": "object",
+      "properties": {
+        "cookieSecret": {
+          "description": "The AES-256-GCM key used to protect OAuth2 browser state and cookies.\nFor example, generated via `openssl rand -hex 32`.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "cookieSecret"
       ]
     },
     "RawTracing": {
@@ -1195,6 +1219,17 @@
             }
           ],
           "default": null
+        },
+        "oauth2": {
+          "description": "Authenticate incoming requests using OAuth2/OIDC.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOAuth2Policy"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "extProc": {
           "description": "Extend agentgateway with an external processor",
@@ -3240,6 +3275,31 @@
             "issuer",
             "jwks"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "$ref": "#/$defs/Mode",
+              "default": "optional"
+            },
+            "issuer": {
+              "type": "string"
+            },
+            "audiences": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "issuer"
+          ]
         }
       ]
     },
@@ -3643,6 +3703,88 @@
         }
       },
       "additionalProperties": false
+    },
+    "LocalOAuth2Policy": {
+      "type": "object",
+      "properties": {
+        "issuer": {
+          "description": "OIDC issuer URL. When set, endpoints are resolved using OIDC discovery.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "authorizationEndpoint": {
+          "description": "Explicit authorization endpoint for non-discovery OAuth2 providers.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "tokenEndpoint": {
+          "description": "Explicit token endpoint for non-discovery OAuth2 providers.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "providerBackend": {
+          "description": "Optional provider backend used for provider back-channel calls.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackend"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "endSessionEndpoint": {
+          "description": "Optional end-session endpoint for explicit OAuth2 providers.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "tokenEndpointAuthMethodsSupported": {
+          "description": "Optional token endpoint auth methods supported by explicit OAuth2 providers.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "clientId": {
+          "description": "OAuth2 client ID.",
+          "type": "string"
+        },
+        "clientSecret": {
+          "description": "OAuth2 client secret value or file reference.",
+          "$ref": "#/$defs/FileOrInline"
+        },
+        "redirectUri": {
+          "description": "Explicit callback URL configured with the upstream provider.",
+          "type": "string"
+        },
+        "scopes": {
+          "description": "OAuth scopes requested during browser login flow.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "clientId",
+        "clientSecret",
+        "redirectUri"
+      ]
     },
     "ExtProc": {
       "type": "object",
@@ -4966,6 +5108,17 @@
           ],
           "default": null
         },
+        "oauth2": {
+          "description": "Authenticate incoming requests using OAuth2/OIDC.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOAuth2Policy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "extProc": {
           "description": "Extend agentgateway with an external processor",
           "anyOf": [
@@ -6011,6 +6164,17 @@
             }
           ],
           "default": null
+        },
+        "oauth2": {
+          "description": "Authenticate incoming requests using OAuth2/OIDC.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOAuth2Policy"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "extProc": {
           "description": "Extend agentgateway with an external processor",

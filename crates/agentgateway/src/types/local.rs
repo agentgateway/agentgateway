@@ -22,12 +22,12 @@ use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendPolicy, BackendReference,
 	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch, Listener,
 	ListenerKey, ListenerName, ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication,
-	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
-	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch,
-	RouteName, RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
-	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig, TrafficPolicy,
-	TunnelProtocol, TypedResourceName,
+	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OAuth2AttachmentKey,
+	OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route,
+	RouteBackendReference, RouteMatch, RouteName, RouteSet, ServerTLSConfig, SimpleBackend,
+	SimpleBackendReference, SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec,
+	TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig,
+	TrafficPolicy, TunnelProtocol, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
@@ -49,6 +49,7 @@ impl NormalizedLocalConfig {
 	pub async fn from(
 		config: &crate::Config,
 		client: client::Client,
+		oidc: crate::http::oidc::OidcJwtService,
 		gateway_name: ListenerTarget,
 		s: &str,
 	) -> anyhow::Result<NormalizedLocalConfig> {
@@ -56,7 +57,7 @@ impl NormalizedLocalConfig {
 		let s = s.replace("# yaml-language-server: $schema", "#");
 		let s = shellexpand::full(&s)?;
 		let local_config: LocalConfig = serdes::yamlviajson::from_str(&s)?;
-		let t = convert(client, gateway_name, config, local_config).await?;
+		let t = convert(client, oidc, gateway_name, config, local_config).await?;
 		Ok(t)
 	}
 }
@@ -969,6 +970,202 @@ where
 }
 
 #[apply(schema_de!)]
+struct LocalOAuth2Policy {
+	/// OIDC issuer URL. When set, endpoints are resolved using OIDC discovery.
+	#[serde(default)]
+	issuer: Option<String>,
+	/// Explicit authorization endpoint for non-discovery OAuth2 providers.
+	#[serde(default)]
+	authorization_endpoint: Option<String>,
+	/// Explicit token endpoint for non-discovery OAuth2 providers.
+	#[serde(default)]
+	token_endpoint: Option<String>,
+	/// Optional provider backend used for provider back-channel calls.
+	#[serde(default)]
+	provider_backend: Option<SimpleLocalBackend>,
+	/// Optional end-session endpoint for explicit OAuth2 providers.
+	#[serde(default)]
+	end_session_endpoint: Option<String>,
+	/// Optional token endpoint auth methods supported by explicit OAuth2 providers.
+	#[serde(default)]
+	token_endpoint_auth_methods_supported: Vec<String>,
+	/// OAuth2 client ID.
+	client_id: String,
+	/// OAuth2 client secret value or file reference.
+	client_secret: crate::serdes::FileOrInline,
+	/// Explicit callback URL configured with the upstream provider.
+	redirect_uri: String,
+	/// OAuth scopes requested during browser login flow.
+	#[serde(default)]
+	scopes: Vec<String>,
+}
+
+impl LocalOAuth2Policy {
+	fn into_policy(self) -> anyhow::Result<crate::types::agent::OAuth2Policy> {
+		let Self {
+			issuer,
+			authorization_endpoint,
+			token_endpoint,
+			provider_backend,
+			end_session_endpoint,
+			token_endpoint_auth_methods_supported,
+			client_id,
+			client_secret,
+			redirect_uri,
+			scopes,
+		} = self;
+		let client_secret = client_secret.load()?;
+		let resolve_provider_backend =
+			|provider_backend: Option<SimpleLocalBackend>| -> anyhow::Result<Option<SimpleBackendReference>> {
+				Ok(provider_backend
+					.map(|backend| match backend {
+						SimpleLocalBackend::Service { name, port } => {
+							Ok(SimpleBackendReference::Service { name, port })
+						},
+						SimpleLocalBackend::Backend(name) => Ok(SimpleBackendReference::Backend(name)),
+						SimpleLocalBackend::Invalid => Ok(SimpleBackendReference::Invalid),
+						SimpleLocalBackend::Opaque(_) => {
+							anyhow::bail!("oauth2 provider_backend supports only service/backend references")
+						},
+					})
+					.transpose()?
+					.and_then(|backend| match backend {
+						SimpleBackendReference::Invalid => None,
+						backend => Some(backend),
+					}))
+			};
+		let resolved_provider_backend = resolve_provider_backend(provider_backend)?;
+		if issuer.is_some()
+			&& (end_session_endpoint.is_some() || !token_endpoint_auth_methods_supported.is_empty())
+		{
+			anyhow::bail!(
+				"oauth2 issuer may not be combined with explicit end_session_endpoint or token_endpoint_auth_methods_supported fields"
+			);
+		}
+		let (provider_id, oidc_issuer, resolved_provider) =
+			match (issuer, authorization_endpoint, token_endpoint) {
+				(Some(issuer), None, None) => (issuer.clone(), Some(issuer), None),
+				(None, Some(authorization_endpoint), Some(token_endpoint)) => (
+					authorization_endpoint.clone(),
+					None,
+					Some(Box::new(crate::types::agent::ResolvedOAuth2Provider {
+						authorization_endpoint,
+						token_endpoint,
+						jwks_inline: None,
+						end_session_endpoint,
+						token_endpoint_auth_methods_supported,
+					})),
+				),
+				(Some(_), _, _) => {
+					anyhow::bail!(
+						"oauth2 issuer may not be combined with explicit authorizationEndpoint/tokenEndpoint fields"
+					)
+				},
+				(None, Some(_), None) | (None, None, Some(_)) => {
+					anyhow::bail!(
+						"oauth2 requires both authorizationEndpoint and tokenEndpoint when issuer is not set"
+					)
+				},
+				(None, None, None) => {
+					anyhow::bail!(
+						"oauth2 must configure issuer or both authorizationEndpoint and tokenEndpoint"
+					)
+				},
+			};
+		let policy = crate::types::agent::OAuth2Policy {
+			provider_id,
+			oidc_issuer,
+			provider_backend: resolved_provider_backend,
+			client_id,
+			client_secret: secrecy::SecretString::new(client_secret.into()),
+			resolved_provider,
+			redirect_uri: Some(redirect_uri),
+			scopes,
+		};
+		crate::http::oauth2::OAuth2::validate_policy(&policy)?;
+		Ok(policy)
+	}
+
+	async fn into_resolved_policy(
+		self,
+		client: &Client,
+		oidc: crate::http::oidc::OidcJwtService,
+	) -> anyhow::Result<crate::types::agent::OAuth2Policy> {
+		let mut policy = self.into_policy()?;
+		if policy.resolved_provider.is_some() {
+			return Ok(policy);
+		}
+
+		let issuer = policy
+			.oidc_issuer
+			.clone()
+			.ok_or_else(|| anyhow!("oauth2 issuer-based local policy requires an oidc issuer"))?;
+		let resolved_provider = oidc
+			.resolve_oauth2_provider(
+				crate::http::oidc::OidcCallContext::new(client, None, policy.provider_backend.as_ref()),
+				&issuer,
+			)
+			.await
+			.map_err(|e| anyhow!("failed resolving local oauth2 provider metadata: {e}"))?;
+		policy.resolved_provider = Some(Box::new(resolved_provider));
+		crate::http::oauth2::OAuth2::validate_policy(&policy)?;
+		Ok(policy)
+	}
+
+	async fn into_stored_policy(
+		self,
+		client: Client,
+		services: &PolicyBuildServices,
+		ctx: &PolicyBuildContext,
+	) -> anyhow::Result<crate::http::oauth2::StoredOAuth2Policy> {
+		let attachment_key = ctx.oauth2_attachment_key()?;
+		let policy = self
+			.into_resolved_policy(&client, services.oidc.clone())
+			.await?;
+		crate::http::oauth2::StoredOAuth2Policy::new(policy, attachment_key)
+	}
+}
+
+#[derive(Clone)]
+pub(crate) struct PolicyBuildServices {
+	oidc: crate::http::oidc::OidcJwtService,
+}
+
+impl PolicyBuildServices {
+	fn new(oidc: crate::http::oidc::OidcJwtService) -> Self {
+		Self { oidc }
+	}
+}
+
+#[derive(Clone, Default)]
+enum PolicyBuildContext {
+	#[default]
+	Unbound,
+	Bound(OAuth2AttachmentKey),
+}
+
+impl PolicyBuildContext {
+	fn targeted_policy(policy_key: impl Into<Strng>) -> Self {
+		Self::Bound(OAuth2AttachmentKey::targeted_policy(policy_key))
+	}
+
+	fn listener_policy(listener_key: impl Into<ListenerKey>) -> Self {
+		Self::Bound(OAuth2AttachmentKey::listener_policy(listener_key))
+	}
+
+	fn inline_route(route_key: impl Into<Strng>, policy_index: usize) -> Self {
+		Self::Bound(OAuth2AttachmentKey::inline_route(route_key, policy_index))
+	}
+
+	fn oauth2_attachment_key(&self) -> anyhow::Result<OAuth2AttachmentKey> {
+		match self {
+			Self::Bound(attachment_key) => Ok(attachment_key.clone()),
+			Self::Unbound => Err(anyhow!("oauth2 policy requires an attachment key")),
+		}
+	}
+}
+
+#[apply(schema_de!)]
 #[derive(Default)]
 struct LocalLLMPolicy {
 	#[serde(flatten)]
@@ -987,6 +1184,9 @@ struct LocalGatewayPolicy {
 	/// Authenticate incoming requests by calling an external authorization server.
 	#[serde(default)]
 	ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
+	/// Authenticate incoming requests using OAuth2/OIDC.
+	#[serde(default)]
+	oauth2: Option<LocalOAuth2Policy>,
 	/// Extend agentgateway with an external processor
 	#[serde(default)]
 	ext_proc: Option<crate::http::ext_proc::ExtProc>,
@@ -1011,6 +1211,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 		let LocalGatewayPolicy {
 			jwt_auth,
 			ext_authz,
+			oauth2,
 			ext_proc,
 			transformations,
 			basic_auth,
@@ -1019,6 +1220,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 		FilterOrPolicy {
 			jwt_auth,
 			ext_authz,
+			oauth2,
 			ext_proc,
 			transformations,
 			basic_auth,
@@ -1292,6 +1494,9 @@ pub struct FilterOrPolicy {
 	/// Authenticate incoming requests by calling an external authorization server.
 	#[serde(default)]
 	ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
+	/// Authenticate incoming requests using OAuth2/OIDC.
+	#[serde(default)]
+	oauth2: Option<LocalOAuth2Policy>,
 	/// Extend agentgateway with an external processor
 	#[serde(default)]
 	ext_proc: Option<crate::http::ext_proc::ExtProc>,
@@ -1326,6 +1531,7 @@ struct TCPFilterOrPolicy {
 
 async fn convert(
 	client: client::Client,
+	oidc: crate::http::oidc::OidcJwtService,
 	gateway: ListenerTarget,
 	config: &crate::Config,
 	i: LocalConfig,
@@ -1349,8 +1555,15 @@ async fn convert(
 		let bind_name = strng::format!("bind/{}", b.port);
 		let mut ls = ListenerSet::default();
 		for (idx, l) in b.listeners.into_iter().enumerate() {
-			let (l, pol, backends) =
-				convert_listener(client.clone(), idx, l, bind_name.clone(), gateway.clone()).await?;
+			let (l, pol, backends) = convert_listener(
+				client.clone(),
+				oidc.clone(),
+				idx,
+				l,
+				bind_name.clone(),
+				gateway.clone(),
+			)
+			.await?;
 			all_policies.extend_from_slice(&pol);
 			all_backends.extend_from_slice(&backends);
 			ls.insert(l)
@@ -1372,7 +1585,8 @@ async fn convert(
 	}
 
 	for p in policies {
-		let res = split_policies(client.clone(), p.policy).await?;
+		let ctx = PolicyBuildContext::targeted_policy(p.name.to_string());
+		let res = split_policies(client.clone(), oidc.clone(), &ctx, p.policy).await?;
 		if (res.route_policies.len() + res.backend_policies.len()) != 1 {
 			anyhow::bail!("'policies' must contain exactly 1 policy")
 		}
@@ -1408,15 +1622,27 @@ async fn convert(
 
 	// Convert llm config if present
 	if let Some(llm_config) = llm {
-		let (llm_bind, llm_policies, llm_backends) =
-			convert_llm_config(client.clone(), config, gateway.clone(), llm_config).await?;
+		let (llm_bind, llm_policies, llm_backends) = convert_llm_config(
+			client.clone(),
+			oidc.clone(),
+			config,
+			gateway.clone(),
+			llm_config,
+		)
+		.await?;
 		all_binds.push(llm_bind);
 		all_policies.extend_from_slice(&llm_policies);
 		all_backends.extend_from_slice(&llm_backends);
 	}
 	if let Some(mcp_config) = mcp {
-		let (mcp_bind, mcp_policies, mcp_backends) =
-			convert_mcp_config(client.clone(), config, gateway.clone(), mcp_config).await?;
+		let (mcp_bind, mcp_policies, mcp_backends) = convert_mcp_config(
+			client.clone(),
+			oidc.clone(),
+			config,
+			gateway.clone(),
+			mcp_config,
+		)
+		.await?;
 		all_binds.push(mcp_bind);
 		all_policies.extend_from_slice(&mcp_policies);
 		all_backends.extend_from_slice(&mcp_backends);
@@ -1467,6 +1693,7 @@ fn llm_model_name_header_match(model_name: &str) -> anyhow::Result<HeaderValueMa
 
 async fn convert_llm_config(
 	client: client::Client,
+	oidc: crate::http::oidc::OidcJwtService,
 	config: &crate::Config,
 	gateway: ListenerTarget,
 	llm_config: LocalLLMConfig,
@@ -1482,27 +1709,6 @@ async fn convert_llm_config(
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
 	let mut routes = RouteSet::default();
-	let (listener_gateway_policies, listener_route_policies) = if let Some(pol) = policies {
-		let LocalLLMPolicy {
-			gateway,
-			authorization,
-		} = pol;
-		let authorization_policies = split_policies(
-			client.clone(),
-			FilterOrPolicy {
-				authorization,
-				..Default::default()
-			},
-		)
-		.await?;
-		let gateway_policies = split_policies(client.clone(), gateway.into()).await?;
-		(
-			gateway_policies.route_policies,
-			authorization_policies.route_policies,
-		)
-	} else {
-		(vec![], vec![])
-	};
 
 	// Create transformation policy to set x-gateway-model-name header from request body
 	let transformation = http::transformation_cel::Transformation::try_from_local_config(
@@ -1785,10 +1991,28 @@ json(request.body).model
 		tcp_routes: Default::default(),
 	};
 
-	if !listener_gateway_policies.is_empty() || !listener_route_policies.is_empty() {
-		let pc = listener_gateway_policies.len();
-		for (idx, pol) in listener_gateway_policies.into_iter().enumerate() {
-			let key = strng::format!("listener/{idx}");
+	if let Some(pol) = policies {
+		let route_ctx = PolicyBuildContext::default();
+		let route_pols = split_policies(
+			client.clone(),
+			oidc.clone(),
+			&route_ctx,
+			FilterOrPolicy {
+				authorization: pol.authorization.clone(),
+				..Default::default()
+			},
+		)
+		.await?;
+		let gateway_ctx = PolicyBuildContext::listener_policy(listener_key.clone());
+		let pols = split_policies(client.clone(), oidc, &gateway_ctx, pol.gateway.into()).await?;
+
+		let pc = pols.route_policies.len();
+		for (idx, pol) in pols.route_policies.into_iter().enumerate() {
+			let key = if matches!(&pol, TrafficPolicy::OAuth2(_)) {
+				strng::new("listener/llm/oauth2")
+			} else {
+				strng::format!("listener/{idx}")
+			};
 			all_policies.push(TargetedPolicy {
 				key: key.clone(),
 				name: None,
@@ -1796,7 +2020,7 @@ json(request.body).model
 				policy: (pol, PolicyPhase::Gateway).into(),
 			})
 		}
-		for (idx, pol) in listener_route_policies.into_iter().enumerate() {
+		for (idx, pol) in route_pols.route_policies.into_iter().enumerate() {
 			let key = strng::format!("listener/{}", pc + idx);
 			all_policies.push(TargetedPolicy {
 				key: key.clone(),
@@ -1847,6 +2071,7 @@ json(request.body).model
 
 async fn convert_mcp_config(
 	client: client::Client,
+	oidc: crate::http::oidc::OidcJwtService,
 	config: &crate::Config,
 	gateway: ListenerTarget,
 	mcp_config: LocalSimpleMcpConfig,
@@ -1860,7 +2085,8 @@ async fn convert_mcp_config(
 	let port = port.unwrap_or(DEFAULT_MCP_PORT);
 
 	let resolved_policies = if let Some(pol) = policies {
-		split_policies(client.clone(), pol).await?
+		let ctx = PolicyBuildContext::inline_route("mcp:default", 0);
+		split_policies(client.clone(), oidc, &ctx, pol).await?
 	} else {
 		ResolvedPolicies::default()
 	};
@@ -1949,6 +2175,7 @@ fn detect_bind_protocol(listeners: &ListenerSet) -> BindProtocol {
 
 async fn convert_listener(
 	client: client::Client,
+	oidc: crate::http::oidc::OidcJwtService,
 	idx: usize,
 	l: LocalListener,
 	bind_key: Strng,
@@ -2013,7 +2240,8 @@ async fn convert_listener(
 
 	let mut rs = RouteSet::default();
 	for (idx, l) in routes.into_iter().flatten().enumerate() {
-		let (route, backends) = convert_route(client.clone(), l, idx, key.clone()).await?;
+		let (route, backends) =
+			convert_route(client.clone(), oidc.clone(), l, idx, key.clone()).await?;
 		all_backends.extend_from_slice(&backends);
 		rs.insert(route)
 	}
@@ -2034,9 +2262,14 @@ async fn convert_listener(
 	};
 
 	if let Some(pol) = policies {
-		let pols = split_policies(client.clone(), pol.into()).await?;
+		let ctx = PolicyBuildContext::listener_policy(key.clone());
+		let pols = split_policies(client.clone(), oidc.clone(), &ctx, pol.into()).await?;
 		for (idx, pol) in pols.route_policies.into_iter().enumerate() {
-			let key = strng::format!("listener/{key}/{idx}");
+			let key = if matches!(&pol, TrafficPolicy::OAuth2(_)) {
+				strng::format!("listener/{key}/oauth2")
+			} else {
+				strng::format!("listener/{key}/{idx}")
+			};
 			all_policies.push(TargetedPolicy {
 				key: key.clone(),
 				name: None,
@@ -2057,8 +2290,9 @@ async fn convert_listener(
 	Ok((l, all_policies, all_backends))
 }
 
-pub async fn convert_route(
+pub(crate) async fn convert_route(
 	client: client::Client,
+	oidc: crate::http::oidc::OidcJwtService,
 	lr: LocalRoute,
 	idx: usize,
 	listener_key: ListenerKey,
@@ -2109,7 +2343,8 @@ pub async fn convert_route(
 		external_backends.extend_from_slice(&backends);
 	}
 	let resolved = if let Some(pol) = policies {
-		split_policies(client, pol).await?
+		let ctx = PolicyBuildContext::inline_route(key.clone(), 0);
+		split_policies(client, oidc, &ctx, pol).await?
 	} else {
 		ResolvedPolicies::default()
 	};
@@ -2192,10 +2427,13 @@ async fn split_frontend_policies(
 	}
 	Ok(pols)
 }
-pub async fn split_policies(
+async fn split_policies(
 	client: Client,
+	oidc: crate::http::oidc::OidcJwtService,
+	ctx: &PolicyBuildContext,
 	pol: FilterOrPolicy,
 ) -> Result<ResolvedPolicies, Error> {
+	let services = PolicyBuildServices::new(oidc);
 	let mut resolved = ResolvedPolicies::default();
 	let ResolvedPolicies {
 		backend_policies,
@@ -2225,10 +2463,16 @@ pub async fn split_policies(
 		transformations,
 		csrf,
 		ext_authz,
+		oauth2,
 		ext_proc,
 		timeout,
 		retry,
 	} = pol;
+
+	if jwt_auth.is_some() && oauth2.is_some() {
+		bail!("`jwtAuth` and `oauth2` cannot be configured together in the same policy block");
+	}
+
 	if let Some(p) = request_header_modifier {
 		route_policies.push(TrafficPolicy::RequestHeaderModifier(p));
 	}
@@ -2259,7 +2503,9 @@ pub async fn split_policies(
 	}
 	if let Some(p) = mcp_authentication {
 		// Translate local MCP authn into runtime authn with a ready JWT validator.
-		let authn: McpAuthentication = p.translate(client.clone()).await?;
+		let authn: McpAuthentication = p
+			.translate(client.clone(), services.oidc.resolver())
+			.await?;
 		backend_policies.push(BackendPolicy::McpAuthentication(authn));
 		// Do NOT inject a separate route-level JwtAuth; MCP router handles validation using jwt_validator.
 	}
@@ -2282,7 +2528,9 @@ pub async fn split_policies(
 		route_policies.push(TrafficPolicy::AI(Arc::new(p)))
 	}
 	if let Some(p) = jwt_auth {
-		route_policies.push(TrafficPolicy::JwtAuth(p.try_into(client.clone()).await?));
+		route_policies.push(TrafficPolicy::JwtAuth(
+			p.try_into(client.clone(), services.oidc.resolver()).await?,
+		));
 	}
 	if let Some(p) = basic_auth {
 		route_policies.push(TrafficPolicy::BasicAuth(p.try_into()?));
@@ -2302,6 +2550,10 @@ pub async fn split_policies(
 	if let Some(p) = ext_authz {
 		route_policies.push(TrafficPolicy::ExtAuthz(p))
 	}
+	if let Some(p) = oauth2 {
+		let oauth2 = p.into_stored_policy(client.clone(), &services, ctx).await?;
+		route_policies.push(TrafficPolicy::OAuth2(Arc::new(oauth2)))
+	}
 	if let Some(p) = ext_proc {
 		route_policies.push(TrafficPolicy::ExtProc(p))
 	}
@@ -2320,6 +2572,16 @@ pub async fn split_policies(
 		route_policies.push(TrafficPolicy::Retry(p));
 	}
 	Ok(resolved)
+}
+
+#[cfg(test)]
+pub(crate) async fn split_policies_for_test(
+	client: Client,
+	oidc: crate::http::oidc::OidcJwtService,
+	pol: FilterOrPolicy,
+) -> Result<ResolvedPolicies, Error> {
+	let ctx = PolicyBuildContext::listener_policy("test-listener");
+	split_policies(client, oidc, &ctx, pol).await
 }
 
 async fn convert_tcp_route(

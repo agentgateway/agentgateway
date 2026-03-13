@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
+assertion_line: 56
 description: "Config normalization test for llm_simple: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
@@ -143,7 +144,8 @@ policies:
           mode: optional
           providers:
             - issuer: agentgateway.dev
-              keys: []
+              keys:
+                - XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI
         phase: gateway
   - key: listener/1
     name: ~

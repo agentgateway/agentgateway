@@ -42,6 +42,7 @@ impl ProxyResponse {
 			| ProxyError::BackendDoesNotExist => ProxyResponseReason::NoHealthyBackend,
 			ProxyError::UpgradeFailed(_, _)
 			| ProxyError::InvalidRequest
+			| ProxyError::AuthPolicyConflict(_)
 			| ProxyError::ProcessingString(_)
 			| ProxyError::Processing(_)
 			| ProxyError::Body(_)
@@ -49,7 +50,11 @@ impl ProxyResponse {
 			| ProxyError::BackendUnsupportedMirror
 			| ProxyError::FilterError(_) => ProxyResponseReason::Internal,
 			ProxyError::JwtAuthenticationFailure(_) => ProxyResponseReason::JwtAuth,
+			ProxyError::OAuth2AuthenticationFailure(http::oauth2::Error::InvalidToken(_)) => {
+				ProxyResponseReason::JwtAuth
+			},
 			ProxyError::McpJwtAuthenticationFailure(_, _) => ProxyResponseReason::JwtAuth,
+			ProxyError::OAuth2AuthenticationFailure(_) => ProxyResponseReason::Internal,
 			ProxyError::BasicAuthenticationFailure(_) => ProxyResponseReason::BasicAuth,
 			ProxyError::APIKeyAuthenticationFailure(_) => ProxyResponseReason::APIKeyAuth,
 			ProxyError::ExternalAuthorizationFailed(_) => ProxyResponseReason::ExtAuth,
@@ -192,8 +197,12 @@ pub enum ProxyError {
 	InvalidRequest,
 	#[error("request upgrade failed, backend tried {1:?} but {0:?} was requested")]
 	UpgradeFailed(Option<HeaderValue>, Option<HeaderValue>),
+	#[error("invalid auth policy state: {0}")]
+	AuthPolicyConflict(&'static str),
 	#[error("mcp: {0}")]
 	MCP(mcp::Error),
+	#[error("{0}")]
+	OAuth2AuthenticationFailure(#[from] http::oauth2::Error),
 }
 
 impl ProxyError {
@@ -222,12 +231,25 @@ impl ProxyError {
 			ProxyError::CsrfValidationFailed => StatusCode::FORBIDDEN,
 
 			ProxyError::UpgradeFailed(_, _) => StatusCode::BAD_GATEWAY,
+			ProxyError::AuthPolicyConflict(_) => StatusCode::INTERNAL_SERVER_ERROR,
 
 			// Should it be 4xx?
 			ProxyError::FilterError(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::InvalidRequest => StatusCode::BAD_REQUEST,
 
 			ProxyError::JwtAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
+			ProxyError::OAuth2AuthenticationFailure(http::oauth2::Error::InvalidToken(_)) => {
+				StatusCode::UNAUTHORIZED
+			},
+			ProxyError::OAuth2AuthenticationFailure(http::oauth2::Error::Handshake(_)) => {
+				StatusCode::BAD_REQUEST
+			},
+			ProxyError::OAuth2AuthenticationFailure(http::oauth2::Error::OidcDiscovery(_)) => {
+				StatusCode::BAD_GATEWAY
+			},
+			ProxyError::OAuth2AuthenticationFailure(http::oauth2::Error::Internal(_)) => {
+				StatusCode::INTERNAL_SERVER_ERROR
+			},
 			ProxyError::BasicAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::APIKeyAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::McpJwtAuthenticationFailure(_, _) => StatusCode::UNAUTHORIZED,

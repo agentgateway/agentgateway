@@ -1,5 +1,6 @@
 use rand::RngExt;
-use std::net::SocketAddr;
+use std::collections::HashSet;
+use std::net::{IpAddr, SocketAddr};
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -12,6 +13,7 @@ use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
 use rand::seq::IndexedRandom;
+use rustls_pki_types::ServerName;
 use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
@@ -71,18 +73,9 @@ async fn apply_request_policies(
 	req: &mut Request,
 	response_policies: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
-	// CORS must run before authentication, authorization and rate limiting so that:
-	// 1. Preflight OPTIONS requests short-circuit without requiring credentials
-	// 2. CORS response headers are queued even if the request is later rejected,
-	//    allowing browsers to read error responses instead of seeing a CORS error
-	if let Some(c) = &policies.cors {
-		c.apply(req)
-			.map_err(ProxyError::from)?
-			.apply(response_policies.headers())?;
-	}
-
-	if let Some(j) = &policies.jwt {
-		j.apply(Some(log), req)
+	if let Some(jwt) = &policies.jwt {
+		jwt
+			.apply(Some(log), req)
 			.await
 			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
 	}
@@ -256,8 +249,9 @@ async fn apply_gateway_policies(
 	ext_proc: Option<&mut ExtProcRequest>,
 	response_headers: &mut HeaderMap,
 ) -> Result<(), ProxyResponse> {
-	if let Some(j) = &policies.jwt {
-		j.apply(Some(log), req)
+	if let Some(jwt) = &policies.jwt {
+		jwt
+			.apply(Some(log), req)
 			.await
 			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
 	}
@@ -287,6 +281,59 @@ async fn apply_gateway_policies(
 	}
 
 	Ok(())
+}
+
+fn apply_route_cors_policy(
+	policies: &store::RoutePolicies,
+	req: &mut Request,
+	response_headers: &mut HeaderMap,
+) -> Result<(), ProxyResponse> {
+	// CORS must run before OAuth2 and the rest of request authentication/authorization so that:
+	// 1. Preflight OPTIONS requests short-circuit without requiring credentials
+	// 2. CORS response headers are queued even if the request is later rejected,
+	//    allowing browsers to read error responses instead of seeing a CORS error
+	let Some(cors) = &policies.cors else {
+		return Ok(());
+	};
+
+	let response = cors.apply(req).map_err(ProxyError::from)?;
+	if let Some(direct_response) = response.direct_response {
+		let mut direct_response = direct_response;
+		merge_in_headers(response.response_headers, direct_response.headers_mut());
+		return Err(ProxyResponse::DirectResponse(Box::new(direct_response)));
+	}
+	merge_in_headers(response.response_headers, response_headers);
+	Ok(())
+}
+
+async fn apply_effective_oauth2_policy(
+	oauth2: Option<&Arc<http::oauth2::OAuth2>>,
+	client: PolicyClient,
+	oauth2_tokens: &crate::http::oauth2::OAuth2TokenService,
+	req: &mut Request,
+	response_headers: &mut HeaderMap,
+) -> Result<(), ProxyResponse> {
+	let Some(oauth2) = oauth2 else {
+		return Ok(());
+	};
+
+	let resp = oauth2
+		.enforce_request(&client.inputs.upstream, &client, oauth2_tokens, req)
+		.await
+		.map_err(ProxyResponse::from)?;
+	if let Some(direct_response) = resp.direct_response {
+		let mut direct_response = direct_response;
+		merge_in_headers(resp.response_headers, direct_response.headers_mut());
+		return Err(ProxyResponse::DirectResponse(Box::new(direct_response)));
+	}
+	merge_in_headers(resp.response_headers, response_headers);
+	Ok(())
+}
+
+#[derive(Clone)]
+struct OAuth2ProtocolEndpointCandidate {
+	route_name: Option<RouteName>,
+	oauth2: Arc<crate::http::oauth2::OAuth2>,
 }
 
 async fn apply_llm_request_policies(
@@ -383,6 +430,134 @@ where
 }
 
 impl HTTPProxy {
+	fn materialize_oauth2_binding(
+		&self,
+		binding: Arc<http::oauth2::StoredOAuth2Policy>,
+	) -> Result<Option<Arc<http::oauth2::OAuth2>>, ProxyError> {
+		let Some(runtime_secret) = self.inputs.cfg.oauth2_runtime.clone() else {
+			return Ok(None);
+		};
+		let oauth2 = binding.materialize(runtime_secret).map_err(|e| {
+			ProxyError::Processing(anyhow::anyhow!("failed to materialize oauth2 policy: {e}"))
+		})?;
+		Ok(Some(Arc::new(oauth2)))
+	}
+
+	fn oauth2_protocol_endpoint_candidates(
+		&self,
+		selected_listener: &Arc<Listener>,
+		host: &str,
+		path: &str,
+	) -> Result<Vec<OAuth2ProtocolEndpointCandidate>, ProxyError> {
+		let store = self.inputs.stores.read_binds();
+		let gateway_binding = store.gateway_oauth2_binding(&selected_listener.name);
+		let gateway_attachment = gateway_binding
+			.as_ref()
+			.map(|oauth2| oauth2.attachment_key().clone());
+		let mut candidates = Vec::new();
+		if let Some(binding) = gateway_binding
+			&& binding.matches_protocol_endpoint(path)
+		{
+			let Some(oauth2) = self.materialize_oauth2_binding(binding)? else {
+				return Ok(candidates);
+			};
+			candidates.push(OAuth2ProtocolEndpointCandidate {
+				route_name: None,
+				oauth2,
+			});
+		}
+
+		let mut seen_routes = HashSet::new();
+		for hostname_match in HostnameMatch::all_matches(host) {
+			for (route, _) in selected_listener.routes.get_hostname(&hostname_match) {
+				if !seen_routes.insert(route.key.clone()) {
+					continue;
+				}
+				let route_path = RoutePath {
+					route: &route.name,
+					listener: &selected_listener.name,
+				};
+				let Some(binding) = store.route_oauth2_binding(&route_path, &route.inline_policies) else {
+					continue;
+				};
+				if gateway_attachment.as_ref() == Some(binding.attachment_key()) {
+					continue;
+				}
+				if !binding.matches_protocol_endpoint(path) {
+					continue;
+				}
+				let Some(oauth2) = self.materialize_oauth2_binding(binding)? else {
+					continue;
+				};
+				candidates.push(OAuth2ProtocolEndpointCandidate {
+					route_name: Some(route.name.clone()),
+					oauth2,
+				});
+			}
+		}
+
+		Ok(candidates)
+	}
+
+	async fn maybe_handle_oauth2_protocol_endpoint(
+		&self,
+		oauth2_tokens: &crate::http::oauth2::OAuth2TokenService,
+		selected_listener: &Arc<Listener>,
+		host: &str,
+		log: &mut RequestLog,
+		req: &mut Request,
+	) -> Result<Option<Response>, SnapshottedProxyResponse> {
+		let candidates = self
+			.oauth2_protocol_endpoint_candidates(selected_listener, host, req.uri().path())
+			.snapshot_on_err(log, req)?;
+		let endpoint = match candidates.as_slice() {
+			[] => None,
+			[candidate] => Some(candidate.clone()),
+			_ => {
+				if let Some(attachment_key) = self
+					.inputs
+					.cfg
+					.oauth2_runtime
+					.as_deref()
+					.and_then(|secret| {
+						http::oauth2::OAuth2::callback_attachment_key_from_uri(req.uri(), secret)
+					}) {
+					candidates
+						.iter()
+						.find(|candidate| candidate.oauth2.attachment_key().to_string() == attachment_key)
+						.cloned()
+				} else {
+					return Err(ProxyError::AuthPolicyConflict(
+						"oauth2 callback path matched multiple policies but the request state did not identify the owner",
+					))
+					.snapshot_on_err(log, req);
+				}
+			},
+		};
+		let Some(endpoint) = endpoint else {
+			if !candidates.is_empty() {
+				return Err(ProxyError::AuthPolicyConflict(
+					"oauth2 callback state identified an unknown policy owner",
+				))
+				.snapshot_on_err(log, req);
+			}
+			return Ok(None);
+		};
+
+		log.route_name = endpoint.route_name.clone();
+		let direct_response = endpoint
+			.oauth2
+			.handle_protocol_endpoint(
+				&self.inputs.upstream,
+				&self.policy_client(),
+				oauth2_tokens,
+				req,
+			)
+			.await
+			.snapshot_on_err(log, req)?;
+		Ok(Some(direct_response))
+	}
+
 	pub async fn proxy(
 		&self,
 		connection: Arc<Extension>,
@@ -559,6 +734,19 @@ impl HTTPProxy {
 		log.bind_name = Some(bind_name.clone());
 		log.listener_name = Some(selected_listener.name.clone());
 
+		if let Some(response) = self
+			.maybe_handle_oauth2_protocol_endpoint(
+				&self.inputs.oauth2_token_service,
+				&selected_listener,
+				&host,
+				log,
+				&mut req,
+			)
+			.await?
+		{
+			return Ok(response);
+		}
+
 		let mut gateway_policies = inputs
 			.stores
 			.read_binds()
@@ -638,6 +826,33 @@ impl HTTPProxy {
 		response_policies.gateway_transformation = gateway_policies.transformation.clone();
 		response_policies.ext_proc = maybe_ext_proc;
 		response_policies.gateway_ext_proc = maybe_gateway_ext_proc;
+		let effective_oauth2 = {
+			let store = inputs.stores.read_binds();
+			store
+				.route_oauth2_binding(&route_path, &selected_route.inline_policies)
+				.map(|binding| self.materialize_oauth2_binding(binding))
+				.or_else(|| {
+					store
+						.gateway_oauth2_binding(&selected_listener.name)
+						.map(|binding| self.materialize_oauth2_binding(binding))
+				})
+				.transpose()
+				.snapshot_on_err(log, &mut req)?
+				.flatten()
+		};
+
+		apply_route_cors_policy(&route_policies, &mut req, response_policies.headers())
+			.snapshot_on_err(log, &mut req)?;
+
+		apply_effective_oauth2_policy(
+			effective_oauth2.as_ref(),
+			self.policy_client(),
+			&self.inputs.oauth2_token_service,
+			&mut req,
+			response_policies.headers(),
+		)
+		.await
+		.snapshot_on_err(log, &mut req)?;
 
 		apply_request_policies(
 			&route_policies,
@@ -1242,6 +1457,7 @@ impl DerefMut for MustSnapshot<'_> {
 	}
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn make_backend_call(
 	inputs: Arc<ProxyInputs>,
 	route_policies: Arc<store::LLMRequestPolicies>,
@@ -2013,6 +2229,15 @@ pub struct PolicyClient {
 }
 
 impl PolicyClient {
+	fn server_name_from_host(host: &str) -> Result<ServerName<'static>, ProxyError> {
+		if let Ok(ip) = host.parse::<IpAddr>() {
+			return Ok(ServerName::IpAddress(ip.into()));
+		}
+		ServerName::try_from(host.to_owned()).map_err(|e| {
+			ProxyError::ProcessingString(format!("invalid OIDC endpoint host `{host}` for SNI: {e}"))
+		})
+	}
+
 	pub async fn call_reference(
 		&self,
 		req: Request,
@@ -2049,6 +2274,45 @@ impl PolicyClient {
 		let pols = get_backend_policies(&self.inputs, &backend, policies, None);
 		self
 			.internal_call_with_policies(req, backend.backend, pols)
+			.await
+	}
+
+	pub async fn call_oidc_provider(
+		&self,
+		req: Request,
+		backend_ref: &SimpleBackendReference,
+	) -> Result<Response, ProxyError> {
+		let endpoint_host = req
+			.uri()
+			.host()
+			.ok_or_else(|| ProxyError::ProcessingString("OIDC endpoint URI missing host".to_string()))?;
+		let endpoint_scheme = req.uri().scheme().cloned().ok_or_else(|| {
+			ProxyError::ProcessingString("OIDC endpoint URI missing scheme".to_string())
+		})?;
+		let endpoint_server_name = Self::server_name_from_host(endpoint_host)?;
+
+		let backend = resolve_simple_backend(backend_ref, self.inputs.as_ref())?;
+		trace!("resolved OIDC provider {:?} to {:?}", backend_ref, &backend);
+
+		let backend = BackendWithPolicies::from(backend);
+		let resolved = get_backend_policies(&self.inputs, &backend, &[], None);
+
+		// Provider calls intentionally use transport settings only (TLS + HTTP version behavior).
+		let mut provider_policies = BackendPolicies {
+			http: resolved.http.clone(),
+			..Default::default()
+		};
+
+		if let Some(tls) = resolved.backend_tls.clone() {
+			provider_policies.backend_tls = Some(tls);
+		} else if endpoint_scheme == Scheme::HTTPS {
+			let mut tls = crate::http::backendtls::SYSTEM_TRUST.clone();
+			tls.hostname_override = Some(endpoint_server_name);
+			provider_policies.backend_tls = Some(tls);
+		}
+
+		self
+			.internal_call_with_policies(req, backend.backend, provider_policies)
 			.await
 	}
 

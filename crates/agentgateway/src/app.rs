@@ -81,7 +81,6 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		state_manager::StateManager::new(config.clone(), control_client.clone(), xds_metrics, xds_tx)
 			.await?;
 	let stores = state_mgr.stores();
-
 	let mut xds_rx_for_task = xds_rx.clone();
 	tokio::spawn(async move {
 		// When we get the initial XDS state, unblock readiness
@@ -106,15 +105,14 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	#[cfg(feature = "ui")]
 	info!("serving UI at http://{}/ui", config.admin_addr);
 
-	let pi = ProxyInputs {
-		cfg: config.clone(),
-		stores: stores.clone(),
-		metrics: metrics_handle.clone(),
-		upstream: client.clone(),
+	let pi = ProxyInputs::new(
+		config.clone(),
+		stores.clone(),
+		metrics_handle.clone(),
+		client.clone(),
 		ca,
-
-		mcp_state: mcp::App::new(stores.clone(), config.session_encoder.clone()),
-	};
+		mcp::App::new(stores.clone(), config.session_encoder.clone()),
+	);
 
 	let gw = proxy::Gateway::new(Arc::new(pi), drain_rx.clone());
 

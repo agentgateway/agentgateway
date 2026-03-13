@@ -26,7 +26,11 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 )
 
-const sessionKeyEnvVar = "SESSION_KEY"
+const (
+	sessionKeyEnvVar = "SESSION_KEY"
+	// #nosec G101 -- environment variable name, not secret material.
+	oauthCookieSecretEnvVar = "OAUTH_COOKIE_SECRET"
+)
 
 // AgentgatewayParametersApplier applies AgentgatewayParameters configurations and overlays.
 type AgentgatewayParametersApplier struct {
@@ -147,8 +151,16 @@ func hasEnvVar(envs []corev1.EnvVar, name string) bool {
 	return false
 }
 
+func usesManagedSecretEnv(envs []corev1.EnvVar, name string) bool {
+	return !hasEnvVar(envs, name)
+}
+
 func usesManagedSessionKeyEnv(envs []corev1.EnvVar) bool {
-	return !hasEnvVar(envs, sessionKeyEnvVar)
+	return usesManagedSecretEnv(envs, sessionKeyEnvVar)
+}
+
+func usesManagedOAuthCookieSecretEnv(envs []corev1.EnvVar) bool {
+	return usesManagedSecretEnv(envs, oauthCookieSecretEnvVar)
 }
 
 // ApplyOverlaysToObjects applies the strategic-merge-patch overlays to rendered k8s objects.
@@ -168,7 +180,7 @@ type agentgatewayParametersHelmValuesGenerator struct {
 	gwClassClient  kclient.Client[*gwv1.GatewayClass]
 	secretClient   kclient.Client[*corev1.Secret]
 	inputs         *deployer.Inputs
-	sessionKeyGen  func() (string, error)
+	keyGen         func() (string, error)
 }
 
 func newAgentgatewayParametersHelmValuesGenerator(cli apiclient.Client, inputs *deployer.Inputs) *agentgatewayParametersHelmValuesGenerator {
@@ -178,7 +190,7 @@ func newAgentgatewayParametersHelmValuesGenerator(cli apiclient.Client, inputs *
 		gwClassClient:  kclient.NewFilteredDelayed[*gwv1.GatewayClass](cli, wellknown.GatewayClassGVR, filter),
 		secretClient:   kclient.NewFiltered[*corev1.Secret](cli, filter),
 		inputs:         inputs,
-		sessionKeyGen:  generateSessionKey,
+		keyGen:         generateSecretKey,
 	}
 }
 
@@ -210,6 +222,7 @@ func (g *agentgatewayParametersHelmValuesGenerator) GetValues(ctx context.Contex
 		applier.ApplyToHelmValues(vals)
 	}
 	applyManagedSessionKeyDefaults(vals.Agentgateway, gw.Name)
+	applyManagedOAuthCookieSecretDefaults(vals.Agentgateway, gw.Name)
 
 	if g.inputs.ControlPlane.XdsTLS {
 		if err := injectXdsCACertificate(g.inputs.ControlPlane.XdsTlsCaPath, vals); err != nil {
@@ -282,6 +295,14 @@ func (g *agentgatewayParametersHelmValuesGenerator) resolveParameters(gw *gwv1.G
 }
 
 func usesManagedSessionKeyResolvedParameters(resolved *resolvedParameters) bool {
+	return usesManagedResolvedParameters(resolved, sessionKeyEnvVar)
+}
+
+func usesManagedOAuthCookieSecretResolvedParameters(resolved *resolvedParameters) bool {
+	return usesManagedResolvedParameters(resolved, oauthCookieSecretEnvVar)
+}
+
+func usesManagedResolvedParameters(resolved *resolvedParameters, envVar string) bool {
 	if resolved == nil {
 		return true
 	}
@@ -293,7 +314,7 @@ func usesManagedSessionKeyResolvedParameters(resolved *resolvedParameters) bool 
 	if resolved.gatewayAGWP != nil {
 		envs = mergeEnvVars(envs, resolved.gatewayAGWP.Spec.AgentgatewayParametersConfigs.Env)
 	}
-	return usesManagedSessionKeyEnv(envs)
+	return usesManagedSecretEnv(envs, envVar)
 }
 
 func applyManagedSessionKeyDefaults(gtw *deployer.AgentgatewayHelmGateway, gatewayName string) {
@@ -307,6 +328,19 @@ func applyManagedSessionKeyDefaults(gtw *deployer.AgentgatewayHelmGateway, gatew
 
 	sessionKeySecretName := gatewaySessionKeySecretName(gatewayName)
 	gtw.SessionKeySecretName = &sessionKeySecretName
+}
+
+func applyManagedOAuthCookieSecretDefaults(gtw *deployer.AgentgatewayHelmGateway, gatewayName string) {
+	if gtw == nil {
+		return
+	}
+	if !usesManagedOAuthCookieSecretEnv(gtw.Env) {
+		gtw.OAuthCookieSecretName = nil
+		return
+	}
+
+	oauthCookieSecretName := gatewayOAuthCookieSecretName(gatewayName)
+	gtw.OAuthCookieSecretName = &oauthCookieSecretName
 }
 
 func (g *agentgatewayParametersHelmValuesGenerator) GetCacheSyncHandlers() []cache.InformerSynced {
@@ -385,6 +419,10 @@ func gatewaySessionKeySecretName(gatewayName string) string {
 	return safeLabelValue(fmt.Sprintf("%s-session-key", safeLabelValue(gatewayName)))
 }
 
+func gatewayOAuthCookieSecretName(gatewayName string) string {
+	return safeLabelValue(fmt.Sprintf("%s-oauth-cookie-secret", safeLabelValue(gatewayName)))
+}
+
 func safeLabelValue(name string) string {
 	if len(name) <= 63 {
 		return name
@@ -395,22 +433,22 @@ func safeLabelValue(name string) string {
 	return fmt.Sprintf("%s-%s", prefix, hash)
 }
 
-func generateSessionKey() (string, error) {
+func generateSecretKey() (string, error) {
 	var key [32]byte
 	if _, err := rand.Read(key[:]); err != nil {
-		return "", fmt.Errorf("failed to generate session key: %w", err)
+		return "", fmt.Errorf("failed to generate secret key: %w", err)
 	}
 	return hex.EncodeToString(key[:]), nil
 }
 
-func validateSessionKey(key string) error {
+func validateSecretKey(key string) error {
 	key = strings.TrimSpace(key)
 	decoded, err := hex.DecodeString(key)
 	if err != nil {
-		return fmt.Errorf("invalid hex-encoded session key: %w", err)
+		return fmt.Errorf("invalid hex-encoded secret key: %w", err)
 	}
 	if len(decoded) != 32 {
-		return fmt.Errorf("invalid session key length: expected 32 bytes, got %d", len(decoded))
+		return fmt.Errorf("invalid secret key length: expected 32 bytes, got %d", len(decoded))
 	}
 	return nil
 }
@@ -420,7 +458,7 @@ func (g *agentgatewayParametersHelmValuesGenerator) buildSessionKeySecret(
 	gw *gwv1.Gateway,
 	secretName string,
 ) (*corev1.Secret, error) {
-	key, err := g.resolveSessionKey(ctx, gw.Namespace, secretName)
+	key, err := g.resolveManagedSecretKey(ctx, gw.Namespace, secretName)
 	if err != nil {
 		return nil, err
 	}
@@ -444,7 +482,36 @@ func (g *agentgatewayParametersHelmValuesGenerator) buildSessionKeySecret(
 	}, nil
 }
 
-func (g *agentgatewayParametersHelmValuesGenerator) resolveSessionKey(
+func (g *agentgatewayParametersHelmValuesGenerator) buildOAuthCookieSecret(
+	ctx context.Context,
+	gw *gwv1.Gateway,
+	secretName string,
+) (*corev1.Secret, error) {
+	key, err := g.resolveManagedSecretKey(ctx, gw.Namespace, secretName)
+	if err != nil {
+		return nil, err
+	}
+	return &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Kind:       "Secret",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: gw.Namespace,
+			Labels: map[string]string{
+				wellknown.GatewayNameLabel:      safeLabelValue(gw.Name),
+				wellknown.GatewayClassNameLabel: string(gw.Spec.GatewayClassName),
+			},
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"key": []byte(key),
+		},
+	}, nil
+}
+
+func (g *agentgatewayParametersHelmValuesGenerator) resolveManagedSecretKey(
 	ctx context.Context,
 	namespace string,
 	secretName string,
@@ -454,21 +521,21 @@ func (g *agentgatewayParametersHelmValuesGenerator) resolveSessionKey(
 	if secret := g.secretClient.Get(secretName, namespace); secret != nil {
 		key, found := secret.Data["key"]
 		if !found || len(key) == 0 {
-			return "", fmt.Errorf("session key secret %s/%s missing key entry", namespace, secretName)
+			return "", fmt.Errorf("managed secret %s/%s missing key entry", namespace, secretName)
 		}
 		resolvedKey := strings.TrimSpace(string(key))
-		if err := validateSessionKey(resolvedKey); err != nil {
-			return "", fmt.Errorf("session key secret %s/%s contains an invalid key: %w", namespace, secretName, err)
+		if err := validateSecretKey(resolvedKey); err != nil {
+			return "", fmt.Errorf("managed secret %s/%s contains an invalid key: %w", namespace, secretName, err)
 		}
 		return resolvedKey, nil
 	}
 
-	key, err := g.sessionKeyGen()
+	key, err := g.keyGen()
 	if err != nil {
 		return "", err
 	}
-	if err := validateSessionKey(key); err != nil {
-		return "", fmt.Errorf("generated invalid session key for %s/%s: %w", namespace, secretName, err)
+	if err := validateSecretKey(key); err != nil {
+		return "", fmt.Errorf("generated invalid secret key for %s/%s: %w", namespace, secretName, err)
 	}
 	return key, nil
 }

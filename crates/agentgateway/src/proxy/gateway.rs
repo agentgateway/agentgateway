@@ -295,11 +295,18 @@ impl Gateway {
 				tokio::spawn(async move {
 					debug!(bind=?name, "connection started");
 					tokio::select! {
-						// We took too long; shutdown now.
+					// We took too long; shutdown now.
 						_ = force_shutdown.changed() => {
 							info!(bind=?name, "connection forcefully terminated");
 						}
-						_ = Self::handle_tunnel(name.clone(), bind_protocol, tunnel_protocol, stream, pi, drain) => {}
+						_ = Self::handle_tunnel(
+							name.clone(),
+							bind_protocol,
+							tunnel_protocol,
+							stream,
+							pi,
+							drain,
+						) => {}
 					}
 					debug!(bind=?name, dur=?start.elapsed(), "connection completed");
 				});

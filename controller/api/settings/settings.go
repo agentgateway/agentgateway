@@ -98,8 +98,8 @@ func (r *GatewayClassParametersRefs) Decode(value string) error {
 const (
 	// TLSSecretName is the name of the Kubernetes Secret containing the TLS certificate,
 	// private key, and CA certificate for xDS communication. This secret must exist in the
-	// kgateway installation namespace when TLS is enabled.
-	TLSSecretName = "kgateway-xds-cert" //nolint:gosec // G101: This is a well-known xDS TLS secret name, not a credential
+	// agentgateway installation namespace when TLS is enabled.
+	TLSSecretName = "agentgateway-xds-cert" //nolint:gosec // G101: This is a well-known xDS TLS secret name, not a credential
 
 	// TLSCertPath is the path to the TLS certificate
 	TLSCertPath = "/etc/xds-tls/tls.crt"

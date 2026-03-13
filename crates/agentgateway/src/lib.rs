@@ -92,6 +92,9 @@ pub struct RawConfig {
 	/// Configuration for stateful session management
 	session: Option<RawSession>,
 
+	/// Configuration for OAuth2 browser-state protection.
+	oauth2: Option<RawOAuth2>,
+
 	#[serde(default, with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	connection_termination_deadline: Option<Duration>,
@@ -206,6 +209,15 @@ pub struct RawSession {
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(serialize_with = "ser_redact", deserialize_with = "deser_key")]
 	key: secrecy::SecretString,
+}
+
+#[apply(schema_de!)]
+pub struct RawOAuth2 {
+	/// The AES-256-GCM key used to protect OAuth2 browser state and cookies.
+	/// For example, generated via `openssl rand -hex 32`.
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	#[serde(serialize_with = "ser_redact", deserialize_with = "deser_key")]
+	cookie_secret: secrecy::SecretString,
 }
 
 #[apply(schema_de!)]
@@ -399,6 +411,8 @@ pub struct Config {
 	pub proxy_metadata: ProxyMetadata,
 	pub threading_mode: ThreadingMode,
 	pub session_encoder: http::sessionpersistence::Encoder,
+	#[serde(skip)]
+	pub oauth2_runtime: Option<Arc<http::oauth2::RuntimeCookieSecret>>,
 	/// Handle for tasks/spans emitted on the admin runtime.
 	#[serde(skip)]
 	pub admin_runtime_handle: Option<tokio::runtime::Handle>,
@@ -484,11 +498,53 @@ pub struct ProxyInputs {
 	stores: Stores,
 
 	upstream: client::Client,
+	oauth2_token_service: http::oauth2::OAuth2TokenService,
 
 	metrics: Arc<metrics::Metrics>,
 
 	mcp_state: mcp::App,
 	ca: Option<Arc<CaClient>>,
+}
+
+impl ProxyInputs {
+	pub fn new(
+		cfg: Arc<Config>,
+		stores: Stores,
+		metrics: Arc<metrics::Metrics>,
+		upstream: client::Client,
+		ca: Option<Arc<CaClient>>,
+		mcp_state: mcp::App,
+	) -> Self {
+		Self::with_oauth2_token_service(
+			cfg,
+			stores,
+			metrics,
+			upstream,
+			ca,
+			mcp_state,
+			http::oauth2::OAuth2TokenService::new_runtime(),
+		)
+	}
+
+	pub(crate) fn with_oauth2_token_service(
+		cfg: Arc<Config>,
+		stores: Stores,
+		metrics: Arc<metrics::Metrics>,
+		upstream: client::Client,
+		ca: Option<Arc<CaClient>>,
+		mcp_state: mcp::App,
+		oauth2_token_service: http::oauth2::OAuth2TokenService,
+	) -> Self {
+		Self {
+			cfg,
+			stores,
+			upstream,
+			oauth2_token_service,
+			metrics,
+			mcp_state,
+			ca,
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy, serde::Serialize)]

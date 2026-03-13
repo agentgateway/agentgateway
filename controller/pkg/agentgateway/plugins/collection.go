@@ -15,6 +15,7 @@ import (
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/backendtransport"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	kgwversioned "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
@@ -59,6 +60,8 @@ type AgwCollections struct {
 	// agentgateway resources
 	Backends             krt.Collection[*agentgateway.AgentgatewayBackend]
 	AgentgatewayPolicies krt.Collection[*agentgateway.AgentgatewayPolicy]
+	// BackendTransportLookup resolves controller-side TLS and backend endpoint details for backendRef-driven fetches.
+	BackendTransportLookup *backendtransport.BackendTransportLookup
 
 	// ControllerName is the name of the Gateway controller.
 	ControllerName string
@@ -161,4 +164,11 @@ func NewAgwCollections(
 func (c *AgwCollections) SetupIndexes() {
 	c.SecretsByNamespace = krt.NewNamespaceIndex(c.Secrets)
 	c.ServicesByNamespace = krt.NewNamespaceIndex(c.Services)
+	c.BackendTransportLookup = backendtransport.NewBackendTransportLookup(
+		c.ConfigMaps,
+		c.Services,
+		c.Backends,
+		c.AgentgatewayPolicies,
+		c.BackendTLSPolicies,
+	)
 }

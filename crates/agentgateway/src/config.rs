@@ -231,6 +231,16 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			Some(session) => crate::http::sessionpersistence::Encoder::aes(session.key.expose_secret())?,
 		}
 	};
+	let oauth2_runtime = if let Some(secret) = parse_oauth_cookie_secret("OAUTH_COOKIE_SECRET")? {
+		Some(Arc::new(secret))
+	} else {
+		raw
+			.oauth2
+			.as_ref()
+			.map(|oauth2| parse_oauth_cookie_secret_value(oauth2.cookie_secret.expose_secret()))
+			.transpose()?
+			.map(Arc::new)
+	};
 
 	Ok(crate::Config {
 		ipv6_enabled,
@@ -397,6 +407,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			),
 		},
 		session_encoder,
+		oauth2_runtime,
 		hbone: Arc::new(agent_hbone::Config {
 			// window size: per-stream limit
 			window_size: parse("HTTP2_STREAM_WINDOW_SIZE")?
@@ -465,6 +476,21 @@ fn parse_duration(env: &str) -> anyhow::Result<Option<Duration>> {
 			durfmt::parse(&ds).map_err(|e| anyhow::anyhow!("invalid env var {}={} ({})", env, ds, e))
 		})
 		.transpose()
+}
+
+fn parse_oauth_cookie_secret(
+	env: &str,
+) -> anyhow::Result<Option<crate::http::oauth2::RuntimeCookieSecret>> {
+	parse::<String>(env)?
+		.map(|raw| parse_oauth_cookie_secret_value(raw.trim()))
+		.transpose()
+		.map_err(|e| anyhow::anyhow!("invalid env var {env} ({e})"))
+}
+
+fn parse_oauth_cookie_secret_value(
+	raw: &str,
+) -> anyhow::Result<crate::http::oauth2::RuntimeCookieSecret> {
+	crate::http::oauth2::parse_runtime_cookie_secret(raw.trim())
 }
 
 pub fn empty_to_none<A: AsRef<str>>(inp: Option<A>) -> Option<A> {
@@ -686,6 +712,70 @@ config:
 
 		unsafe {
 			env::remove_var("SESSION_KEY");
+		}
+	}
+
+	#[test]
+	fn oauth_cookie_secret_inline_config_is_loaded() {
+		let _env_lock = lock_env();
+
+		unsafe {
+			env::remove_var("OAUTH_COOKIE_SECRET");
+		}
+
+		let config = parse_config(
+			r#"
+config:
+  oauth2:
+    cookieSecret: "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should parse");
+
+		assert_eq!(
+			config.oauth2_runtime.as_deref().map(|v| v.as_bytes()),
+			Some(&[
+				0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
+				0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d,
+				0x1e, 0x1f,
+			])
+		);
+	}
+
+	#[test]
+	fn oauth_cookie_secret_env_overrides_inline_config() {
+		let _env_lock = lock_env();
+
+		let env_key = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+		let inline_key = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100";
+
+		unsafe {
+			env::set_var("OAUTH_COOKIE_SECRET", env_key);
+		}
+
+		let config = parse_config(
+			format!(
+				r#"
+config:
+  oauth2:
+    cookieSecret: "{inline_key}"
+"#
+			),
+			None,
+		)
+		.expect("config should parse");
+
+		let expected =
+			crate::http::oauth2::parse_runtime_cookie_secret(env_key).expect("env key should parse");
+		assert_eq!(
+			config.oauth2_runtime.as_deref().map(|v| v.as_bytes()),
+			Some(expected.as_bytes())
+		);
+
+		unsafe {
+			env::remove_var("OAUTH_COOKIE_SECRET");
 		}
 	}
 }

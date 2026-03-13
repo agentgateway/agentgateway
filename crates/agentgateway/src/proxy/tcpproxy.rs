@@ -348,7 +348,7 @@ mod tests {
 		Stores {
 			discovery: crate::store::DiscoveryStoreUpdater::new(Arc::new(RwLock::new(discovery_store))),
 			binds: crate::store::BindStoreUpdater::new(Arc::new(RwLock::new(
-				crate::store::BindStore::with_ipv6_enabled(true),
+				crate::store::BindStore::default(),
 			))),
 		}
 	}

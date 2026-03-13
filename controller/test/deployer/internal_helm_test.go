@@ -89,16 +89,22 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 				t.Helper()
 				assert.Contains(t, outputYaml, "name: SESSION_KEY",
 					"deployment should inject the managed session key via env")
+				assert.Contains(t, outputYaml, "name: OAUTH_COOKIE_SECRET",
+					"deployment should inject the managed oauth cookie secret via env")
 				assert.Contains(t, outputYaml, "secretKeyRef:",
-					"deployment should reference the session key Secret from env")
+					"deployment should reference managed secrets from env")
 				assert.Contains(t, outputYaml, "name: gw-session-key",
 					"deployment should reference the controller-managed session key Secret")
+				assert.Contains(t, outputYaml, "name: gw-oauth-cookie-secret",
+					"deployment should reference the controller-managed oauth cookie secret")
 				assert.Contains(t, outputYaml, "kind: Secret",
-					"rendered objects should include the controller-managed session key Secret")
+					"rendered objects should include the controller-managed secrets")
 				assert.Contains(t, outputYaml, "type: Opaque",
-					"session key Secret should use the opaque Secret type")
+					"managed secrets should use the opaque Secret type")
 				assert.Contains(t, outputYaml, "checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737",
 					"deployment pod template should roll when the managed session key changes")
+				assert.Contains(t, outputYaml, "checksum/oauth-cookie-secret: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737",
+					"deployment pod template should roll when the managed oauth cookie secret changes")
 			},
 		},
 		{

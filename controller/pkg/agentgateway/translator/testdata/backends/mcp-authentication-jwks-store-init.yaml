@@ -34,8 +34,8 @@ status:
   status:
     conditions:
     - lastTransitionTime: fake
-      message: 'failed to translate backend: JwksUrlBuilderFactory must be initialized
-        before use'
+      message: 'failed to translate backend: jwks ConfigMap agentgateway-system/jwks-store-713e840c2d857f91676697f3277e8bba
+        isn''t available'
       reason: TranslationError
       status: "False"
       type: Accepted

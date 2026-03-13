@@ -27,6 +27,8 @@ import (
 
 	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
 	agwv1alpha1 "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/identity/jwks_url"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/identity/oidc"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer"
@@ -80,6 +82,7 @@ func isSpace(r rune) bool {
 func init() {
 	// Add our types to Istio since we are using their library
 	utilruntime.Must(schemes.AddToScheme(kube.IstioScheme))
+	oidc.BuildProviderConfigMapNamespacedNameFunc(oidc.DefaultStorePrefix, "agentgateway-system")
 }
 
 func GetTestResource[T any](t *testing.T, collection krt.Collection[T]) T {
@@ -196,9 +199,11 @@ func agwPluginFactory(agwCollections *plugins.AgwCollections) plugins.AgwPlugin 
 }
 
 func BuildMockPolicyContext(t test.Failer, inputs []any) plugins.PolicyCtx {
+	collections := BuildMockCollection(t, inputs)
 	return plugins.PolicyCtx{
-		Krt:         krt.TestingDummyContext{},
-		Collections: BuildMockCollection(t, inputs),
+		Krt:            krt.TestingDummyContext{},
+		Collections:    collections,
+		JWKSURLBuilder: jwks_url.NewJwksUrlFactory(collections.BackendTransportLookup),
 	}
 }
 

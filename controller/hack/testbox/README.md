@@ -15,3 +15,7 @@ Build/load:
 ```bash
 make -C controller testbox-docker kind-load-testbox
 ```
+
+TLS fixtures:
+- `dummy-idp.cert` / `dummy-idp.key` are checked-in test fixtures used by the embedded dummy IdP HTTPS server.
+- `/tls` is reserved for the echo app HTTPS listener.

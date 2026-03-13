@@ -2,11 +2,11 @@ package main
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -14,20 +14,15 @@ import (
 )
 
 //go:embed dummy-idp.cert
-var cert []byte
+var dummyIDPCert []byte
 
 //go:embed dummy-idp.key
-var key []byte
+var dummyIDPKey []byte
 
 func startDummyIDP() (shutdownFunc, error) {
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(cert) {
-		return nil, fmt.Errorf("failed to append Cert from PEM")
-	}
-
-	cert, err := tls.X509KeyPair(cert, key)
+	cert, err := tls.X509KeyPair(dummyIDPCert, dummyIDPKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load embedded dummy-idp TLS keypair: %w", err)
 	}
 
 	mux := http.NewServeMux()
@@ -68,9 +63,11 @@ func startDummyIDP() (shutdownFunc, error) {
 	mux.HandleFunc("/register", handleRegister)
 	mux.HandleFunc("/authorize", handleAuthorize)
 	mux.HandleFunc("/token", handleToken)
-	// Handle .well-known paths - register each path explicitly
+	// Handle .well-known metadata paths explicitly.
+	// Support both RFC 8414 OAuth metadata and OIDC discovery aliases.
 	mux.HandleFunc("/.well-known/jwks.json", handleJWKS)
 	mux.HandleFunc("/.well-known/oauth-authorization-server", handleDiscovery)
+	mux.HandleFunc("/.well-known/openid-configuration", handleDiscovery)
 
 	// Add CORS middleware for all routes
 	muxWithCORS := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -83,7 +80,6 @@ func startDummyIDP() (shutdownFunc, error) {
 
 	// nolint: gosec // Test code only
 	cfg := &tls.Config{
-		RootCAs:      roots,
 		Certificates: []tls.Certificate{cert},
 		NextProtos:   []string{"http/1.1"},
 	}
@@ -163,13 +159,29 @@ func handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	clientID := query.Get("client_id")
 	redirectURI := query.Get("redirect_uri")
 
-	if clientID != hardcodedClientID {
+	if clientID == "" {
 		sendJSONResponse(w, r, map[string]string{"error": "invalid_client"}, http.StatusBadRequest)
 		return
 	}
+	if redirectURI == "" {
+		sendJSONResponse(w, r, map[string]string{"error": "invalid_request"}, http.StatusBadRequest)
+		return
+	}
 
-	callbackURL := fmt.Sprintf("%s?code=%s", redirectURI, hardcodedCode)
-	sendJSONResponse(w, r, map[string]string{"redirect_to": callbackURL}, http.StatusOK)
+	callbackURL, err := url.Parse(redirectURI)
+	if err != nil {
+		sendJSONResponse(w, r, map[string]string{"error": "invalid_request"}, http.StatusBadRequest)
+		return
+	}
+
+	callbackQuery := callbackURL.Query()
+	callbackQuery.Set("code", hardcodedCode)
+	if state := query.Get("state"); state != "" {
+		callbackQuery.Set("state", state)
+	}
+	callbackURL.RawQuery = callbackQuery.Encode()
+
+	sendJSONResponse(w, r, map[string]string{"redirect_to": callbackURL.String()}, http.StatusOK)
 }
 
 // handleToken handles OAuth2 token endpoint

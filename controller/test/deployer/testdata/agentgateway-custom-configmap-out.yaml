@@ -73,6 +73,7 @@ spec:
     metadata:
       annotations:
         checksum/config: ec135fae21e21f5a5230963218b244d7bd004d0d21da900292b3f317e4545a22
+        checksum/oauth-cookie-secret: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         gateway.kgateway.dev/gateway-full-name: agentgateway
         prometheus.io/path: /metrics
@@ -114,6 +115,11 @@ spec:
             secretKeyRef:
               key: key
               name: agentgateway-session-key
+        - name: OAUTH_COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: key
+              name: agentgateway-oauth-cookie-secret
         - name: XDS_ADDRESS
           value: http://xds.cluster.local:9978
         - name: NAMESPACE
@@ -201,5 +207,17 @@ metadata:
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: agentgateway
   name: agentgateway-session-key
+  namespace: default
+type: Opaque
+---
+apiVersion: v1
+data:
+  key: MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmYwMDExMjIzMzQ0NTU2Njc3ODg5OWFhYmJjY2RkZWVmZg==
+kind: Secret
+metadata:
+  labels:
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: agentgateway
+  name: agentgateway-oauth-cookie-secret
   namespace: default
 type: Opaque

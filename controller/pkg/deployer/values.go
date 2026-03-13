@@ -49,6 +49,8 @@ type AgentgatewayHelmGateway struct {
 	agentgateway.AgentgatewayParametersConfigs `json:",inline"`
 	// SessionKeySecretName is the Secret name used by the dataplane mount.
 	SessionKeySecretName *string `json:"sessionKeySecretName,omitempty"`
+	// OAuthCookieSecretName is the Secret name used by the OAuth2 browser-session runtime.
+	OAuthCookieSecretName *string `json:"oauthCookieSecretName,omitempty"`
 	// naming
 	Name               *string           `json:"name,omitempty"`
 	GatewayClassName   *string           `json:"gatewayClassName,omitempty"`

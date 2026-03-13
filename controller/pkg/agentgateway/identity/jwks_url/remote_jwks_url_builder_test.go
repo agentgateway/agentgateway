@@ -14,7 +14,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/backendtransport"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/identity/jwks_url"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
@@ -140,7 +141,7 @@ func TestRemoteJwksUrlBuilder(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := jwks_url.NewJwksUrlFactory(tt.ctx.Collections.ConfigMaps, tt.ctx.Collections.Backends, tt.ctx.Collections.AgentgatewayPolicies)
+			f := jwks_url.NewJwksUrlFactory(tt.ctx.Collections.BackendTransportLookup)
 			pol := ptr.Flatten(krt.FetchOne(tt.ctx.Krt, tt.ctx.Collections.AgentgatewayPolicies, krt.FilterObjectName(types.NamespacedName{Name: "gw-policy", Namespace: "default"})))
 
 			assert.NotNil(t, pol)
@@ -184,6 +185,6 @@ func caFromConfigMap(t *testing.T, ctx plugins.PolicyCtx) *x509.CertPool {
 	cfgmap := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.ConfigMaps, krt.FilterObjectName(types.NamespacedName{Namespace: "default", Name: "ca"})))
 	assert.NotNil(t, cfgmap)
 
-	assert.True(t, jwks_url.AppendPoolWithCertsFromConfigMap(certPool, cfgmap))
+	assert.True(t, backendtransport.AppendPoolWithCertsFromConfigMap(certPool, cfgmap))
 	return certPool
 }

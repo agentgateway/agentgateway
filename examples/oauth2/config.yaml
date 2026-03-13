@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+binds:
+- port: 3000
+  listeners:
+  - name: default
+    protocol: HTTP
+    routes:
+    - name: oauth2
+      policies:
+        oauth2:
+          # Default sample uses explicit endpoints so --validate-only does not rely on external DNS.
+          # You can switch to `issuer` for OIDC discovery if preferred.
+          # issuer: "https://issuer.example.com"
+          authorizationEndpoint: "https://provider.example.com/oauth/authorize"
+          tokenEndpoint: "https://provider.example.com/oauth/token"
+          tokenEndpointAuthMethodsSupported:
+          - client_secret_post
+          # Optional: route provider back-channel calls through a specific backend.
+          # Useful for private IdP connectivity and custom trust paths.
+          # providerBackend:
+          #   host: "idp.internal.example.com:443"
+          # Replace with your OAuth2 client ID.
+          clientId: "replace-with-client-id"
+
+          # Local/dev option: load secret from file (or set inline).
+          clientSecret:
+            file: ./examples/oauth2/client-secret.example.txt
+
+          # Alternative local inline secret:
+          # clientSecret: "replace-with-client-secret"
+
+          # Must exactly match the redirect URI configured in your IdP app.
+          redirectUri: "http://localhost:3000/oauth2/callback"
+          scopes:
+          - openid
+          - profile
+          - email
+        # Optional: forward the OAuth2 access token upstream.
+        # backendAuth:
+        #   passthrough: {}
+      backends:
+      - host: localhost:8080
