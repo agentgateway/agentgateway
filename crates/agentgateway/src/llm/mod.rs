@@ -430,14 +430,9 @@ impl AIProvider {
 			AIProvider::Anthropic(_) => {
 				http::modify_req(req, |req| {
 					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
-						// Anthropic OAuth tokens are identified by the "sk-ant-oat" prefix.
-						// When detected: keep Authorization: Bearer as-is and ensure the
-						// oauth-2025-04-20 beta flag is present (required for OAuth auth).
-						// Otherwise: move the Bearer token to x-api-key (standard API key auth).
-						if authz.token().starts_with(anthropic::OAUTH_TOKEN_PREFIX) {
-							anthropic::ensure_beta_flag(&mut req.headers, anthropic::OAUTH_BETA_FLAG)?;
-						} else {
-							// Move bearer token to x-api-key for standard API-key auth
+						// OAuth tokens ("sk-ant-oat*") keep Authorization: Bearer as-is.
+						// All other tokens are moved to x-api-key (standard API key auth).
+						if !authz.token().starts_with(anthropic::OAUTH_TOKEN_PREFIX) {
 							req.headers.remove(http::header::AUTHORIZATION);
 							let mut api_key = HeaderValue::from_str(authz.token())?;
 							api_key.set_sensitive(true);
