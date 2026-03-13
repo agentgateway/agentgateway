@@ -64,7 +64,7 @@ func policyTest(t *testing.T, folder string) {
 			x := ir.GetAgwResourceName(resource.Resource)
 			return strings.HasPrefix(x, "policy/")
 		})
-		return sq.DumpStatus(), slices.SortBy(r, func(a ir.AgwResource) string {
+		return sq.Dump(), slices.SortBy(r, func(a ir.AgwResource) string {
 			return a.ResourceName()
 		})
 	})
