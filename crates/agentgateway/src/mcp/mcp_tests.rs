@@ -187,6 +187,7 @@ async fn authorization_denied_returns_unknown_tool_error() {
 	let deny_all_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
 		vec![],                                                       // no allow rules
 		vec![Arc::new(cel::Expression::new_strict("true").unwrap())], // deny all
+		vec![],
 	)));
 
 	let (_bind, io) = setup_proxy_policies(
@@ -246,6 +247,7 @@ async fn authorization_denied_returns_unknown_prompt_error() {
 	let deny_all_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
 		vec![],                                                       // no allow rules
 		vec![Arc::new(cel::Expression::new_strict("true").unwrap())], // deny all
+		vec![],
 	)));
 
 	let (_bind, io) = setup_proxy_policies(
@@ -304,6 +306,7 @@ async fn authorization_denied_returns_unknown_resource_error() {
 	let deny_all_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
 		vec![],                                                       // no allow rules
 		vec![Arc::new(cel::Expression::new_strict("true").unwrap())], // deny all
+		vec![],
 	)));
 
 	let (_bind, io) = setup_proxy_policies(
@@ -363,6 +366,7 @@ async fn authorization_deny_specific_tool_filters_only_that_tool() {
 		vec![Arc::new(
 			cel::Expression::new_strict(r#"mcp.tool.name == "echo""#).unwrap(),
 		)],
+		vec![],
 	)));
 
 	let (_bind, io) = setup_proxy_policies(
@@ -433,6 +437,7 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 			)
 			.unwrap(),
 		)],
+		vec![],
 	)));
 
 	let (_bind, io) = setup_proxy_policies(

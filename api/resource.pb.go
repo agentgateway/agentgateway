@@ -7620,6 +7620,7 @@ type TrafficPolicySpec_RBAC struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Allow         []string               `protobuf:"bytes,1,rep,name=allow,proto3" json:"allow,omitempty"`
 	Deny          []string               `protobuf:"bytes,2,rep,name=deny,proto3" json:"deny,omitempty"`
+	Require       []string               `protobuf:"bytes,3,rep,name=require,proto3" json:"require,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7664,6 +7665,13 @@ func (x *TrafficPolicySpec_RBAC) GetAllow() []string {
 func (x *TrafficPolicySpec_RBAC) GetDeny() []string {
 	if x != nil {
 		return x.Deny
+	}
+	return nil
+}
+
+func (x *TrafficPolicySpec_RBAC) GetRequire() []string {
+	if x != nil {
+		return x.Require
 	}
 	return nil
 }
@@ -9308,6 +9316,7 @@ type BackendPolicySpec_McpAuthorization struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Allow         []string               `protobuf:"bytes,1,rep,name=allow,proto3" json:"allow,omitempty"`
 	Deny          []string               `protobuf:"bytes,2,rep,name=deny,proto3" json:"deny,omitempty"`
+	Require       []string               `protobuf:"bytes,3,rep,name=require,proto3" json:"require,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9352,6 +9361,13 @@ func (x *BackendPolicySpec_McpAuthorization) GetAllow() []string {
 func (x *BackendPolicySpec_McpAuthorization) GetDeny() []string {
 	if x != nil {
 		return x.Deny
+	}
+	return nil
+}
+
+func (x *BackendPolicySpec_McpAuthorization) GetRequire() []string {
+	if x != nil {
+		return x.Require
 	}
 	return nil
 }
@@ -11435,7 +11451,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05valueB\x06\n" +
 	"\x04kind\"?\n" +
 	"\x14JWTValidationOptions\x12'\n" +
-	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xfc;\n" +
+	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\x96<\n" +
 	"\x11TrafficPolicySpec\x12N\n" +
 	"\x05phase\x18\x01 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.PolicyPhaseR\x05phase\x12>\n" +
 	"\atimeout\x18\x02 \x01(\v2\".agentgateway.dev.resource.TimeoutH\x00R\atimeout\x128\n" +
@@ -11531,10 +11547,11 @@ const file_resource_proto_rawDesc = "" +
 	"\x10DENY_WITH_STATUS\x10\x02B\n" +
 	"\n" +
 	"\bprotocolB\x12\n" +
-	"\x10_status_on_errorJ\x04\b\b\x10\tR\atimeout\x1a0\n" +
+	"\x10_status_on_errorJ\x04\b\b\x10\tR\atimeout\x1aJ\n" +
 	"\x04RBAC\x12\x14\n" +
 	"\x05allow\x18\x01 \x03(\tR\x05allow\x12\x12\n" +
-	"\x04deny\x18\x02 \x03(\tR\x04deny\x1a\xd3\x01\n" +
+	"\x04deny\x18\x02 \x03(\tR\x04deny\x12\x18\n" +
+	"\arequire\x18\x03 \x03(\tR\arequire\x1a\xd3\x01\n" +
 	"\vJWTProvider\x12\x16\n" +
 	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1c\n" +
 	"\taudiences\x18\x02 \x03(\tR\taudiences\x12\x18\n" +
@@ -11623,7 +11640,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\x9cB\n" +
+	"\x04kind\"\xb6B\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -11811,10 +11828,11 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"BackendTCP\x12H\n" +
 	"\tkeepalive\x18\x01 \x01(\v2*.agentgateway.dev.resource.KeepaliveConfigR\tkeepalive\x12B\n" +
-	"\x0fconnect_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x0econnectTimeout\x1a<\n" +
+	"\x0fconnect_timeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x0econnectTimeout\x1aV\n" +
 	"\x10McpAuthorization\x12\x14\n" +
 	"\x05allow\x18\x01 \x03(\tR\x05allow\x12\x12\n" +
-	"\x04deny\x18\x02 \x03(\tR\x04deny\x1a\xca\x06\n" +
+	"\x04deny\x18\x02 \x03(\tR\x04deny\x12\x18\n" +
+	"\arequire\x18\x03 \x03(\tR\arequire\x1a\xca\x06\n" +
 	"\x11McpAuthentication\x12\x16\n" +
 	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1c\n" +
 	"\taudiences\x18\x02 \x03(\tR\taudiences\x12\x1f\n" +

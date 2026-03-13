@@ -36,6 +36,16 @@ fn tool_context(target: &str, name: &str) -> MCPInfo {
 	)))
 }
 
+fn create_require_policy_set(policies: Vec<&str>) -> PolicySet {
+	let mut policy_set = PolicySet::default();
+	for p in policies.into_iter() {
+		policy_set
+			.require
+			.push(Arc::new(cel::Expression::new_strict(p).unwrap()));
+	}
+	policy_set
+}
+
 #[test]
 fn test_rbac_reject_exact_match() {
 	let policies = vec![r#"mcp.tool.name == "increment" && jwt.user == "admin""#];
@@ -206,6 +216,7 @@ fn test_mixed_allow_deny_default_deny() {
 		vec![Arc::new(
 			cel::Expression::new_strict(r#"mcp.tool.name == "denied_tool""#).unwrap(),
 		)],
+		vec![],
 	);
 	let rbac = RuleSet::new(policy_set);
 	let mut ctx = ContextBuilder::new();
@@ -241,6 +252,78 @@ fn test_rbac_mcp_context_is_identity_only() {
 	.unwrap();
 
 	assert!(exec.eval_bool(&expr));
+}
+
+#[test]
+fn test_require_only_matching_allows() {
+	let require_policies = vec![r#"mcp.tool.name == "increment""#];
+	let rbac = RuleSet::new(create_require_policy_set(require_policies));
+	let mut ctx = ContextBuilder::new();
+	let rs = RuleSets::from(vec![rbac]);
+	rs.register(&mut ctx);
+
+	let req = req(json!({"sub": "1234567890"}));
+	let mcp = tool_context("server", "increment");
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
+
+	assert_matches!(rs.validate(&exec), true);
+}
+
+#[test]
+fn test_require_only_non_matching_denies() {
+	let require_policies = vec![r#"mcp.tool.name == "increment""#];
+	let rbac = RuleSet::new(create_require_policy_set(require_policies));
+	let mut ctx = ContextBuilder::new();
+	let rs = RuleSets::from(vec![rbac]);
+	rs.register(&mut ctx);
+
+	let req = req(json!({"sub": "1234567890"}));
+	let mcp = tool_context("server", "decrement");
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
+
+	assert_matches!(rs.validate(&exec), false);
+}
+
+#[test]
+fn test_all_require_rule_sets_must_pass() {
+	let require_increment = RuleSet::new(create_require_policy_set(vec![
+		r#"mcp.tool.name == "increment""#,
+	]));
+	let require_admin = RuleSet::new(create_require_policy_set(vec![r#"jwt.role == "admin""#]));
+	let mut ctx = ContextBuilder::new();
+	let rs = RuleSets::from(vec![require_increment, require_admin]);
+	rs.register(&mut ctx);
+
+	let admin_req = req(json!({"role": "admin"}));
+	let mcp = tool_context("server", "increment");
+	let exec = cel::Executor::new_mcp(admin_req.as_ref(), &mcp);
+	assert_matches!(rs.validate(&exec), true);
+
+	let user_req = req(json!({"role": "user"}));
+	let mcp = tool_context("server", "increment");
+	let exec = cel::Executor::new_mcp(user_req.as_ref(), &mcp);
+	assert_matches!(rs.validate(&exec), false);
+}
+
+#[test]
+fn test_require_is_not_sufficient_when_allow_rules_exist() {
+	let require_increment = RuleSet::new(create_require_policy_set(vec![
+		r#"mcp.tool.name == "increment""#,
+	]));
+	let allow_admin = RuleSet::new(create_policy_set(vec![r#"jwt.role == "admin""#]));
+	let mut ctx = ContextBuilder::new();
+	let rs = RuleSets::from(vec![require_increment, allow_admin]);
+	rs.register(&mut ctx);
+
+	let user_req = req(json!({"role": "user"}));
+	let mcp = tool_context("server", "increment");
+	let exec = cel::Executor::new_mcp(user_req.as_ref(), &mcp);
+	assert_matches!(rs.validate(&exec), false);
+
+	let admin_req = req(json!({"role": "admin"}));
+	let mcp = tool_context("server", "increment");
+	let exec = cel::Executor::new_mcp(admin_req.as_ref(), &mcp);
+	assert_matches!(rs.validate(&exec), true);
 }
 
 #[divan::bench]

@@ -171,7 +171,13 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthorization> for McpAuthor
 			deny_exprs.push(Arc::new(expr));
 		}
 
-		let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs);
+		let mut require_exprs = Vec::new();
+		for require_rule in &rbac.require {
+			let expr = cel::Expression::new_permissive(require_rule);
+			require_exprs.push(Arc::new(expr));
+		}
+
+		let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
 		Ok(McpAuthorization::new(authorization::RuleSet::new(
 			policy_set,
 		)))
@@ -991,8 +997,14 @@ impl TryFrom<&proto::agent::traffic_policy_spec::Rbac> for Authorization {
 			deny_exprs.push(Arc::new(expr));
 		}
 
+		let mut require_exprs = Vec::new();
+		for require_rule in &rbac.require {
+			let expr = cel::Expression::new_permissive(require_rule);
+			require_exprs.push(Arc::new(expr));
+		}
+
 		// Create PolicySet using the same pattern as in de_policies function
-		let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs);
+		let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
 		Ok(Authorization(authorization::RuleSet::new(policy_set)))
 	}
 }

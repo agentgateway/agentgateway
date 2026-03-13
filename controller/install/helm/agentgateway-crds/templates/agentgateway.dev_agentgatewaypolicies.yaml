@@ -5191,11 +5191,13 @@ spec:
                           action:
                             default: Allow
                             description: |-
-                              `action` defines whether the rule allows or denies the request if
+                              `action` defines whether the rule allows, denies, or requires the request if
                               matched. If unspecified, the default is `Allow`.
+                              Require policies are conjunctive across merged policies: all require policies must match.
                             enum:
                             - Allow
                             - Deny
+                            - Require
                             type: string
                           policy:
                             description: |-
@@ -6479,11 +6481,13 @@ spec:
                       action:
                         default: Allow
                         description: |-
-                          `action` defines whether the rule allows or denies the request if
+                          `action` defines whether the rule allows, denies, or requires the request if
                           matched. If unspecified, the default is `Allow`.
+                          Require policies are conjunctive across merged policies: all require policies must match.
                         enum:
                         - Allow
                         - Deny
+                        - Require
                         type: string
                       policy:
                         description: |-

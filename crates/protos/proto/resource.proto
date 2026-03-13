@@ -668,6 +668,7 @@ message TrafficPolicySpec {
   message RBAC {
     repeated string allow = 1;
     repeated string deny = 2;
+    repeated string require = 3;
   }
   message JWTProvider {
     // JWT issuer that must match the 'iss' claim
@@ -1078,6 +1079,7 @@ message BackendPolicySpec {
   message McpAuthorization {
     repeated string allow = 1;
     repeated string deny = 2;
+    repeated string require = 3;
   }
 
   message McpAuthentication {
