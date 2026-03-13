@@ -35,6 +35,15 @@ func InferenceHostname(name, namespace, domainSuffix string) host.Name {
 	return host.Name(name + "." + namespace + "." + "inference" + "." + domainSuffix) // Format: "%s.%s.svc.%s"
 }
 
+func toInferencePoolAppProtocol(appProtocol inf.AppProtocol) workloadapi.AppProtocol {
+	switch appProtocol {
+	case inf.AppProtocolH2C:
+		return workloadapi.AppProtocol_HTTP2
+	default:
+		return workloadapi.AppProtocol_HTTP11
+	}
+}
+
 func inferencePoolBuilder() krt.TransformationSingle[*inf.InferencePool, model.ServiceInfo] {
 	domainSuffix := kubeutils.GetClusterDomainName()
 	return func(ctx krt.HandlerContext, s *inf.InferencePool) *model.ServiceInfo {
@@ -43,7 +52,7 @@ func inferencePoolBuilder() krt.TransformationSingle[*inf.InferencePool, model.S
 			return &workloadapi.Port{
 				ServicePort: uint32(e.Number), //nolint:gosec // G115: InferencePool TargetPort is int32 with validation 1-65535, always safe
 				TargetPort:  uint32(e.Number), //nolint:gosec // G115: InferencePool TargetPort is int32 with validation 1-65535, always safe
-				AppProtocol: workloadapi.AppProtocol_HTTP11,
+				AppProtocol: toInferencePoolAppProtocol(s.Spec.AppProtocol),
 			}
 		})
 

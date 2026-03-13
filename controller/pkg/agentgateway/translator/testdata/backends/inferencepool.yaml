@@ -4,6 +4,7 @@ metadata:
   name: gateway-pool
   namespace: default
 spec:
+  appProtocol: kubernetes.io/h2c
   endpointPickerRef:
     failureMode: FailClose
     group: ""
@@ -112,7 +113,7 @@ output:
   name: gateway-pool
   namespace: default
   ports:
-  - appProtocol: HTTP11
+  - appProtocol: HTTP2
     servicePort: 8080
     targetPort: 8080
 status:
