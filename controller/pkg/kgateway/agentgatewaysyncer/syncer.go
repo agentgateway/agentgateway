@@ -472,7 +472,9 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	ancestorCollection := ancestorsIndex.AsCollection(append(krtopts.ToOptions("AncestorBackend"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 	referenceIndex := plugins.BuildReferenceIndex(ancestorCollection, routeAttachmentsIndex)
 	agwPolicies, policyReferences, policyStatuses := AgwPolicyCollection(s.agwPlugins, referenceIndex, krtopts)
-	policyReferencesIndex := krt.NewIndex(policyReferences, "policyReferences", func(o *plugins.PolicyAttachment) []utils.TypedNamespacedName {
+	backendPolicyReferences := s.newAgwBackendPolicyReferences(s.agwCollections.Backends, krtopts)
+	joinedPolicyReferences := krt.JoinCollection([]krt.Collection[*plugins.PolicyAttachment]{policyReferences, backendPolicyReferences}, krtopts.ToOptions("JoinPolicyAttachment")...)
+	policyReferencesIndex := krt.NewIndex(joinedPolicyReferences, "policyReferences", func(o *plugins.PolicyAttachment) []utils.TypedNamespacedName {
 		return []utils.TypedNamespacedName{o.Backend}
 	})
 	policyReferencesIndexCollection := policyReferencesIndex.AsCollection(append(krtopts.ToOptions("PolicyReferencesIndex"), utils.TypedNamespacedNameIndexCollectionFunc)...)
@@ -509,6 +511,17 @@ func (s *Syncer) buildListenerFromGateway(obj *translator.GatewayListener) *agwi
 		Namespace: obj.ParentGateway.Namespace,
 		Name:      obj.ParentGateway.Name,
 	}, translator.AgwListener{l}))
+}
+
+// newAgwBackendPolicyReferences creates the ADP backend collection for agent gateway resources
+func (s *Syncer) newAgwBackendPolicyReferences(
+	finalBackends krt.Collection[*agentgateway.AgentgatewayBackend],
+	krtopts krtutil.KrtOptions,
+) krt.Collection[*plugins.PolicyAttachment] {
+	policyReferences := krt.NewManyCollection(finalBackends, func(ctx krt.HandlerContext, backend *agentgateway.AgentgatewayBackend) []*plugins.PolicyAttachment {
+		return agentgatewaybackend.BuildAgwBackendReferences(backend)
+	}, krtopts.ToOptions("BackendPolicyAttachments")...)
+	return policyReferences
 }
 
 // newAgwBackendCollection creates the ADP backend collection for agent gateway resources

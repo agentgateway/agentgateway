@@ -88,93 +88,8 @@ func convertStatusCollection[T controllers.Object, S any](col krt.Collection[krt
 
 // NewAgentPlugin creates a new AgentgatewayPolicy plugin
 func NewAgentPlugin(agw *AgwCollections) AgwPlugin {
-	backendReferences := krt.NewManyCollection(agw.AgentgatewayPolicies, func(krtctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy) []*PolicyAttachment {
-		var attachments []*PolicyAttachment
-		s := policy.Spec
-		self := utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name},
-			Kind:           wellknown.AgentgatewayPolicyGVK.Kind,
-		}
-		app := func(ref gwv1.BackendObjectReference) {
-			for _, tgt := range s.TargetRefs {
-				attachments = append(attachments, &PolicyAttachment{
-					Target: utils.TypedNamespacedName{
-						NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: string(tgt.Name)},
-						Kind:           string(tgt.Kind),
-					},
-					Backend: utils.TypedNamespacedName{
-						NamespacedName: types.NamespacedName{Namespace: defaultString(ref.Namespace, policy.Namespace), Name: string(ref.Name)},
-						Kind:           defaultString(ref.Kind, wellknown.ServiceKind),
-					},
-					Source: self,
-				})
-			}
-		}
-		appTunnel := func(backend *agentgateway.BackendSimple) {
-			if backend != nil && backend.Tunnel != nil {
-				app(backend.Tunnel.BackendRef)
-			}
-		}
-		if s.Traffic != nil {
-			if s.Traffic.ExtAuth != nil {
-				app(s.Traffic.ExtAuth.BackendRef)
-			}
-			if s.Traffic.ExtProc != nil {
-				app(s.Traffic.ExtProc.BackendRef)
-			}
-			if s.Traffic.RateLimit != nil && s.Traffic.RateLimit.Global != nil {
-				app(s.Traffic.RateLimit.Global.BackendRef)
-			}
-			if s.Traffic.JWTAuthentication != nil {
-				for _, p := range s.Traffic.JWTAuthentication.Providers {
-					if p.JWKS.Remote != nil {
-						app(p.JWKS.Remote.BackendRef)
-					}
-				}
-			}
-		}
-		if s.Frontend != nil {
-			if s.Frontend.Tracing != nil {
-				app(s.Frontend.Tracing.BackendRef)
-			}
-			if s.Frontend.AccessLog != nil && s.Frontend.AccessLog.Otlp != nil {
-				app(s.Frontend.AccessLog.Otlp.BackendRef)
-			}
-		}
-		if s.Backend != nil {
-			appTunnel(&s.Backend.BackendSimple)
-			if s.Backend.MCP != nil && s.Backend.MCP.Authentication != nil {
-				app(s.Backend.MCP.Authentication.JWKS.BackendRef)
-			}
-			if s.Backend.AI != nil && s.Backend.AI.PromptGuard != nil {
-				for _, p := range s.Backend.AI.PromptGuard.Request {
-					if p.Webhook != nil {
-						app(p.Webhook.BackendRef)
-					}
-					if p.OpenAIModeration != nil {
-						appTunnel(p.OpenAIModeration.Policies)
-					}
-					if p.GoogleModelArmor != nil {
-						appTunnel(p.GoogleModelArmor.Policies)
-					}
-					if p.BedrockGuardrails != nil {
-						appTunnel(p.BedrockGuardrails.Policies)
-					}
-				}
-				for _, p := range s.Backend.AI.PromptGuard.Response {
-					if p.Webhook != nil {
-						app(p.Webhook.BackendRef)
-					}
-					if p.GoogleModelArmor != nil {
-						appTunnel(p.GoogleModelArmor.Policies)
-					}
-					if p.BedrockGuardrails != nil {
-						appTunnel(p.BedrockGuardrails.Policies)
-					}
-				}
-			}
-		}
-		return attachments
+	backendReferences := krt.NewManyCollection(agw.AgentgatewayPolicies, func(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy) []*PolicyAttachment {
+		return BackendReferencesFromPolicy(policy)
 	})
 	return AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]PolicyPlugin{
@@ -1688,9 +1603,101 @@ func toStruct(rm json.RawMessage) (*structpb.Struct, error) {
 	return pbs, nil
 }
 
-func defaultString[T ~string](s *T, def string) string {
+func DefaultString[T ~string](s *T, def string) string {
 	if s == nil {
 		return def
 	}
 	return string(*s)
+}
+func BackendReferencesFromPolicy(policy *agentgateway.AgentgatewayPolicy) []*PolicyAttachment {
+	var attachments []*PolicyAttachment
+	s := policy.Spec
+	self := utils.TypedNamespacedName{
+		NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name},
+		Kind:           wellknown.AgentgatewayPolicyGVK.Kind,
+	}
+	app := func(ref gwv1.BackendObjectReference) {
+		for _, tgt := range s.TargetRefs {
+			attachments = append(attachments, &PolicyAttachment{
+				Target: utils.TypedNamespacedName{
+					NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: string(tgt.Name)},
+					Kind:           string(tgt.Kind),
+				},
+				Backend: utils.TypedNamespacedName{
+					NamespacedName: types.NamespacedName{Namespace: DefaultString(ref.Namespace, policy.Namespace), Name: string(ref.Name)},
+					Kind:           DefaultString(ref.Kind, wellknown.ServiceKind),
+				},
+				Source: self,
+			})
+		}
+	}
+	if s.Traffic != nil {
+		if s.Traffic.ExtAuth != nil {
+			app(s.Traffic.ExtAuth.BackendRef)
+		}
+		if s.Traffic.ExtProc != nil {
+			app(s.Traffic.ExtProc.BackendRef)
+		}
+		if s.Traffic.RateLimit != nil && s.Traffic.RateLimit.Global != nil {
+			app(s.Traffic.RateLimit.Global.BackendRef)
+		}
+		if s.Traffic.JWTAuthentication != nil {
+			for _, p := range s.Traffic.JWTAuthentication.Providers {
+				if p.JWKS.Remote != nil {
+					app(p.JWKS.Remote.BackendRef)
+				}
+			}
+		}
+	}
+	if s.Frontend != nil {
+		if s.Frontend.Tracing != nil {
+			app(s.Frontend.Tracing.BackendRef)
+		}
+		if s.Frontend.AccessLog != nil && s.Frontend.AccessLog.Otlp != nil {
+			app(s.Frontend.AccessLog.Otlp.BackendRef)
+		}
+	}
+	if s.Backend != nil {
+		BackendReferencesFromBackendPolicy(s.Backend, app)
+	}
+	return attachments
+}
+
+func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(ref gwv1.BackendObjectReference)) {
+	appTunnel := func(backend *agentgateway.BackendSimple) {
+		if backend != nil && backend.Tunnel != nil {
+			app(backend.Tunnel.BackendRef)
+		}
+	}
+	appTunnel(&s.BackendSimple)
+	if s.MCP != nil && s.MCP.Authentication != nil {
+		app(s.MCP.Authentication.JWKS.BackendRef)
+	}
+	if s.AI != nil && s.AI.PromptGuard != nil {
+		for _, p := range s.AI.PromptGuard.Request {
+			if p.Webhook != nil {
+				app(p.Webhook.BackendRef)
+			}
+			if p.OpenAIModeration != nil {
+				appTunnel(p.OpenAIModeration.Policies)
+			}
+			if p.GoogleModelArmor != nil {
+				appTunnel(p.GoogleModelArmor.Policies)
+			}
+			if p.BedrockGuardrails != nil {
+				appTunnel(p.BedrockGuardrails.Policies)
+			}
+		}
+		for _, p := range s.AI.PromptGuard.Response {
+			if p.Webhook != nil {
+				app(p.Webhook.BackendRef)
+			}
+			if p.GoogleModelArmor != nil {
+				appTunnel(p.GoogleModelArmor.Policies)
+			}
+			if p.BedrockGuardrails != nil {
+				appTunnel(p.BedrockGuardrails.Policies)
+			}
+		}
+	}
 }

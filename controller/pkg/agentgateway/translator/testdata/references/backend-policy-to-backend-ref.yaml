@@ -45,4 +45,16 @@ output:
       static:
         host: primary.example.com
         port: 80
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    backend:
+      key: default/policy-be
+      name:
+        name: policy-be
+        namespace: default
+      static:
+        host: policy.example.com
+        port: 80
 status: []

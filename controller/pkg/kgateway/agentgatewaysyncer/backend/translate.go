@@ -11,6 +11,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
 	apiannotations "github.com/agentgateway/agentgateway/controller/api/annotations"
@@ -25,6 +27,55 @@ import (
 )
 
 var logger = logging.New("agentgateway/backend")
+
+func BuildAgwBackendReferences(
+	backend *agentgateway.AgentgatewayBackend,
+) []*plugins.PolicyAttachment {
+	var attachments []*plugins.PolicyAttachment
+	self := utils.TypedNamespacedName{
+		NamespacedName: types.NamespacedName{Namespace: backend.Namespace, Name: backend.Name},
+		Kind:           wellknown.AgentgatewayBackendGVK.Kind,
+	}
+	app := func(ref gwv1.BackendObjectReference) {
+		attachments = append(attachments, &plugins.PolicyAttachment{
+			Target: self,
+			Backend: utils.TypedNamespacedName{
+				NamespacedName: types.NamespacedName{Namespace: plugins.DefaultString(ref.Namespace, backend.Namespace), Name: string(ref.Name)},
+				Kind:           plugins.DefaultString(ref.Kind, wellknown.ServiceKind),
+			},
+			Source: self,
+		})
+	}
+	if backend.Spec.Policies != nil {
+		plugins.BackendReferencesFromBackendPolicy(backend.Spec.Policies, app)
+	}
+	if ai := backend.Spec.AI; ai != nil {
+		for _, r := range ai.PriorityGroups {
+			for _, p := range r.Providers {
+				if p.Policies != nil {
+					plugins.BackendReferencesFromBackendPolicy(&agentgateway.BackendFull{
+						BackendSimple: p.Policies.BackendSimple,
+						AI:            p.Policies.AI,
+						MCP:           nil,
+					}, app)
+				}
+			}
+		}
+	}
+	if mcp := backend.Spec.MCP; mcp != nil {
+		for _, r := range mcp.Targets {
+			if r.Static != nil && r.Static.Policies != nil {
+				p := r.Static.Policies
+				plugins.BackendReferencesFromBackendPolicy(&agentgateway.BackendFull{
+					BackendSimple: p.BackendSimple,
+					MCP:           p.MCP,
+					AI:            nil,
+				}, app)
+			}
+		}
+	}
+	return attachments
+}
 
 // BuildAgwBackend translates a Backend to an AgwBackend
 func BuildAgwBackend(
