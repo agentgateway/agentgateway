@@ -41,6 +41,9 @@ impl RuleSet {
 		for rule in &self.rules.deny {
 			cel.register_expression(rule.as_ref());
 		}
+		for rule in &self.rules.require {
+			cel.register_expression(rule.as_ref());
+		}
 	}
 }
 
@@ -48,12 +51,14 @@ impl RuleSet {
 pub struct PolicySet {
 	allow: Vec<Arc<cel::Expression>>,
 	deny: Vec<Arc<cel::Expression>>,
+	require: Vec<Arc<cel::Expression>>,
 }
 
 #[derive(Clone, Debug)]
 pub enum Policy {
 	Allow(Arc<cel::Expression>),
 	Deny(Arc<cel::Expression>),
+	Require(Arc<cel::Expression>),
 }
 
 #[apply(schema!)]
@@ -70,18 +75,37 @@ enum RuleSerde {
 enum RuleTypeSerde {
 	Allow(String),
 	Deny(String),
+	Require(String),
 }
 
 impl PolicySet {
-	pub fn new(allow: Vec<Arc<cel::Expression>>, deny: Vec<Arc<cel::Expression>>) -> Self {
-		Self { allow, deny }
+	pub fn new(
+		allow: Vec<Arc<cel::Expression>>,
+		deny: Vec<Arc<cel::Expression>>,
+		require: Vec<Arc<cel::Expression>>,
+	) -> Self {
+		Self {
+			allow,
+			deny,
+			require,
+		}
 	}
 }
 
 pub fn se_policies<S: Serializer>(t: &PolicySet, serializer: S) -> Result<S::Ok, S::Error> {
-	let mut m = serializer.serialize_map(Some(2))?;
-	m.serialize_entry("allow", &t.allow)?;
-	m.serialize_entry("deny", &t.deny)?;
+	let len = usize::from(!t.allow.is_empty())
+		+ usize::from(!t.deny.is_empty())
+		+ usize::from(!t.require.is_empty());
+	let mut m = serializer.serialize_map(Some(len))?;
+	if !t.allow.is_empty() {
+		m.serialize_entry("allow", &t.allow)?;
+	}
+	if !t.deny.is_empty() {
+		m.serialize_entry("deny", &t.deny)?;
+	}
+	if !t.require.is_empty() {
+		m.serialize_entry("require", &t.require)?;
+	}
 	m.end()
 }
 
@@ -93,6 +117,7 @@ where
 	let mut res = PolicySet {
 		allow: vec![],
 		deny: vec![],
+		require: vec![],
 	};
 	for r in raw {
 		match r {
@@ -108,6 +133,13 @@ where
 				rule: RuleTypeSerde::Deny(deny),
 			} => res.deny.push(
 				cel::Expression::new_strict(deny)
+					.map(Arc::new)
+					.map_err(|e| serde::de::Error::custom(e.to_string()))?,
+			),
+			RuleSerde::Object {
+				rule: RuleTypeSerde::Require(require),
+			} => res.require.push(
+				cel::Expression::new_strict(require)
 					.map(Arc::new)
 					.map_err(|e| serde::de::Error::custom(e.to_string()))?,
 			),
@@ -144,6 +176,10 @@ impl RuleSets {
 		if rule_sets.iter().any(|r| r.denies(exec)) {
 			return false;
 		}
+		// All REQUIRE policies must match when present.
+		if rule_sets.iter().any(|r| !r.all_requires_match(exec)) {
+			return false;
+		}
 		// If there are any ALLOW, allow
 		if rule_sets.iter().any(|r| r.allows(exec)) {
 			return true;
@@ -164,11 +200,14 @@ impl RuleSet {
 	}
 
 	pub fn has_rules(&self) -> bool {
-		!self.rules.allow.is_empty() || !self.rules.deny.is_empty()
+		!self.rules.allow.is_empty() || !self.rules.deny.is_empty() || !self.rules.require.is_empty()
 	}
 
 	pub fn has_allow_rules(&self) -> bool {
 		!self.rules.allow.is_empty()
+	}
+	pub fn has_require_rules(&self) -> bool {
+		!self.rules.require.is_empty()
 	}
 	pub fn denies(&self, exec: &cel::Executor) -> bool {
 		if self.rules.deny.is_empty() {
@@ -192,6 +231,14 @@ impl RuleSet {
 				.iter()
 				.any(|rule| exec.eval_bool(rule.as_ref()))
 		}
+	}
+
+	pub fn all_requires_match(&self, exec: &cel::Executor) -> bool {
+		self
+			.rules
+			.require
+			.iter()
+			.all(|rule| exec.eval_bool(rule.as_ref()))
 	}
 }
 

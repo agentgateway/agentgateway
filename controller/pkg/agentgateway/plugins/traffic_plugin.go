@@ -1129,9 +1129,11 @@ func processAuthorizationPolicy(
 	policy types.NamespacedName,
 	policyTarget *api.PolicyTarget,
 ) *api.Policy {
-	var allowPolicies, denyPolicies []string
+	var allowPolicies, denyPolicies, requirePolicies []string
 	if auth.Action == shared.AuthorizationPolicyActionDeny {
 		denyPolicies = append(denyPolicies, cast(auth.Policy.MatchExpressions)...)
+	} else if auth.Action == shared.AuthorizationPolicyActionRequire {
+		requirePolicies = append(requirePolicies, cast(auth.Policy.MatchExpressions)...)
 	} else {
 		allowPolicies = append(allowPolicies, cast(auth.Policy.MatchExpressions)...)
 	}
@@ -1144,8 +1146,9 @@ func processAuthorizationPolicy(
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_Authorization{
 					Authorization: &api.TrafficPolicySpec_RBAC{
-						Allow: allowPolicies,
-						Deny:  denyPolicies,
+						Allow:   allowPolicies,
+						Deny:    denyPolicies,
+						Require: requirePolicies,
 					},
 				},
 			},

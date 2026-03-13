@@ -125,3 +125,22 @@ spec:
         host: localhost
         port: 8443
         path: /custom
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-require
+spec:
+  mcp:
+    targets:
+    - name: everything
+      static:
+        host: example.com
+        port: 443
+        policies:
+          mcp:
+            authorization:
+              action: Require
+              policy:
+                matchExpressions:
+                - 'mcp.tool.name == "hello"'
