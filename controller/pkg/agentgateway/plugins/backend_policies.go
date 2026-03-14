@@ -435,9 +435,11 @@ func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy, t
 		return nil
 	}
 	auth := backend.MCP.Authorization
-	var allowPolicies, denyPolicies []string
+	var allowPolicies, denyPolicies, requirePolicies []string
 	if auth.Action == shared.AuthorizationPolicyActionDeny {
 		denyPolicies = append(denyPolicies, cast(auth.Policy.MatchExpressions)...)
+	} else if auth.Action == shared.AuthorizationPolicyActionRequire {
+		requirePolicies = append(requirePolicies, cast(auth.Policy.MatchExpressions)...)
 	} else {
 		allowPolicies = append(allowPolicies, cast(auth.Policy.MatchExpressions)...)
 	}
@@ -450,8 +452,9 @@ func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy, t
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_McpAuthorization_{
 					McpAuthorization: &api.BackendPolicySpec_McpAuthorization{
-						Allow: allowPolicies,
-						Deny:  denyPolicies,
+						Allow:   allowPolicies,
+						Deny:    denyPolicies,
+						Require: requirePolicies,
 					},
 				},
 			},

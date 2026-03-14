@@ -158,7 +158,6 @@ policies:
           rules:
             allow:
               - "jwt.email.endsWith(\"@example.com\")"
-            deny: []
         phase: route
   - key: "llm:transformation"
     name:
