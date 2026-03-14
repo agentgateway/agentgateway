@@ -1,4 +1,4 @@
-package jwks_url_test
+package jwks_test
 
 import (
 	"crypto/tls"
@@ -14,13 +14,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 )
 
-func TestRemoteJwksUrlBuilder(t *testing.T) {
+func TestBuildRequest(t *testing.T) {
 	var mockCtx plugins.PolicyCtx
 
 	var tests = []struct {
@@ -66,6 +66,12 @@ func TestRemoteJwksUrlBuilder(t *testing.T) {
 				NextProtos: []string{"test1", "test2"},
 				RootCAs:    caFromConfigMap(t, mockCtx),
 			},
+		},
+		{
+			name:        "service prefers highest priority inherited tls policy",
+			ctx:         setup(t, []string{getTestFile("svc-with-ambiguous-tls.yaml")}),
+			expectedUrl: "https://dummy-idp.default.svc.cluster.local:8443/org-one/keys",
+			expectedTls: &tls.Config{}, //nolint:gosec
 		},
 		{
 			name:          "non-static backend",
@@ -136,20 +142,26 @@ func TestRemoteJwksUrlBuilder(t *testing.T) {
 				RootCAs:    caFromConfigMap(t, mockCtx),
 			},
 		},
+		{
+			name:        "backend prefers highest priority inherited tls policy",
+			ctx:         setup(t, []string{getTestFile("gw-with-backend-with-ambiguous-policy-ref-tls.yaml")}),
+			expectedUrl: "https://dummy-idp.default:8443/org-one/keys",
+			expectedTls: &tls.Config{}, //nolint:gosec
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := jwks_url.NewJwksUrlFactory(tt.ctx.Collections.ConfigMaps, tt.ctx.Collections.Backends, tt.ctx.Collections.AgentgatewayPolicies)
 			pol := ptr.Flatten(krt.FetchOne(tt.ctx.Krt, tt.ctx.Collections.AgentgatewayPolicies, krt.FilterObjectName(types.NamespacedName{Name: "gw-policy", Namespace: "default"})))
+			runtimeWiring := testutils.BuildRuntimeWiring(tt.ctx.Collections)
 
 			assert.NotNil(t, pol)
 			assert.NotNil(t, pol.Spec.Traffic)
 			assert.NotNil(t, pol.Spec.Traffic.JWTAuthentication)
 			assert.Len(t, pol.Spec.Traffic.JWTAuthentication.Providers, 1)
 			assert.NotNil(t, pol.Spec.Traffic.JWTAuthentication.Providers[0].JWKS.Remote)
-			url, tlsConfig, err := f.BuildJwksUrlAndTlsConfig(tt.ctx.Krt, "gw-policy", "default", pol.Spec.Traffic.JWTAuthentication.Providers[0].JWKS.Remote)
-			assert.Equal(t, tt.expectedUrl, url)
+			request, tlsConfig, err := jwks.BuildRequest(tt.ctx.Krt, runtimeWiring.RemoteHTTPResolver, "gw-policy", "default", pol.Spec.Traffic.JWTAuthentication.Providers[0].JWKS.Remote)
+			assert.Equal(t, tt.expectedUrl, request.URL)
 			if tt.expectedTls != nil {
 				assert.Equal(t, tt.expectedTls.ServerName, tlsConfig.ServerName)
 				assert.Equal(t, tt.expectedTls.NextProtos, tlsConfig.NextProtos)
@@ -159,6 +171,7 @@ func TestRemoteJwksUrlBuilder(t *testing.T) {
 				assert.Nil(t, tlsConfig)
 			}
 			assert.Equal(t, tt.expectedError, err)
+			assert.Equal(t, jwks.RequestKey(request.Key()), request.Key())
 		})
 	}
 }
@@ -184,6 +197,6 @@ func caFromConfigMap(t *testing.T, ctx plugins.PolicyCtx) *x509.CertPool {
 	cfgmap := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.ConfigMaps, krt.FilterObjectName(types.NamespacedName{Namespace: "default", Name: "ca"})))
 	assert.NotNil(t, cfgmap)
 
-	assert.True(t, jwks_url.AppendPoolWithCertsFromConfigMap(certPool, cfgmap))
+	assert.True(t, certPool.AppendCertsFromPEM([]byte(cfgmap.Data["ca.crt"])))
 	return certPool
 }

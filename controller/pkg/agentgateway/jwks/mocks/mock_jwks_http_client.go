@@ -8,6 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	jwks "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	jose "github.com/go-jose/go-jose/v4"
 	gomock "github.com/golang/mock/gomock"
 )
@@ -36,16 +37,16 @@ func (m *MockJwksHttpClient) EXPECT() *MockJwksHttpClientMockRecorder {
 }
 
 // FetchJwks mocks base method.
-func (m *MockJwksHttpClient) FetchJwks(ctx context.Context, jwksURL string) (jose.JSONWebKeySet, error) {
+func (m *MockJwksHttpClient) FetchJwks(ctx context.Context, req jwks.Request) (jose.JSONWebKeySet, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FetchJwks", ctx, jwksURL)
+	ret := m.ctrl.Call(m, "FetchJwks", ctx, req)
 	ret0, _ := ret[0].(jose.JSONWebKeySet)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FetchJwks indicates an expected call of FetchJwks.
-func (mr *MockJwksHttpClientMockRecorder) FetchJwks(ctx, jwksURL interface{}) *gomock.Call {
+func (mr *MockJwksHttpClientMockRecorder) FetchJwks(ctx, req interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchJwks", reflect.TypeOf((*MockJwksHttpClient)(nil).FetchJwks), ctx, jwksURL)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchJwks", reflect.TypeOf((*MockJwksHttpClient)(nil).FetchJwks), ctx, req)
 }

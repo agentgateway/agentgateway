@@ -35,13 +35,3 @@ func MergePlugins(plug ...AgwPlugin) AgwPlugin {
 	}
 	return ret
 }
-
-// Plugins registers all built-in policy plugins
-func Plugins(agw *AgwCollections) []AgwPlugin {
-	return []AgwPlugin{
-		NewAgentPlugin(agw),
-		NewInferencePlugin(agw),
-		NewA2APlugin(agw),
-		NewBackendTLSPlugin(agw),
-	}
-}

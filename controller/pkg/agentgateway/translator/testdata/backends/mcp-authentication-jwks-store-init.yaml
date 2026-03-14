@@ -34,8 +34,8 @@ status:
   status:
     conditions:
     - lastTransitionTime: fake
-      message: 'failed to translate backend: JwksUrlBuilderFactory must be initialized
-        before use'
+      message: 'failed to translate backend: jwks artifact for request key 2750fd1c0f33e23728954f0340ba1fa6dbb644dbe78e955f4ee6746fb331a1f5
+        isn''t available'
       reason: TranslationError
       status: "False"
       type: Accepted

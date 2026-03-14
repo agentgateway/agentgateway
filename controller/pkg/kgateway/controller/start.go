@@ -21,7 +21,9 @@ import (
 
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer"
@@ -113,7 +115,8 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 	// This only effects metrics in the resources subsystem and is not required for other metrics.
 	//metrics.StartResourceSyncMetricsProcessing(ctx)
 
-	agwMergedPlugins := agwPluginFactory(cfg)(ctx, cfg.AgwCollections)
+	runtimeDeps := newRuntimeDeps(cfg.AgwCollections)
+	agwMergedPlugins := agwPluginFactory(cfg, runtimeDeps.JWKSLookup)(ctx, cfg.AgwCollections)
 
 	// Compute the extra GVKs list to provide at initialization time
 	var gvks []schema.GroupVersionKind
@@ -126,6 +129,7 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 		cfg.Client,
 		cfg.AgwCollections,
 		agwMergedPlugins,
+		runtimeDeps.JWKSLookup,
 		cfg.AdditionalGatewayClasses,
 		cfg.KrtOptions,
 		gvks,
@@ -173,14 +177,53 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 	return cb, nil
 }
 
-func agwPluginFactory(cfg StartConfig) func(ctx context.Context, agw *agwplugins.AgwCollections) agwplugins.AgwPlugin {
+type runtimeDeps struct {
+	JWKSLookup jwks.Lookup
+}
+
+func newRuntimeDeps(agw *agwplugins.AgwCollections) runtimeDeps {
+	remoteHTTPResolver := remotehttp.NewResolver(remotehttp.Inputs{
+		ConfigMaps:           agw.ConfigMaps,
+		Services:             agw.Services,
+		Backends:             agw.Backends,
+		AgentgatewayPolicies: agw.AgentgatewayPolicies,
+		BackendTLSPolicies:   agw.BackendTLSPolicies,
+	})
+	jwksResolver := jwks.NewResolver(remoteHTTPResolver)
+	jwksLookup := jwks.NewLookup(
+		agw.ConfigMaps,
+		jwksResolver,
+		jwks.DefaultJwksStorePrefix,
+		agw.SystemNamespace,
+	)
+
+	return runtimeDeps{
+		JWKSLookup: jwksLookup,
+	}
+}
+
+func agwPluginFactory(cfg StartConfig, jwksLookup jwks.Lookup) func(ctx context.Context, agw *agwplugins.AgwCollections) agwplugins.AgwPlugin {
 	return func(ctx context.Context, agw *agwplugins.AgwCollections) agwplugins.AgwPlugin {
-		plugins := agwplugins.Plugins(agw)
+		plugins := BuiltinAgwPlugins(agw, jwksLookup)
 		if cfg.ExtraAgwPlugins != nil {
 			plugins = append(plugins, cfg.ExtraAgwPlugins(ctx, agw)...)
 		}
 		return agwplugins.MergePlugins(plugins...)
 	}
+}
+
+func defaultProxyImageTag(globalSettings *apisettings.Settings) *string {
+	if globalSettings.ProxyImageTag != nil {
+		return globalSettings.ProxyImageTag
+	}
+
+	// version.Version is unprefixed semver-like data such as 1.0.1-dev. Downstream
+	// chart/deployer paths handle adding a single "v" when appropriate.
+	if version.Version != "" {
+		return ptr.Of(version.Version)
+	}
+
+	return ptr.Of(version.GitVersion)
 }
 
 func (c *ControllerBuilder) Build(ctx context.Context) (*agentgatewaysyncer.Syncer, error) {
@@ -199,19 +242,6 @@ func (c *ControllerBuilder) Build(ctx context.Context) (*agentgatewaysyncer.Sync
 	agwXdsPort := globalSettings.AgentgatewayXdsServicePort
 	slog.Info("got agentgateway xds address for deployer", "agw_xds_host", xdsHost, "agw_xds_port", agwXdsPort)
 
-	// Best case: they explicit set at runtime
-	defaultTag := globalSettings.ProxyImageTag
-	if defaultTag == nil {
-		// Else, the binary is built with an explicit version
-		if version.Version != "" {
-			defaultTag = ptr.Of("v" + version.Version)
-		} else {
-			// Else, detect automatically based on the build.
-			// TODO: probably what we really want here is to have a file in the repo that has a floating version like v1.0.0-dev
-			// that is used here + for nightly builds.
-			defaultTag = ptr.Of(version.GitVersion)
-		}
-	}
 	gwCfg := GatewayConfig{
 		Client:            c.cfg.Client,
 		Mgr:               c.mgr,
@@ -219,7 +249,7 @@ func (c *ControllerBuilder) Build(ctx context.Context) (*agentgatewaysyncer.Sync
 		ImageDefaults: &agentgateway.Image{
 			Registry:   &globalSettings.ProxyImageRegistry,
 			Repository: &globalSettings.ProxyImageRepository,
-			Tag:        defaultTag,
+			Tag:        defaultProxyImageTag(globalSettings),
 		},
 		ControlPlane: deployer.ControlPlaneInfo{
 			XdsHost:      xdsHost,

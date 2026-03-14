@@ -23,9 +23,8 @@ import (
 
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
-	agentjwksstore "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwksstore"
 	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/common"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
@@ -328,9 +327,6 @@ func (s *setup) Start(ctx context.Context) error {
 		return err
 	}
 
-	jwksUrlFactory := jwks_url.NewJwksUrlFactory(agwCollections.ConfigMaps, agwCollections.Backends, agwCollections.AgentgatewayPolicies)
-	jwks_url.JwksUrlBuilderFactory = func() jwks_url.JwksUrlBuilder { return jwksUrlFactory }
-
 	for _, mgrCfgFunc := range s.extraManagerConfig {
 		err := mgrCfgFunc(ctx, mgr, s.apiClient.ObjectFilter())
 		if err != nil {
@@ -457,18 +453,31 @@ func SetupLogging(levelStr string) {
 }
 
 func buildJwksStore(ctx context.Context, mgr manager.Manager, apiClient apiclient.Client, commonCollections *collections.CommonCollections, agwCollections *agwplugins.AgwCollections) error {
-	jwksStorePolicyCtrl := agentjwksstore.NewJWKSStorePolicyController(apiClient, agwCollections, jwks_url.JwksUrlBuilderFactory)
-	if err := mgr.Add(jwksStorePolicyCtrl); err != nil {
+	remoteHTTPResolver := remotehttp.NewResolver(remotehttp.Inputs{
+		ConfigMaps:           agwCollections.ConfigMaps,
+		Services:             agwCollections.Services,
+		Backends:             agwCollections.Backends,
+		AgentgatewayPolicies: agwCollections.AgentgatewayPolicies,
+		BackendTLSPolicies:   agwCollections.BackendTLSPolicies,
+	})
+	jwksResolver := jwks.NewResolver(remoteHTTPResolver)
+	jwksOwnerCtrl := jwks.NewOwnerController(apiClient, jwks.OwnerControllerInputs{
+		AgentgatewayPolicies: agwCollections.AgentgatewayPolicies,
+		Backends:             agwCollections.Backends,
+		Resolver:             jwksResolver,
+		KrtOpts:              agwCollections.KrtOpts,
+	})
+	if err := mgr.Add(jwksOwnerCtrl); err != nil {
 		return err
 	}
-	jwksStorePolicyCtrl.Init(ctx)
+	jwksOwnerCtrl.Init(ctx)
 
-	jwksStore := jwks.BuildJwksStore(ctx, apiClient, commonCollections, jwksStorePolicyCtrl.JwksChanges(), jwks.DefaultJwksStorePrefix, namespaces.GetPodNamespace())
+	jwksStore := jwks.NewStore(ctx, apiClient, commonCollections, jwksOwnerCtrl.JwksChanges(), jwks.DefaultJwksStorePrefix, namespaces.GetPodNamespace())
 	if err := mgr.Add(jwksStore); err != nil {
 		return err
 	}
 
-	jwksStoreCMCtrl := agentjwksstore.NewJWKSStoreConfigMapsController(apiClient, jwks.DefaultJwksStorePrefix, namespaces.GetPodNamespace(), jwksStore)
+	jwksStoreCMCtrl := jwks.NewConfigMapController(apiClient, jwks.DefaultJwksStorePrefix, namespaces.GetPodNamespace(), jwksStore)
 	jwksStoreCMCtrl.Init(ctx)
 	if err := mgr.Add(jwksStoreCMCtrl); err != nil {
 		return err

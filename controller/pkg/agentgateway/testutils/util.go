@@ -27,10 +27,13 @@ import (
 
 	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
 	agwv1alpha1 "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/status"
+	agwcontroller "github.com/agentgateway/agentgateway/controller/pkg/kgateway/controller"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
@@ -150,6 +153,12 @@ type testOutput[Status any, Output any] struct {
 	Output []Output `json:"output"`
 }
 
+type RuntimeWiring struct {
+	RemoteHTTPResolver remotehttp.Resolver
+	JWKSResolver       jwks.Resolver
+	JWKSLookup         jwks.Lookup
+}
+
 func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (*TestStatusQueue, *agentgatewaysyncer.Syncer) {
 	fc := fake.NewClient(t)
 	stop := test.NewStop(t)
@@ -161,12 +170,14 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 			t.Log(string(b))
 		}
 	})
+	runtimeWiring := BuildRuntimeWiring(ctx.Collections)
 	syncer := agentgatewaysyncer.NewAgwSyncer(
 		wellknown.DefaultAgwControllerName,
 		// Only used for NACK, so no need to do anything special here.
 		fc,
 		ctx.Collections,
 		agwPluginFactory(ctx.Collections),
+		runtimeWiring.JWKSLookup,
 		nil,
 		opts,
 		nil,
@@ -190,15 +201,19 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 // agwPluginFactory is a factory function that returns the agent gateway plugins
 // It is based on agwPluginFactory(cfg)(ctx, cfg.AgwCollections) in start.go
 func agwPluginFactory(agwCollections *plugins.AgwCollections) plugins.AgwPlugin {
-	agwPlugins := plugins.Plugins(agwCollections)
+	runtimeWiring := BuildRuntimeWiring(agwCollections)
+	agwPlugins := agwcontroller.BuiltinAgwPlugins(agwCollections, runtimeWiring.JWKSLookup)
 	mergedPlugins := plugins.MergePlugins(agwPlugins...)
 	return mergedPlugins
 }
 
 func BuildMockPolicyContext(t test.Failer, inputs []any) plugins.PolicyCtx {
+	collections := BuildMockCollection(t, inputs)
+	runtimeWiring := BuildRuntimeWiring(collections)
 	return plugins.PolicyCtx{
 		Krt:         krt.TestingDummyContext{},
-		Collections: BuildMockCollection(t, inputs),
+		Collections: collections,
+		JWKSLookup:  runtimeWiring.JWKSLookup,
 	}
 }
 
@@ -233,4 +248,27 @@ func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 	}
 	col.SetupIndexes()
 	return col
+}
+
+func BuildRuntimeWiring(collections *plugins.AgwCollections) RuntimeWiring {
+	remoteHTTPResolver := remotehttp.NewResolver(remotehttp.Inputs{
+		ConfigMaps:           collections.ConfigMaps,
+		Services:             collections.Services,
+		Backends:             collections.Backends,
+		AgentgatewayPolicies: collections.AgentgatewayPolicies,
+		BackendTLSPolicies:   collections.BackendTLSPolicies,
+	})
+	jwksResolver := jwks.NewResolver(remoteHTTPResolver)
+	jwksLookup := jwks.NewLookup(
+		collections.ConfigMaps,
+		jwksResolver,
+		jwks.DefaultJwksStorePrefix,
+		collections.SystemNamespace,
+	)
+
+	return RuntimeWiring{
+		RemoteHTTPResolver: remoteHTTPResolver,
+		JWKSResolver:       jwksResolver,
+		JWKSLookup:         jwksLookup,
+	}
 }
