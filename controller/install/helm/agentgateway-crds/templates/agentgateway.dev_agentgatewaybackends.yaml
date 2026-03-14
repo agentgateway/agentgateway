@@ -7697,6 +7697,11 @@ spec:
                           - host
                           - port
                           type: object
+                        required:
+                          description: |-
+                            Required marks this target as required. If a required target fails to connect,
+                            the entire backend initialization will fail. Non-required targets are skipped with a warning.
+                          type: boolean
                       required:
                       - name
                       type: object

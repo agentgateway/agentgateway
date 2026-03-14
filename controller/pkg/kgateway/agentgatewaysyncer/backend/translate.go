@@ -158,13 +158,14 @@ func translateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 			backends = append(backends, staticBackend)
 
 			mcpTarget := &api.MCPTarget{
-				Name: string(target.Name),
+				Name:     string(target.Name),
 				Backend: &api.BackendReference{
 					Kind: &api.BackendReference_Backend{
 						Backend: staticBackendRef,
 					},
 				},
-				Path: ptr.OrEmpty(target.Static.Path),
+				Path:     ptr.OrEmpty(target.Static.Path),
+				Required: ptr.OrEmpty(target.Required),
 			}
 
 			switch ptr.OrEmpty(target.Static.Protocol) {
@@ -261,6 +262,7 @@ func translateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 						},
 						Protocol: toMCPProtocol(appProtocol),
 						Path:     service.Annotations[apiannotations.MCPServiceHTTPPath],
+						Required: ptr.OrEmpty(target.Required),
 					}
 
 					mcpTargets = append(mcpTargets, mcpTarget)

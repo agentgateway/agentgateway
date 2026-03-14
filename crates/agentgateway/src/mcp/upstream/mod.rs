@@ -238,10 +238,37 @@ impl UpstreamGroup {
 	pub(crate) fn setup_connections(&mut self) -> Result<(), mcp::Error> {
 		for tgt in &self.backend.targets {
 			debug!("initializing target: {}", tgt.name);
-			let transport = self.setup_upstream(tgt.as_ref())?;
-			self.by_name.insert(tgt.name.clone(), Arc::new(transport));
+			match self.setup_upstream(tgt.as_ref()) {
+				Ok(transport) => {
+					self.by_name.insert(tgt.name.clone(), Arc::new(transport));
+				},
+				Err(e) => {
+					if tgt.required {
+						return Err(e);
+					}
+					warn!(mcp_target = %tgt.name, error = %e, "target failed to initialize, skipping");
+				},
+			}
+		}
+		if self.by_name.is_empty() {
+			return Err(mcp::Error::SendError(
+				None,
+				"all MCP targets failed to initialize".into(),
+			));
 		}
 		Ok(())
+	}
+
+	pub(crate) fn is_required(&self, name: &str) -> bool {
+		self
+			.backend
+			.targets
+			.iter()
+			.any(|t| t.name.as_str() == name && t.required)
+	}
+
+	pub(crate) fn metrics(&self) -> &Arc<crate::telemetry::metrics::Metrics> {
+		&self.client.inputs.metrics
 	}
 
 	pub(crate) fn iter_named(&self) -> impl Iterator<Item = (Strng, Arc<upstream::Upstream>)> {

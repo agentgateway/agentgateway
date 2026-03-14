@@ -5910,6 +5910,7 @@ type MCPTarget struct {
 	Backend       *BackendReference      `protobuf:"bytes,2,opt,name=backend,proto3" json:"backend,omitempty"`
 	Path          string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
 	Protocol      MCPTarget_Protocol     `protobuf:"varint,4,opt,name=protocol,proto3,enum=agentgateway.dev.resource.MCPTarget_Protocol" json:"protocol,omitempty"`
+	Required      bool                   `protobuf:"varint,5,opt,name=required,proto3" json:"required,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5970,6 +5971,13 @@ func (x *MCPTarget) GetProtocol() MCPTarget_Protocol {
 		return x.Protocol
 	}
 	return MCPTarget_UNDEFINED
+}
+
+func (x *MCPTarget) GetRequired() bool {
+	if x != nil {
+		return x.Required
+	}
+	return false
 }
 
 type BackendReference struct {
@@ -11786,12 +11794,13 @@ const file_resource_proto_rawDesc = "" +
 	"PrefixMode\x12\x0f\n" +
 	"\vCONDITIONAL\x10\x00\x12\n" +
 	"\n" +
-	"\x06ALWAYS\x10\x01\"\xfe\x01\n" +
+	"\x06ALWAYS\x10\x01\"\x9a\x02\n" +
 	"\tMCPTarget\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12E\n" +
 	"\abackend\x18\x02 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\abackend\x12\x12\n" +
 	"\x04path\x18\x03 \x01(\tR\x04path\x12I\n" +
-	"\bprotocol\x18\x04 \x01(\x0e2-.agentgateway.dev.resource.MCPTarget.ProtocolR\bprotocol\"7\n" +
+	"\bprotocol\x18\x04 \x01(\x0e2-.agentgateway.dev.resource.MCPTarget.ProtocolR\bprotocol\x12\x1a\n" +
+	"\brequired\x18\x05 \x01(\bR\brequired\"7\n" +
 	"\bProtocol\x12\r\n" +
 	"\tUNDEFINED\x10\x00\x12\a\n" +
 	"\x03SSE\x10\x01\x12\x13\n" +

@@ -1222,6 +1222,7 @@ message MCPTarget {
   BackendReference backend = 2;
   string path = 3;
   Protocol protocol = 4;
+  bool required = 5;
 }
 
 message BackendReference {

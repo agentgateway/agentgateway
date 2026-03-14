@@ -92,6 +92,7 @@ impl App {
 						backend: be.map(|b| b.backend),
 						backend_policies,
 						always_use_prefix: backend.always_use_prefix,
+						required: t.required,
 					}))
 				})
 				.collect::<Result<Vec<_>, _>>()?;
@@ -180,4 +181,5 @@ pub struct McpTarget {
 	pub backend_policies: BackendPolicies,
 	pub backend: Option<SimpleBackend>,
 	pub always_use_prefix: bool,
+	pub required: bool,
 }

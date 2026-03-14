@@ -425,6 +425,7 @@ impl TestBind {
 							path: "/sse".to_string(),
 						})
 					},
+					required: false,
 				})],
 				stateful,
 				always_use_prefix: false,
@@ -470,6 +471,7 @@ impl TestBind {
 									path: "/sse".to_string(),
 								})
 							},
+							required: false,
 						})
 					})
 					.collect_vec(),

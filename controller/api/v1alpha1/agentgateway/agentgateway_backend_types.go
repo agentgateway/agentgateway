@@ -353,6 +353,11 @@ type McpTargetSelector struct {
 	// 'selector' instead.
 	// +optional
 	Static *McpTarget `json:"static,omitempty"`
+
+	// Required marks this target as required. If a required target fails to connect,
+	// the entire backend initialization will fail. Non-required targets are skipped with a warning.
+	// +optional
+	Required *bool `json:"required,omitempty"`
 }
 
 const (

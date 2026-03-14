@@ -1061,6 +1061,7 @@ async fn test_openapi_from_url() {
 			name: "users-api".into(),
 			spec: local_target_spec,
 			policies: None,
+			required: false,
 		})],
 		stateful_mode: McpStatefulMode::Stateful,
 		prefix_mode: None,

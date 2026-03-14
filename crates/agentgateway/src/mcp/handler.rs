@@ -13,6 +13,7 @@ use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, MCPInfo, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
+use crate::telemetry::metrics::MCPSkippedTarget;
 use futures_core::Stream;
 use http::StatusCode;
 use http::request::Parts;
@@ -24,6 +25,7 @@ use rmcp::model::{
 	PromptsCapability, ProtocolVersion, RequestId, ResourcesCapability, ServerCapabilities,
 	ServerInfo, ServerJsonRpcMessage, ServerResult, Tool, ToolsCapability,
 };
+use tracing::warn;
 
 const DELIMITER: &str = "_";
 
@@ -326,8 +328,21 @@ impl Relay {
 		&self,
 		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
-		for (_, con) in self.upstreams.iter_named() {
-			con.delete(&ctx).await?;
+		for (name, con) in self.upstreams.iter_named() {
+			if let Err(e) = con.delete(&ctx).await {
+				if self.upstreams.is_required(&name) {
+					return Err(e);
+				}
+				warn!(mcp_target = %name, error = %e, "target failed during deletion, skipping");
+				self
+					.upstreams
+					.metrics()
+					.mcp_skipped_targets
+					.get_or_create(&MCPSkippedTarget {
+						target: name.into(),
+					})
+					.inc();
+			}
 		}
 		Ok(accepted_response())
 	}
@@ -337,7 +352,28 @@ impl Relay {
 	) -> Result<Response, UpstreamError> {
 		let mut streams = Vec::new();
 		for (name, con) in self.upstreams.iter_named() {
-			streams.push((name, con.get_event_stream(&ctx).await?));
+			match con.get_event_stream(&ctx).await {
+				Ok(stream) => streams.push((name, stream)),
+				Err(e) => {
+					if self.upstreams.is_required(&name) {
+						return Err(e);
+					}
+					warn!(mcp_target = %name, error = %e, "target failed during get, skipping");
+					self
+						.upstreams
+						.metrics()
+						.mcp_skipped_targets
+						.get_or_create(&MCPSkippedTarget {
+							target: name.into(),
+						})
+						.inc();
+				},
+			}
+		}
+		if streams.is_empty() {
+			return Err(UpstreamError::InvalidRequest(
+				"all MCP targets failed".into(),
+			));
 		}
 
 		let ms = mergestream::MergeStream::new_without_merge(streams);
@@ -352,7 +388,28 @@ impl Relay {
 		let id = r.id.clone();
 		let mut streams = Vec::new();
 		for (name, con) in self.upstreams.iter_named() {
-			streams.push((name, con.generic_stream(r.clone(), &ctx).await?));
+			match con.generic_stream(r.clone(), &ctx).await {
+				Ok(stream) => streams.push((name, stream)),
+				Err(e) => {
+					if self.upstreams.is_required(&name) {
+						return Err(e);
+					}
+					warn!(mcp_target = %name, error = %e, "target failed, skipping");
+					self
+						.upstreams
+						.metrics()
+						.mcp_skipped_targets
+						.get_or_create(&MCPSkippedTarget {
+							target: name.into(),
+						})
+						.inc();
+				},
+			}
+		}
+		if streams.is_empty() {
+			return Err(UpstreamError::InvalidRequest(
+				"all MCP targets failed".into(),
+			));
 		}
 
 		let ms = mergestream::MergeStream::new(streams, id.clone(), merge);
@@ -363,14 +420,21 @@ impl Relay {
 		r: JsonRpcNotification<ClientNotification>,
 		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
-		let mut streams = Vec::new();
 		for (name, con) in self.upstreams.iter_named() {
-			streams.push((
-				name,
-				con
-					.generic_notification(r.notification.clone(), &ctx)
-					.await?,
-			));
+			if let Err(e) = con.generic_notification(r.notification.clone(), &ctx).await {
+				if self.upstreams.is_required(&name) {
+					return Err(e);
+				}
+				warn!(mcp_target = %name, error = %e, "target failed during notification, skipping");
+				self
+					.upstreams
+					.metrics()
+					.mcp_skipped_targets
+					.get_or_create(&MCPSkippedTarget {
+						target: name.into(),
+					})
+					.inc();
+			}
 		}
 
 		Ok(accepted_response())

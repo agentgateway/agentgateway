@@ -116,6 +116,11 @@ pub struct ConnectLabels {
 	pub transport: DefaultedUnknown<RichStrng>,
 }
 
+#[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct MCPSkippedTarget {
+	pub target: DefaultedUnknown<RichStrng>,
+}
+
 type Counter = Family<HTTPLabels, counter::Counter>;
 type Histogram<T> = Family<T, prometheus_client::metrics::histogram::Histogram>;
 type TCPCounter = Family<TCPLabels, counter::Counter>;
@@ -148,6 +153,8 @@ pub struct Metrics {
 
 	// metrics for guardrail checks (allow/mask/reject) for request/response
 	pub guardrail_checks: Family<GuardrailLabels, counter::Counter>,
+
+	pub mcp_skipped_targets: Family<MCPSkippedTarget, counter::Counter>,
 }
 
 // FilteredRegistry is a wrapper around Registry that allows to filter out certain metrics.
@@ -290,6 +297,11 @@ impl Metrics {
 				&mut registry,
 				"mcp_requests",
 				"Total number of MCP tool calls",
+			),
+			mcp_skipped_targets: build(
+				&mut registry,
+				"mcp_skipped_targets",
+				"Total MCP targets skipped due to connection failure",
 			),
 
 			gen_ai_token_usage,

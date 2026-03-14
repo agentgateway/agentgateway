@@ -891,6 +891,7 @@ impl TryFrom<&proto::agent::McpTarget> for McpTarget {
 					})
 				},
 			},
+			required: s.required,
 		})
 	}
 }

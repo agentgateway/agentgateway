@@ -716,6 +716,7 @@ impl LocalBackend {
 					let t = McpTarget {
 						name: t.name.clone(),
 						spec,
+						required: t.required,
 					};
 					targets.push(Arc::new(t));
 				}
@@ -805,6 +806,8 @@ pub struct LocalMcpTarget {
 	pub spec: LocalMcpTargetSpec,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub policies: Option<MCPLocalBackendPolicies>,
+	#[serde(default)]
+	pub required: bool,
 }
 
 #[apply(schema_de!)]

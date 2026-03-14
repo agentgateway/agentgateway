@@ -1205,6 +1205,8 @@ pub struct McpTarget {
 	pub name: McpTargetName,
 	#[serde(flatten)]
 	pub spec: McpTargetSpec,
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub required: bool,
 }
 
 pub type McpTargetName = Strng;
