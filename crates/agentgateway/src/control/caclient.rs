@@ -184,7 +184,7 @@ impl WorkloadCertificate {
 	pub fn hbone_termination(&self) -> Result<ServerConfig, Error> {
 		let Identity::Spiffe { trust_domain, .. } = &self.identity;
 
-		// TODO: this istoo expensive to build per request
+		// TODO: this is too expensive to build per request
 		let roots = self.roots.clone();
 		let raw_client_cert_verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
 			roots.clone(),
@@ -195,7 +195,7 @@ impl WorkloadCertificate {
 			raw_client_cert_verifier,
 			Some(trust_domain.clone()),
 		);
-		let sc = ServerConfig::builder_with_provider(transport::tls::provider())
+		let mut sc = ServerConfig::builder_with_provider(transport::tls::provider())
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
 			.expect("server config must be valid")
 			.with_client_cert_verifier(client_cert_verifier)
@@ -203,6 +203,7 @@ impl WorkloadCertificate {
 				self.chain.iter().map(|c| c.der.clone()).collect(),
 				self.private_key.clone_key(),
 			)?;
+		sc.alpn_protocols = vec![b"h2".into()];
 		Ok(sc)
 	}
 }

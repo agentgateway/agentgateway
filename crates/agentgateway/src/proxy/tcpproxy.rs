@@ -2,21 +2,22 @@ use crate::cel::SourceContext;
 use rand::prelude::IndexedRandom;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use futures::pin_mut;
 
 use crate::proxy::httpproxy::BackendCall;
 use crate::proxy::{ProxyError, httpproxy};
-use crate::store::{BackendPolicies, RoutePath};
+use crate::store::{BackendPolicies, FrontendPolices, RoutePath};
 use crate::telemetry::log;
 use crate::telemetry::log::{DropOnLog, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
-use crate::transport::stream::{Socket, TCPConnectionInfo, TLSConnectionInfo};
-use crate::types::agent;
+use crate::transport::stream::{Socket, TCPConnectionInfo, TLSConnectionInfo, WaypointTLSInfo};
 use crate::types::agent::{
 	BackendPolicy, BindKey, Listener, ListenerProtocol, SimpleBackend, SimpleBackendReference,
 	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference,
 	TransportProtocol,
 };
 use crate::types::discovery::{NetworkAddress, WaypointIdentity, gatewayaddress::Destination};
+use crate::types::{agent, frontend};
 use crate::{ProxyInputs, Stores, *};
 
 #[derive(Clone)]
@@ -76,6 +77,19 @@ impl TCPProxy {
 			httpproxy::apply_logging_policy_to_log(log, lp);
 		}
 
+		// Only sniff TLS if: From waypoint AND service port's appProtocol is TLS
+		let should_sniff = connection
+			.ext::<WaypointTLSInfo>()
+			.map(|info| info.should_sniff_tls)
+			.unwrap_or(false);
+
+		let connection = if should_sniff {
+			Self::sniff_tls_sni(connection, &frontend_policies)
+				.await
+				.map_err(ProxyError::Processing)?
+		} else {
+			connection
+		};
 		log.tls_info = connection.ext::<TLSConnectionInfo>().cloned();
 		log.backend_protocol = Some(cel::BackendProtocol::tcp);
 		let tcp_labels = TCPLabels {
@@ -97,7 +111,8 @@ impl TCPProxy {
 		let sni = log
 			.tls_info
 			.as_ref()
-			.and_then(|tls| tls.server_name.as_deref());
+			.and_then(|tls| tls.server_name.as_deref())
+			.map(|s| s.to_string());
 
 		let selected_listener = self.selected_listener.clone();
 		let inputs = self.inputs.clone();
@@ -108,7 +123,7 @@ impl TCPProxy {
 		debug!(bind=%bind_name, listener=%selected_listener.key, "selected listener");
 
 		let selected_route = select_best_route(
-			sni,
+			sni.as_deref(),
 			selected_listener.clone(),
 			&self.inputs.stores,
 			&self.inputs.cfg.network,
@@ -136,6 +151,7 @@ impl TCPProxy {
 
 		let backend_call = Self::build_backend_call(
 			&mut Some(log),
+			sni,
 			&inputs,
 			&selected_backend.backend.backend,
 			backend_policies,
@@ -172,14 +188,21 @@ impl TCPProxy {
 
 	pub fn build_backend_call(
 		log: &mut Option<&mut RequestLog>,
+		sni: Option<String>,
 		inputs: &ProxyInputs,
 		selected_backend: &SimpleBackend,
 		backend_policies: BackendPolicies,
 	) -> Result<BackendCall, ProxyError> {
 		let backend_call = match &selected_backend {
-			SimpleBackend::Service(svc, port) => {
-				httpproxy::build_service_call(inputs, backend_policies, log, None, svc, port)?
-			},
+			SimpleBackend::Service(svc, port) => httpproxy::build_service_call(
+				inputs,
+				backend_policies,
+				log,
+				None,
+				svc,
+				port,
+				sni.as_deref(),
+			)?,
 			SimpleBackend::Opaque(_, target) => BackendCall {
 				target: target.clone(),
 				http_version_override: None,
@@ -190,6 +213,29 @@ impl TCPProxy {
 			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
 		};
 		Ok(backend_call)
+	}
+
+	async fn sniff_tls_sni(raw_stream: Socket, policies: &FrontendPolices) -> anyhow::Result<Socket> {
+		let def = frontend::TLS::default();
+		let tls_pol = policies.tls.as_ref();
+		let to = tls_pol.unwrap_or(&def).handshake_timeout;
+		let handshake = async move {
+			let (mut ext, counter, inner) = raw_stream.into_parts();
+			let inner = Socket::new_rewind(inner);
+			let acceptor =
+				tokio_rustls::LazyConfigAcceptor::new(rustls::server::Acceptor::default(), inner);
+			pin_mut!(acceptor);
+			let mut start = acceptor.as_mut().await?;
+			let ch = start.client_hello();
+			let sni = ch.server_name().unwrap_or_default().to_string();
+			start.io.rewind();
+			ext.insert(TLSConnectionInfo {
+				server_name: Some(sni),
+				..Default::default()
+			});
+			Ok(Socket::from_rewind(ext, counter, start.io))
+		};
+		tokio::time::timeout(to, handshake).await?
 	}
 }
 

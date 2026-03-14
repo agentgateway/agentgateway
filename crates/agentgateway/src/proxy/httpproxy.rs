@@ -1092,7 +1092,7 @@ pub async fn build_transport(
 	if let Some(tun) = backend_tunnel {
 		let backend = super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?;
 		let pols = crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &[], None);
-		let call = TCPProxy::build_backend_call(&mut None, inputs, &backend.backend, pols)?;
+		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols)?;
 		let tunnel_backend_tls = call.backend_policies.backend_tls.clone();
 		let tunnel_auth = call.backend_policies.backend_auth.clone();
 		// This is a bounded recursion; this code is only called when backend_tunnel is set, and in this call
@@ -1347,9 +1347,15 @@ async fn make_backend_call(
 				network_gateway: None,
 			}
 		},
-		Backend::Service(svc, port) => {
-			build_service_call(&inputs, policies, &mut log, override_dest, svc, port)?
-		},
+		Backend::Service(svc, port) => build_service_call(
+			&inputs,
+			policies,
+			&mut log,
+			override_dest,
+			svc,
+			port,
+			req.uri().host(),
+		)?,
 		Backend::Opaque(_, target) => BackendCall {
 			target: target.clone(),
 			http_version_override: None,
@@ -1688,6 +1694,7 @@ pub fn build_service_call(
 	override_dest: Option<SocketAddr>,
 	svc: &Arc<Service>,
 	port: &u16,
+	request_host: Option<&str>,
 ) -> Result<BackendCall, ProxyError> {
 	let port = *port;
 	let workloads = &inputs.stores.read_discovery().workloads;
@@ -1772,14 +1779,19 @@ pub fn build_service_call(
 		);
 		Target::Hostname(svc.hostname.clone(), port)
 	} else {
-		// TODO: support a mode like ServiceEntry DYNAMIC_DNS. Need a way to signal this, though; perhaps:
-		// wl.workload_ips.is_empty() && wl.hostname.starts_with("*.")
-		// For direct connections, we need the workload IP
-		let Some(ip) = wl.workload_ips.first() else {
-			return Err(ProxyError::NoHealthyEndpoints);
-		};
-		let dest = SocketAddr::from((*ip, target_port));
-		Target::Address(dest)
+		// TODO: this should only be used with DNS resolution type! maybe?
+		if wl.workload_ips.is_empty()
+			&& let Some(hostname) = resolved_workload_target_hostname(&wl.hostname, request_host)
+		{
+			Target::Hostname(hostname.into(), port)
+		} else {
+			// For direct connections, we need the workload IP
+			let Some(ip) = wl.workload_ips.first() else {
+				return Err(ProxyError::NoHealthyEndpoints);
+			};
+			let dest = SocketAddr::from((*ip, target_port));
+			Target::Address(dest)
+		}
 	};
 
 	Ok(BackendCall {
@@ -1791,11 +1803,72 @@ pub fn build_service_call(
 	})
 }
 
+fn resolved_workload_target_hostname<'a>(
+	workload_hostname: &'a str,
+	request_host: Option<&'a str>,
+) -> Option<&'a str> {
+	if workload_hostname.is_empty() {
+		return None;
+	}
+
+	if let Some(wildcard_suffix) = workload_hostname.strip_prefix("*.") {
+		let suffix = format!(".{wildcard_suffix}");
+		request_host.filter(|host| host.ends_with(&suffix))
+	} else {
+		Some(workload_hostname)
+	}
+}
+
 fn should_retry(res: &Result<Response, SnapshottedProxyResponse>, pol: &retry::Policy) -> bool {
 	match res {
 		Ok(resp) => pol.codes.contains(&resp.status()),
 		Err(SnapshottedProxyResponse(ProxyResponse::Error(e))) => e.is_retryable(),
 		Err(SnapshottedProxyResponse(ProxyResponse::DirectResponse(_))) => false,
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::resolved_workload_target_hostname;
+
+	#[test]
+	fn resolved_workload_target_hostname_uses_explicit_workload_hostname() {
+		assert_eq!(
+			resolved_workload_target_hostname("api.example.com", Some("caller.example.com")),
+			Some("api.example.com")
+		);
+		assert_eq!(
+			resolved_workload_target_hostname("api.example.com", None),
+			Some("api.example.com")
+		);
+	}
+
+	#[test]
+	fn resolved_workload_target_hostname_uses_request_host_for_matching_wildcard() {
+		assert_eq!(
+			resolved_workload_target_hostname("*.example.com", Some("api.example.com")),
+			Some("api.example.com")
+		);
+		assert_eq!(
+			resolved_workload_target_hostname("*.example.com", Some("deep.api.example.com")),
+			Some("deep.api.example.com")
+		);
+	}
+
+	#[test]
+	fn resolved_workload_target_hostname_rejects_non_matching_wildcard() {
+		assert_eq!(
+			resolved_workload_target_hostname("*.example.com", Some("example.com")),
+			None
+		);
+		assert_eq!(
+			resolved_workload_target_hostname("*.example.com", Some("api.other.com")),
+			None
+		);
+		assert_eq!(
+			resolved_workload_target_hostname("*.example.com", None),
+			None
+		);
 	}
 }
 
