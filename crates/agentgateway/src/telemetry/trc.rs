@@ -7,8 +7,10 @@ use agent_core::telemetry::ValueBag;
 use http::Version;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
-use opentelemetry::trace::{Span, SpanContext, SpanKind, TraceState, Tracer as _, TracerProvider};
-use opentelemetry::{Key, KeyValue, TraceFlags};
+use opentelemetry::trace::{
+	Span, SpanContext, SpanKind, TraceContextExt as _, TraceState, Tracer as _, TracerProvider,
+};
+use opentelemetry::{Context, Key, KeyValue, TraceFlags};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::trace::SdkTracerProvider;
@@ -218,7 +220,7 @@ impl Tracer {
 		});
 
 		let out_span = request.outgoing_span.as_ref().unwrap();
-		let mut sb = self
+		let sb = self
 			.tracer
 			.span_builder(span_name)
 			.with_start_time(end.sub(elapsed))
@@ -228,6 +230,7 @@ impl Tracer {
 			.with_trace_id(out_span.trace_id.into())
 			.with_span_id(out_span.span_id.into());
 
+		let mut context = Context::new();
 		if let Some(in_span) = &request.incoming_span {
 			let parent = SpanContext::new(
 				in_span.trace_id.into(),
@@ -236,13 +239,9 @@ impl Tracer {
 				true,
 				TraceState::default(),
 			);
-			sb = sb.with_links(vec![opentelemetry::trace::Link::new(
-				parent.clone(),
-				vec![],
-				0,
-			)]);
+			context = context.with_remote_span_context(parent);
 		}
-		sb.start(self.tracer.as_ref()).end()
+		sb.start_with_context(self.tracer.as_ref(), &context).end()
 	}
 }
 
@@ -582,5 +581,123 @@ mod traceparent {
 				flags: u8::from_str_radix(segs[3], 16)?,
 			})
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::future::ready;
+	use std::net::SocketAddr;
+	use std::sync::{Arc, Mutex};
+	use std::time::Instant;
+
+	use agent_core::strng;
+	use opentelemetry::trace::SpanKind;
+	use opentelemetry_sdk::error::OTelSdkResult;
+	use opentelemetry_sdk::trace::{SimpleSpanProcessor, SpanData, SpanExporter};
+	use prometheus_client::registry::Registry;
+
+	use super::*;
+	use crate::telemetry::log::{
+		CelLogging, CelLoggingExecutor, LoggingFields, MetricFields, RequestLog,
+	};
+	use crate::telemetry::metrics::Metrics;
+	use crate::transport::stream::TCPConnectionInfo;
+
+	#[derive(Clone, Debug, Default)]
+	struct RecordingSpanExporter {
+		spans: Arc<Mutex<Vec<SpanData>>>,
+	}
+
+	impl RecordingSpanExporter {
+		fn finished_spans(&self) -> Vec<SpanData> {
+			self.spans.lock().unwrap().clone()
+		}
+	}
+
+	impl SpanExporter for RecordingSpanExporter {
+		fn export(
+			&self,
+			batch: Vec<SpanData>,
+		) -> impl std::future::Future<Output = OTelSdkResult> + Send {
+			self.spans.lock().unwrap().extend(batch);
+			ready(Ok(()))
+		}
+	}
+
+	fn test_tracer() -> (Tracer, RecordingSpanExporter) {
+		let exporter = RecordingSpanExporter::default();
+		let provider = SdkTracerProvider::builder()
+			.with_span_processor(SimpleSpanProcessor::new(exporter.clone()))
+			.build();
+		let tracer = provider.tracer("test-tracer");
+		(
+			Tracer {
+				tracer: Arc::new(tracer),
+				provider,
+				fields: Arc::new(LoggingFields::default()),
+			},
+			exporter,
+		)
+	}
+
+	fn test_request_log() -> RequestLog {
+		let cel = CelLogging {
+			cel_context: crate::cel::ContextBuilder::new(),
+			filter: None,
+			fields: LoggingFields::default(),
+			metric_fields: Arc::new(MetricFields::default()),
+		};
+		let mut registry = Registry::default();
+		let metrics = Arc::new(Metrics::new(&mut registry, Default::default()));
+		RequestLog::new(
+			cel,
+			metrics,
+			Instant::now(),
+			TCPConnectionInfo {
+				peer_addr: "127.0.0.1:12345".parse::<SocketAddr>().unwrap(),
+				local_addr: "127.0.0.1:8080".parse::<SocketAddr>().unwrap(),
+				start: Instant::now(),
+				raw_peer_addr: None,
+			},
+		)
+	}
+
+	#[test]
+	fn send_uses_incoming_span_as_parent_and_preserves_manual_ids() {
+		let (tracer, exporter) = test_tracer();
+		let mut request = test_request_log();
+		request.method = Some(http::Method::GET);
+		request.path_match = Some(strng::new("/trace"));
+
+		let mut incoming = TraceParent::new();
+		incoming.flags = 1;
+		let mut outgoing = incoming.new_span();
+		outgoing.flags = 1;
+		request.incoming_span = Some(incoming.clone());
+		request.outgoing_span = Some(outgoing.clone());
+
+		let filter = None;
+		let fields = LoggingFields::default();
+		let metric_fields = Arc::new(MetricFields::default());
+		let cel_exec = CelLoggingExecutor {
+			executor: crate::cel::Executor::new_empty(),
+			filter: &filter,
+			fields: &fields,
+			metric_fields: &metric_fields,
+		};
+
+		tracer.send(&request, &cel_exec, &[]);
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		assert_eq!(spans.len(), 1);
+		let span = &spans[0];
+		assert_eq!(span.span_kind, SpanKind::Server);
+		assert_eq!(span.span_context.trace_id(), outgoing.trace_id.into());
+		assert_eq!(span.span_context.span_id(), outgoing.span_id.into());
+		assert_eq!(span.parent_span_id, incoming.span_id.into());
+		assert!(span.parent_span_is_remote);
+		assert!(span.links.iter().next().is_none());
 	}
 }

@@ -17,7 +17,9 @@ use http_body::{Body, Frame, SizeHint};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use opentelemetry::TraceFlags;
-use opentelemetry::trace::{Span, SpanBuilder, SpanContext, SpanKind, TraceState, Tracer};
+use opentelemetry::trace::{
+	Span, SpanBuilder, SpanContext, SpanKind, TraceContextExt as _, TraceState, Tracer,
+};
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -41,7 +43,7 @@ use crate::types::loadbalancer::ActiveHandle;
 use crate::{cel, llm, mcp};
 
 use opentelemetry::logs::{AnyValue, LogRecord as _, Logger, LoggerProvider as _, Severity};
-use opentelemetry::{Key, KeyValue};
+use opentelemetry::{Context as OtelContext, Key, KeyValue};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::logs::SdkLoggerProvider;
@@ -659,7 +661,7 @@ pub struct RequestLog {
 	pub tracer: Option<std::sync::Arc<trc::Tracer>>,
 	/// Additional spans created during the request (e.g. upstream call spans).
 	/// These are flushed on drop when tracing is enabled.
-	pub trace_spans: Arc<Mutex<Vec<SpanBuilder>>>,
+	pub trace_spans: Arc<Mutex<Vec<(SpanBuilder, OtelContext)>>>,
 
 	// Set only if OTLP logging is configured
 	pub otel_logger: Option<std::sync::Arc<OtelAccessLogger>>,
@@ -941,11 +943,50 @@ impl Drop for DropOnLog {
 			("protocol", log.backend_protocol.as_ref().map(debug)),
 			("a2a.method", log.a2a_method.display()),
 			(
-				"mcp.method",
+				"mcp.method.name",
 				mcp
 					.as_ref()
 					.and_then(|m| m.method_name.as_ref())
 					.map(display),
+			),
+			(
+				"mcp.method", // Kept for compatibility with v1.37
+				mcp
+					.as_ref()
+					.and_then(|m| m.method_name.as_ref())
+					.map(display),
+			),
+			(
+				"gen_ai.operation.name",
+				mcp.as_ref().and_then(|m| {
+					if matches!(m.resource, Some(MCPOperation::Tool))
+						&& m.method_name.as_deref() == Some("tools/call")
+					{
+						Some("execute_tool".into())
+					} else {
+						None
+					}
+				}),
+			),
+			(
+				"gen_ai.tool.name",
+				mcp.as_ref().and_then(|m| {
+					if matches!(m.resource, Some(MCPOperation::Tool)) {
+						m.resource_name.as_ref().map(display)
+					} else {
+						None
+					}
+				}),
+			),
+			(
+				"gen_ai.prompt.name",
+				mcp.as_ref().and_then(|m| {
+					if matches!(m.resource, Some(MCPOperation::Prompt)) {
+						m.resource_name.as_ref().map(display)
+					} else {
+						None
+					}
+				}),
 			),
 			(
 				"mcp.target",
@@ -959,7 +1000,17 @@ impl Drop for DropOnLog {
 				mcp.as_ref().and_then(|m| m.resource.as_ref()).map(display),
 			),
 			(
-				"mcp.resource.name",
+				"mcp.resource.uri",
+				mcp.as_ref().and_then(|m| {
+					if matches!(m.resource, Some(MCPOperation::Resource)) {
+						m.resource_name.as_ref().map(display)
+					} else {
+						None
+					}
+				}),
+			),
+			(
+				"mcp.resource.name", // Kept for compatibility with v1.37
 				mcp
 					.as_ref()
 					.and_then(|m| m.resource_name.as_ref())
@@ -976,7 +1027,7 @@ impl Drop for DropOnLog {
 				"inferencepool.selected_endpoint",
 				log.inference_pool.display(),
 			),
-			// OpenTelemetry Gen AI Semantic Conventions v1.37.0
+			// OpenTelemetry Gen AI Semantic Conventions v1.40.0
 			(
 				"gen_ai.operation.name",
 				log.llm_request.as_ref().map(|r| {
@@ -989,6 +1040,10 @@ impl Drop for DropOnLog {
 			),
 			(
 				"gen_ai.provider.name",
+				log.llm_request.as_ref().map(|l| display(&l.provider)),
+			),
+			(
+				"gen_ai.system", // Kept for compatibility with v1.37
 				log.llm_request.as_ref().map(|l| display(&l.provider)),
 			),
 			(
@@ -1007,6 +1062,13 @@ impl Drop for DropOnLog {
 				llm_response
 					.as_ref()
 					.and_then(|l| l.output_tokens)
+					.map(Into::into),
+			),
+			(
+				"gen_ai.usage.cached_input_tokens",
+				llm_response
+					.as_ref()
+					.and_then(|l| l.cached_input_tokens)
 					.map(Into::into),
 			),
 			(
@@ -1077,13 +1139,14 @@ impl Drop for DropOnLog {
 			("reason", reason.display()),
 			("duration", Some(dur.as_str().into())),
 		];
+
 		if enable_trace && let Some(t) = &log.tracer {
 			t.send(&log, &cel_exec, kv.as_slice());
 			// Flush any buffered spans created during request processing.
 			// Does best effort, if the lock is poisoned, skip flushing.
 			if let Ok(mut spans) = log.trace_spans.lock() {
-				for sb in spans.drain(..) {
-					sb.start(t.tracer.as_ref()).end();
+				for (sb, context) in spans.drain(..) {
+					sb.start_with_context(t.tracer.as_ref(), &context).end();
 				}
 			}
 		};
@@ -1448,7 +1511,7 @@ pub struct SpanWriterInner {
 	parent: trc::TraceParent,
 	current: trc::TraceParent,
 	tracer: Arc<trc::Tracer>,
-	inner: Arc<Mutex<Vec<SpanBuilder>>>,
+	inner: Arc<Mutex<Vec<(SpanBuilder, OtelContext)>>>,
 }
 
 impl SpanWriterInner {
@@ -1477,6 +1540,7 @@ impl SpanWriterInner {
 		// Capture end time at write time so it measures the intended operation duration.
 		sb = sb.with_end_time(SystemTime::now());
 
+		let mut context = OtelContext::new();
 		let parent = SpanContext::new(
 			self.parent.trace_id.into(),
 			self.parent.span_id.into(),
@@ -1484,11 +1548,11 @@ impl SpanWriterInner {
 			true,
 			TraceState::default(),
 		);
-		sb = sb.with_links(vec![opentelemetry::trace::Link::new(parent, vec![], 0)]);
+		context = context.with_remote_span_context(parent);
 
 		// Store for later flush when the request log is finalized.
 		if let Ok(mut spans) = self.inner.lock() {
-			spans.push(sb);
+			spans.push((sb, context));
 		}
 	}
 
@@ -1504,25 +1568,7 @@ impl SpanWriterInner {
 			.with_span_id(child.span_id.into())
 			.with_start_time(SystemTime::now());
 
-		SpanWriteOnDrop {
-			sb: Some(sb),
-			parent: self.parent.clone(),
-			inner: self.inner.clone(),
-		}
-	}
-}
-
-#[derive(Default)]
-pub struct SpanWriteOnDrop {
-	sb: Option<SpanBuilder>,
-	parent: trc::TraceParent,
-	inner: Arc<Mutex<Vec<SpanBuilder>>>,
-}
-impl Drop for SpanWriteOnDrop {
-	fn drop(&mut self) {
-		let Some(mut sb) = self.sb.take() else { return };
-		sb = sb.with_end_time(SystemTime::now());
-
+		let mut context = OtelContext::new();
 		let parent = SpanContext::new(
 			self.parent.trace_id.into(),
 			self.parent.span_id.into(),
@@ -1530,11 +1576,144 @@ impl Drop for SpanWriteOnDrop {
 			true,
 			TraceState::default(),
 		);
-		sb = sb.with_links(vec![opentelemetry::trace::Link::new(parent, vec![], 0)]);
+		context = context.with_remote_span_context(parent);
+
+		SpanWriteOnDrop {
+			sb: Some(sb),
+			context,
+			inner: self.inner.clone(),
+		}
+	}
+}
+
+#[derive(Default, Clone)]
+pub struct SpanWriteOnDrop {
+	sb: Option<SpanBuilder>,
+	context: OtelContext,
+	inner: Arc<Mutex<Vec<(SpanBuilder, OtelContext)>>>,
+}
+impl SpanWriteOnDrop {
+	pub fn rename_span(&mut self, name: impl Into<Cow<'static, str>>) {
+		if let Some(sb) = self.sb.as_mut() {
+			sb.name = name.into();
+		}
+	}
+}
+impl Drop for SpanWriteOnDrop {
+	fn drop(&mut self) {
+		let Some(mut sb) = self.sb.take() else { return };
+		sb = sb.with_end_time(SystemTime::now());
 
 		// Store for later flush when the request log is finalized.
 		if let Ok(mut spans) = self.inner.lock() {
-			spans.push(sb);
+			spans.push((sb, self.context.clone()));
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::future::ready;
+	use std::net::SocketAddr;
+	use std::sync::{Arc, Mutex};
+	use std::time::Instant;
+
+	use opentelemetry::trace::{SpanKind, TracerProvider};
+	use opentelemetry_sdk::error::OTelSdkResult;
+	use opentelemetry_sdk::trace::{SimpleSpanProcessor, SpanData, SpanExporter};
+	use prometheus_client::registry::Registry;
+
+	use super::*;
+	use crate::telemetry::metrics::Metrics;
+	use crate::telemetry::trc;
+	use crate::transport::stream::TCPConnectionInfo;
+
+	#[derive(Clone, Debug, Default)]
+	struct RecordingSpanExporter {
+		spans: Arc<Mutex<Vec<SpanData>>>,
+	}
+
+	impl RecordingSpanExporter {
+		fn finished_spans(&self) -> Vec<SpanData> {
+			self.spans.lock().unwrap().clone()
+		}
+	}
+
+	impl SpanExporter for RecordingSpanExporter {
+		fn export(
+			&self,
+			batch: Vec<SpanData>,
+		) -> impl std::future::Future<Output = OTelSdkResult> + Send {
+			self.spans.lock().unwrap().extend(batch);
+			ready(Ok(()))
+		}
+	}
+
+	fn test_tracer() -> (Arc<trc::Tracer>, RecordingSpanExporter) {
+		let exporter = RecordingSpanExporter::default();
+		let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+			.with_span_processor(SimpleSpanProcessor::new(exporter.clone()))
+			.build();
+		let tracer = provider.tracer("test-tracer");
+		(
+			Arc::new(trc::Tracer {
+				tracer: Arc::new(tracer),
+				provider,
+				fields: Arc::new(LoggingFields::default()),
+			}),
+			exporter,
+		)
+	}
+
+	fn test_request_log() -> RequestLog {
+		let cel = CelLogging {
+			cel_context: crate::cel::ContextBuilder::new(),
+			filter: None,
+			fields: LoggingFields::default(),
+			metric_fields: Arc::new(MetricFields::default()),
+		};
+		let mut registry = Registry::default();
+		let metrics = Arc::new(Metrics::new(&mut registry, Default::default()));
+		RequestLog::new(
+			cel,
+			metrics,
+			Instant::now(),
+			TCPConnectionInfo {
+				peer_addr: "127.0.0.1:12345".parse::<SocketAddr>().unwrap(),
+				local_addr: "127.0.0.1:8080".parse::<SocketAddr>().unwrap(),
+				start: Instant::now(),
+				raw_peer_addr: None,
+			},
+		)
+	}
+
+	#[test]
+	fn span_writer_flushes_recorded_spans_as_children_of_request_span() {
+		let (tracer, exporter) = test_tracer();
+		let mut request = test_request_log();
+		request.tracer = Some(tracer.clone());
+
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		request.outgoing_span = Some(outgoing.clone());
+
+		{
+			let _span = request.span_writer().start("buffered child span");
+		}
+
+		drop(DropOnLog::from(request));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		assert_eq!(spans.len(), 2);
+
+		let child = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "buffered child span")
+			.expect("buffered span should be exported");
+		assert_eq!(child.span_kind, SpanKind::Server);
+		assert_eq!(child.parent_span_id, outgoing.span_id.into());
+		assert_eq!(child.span_context.trace_id(), outgoing.trace_id.into());
+		assert!(child.parent_span_is_remote);
 	}
 }
