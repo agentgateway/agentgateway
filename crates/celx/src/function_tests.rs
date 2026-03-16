@@ -82,6 +82,19 @@ fn json_field() {
 }
 
 #[test]
+fn unvalidated_jwt_payload() {
+	let expr = r#"unvalidatedJwtPayload("eyJhbGciOiJub25lIn0.eyJzdWIiOiIxMjMiLCJhZG1pbiI6dHJ1ZX0.")"#;
+	assert(json!({"sub": "123", "admin": true}), expr);
+	// This payload contains a `-` in the encoded JWT segment, so it verifies we use
+	// base64url decoding rather than standard base64.
+	let expr = r#"unvalidatedJwtPayload("eyJhbGciOiJub25lIn0.eyJkYXRhIjoifn5-In0.").data"#;
+	assert(json!("~~~"), expr);
+
+	assert_fails(r#"unvalidatedJwtPayload("not-a-jwt")"#);
+	assert_fails(r#"unvalidatedJwtPayload("a.b.c")"#);
+}
+
+#[test]
 fn random() {
 	let expr = r#"int(random() * 10.0)"#;
 	let v = eval_with_optimizations_check(expr, false)
