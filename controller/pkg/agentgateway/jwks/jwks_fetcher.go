@@ -220,20 +220,38 @@ func (f *JwksFetcher) RemoveKeyset(source JwksSource) {
 }
 
 func (f *JwksFetcher) fetchJwks(ctx context.Context, jwksURL string, tlsConfig *tls.Config) (jose.JSONWebKeySet, error) {
+	// When TLS is configured with an SNI ServerName, use it as the HTTP Host
+	// header override. This is needed for ExternalName services behind CDN
+	// proxies (e.g. Cloudflare), which validate the Host header and reject
+	// requests with Kubernetes internal service hostnames.
+	var hostOverride string
 	if tlsConfig != nil {
+		hostOverride = tlsConfig.ServerName
 		c := &jwksHttpClientImpl{Client: makeClient(tlsConfig)}
-		return c.FetchJwks(ctx, jwksURL)
+		return c.fetchJwksWithHostOverride(ctx, jwksURL, hostOverride)
 	}
 	return f.defaultJwksClient.FetchJwks(ctx, jwksURL)
 }
 
 func (c *jwksHttpClientImpl) FetchJwks(ctx context.Context, jwksURL string) (jose.JSONWebKeySet, error) {
+	return c.fetchJwksWithHostOverride(ctx, jwksURL, "")
+}
+
+func (c *jwksHttpClientImpl) fetchJwksWithHostOverride(ctx context.Context, jwksURL string, hostOverride string) (jose.JSONWebKeySet, error) {
 	log := log.FromContext(ctx)
-	log.Info("fetching jwks", "url", jwksURL)
+	log.Info("fetching jwks", "url", jwksURL, "hostOverride", hostOverride)
 
 	request, err := http.NewRequest(http.MethodGet, jwksURL, nil)
 	if err != nil {
 		return jose.JSONWebKeySet{}, fmt.Errorf("could not build request to get JWKS: %w", err)
+	}
+
+	// Override Host header with the TLS SNI value if provided.
+	// This ensures CDN proxies (e.g. Cloudflare) and host-based load balancers
+	// receive the correct Host header when the JWKS URL uses a Kubernetes
+	// internal service hostname (e.g. from an ExternalName service).
+	if hostOverride != "" {
+		request.Host = hostOverride
 	}
 
 	// TODO (dmitri-d) control the size here maybe?
