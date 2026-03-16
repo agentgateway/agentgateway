@@ -1,9 +1,12 @@
 use std::collections::HashSet;
+use std::io;
+use std::sync::{Arc, Mutex};
 
 use super::*;
 use crate::http::Body;
 use http::{HeaderValue, Method};
 use serde_json::json;
+use tracing_subscriber::fmt::MakeWriter;
 
 fn eval(expr: &str) -> Result<serde_json::Value, Error> {
 	let exec_serde = full_example_executor();
