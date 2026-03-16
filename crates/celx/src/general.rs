@@ -25,6 +25,7 @@ pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("variables", variables);
 	ctx.add_function("random", random);
 	ctx.add_function("default", default);
+	ctx.add_function("coalesce", coalesce);
 	ctx.add_function("regexReplace", regex_replace);
 	ctx.add_function("fail", fail);
 	ctx.add_function("uuid", uuid_generate);
@@ -248,6 +249,22 @@ fn default<'a>(ftx: &mut FunctionContext<'a, '_>, exp: Argument, d: Argument) ->
 		Some(v) => Ok(v),
 		None => Ok(d.load_unmaterialized(ftx)?),
 	}
+}
+
+fn coalesce<'a>(ftx: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
+	if ftx.args.is_empty() {
+		return Err(ExecutionError::invalid_argument_count(1, 0));
+	}
+
+	let mut last_error = None;
+	for exp in ftx.expr_iter() {
+		match Value::resolve(exp, ftx.ptx, ftx.vars()) {
+			Ok(v) => return Ok(v),
+			Err(err) => last_error = Some(err),
+		}
+	}
+
+	Err(last_error.unwrap_or_else(|| ExecutionError::invalid_argument_count(1, 0)))
 }
 
 mod json_field {

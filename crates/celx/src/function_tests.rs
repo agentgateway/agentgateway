@@ -198,6 +198,25 @@ fn default() {
 }
 
 #[test]
+fn coalesce() {
+	let expr = r#"coalesce(a, "b")"#;
+	assert(json!("b"), expr);
+	let expr = r#"coalesce({"a":1}["b"], {"a":2}["a"], 3)"#;
+	assert(json!(2), expr);
+	let expr = r#"coalesce(fail("bad"), 1 / 0, "fallback")"#;
+	assert(json!("fallback"), expr);
+	let expr = r#"coalesce(null, "fallback")"#;
+	assert(json!(null), expr);
+	assert_fails(r#"coalesce(fail("bad"), 1 / 0)"#);
+
+	// coalesce() should not materialize the selected value
+	eval_non_static("coalesce(fail('bad'), vars)", |r| {
+		assert_matches!(r, Value::Dynamic(_));
+	})
+	.unwrap();
+}
+
+#[test]
 fn regex_replace() {
 	let expr = r#""/path/1/id/499c81c2/bar".regexReplace("/path/([0-9]+?)/id/([0-9a-z]{8})/bar", "/path/{n}/id/{id}/bar")"#;
 	assert(json!("/path/{n}/id/{id}/bar"), expr);
