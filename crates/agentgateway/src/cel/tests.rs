@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use super::*;
 use crate::http::Body;
-use http::Method;
+use http::{HeaderValue, Method};
 use serde_json::json;
 
 fn eval(expr: &str) -> Result<serde_json::Value, Error> {
@@ -43,6 +43,125 @@ fn expression() {
 		.body(Body::empty())
 		.unwrap();
 	assert_eq!(Value::Bool(true), eval_request(expr, req).unwrap());
+}
+
+fn request_with_header_modes() -> crate::http::Request {
+	let mut req = ::http::Request::builder()
+		.method(Method::GET)
+		.uri("http://example.com")
+		.header("single", "z")
+		.header("multi", "a,b")
+		.body(Body::empty())
+		.unwrap();
+	req.headers_mut().append("multi", "c".parse().unwrap());
+	let mut authorization = HeaderValue::from_static("Bearer token");
+	authorization.set_sensitive(true);
+	req.headers_mut().insert("authorization", authorization);
+	req
+}
+
+mod headers {
+	use crate::cel::tests::{eval_request, request_with_header_modes};
+	use cel::Value;
+
+	#[test]
+	fn lookup_default() {
+		assert_eq!(
+			Value::Bool(true),
+			eval_request(
+				r#"request.headers.multi == ['a,b', 'c']"#,
+				request_with_header_modes()
+			)
+			.unwrap()
+		);
+		assert_eq!(
+			Value::Bool(true),
+			eval_request(
+				r#"request.headers.single == 'z'"#,
+				request_with_header_modes()
+			)
+			.unwrap()
+		);
+	}
+
+	#[test]
+	fn redacted() {
+		assert_eq!(
+			"Bearer token",
+			eval_request(
+				r#"request.headers.authorization"#,
+				request_with_header_modes()
+			)
+			.unwrap()
+			.as_str()
+			.unwrap()
+			.as_ref()
+		);
+		assert_eq!(
+			"<redacted>",
+			eval_request(
+				r#"request.headers.redacted().authorization"#,
+				request_with_header_modes()
+			)
+			.unwrap()
+			.as_str()
+			.unwrap()
+			.as_ref()
+		);
+	}
+
+	#[test]
+	fn join() {
+		let req = request_with_header_modes();
+		assert_eq!(
+			Value::Bool(true),
+			eval_request(r#"request.headers.join().multi == "a,b,c""#, req).unwrap()
+		);
+	}
+
+	#[test]
+	fn raw() {
+		let req = request_with_header_modes();
+		assert_eq!(
+			Value::Bool(true),
+			eval_request(r#"request.headers.raw().multi == ['a,b','c']"#, req,).unwrap()
+		);
+	}
+
+	#[test]
+	fn split() {
+		let req = request_with_header_modes();
+		assert_eq!(
+			Value::Bool(true),
+			eval_request(r#"request.headers.split().multi == ['a','b','c']"#, req,).unwrap()
+		);
+	}
+
+	#[test]
+	fn chained() {
+		let req = request_with_header_modes();
+		assert_eq!(
+				Value::Bool(true),
+				eval_request(
+					r#"size(request.headers.redacted().raw()["authorization"]) == 1 && request.headers.redacted().raw()["authorization"][0] == "<redacted>""#,
+					req,
+				)
+				.unwrap()
+			);
+	}
+
+	#[test]
+	fn last_mode_wins() {
+		let req = request_with_header_modes();
+		assert_eq!(
+				Value::Bool(true),
+				eval_request(
+					r#"request.headers.raw().join().multi == "a,b,c" && request.headers.join().split().multi == ['a','b','c']"#,
+					req,
+				)
+				.unwrap()
+			);
+	}
 }
 
 #[test]

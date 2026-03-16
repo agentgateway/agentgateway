@@ -46,7 +46,10 @@ data:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       backend:
         backendHttp:
@@ -62,7 +65,10 @@ output:
           kind: HTTPRoute
           name: test
           namespace: default
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       backend:
         backendTls:
@@ -88,18 +94,25 @@ output:
           name: test
           namespace: default
 status:
-  ancestors:
-  - ancestorRef:
-      group: gateway.networking.k8s.io
-      kind: Gateway
-      name: test
-      namespace: default
-    conditions:
-    - lastTransitionTime: fake
-      message: |-
-        ConfigMap default/ca-bundle not found
-        secret default/hello missing Authorization value
-      reason: PartiallyValid
-      status: "True"
-      type: Accepted
-    controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: |-
+          ConfigMap default/ca-bundle not found
+          secret default/hello missing Authorization value
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

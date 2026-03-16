@@ -13,6 +13,7 @@ use futures_util::FutureExt;
 use http::StatusCode;
 use hyper_util::rt::TokioIo;
 use hyper_util::server::conn::auto;
+use rand::RngExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
 use tokio::task::{AbortHandle, JoinSet};
@@ -305,10 +306,41 @@ impl Gateway {
 			};
 			let wait = drain_watch.wait_for_drain();
 			tokio::pin!(wait);
+			const BACKOFF_INITIAL: Duration = Duration::from_millis(5);
+			const BACKOFF_MAX: Duration = Duration::from_millis(100);
+			let mut backoff = BACKOFF_INITIAL;
 			// First, accept new connections until a drain is triggered
+			// NOTE: Do not use `Ok(...) = listener.accept()` as a select! pattern.
+			// If accept() returns Err, select! permanently disables that branch,
+			// hanging the loop. Match on the full Result instead.
 			let drain_mode = loop {
 				tokio::select! {
-					Ok((stream, _peer)) = listener.accept() => handle_stream(stream, &upgrader),
+					res = listener.accept() => match res {
+						Ok((stream, _peer)) => {
+							backoff = BACKOFF_INITIAL;
+							handle_stream(stream, &upgrader);
+						}
+						Err(e) => {
+							if is_accept_error_permanent(&e) {
+								error!(bind=?name, "fatal accept error, stopping listener: {e}");
+								return;
+							}
+							if is_accept_error_per_connection(&e) {
+								debug!(bind=?name, "per-connection accept error: {e}");
+								continue;
+							}
+							warn!(bind=?name, "accept error: {e}");
+							let jittered = Duration::from_millis(
+								rand::rng().random_range(0..=backoff.as_millis() as u64)
+							);
+							tokio::select! {
+								_ = tokio::time::sleep(jittered) => {},
+								res = &mut wait => { break res; }
+							}
+							backoff = (backoff * 2).min(BACKOFF_MAX);
+							continue;
+						}
+					},
 					res = &mut wait => {
 						break res;
 					}
@@ -327,9 +359,35 @@ impl Gateway {
 			};
 			tokio::pin!(drained_for_minimum);
 			// We still need to accept new connections during this time though, so race them
+			backoff = BACKOFF_INITIAL;
 			loop {
 				tokio::select! {
-					Ok((stream, _peer)) = listener.accept() => handle_stream(stream, &upgrader),
+					res = listener.accept() => match res {
+						Ok((stream, _peer)) => {
+							backoff = BACKOFF_INITIAL;
+							handle_stream(stream, &upgrader);
+						}
+						Err(e) => {
+							if is_accept_error_permanent(&e) {
+								error!(bind=?name, "fatal accept error during drain, stopping listener: {e}");
+								return;
+							}
+							if is_accept_error_per_connection(&e) {
+								debug!(bind=?name, "per-connection accept error during drain: {e}");
+								continue;
+							}
+							warn!(bind=?name, "accept error during drain: {e}");
+							let jittered = Duration::from_millis(
+								rand::rng().random_range(0..=backoff.as_millis() as u64)
+							);
+							tokio::select! {
+								_ = tokio::time::sleep(jittered) => {},
+								_ = &mut drained_for_minimum => { return; }
+							}
+							backoff = (backoff * 2).min(BACKOFF_MAX);
+							continue;
+						}
+					},
 					_ = &mut drained_for_minimum => {
 						// We are done! exit.
 						// This will stop accepting new connections
@@ -1055,6 +1113,26 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 	}
 
 	b
+}
+
+/// The listening socket itself is broken; retrying won't help.
+/// EBADF/ENOTSOCK: fd is dead on all platforms.
+/// EINVAL: permanent on Linux (socket not listening), transient on macOS (can recover).
+fn is_accept_error_permanent(e: &std::io::Error) -> bool {
+	match e.raw_os_error() {
+		Some(libc::EBADF | libc::ENOTSOCK) => true,
+		#[cfg(target_os = "linux")]
+		Some(libc::EINVAL) => true,
+		_ => false,
+	}
+}
+
+/// Per-connection failure (client gone during handshake); harmless, no backoff needed.
+fn is_accept_error_per_connection(e: &std::io::Error) -> bool {
+	matches!(
+		e.raw_os_error(),
+		Some(libc::ECONNABORTED | libc::ECONNRESET | libc::EPERM)
+	)
 }
 
 fn build_response(status: StatusCode) -> ::http::Response<()> {

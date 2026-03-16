@@ -104,7 +104,7 @@ Only project maintainers can create releases. The process is:
 ### Community
 
 - Join our [Discord server](https://discord.gg/y9efgEmppm) for discussions
-- Participate in [our All Things AI Agents community calls](https://github.com/kagent-dev/community?tab=readme-ov-file#community-meetings)
+- Participate in our [agentgateway community calls](https://calendar.google.com/calendar/u/0?cid=Y18zZTAzNGE0OTFiMGUyYzU2OWI1Y2ZlOWNmOWM4NjYyZTljNTNjYzVlOTdmMjdkY2I5ZTZmNmM5ZDZhYzRkM2ZmQGdyb3VwLmNhbGVuZGFyLmdvb2dsZS5jb20) 
 - Help answer questions in GitHub issues
 - Review pull requests from other contributors
 

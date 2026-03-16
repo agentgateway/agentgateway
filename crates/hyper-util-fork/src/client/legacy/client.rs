@@ -20,7 +20,6 @@ use hyper::rt::Timer;
 use hyper::{Method, Request, Response, Uri, Version};
 use tracing::{debug, trace, warn};
 
-use super::connect::capture::CaptureConnectionExtension;
 use super::connect::{Alpn, Connect, Connected, Connection};
 use super::pool::{self, Ver};
 use crate::common::future::poll_fn;
@@ -258,10 +257,6 @@ where
 			// it returns an error, there's not much else to retry
 			.map_err(TrySendError::Nope)?;
 		let mut req = Request::from_parts(parts, body);
-
-		if let Some(conn) = req.extensions_mut().get_mut::<CaptureConnectionExtension>() {
-			conn.set(&pooled.conn_info);
-		}
 
 		if pooled.is_http1() {
 			if req.version() == Version::HTTP_2 {

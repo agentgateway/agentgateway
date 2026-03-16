@@ -16,7 +16,7 @@ use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
 
-use crate::cel::{BackendContext, RequestStartTime};
+use crate::cel::{BackendContext, RequestTime};
 use crate::client::{ApplicationTransport, Transport};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::ExtProcRequest;
@@ -229,9 +229,9 @@ async fn apply_backend_policies(
 
 	if let Some(a2a) = a2a {
 		let a2a_type = a2a::apply_to_request(a2a, req).await;
-		if let a2a::RequestType::Call(method) = a2a_type {
+		if let a2a::RequestType::Call(method) = &a2a_type {
 			log.add(|l| {
-				l.a2a_method = Some(method);
+				l.a2a_method = Some(method.clone());
 			});
 		}
 		if matches!(
@@ -389,7 +389,7 @@ impl HTTPProxy {
 		mut req: ::http::Request<Incoming>,
 	) -> Response {
 		let start = Instant::now();
-		let start_time = agent_core::telemetry::render_current_time();
+		let start_time = chrono::Utc::now().fixed_offset();
 
 		// Copy connection level attributes into request level attributes
 		connection.copy::<TCPConnectionInfo>(req.extensions_mut());
@@ -405,9 +405,7 @@ impl HTTPProxy {
 			tls: tls.and_then(|t| t.src_identity.clone()),
 		};
 		req.extensions_mut().insert(src);
-		req
-			.extensions_mut()
-			.insert(RequestStartTime(start_time.clone()));
+		req.extensions_mut().insert(RequestTime(start_time));
 		let log = RequestLog::new(
 			log::CelLogging::new(
 				self.inputs.cfg.logging.clone(),

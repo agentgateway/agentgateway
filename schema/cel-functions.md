@@ -33,3 +33,26 @@ The following standard functions are available:
 * From the [strings extension](https://pkg.go.dev/github.com/google/cel-go/ext#Strings): `charAt`, `indexOf`, `join`, `lastIndexOf`, `lowerAscii`, `upperAscii`, `trim`, `replace`, `split`, `substring`, `stripPrefix`, `stripSuffix`.
 * From the [Kubernetes IP extension](https://kubernetes.io/docs/reference/using-api/cel/#kubernetes-ip-address-library): `isIP("...")`, `ip("...")`, `ip("...").family()`, `ip("...").isUnspecified()`, `ip("...").isLoopback()`, `ip("...").isLinkLocalMulticast()`, `ip("...").isLinkLocalUnicast()`, `ip("...").isGlobalUnicast()`.
 * From the [Kubernetes CIDR extension](https://kubernetes.io/docs/reference/using-api/cel/#kubernetes-cidr-library): `cidr("...").containsIP("...")`, `cidr("...").containsIP(ip("..."))`, `cidr("...").containsCIDR(cidr("..."))`, `cidr("...").ip()`, `cidr("...").masked()`, `cidr("...").prefixLength()`.
+
+## Header Views
+
+`request.headers` and `response.headers` expose a header-view object with chainable methods.
+
+Available methods:
+
+| Method       | Purpose                                                                                                                                                                                         |
+|--------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| default      | A direct header lookup returns a string when there is one header entry, or a list of raw values when there are multiple entries. Example: `["a,b", "c"] -> ["a,b", "c"]`, while `["z"] -> "z"`. |
+| `redacted()` | Replaces sensitive header values with `"<redacted>"`. Useful for usage within logs.                                                                                                             |
+| `join()`     | Joins all header entries with `,`. Example: `["a,b", "c"] -> "a,b,c"`.                                                                                                                          |
+| `raw()`      | Returns the raw header entries as a list. Example: `["a,b", "c"] -> ["a,b", "c"]`.                                                                                                              |
+| `split()`    | Returns all header entries split on `,` as a list. Example: `["a,b", "c"] -> ["a", "b", "c"]`.                                                                                                  |
+
+Examples:
+
+* `request.headers.redacted().authorization`
+* `request.headers.join()["x-forwarded-for"]`
+* `request.headers.raw()["set-cookie"]`
+* `request.headers.redacted().split()["authorization"]`
+
+`redacted()` can be combined with any of the other methods. `join()`, `raw()`, and `split()` are mutually exclusive; if multiple are chained, the last one wins.

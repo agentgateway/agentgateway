@@ -1410,3 +1410,57 @@ async fn dfp_defaults_to_port_443_for_https() {
 			.unwrap();
 	assert_eq!(log["endpoint"].as_str(), Some("127.0.0.1:443"));
 }
+
+#[test]
+fn accept_error_classification() {
+	use std::io::{Error, ErrorKind};
+
+	use super::{is_accept_error_per_connection, is_accept_error_permanent};
+
+	// Fatal errors: socket is permanently broken
+	assert!(is_accept_error_permanent(&Error::from_raw_os_error(
+		libc::EBADF
+	)));
+	assert!(is_accept_error_permanent(&Error::from_raw_os_error(
+		libc::ENOTSOCK
+	)));
+	// EINVAL is permanent on Linux (socket not listening), but transient on macOS
+	#[cfg(target_os = "linux")]
+	assert!(is_accept_error_permanent(&Error::from_raw_os_error(
+		libc::EINVAL
+	)));
+	#[cfg(not(target_os = "linux"))]
+	assert!(!is_accept_error_permanent(&Error::from_raw_os_error(
+		libc::EINVAL
+	)));
+
+	// Per-connection errors: harmless, no backoff needed
+	assert!(is_accept_error_per_connection(&Error::from_raw_os_error(
+		libc::ECONNABORTED
+	)));
+	assert!(is_accept_error_per_connection(&Error::from_raw_os_error(
+		libc::ECONNRESET
+	)));
+	assert!(is_accept_error_per_connection(&Error::from_raw_os_error(
+		libc::EPERM
+	)));
+
+	// Resource pressure errors: need backoff
+	let pressure = Error::from_raw_os_error(libc::EMFILE);
+	assert!(!is_accept_error_permanent(&pressure));
+	assert!(!is_accept_error_per_connection(&pressure));
+
+	let pressure = Error::from_raw_os_error(libc::ENOMEM);
+	assert!(!is_accept_error_permanent(&pressure));
+	assert!(!is_accept_error_per_connection(&pressure));
+
+	// Generic errors: not permanent, not per-connection
+	assert!(!is_accept_error_permanent(&Error::new(
+		ErrorKind::WouldBlock,
+		"again"
+	)));
+	assert!(!is_accept_error_per_connection(&Error::new(
+		ErrorKind::WouldBlock,
+		"again"
+	)));
+}

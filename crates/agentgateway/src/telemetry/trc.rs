@@ -317,7 +317,8 @@ impl opentelemetry_sdk::trace::SpanExporter for PolicyGrpcSpanExporter {
 				.await
 				.map_err(|e| OTelSdkError::InternalFailure(e.to_string()))?
 				.map(|_| ())
-				.map_err(|e| OTelSdkError::InternalFailure(e.to_string())) as OTelSdkResult
+				.map_err(|e: tonic::Status| OTelSdkError::InternalFailure(e.message().to_string()))
+				as OTelSdkResult
 		}
 	}
 

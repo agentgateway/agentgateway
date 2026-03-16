@@ -71,15 +71,6 @@ func (t *TestStatusQueue) dump() []crd.IstioKind {
 	return objs
 }
 
-// DumpStatus returns just the status of the 1 objects that had status written, or panics
-func (t *TestStatusQueue) DumpStatus() any {
-	d := t.dump()
-	if len(d) != 1 {
-		panic("DumpStatus called with multiple status messages")
-	}
-	return d[0].Status
-}
-
 // Dump returns all objects that had status written
 func (t *TestStatusQueue) Dump() []any {
 	return slices.Map(t.dump(), func(e crd.IstioKind) any {

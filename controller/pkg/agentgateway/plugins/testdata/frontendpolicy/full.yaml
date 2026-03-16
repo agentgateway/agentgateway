@@ -62,7 +62,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       frontend:
         http:
@@ -77,7 +80,10 @@ output:
         gateway:
           name: test
           namespace: default
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       frontend:
         logging:
@@ -97,7 +103,10 @@ output:
         gateway:
           name: test
           namespace: default
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       frontend:
         tcp:
@@ -114,7 +123,10 @@ output:
         gateway:
           name: test
           namespace: default
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       frontend:
         tls:
@@ -132,17 +144,24 @@ output:
           name: test
           namespace: default
 status:
-  ancestors:
-  - ancestorRef:
-      group: gateway.networking.k8s.io
-      kind: Gateway
-      name: test
-      namespace: default
-    conditions:
-    - lastTransitionTime: fake
-      message: 'failed to translate tracing backend ref: unable to find the Service
-        some-other-ns/my-otel'
-      reason: PartiallyValid
-      status: "True"
-      type: Accepted
-    controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: 'failed to translate tracing backend ref: unable to find the Service
+          some-other-ns/my-otel'
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

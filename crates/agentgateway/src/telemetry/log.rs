@@ -402,7 +402,7 @@ impl CelLogging {
 		resp: Option<&'a cel::ResponseSnapshot>,
 		llm_response: Option<&'a LLMContext>,
 		mcp: Option<&'a ResourceType>,
-		end_time: Option<&'a str>,
+		end_time: Option<&'a cel::RequestTime>,
 		source_context: Option<&'a cel::SourceContext>,
 	) -> Result<CelLoggingExecutor<'a>, cel::Error> {
 		let CelLogging {
@@ -700,7 +700,7 @@ pub struct RequestLog {
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
 
-	pub a2a_method: Option<&'static str>,
+	pub a2a_method: Option<Strng>,
 
 	pub inference_pool: Option<SocketAddr>,
 
@@ -781,8 +781,8 @@ impl Drop for DropOnLog {
 			.health_policy
 			.as_ref()
 			.is_some_and(|p| p.unhealthy_expression.is_some());
-		let end_time_str = (needs_cel_for_outputs || needs_cel_for_eviction)
-			.then(agent_core::telemetry::render_current_time);
+		let cel_end_time = (needs_cel_for_outputs || needs_cel_for_eviction)
+			.then(|| cel::RequestTime(chrono::Utc::now().fixed_offset()));
 		let cel_exec = if needs_cel_for_outputs || needs_cel_for_eviction {
 			log
 				.cel
@@ -791,7 +791,7 @@ impl Drop for DropOnLog {
 					log.response_snapshot.as_ref(),
 					llm_response.as_ref(),
 					mcp_cel.as_ref(),
-					end_time_str.as_deref(),
+					cel_end_time.as_ref(),
 					log.source_context.as_ref(),
 				)
 				.ok()
@@ -1267,7 +1267,8 @@ impl opentelemetry_sdk::logs::LogExporter for PolicyGrpcLogExporter {
 				.await
 				.map_err(|e| OTelSdkError::InternalFailure(e.to_string()))?
 				.map(|_| ())
-				.map_err(|e| OTelSdkError::InternalFailure(e.to_string())) as OTelSdkResult
+				.map_err(|e: tonic::Status| OTelSdkError::InternalFailure(e.message().to_string()))
+				as OTelSdkResult
 		}
 	}
 

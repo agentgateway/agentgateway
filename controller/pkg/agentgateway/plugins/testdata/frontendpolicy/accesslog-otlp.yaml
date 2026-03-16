@@ -1,0 +1,93 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: accesslog-otlp-policy
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  frontend:
+    accessLog:
+      filter: 'response.code >= 400'
+      attributes:
+        remove:
+        - request.headers["authorization"]
+        add:
+        - expression: 'request.headers["x-request-id"]'
+          name: trace.id
+      otlp:
+        backendRef:
+          name: otel-collector
+          port: 4318
+        protocol: HTTP
+        path: /custom/v1/logs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: default
+spec:
+  ports:
+    - port: 4318
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      frontend:
+        logging:
+          fields:
+            add:
+            - expression: request.headers["x-request-id"]
+              name: trace.id
+            remove:
+            - request.headers["authorization"]
+          filter: response.code >= 400
+          otlpAccessLog:
+            path: /custom/v1/logs
+            providerBackend:
+              port: 4318
+              service:
+                hostname: otel-collector.default.svc.cluster.local
+                namespace: default
+      key: frontend/default/accesslog-otlp-policy:frontend-logging:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: accesslog-otlp-policy
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: accesslog-otlp-policy
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

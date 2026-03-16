@@ -3,6 +3,7 @@ use std::net::IpAddr;
 use std::sync::Arc;
 
 use crate::Value;
+use crate::functions::FunctionContext;
 use crate::objects::StringValue;
 use cel::objects::KeyRef;
 use cel::{to_value, types};
@@ -36,6 +37,19 @@ pub trait DynamicType: std::fmt::Debug + Send + Sync {
 	fn field(&self, field: &str) -> Option<Value<'_>> {
 		None
 	}
+
+	/// Resolves a method function by name.
+	#[allow(unused_variables)]
+	fn call_function<'a, 'rf>(
+		&self,
+		name: &str,
+		ftx: &mut FunctionContext<'a, 'rf>,
+	) -> Option<crate::ResolveResult<'a>>
+	where
+		Self: 'a,
+	{
+		None
+	}
 }
 
 /// Trait for types that can be flattened into a parent struct's map.
@@ -49,37 +63,73 @@ pub trait DynamicFlatten: DynamicType {
 	);
 }
 
+#[derive(Clone)]
+enum DynamicRef<'a> {
+	Borrowed(&'a dyn DynamicType),
+	Owned(Arc<dyn DynamicType + 'a>),
+}
+
 pub struct DynamicValue<'a> {
-	dyn_ref: &'a dyn DynamicType,
+	dyn_ref: DynamicRef<'a>,
 }
 
 impl<'a> DynamicValue<'a> {
 	pub fn new<T: DynamicType>(t: &'a T) -> Self {
 		Self {
-			dyn_ref: t as &dyn DynamicType,
+			dyn_ref: DynamicRef::Borrowed(t as &dyn DynamicType),
+		}
+	}
+
+	pub fn new_owned<T: DynamicType + 'a>(t: T) -> Self {
+		Self {
+			dyn_ref: DynamicRef::Owned(Arc::new(t)),
+		}
+	}
+
+	fn as_ref(&self) -> &(dyn DynamicType + 'a) {
+		match &self.dyn_ref {
+			DynamicRef::Borrowed(dyn_ref) => *dyn_ref,
+			DynamicRef::Owned(dyn_ref) => dyn_ref.as_ref(),
 		}
 	}
 
 	pub fn materialize(&self) -> Value<'a> {
-		self.dyn_ref.materialize()
+		match &self.dyn_ref {
+			DynamicRef::Borrowed(dyn_ref) => dyn_ref.materialize(),
+			DynamicRef::Owned(dyn_ref) => dyn_ref.materialize().as_static(),
+		}
 	}
 
 	pub fn field(&self, field: &str) -> Option<Value<'a>> {
-		self.dyn_ref.field(field)
+		match &self.dyn_ref {
+			DynamicRef::Borrowed(dyn_ref) => dyn_ref.field(field),
+			DynamicRef::Owned(dyn_ref) => dyn_ref.field(field).map(|value| value.as_static()),
+		}
+	}
+
+	pub fn call_function<'rf>(
+		&self,
+		name: &str,
+		ftx: &mut FunctionContext<'a, 'rf>,
+	) -> Option<crate::ResolveResult<'a>> {
+		match &self.dyn_ref {
+			DynamicRef::Borrowed(dyn_ref) => dyn_ref.call_function(name, ftx),
+			DynamicRef::Owned(dyn_ref) => dyn_ref.call_function(name, ftx),
+		}
 	}
 }
 
 impl<'a> Clone for DynamicValue<'a> {
 	fn clone(&self) -> Self {
 		Self {
-			dyn_ref: self.dyn_ref,
+			dyn_ref: self.dyn_ref.clone(),
 		}
 	}
 }
 
 impl<'a> std::fmt::Debug for DynamicValue<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		self.dyn_ref.fmt(f)
+		self.as_ref().fmt(f)
 	}
 }
 
@@ -266,37 +316,16 @@ impl<T: DynamicType> DynamicType for &T {
 	fn field(&self, field: &str) -> Option<Value<'_>> {
 		(*self).field(field)
 	}
-}
 
-impl DynamicType for http::HeaderMap {
-	fn materialize(&self) -> Value<'_> {
-		let mut map = vector_map::VecMap::with_capacity(self.len());
-		for (k, v) in self.iter() {
-			if let Ok(s) = str::from_utf8(v.as_bytes()) {
-				map.insert(crate::objects::KeyRef::from(k.as_str()), Value::from(s));
-			}
-		}
-		Value::Map(crate::objects::MapValue::Borrow(map))
-	}
-
-	fn field(&self, field: &str) -> Option<Value<'_>> {
-		// TODO: do not implicitly drop invalid utf8
-		self
-			.get(field)
-			.and_then(|v| Some(Value::from(str::from_utf8(v.as_bytes()).ok()?)))
-	}
-}
-
-impl DynamicFlatten for http::HeaderMap {
-	fn materialize_into<'a>(
-		&'a self,
-		map: &mut vector_map::VecMap<crate::objects::KeyRef<'a>, Value<'a>>,
-	) {
-		for (k, v) in self.iter() {
-			if let Ok(s) = str::from_utf8(v.as_bytes()) {
-				map.insert(crate::objects::KeyRef::from(k.as_str()), Value::from(s));
-			}
-		}
+	fn call_function<'a, 'rf>(
+		&self,
+		name: &str,
+		ftx: &mut FunctionContext<'a, 'rf>,
+	) -> Option<crate::ResolveResult<'a>>
+	where
+		Self: 'a,
+	{
+		(*self).call_function(name, ftx)
 	}
 }
 
@@ -323,6 +352,16 @@ where
 	fn field(&self, field: &str) -> Option<Value<'_>> {
 		self.as_ref().field(field)
 	}
+	fn call_function<'a, 'rf>(
+		&self,
+		name: &str,
+		ftx: &mut FunctionContext<'a, 'rf>,
+	) -> Option<crate::ResolveResult<'a>>
+	where
+		Self: 'a,
+	{
+		self.as_ref().call_function(name, ftx)
+	}
 }
 impl<T> DynamicType for Option<T>
 where
@@ -343,6 +382,19 @@ where
 	fn field(&self, field: &str) -> Option<Value<'_>> {
 		match self {
 			Some(v) => v.field(field),
+			None => None,
+		}
+	}
+	fn call_function<'a, 'rf>(
+		&self,
+		name: &str,
+		ftx: &mut FunctionContext<'a, 'rf>,
+	) -> Option<crate::ResolveResult<'a>>
+	where
+		Self: 'a,
+	{
+		match self {
+			Some(v) => v.call_function(name, ftx),
 			None => None,
 		}
 	}

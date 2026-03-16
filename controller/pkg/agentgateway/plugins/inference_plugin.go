@@ -91,7 +91,11 @@ func translatePoliciesForInferencePool(
 			},
 		},
 	}
-	infPolicies = append(infPolicies, AgwPolicy{Policy: inferencePolicy})
+	gatewayTargets := make([]types.NamespacedName, 0, len(attachedGateways))
+	for gatewayTarget := range attachedGateways {
+		gatewayTargets = append(gatewayTargets, gatewayTarget)
+	}
+	infPolicies = appendPolicyForGateways(infPolicies, gatewayTargets, inferencePolicy)
 
 	// Create the TLS policy for the endpoint picker
 	// TODO: we would want some way if they explicitly set a BackendTLSPolicy for the EPP to respect that
@@ -110,7 +114,7 @@ func translatePoliciesForInferencePool(
 			},
 		},
 	}
-	infPolicies = append(infPolicies, AgwPolicy{Policy: inferencePolicyTLS})
+	infPolicies = appendPolicyForGateways(infPolicies, gatewayTargets, inferencePolicyTLS)
 
 	logger.Debug("generated inference pool policies",
 		"pool", pool.Name,

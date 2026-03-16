@@ -18,6 +18,17 @@ llm:
     params:
       model: claude-haiku-4-5-20251001
       apiKey: "sk-123"
+      hostOverride: anthropic.internal:8443
+      pathOverride: /v1/messages
+      tokenize: true
+    responseHeaders:
+      remove:
+      - server
+    backendTLS: {}
+    health:
+      unhealthyExpression: "response.code >= 500 || response.code == 429"
+      eviction:
+        duration: 30s
     matches:
     - headers:
       - name: "X-Org"

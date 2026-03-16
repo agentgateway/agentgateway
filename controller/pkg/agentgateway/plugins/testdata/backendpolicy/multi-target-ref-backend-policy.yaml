@@ -5,13 +5,22 @@ metadata:
   namespace: default
 spec:
   parentRefs:
-    - name: mcp
+    - name: test
       namespace: default
   rules:
     - backendRefs:
-        - name: agentgateway
-          namespace: agentgateway-system
-          port: 7777
+      - group: agentgateway.dev
+        kind: AgentgatewayBackend
+        name: test1
+      - group: agentgateway.dev
+        kind: AgentgatewayBackend
+        name: test2
+      - group: agentgateway.dev
+        kind: AgentgatewayBackend
+        name: test3
+      - group: agentgateway.dev
+        kind: AgentgatewayBackend
+        name: dummy-oauth
       matches:
         - path:
             type: PathPrefix
@@ -136,7 +145,10 @@ metadata:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       backend:
         mcpAuthentication:
@@ -161,7 +173,10 @@ output:
         backend:
           name: dummy-oauth
           namespace: default
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       backend:
         mcpAuthentication:
@@ -186,7 +201,10 @@ output:
         backend:
           name: test1
           namespace: default
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       backend:
         mcpAuthentication:
@@ -211,7 +229,10 @@ output:
         backend:
           name: test2
           namespace: default
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       backend:
         mcpAuthentication:
@@ -237,72 +258,79 @@ output:
           name: test3
           namespace: default
 status:
-  ancestors:
-  - ancestorRef:
-      group: agentgateway.dev
-      kind: AgentgatewayBackend
-      name: dummy-oauth
-      namespace: default
-    conditions:
-    - lastTransitionTime: fake
-      message: Policy accepted
-      reason: Valid
-      status: "True"
-      type: Accepted
-    - lastTransitionTime: fake
-      message: Attached to all targets
-      reason: Attached
-      status: "True"
-      type: Attached
-    controllerName: agentgateway.dev/agentgateway
-  - ancestorRef:
-      group: agentgateway.dev
-      kind: AgentgatewayBackend
-      name: test1
-      namespace: default
-    conditions:
-    - lastTransitionTime: fake
-      message: Policy accepted
-      reason: Valid
-      status: "True"
-      type: Accepted
-    - lastTransitionTime: fake
-      message: Attached to all targets
-      reason: Attached
-      status: "True"
-      type: Attached
-    controllerName: agentgateway.dev/agentgateway
-  - ancestorRef:
-      group: agentgateway.dev
-      kind: AgentgatewayBackend
-      name: test2
-      namespace: default
-    conditions:
-    - lastTransitionTime: fake
-      message: Policy accepted
-      reason: Valid
-      status: "True"
-      type: Accepted
-    - lastTransitionTime: fake
-      message: Attached to all targets
-      reason: Attached
-      status: "True"
-      type: Attached
-    controllerName: agentgateway.dev/agentgateway
-  - ancestorRef:
-      group: agentgateway.dev
-      kind: AgentgatewayBackend
-      name: test3
-      namespace: default
-    conditions:
-    - lastTransitionTime: fake
-      message: Policy accepted
-      reason: Valid
-      status: "True"
-      type: Accepted
-    - lastTransitionTime: fake
-      message: Attached to all targets
-      reason: Attached
-      status: "True"
-      type: Attached
-    controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: mcp-auth
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+        name: dummy-oauth
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
+    - ancestorRef:
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+        name: test1
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
+    - ancestorRef:
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+        name: test2
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
+    - ancestorRef:
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+        name: test3
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

@@ -127,6 +127,23 @@ pub struct LoggingPolicy {
 	pub remove: Arc<FzHashSet<String>>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub otlp: Option<OtlpLoggingConfig>,
+	#[serde(skip)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub access_log_policy: Option<Arc<super::agent::AccessLogPolicy>>,
+}
+
+impl LoggingPolicy {
+	/// Initializes the shared `AccessLogPolicy` from the OTLP config, if present.
+	/// Must be called after deserialization so the `OnceCell`-backed logger is
+	/// shared across requests instead of being recreated each time.
+	pub fn init_access_log_policy(&mut self) {
+		if let Some(otlp_cfg) = &self.otlp {
+			self.access_log_policy = Some(Arc::new(super::agent::AccessLogPolicy {
+				config: otlp_cfg.clone(),
+				logger: once_cell::sync::OnceCell::new(),
+			}));
+		}
+	}
 }
 
 #[apply(schema!)]

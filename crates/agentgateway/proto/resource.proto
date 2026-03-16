@@ -511,6 +511,27 @@ message FrontendPolicySpec {
 
     // Fields applied to logs
     Fields fields = 2;
+
+    // OTLP access log configuration for shipping access logs to an
+    // OpenTelemetry-compatible backend.
+    message OtlpAccessLog {
+      // Backend to send OTLP access logs to.
+      BackendReference provider_backend = 1;
+      // Inline backend policies (e.g. TLS, auth) for the OTLP backend.
+      repeated BackendPolicySpec inline_policies = 2;
+      // OTLP protocol variant. Default is HTTP.
+      Protocol protocol = 3;
+      // OTLP/HTTP path. Only applicable when protocol is HTTP. Default is /v1/logs.
+      optional string path = 4;
+
+      enum Protocol {
+        HTTP = 0;
+        GRPC = 1;
+      }
+    }
+
+    // Optional OTLP access log export configuration.
+    OtlpAccessLog otlp_access_log = 3;
   }
 
   message Tracing {

@@ -176,6 +176,7 @@ fn merge_deprecated_frontend_policies(
 			add: log.fields.add.clone(),
 			remove: log.fields.remove.clone(),
 			otlp: None,
+			access_log_policy: None,
 		});
 	}
 	if let Some(tracing) = deprecated.tracing.clone() {
@@ -320,6 +321,18 @@ pub struct LocalLLMModels {
 	/// requestHeaders modifies headers in requests to the LLM provider.
 	#[serde(default)]
 	request_headers: Option<filters::HeaderModifier>,
+	/// responseHeaders modifies headers in responses from the LLM provider.
+	#[serde(default)]
+	response_headers: Option<filters::HeaderModifier>,
+	/// backendTLS configures TLS when connecting to the LLM provider.
+	#[serde(rename = "backendTLS", default)]
+	backend_tls: Option<http::backendtls::LocalBackendTLS>,
+	/// health configures outlier detection for this model backend.
+	#[serde(default)]
+	health: Option<health::LocalHealthPolicy>,
+	/// backendTunnel configures tunneling when connecting to the LLM provider.
+	#[serde(default)]
+	backend_tunnel: Option<backend::Tunnel>,
 	/// guardrails to apply to the request or response
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	guardrails: Option<PromptGuard>,
@@ -356,6 +369,15 @@ pub struct LocalLLMParams {
 	azure_host: Option<Strng>,
 	/// For Azure: the API version to use
 	azure_api_version: Option<Strng>,
+	/// Override the upstream host for this provider.
+	#[serde(default)]
+	host_override: Option<Target>,
+	/// Override the upstream path for this provider.
+	#[serde(default)]
+	path_override: Option<Strng>,
+	/// Whether to tokenize the request before forwarding it upstream.
+	#[serde(default)]
+	tokenize: bool,
 }
 
 #[apply(schema_de!)]
@@ -1450,11 +1472,37 @@ async fn convert_llm_config(
 	llm_config: LocalLLMConfig,
 ) -> anyhow::Result<(Bind, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
 	const DEFAULT_LLM_PORT: u16 = 4000;
-	let port = llm_config.port.unwrap_or(DEFAULT_LLM_PORT);
+	let LocalLLMConfig {
+		port,
+		models,
+		policies,
+	} = llm_config;
+	let port = port.unwrap_or(DEFAULT_LLM_PORT);
 
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
 	let mut routes = RouteSet::default();
+	let (listener_gateway_policies, listener_route_policies) = if let Some(pol) = policies {
+		let LocalLLMPolicy {
+			gateway,
+			authorization,
+		} = pol;
+		let authorization_policies = split_policies(
+			client.clone(),
+			FilterOrPolicy {
+				authorization,
+				..Default::default()
+			},
+		)
+		.await?;
+		let gateway_policies = split_policies(client.clone(), gateway.into()).await?;
+		(
+			gateway_policies.route_policies,
+			authorization_policies.route_policies,
+		)
+	} else {
+		(vec![], vec![])
+	};
 
 	// Create transformation policy to set x-gateway-model-name header from request body
 	let transformation = http::transformation_cel::Transformation::try_from_local_config(
@@ -1496,8 +1544,7 @@ json(request.body).model
 
 	// Create model list route
 	let model_list_body = serde_json::json!({
-		"data": llm_config
-			.models
+		"data": models
 			.iter()
 			.map(|m| serde_json::json!({
 				"id": m.name,
@@ -1542,7 +1589,7 @@ json(request.body).model
 	routes.insert(model_list_route);
 
 	// Create routes and backends for each model
-	for (idx, model_config) in llm_config.models.iter().enumerate() {
+	for (idx, model_config) in models.iter().enumerate() {
 		let model_name = strng::new(&model_config.name);
 		// Index is needed because the same name can be used with different match criteria
 		let backend_key = strng::format!("llm:model:{}:{idx}", model_config.name);
@@ -1587,9 +1634,9 @@ json(request.body).model
 		let named_provider = NamedAIProvider {
 			name: model_name.clone(),
 			provider,
-			host_override: None,
-			path_override: None,
-			tokenize: false,
+			host_override: p.host_override,
+			path_override: p.path_override,
+			tokenize: p.tokenize,
 			inline_policies: pols,
 		};
 
@@ -1601,6 +1648,12 @@ json(request.body).model
 		};
 
 		let mut pols = vec![];
+		if let Some(p) = model_config.backend_tls.clone() {
+			pols.push(BackendPolicy::BackendTLS(p.try_into()?));
+		}
+		if let Some(p) = model_config.backend_tunnel.clone() {
+			pols.push(BackendPolicy::Tunnel(p));
+		}
 		if let Some(mut rh) = model_config.request_headers.clone() {
 			rh.remove.push(strng::literal!("x-gateway-model-name"));
 			pols.push(BackendPolicy::RequestHeaderModifier(rh));
@@ -1610,6 +1663,14 @@ json(request.body).model
 				add: vec![],
 				set: vec![],
 			}));
+		}
+		if let Some(rh) = model_config.response_headers.clone() {
+			pols.push(BackendPolicy::ResponseHeaderModifier(rh));
+		}
+		if let Some(p) = model_config.health.clone() {
+			pols.push(BackendPolicy::Health(p.try_into().map_err(
+				|e: crate::cel::Error| anyhow::anyhow!("health.unhealthyExpression: {}", e),
+			)?));
 		}
 		pols.push(BackendPolicy::AI(Arc::new(llm::Policy {
 			defaults: model_config.defaults.clone(),
@@ -1725,19 +1786,9 @@ json(request.body).model
 		tcp_routes: Default::default(),
 	};
 
-	if let Some(pol) = llm_config.policies {
-		let route_pols = split_policies(
-			client.clone(),
-			FilterOrPolicy {
-				authorization: pol.authorization.clone(),
-				..Default::default()
-			},
-		)
-		.await?;
-		let pols = split_policies(client.clone(), pol.gateway.into()).await?;
-
-		let pc = pols.route_policies.len();
-		for (idx, pol) in pols.route_policies.into_iter().enumerate() {
+	if !listener_gateway_policies.is_empty() || !listener_route_policies.is_empty() {
+		let pc = listener_gateway_policies.len();
+		for (idx, pol) in listener_gateway_policies.into_iter().enumerate() {
 			let key = strng::format!("listener/{idx}");
 			all_policies.push(TargetedPolicy {
 				key: key.clone(),
@@ -1746,7 +1797,7 @@ json(request.body).model
 				policy: (pol, PolicyPhase::Gateway).into(),
 			})
 		}
-		for (idx, pol) in route_pols.route_policies.into_iter().enumerate() {
+		for (idx, pol) in listener_route_policies.into_iter().enumerate() {
 			let key = strng::format!("listener/{}", pc + idx);
 			all_policies.push(TargetedPolicy {
 				key: key.clone(),
@@ -2120,7 +2171,8 @@ async fn split_frontend_policies(
 	if let Some(p) = tcp {
 		add(FrontendPolicy::TCP(p), "tcp");
 	}
-	if let Some(p) = access_log {
+	if let Some(mut p) = access_log {
+		p.init_access_log_policy();
 		add(FrontendPolicy::AccessLog(p), "accessLog");
 	}
 	if let Some(tracing_config) = tracing {

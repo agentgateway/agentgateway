@@ -1428,6 +1428,32 @@ type AccessLog struct {
 	// attributes specifies customizations to the key-value pairs that are logged
 	// +optional
 	Attributes *LogTracingAttributes `json:"attributes,omitempty"`
+
+	// otlp configures OTLP access log export to an OpenTelemetry-compatible backend.
+	// +optional
+	Otlp *OtlpAccessLog `json:"otlp,omitempty"`
+}
+
+// OtlpAccessLog defines configuration for shipping access logs to an
+// OpenTelemetry-compatible backend via OTLP.
+// +kubebuilder:validation:XValidation:rule="!has(self.path) || !has(self.protocol) || self.protocol == 'HTTP'",message="path is only valid with protocol HTTP"
+// +kubebuilder:validation:XValidation:rule="!has(self.path) || self.path.startsWith('/')",message="path must start with /"
+type OtlpAccessLog struct {
+	// backendRef references the OTLP server to send access logs to.
+	// Supported types: Service and AgentgatewayBackend.
+	// +required
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// protocol specifies the OTLP protocol variant to use.
+	// +kubebuilder:default=GRPC
+	// +kubebuilder:validation:Enum=HTTP;GRPC
+	// +optional
+	Protocol OTLPProtocol `json:"protocol,omitempty"`
+
+	// path specifies the OTLP/HTTP path to use. This is only applicable when protocol is HTTP.
+	// If unset, this defaults to /v1/logs.
+	// +optional
+	Path *LongString `json:"path,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -1452,11 +1478,11 @@ type AttributeAdd struct {
 	Expression shared.CELExpression `json:"expression"`
 }
 
-type TracingProtocol string
+type OTLPProtocol string
 
 const (
-	TracingProtocolHttp TracingProtocol = "HTTP"
-	TracingProtocolGrpc TracingProtocol = "GRPC"
+	OTLPProtocolHttp OTLPProtocol = "HTTP"
+	OTLPProtocolGrpc OTLPProtocol = "GRPC"
 )
 
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || !has(self.protocol) || self.protocol == 'HTTP'",message="path is only valid with protocol HTTP"
@@ -1470,7 +1496,7 @@ type Tracing struct {
 	// +kubebuilder:default=GRPC
 	// +kubebuilder:validation:Enum=HTTP;GRPC
 	// +optional
-	Protocol TracingProtocol `json:"protocol,omitempty"`
+	Protocol OTLPProtocol `json:"protocol,omitempty"`
 
 	// path specifies the OTLP path to use. This is only applicable when protocol is HTTP.
 	// If unset, this defaults to /v1/traces.

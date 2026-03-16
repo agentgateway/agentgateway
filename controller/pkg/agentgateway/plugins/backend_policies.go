@@ -50,8 +50,8 @@ func TranslateInlineBackendPolicy(
 		Spec: agentgateway.AgentgatewayPolicySpec{Backend: policy},
 	}
 	res, err := translateBackendPolicyToAgw(ctx, dummy, nil)
-	return slices.MapFilter(res, func(e AgwPolicy) **api.BackendPolicySpec {
-		return ptr.Of(e.Policy.GetBackend())
+	return slices.MapFilter(res, func(e *api.Policy) **api.BackendPolicySpec {
+		return ptr.Of(e.GetBackend())
 	}), err
 }
 
@@ -59,19 +59,19 @@ func translateBackendPolicyToAgw(
 	ctx PolicyCtx,
 	policy *agentgateway.AgentgatewayPolicy,
 	policyTarget *api.PolicyTarget,
-) ([]AgwPolicy, error) {
+) ([]*api.Policy, error) {
 	backend := policy.Spec.Backend
 	if backend == nil {
 		return nil, nil
 	}
-	agwPolicies := make([]AgwPolicy, 0)
+	agwPolicies := make([]*api.Policy, 0)
 	var errs []error
 
 	policyName := getBackendPolicyName(policy.Namespace, policy.Name)
 
 	if s := backend.HTTP; s != nil {
 		pol := translateBackendHTTP(policy, policyTarget)
-		agwPolicies = append(agwPolicies, pol...)
+		agwPolicies = append(agwPolicies, pol)
 	}
 
 	if s := backend.Tunnel; s != nil {
@@ -80,7 +80,9 @@ func translateBackendPolicyToAgw(
 			logger.Error("error processing backend tunnel", "err", err)
 			errs = append(errs, err)
 		}
-		agwPolicies = append(agwPolicies, pol...)
+		if pol != nil {
+			agwPolicies = append(agwPolicies, pol)
+		}
 	}
 
 	if s := backend.TLS; s != nil {
@@ -89,7 +91,9 @@ func translateBackendPolicyToAgw(
 			logger.Error("error processing backend TLS", "err", err)
 			errs = append(errs, err)
 		}
-		agwPolicies = append(agwPolicies, pol...)
+		if pol != nil {
+			agwPolicies = append(agwPolicies, pol)
+		}
 	}
 
 	if s := backend.TCP; s != nil {
@@ -98,7 +102,9 @@ func translateBackendPolicyToAgw(
 			logger.Error("error processing backend TCP", "err", err)
 			errs = append(errs, err)
 		}
-		agwPolicies = append(agwPolicies, pol...)
+		if pol != nil {
+			agwPolicies = append(agwPolicies, pol)
+		}
 	}
 
 	if s := backend.Health; s != nil {
@@ -107,7 +113,9 @@ func translateBackendPolicyToAgw(
 			logger.Error("error processing backend health policy", "err", err)
 			errs = append(errs, err)
 		}
-		agwPolicies = append(agwPolicies, pol...)
+		if pol != nil {
+			agwPolicies = append(agwPolicies, pol)
+		}
 	}
 
 	if s := backend.Transformation; s != nil {
@@ -116,13 +124,17 @@ func translateBackendPolicyToAgw(
 			logger.Error("error processing backend transformation", "err", err)
 			errs = append(errs, err)
 		}
-		agwPolicies = append(agwPolicies, pol...)
+		if pol != nil {
+			agwPolicies = append(agwPolicies, pol)
+		}
 	}
 
 	if s := backend.MCP; s != nil {
 		if backend.MCP.Authorization != nil {
 			pol := translateBackendMCPAuthorization(policy, policyTarget)
-			agwPolicies = append(agwPolicies, pol...)
+			if pol != nil {
+				agwPolicies = append(agwPolicies, pol)
+			}
 		}
 
 		if backend.MCP.Authentication != nil {
@@ -131,7 +143,9 @@ func translateBackendPolicyToAgw(
 				logger.Error("error processing backend mcp auth", "err", err)
 				errs = append(errs, err)
 			}
-			agwPolicies = append(agwPolicies, pol...)
+			if pol != nil {
+				agwPolicies = append(agwPolicies, pol)
+			}
 		}
 	}
 
@@ -141,7 +155,9 @@ func translateBackendPolicyToAgw(
 			logger.Error("error processing backend AI", "err", err)
 			errs = append(errs, err)
 		}
-		agwPolicies = append(agwPolicies, pol...)
+		if pol != nil {
+			agwPolicies = append(agwPolicies, pol)
+		}
 	}
 
 	if s := backend.Auth; s != nil {
@@ -150,13 +166,15 @@ func translateBackendPolicyToAgw(
 			logger.Error("error processing backend Auth", "err", err)
 			errs = append(errs, err)
 		}
-		agwPolicies = append(agwPolicies, pol...)
+		if pol != nil {
+			agwPolicies = append(agwPolicies, pol)
+		}
 	}
 
 	return agwPolicies, errors.Join(errs...)
 }
 
-func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) ([]AgwPolicy, error) {
+func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) (*api.Policy, error) {
 	var errs []error
 
 	healthPolicy := policy.Spec.Backend.Health
@@ -210,10 +228,10 @@ func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy, targe
 		},
 	}
 
-	return []AgwPolicy{{Policy: evictPolicy}}, errors.Join(errs...)
+	return evictPolicy, errors.Join(errs...)
 }
 
-func translateBackendTCP(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) ([]AgwPolicy, error) {
+func translateBackendTCP(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) (*api.Policy, error) {
 	// TODO
 	return nil, nil
 }
@@ -221,7 +239,7 @@ func translateBackendTCP(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy,
 func translateBackendTransformation(
 	policy *agentgateway.AgentgatewayPolicy,
 	target *api.PolicyTarget,
-) ([]AgwPolicy, error) {
+) (*api.Policy, error) {
 	var errs []error
 	transformation := policy.Spec.Backend.Transformation
 
@@ -252,10 +270,10 @@ func translateBackendTransformation(
 	logger.Debug("generated backend transformation policy",
 		"policy", policy.Name,
 		"agentgateway_policy", tp.Name)
-	return []AgwPolicy{{Policy: tp}}, errors.Join(errs...)
+	return tp, errors.Join(errs...)
 }
 
-func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) ([]AgwPolicy, error) {
+func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) (*api.Policy, error) {
 	var errs []error
 	tls := policy.Spec.Backend.TLS
 
@@ -345,10 +363,10 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy,
 		"policy", policy.Name,
 		"agentgateway_policy", tlsPolicy.Name)
 
-	return []AgwPolicy{{Policy: tlsPolicy}}, errors.Join(errs...)
+	return tlsPolicy, errors.Join(errs...)
 }
 
-func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) []AgwPolicy {
+func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) *api.Policy {
 	http := policy.Spec.Backend.HTTP
 	p := &api.BackendPolicySpec_BackendHTTP{}
 	if v := http.Version; v != nil {
@@ -378,10 +396,10 @@ func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy, target *api.P
 		"policy", policy.Name,
 		"agentgateway_policy", tp.Name)
 
-	return []AgwPolicy{{Policy: tp}}
+	return tp
 }
 
-func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) ([]AgwPolicy, error) {
+func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) (*api.Policy, error) {
 	tunnel := policy.Spec.Backend.Tunnel
 
 	proxy, err := buildBackendRef(ctx, tunnel.BackendRef, policy.Namespace)
@@ -408,10 +426,10 @@ func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 		"policy", policy.Name,
 		"agentgateway_policy", tunnelPolicy.Name)
 
-	return []AgwPolicy{{Policy: tunnelPolicy}}, nil
+	return tunnelPolicy, nil
 }
 
-func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) []AgwPolicy {
+func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) *api.Policy {
 	backend := policy.Spec.Backend
 	if backend == nil || backend.MCP == nil || backend.MCP.Authorization == nil {
 		return nil
@@ -444,10 +462,10 @@ func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy, t
 		"policy", policy.Name,
 		"agentgateway_policy", mcpPolicy.Name)
 
-	return []AgwPolicy{{Policy: mcpPolicy}}
+	return mcpPolicy
 }
 
-func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) ([]AgwPolicy, error) {
+func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) (*api.Policy, error) {
 	backend := policy.Spec.Backend
 	if backend == nil || backend.MCP == nil || backend.MCP.Authentication == nil {
 		return nil, nil
@@ -532,11 +550,11 @@ func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.Agent
 		"policy", policy.Name,
 		"agentgateway_policy", mcpAuthnPolicy.Name)
 
-	return []AgwPolicy{{Policy: mcpAuthnPolicy}}, errors.Join(errs...)
+	return mcpAuthnPolicy, errors.Join(errs...)
 }
 
 // translateBackendAI processes AI configuration and creates corresponding Agw policies
-func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolicy, name string, policyTarget *api.PolicyTarget) ([]AgwPolicy, error) {
+func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolicy, name string, policyTarget *api.PolicyTarget) (*api.Policy, error) {
 	var errs []error
 	aiSpec := agwPolicy.Spec.Backend.AI
 
@@ -646,10 +664,10 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 		"policy", agwPolicy.Name,
 		"agentgateway_policy", aiPolicy.Name)
 
-	return []AgwPolicy{{Policy: aiPolicy}}, errors.Join(errs...)
+	return aiPolicy, errors.Join(errs...)
 }
 
-func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) ([]AgwPolicy, error) {
+func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) (*api.Policy, error) {
 	var errs []error
 	auth := policy.Spec.Backend.Auth
 
@@ -719,7 +737,7 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 		"policy", policy.Name,
 		"agentgateway_policy", authPolicy.Name)
 
-	return []AgwPolicy{{Policy: authPolicy}}, errors.Join(errs...)
+	return authPolicy, errors.Join(errs...)
 }
 
 // translateRouteType converts kgateway RouteType to agentgateway proto RouteType

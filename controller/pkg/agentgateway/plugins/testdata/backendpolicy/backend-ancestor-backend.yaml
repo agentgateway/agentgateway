@@ -25,7 +25,10 @@ spec:
 ---
 # Output
 output:
-- resource:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
     policy:
       backend:
         backendTls: {}
@@ -39,16 +42,23 @@ output:
           name: be
           namespace: default
 status:
-  ancestors:
-  - ancestorRef:
-      group: agentgateway.dev
-      kind: AgentgatewayBackend
-      name: be
-      namespace: default
-    conditions:
-    - lastTransitionTime: fake
-      message: secret default/mtls not found
-      reason: PartiallyValid
-      status: "True"
-      type: Accepted
-    controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+        name: be
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: secret default/mtls not found
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

@@ -1782,7 +1782,32 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 					})
 					.transpose()?
 					.unwrap_or_default();
-				FrontendPolicy::AccessLog(frontend::LoggingPolicy {
+				let otlp = p
+					.otlp_access_log
+					.as_ref()
+					.map(|oal| -> Result<frontend::OtlpLoggingConfig, ProtoError> {
+						let provider_backend = resolve_simple_reference(oal.provider_backend.as_ref())?;
+						let policies = oal
+							.inline_policies
+							.iter()
+							.map(BackendPolicy::try_from)
+							.collect::<Result<Vec<_>, _>>()?;
+						let protocol = match fps::logging::otlp_access_log::Protocol::try_from(oal.protocol) {
+							Ok(fps::logging::otlp_access_log::Protocol::Grpc) => {
+								types::agent::TracingProtocol::Grpc
+							},
+							_ => types::agent::TracingProtocol::Http,
+						};
+						let path = oal.path.clone().unwrap_or_else(|| "/v1/logs".to_string());
+						Ok(frontend::OtlpLoggingConfig {
+							provider_backend,
+							policies,
+							protocol,
+							path,
+						})
+					})
+					.transpose()?;
+				let mut logging_policy = frontend::LoggingPolicy {
 					filter: p
 						.filter
 						.as_ref()
@@ -1790,8 +1815,11 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 						.map(Arc::new),
 					add: Arc::new(add),
 					remove: Arc::new(FzHashSet::new(rm)),
-					otlp: None,
-				})
+					otlp,
+					access_log_policy: None,
+				};
+				logging_policy.init_access_log_policy();
+				FrontendPolicy::AccessLog(logging_policy)
 			},
 			Some(fps::Kind::Tracing(t)) => {
 				// Convert protobuf to TracingConfig

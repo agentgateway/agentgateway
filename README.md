@@ -37,9 +37,6 @@
 </div>
 <br>
 
-> [!TIP]
-> Want to use agentgateway in Kubernetes? Check out the [kgateway.dev/docs/agentgateway](https://kgateway.dev/docs/agentgateway/) docs. Agentgateway is a supported data plane for the kgateway project, which provides a control plane to dynamically provision and manage agentgateway with the Kubernetes Gateway API.
-
 ## Intro to Agentgateway Video
 
 [![Agentgateway Intro Video](https://img.youtube.com/vi/SomP92JWPmE/hqdefault.jpg)](https://youtu.be/SomP92JWPmE)
@@ -52,6 +49,7 @@
 - [x] **Dynamic:** agentgateway supports dynamic configuration updates via xDS, without any downtime.
 - [x] **Run Anywhere:** agentgateway can run anywhere with any agent framework, from a single machine to a large scale multi-tenant deployment.
 - [x] **Legacy API Support:** agentgateway can transform legacy APIs into MCP resources. Currently supports OpenAPI. (gRPC coming soon)
+- [x] **Kubernetes Native:** agentgateway includes a built-in Kubernetes controller for dynamic provisioning and management via the Kubernetes Gateway API.
 <br>
 
 ## Getting Started 
@@ -63,7 +61,7 @@ To get started with agentgateway, please check out the [Getting Started Guide](h
 Depending on your deployment environment, check out the following docs:
 
 - [agentgateway.dev/docs](https://agentgateway.dev/docs/): For standalone deployments such as local or on-prem. These docs are for this upstream `agentgateway/agentgateway` GitHub project.
-- [kgateway.dev/docs/agentgateway](https://kgateway.dev/docs/agentgateway/): For Kubernetes-based deployments. These docs are for the agentgateway data plane that is supported by the [`kgateway-dev/kgateway` GitHub project](https://github.com/kgateway-dev/kgateway). Kgateway provides a control plane to dynamically provision and manage agentgateway with the Kubernetes Gateway API.
+- [agentgateway.dev/docs/kubernetes/latest](https://agentgateway.dev/docs/kubernetes/latest): For Kubernetes-based deployments using the built-in Kubernetes controller and Gateway API support.
 
 Agentgateway has a built-in UI for you to explore agentgateway connecting agent-to-agent or agent-to-tool:
 

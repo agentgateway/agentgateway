@@ -6,7 +6,6 @@ wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "e55f5b960
 [workspace]
 resolver = "2"
 members = [
-    "crates/a2a-sdk",
     "crates/agentgateway",
     "crates/agentgateway-app",
     "crates/cel-fork/cel",
@@ -18,7 +17,6 @@ members = [
     "crates/xtask",
 ]
 default-members = [
-    "crates/a2a-sdk",
     "crates/agentgateway",
     "crates/agentgateway-app",
     "crates/cel-fork/cel",
@@ -37,7 +35,6 @@ license = "Apache-2.0"
 publish = false
 
 [workspace.dependencies]
-a2a-sdk = { version = "0.7.0", path = "crates/a2a-sdk" }
 agent-core = { path = "crates/core" }
 agent-celx = { path = "crates/celx" }
 agent-hbone = { path = "crates/hbone" }

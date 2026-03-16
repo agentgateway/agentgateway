@@ -12,7 +12,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 )
 
-func NewKgatewayValidator(t *testing.T) *crd.Validator {
+func NewAgentgatewayValidator(t *testing.T) *crd.Validator {
 	root := fsutils.GetModuleRoot()
 	dirs := []string{}
 	agentgatewayDir, err := os.ReadDir(filepath.Join(root, "controller/install/helm/agentgateway-crds/templates/"))

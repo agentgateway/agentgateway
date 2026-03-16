@@ -15,12 +15,12 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/extproc"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/jwtauth"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/mcp"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/otel"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/policystatus"
 	global_rate_limit "github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/rate_limit/global"
 	local_rate_limit "github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/rate_limit/local"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/rbac"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/remotejwtauth"
-	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/tracing"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/transformation"
 )
 
@@ -43,7 +43,7 @@ func AgentgatewaySuiteRunner() e2e.SuiteRunner {
 	agentgatewaySuiteRunner.Register("AIBackend", aibackend.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("Transformation", transformation.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("RemoteJwtAuth", remotejwtauth.NewTestingSuite)
-	agentgatewaySuiteRunner.Register("Tracing", tracing.NewTestingSuite)
+	agentgatewaySuiteRunner.Register("OTel", otel.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("PolicyStatus", policystatus.NewTestingSuite)
 
 	return agentgatewaySuiteRunner

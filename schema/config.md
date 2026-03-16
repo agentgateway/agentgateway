@@ -5712,6 +5712,9 @@
 |`llm.models[].params.vertexProject`||
 |`llm.models[].params.azureHost`|For Azure: the host of the deployment|
 |`llm.models[].params.azureApiVersion`|For Azure: the API version to use|
+|`llm.models[].params.hostOverride`|Override the upstream host for this provider.|
+|`llm.models[].params.pathOverride`|Override the upstream path for this provider.|
+|`llm.models[].params.tokenize`|Whether to tokenize the request before forwarding it upstream.|
 |`llm.models[].provider`|provider of the LLM we are connecting too|
 |`llm.models[].defaults`|defaults allows setting default values for the request. If these are not present in the request body, they will be set.<br>To override even when set, use `overrides`.|
 |`llm.models[].overrides`|overrides allows setting values for the request, overriding any existing values|
@@ -5720,6 +5723,35 @@
 |`llm.models[].requestHeaders.add`||
 |`llm.models[].requestHeaders.set`||
 |`llm.models[].requestHeaders.remove`||
+|`llm.models[].responseHeaders`|responseHeaders modifies headers in responses from the LLM provider.|
+|`llm.models[].responseHeaders.add`||
+|`llm.models[].responseHeaders.set`||
+|`llm.models[].responseHeaders.remove`||
+|`llm.models[].backendTLS`|backendTLS configures TLS when connecting to the LLM provider.|
+|`llm.models[].backendTLS.cert`||
+|`llm.models[].backendTLS.key`||
+|`llm.models[].backendTLS.root`||
+|`llm.models[].backendTLS.hostname`||
+|`llm.models[].backendTLS.insecure`||
+|`llm.models[].backendTLS.insecureHost`||
+|`llm.models[].backendTLS.alpn`||
+|`llm.models[].backendTLS.subjectAltNames`||
+|`llm.models[].health`|health configures outlier detection for this model backend.|
+|`llm.models[].health.unhealthyExpression`|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`llm.models[].health.eviction`|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`llm.models[].health.eviction.duration`||
+|`llm.models[].health.eviction.restoreHealth`||
+|`llm.models[].health.eviction.consecutiveFailures`||
+|`llm.models[].health.eviction.healthThreshold`||
+|`llm.models[].backendTunnel`|backendTunnel configures tunneling when connecting to the LLM provider.|
+|`llm.models[].backendTunnel.proxy`|Reference to the proxy address|
+|`llm.models[].backendTunnel.proxy.(1)service`||
+|`llm.models[].backendTunnel.proxy.(1)service.name`||
+|`llm.models[].backendTunnel.proxy.(1)service.name.namespace`||
+|`llm.models[].backendTunnel.proxy.(1)service.name.hostname`||
+|`llm.models[].backendTunnel.proxy.(1)service.port`||
+|`llm.models[].backendTunnel.proxy.(1)host`|Hostname or IP address|
+|`llm.models[].backendTunnel.proxy.(1)backend`|Explicit backend reference. Backend must be defined in the top level backends list|
 |`llm.models[].guardrails`|guardrails to apply to the request or response|
 |`llm.models[].guardrails.request`||
 |`llm.models[].guardrails.request[].(1)regex`||

@@ -439,11 +439,16 @@ impl AIProvider {
 			AIProvider::Anthropic(_) => {
 				http::modify_req(req, |req| {
 					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
-						// Move bearer token in anthropic header
-						req.headers.remove(http::header::AUTHORIZATION);
-						let mut api_key = HeaderValue::from_str(authz.token())?;
-						api_key.set_sensitive(true);
-						req.headers.insert("x-api-key", api_key);
+						// OAuth tokens ("sk-ant-oat*") keep Authorization: Bearer; drop any x-api-key.
+						// All other tokens are moved to x-api-key (standard API key auth).
+						if authz.token().starts_with(anthropic::OAUTH_TOKEN_PREFIX) {
+							req.headers.remove("x-api-key");
+						} else {
+							req.headers.remove(http::header::AUTHORIZATION);
+							let mut api_key = HeaderValue::from_str(authz.token())?;
+							api_key.set_sensitive(true);
+							req.headers.insert("x-api-key", api_key);
+						}
 						// https://docs.anthropic.com/en/api/versioning
 						req
 							.headers

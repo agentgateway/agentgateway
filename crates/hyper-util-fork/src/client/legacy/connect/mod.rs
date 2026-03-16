@@ -72,9 +72,6 @@ pub use self::http::HttpInfo;
 
 mod http;
 
-pub(crate) mod capture;
-pub use capture::{capture_connection, CaptureConnection};
-
 pub use self::sealed::Connect;
 
 /// Describes a type returned by a connector.

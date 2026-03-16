@@ -189,10 +189,13 @@ pub(super) async fn authorization_server_metadata(
 	auth: &McpAuthentication,
 	client: PolicyClient,
 ) -> Result<Response, ProxyError> {
-	// Normalize issuer URL by removing trailing slashes to avoid double-slash in path
-	let issuer = auth.issuer.trim_end_matches('/');
+	// Construct the metadata URL per RFC 8414 Section 3:
+	// For path-based issuers, the well-known suffix is inserted between the origin and path.
+	// e.g. issuer "https://idp.example.com/app/myapp/" becomes
+	//      "https://idp.example.com/.well-known/oauth-authorization-server/app/myapp/"
+	let metadata_uri = rfc8414_metadata_url(&auth.issuer);
 	let ureq = ::http::Request::builder()
-		.uri(format!("{issuer}/.well-known/oauth-authorization-server"))
+		.uri(metadata_uri)
 		.body(Body::empty())?;
 	let upstream = client.simple_call(ureq).await?;
 	let limit = crate::http::response_buffer_limit(&upstream);
@@ -282,4 +285,70 @@ pub(super) async fn client_registration(
 	);
 
 	Ok(upstream)
+}
+
+/// Construct the OAuth Authorization Server Metadata URL per RFC 8414 Section 3.
+///
+/// For issuers with a path component, the well-known suffix is inserted between
+/// the origin and the path:
+///   issuer: https://idp.example.com/application/o/myapp
+///   result: https://idp.example.com/.well-known/oauth-authorization-server/application/o/myapp
+///
+/// For root issuers (no path), this produces the same result as before:
+///   issuer: https://idp.example.com
+///   result: https://idp.example.com/.well-known/oauth-authorization-server
+fn rfc8414_metadata_url(issuer: &str) -> String {
+	match url::Url::parse(issuer) {
+		Ok(parsed) => {
+			let origin = parsed.origin().ascii_serialization();
+			let path = parsed.path();
+			if path == "/" {
+				format!("{origin}/.well-known/oauth-authorization-server")
+			} else {
+				format!("{origin}/.well-known/oauth-authorization-server{path}")
+			}
+		},
+		// Fallback to previous behavior if URL parsing fails, normalizing trailing slashes
+		Err(_) => {
+			let normalized = issuer.trim_end_matches('/');
+			format!("{normalized}/.well-known/oauth-authorization-server")
+		},
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_rfc8414_metadata_url_path_based() {
+		assert_eq!(
+			rfc8414_metadata_url("https://idp.example.com/application/o/myapp"),
+			"https://idp.example.com/.well-known/oauth-authorization-server/application/o/myapp"
+		);
+	}
+
+	#[test]
+	fn test_rfc8414_metadata_url_trailing_slash() {
+		assert_eq!(
+			rfc8414_metadata_url("https://idp.example.com/application/o/myapp/"),
+			"https://idp.example.com/.well-known/oauth-authorization-server/application/o/myapp/"
+		);
+	}
+
+	#[test]
+	fn test_rfc8414_metadata_url_root_issuer() {
+		assert_eq!(
+			rfc8414_metadata_url("https://idp.example.com"),
+			"https://idp.example.com/.well-known/oauth-authorization-server"
+		);
+	}
+
+	#[test]
+	fn test_rfc8414_metadata_url_root_issuer_trailing_slash() {
+		assert_eq!(
+			rfc8414_metadata_url("https://idp.example.com/"),
+			"https://idp.example.com/.well-known/oauth-authorization-server"
+		);
+	}
 }

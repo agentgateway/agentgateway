@@ -1,0 +1,60 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: policy-be
+  namespace: default
+spec:
+  static:
+    host: policy.example.com
+    port: 80
+---
+# Policy is attached to gateway via HTTPRoute
+# policy-be should be attached via BE -> Policy -> Route -> Gateway
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: be
+  namespace: default
+spec:
+  static:
+    host: primary.example.com
+    port: 80
+  policies:
+    tunnel:
+      backendRef:
+        name: policy-be
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+---
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    backend:
+      inlinePolicies:
+      - backendTunnel:
+          proxy:
+            backend: default/policy-be
+      key: default/be
+      name:
+        name: be
+        namespace: default
+      static:
+        host: primary.example.com
+        port: 80
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    backend:
+      key: default/policy-be
+      name:
+        name: policy-be
+        namespace: default
+      static:
+        host: policy.example.com
+        port: 80
+status: []
