@@ -34,40 +34,37 @@ func translateFrontendPolicyToAgw(
 	var errs []error
 
 	policyName := getFrontendPolicyName(policy.Namespace, policy.Name)
+	appendPolicy := func(kind string) func(*api.Policy, error) {
+		return func(p *api.Policy, err error) {
+			if err != nil {
+				name := fmt.Sprintf("%s %s", kind, policyName)
+				logger.Error("error processing policy", "policy", name, "error", err)
+				errs = append(errs, err)
+			}
+			if p != nil {
+				agwPolicies = append(agwPolicies, p)
+			}
+		}
+	}
 
 	if s := frontend.HTTP; s != nil {
-		pol := translateFrontendHTTP(policy, policyName, policyTarget)
-		agwPolicies = append(agwPolicies, pol)
+		appendPolicy("http")(translateFrontendHTTP(policy, policyName, policyTarget), nil)
 	}
 
 	if s := frontend.TLS; s != nil {
-		pol := translateFrontendTLS(policy, policyName, policyTarget)
-		agwPolicies = append(agwPolicies, pol)
+		appendPolicy("tls")(translateFrontendTLS(policy, policyName, policyTarget), nil)
 	}
 
 	if s := frontend.TCP; s != nil {
-		pol := translateFrontendTCP(policy, policyName, policyTarget)
-		agwPolicies = append(agwPolicies, pol)
+		appendPolicy("tcp")(translateFrontendTCP(policy, policyName, policyTarget), nil)
 	}
 
 	if s := frontend.AccessLog; s != nil {
-		pol, err := translateFrontendAccessLog(policyCtx, policy, policyName, policyTarget)
-		if err != nil {
-			logger.Error("error processing access log", "err", err)
-			errs = append(errs, err)
-		}
-		agwPolicies = append(agwPolicies, pol)
+		appendPolicy("accessLog")(translateFrontendAccessLog(policyCtx, policy, policyName, policyTarget))
 	}
 
 	if s := frontend.Tracing; s != nil {
-		pol, err := translateFrontendTracing(policyCtx, policy, policyName, policyTarget)
-		if err != nil {
-			logger.Error("error processing tracing", "err", err)
-			errs = append(errs, err)
-		}
-		if pol != nil {
-			agwPolicies = append(agwPolicies, pol)
-		}
+		appendPolicy("tracing")(translateFrontendTracing(policyCtx, policy, policyName, policyTarget))
 	}
 
 	return agwPolicies, errors.Join(errs...)
@@ -75,13 +72,11 @@ func translateFrontendPolicyToAgw(
 
 func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) (*api.Policy, error) {
 	tracing := policy.Spec.Frontend.Tracing
-	if tracing == nil {
-		return nil, nil
-	}
 
+	var backendErr error
 	provider, err := buildBackendRef(ctx, tracing.BackendRef, policy.Namespace)
 	if err != nil {
-		return nil, fmt.Errorf("failed to translate tracing backend ref: %v", err)
+		backendErr = fmt.Errorf("failed to translate tracing backend ref: %v", err)
 	}
 
 	var addAttributes []*api.FrontendPolicySpec_TracingAttribute
@@ -131,7 +126,7 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 		protocol = api.FrontendPolicySpec_Tracing_HTTP
 	default:
 		// default to HTTP
-		protocol = api.FrontendPolicySpec_Tracing_HTTP
+		protocol = api.FrontendPolicySpec_Tracing_GRPC
 	}
 
 	tracingPolicy := &api.Policy{
@@ -159,12 +154,13 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 		"agentgateway_policy", tracingPolicy.Name,
 		"target", target)
 
-	return tracingPolicy, nil
+	return tracingPolicy, backendErr
 }
 
 func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) (*api.Policy, error) {
 	logging := policy.Spec.Frontend.AccessLog
 	spec := &api.FrontendPolicySpec_Logging{}
+	var backendErr error
 	if f := logging.Filter; f != nil {
 		spec.Filter = (*string)(f)
 	}
@@ -183,7 +179,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 	if otlp := logging.Otlp; otlp != nil {
 		provider, err := buildBackendRef(ctx, otlp.BackendRef, policy.Namespace)
 		if err != nil {
-			return nil, fmt.Errorf("failed to translate access log OTLP backend ref: %v", err)
+			backendErr = fmt.Errorf("failed to translate access log OTLP backend ref: %v", err)
 		}
 
 		var protocol api.FrontendPolicySpec_Logging_OtlpAccessLog_Protocol
@@ -226,7 +222,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 		"agentgateway_policy", loggingPolicy.Name,
 		"target", target)
 
-	return loggingPolicy, nil
+	return loggingPolicy, backendErr
 }
 
 func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) *api.Policy {
