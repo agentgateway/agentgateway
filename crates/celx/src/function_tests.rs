@@ -210,6 +210,7 @@ fn coalesce() {
 	let expr = r#"coalesce(null)"#;
 	assert(json!(null), expr);
 	assert_fails(r#"coalesce(fail("bad"), 1 / 0)"#);
+	assert_fails(r#"coalesce()"#);
 
 	// coalesce() should not materialize the selected value
 	eval_non_static("coalesce(fail('bad'), vars)", |r| {
