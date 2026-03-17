@@ -1,4 +1,4 @@
-use chrono::{DateTime, FixedOffset, Local};
+use chrono::{DateTime, FixedOffset, Utc};
 use std::time::{Duration, Instant, SystemTime};
 
 #[derive(Clone, Copy, Debug)]
@@ -29,7 +29,7 @@ impl Timestamp {
 
 	/// The wall-clock time this Timestamp was created, as a DateTime<FixedOffset>
 	pub fn as_datetime(&self) -> DateTime<FixedOffset> {
-		DateTime::<Local>::from(self.system).into()
+		DateTime::<Utc>::from(self.system).fixed_offset()
 	}
 
 	pub fn now_system(&self) -> SystemTime {

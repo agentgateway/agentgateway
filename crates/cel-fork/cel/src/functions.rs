@@ -2,6 +2,8 @@ use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::sync::Arc;
 
+use chrono::SecondsFormat;
+
 use crate::context::{Context, VariableResolver};
 use crate::magic::{Argument, FromValue, This};
 use crate::objects::{BytesValue, KeyRef, OpaqueValue, OptionalValue, StringValue, Value};
@@ -244,7 +246,7 @@ pub fn string<'a>(ftx: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
 	Ok(match this {
 		Value::String(v) => Value::String(v.clone()),
 
-		Value::Timestamp(t) => Value::String(t.to_rfc3339().into()),
+		Value::Timestamp(t) => Value::String(t.to_rfc3339_opts(SecondsFormat::Micros, true).into()),
 
 		Value::Duration(v) => Value::String(crate::duration::format_duration(&v).into()),
 		Value::Int(v) => Value::String(v.to_string().into()),

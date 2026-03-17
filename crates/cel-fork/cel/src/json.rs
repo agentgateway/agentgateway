@@ -1,5 +1,5 @@
 use base64::prelude::*;
-use chrono::Duration;
+use chrono::{Duration, SecondsFormat};
 use thiserror::Error;
 
 use crate::Value;
@@ -56,7 +56,7 @@ impl<'a> Value<'a> {
 			Value::Bytes(ref b) => BASE64_STANDARD.encode(b.as_ref()).to_string().into(),
 			Value::Null => serde_json::Value::Null,
 
-			Value::Timestamp(ref dt) => dt.to_rfc3339().into(),
+			Value::Timestamp(ref dt) => dt.to_rfc3339_opts(SecondsFormat::Micros, true).into(),
 
 			Value::Duration(ref v) => serde_json::Value::Number(serde_json::Number::from(
 				v.num_nanoseconds()

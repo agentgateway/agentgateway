@@ -680,14 +680,14 @@ pub struct RequestTime(
 );
 
 mod serde_rfc3339 {
-	use chrono::{DateTime, FixedOffset};
+	use chrono::{DateTime, FixedOffset, SecondsFormat};
 	use serde::{Deserialize, Deserializer, Serializer};
 
 	pub fn serialize<S>(value: &DateTime<FixedOffset>, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
-		serializer.serialize_str(&value.to_rfc3339())
+		serializer.serialize_str(&value.to_rfc3339_opts(SecondsFormat::Micros, true))
 	}
 
 	pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<FixedOffset>, D::Error>
