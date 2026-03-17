@@ -81,7 +81,6 @@ pub struct Policy {
 	/// Eviction settings. When absent, falls back to defaults.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub eviction: Option<Eviction>,
- feat/1138-active-health-check
 
 	/// Evict only when endpoint health (EWMA) is below this threshold (0.0–1.0).
 	/// When absent, eviction is driven only by the per-response unhealthy signal.
@@ -219,7 +218,6 @@ pub struct LocalHealthPolicy {
 	pub unhealthy_expression: Option<String>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub eviction: Option<LocalEviction>,
- feat/1138-active-health-check
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub health_threshold: Option<f64>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -259,7 +257,6 @@ impl TryFrom<LocalHealthPolicy> for Policy {
 			Some(s) if !s.trim().is_empty() => Some(Arc::new(Expression::new_strict(&s)?)),
 			_ => None,
 		};
- feat/1138-active-health-check
 		let eviction = local.eviction.map(|e| Eviction {
 			duration: e.duration,
 		});
