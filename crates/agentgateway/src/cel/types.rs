@@ -330,13 +330,20 @@ impl<'a> Executor<'a> {
 
 	pub fn eval(&'a self, expr: &'a Expression) -> Result<Value<'a>, Error> {
 		let resolver = ExecutorResolver { executor: self };
-		match Value::resolve(
-			expr.expression.expression(),
-			ROOT_CONTEXT.as_ref(),
-			&resolver,
-		) {
-			Ok(v) => Ok(v),
+		match Value::resolve(expr.evaluated_expression(), ROOT_CONTEXT.as_ref(), &resolver) {
+			Ok(v) => {
+				if expr.trace_mode() == super::TraceMode::All {
+					let label = expr
+						.trace_label()
+						.expect("trace_label must be set when trace_mode is enabled");
+					tracing::info!(expression = %label, result = ?v, "traced CEL expression");
+				}
+				Ok(v)
+			},
 			Err(e) => {
+				if let Some(label) = expr.trace_label() {
+					tracing::warn!(expression = %label, error = %e, "traced CEL expression");
+				}
 				tracing::trace!("failed to evaluate expression: {}", e);
 				Err(e.into())
 			},

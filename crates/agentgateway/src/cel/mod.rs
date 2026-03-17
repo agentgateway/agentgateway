@@ -41,6 +41,15 @@ pub struct Expression {
 	attributes: FlagSet<Attributes>,
 	expression: Program,
 	original_expression: String,
+	trace_mode: TraceMode,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum TraceMode {
+	#[default]
+	Disabled,
+	All,
+	ErrorsOnly,
 }
 
 impl Serialize for Expression {
@@ -229,6 +238,7 @@ impl Expression {
 						.expect("must be valid")
 						.expression,
 					original_expression: expr,
+					trace_mode: TraceMode::Disabled,
 				}
 			},
 		}
@@ -309,11 +319,62 @@ impl Expression {
 			attributes |= FlagSet::full();
 		}
 
+		let trace_mode = trace_mode(expression.expression());
+
 		Ok(Self {
 			attributes,
 			expression,
 			original_expression,
+			trace_mode,
 		})
+	}
+
+	pub(crate) fn evaluated_expression(&self) -> &cel::parser::Expression {
+		if let Some(inner) = traced_inner_expression(self.expression.expression()) {
+			return inner;
+		}
+		self.expression.expression()
+	}
+
+	pub(crate) fn trace_label(&self) -> Option<&str> {
+		(self.trace_mode != TraceMode::Disabled).then_some(self.original_expression.as_str())
+	}
+
+	pub(crate) fn trace_mode(&self) -> TraceMode {
+		self.trace_mode
+	}
+}
+
+fn trace_mode(expression: &cel::parser::Expression) -> TraceMode {
+	match &expression.expr {
+		cel::common::ast::Expr::Call(call)
+			if call.target.is_none() && call.args.len() == 1 && call.func_name == "traced" =>
+		{
+			TraceMode::All
+		},
+		cel::common::ast::Expr::Call(call)
+			if call.target.is_none()
+				&& call.args.len() == 1
+				&& call.func_name == "tracedErrors" =>
+		{
+			TraceMode::ErrorsOnly
+		},
+		_ => TraceMode::Disabled,
+	}
+}
+
+fn traced_inner_expression(
+	expression: &cel::parser::Expression,
+) -> Option<&cel::parser::Expression> {
+	match &expression.expr {
+		cel::common::ast::Expr::Call(call)
+			if (call.func_name == "traced" || call.func_name == "tracedErrors")
+				&& call.target.is_none()
+				&& call.args.len() == 1 =>
+		{
+			Some(&call.args[0])
+		},
+		_ => None,
 	}
 }
 
