@@ -1,7 +1,5 @@
 use std::collections::HashMap;
-use std::ops::Sub;
 use std::sync::Arc;
-use std::time::SystemTime;
 
 use agent_core::telemetry::ValueBag;
 use http::Version;
@@ -167,6 +165,7 @@ impl Tracer {
 	pub fn send<'v>(
 		&self,
 		request: &RequestLog,
+		end: &agent_core::Timestamp,
 		cel_exec: &CelLoggingExecutor,
 		attrs: &[(&str, Option<ValueBag<'v>>)],
 	) {
@@ -180,8 +179,8 @@ impl Tracer {
 		if !out_span.is_sampled() {
 			return;
 		}
-		let end = SystemTime::now();
-		let elapsed = request.tcp_info.start.elapsed();
+		let start = request.start.as_system_time();
+		let end = end.as_system_time();
 
 		// For now we only accept HTTP(?)
 		attributes.push(KeyValue::new(semconv::URL_SCHEME.clone(), "http"));
@@ -223,8 +222,8 @@ impl Tracer {
 		let sb = self
 			.tracer
 			.span_builder(span_name)
-			.with_start_time(end.sub(elapsed))
-			.with_end_time(SystemTime::now())
+			.with_start_time(start)
+			.with_end_time(end)
 			.with_kind(SpanKind::Server)
 			.with_attributes(attributes)
 			.with_trace_id(out_span.trace_id.into())

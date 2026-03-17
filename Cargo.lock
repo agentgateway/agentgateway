@@ -46,6 +46,7 @@ dependencies = [
  "arc-swap",
  "arcstr",
  "bytes",
+ "chrono",
  "crossbeam-channel",
  "durationfmt",
  "go-parse-duration",

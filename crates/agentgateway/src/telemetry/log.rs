@@ -4,8 +4,9 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, ready};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
+use agent_core::Timestamp;
 use agent_core::metrics::CustomField;
 use agent_core::strng;
 use agent_core::strng::{RichStrng, Strng};
@@ -489,7 +490,7 @@ impl DropOnLog {
 	fn add_llm_metrics(
 		log: &RequestLog,
 		route_identifier: &RouteIdentifier,
-		end_time: Instant,
+		end_time: Timestamp,
 		duration: Duration,
 		llm_response: Option<&LLMContext>,
 		custom_metric_fields: &CustomField,
@@ -549,7 +550,7 @@ impl DropOnLog {
 				.get_or_create(&gen_ai_labels)
 				.observe(duration.as_secs_f64());
 			if let Some(ft) = llm_response.first_token {
-				let ttft = ft - log.start;
+				let ttft = ft.duration_since(log.start.as_instant());
 				// Duration from start of request to first token
 				// This is the start of when WE got the request, but it should probably be when we SENT the upstream.
 				log
@@ -559,7 +560,7 @@ impl DropOnLog {
 					.observe(ttft.as_secs_f64());
 
 				if let Some(ot) = llm_response.output_tokens {
-					let first_to_last = end_time - ft;
+					let first_to_last = end_time.as_instant().duration_since(ft);
 					let throughput = first_to_last.as_secs_f64() / (ot as f64);
 					log
 						.metrics
@@ -582,7 +583,7 @@ impl RequestLog {
 	pub fn new(
 		cel: CelLogging,
 		metrics: Arc<Metrics>,
-		start: Instant,
+		start: Timestamp,
 		tcp_info: TCPConnectionInfo,
 	) -> Self {
 		RequestLog {
@@ -649,7 +650,7 @@ impl RequestLog {
 pub struct RequestLog {
 	pub cel: CelLogging,
 	pub metrics: Arc<Metrics>,
-	pub start: Instant,
+	pub start: Timestamp,
 	pub tcp_info: TCPConnectionInfo,
 
 	// Set only for TLS traffic
@@ -755,8 +756,8 @@ impl Drop for DropOnLog {
 
 		// Always run request_handle/finish_request first so LLM provider eviction (failover) runs
 		// even when logging/tracing/metrics are disabled.
-		let end_time = Instant::now();
-		let duration = end_time - log.start;
+		let end_time = Timestamp::now();
+		let duration = end_time.duration_since(&log.start);
 		let enable_trace = log.tracer.is_some();
 		// We will later check it also matches a filter, but filter is slower
 		let maybe_enable_log = agent_core::telemetry::enabled("request", &Level::INFO);
@@ -782,7 +783,7 @@ impl Drop for DropOnLog {
 			.as_ref()
 			.is_some_and(|p| p.unhealthy_expression.is_some());
 		let cel_end_time = (needs_cel_for_outputs || needs_cel_for_eviction)
-			.then(|| cel::RequestTime(chrono::Utc::now().fixed_offset()));
+			.then(|| cel::RequestTime(end_time.as_datetime()));
 		let cel_exec = if needs_cel_for_outputs || needs_cel_for_eviction {
 			log
 				.cel
@@ -1092,7 +1093,7 @@ impl Drop for DropOnLog {
 		];
 
 		if enable_trace && let Some(t) = &log.tracer {
-			t.send(&log, &cel_exec, kv.as_slice());
+			t.send(&log, &end_time, &cel_exec, kv.as_slice());
 			// Flush any buffered spans created during request processing.
 			// Does best effort, if the lock is poisoned, skip flushing.
 			if let Ok(mut spans) = log.trace_spans.lock() {
