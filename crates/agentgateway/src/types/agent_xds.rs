@@ -1194,6 +1194,7 @@ fn convert_health(
 		eviction,
 		health_threshold: None,
 		health_on_unevict: None,
+		probe: None,
 	})
 }
 

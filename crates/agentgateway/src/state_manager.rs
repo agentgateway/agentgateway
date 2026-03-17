@@ -19,6 +19,9 @@ pub struct StateManager {
 
 	#[serde(skip_serializing)]
 	xds_client: Option<agent_xds::AdsClient>,
+
+	#[serde(skip_serializing)]
+	client: client::Client,
 }
 
 pub const ADDRESS_TYPE: Strng = strng::literal!("type.googleapis.com/istio.workload.Address");
@@ -63,7 +66,7 @@ impl StateManager {
 				config: config.clone(),
 				stores: stores.clone(),
 				cfg: cfg.clone(),
-				client,
+				client: client.clone(),
 				gateway: ListenerTarget {
 					gateway_name: xds.gateway.clone(),
 					gateway_namespace: xds.namespace.clone(),
@@ -72,7 +75,11 @@ impl StateManager {
 			};
 			Box::pin(local_client.run()).await?;
 		}
-		Ok(Self { stores, xds_client })
+		Ok(Self {
+			stores,
+			xds_client,
+			client,
+		})
 	}
 
 	pub fn stores(&self) -> Stores {
@@ -80,10 +87,25 @@ impl StateManager {
 	}
 
 	pub async fn run(self) -> anyhow::Result<()> {
-		match self.xds_client {
-			Some(xds) => xds.run().await.map_err(|e| anyhow::anyhow!(e)),
-			None => Ok(()),
+		let mut tasks = vec![];
+		if let Some(xds) = self.xds_client {
+			tasks.push(tokio::spawn(async move {
+				xds.run().await.map_err(|e| anyhow::anyhow!(e))
+			}));
 		}
+
+		// Start health prober
+		let stores = self.stores.clone();
+		let client = self.client.clone();
+		tasks.push(tokio::spawn(async move {
+			crate::http::health_prober::run(stores, client).await;
+			Ok(())
+		}));
+
+		if let Some(res) = futures::future::select_all(tasks).await.0.ok() {
+			return res;
+		}
+		Ok(())
 	}
 }
 

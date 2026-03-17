@@ -139,11 +139,19 @@ async fn probe_endpoint(
 			let executor = cel::Executor::new_response(None, &resp);
 			executor.eval_bool(&probe.expected_condition)
 		},
-		_ => false,
+		Ok(Err(e)) => {
+			debug!("probe request failed for {}:{}: {}", ip, target_port, e);
+			false
+		},
+		Err(_) => {
+			debug!("probe timeout for {}:{}", ip, target_port);
+			false
+		},
 	};
 
 	if !success {
 		let evict_until = Instant::now() + eviction_duration.unwrap_or(Duration::from_secs(30));
+		debug!("evicting endpoint {} until {:?}", ep_uid, evict_until);
 		endpoint_set.evict(ep_uid, evict_until.into()).await;
 	}
 
