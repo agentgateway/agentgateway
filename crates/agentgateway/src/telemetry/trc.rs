@@ -590,7 +590,7 @@ mod tests {
 	use std::sync::{Arc, Mutex};
 	use std::time::Instant;
 
-	use agent_core::strng;
+	use agent_core::{Timestamp, strng};
 	use opentelemetry::trace::SpanKind;
 	use opentelemetry_sdk::error::OTelSdkResult;
 	use opentelemetry_sdk::trace::{SimpleSpanProcessor, SpanData, SpanExporter};
@@ -652,7 +652,7 @@ mod tests {
 		RequestLog::new(
 			cel,
 			metrics,
-			Instant::now(),
+			Timestamp::now(),
 			TCPConnectionInfo {
 				peer_addr: "127.0.0.1:12345".parse::<SocketAddr>().unwrap(),
 				local_addr: "127.0.0.1:8080".parse::<SocketAddr>().unwrap(),
@@ -686,7 +686,7 @@ mod tests {
 			metric_fields: &metric_fields,
 		};
 
-		tracer.send(&request, &cel_exec, &[]);
+		tracer.send(&request, &Timestamp::now(), &cel_exec, &[]);
 		let _ = tracer.provider.force_flush();
 
 		let spans = exporter.finished_spans();

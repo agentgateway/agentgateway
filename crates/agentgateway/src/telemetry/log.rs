@@ -1614,7 +1614,7 @@ mod tests {
 		RequestLog::new(
 			cel,
 			metrics,
-			Instant::now(),
+			Timestamp::now(),
 			TCPConnectionInfo {
 				peer_addr: "127.0.0.1:12345".parse::<SocketAddr>().unwrap(),
 				local_addr: "127.0.0.1:8080".parse::<SocketAddr>().unwrap(),
