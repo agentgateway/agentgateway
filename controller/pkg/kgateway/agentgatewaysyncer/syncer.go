@@ -621,7 +621,7 @@ func (s *Syncer) buildAddressCollections(krtopts krtutil.KrtOptions) krt.Collect
 			[]krt.Collection[ambient.NetworkGateway]{Networks.NetworkGateways, extra},
 			opts.WithName("MergedNetworkGateways")...,
 		)
-		Networks.GatewaysByNetwork = krt.NewIndex(Networks.NetworkGateways, "network", func(o ambient.NetworkGateway) []network.ID {
+		Networks.GatewaysByNetwork = krt.NewIndex(Networks.NetworkGateways, "mergedNetwork", func(o ambient.NetworkGateway) []network.ID {
 			return []network.ID{o.Network}
 		})
 	}
