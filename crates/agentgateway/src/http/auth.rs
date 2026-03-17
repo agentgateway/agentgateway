@@ -640,13 +640,12 @@ mod azure {
 		) -> azure_core::Result<AccessToken> {
 			// If a credential has previously succeeded, use it directly.
 			let cached_index = self.cached_source_index.load(Ordering::Relaxed);
-			if cached_index != usize::MAX {
-				if let Some((name, source)) = self.sources.get(cached_index) {
-					trace!("DefaultAzureCredential: using cached credential: {name}");
-					return source.get_token(scopes, options).await;
-				}
+			if cached_index != usize::MAX
+				&& let Some((name, source)) = self.sources.get(cached_index)
+			{
+				trace!("DefaultAzureCredential: using cached credential: {name}");
+				return source.get_token(scopes, options).await;
 			}
-
 			// Try each credential in order, caching the first one that succeeds.
 			let mut errors = Vec::new();
 			for (index, (name, source)) in self.sources.iter().enumerate() {
