@@ -71,7 +71,19 @@ Agentgateway has a built-in UI for you to explore agentgateway connecting agent-
 
 ## Contributing
 
-For instructions on how to contribute to the agentgateway project, see the [CONTRIBUTION.md](CONTRIBUTION.md) file.
+The root `make` targets are the contributor entrypoint:
+
+```bash
+make help
+make bootstrap
+make doctor
+make test
+```
+
+Use:
+
+- [DEVELOPMENT.md](DEVELOPMENT.md) for the canonical workflow guide
+- [CONTRIBUTION.md](CONTRIBUTION.md) for contribution expectations and PR process
 
 ## Community Meetings
 To join a community meeting, add the [agentgateway calendar](https://calendar.google.com/calendar/u/0?cid=Y18zZTAzNGE0OTFiMGUyYzU2OWI1Y2ZlOWNmOWM4NjYyZTljNTNjYzVlOTdmMjdkY2I5ZTZmNmM5ZDZhYzRkM2ZmQGdyb3VwLmNhbGVuZGFyLmdvb2dsZS5jb20) to your Google account. Then, you can find event details on the calendar.

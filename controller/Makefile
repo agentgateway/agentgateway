@@ -423,7 +423,7 @@ agentgateway-controller-docker: agentgateway-controller $(CONTROLLER_OUTPUT_DIR)
 agentgateway-controller-docker-local: agentgateway-controller $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway
 	docker buildx build --push $(PLATFORM) $(CONTROLLER_OUTPUT_DIR) -f $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway \
 		--build-arg GOARCH=$(GOARCH) \
-		-t localhost:5000/$(AGENTGATEWAY_IMAGE_REPO):$(TAG)
+		-t $(IMAGE_REGISTRY)/$(AGENTGATEWAY_IMAGE_REPO):$(TAG)
 
 #----------------------------------------------------------------------------------
 # testbox (used in e2e tests)
@@ -571,15 +571,21 @@ metallb: ## Install the MetalLB load balancer
 deploy-agentgateway: package-agentgateway-charts deploy-agentgateway-crd-chart deploy-agentgateway-chart ## Deploy the agentgateway chart and CRDs
 
 .PHONY: setup-base
-setup-base: kind-create gw-api-crds gie-crds metallb ## Setup the base infrastructure (kind cluster, CRDs, and MetalLB)
+setup-base: ## Compatibility wrapper for the shared local cluster bootstrap.
+	../tools/dev-env.sh --profile local cluster
+	../tools/dev-env.sh --profile local crds
 
 # Creates a functional kind cluster, builds and loads all images, and packages charts
 # Does NOT deploy anything to the cluster
 .PHONY: setup
-setup: setup-base kind-build-and-load package-agentgateway-charts  ## Setup base infra, build/load images, and package charts (without deployment)
+setup: ## Compatibility wrapper for the shared local env bootstrap without deploy.
+	../tools/dev-env.sh --profile local cluster
+	../tools/dev-env.sh --profile local crds
+	../tools/dev-env.sh --profile local images
 
 .PHONY: run
-run: setup deploy-agentgateway ## Set up complete development environment
+run: ## Compatibility wrapper for the shared local env bootstrap and deploy.
+	../tools/dev-env.sh --profile local up
 
 #----------------------------------------------------------------------------------
 # Build assets for kubernetes e2e tests

@@ -1,0 +1,2 @@
+# CI currently shares the e2e defaults but keeps a stable profile name.
+extends: e2e

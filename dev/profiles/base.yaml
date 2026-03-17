@@ -1,0 +1,11 @@
+cluster_name: kind
+install_namespace: agentgateway-system
+registry_name: kind-registry
+registry_host: localhost:5000
+registry_port: 5000
+proxy_build_profile: ci
+enable_inference_extension: true
+controller_log_level: debug
+controller_image_repository: agentgateway-controller
+proxy_image_repository: agentgateway
+testbox_image_repository: testbox

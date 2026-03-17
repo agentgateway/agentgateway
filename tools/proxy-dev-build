@@ -28,7 +28,9 @@ if [[ -n "${DRY_RUN:-}" ]]; then
   exit 0
 fi
 tag="$(get-tag)"
-dest="localhost:5000/agentgateway:${tag}"
+image_registry="${IMAGE_REGISTRY:-localhost:5000}"
+image_repository="${IMAGE_REPOSITORY:-agentgateway}"
+dest="${image_registry}/${image_repository}:${tag}"
 
 {
   crane mutate --platform linux/amd64 $(

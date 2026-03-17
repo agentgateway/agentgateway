@@ -46,7 +46,7 @@ jobs:
         # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
         save-if: ${{ github.ref == 'refs/heads/main' }}
     - name: Test
-      run: make test
+      run: make test-proxy
     - name: Validate
       if: ${{ matrix.validate }}
       run: make validate
@@ -68,23 +68,18 @@ jobs:
     - name: Generation
       run: make generate-schema check-clean-repo
     - name: Lint
-      run: make lint
+      run: make lint-proxy
 
   #### UI jobs ####
   ui-lint:
     runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: ui
     steps:
     - uses: actions/checkout@v6
     - uses: actions/setup-node@v6
       with:
         node-version: 24
-    - name: Lint
-      run: |
-        npm ci
-        npm run lint
+    - name: Verify
+      run: make test-ui
 
   #### Controller jobs ####
   controller-test:
@@ -98,7 +93,7 @@ jobs:
           **/*.sum
           .github/workflows/cache-lint
     - name: Test
-      run: go test -race ./...
+      run: make test-controller
 
   controller-lint:
     runs-on: ubuntu-24.04
@@ -111,7 +106,7 @@ jobs:
           **/*.sum
           .github/workflows/cache-test
     - name: Lint
-      run: make -C controller analyze
+      run: make lint-controller
     - name: go mod tidy
       run: |
         go mod tidy
@@ -140,14 +135,8 @@ jobs:
         cache-dependency-path: |
           **/*.sum
           .github/workflows/cache-e2e
-    - name: Set Path
-      run: |
-        echo "./tools" >> $GITHUB_PATH
-    - name: Setup
-      run: TEST_MODE=e2e ./controller/test/setup/setup-kind-ci.sh
     - name: E2E
-      run: |
-        CGO_ENABLED=0 PERSIST_INSTALL=true go test -tags=e2e -v ./controller/test/e2e/tests -run '^TestAgentgatewayIntegration'
+      run: make e2e E2E_PROFILE=ci
     - name: Archive bug report directory on failure
       if: ${{ failure() }}
       uses: actions/upload-artifact@v6
@@ -185,11 +174,8 @@ jobs:
         cache-dependency-path: |
           **/*.sum
           .github/workflows/cache-e2e
-    - name: Set Path
-      run: |
-        echo "./tools" >> $GITHUB_PATH
     - name: Setup
-      run: TEST_MODE=conformance ./controller/test/setup/setup-kind-ci.sh
+      run: make env-up PROFILE=ci TEST_MODE=conformance
     - name: Conformance
       run: |
         make -C controller all-conformance

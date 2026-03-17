@@ -1,0 +1,10 @@
+apiVersion: ctlptl.dev/v1alpha1
+kind: Registry
+name: __REGISTRY_NAME__
+port: __REGISTRY_PORT__
+---
+apiVersion: ctlptl.dev/v1alpha1
+kind: Cluster
+name: __CLUSTER_RESOURCE_NAME__
+product: kind
+registry: __REGISTRY_NAME__

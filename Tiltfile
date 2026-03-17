@@ -1,60 +1,88 @@
 # Tiltfile for AgentGateway development
-# This deploys both control plane (Go) and data plane (Rust) to Kind with live updates
+# This deploys both control plane (Go) and data plane (Rust) to Kind with live updates.
 load('ext://restart_process', 'docker_build_with_restart')
-load('ext://helm_resource', 'helm_resource', 'helm_repo')
+load('ext://helm_resource', 'helm_resource')
 
-# Configuration
-version = 'v1.0.1-dev'
-cluster_name = 'kind'
-install_namespace = k8s_namespace()
-image_registry = 'localhost:5000'
+def env_command(action):
+    return './tools/dev-env.sh --profile local ' + action
 
-# Ensure Kind cluster exists
-allow_k8s_contexts('kind-' + cluster_name)
+def load_dev_env_config():
+    return decode_json(str(local(env_command('config'))).strip())
 
-# Helper to run Make targets
-def run_make(target, cwd='.'):
-    return local('make -C ' + cwd + ' ' + target)
+dev_env = load_dev_env_config()
+version = dev_env['image_tag']
+default_install_namespace = dev_env['install_namespace']
+tilt_namespace = k8s_namespace()
+install_namespace = tilt_namespace if tilt_namespace else default_install_namespace
+image_registry = dev_env['registry_host']
+cluster_context = dev_env['cluster_context']
+controller_image_repository = dev_env['controller_image_repository']
+proxy_image_repository = dev_env['proxy_image_repository']
 
-def run_controller_make(target):
-    return run_make(target, cwd='./controller')
-# =============================================================================
-# Setup: Ensure cluster is ready
-# =============================================================================
+env_bootstrap_deps = [
+    './tools/dev-env.sh',
+    './tools/dev_env_config.py',
+    './dev/cluster/local.ctlptl.yaml',
+    './dev/profiles/base.yaml',
+    './dev/profiles/local.yaml',
+]
 
-# Check if kind cluster exists, create if not
-if str(local('kind get clusters 2>/dev/null | grep -c "^' + cluster_name + '$" || true')).strip() == '0':
-    print('No kind cluster! create one and restart tilt after doing so. You can use this command:')
-    print('ctlptl create cluster kind --name kind-' + cluster_name + ' --registry=ctlptl-registry')
-    fail("started kind cluster. Create one and run tilt again")
+allow_k8s_contexts(cluster_context)
 
-print('Installing Gateway API CRDs...')
-run_controller_make('gw-api-crds')
-run_controller_make('gie-crds')
+local_resource(
+    'env-cluster',
+    env_command('cluster'),
+    deps=env_bootstrap_deps,
+    allow_parallel=False,
+)
 
-# Install CRDs
-print('Installing AgentGateway CRDs...')
-helm_resource(
-  'agentgateway-crds',
-  'controller/install/helm/agentgateway-crds',
-  namespace=install_namespace,
-  flags=['--set=version=' + version],
+local_resource(
+    'env-addons',
+    env_command('crds'),
+    deps=env_bootstrap_deps + [
+        './controller/test/setup/metallb.yaml',
+        './controller/Makefile',
+    ],
+    resource_deps=['env-cluster'],
+    allow_parallel=False,
+)
+
+local_resource(
+    'env-ready',
+    env_command('ready'),
+    deps=env_bootstrap_deps + [
+        './controller/test/setup/metallb.yaml',
+        './controller/Makefile',
+    ],
+    resource_deps=['env-addons'],
+    allow_parallel=False,
 )
 
 # =============================================================================
-# Control Plane (Go-based controller)
+# Cluster add-ons
+# =============================================================================
+
+helm_resource(
+    'agentgateway-crds',
+    'controller/install/helm/agentgateway-crds',
+    namespace=install_namespace,
+    flags=['--set=version=' + version],
+)
+k8s_resource('agentgateway-crds', resource_deps=['env-ready'])
+
+# =============================================================================
+# Control plane (Go-based controller)
 # =============================================================================
 
 local_resource(
-  'go-compile-controller',
-  'make -C ./controller VERSION=' + version + ' GCFLAGS=all="-N -l" agentgateway-controller && mv ./controller/_output/pkg/agentgateway/agentgateway-linux-$(go env GOARCH) ./tools/tilt/agentgateway-controller',
-  deps=['./controller/'],
-  ignore=['./controller/_output/'],
+    'go-compile-controller',
+    'make -C ./controller VERSION=' + version + ' GCFLAGS=all="-N -l" agentgateway-controller && mv ./controller/_output/pkg/agentgateway/agentgateway-linux-$(go env GOARCH) ./tools/tilt/agentgateway-controller',
+    deps=['./controller/'],
+    ignore=['./controller/_output/'],
 )
 
-# Build control plane Docker image
 docker_build_with_restart(
-    image_registry + '/agentgateway-controller',
+    image_registry + '/' + controller_image_repository,
     context='./tools/tilt/',
     entrypoint='/usr/local/bin/agentgateway-controller',
     dockerfile_contents="""
@@ -62,22 +90,18 @@ FROM ubuntu:24.04
 COPY agentgateway-controller /usr/local/bin/agentgateway-controller
 ENTRYPOINT /usr/local/bin/agentgateway-controller
     """,
-    # Live update: sync Go binaries
     live_update=[
-        # Sync Go code changes
-        sync('./tools/tilt/agentgateway-controller', '/usr/local/bin/agentgateway-controller'), 
+        sync('./tools/tilt/agentgateway-controller', '/usr/local/bin/agentgateway-controller'),
     ],
     only=[
         './agentgateway-controller',
     ],
 )
 
-
 # =============================================================================
 # Deploy via Helm
 # =============================================================================
 
-# Deploy AgentGateway via Helm
 k8s_yaml(helm(
     'controller/install/helm/agentgateway',
     name='agentgateway',
@@ -86,34 +110,33 @@ k8s_yaml(helm(
         'image.registry=' + image_registry,
         'image.tag=' + version,
         'image.pullPolicy=IfNotPresent',
-        'controller.image.repository=agentgateway-controller',
+        'controller.image.repository=' + controller_image_repository,
         'controller.image.tag=' + version,
         'controller.replicaCount=1',
         'controller.logLevel=debug',
-        'proxy.image.repository=agentgateway',
+        'proxy.image.repository=' + proxy_image_repository,
         'proxy.image.tag=' + version,
     ],
     values=[config.main_dir + '/controller/hack/helm/dev.yaml'] if os.path.exists(config.main_dir + '/controller/hack/helm/dev.yaml') else [],
- ))
+))
 
-k8s_resource('agentgateway',
-             resource_deps=['go-compile-controller'])
+k8s_resource(
+    'agentgateway',
+    resource_deps=['env-ready', 'agentgateway-crds', 'go-compile-controller'],
+)
 
 # =============================================================================
-# Data Plane (Rust-based proxy)
+# Data plane (Rust-based proxy)
 # =============================================================================
 
 local_resource(
-  'rust-compile-dataplane',
-  'cargo build && if [ -f "./tools/tilt/agentgateway" ]; then rm "./tools/tilt/agentgateway"; fi && mv ./target/debug/agentgateway ./tools/tilt/agentgateway',
-  deps=['./crates',
-        './Cargo.toml',
-        './Cargo.lock',
-        './.cargo'])
-# 
-# Build data plane Docker image
+    'rust-compile-dataplane',
+    'cargo build && if [ -f "./tools/tilt/agentgateway" ]; then rm "./tools/tilt/agentgateway"; fi && mv ./target/debug/agentgateway ./tools/tilt/agentgateway',
+    deps=['./crates', './Cargo.toml', './Cargo.lock', './.cargo'],
+)
+
 docker_build(
-    'agentgateway',
+    proxy_image_repository,
     context='./tools/tilt/',
     dockerfile_contents="""
 FROM ubuntu:24.04
@@ -143,16 +166,14 @@ metadata:
   name: dataplane-dev-gwparams
 spec:
   image:
-    registry: "" # tilt will fill in the registry in the repository field, so leave it blank here (othewise it will be duplicated)
-    repository: agentgateway
+    registry: ""
+    repository: """ + proxy_image_repository + """
     tag: """ + version + """
   deployment:
     spec:
       template:
         spec:
           containers:
-          # Delete container-level securityContext so that Tilt can apply live updates
-          # (need root user, and file system to be writable for live updates)
           - name: agentgateway
             securityContext:
              $patch: delete
@@ -173,5 +194,9 @@ spec:
       protocol: HTTP
       port: 8080
 """))
-k8s_resource(workload='dataplane-dev-gwparams', extra_pod_selectors={"gateway.networking.k8s.io/gateway-name":"tilt-gw"}, 
- resource_deps=['rust-compile-dataplane'])
+
+k8s_resource(
+    workload='dataplane-dev-gwparams',
+    extra_pod_selectors={"gateway.networking.k8s.io/gateway-name": "tilt-gw"},
+    resource_deps=['env-ready', 'agentgateway', 'rust-compile-dataplane'],
+)

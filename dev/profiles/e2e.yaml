@@ -1,0 +1,4 @@
+# Local e2e defaults can diverge here without changing the CI profile name.
+extends: base
+image_tag: ci
+test_mode: e2e

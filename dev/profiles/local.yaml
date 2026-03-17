@@ -1,0 +1,3 @@
+extends: base
+image_tag: dev
+test_mode: local

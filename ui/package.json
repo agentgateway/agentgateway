@@ -6,10 +6,12 @@
   "main": "index.js",
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "npm run lint -- --fix && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "prepublishOnly": "npm run build"
+    "fix": "next lint --fix",
+    "verify": "npm run lint && npm run build",
+    "prepublishOnly": "npm run verify"
   },
   "dependencies": {
     "@a2a-js/sdk": "^0.3.10",
