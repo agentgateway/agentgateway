@@ -257,11 +257,19 @@ fn coalesce<'a>(ftx: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
 	}
 
 	let mut last_error = None;
+	let mut saw_null = false;
 	for exp in ftx.expr_iter() {
 		match Value::resolve(exp, ftx.ptx, ftx.vars()) {
+			Ok(Value::Null) => {
+				saw_null = true;
+			},
 			Ok(v) => return Ok(v),
 			Err(err) => last_error = Some(err),
 		}
+	}
+
+	if saw_null {
+		return Ok(Value::Null);
 	}
 
 	Err(last_error.unwrap_or_else(|| ExecutionError::invalid_argument_count(1, 0)))

@@ -206,6 +206,8 @@ fn coalesce() {
 	let expr = r#"coalesce(fail("bad"), 1 / 0, "fallback")"#;
 	assert(json!("fallback"), expr);
 	let expr = r#"coalesce(null, "fallback")"#;
+	assert(json!("fallback"), expr);
+	let expr = r#"coalesce(null)"#;
 	assert(json!(null), expr);
 	assert_fails(r#"coalesce(fail("bad"), 1 / 0)"#);
 
