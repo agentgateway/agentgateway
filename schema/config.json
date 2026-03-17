@@ -793,7 +793,10 @@
           }
         },
         "path": {
-          "$ref": "#/$defs/PathMatch"
+          "$ref": "#/$defs/PathMatch",
+          "default": {
+            "pathPrefix": "/"
+          }
         },
         "method": {
           "type": "string"
@@ -805,10 +808,7 @@
           }
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "path"
-      ]
+      "additionalProperties": false
     },
     "HeaderMatch": {
       "type": "object",
