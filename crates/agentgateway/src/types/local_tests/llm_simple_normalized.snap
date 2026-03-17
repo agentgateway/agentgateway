@@ -29,7 +29,7 @@ binds:
                   pathPrefix: /models
             name: "admin:model-list"
             namespace: internal
-          "llm:model:claude-3-haiku:0":
+          "llm:model:0:claude-3-haiku":
             backends:
               - backend: "/llm:model:claude-3-haiku:0"
                 weight: 1
@@ -43,7 +43,7 @@ binds:
                     /v1/responses: responses
                     ":rawPredict": messages
                     ":streamRawPredict": messages
-            key: "llm:model:claude-3-haiku:0"
+            key: "llm:model:0:claude-3-haiku"
             matches:
               - headers:
                   - name: x-org
@@ -56,7 +56,7 @@ binds:
                   pathPrefix: /
             name: "model:claude-3-haiku"
             namespace: internal
-          "llm:model:gemini-0.5-pro:1":
+          "llm:model:1:gemini-0.5-pro":
             backends:
               - backend: "/llm:model:gemini-0.5-pro:1"
                 weight: 1
@@ -70,7 +70,7 @@ binds:
                     /v1/responses: responses
                     ":rawPredict": messages
                     ":streamRawPredict": messages
-            key: "llm:model:gemini-0.5-pro:1"
+            key: "llm:model:1:gemini-0.5-pro"
             matches:
               - headers:
                   - name: x-gateway-model-name
@@ -80,31 +80,7 @@ binds:
                   pathPrefix: /
             name: "model:gemini-0.5-pro"
             namespace: internal
-          "llm:model:gpt-3.5-turbo:3":
-            backends:
-              - backend: "/llm:model:gpt-3.5-turbo:3"
-                weight: 1
-            inlinePolicies:
-              - ai:
-                  routes:
-                    "*": passthrough
-                    /v1/chat/completions: completions
-                    /v1/embeddings: embeddings
-                    /v1/messages: messages
-                    /v1/responses: responses
-                    ":rawPredict": messages
-                    ":streamRawPredict": messages
-            key: "llm:model:gpt-3.5-turbo:3"
-            matches:
-              - headers:
-                  - name: x-gateway-model-name
-                    value:
-                      exact: gpt-3.5-turbo
-                path:
-                  pathPrefix: /
-            name: "model:gpt-3.5-turbo"
-            namespace: internal
-          "llm:model:gpt-7-max:2":
+          "llm:model:2:gpt-7-max":
             backends:
               - backend: "/llm:model:gpt-7-max:2"
                 weight: 1
@@ -118,7 +94,7 @@ binds:
                     /v1/responses: responses
                     ":rawPredict": messages
                     ":streamRawPredict": messages
-            key: "llm:model:gpt-7-max:2"
+            key: "llm:model:2:gpt-7-max"
             matches:
               - headers:
                   - name: x-gateway-model-name
@@ -127,6 +103,30 @@ binds:
                 path:
                   pathPrefix: /
             name: "model:gpt-7-max"
+            namespace: internal
+          "llm:model:3:gpt-3.5-turbo":
+            backends:
+              - backend: "/llm:model:gpt-3.5-turbo:3"
+                weight: 1
+            inlinePolicies:
+              - ai:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/messages: messages
+                    /v1/responses: responses
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+            key: "llm:model:3:gpt-3.5-turbo"
+            matches:
+              - headers:
+                  - name: x-gateway-model-name
+                    value:
+                      exact: gpt-3.5-turbo
+                path:
+                  pathPrefix: /
+            name: "model:gpt-3.5-turbo"
             namespace: internal
         tcpRoutes: {}
 policies:

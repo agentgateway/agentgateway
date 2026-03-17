@@ -1696,7 +1696,10 @@ json(request.body).model
 
 		// Create route for this model
 		// Index is needed because the same name can be used with different match criteria
-		let route_key = strng::format!("llm:model:{}:{idx}", model_config.name);
+		// Important: index is before model, to ensure we rank ties by order of first-in-list
+		// This ensures if I have '*' and 'foo/*', I can prefer `foo/*` by making it first.
+		// TODO: should we automatically make more explicit prefixes higher ranked?
+		let route_key = strng::format!("llm:model:{idx}:{}", model_config.name);
 		let user_matches = if model_config.matches.is_empty() {
 			vec![RouteMatch {
 				path: PathMatch::PathPrefix(strng::new("/")),
