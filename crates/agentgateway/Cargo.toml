@@ -16,7 +16,6 @@ schema = ["schemars"]
 internal_benches = ["divan"]
 
 [dependencies]
-a2a-sdk.workspace = true
 agent-core.workspace = true
 agent-celx.workspace = true
 agent-hbone.workspace = true
@@ -94,6 +93,7 @@ prost-types.workspace = true
 prost-wkt-types.workspace = true
 prost.workspace = true
 rand.workspace = true
+libc.workspace = true
 rcgen.workspace = true
 regex.workspace = true
 

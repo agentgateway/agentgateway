@@ -220,14 +220,14 @@ impl Expression {
 			Ok(ok) => ok,
 			Err(err) => {
 				debug!("ignoring failed expression: {}", err);
+				let fail_message =
+					serde_json::to_string(&format!("the expression {expr:?} could not be compiled"))
+						.expect("string serialization must succeed");
 				Self {
 					attributes: Default::default(),
-					expression: Self::new_strict(format!(
-						"fail(\"the expression {:?} could not be compiled\")",
-						&expr
-					))
-					.expect("must be valid")
-					.expression,
+					expression: Self::new_strict(format!("fail({fail_message})"))
+						.expect("must be valid")
+						.expression,
 					original_expression: expr,
 				}
 			},

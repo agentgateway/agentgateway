@@ -3,15 +3,6 @@
 version = 4
 
 [[package]]
-name = "a2a-sdk"
-version = "0.7.0"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -34,6 +25,7 @@ dependencies = [
  "assert_matches",
  "base64",
  "cel",
+ "divan",
  "hashbrown 0.16.1",
  "ipnet",
  "once_cell",
@@ -132,7 +124,6 @@ dependencies = [
 name = "agentgateway"
 version = "0.0.0"
 dependencies = [
- "a2a-sdk",
  "agent-celx",
  "agent-core",
  "agent-hbone",
@@ -192,6 +183,7 @@ dependencies = [
  "jemalloc_pprof",
  "jsonwebtoken",
  "lazy_static",
+ "libc",
  "macro_rules_attribute",
  "notify",
  "notify-debouncer-full",

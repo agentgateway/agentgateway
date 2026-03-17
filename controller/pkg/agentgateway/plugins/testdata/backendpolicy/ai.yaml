@@ -114,94 +114,109 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    key: traffic/default/agw:rbac:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      route:
-        kind: HTTPRoute
-        name: test
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        ai:
+          defaults:
+            logit_bias: '{"50256":-100}'
+          modelAliases:
+            fast: amazon.nova-micro-v1:0
+            smart: anthropic.claude-3-5-sonnet-20241022-v2:0
+          overrides:
+            model: '"gpt-4"'
+          promptCaching:
+            cacheMessages: true
+            cacheSystem: true
+            minTokens: 1024
+          promptGuard:
+            request:
+            - regex:
+                rules:
+                - regex: bad.*
+                - builtin: CREDIT_CARD
+              rejection:
+                body: cmVnZXggcmVqZWN0ZWQgb24gcmVxdWVzdA==
+            - openaiModeration:
+                inlinePolicies:
+                - backendTls:
+                    verification: INSECURE_ALL
+            - bedrockGuardrails:
+                identifier: bedrock-guardrail-identifier
+                region: us-west-2
+                version: DRAFT
+            - googleModelArmor:
+                location: us-central1
+                projectId: model-armor-project-id
+                templateId: model-armor-template-id
+            - webhook:
+                backend:
+                  port: 80
+                  service:
+                    hostname: webhook.default.svc.cluster.local
+                    namespace: default
+          prompts:
+            append:
+            - content: hello!
+              role: user
+            prepend:
+            - content: be nice
+              role: system
+          routes:
+            '*': PASSTHROUGH
+            /v1/chat/completions: COMPLETIONS
+            /v1/embeddings: PASSTHROUGH
+            /v1/models: PASSTHROUGH
+      key: backend/default/agw:ai:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
-    traffic:
-      authorization:
-        deny:
-        - "true"
-- Policy:
-    backend:
-      ai:
-        defaults:
-          logit_bias: '{"50256":-100}'
-        modelAliases:
-          fast: amazon.nova-micro-v1:0
-          smart: anthropic.claude-3-5-sonnet-20241022-v2:0
-        overrides:
-          model: '"gpt-4"'
-        promptCaching:
-          cacheMessages: true
-          cacheSystem: true
-          minTokens: 1024
-        promptGuard:
-          request:
-          - regex:
-              rules:
-              - regex: bad.*
-              - builtin: CREDIT_CARD
-            rejection:
-              body: cmVnZXggcmVqZWN0ZWQgb24gcmVxdWVzdA==
-          - openaiModeration:
-              inlinePolicies:
-              - backendTls:
-                  verification: INSECURE_ALL
-          - bedrockGuardrails:
-              identifier: bedrock-guardrail-identifier
-              region: us-west-2
-              version: DRAFT
-          - googleModelArmor:
-              location: us-central1
-              projectId: model-armor-project-id
-              templateId: model-armor-template-id
-          - webhook:
-              backend:
-                port: 80
-                service:
-                  hostname: webhook.default.svc.cluster.local
-                  namespace: default
-        prompts:
-          append:
-          - content: hello!
-            role: user
-          prepend:
-          - content: be nice
-            role: system
-        routes:
-          '*': PASSTHROUGH
-          /v1/chat/completions: COMPLETIONS
-          /v1/embeddings: PASSTHROUGH
-          /v1/models: PASSTHROUGH
-    key: backend/default/agw:ai:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      route:
-        kind: HTTPRoute
-        name: test
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/agw:rbac:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+      traffic:
+        authorization:
+          deny:
+          - "true"
 status:
-  ancestors:
-  - ancestorRef:
-      group: gateway.networking.k8s.io
-      kind: Gateway
-      name: test
-      namespace: default
-    conditions:
-    - lastTransitionTime: fake
-      message: 'failed to build webhook: unable to find the Service default/ai-guardrails-webhook'
-      reason: PartiallyValid
-      status: "True"
-      type: Accepted
-    controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: 'failed to build webhook: unable to find the Service default/ai-guardrails-webhook'
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

@@ -22,10 +22,10 @@ impl<'a> MapValue<'a> {
 			MapValue::Borrow(m) => Either::Right(m.keys().cloned()),
 		}
 	}
-	pub fn iter(&'a self) -> impl Iterator<Item = (KeyRef<'a>, &'a Value<'a>)> {
+	pub fn iter(&self) -> impl Iterator<Item = (KeyRef<'a>, &Value<'a>)> + use<'a, '_> {
 		use itertools::Either;
 		match self {
-			MapValue::Owned(m) => Either::Left(m.iter().map(|(k, v)| (KeyRef::from(k), v))),
+			MapValue::Owned(m) => Either::Left(m.iter().map(|(k, v)| (KeyRef::from(k.clone()), v))),
 			MapValue::Borrow(m) => Either::Right(m.iter().map(|(k, v)| (k.clone(), v))),
 		}
 	}

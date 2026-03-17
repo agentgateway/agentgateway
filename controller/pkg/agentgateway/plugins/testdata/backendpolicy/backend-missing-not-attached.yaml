@@ -1,3 +1,4 @@
+# Intentionally no output. There is no backend, so nothing to attach to.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -14,33 +15,29 @@ spec:
         - name: mtls
 ---
 # Output
-output:
-- Policy:
-    backend:
-      backendTls: {}
-    key: default/agw:tls:default/missing
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      backend:
-        name: missing
-        namespace: default
+output: []
 status:
-  ancestors:
-  - ancestorRef:
-      group: agentgateway.dev
-      name: StatusSummary
-    conditions:
-    - lastTransitionTime: fake
-      message: Policy accepted
-      reason: Valid
-      status: "True"
-      type: Accepted
-    - lastTransitionTime: fake
-      message: 'Policy is not attached: AgentgatewayBackend default/missing not found'
-      reason: Pending
-      status: "False"
-      type: Attached
-    controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: agentgateway.dev
+        name: StatusSummary
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is not attached: AgentgatewayBackend default/missing not
+          found'
+        reason: Pending
+        status: "False"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

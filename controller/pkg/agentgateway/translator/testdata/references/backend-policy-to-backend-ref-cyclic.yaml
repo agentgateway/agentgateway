@@ -1,0 +1,67 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: be
+  namespace: default
+spec:
+  static:
+    host: primary.example.com
+    port: 80
+  policies:
+    tunnel:
+      backendRef:
+        name: be-b
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: be-b
+  namespace: default
+spec:
+  static:
+    host: secondary.example.com
+    port: 80
+  policies:
+    tunnel:
+      backendRef:
+        name: be
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    backend:
+      inlinePolicies:
+      - backendTunnel:
+          proxy:
+            backend: default/be-b
+      key: default/be
+      name:
+        name: be
+        namespace: default
+      static:
+        host: primary.example.com
+        port: 80
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    backend:
+      inlinePolicies:
+      - backendTunnel:
+          proxy:
+            backend: default/be
+      key: default/be-b
+      name:
+        name: be-b
+        namespace: default
+      static:
+        host: secondary.example.com
+        port: 80
+status: []

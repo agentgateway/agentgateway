@@ -12,6 +12,7 @@ use super::agent::*;
 use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{HeaderOrPseudo, Scheme, auth, authorization, health};
+use crate::mcp::FailureMode;
 use crate::mcp::McpAuthorization;
 use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
@@ -276,6 +277,7 @@ fn convert_route_type(proto_rt: i32) -> llm::RouteType {
 		Ok(ProtoRT::Messages) => llm::RouteType::Messages,
 		Ok(ProtoRT::Models) => llm::RouteType::Models,
 		Ok(ProtoRT::Passthrough) => llm::RouteType::Passthrough,
+		Ok(ProtoRT::Detect) => llm::RouteType::Detect,
 		Ok(ProtoRT::Responses) => llm::RouteType::Responses,
 		Ok(ProtoRT::AnthropicTokenCount) => llm::RouteType::AnthropicTokenCount,
 		Ok(ProtoRT::Embeddings) => llm::RouteType::Embeddings,
@@ -848,6 +850,10 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 						proto::agent::mcp_backend::PrefixMode::Always => true,
 						proto::agent::mcp_backend::PrefixMode::Conditional => false,
 					},
+					failure_mode: match m.failure_mode() {
+						proto::agent::mcp_backend::FailureMode::FailOpen => FailureMode::FailOpen,
+						proto::agent::mcp_backend::FailureMode::FailClosed => FailureMode::FailClosed,
+					},
 				},
 			),
 			None => {
@@ -1068,6 +1074,9 @@ impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 					.transpose()?
 					.unwrap_or_default(),
 			}),
+			Some(bps::Kind::BackendTunnel(bt)) => BackendPolicy::Tunnel(backend::Tunnel {
+				proxy: Arc::new(resolve_simple_reference(bt.proxy.as_ref())?),
+			}),
 			Some(bps::Kind::BackendTls(btls)) => {
 				let mode = bps::backend_tls::VerificationMode::try_from(btls.verification)?;
 				let tls = http::backendtls::ResolvedBackendTLS {
@@ -1188,10 +1197,14 @@ fn convert_health(
 	};
 	let eviction = h.eviction.as_ref().map(|ev| health::Eviction {
 		duration: ev.duration.map(convert_duration),
+		restore_health: ev.restore_health,
+		consecutive_failures: ev.consecutive_failures,
+		health_threshold: ev.health_threshold,
 	});
 	Ok(health::Policy {
 		unhealthy_expression,
 		eviction,
+ feat/1138-active-health-check
 		health_threshold: None,
 		health_on_unevict: None,
 		probe: None,
@@ -1771,7 +1784,32 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 					})
 					.transpose()?
 					.unwrap_or_default();
-				FrontendPolicy::AccessLog(frontend::LoggingPolicy {
+				let otlp = p
+					.otlp_access_log
+					.as_ref()
+					.map(|oal| -> Result<frontend::OtlpLoggingConfig, ProtoError> {
+						let provider_backend = resolve_simple_reference(oal.provider_backend.as_ref())?;
+						let policies = oal
+							.inline_policies
+							.iter()
+							.map(BackendPolicy::try_from)
+							.collect::<Result<Vec<_>, _>>()?;
+						let protocol = match fps::logging::otlp_access_log::Protocol::try_from(oal.protocol) {
+							Ok(fps::logging::otlp_access_log::Protocol::Grpc) => {
+								types::agent::TracingProtocol::Grpc
+							},
+							_ => types::agent::TracingProtocol::Http,
+						};
+						let path = oal.path.clone().unwrap_or_else(|| "/v1/logs".to_string());
+						Ok(frontend::OtlpLoggingConfig {
+							provider_backend,
+							policies,
+							protocol,
+							path,
+						})
+					})
+					.transpose()?;
+				let mut logging_policy = frontend::LoggingPolicy {
 					filter: p
 						.filter
 						.as_ref()
@@ -1779,8 +1817,11 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 						.map(Arc::new),
 					add: Arc::new(add),
 					remove: Arc::new(FzHashSet::new(rm)),
-					otlp: None,
-				})
+					otlp,
+					access_log_policy: None,
+				};
+				logging_policy.init_access_log_policy();
+				FrontendPolicy::AccessLog(logging_policy)
 			},
 			Some(fps::Kind::Tracing(t)) => {
 				// Convert protobuf to TracingConfig
@@ -2236,6 +2277,7 @@ mod tests {
 						RouteType::Completions as i32,
 					),
 					("/v1/messages".to_string(), RouteType::Messages as i32),
+					("/v1/detect".to_string(), RouteType::Detect as i32),
 				]
 				.into_iter()
 				.collect(),
@@ -2283,7 +2325,7 @@ mod tests {
 			assert!(transformation_policy.get("system").is_some());
 
 			// Verify routes conversion
-			assert_eq!(ai_policy.routes.len(), 2);
+			assert_eq!(ai_policy.routes.len(), 3);
 			assert_eq!(
 				ai_policy.routes.get("/v1/chat/completions"),
 				Some(&llm::RouteType::Completions)
@@ -2291,6 +2333,10 @@ mod tests {
 			assert_eq!(
 				ai_policy.routes.get("/v1/messages"),
 				Some(&llm::RouteType::Messages)
+			);
+			assert_eq!(
+				ai_policy.routes.get("/v1/detect"),
+				Some(&llm::RouteType::Detect)
 			);
 		} else {
 			panic!("Expected AI policy variant");

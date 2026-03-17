@@ -1,6 +1,7 @@
 pub mod bedrock;
 pub mod completions;
 pub mod count_tokens;
+pub mod detect;
 pub mod embeddings;
 pub mod messages;
 pub mod responses;
@@ -28,6 +29,9 @@ pub trait ResponseType: Send + Sync {
 /// RequestType is an abstraction over provider/endpoint specific request formats that enables
 /// uniform policy enforcement and observability
 pub trait RequestType: Send + Sync {
+	fn supports_model(&self) -> bool {
+		true
+	}
 	fn model(&mut self) -> &mut Option<String>;
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>);
 	fn append_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>);

@@ -1,7 +1,6 @@
 package testutils
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -103,7 +102,7 @@ var timestampRegex = regexp.MustCompile(`lastTransitionTime:.*`)
 //
 // The output is generally created by running the test with `REFRESH_GOLDEN=true`.
 func RunForDirectory[Status any, Output any](t *testing.T, base string, run func(t *testing.T, ctx plugins.PolicyCtx) (Status, []Output)) {
-	val := apitests.NewKgatewayValidator(t)
+	val := apitests.NewAgentgatewayValidator(t)
 	val.SkipMissing = true
 	defaults, defaultsErr := file.AsString(filepath.Join(base, "_defaults.yaml"))
 	for _, f := range file.ReadDirOrFail(t, base) {
@@ -163,7 +162,6 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 		}
 	})
 	syncer := agentgatewaysyncer.NewAgwSyncer(
-		context.Background(),
 		wellknown.DefaultAgwControllerName,
 		// Only used for NACK, so no need to do anything special here.
 		fc,

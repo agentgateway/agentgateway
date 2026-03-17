@@ -7,6 +7,7 @@ use crate::ProxyInputs;
 use crate::http::authorization::RuleSets;
 use crate::http::sessionpersistence::Encoder;
 use crate::http::*;
+use crate::mcp::FailureMode;
 use crate::mcp::auth;
 use crate::mcp::handler::RelayInputs;
 use crate::mcp::session::SessionManager;
@@ -99,6 +100,7 @@ impl App {
 			McpBackendGroup {
 				targets: nt,
 				stateful: backend.stateful,
+				failure_mode: backend.failure_mode,
 			}
 		};
 		let sm = self.session.clone();
@@ -171,6 +173,7 @@ impl App {
 pub struct McpBackendGroup {
 	pub targets: Vec<Arc<McpTarget>>,
 	pub stateful: bool,
+	pub failure_mode: FailureMode,
 }
 
 #[derive(Debug)]

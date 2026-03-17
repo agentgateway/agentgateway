@@ -450,12 +450,23 @@ spec:
                                               description: Eviction defines settings
                                                 for evicting unhealthy backends.
                                               properties:
+                                                consecutiveFailures:
+                                                  description: |-
+                                                    ConsecutiveFailures is the number of consecutive unhealthy responses required before the backend is evicted.
+                                                    For example, a value of 5 means the backend must receive 5 unhealthy responses in a row before being evicted.
+                                                    When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+                                                    When neither is set, a single unhealthy response can trigger eviction.
+                                                  format: int32
+                                                  minimum: 0
+                                                  type: integer
                                                 duration:
-                                                  default: 30s
-                                                  description: duration specifies
-                                                    how long a backend should be evicted
-                                                    after being marked unhealthy.
-                                                    If unset, defaults to 30s.
+                                                  default: 3s
+                                                  description: |-
+                                                    Duration specifies the base time a backend should be evicted after being marked unhealthy.
+                                                    Subsequent evictions use multiplicative backoff (duration * times_evicted).
+                                                    If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
+                                                    rather than failing entirely.
+                                                    If unset, defaults to 3s.
                                                   type: string
                                                   x-kubernetes-validations:
                                                   - message: invalid duration value
@@ -463,6 +474,28 @@ spec:
                                                   - message: evictionDuration must
                                                       be at least 1 second
                                                     rule: duration(self) >= duration('1s')
+                                                healthThreshold:
+                                                  description: |-
+                                                    HealthThreshold is the EWMA (exponentially-weighted moving average) health score threshold, expressed as 0–100.
+                                                    When set, a backend is only evicted if its computed health drops below this value after an unhealthy response.
+                                                    For example, 50 means the backend is evicted when its EWMA health falls below 50% following failures.
+                                                    Unlike consecutiveFailures (which counts consecutive failures), this uses a sliding-window average
+                                                    so a single success in a stream of failures can delay eviction.
+                                                    When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+                                                    When neither is set, a single unhealthy response triggers eviction.
+                                                  format: int32
+                                                  maximum: 100
+                                                  minimum: 0
+                                                  type: integer
+                                                restoreHealth:
+                                                  description: |-
+                                                    RestoreHealth is the health score (0–100) assigned to a backend when it returns from eviction.
+                                                    For gradual recovery, set below 100; for full recovery immediately, set 100.
+                                                    If unset, the backend resumes with the health it had when evicted.
+                                                  format: int32
+                                                  maximum: 100
+                                                  minimum: 0
+                                                  type: integer
                                               type: object
                                             unhealthyCondition:
                                               description: |-
@@ -470,11 +503,12 @@ spec:
                                                 When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
 
                                                 For example, to evict on 5xx responses: `response.code >= 500`.
+
+                                                When unset, any 5xx response, or a connection failure, is treated as unhealthy.
+                                                This default lowers the backend's health score but does not trigger eviction on its own.
                                               maxLength: 16384
                                               minLength: 1
                                               type: string
-                                          required:
-                                          - unhealthyCondition
                                           type: object
                                         http:
                                           description: http defines settings for managing
@@ -952,6 +986,89 @@ spec:
                                               [request response] must be set
                                             rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
                                               >= 1'
+                                        tunnel:
+                                          description: tunnel defines settings for
+                                            managing tunnel connections (like HTTPS_PROXY)
+                                            to the backend.
+                                          properties:
+                                            backendRef:
+                                              description: |-
+                                                backendRef references the proxy server to reach.
+                                                Supported types: Service and Backend.
+                                              properties:
+                                                group:
+                                                  default: ""
+                                                  description: |-
+                                                    Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                    When unspecified or empty string, core API group is inferred.
+                                                  maxLength: 253
+                                                  pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                  type: string
+                                                kind:
+                                                  default: Service
+                                                  description: |-
+                                                    Kind is the Kubernetes resource kind of the referent. For example
+                                                    "Service".
+
+                                                    Defaults to "Service" when not specified.
+
+                                                    ExternalName services can refer to CNAME DNS records that may live
+                                                    outside of the cluster and as such are difficult to reason about in
+                                                    terms of conformance. They also may not be safe to forward to (see
+                                                    CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                    support ExternalName Services.
+
+                                                    Support: Core (Services with a type other than ExternalName)
+
+                                                    Support: Implementation-specific (Services with type ExternalName)
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                  type: string
+                                                name:
+                                                  description: Name is the name of
+                                                    the referent.
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                                namespace:
+                                                  description: |-
+                                                    Namespace is the namespace of the backend. When unspecified, the local
+                                                    namespace is inferred.
+
+                                                    Note that when a namespace different than the local namespace is specified,
+                                                    a ReferenceGrant object is required in the referent namespace to allow that
+                                                    namespace's owner to accept the reference. See the ReferenceGrant
+                                                    documentation for details.
+
+                                                    Support: Core
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                  type: string
+                                                port:
+                                                  description: |-
+                                                    Port specifies the destination port number to use for this resource.
+                                                    Port is required when the referent is a Kubernetes Service. In this
+                                                    case, the port number is the service port number, not the target port.
+                                                    For other resources, destination port might be derived from the referent
+                                                    resource or this field.
+                                                  format: int32
+                                                  maximum: 65535
+                                                  minimum: 1
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: Must have port for Service
+                                                  reference
+                                                rule: '(size(self.group) == 0 && self.kind
+                                                  == ''Service'') ? has(self.port)
+                                                  : true'
+                                          required:
+                                          - backendRef
+                                          type: object
                                       type: object
                                     region:
                                       description: Region is the AWS region where
@@ -1120,12 +1237,23 @@ spec:
                                               description: Eviction defines settings
                                                 for evicting unhealthy backends.
                                               properties:
+                                                consecutiveFailures:
+                                                  description: |-
+                                                    ConsecutiveFailures is the number of consecutive unhealthy responses required before the backend is evicted.
+                                                    For example, a value of 5 means the backend must receive 5 unhealthy responses in a row before being evicted.
+                                                    When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+                                                    When neither is set, a single unhealthy response can trigger eviction.
+                                                  format: int32
+                                                  minimum: 0
+                                                  type: integer
                                                 duration:
-                                                  default: 30s
-                                                  description: duration specifies
-                                                    how long a backend should be evicted
-                                                    after being marked unhealthy.
-                                                    If unset, defaults to 30s.
+                                                  default: 3s
+                                                  description: |-
+                                                    Duration specifies the base time a backend should be evicted after being marked unhealthy.
+                                                    Subsequent evictions use multiplicative backoff (duration * times_evicted).
+                                                    If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
+                                                    rather than failing entirely.
+                                                    If unset, defaults to 3s.
                                                   type: string
                                                   x-kubernetes-validations:
                                                   - message: invalid duration value
@@ -1133,6 +1261,28 @@ spec:
                                                   - message: evictionDuration must
                                                       be at least 1 second
                                                     rule: duration(self) >= duration('1s')
+                                                healthThreshold:
+                                                  description: |-
+                                                    HealthThreshold is the EWMA (exponentially-weighted moving average) health score threshold, expressed as 0–100.
+                                                    When set, a backend is only evicted if its computed health drops below this value after an unhealthy response.
+                                                    For example, 50 means the backend is evicted when its EWMA health falls below 50% following failures.
+                                                    Unlike consecutiveFailures (which counts consecutive failures), this uses a sliding-window average
+                                                    so a single success in a stream of failures can delay eviction.
+                                                    When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+                                                    When neither is set, a single unhealthy response triggers eviction.
+                                                  format: int32
+                                                  maximum: 100
+                                                  minimum: 0
+                                                  type: integer
+                                                restoreHealth:
+                                                  description: |-
+                                                    RestoreHealth is the health score (0–100) assigned to a backend when it returns from eviction.
+                                                    For gradual recovery, set below 100; for full recovery immediately, set 100.
+                                                    If unset, the backend resumes with the health it had when evicted.
+                                                  format: int32
+                                                  maximum: 100
+                                                  minimum: 0
+                                                  type: integer
                                               type: object
                                             unhealthyCondition:
                                               description: |-
@@ -1140,11 +1290,12 @@ spec:
                                                 When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
 
                                                 For example, to evict on 5xx responses: `response.code >= 500`.
+
+                                                When unset, any 5xx response, or a connection failure, is treated as unhealthy.
+                                                This default lowers the backend's health score but does not trigger eviction on its own.
                                               maxLength: 16384
                                               minLength: 1
                                               type: string
-                                          required:
-                                          - unhealthyCondition
                                           type: object
                                         http:
                                           description: http defines settings for managing
@@ -1622,6 +1773,89 @@ spec:
                                               [request response] must be set
                                             rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
                                               >= 1'
+                                        tunnel:
+                                          description: tunnel defines settings for
+                                            managing tunnel connections (like HTTPS_PROXY)
+                                            to the backend.
+                                          properties:
+                                            backendRef:
+                                              description: |-
+                                                backendRef references the proxy server to reach.
+                                                Supported types: Service and Backend.
+                                              properties:
+                                                group:
+                                                  default: ""
+                                                  description: |-
+                                                    Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                    When unspecified or empty string, core API group is inferred.
+                                                  maxLength: 253
+                                                  pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                  type: string
+                                                kind:
+                                                  default: Service
+                                                  description: |-
+                                                    Kind is the Kubernetes resource kind of the referent. For example
+                                                    "Service".
+
+                                                    Defaults to "Service" when not specified.
+
+                                                    ExternalName services can refer to CNAME DNS records that may live
+                                                    outside of the cluster and as such are difficult to reason about in
+                                                    terms of conformance. They also may not be safe to forward to (see
+                                                    CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                    support ExternalName Services.
+
+                                                    Support: Core (Services with a type other than ExternalName)
+
+                                                    Support: Implementation-specific (Services with type ExternalName)
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                  type: string
+                                                name:
+                                                  description: Name is the name of
+                                                    the referent.
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                                namespace:
+                                                  description: |-
+                                                    Namespace is the namespace of the backend. When unspecified, the local
+                                                    namespace is inferred.
+
+                                                    Note that when a namespace different than the local namespace is specified,
+                                                    a ReferenceGrant object is required in the referent namespace to allow that
+                                                    namespace's owner to accept the reference. See the ReferenceGrant
+                                                    documentation for details.
+
+                                                    Support: Core
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                  type: string
+                                                port:
+                                                  description: |-
+                                                    Port specifies the destination port number to use for this resource.
+                                                    Port is required when the referent is a Kubernetes Service. In this
+                                                    case, the port number is the service port number, not the target port.
+                                                    For other resources, destination port might be derived from the referent
+                                                    resource or this field.
+                                                  format: int32
+                                                  maximum: 65535
+                                                  minimum: 1
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: Must have port for Service
+                                                  reference
+                                                rule: '(size(self.group) == 0 && self.kind
+                                                  == ''Service'') ? has(self.port)
+                                                  : true'
+                                          required:
+                                          - backendRef
+                                          type: object
                                       type: object
                                     projectId:
                                       description: ProjectID is the Google Cloud project
@@ -1786,12 +2020,23 @@ spec:
                                               description: Eviction defines settings
                                                 for evicting unhealthy backends.
                                               properties:
+                                                consecutiveFailures:
+                                                  description: |-
+                                                    ConsecutiveFailures is the number of consecutive unhealthy responses required before the backend is evicted.
+                                                    For example, a value of 5 means the backend must receive 5 unhealthy responses in a row before being evicted.
+                                                    When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+                                                    When neither is set, a single unhealthy response can trigger eviction.
+                                                  format: int32
+                                                  minimum: 0
+                                                  type: integer
                                                 duration:
-                                                  default: 30s
-                                                  description: duration specifies
-                                                    how long a backend should be evicted
-                                                    after being marked unhealthy.
-                                                    If unset, defaults to 30s.
+                                                  default: 3s
+                                                  description: |-
+                                                    Duration specifies the base time a backend should be evicted after being marked unhealthy.
+                                                    Subsequent evictions use multiplicative backoff (duration * times_evicted).
+                                                    If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
+                                                    rather than failing entirely.
+                                                    If unset, defaults to 3s.
                                                   type: string
                                                   x-kubernetes-validations:
                                                   - message: invalid duration value
@@ -1799,6 +2044,28 @@ spec:
                                                   - message: evictionDuration must
                                                       be at least 1 second
                                                     rule: duration(self) >= duration('1s')
+                                                healthThreshold:
+                                                  description: |-
+                                                    HealthThreshold is the EWMA (exponentially-weighted moving average) health score threshold, expressed as 0–100.
+                                                    When set, a backend is only evicted if its computed health drops below this value after an unhealthy response.
+                                                    For example, 50 means the backend is evicted when its EWMA health falls below 50% following failures.
+                                                    Unlike consecutiveFailures (which counts consecutive failures), this uses a sliding-window average
+                                                    so a single success in a stream of failures can delay eviction.
+                                                    When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+                                                    When neither is set, a single unhealthy response triggers eviction.
+                                                  format: int32
+                                                  maximum: 100
+                                                  minimum: 0
+                                                  type: integer
+                                                restoreHealth:
+                                                  description: |-
+                                                    RestoreHealth is the health score (0–100) assigned to a backend when it returns from eviction.
+                                                    For gradual recovery, set below 100; for full recovery immediately, set 100.
+                                                    If unset, the backend resumes with the health it had when evicted.
+                                                  format: int32
+                                                  maximum: 100
+                                                  minimum: 0
+                                                  type: integer
                                               type: object
                                             unhealthyCondition:
                                               description: |-
@@ -1806,11 +2073,12 @@ spec:
                                                 When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
 
                                                 For example, to evict on 5xx responses: `response.code >= 500`.
+
+                                                When unset, any 5xx response, or a connection failure, is treated as unhealthy.
+                                                This default lowers the backend's health score but does not trigger eviction on its own.
                                               maxLength: 16384
                                               minLength: 1
                                               type: string
-                                          required:
-                                          - unhealthyCondition
                                           type: object
                                         http:
                                           description: http defines settings for managing
@@ -2288,6 +2556,89 @@ spec:
                                               [request response] must be set
                                             rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
                                               >= 1'
+                                        tunnel:
+                                          description: tunnel defines settings for
+                                            managing tunnel connections (like HTTPS_PROXY)
+                                            to the backend.
+                                          properties:
+                                            backendRef:
+                                              description: |-
+                                                backendRef references the proxy server to reach.
+                                                Supported types: Service and Backend.
+                                              properties:
+                                                group:
+                                                  default: ""
+                                                  description: |-
+                                                    Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                    When unspecified or empty string, core API group is inferred.
+                                                  maxLength: 253
+                                                  pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                  type: string
+                                                kind:
+                                                  default: Service
+                                                  description: |-
+                                                    Kind is the Kubernetes resource kind of the referent. For example
+                                                    "Service".
+
+                                                    Defaults to "Service" when not specified.
+
+                                                    ExternalName services can refer to CNAME DNS records that may live
+                                                    outside of the cluster and as such are difficult to reason about in
+                                                    terms of conformance. They also may not be safe to forward to (see
+                                                    CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                    support ExternalName Services.
+
+                                                    Support: Core (Services with a type other than ExternalName)
+
+                                                    Support: Implementation-specific (Services with type ExternalName)
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                  type: string
+                                                name:
+                                                  description: Name is the name of
+                                                    the referent.
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                                namespace:
+                                                  description: |-
+                                                    Namespace is the namespace of the backend. When unspecified, the local
+                                                    namespace is inferred.
+
+                                                    Note that when a namespace different than the local namespace is specified,
+                                                    a ReferenceGrant object is required in the referent namespace to allow that
+                                                    namespace's owner to accept the reference. See the ReferenceGrant
+                                                    documentation for details.
+
+                                                    Support: Core
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                  type: string
+                                                port:
+                                                  description: |-
+                                                    Port specifies the destination port number to use for this resource.
+                                                    Port is required when the referent is a Kubernetes Service. In this
+                                                    case, the port number is the service port number, not the target port.
+                                                    For other resources, destination port might be derived from the referent
+                                                    resource or this field.
+                                                  format: int32
+                                                  maximum: 65535
+                                                  minimum: 1
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: Must have port for Service
+                                                  reference
+                                                rule: '(size(self.group) == 0 && self.kind
+                                                  == ''Service'') ? has(self.port)
+                                                  : true'
+                                          required:
+                                          - backendRef
+                                          type: object
                                       type: object
                                   type: object
                                 regex:
@@ -2669,12 +3020,23 @@ spec:
                                               description: Eviction defines settings
                                                 for evicting unhealthy backends.
                                               properties:
+                                                consecutiveFailures:
+                                                  description: |-
+                                                    ConsecutiveFailures is the number of consecutive unhealthy responses required before the backend is evicted.
+                                                    For example, a value of 5 means the backend must receive 5 unhealthy responses in a row before being evicted.
+                                                    When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+                                                    When neither is set, a single unhealthy response can trigger eviction.
+                                                  format: int32
+                                                  minimum: 0
+                                                  type: integer
                                                 duration:
-                                                  default: 30s
-                                                  description: duration specifies
-                                                    how long a backend should be evicted
-                                                    after being marked unhealthy.
-                                                    If unset, defaults to 30s.
+                                                  default: 3s
+                                                  description: |-
+                                                    Duration specifies the base time a backend should be evicted after being marked unhealthy.
+                                                    Subsequent evictions use multiplicative backoff (duration * times_evicted).
+                                                    If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
+                                                    rather than failing entirely.
+                                                    If unset, defaults to 3s.
                                                   type: string
                                                   x-kubernetes-validations:
                                                   - message: invalid duration value
@@ -2682,6 +3044,28 @@ spec:
                                                   - message: evictionDuration must
                                                       be at least 1 second
                                                     rule: duration(self) >= duration('1s')
+                                                healthThreshold:
+                                                  description: |-
+                                                    HealthThreshold is the EWMA (exponentially-weighted moving average) health score threshold, expressed as 0–100.
+                                                    When set, a backend is only evicted if its computed health drops below this value after an unhealthy response.
+                                                    For example, 50 means the backend is evicted when its EWMA health falls below 50% following failures.
+                                                    Unlike consecutiveFailures (which counts consecutive failures), this uses a sliding-window average
+                                                    so a single success in a stream of failures can delay eviction.
+                                                    When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+                                                    When neither is set, a single unhealthy response triggers eviction.
+                                                  format: int32
+                                                  maximum: 100
+                                                  minimum: 0
+                                                  type: integer
+                                                restoreHealth:
+                                                  description: |-
+                                                    RestoreHealth is the health score (0–100) assigned to a backend when it returns from eviction.
+                                                    For gradual recovery, set below 100; for full recovery immediately, set 100.
+                                                    If unset, the backend resumes with the health it had when evicted.
+                                                  format: int32
+                                                  maximum: 100
+                                                  minimum: 0
+                                                  type: integer
                                               type: object
                                             unhealthyCondition:
                                               description: |-
@@ -2689,11 +3073,12 @@ spec:
                                                 When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
 
                                                 For example, to evict on 5xx responses: `response.code >= 500`.
+
+                                                When unset, any 5xx response, or a connection failure, is treated as unhealthy.
+                                                This default lowers the backend's health score but does not trigger eviction on its own.
                                               maxLength: 16384
                                               minLength: 1
                                               type: string
-                                          required:
-                                          - unhealthyCondition
                                           type: object
                                         http:
                                           description: http defines settings for managing
@@ -3171,6 +3556,89 @@ spec:
                                               [request response] must be set
                                             rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
                                               >= 1'
+                                        tunnel:
+                                          description: tunnel defines settings for
+                                            managing tunnel connections (like HTTPS_PROXY)
+                                            to the backend.
+                                          properties:
+                                            backendRef:
+                                              description: |-
+                                                backendRef references the proxy server to reach.
+                                                Supported types: Service and Backend.
+                                              properties:
+                                                group:
+                                                  default: ""
+                                                  description: |-
+                                                    Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                    When unspecified or empty string, core API group is inferred.
+                                                  maxLength: 253
+                                                  pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                  type: string
+                                                kind:
+                                                  default: Service
+                                                  description: |-
+                                                    Kind is the Kubernetes resource kind of the referent. For example
+                                                    "Service".
+
+                                                    Defaults to "Service" when not specified.
+
+                                                    ExternalName services can refer to CNAME DNS records that may live
+                                                    outside of the cluster and as such are difficult to reason about in
+                                                    terms of conformance. They also may not be safe to forward to (see
+                                                    CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                    support ExternalName Services.
+
+                                                    Support: Core (Services with a type other than ExternalName)
+
+                                                    Support: Implementation-specific (Services with type ExternalName)
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                  type: string
+                                                name:
+                                                  description: Name is the name of
+                                                    the referent.
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                                namespace:
+                                                  description: |-
+                                                    Namespace is the namespace of the backend. When unspecified, the local
+                                                    namespace is inferred.
+
+                                                    Note that when a namespace different than the local namespace is specified,
+                                                    a ReferenceGrant object is required in the referent namespace to allow that
+                                                    namespace's owner to accept the reference. See the ReferenceGrant
+                                                    documentation for details.
+
+                                                    Support: Core
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                  type: string
+                                                port:
+                                                  description: |-
+                                                    Port specifies the destination port number to use for this resource.
+                                                    Port is required when the referent is a Kubernetes Service. In this
+                                                    case, the port number is the service port number, not the target port.
+                                                    For other resources, destination port might be derived from the referent
+                                                    resource or this field.
+                                                  format: int32
+                                                  maximum: 65535
+                                                  minimum: 1
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: Must have port for Service
+                                                  reference
+                                                rule: '(size(self.group) == 0 && self.kind
+                                                  == ''Service'') ? has(self.port)
+                                                  : true'
+                                          required:
+                                          - backendRef
+                                          type: object
                                       type: object
                                     region:
                                       description: Region is the AWS region where
@@ -3339,12 +3807,23 @@ spec:
                                               description: Eviction defines settings
                                                 for evicting unhealthy backends.
                                               properties:
+                                                consecutiveFailures:
+                                                  description: |-
+                                                    ConsecutiveFailures is the number of consecutive unhealthy responses required before the backend is evicted.
+                                                    For example, a value of 5 means the backend must receive 5 unhealthy responses in a row before being evicted.
+                                                    When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+                                                    When neither is set, a single unhealthy response can trigger eviction.
+                                                  format: int32
+                                                  minimum: 0
+                                                  type: integer
                                                 duration:
-                                                  default: 30s
-                                                  description: duration specifies
-                                                    how long a backend should be evicted
-                                                    after being marked unhealthy.
-                                                    If unset, defaults to 30s.
+                                                  default: 3s
+                                                  description: |-
+                                                    Duration specifies the base time a backend should be evicted after being marked unhealthy.
+                                                    Subsequent evictions use multiplicative backoff (duration * times_evicted).
+                                                    If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
+                                                    rather than failing entirely.
+                                                    If unset, defaults to 3s.
                                                   type: string
                                                   x-kubernetes-validations:
                                                   - message: invalid duration value
@@ -3352,6 +3831,28 @@ spec:
                                                   - message: evictionDuration must
                                                       be at least 1 second
                                                     rule: duration(self) >= duration('1s')
+                                                healthThreshold:
+                                                  description: |-
+                                                    HealthThreshold is the EWMA (exponentially-weighted moving average) health score threshold, expressed as 0–100.
+                                                    When set, a backend is only evicted if its computed health drops below this value after an unhealthy response.
+                                                    For example, 50 means the backend is evicted when its EWMA health falls below 50% following failures.
+                                                    Unlike consecutiveFailures (which counts consecutive failures), this uses a sliding-window average
+                                                    so a single success in a stream of failures can delay eviction.
+                                                    When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+                                                    When neither is set, a single unhealthy response triggers eviction.
+                                                  format: int32
+                                                  maximum: 100
+                                                  minimum: 0
+                                                  type: integer
+                                                restoreHealth:
+                                                  description: |-
+                                                    RestoreHealth is the health score (0–100) assigned to a backend when it returns from eviction.
+                                                    For gradual recovery, set below 100; for full recovery immediately, set 100.
+                                                    If unset, the backend resumes with the health it had when evicted.
+                                                  format: int32
+                                                  maximum: 100
+                                                  minimum: 0
+                                                  type: integer
                                               type: object
                                             unhealthyCondition:
                                               description: |-
@@ -3359,11 +3860,12 @@ spec:
                                                 When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
 
                                                 For example, to evict on 5xx responses: `response.code >= 500`.
+
+                                                When unset, any 5xx response, or a connection failure, is treated as unhealthy.
+                                                This default lowers the backend's health score but does not trigger eviction on its own.
                                               maxLength: 16384
                                               minLength: 1
                                               type: string
-                                          required:
-                                          - unhealthyCondition
                                           type: object
                                         http:
                                           description: http defines settings for managing
@@ -3841,6 +4343,89 @@ spec:
                                               [request response] must be set
                                             rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
                                               >= 1'
+                                        tunnel:
+                                          description: tunnel defines settings for
+                                            managing tunnel connections (like HTTPS_PROXY)
+                                            to the backend.
+                                          properties:
+                                            backendRef:
+                                              description: |-
+                                                backendRef references the proxy server to reach.
+                                                Supported types: Service and Backend.
+                                              properties:
+                                                group:
+                                                  default: ""
+                                                  description: |-
+                                                    Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                    When unspecified or empty string, core API group is inferred.
+                                                  maxLength: 253
+                                                  pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                  type: string
+                                                kind:
+                                                  default: Service
+                                                  description: |-
+                                                    Kind is the Kubernetes resource kind of the referent. For example
+                                                    "Service".
+
+                                                    Defaults to "Service" when not specified.
+
+                                                    ExternalName services can refer to CNAME DNS records that may live
+                                                    outside of the cluster and as such are difficult to reason about in
+                                                    terms of conformance. They also may not be safe to forward to (see
+                                                    CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                    support ExternalName Services.
+
+                                                    Support: Core (Services with a type other than ExternalName)
+
+                                                    Support: Implementation-specific (Services with type ExternalName)
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                  type: string
+                                                name:
+                                                  description: Name is the name of
+                                                    the referent.
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                                namespace:
+                                                  description: |-
+                                                    Namespace is the namespace of the backend. When unspecified, the local
+                                                    namespace is inferred.
+
+                                                    Note that when a namespace different than the local namespace is specified,
+                                                    a ReferenceGrant object is required in the referent namespace to allow that
+                                                    namespace's owner to accept the reference. See the ReferenceGrant
+                                                    documentation for details.
+
+                                                    Support: Core
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                  type: string
+                                                port:
+                                                  description: |-
+                                                    Port specifies the destination port number to use for this resource.
+                                                    Port is required when the referent is a Kubernetes Service. In this
+                                                    case, the port number is the service port number, not the target port.
+                                                    For other resources, destination port might be derived from the referent
+                                                    resource or this field.
+                                                  format: int32
+                                                  maximum: 65535
+                                                  minimum: 1
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: Must have port for Service
+                                                  reference
+                                                rule: '(size(self.group) == 0 && self.kind
+                                                  == ''Service'') ? has(self.port)
+                                                  : true'
+                                          required:
+                                          - backendRef
+                                          type: object
                                       type: object
                                     projectId:
                                       description: ProjectID is the Google Cloud project
@@ -4096,6 +4681,7 @@ spec:
                           - Messages
                           - Models
                           - Passthrough
+                          - Detect
                           - Responses
                           - AnthropicTokenCount
                           - Embeddings
@@ -4275,17 +4861,51 @@ spec:
                         description: Eviction defines settings for evicting unhealthy
                           backends.
                         properties:
+                          consecutiveFailures:
+                            description: |-
+                              ConsecutiveFailures is the number of consecutive unhealthy responses required before the backend is evicted.
+                              For example, a value of 5 means the backend must receive 5 unhealthy responses in a row before being evicted.
+                              When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+                              When neither is set, a single unhealthy response can trigger eviction.
+                            format: int32
+                            minimum: 0
+                            type: integer
                           duration:
-                            default: 30s
-                            description: duration specifies how long a backend should
-                              be evicted after being marked unhealthy. If unset, defaults
-                              to 30s.
+                            default: 3s
+                            description: |-
+                              Duration specifies the base time a backend should be evicted after being marked unhealthy.
+                              Subsequent evictions use multiplicative backoff (duration * times_evicted).
+                              If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
+                              rather than failing entirely.
+                              If unset, defaults to 3s.
                             type: string
                             x-kubernetes-validations:
                             - message: invalid duration value
                               rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                             - message: evictionDuration must be at least 1 second
                               rule: duration(self) >= duration('1s')
+                          healthThreshold:
+                            description: |-
+                              HealthThreshold is the EWMA (exponentially-weighted moving average) health score threshold, expressed as 0–100.
+                              When set, a backend is only evicted if its computed health drops below this value after an unhealthy response.
+                              For example, 50 means the backend is evicted when its EWMA health falls below 50% following failures.
+                              Unlike consecutiveFailures (which counts consecutive failures), this uses a sliding-window average
+                              so a single success in a stream of failures can delay eviction.
+                              When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+                              When neither is set, a single unhealthy response triggers eviction.
+                            format: int32
+                            maximum: 100
+                            minimum: 0
+                            type: integer
+                          restoreHealth:
+                            description: |-
+                              RestoreHealth is the health score (0–100) assigned to a backend when it returns from eviction.
+                              For gradual recovery, set below 100; for full recovery immediately, set 100.
+                              If unset, the backend resumes with the health it had when evicted.
+                            format: int32
+                            maximum: 100
+                            minimum: 0
+                            type: integer
                         type: object
                       unhealthyCondition:
                         description: |-
@@ -4293,11 +4913,12 @@ spec:
                           When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
 
                           For example, to evict on 5xx responses: `response.code >= 500`.
+
+                          When unset, any 5xx response, or a connection failure, is treated as unhealthy.
+                          This default lowers the backend's health score but does not trigger eviction on its own.
                         maxLength: 16384
                         minLength: 1
                         type: string
-                    required:
-                    - unhealthyCondition
                     type: object
                   http:
                     description: http defines settings for managing HTTP requests
@@ -4909,11 +5530,90 @@ spec:
                         be set
                       rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
                         >= 1'
+                  tunnel:
+                    description: tunnel defines settings for managing tunnel connections
+                      (like HTTPS_PROXY) to the backend.
+                    properties:
+                      backendRef:
+                        description: |-
+                          backendRef references the proxy server to reach.
+                          Supported types: Service and Backend.
+                        properties:
+                          group:
+                            default: ""
+                            description: |-
+                              Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                              When unspecified or empty string, core API group is inferred.
+                            maxLength: 253
+                            pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                            type: string
+                          kind:
+                            default: Service
+                            description: |-
+                              Kind is the Kubernetes resource kind of the referent. For example
+                              "Service".
+
+                              Defaults to "Service" when not specified.
+
+                              ExternalName services can refer to CNAME DNS records that may live
+                              outside of the cluster and as such are difficult to reason about in
+                              terms of conformance. They also may not be safe to forward to (see
+                              CVE-2021-25740 for more information). Implementations SHOULD NOT
+                              support ExternalName Services.
+
+                              Support: Core (Services with a type other than ExternalName)
+
+                              Support: Implementation-specific (Services with type ExternalName)
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                            type: string
+                          name:
+                            description: Name is the name of the referent.
+                            maxLength: 253
+                            minLength: 1
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace is the namespace of the backend. When unspecified, the local
+                              namespace is inferred.
+
+                              Note that when a namespace different than the local namespace is specified,
+                              a ReferenceGrant object is required in the referent namespace to allow that
+                              namespace's owner to accept the reference. See the ReferenceGrant
+                              documentation for details.
+
+                              Support: Core
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                            type: string
+                          port:
+                            description: |-
+                              Port specifies the destination port number to use for this resource.
+                              Port is required when the referent is a Kubernetes Service. In this
+                              case, the port number is the service port number, not the target port.
+                              For other resources, destination port might be derived from the referent
+                              resource or this field.
+                            format: int32
+                            maximum: 65535
+                            minimum: 1
+                            type: integer
+                        required:
+                        - name
+                        type: object
+                        x-kubernetes-validations:
+                        - message: Must have port for Service reference
+                          rule: '(size(self.group) == 0 && self.kind == ''Service'')
+                            ? has(self.port) : true'
+                    required:
+                    - backendRef
+                    type: object
                 type: object
                 x-kubernetes-validations:
                 - message: at least one of the fields in [ai auth health http mcp
-                    tcp tls transformation] must be set
-                  rule: '[has(self.ai),has(self.auth),has(self.health),has(self.http),has(self.mcp),has(self.tcp),has(self.tls),has(self.transformation)].filter(x,x==true).size()
+                    tcp tls transformation tunnel] must be set
+                  rule: '[has(self.ai),has(self.auth),has(self.health),has(self.http),has(self.mcp),has(self.tcp),has(self.tls),has(self.transformation),has(self.tunnel)].filter(x,x==true).size()
                     >= 1'
               frontend:
                 description: |-
@@ -4977,6 +5677,106 @@ spec:
                         maxLength: 16384
                         minLength: 1
                         type: string
+                      otlp:
+                        description: otlp configures OTLP access log export to an
+                          OpenTelemetry-compatible backend.
+                        properties:
+                          backendRef:
+                            description: |-
+                              backendRef references the OTLP server to send access logs to.
+                              Supported types: Service and AgentgatewayBackend.
+                            properties:
+                              group:
+                                default: ""
+                                description: |-
+                                  Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                  When unspecified or empty string, core API group is inferred.
+                                maxLength: 253
+                                pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                type: string
+                              kind:
+                                default: Service
+                                description: |-
+                                  Kind is the Kubernetes resource kind of the referent. For example
+                                  "Service".
+
+                                  Defaults to "Service" when not specified.
+
+                                  ExternalName services can refer to CNAME DNS records that may live
+                                  outside of the cluster and as such are difficult to reason about in
+                                  terms of conformance. They also may not be safe to forward to (see
+                                  CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                  support ExternalName Services.
+
+                                  Support: Core (Services with a type other than ExternalName)
+
+                                  Support: Implementation-specific (Services with type ExternalName)
+                                maxLength: 63
+                                minLength: 1
+                                pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                type: string
+                              name:
+                                description: Name is the name of the referent.
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace is the namespace of the backend. When unspecified, the local
+                                  namespace is inferred.
+
+                                  Note that when a namespace different than the local namespace is specified,
+                                  a ReferenceGrant object is required in the referent namespace to allow that
+                                  namespace's owner to accept the reference. See the ReferenceGrant
+                                  documentation for details.
+
+                                  Support: Core
+                                maxLength: 63
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                type: string
+                              port:
+                                description: |-
+                                  Port specifies the destination port number to use for this resource.
+                                  Port is required when the referent is a Kubernetes Service. In this
+                                  case, the port number is the service port number, not the target port.
+                                  For other resources, destination port might be derived from the referent
+                                  resource or this field.
+                                format: int32
+                                maximum: 65535
+                                minimum: 1
+                                type: integer
+                            required:
+                            - name
+                            type: object
+                            x-kubernetes-validations:
+                            - message: Must have port for Service reference
+                              rule: '(size(self.group) == 0 && self.kind == ''Service'')
+                                ? has(self.port) : true'
+                          path:
+                            description: |-
+                              path specifies the OTLP/HTTP path to use. This is only applicable when protocol is HTTP.
+                              If unset, this defaults to /v1/logs.
+                            maxLength: 1024
+                            minLength: 1
+                            type: string
+                          protocol:
+                            default: GRPC
+                            description: protocol specifies the OTLP protocol variant
+                              to use.
+                            enum:
+                            - HTTP
+                            - GRPC
+                            type: string
+                        required:
+                        - backendRef
+                        type: object
+                        x-kubernetes-validations:
+                        - message: path is only valid with protocol HTTP
+                          rule: '!has(self.path) || !has(self.protocol) || self.protocol
+                            == ''HTTP'''
+                        - message: path must start with /
+                          rule: '!has(self.path) || self.path.startsWith(''/'')'
                     type: object
                   http:
                     description: http defines settings on managing incoming HTTP requests.
@@ -6583,9 +7383,6 @@ spec:
                       hostRewrite specifies how to rewrite the Host header for requests.
 
                       If the HTTPRoute `urlRewrite` filter already specifies a host rewrite, this setting is ignored.
-                    enum:
-                    - Auto
-                    - None
                     properties:
                       mode:
                         description: |-
@@ -6597,6 +7394,9 @@ spec:
 
                           This setting defaults to Auto when connecting to hostname-based Backend types, and None otherwise (for Service or
                           IP-based Backends).
+                        enum:
+                        - Auto
+                        - None
                         type: string
                     required:
                     - mode

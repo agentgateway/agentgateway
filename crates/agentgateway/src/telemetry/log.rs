@@ -402,7 +402,7 @@ impl CelLogging {
 		resp: Option<&'a cel::ResponseSnapshot>,
 		llm_response: Option<&'a LLMContext>,
 		mcp: Option<&'a ResourceType>,
-		end_time: Option<&'a str>,
+		end_time: Option<&'a cel::RequestTime>,
 		source_context: Option<&'a cel::SourceContext>,
 	) -> Result<CelLoggingExecutor<'a>, cel::Error> {
 		let CelLogging {
@@ -445,9 +445,9 @@ impl DropOnLog {
 		}
 	}
 
-	/// Computes (health, eviction_duration, health_on_unevict) for finish_request.
+	/// Computes (health, eviction_duration, restore_health) for finish_request.
 	/// `unhealthy` should already be evaluated (preferably with the shared CEL executor when available).
-	/// When not set, eviction is disabled.
+	/// When no CEL expression is set, the default treats 4xx, 5xx, or connection failures as unhealthy.
 	fn eviction_unhealthy(log: &RequestLog, cel_exec: Option<&CelLoggingExecutor<'_>>) -> bool {
 		let default_unhealthy = log.status.is_none_or(|s| s.is_server_error());
 		let Some(policy) = &log.health_policy else {
@@ -462,31 +462,26 @@ impl DropOnLog {
 		}
 	}
 
+	/// Returns (health, eviction_duration, restore_health).
 	fn eviction_decision(
 		log: &RequestLog,
 		current_health: f64,
+		consecutive_failure_count: u64,
+		times_ejected: u64,
 		unhealthy: bool,
 	) -> (bool, Option<Duration>, Option<f64>) {
-		const DEFAULT_EVICTION_SECS: u64 = 30;
 		let Some(policy) = &log.health_policy else {
 			let health = !unhealthy;
 			return (health, None, None);
 		};
-		let health = !unhealthy;
-		let eviction_duration = if unhealthy {
-			let duration = policy
-				.eviction_duration()
-				.or(log.retry_after)
-				.or(log.retry_backoff)
-				.or(Some(Duration::from_secs(DEFAULT_EVICTION_SECS)));
-			// Apply health threshold: only evict when current health is below threshold
-			let below_threshold = policy.health_threshold.is_none_or(|t| current_health < t);
-			if below_threshold { duration } else { None }
-		} else {
-			None
-		};
-		let health_on_unevict = policy.health_on_unevict;
-		(health, eviction_duration, health_on_unevict)
+		let fallback_duration = log.retry_after.or(log.retry_backoff);
+		policy.eviction_decision(
+			current_health,
+			consecutive_failure_count,
+			times_ejected,
+			unhealthy,
+			fallback_duration,
+		)
 	}
 
 	fn add_llm_metrics(
@@ -525,6 +520,26 @@ impl DropOnLog {
 						common: gen_ai_labels.clone().into(),
 					})
 					.observe(ot as f64)
+			}
+			if let Some(crt) = llm_response.cached_input_tokens {
+				log
+					.metrics
+					.gen_ai_token_usage
+					.get_or_create(&GenAILabelsTokenUsage {
+						gen_ai_token_type: strng::literal!("input_cache_read").into(),
+						common: gen_ai_labels.clone().into(),
+					})
+					.observe(crt as f64)
+			}
+			if let Some(cwt) = llm_response.cache_creation_input_tokens {
+				log
+					.metrics
+					.gen_ai_token_usage
+					.get_or_create(&GenAILabelsTokenUsage {
+						gen_ai_token_type: strng::literal!("input_cache_write").into(),
+						common: gen_ai_labels.clone().into(),
+					})
+					.observe(cwt as f64)
 			}
 			log
 				.metrics
@@ -685,7 +700,7 @@ pub struct RequestLog {
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
 
-	pub a2a_method: Option<&'static str>,
+	pub a2a_method: Option<Strng>,
 
 	pub inference_pool: Option<SocketAddr>,
 
@@ -766,8 +781,8 @@ impl Drop for DropOnLog {
 			.health_policy
 			.as_ref()
 			.is_some_and(|p| p.unhealthy_expression.is_some());
-		let end_time_str = (needs_cel_for_outputs || needs_cel_for_eviction)
-			.then(agent_core::telemetry::render_current_time);
+		let cel_end_time = (needs_cel_for_outputs || needs_cel_for_eviction)
+			.then(|| cel::RequestTime(chrono::Utc::now().fixed_offset()));
 		let cel_exec = if needs_cel_for_outputs || needs_cel_for_eviction {
 			log
 				.cel
@@ -776,7 +791,7 @@ impl Drop for DropOnLog {
 					log.response_snapshot.as_ref(),
 					llm_response.as_ref(),
 					mcp_cel.as_ref(),
-					end_time_str.as_deref(),
+					cel_end_time.as_ref(),
 					log.source_context.as_ref(),
 				)
 				.ok()
@@ -786,10 +801,17 @@ impl Drop for DropOnLog {
 
 		if let Some(rh) = log.request_handle.take() {
 			let current_health = rh.health_score();
+			let consecutive_failures = rh.consecutive_failures();
+			let times_ejected = rh.times_ejected();
 			let unhealthy = Self::eviction_unhealthy(&log, cel_exec.as_ref());
-			let (health, eviction_duration, health_on_unevict) =
-				Self::eviction_decision(&log, current_health, unhealthy);
-			rh.finish_request(health, duration, eviction_duration, health_on_unevict);
+			let (health, eviction_duration, restore_health) = Self::eviction_decision(
+				&log,
+				current_health,
+				consecutive_failures,
+				times_ejected,
+				unhealthy,
+			);
+			rh.finish_request(health, duration, eviction_duration, restore_health);
 		}
 		if !maybe_enable_log && !enable_trace && !enable_custom_metrics {
 			// Report our non-customized metrics
@@ -1245,7 +1267,8 @@ impl opentelemetry_sdk::logs::LogExporter for PolicyGrpcLogExporter {
 				.await
 				.map_err(|e| OTelSdkError::InternalFailure(e.to_string()))?
 				.map(|_| ())
-				.map_err(|e| OTelSdkError::InternalFailure(e.to_string())) as OTelSdkResult
+				.map_err(|e: tonic::Status| OTelSdkError::InternalFailure(e.message().to_string()))
+				as OTelSdkResult
 		}
 	}
 

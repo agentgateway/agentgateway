@@ -13,6 +13,9 @@ spec:
       unhealthyCondition: "response.code >= 500"
       eviction:
          duration: 60s
+         restoreHealth: 100
+         consecutiveFailures: 3
+         healthThreshold: 50
 ---
 apiVersion: v1
 kind: Service
@@ -25,35 +28,49 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    backend:
-      health:
-        eviction:
-          duration: 60s
-        unhealthyCondition: response.code >= 500
-    key: default/agw:health:default/be
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
       backend:
-        name: be
+        health:
+          eviction:
+            consecutiveFailures: 3
+            duration: 60s
+            healthThreshold: 0.5
+            restoreHealth: 1
+          unhealthyCondition: response.code >= 500
+      key: default/agw:health:default/be
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
+      target:
+        backend:
+          name: be
+          namespace: default
 status:
-  ancestors:
-  - ancestorRef:
-      group: agentgateway.dev
-      name: StatusSummary
-    conditions:
-    - lastTransitionTime: fake
-      message: Policy accepted
-      reason: Valid
-      status: "True"
-      type: Accepted
-    - lastTransitionTime: fake
-      message: 'Policy is not attached: AgentgatewayBackend default/be not found'
-      reason: Pending
-      status: "False"
-      type: Attached
-    controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: agentgateway.dev
+        name: StatusSummary
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is not attached: AgentgatewayBackend default/be not found'
+        reason: Pending
+        status: "False"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

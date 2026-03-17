@@ -39,6 +39,7 @@ impl Client {
 		let session_id = self.session_id.load().clone();
 		let backend = self.http_client.pinned_backend();
 		http::sessionpersistence::MCPSession {
+			target_name: Some(self.http_client.target_name().to_string()),
 			session: session_id.map(|s| s.to_string()),
 			backend,
 		}

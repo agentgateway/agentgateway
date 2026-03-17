@@ -13,23 +13,30 @@ spec:
       attempts: 2147483648
 ---
 # Output
-output: null
+output: []
 status:
-  ancestors:
-  - ancestorRef:
-      group: gateway.networking.k8s.io
-      kind: Gateway
-      name: test
-      namespace: default
-    conditions:
-    - lastTransitionTime: fake
-      message: failed to parse retry attempts should be positive int32 (2147483648)
-      reason: Invalid
-      status: "True"
-      type: Accepted
-    - lastTransitionTime: fake
-      message: Policy is not attached due to invalid status
-      reason: Pending
-      status: "False"
-      type: Attached
-    controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: failed to parse retry attempts should be positive int32 (2147483648)
+        reason: Invalid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Policy is not attached due to invalid status
+        reason: Pending
+        status: "False"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

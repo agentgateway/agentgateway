@@ -1,11 +1,12 @@
-use secrecy::{ExposeSecret, SecretString};
-
 use crate::http::Request;
 use crate::http::jwt::Claims;
 use crate::proxy::ProxyError;
+use crate::proxy::ProxyError::ProcessingString;
 use crate::serdes::deser_key_from_file;
 use crate::types::agent::{BackendTarget, Target};
 use crate::*;
+use ::http::HeaderValue;
+use secrecy::{ExposeSecret, SecretString};
 
 #[apply(schema!)]
 #[serde(untagged)]
@@ -145,6 +146,22 @@ pub struct BackendInfo {
 	pub inputs: Arc<ProxyInputs>,
 }
 
+pub fn apply_tunnel_auth(auth: &BackendAuth) -> Result<HeaderValue, ProxyError> {
+	match auth {
+		BackendAuth::Key(k) => {
+			// TODO: currently we only support basic auth; this is not great but we are pending the ability
+			// to customize this
+			let mut token = http::HeaderValue::from_str(&format!("Basic {}", k.expose_secret()))
+				.map_err(|e| ProxyError::Processing(e.into()))?;
+			token.set_sensitive(true);
+
+			Ok(token)
+		},
+		_ => Err(ProcessingString(
+			"only key auth is supported in tunnel".to_string(),
+		)),
+	}
+}
 pub async fn apply_backend_auth(
 	backend_info: &BackendInfo,
 	auth: &BackendAuth,

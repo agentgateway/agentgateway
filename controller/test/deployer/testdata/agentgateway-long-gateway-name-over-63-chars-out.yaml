@@ -4,12 +4,11 @@ kind: ServiceAccount
 metadata:
   labels:
     app.kubernetes.io/instance: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
-    kgateway: kube-gateway
   name: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
 ---
 apiVersion: v1
@@ -20,12 +19,11 @@ kind: ConfigMap
 metadata:
   labels:
     app.kubernetes.io/instance: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
-    kgateway: kube-gateway
   name: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
 ---
 apiVersion: v1
@@ -33,12 +31,11 @@ kind: Service
 metadata:
   labels:
     app.kubernetes.io/instance: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
-    kgateway: kube-gateway
   name: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
 spec:
   ports:
@@ -59,12 +56,11 @@ kind: Deployment
 metadata:
   labels:
     app.kubernetes.io/instance: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
-    kgateway: kube-gateway
   name: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
 spec:
   selector:
@@ -76,7 +72,8 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: aaf5e2738c763c66015fbfc634d35ab6ccf946d18956c1ad787c730ba03aa5d4
+        checksum/config: 20e03375ff2a736462894456b982110ca3e7b8ba58eab83c6f2e936be3e714ba
+        checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         gateway.kgateway.dev/gateway-full-name: extremely-long-gateway-name-that-exceeds-the-sixty-three-character-limit-imposed-by-kubernetes-dns-naming-requirements
         prometheus.io/path: /metrics
         prometheus.io/port: "15020"
@@ -112,6 +109,11 @@ spec:
           value: "1"
         - name: RUST_LOG
           value: info
+        - name: SESSION_KEY
+          valueFrom:
+            secretKeyRef:
+              key: key
+              name: extremely-long-gateway-name-that-exceeds-the-sixty-961030199626
         - name: XDS_ADDRESS
           value: http://xds.cluster.local:9978
         - name: NAMESPACE
@@ -183,9 +185,21 @@ spec:
         projected:
           sources:
           - serviceAccountToken:
-              audience: kgateway
+              audience: agentgateway
               expirationSeconds: 43200
               path: xds-token
       - emptyDir: {}
         name: tmp
 status: {}
+---
+apiVersion: v1
+data:
+  key: MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmYwMDExMjIzMzQ0NTU2Njc3ODg5OWFhYmJjY2RkZWVmZg==
+kind: Secret
+metadata:
+  labels:
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097
+  name: extremely-long-gateway-name-that-exceeds-the-sixty-961030199626
+  namespace: default
+type: Opaque

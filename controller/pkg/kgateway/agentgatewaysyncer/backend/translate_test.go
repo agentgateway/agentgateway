@@ -108,6 +108,31 @@ func TestBuildMCP(t *testing.T) {
 			inputs: append(createMockMultipleNamespaceServices(), createMockNamespaceCollectionWithLabels()...),
 		},
 		{
+			name: "Service selector MCPBackend backend - agentgateway.dev appProtocol",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "service-mcp-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Selector: &agentgateway.McpSelector{
+									Service: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"app": "mcp-server",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			inputs: []any{createMockMCPServiceWithProtocol("test-ns", "mcp-service", "app=mcp-server", "agentgateway.dev/mcp")},
+		},
+		{
 			name: "Error case - invalid service selector",
 			backend: &agentgateway.AgentgatewayBackend{
 				ObjectMeta: metav1.ObjectMeta{
@@ -696,6 +721,26 @@ func TestGetSecretValue(t *testing.T) {
 				t.Errorf("value = %v, expected %v", val, tt.expectedVal)
 			}
 		})
+	}
+}
+
+// createMockMCPServiceWithProtocol creates a mock service with a configurable appProtocol
+func createMockMCPServiceWithProtocol(namespace, serviceName, _ /* labels */, appProtocol string) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: namespace,
+			Labels:    map[string]string{"app": "mcp-server"},
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name:        "mcp",
+					Port:        8080,
+					AppProtocol: ptr.Of(appProtocol),
+				},
+			},
+		},
 	}
 }
 

@@ -43,7 +43,7 @@ func NewBackendTLSPlugin(agw *AgwCollections) AgwPlugin {
 			wellknown.BackendTLSPolicyGVK.GroupKind(): {
 				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy]) {
 					st, o := krt.NewStatusManyCollection(agw.BackendTLSPolicies, func(krtctx krt.HandlerContext, btls *gwv1.BackendTLSPolicy) (*gwv1.PolicyStatus, []AgwPolicy) {
-						return translatePoliciesForBackendTLS(krtctx, agw.ControllerName, input.Ancestors, agw.ConfigMaps, agw.Secrets, agw.Services, backendTLSTarget, agw.Gateways, btls)
+						return translatePoliciesForBackendTLS(krtctx, agw.ControllerName, input.References, agw.ConfigMaps, agw.Secrets, agw.Services, backendTLSTarget, agw.Gateways, btls)
 					}, agw.KrtOpts.ToOptions("agentgateway/BackendTLSPolicy")...)
 					return convertStatusCollection(st), o
 				},
@@ -56,7 +56,7 @@ func NewBackendTLSPlugin(agw *AgwCollections) AgwPlugin {
 func translatePoliciesForBackendTLS(
 	krtctx krt.HandlerContext,
 	controllerName string,
-	ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend],
+	references ReferenceIndex,
 	cfgmaps krt.Collection[*corev1.ConfigMap],
 	secrets krt.Collection[*corev1.Secret],
 	svcs krt.Collection[*corev1.Service],
@@ -115,13 +115,8 @@ func translatePoliciesForBackendTLS(
 			Kind: string(target.Kind),
 		}
 
-		// TODO: does this need to account for listenersets
-		ancestorBackends := krt.Fetch(krtctx, ancestors, krt.FilterKey(tgtRef.String()))
-		for _, gwl := range ancestorBackends {
-			for _, i := range gwl.Objects {
-				uniqueGateways.Insert(i.Gateway)
-			}
-		}
+		gatewayTargets := references.LookupGatewaysForBackend(krtctx, tgtRef).UnsortedList()
+		uniqueGateways = uniqueGateways.InsertAll(gatewayTargets...)
 
 		var mtlsClientRef *gwv1.SecretObjectReference
 		var mtlsClientRefNamespace string
@@ -238,7 +233,7 @@ func translatePoliciesForBackendTLS(
 				},
 			},
 		}
-		policies = append(policies, AgwPolicy{policy})
+		policies = appendPolicyForGateways(policies, gatewayTargets, policy)
 	}
 	ancestorStatus := make([]gwv1.PolicyAncestorStatus, 0, len(btls.Spec.TargetRefs))
 	for g := range uniqueGateways {

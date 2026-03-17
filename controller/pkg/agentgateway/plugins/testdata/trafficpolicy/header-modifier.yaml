@@ -31,62 +31,77 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    key: traffic/default/agw:header-modifier:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      gateway:
-        name: test
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/agw:header-modifier:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
-    traffic:
-      requestHeaderModifier:
-        add:
-        - name: add-req-header
-          value: bar,baz
-        remove:
-        - remove-req-header
-        set:
-        - name: set-req-header
-          value: foo
-- Policy:
-    key: traffic/default/agw:header-modifier:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      gateway:
-        name: test
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        requestHeaderModifier:
+          add:
+          - name: add-req-header
+            value: bar,baz
+          remove:
+          - remove-req-header
+          set:
+          - name: set-req-header
+            value: foo
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/agw:resp-header-modifier:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
         namespace: default
-    traffic:
-      responseHeaderModifier:
-        add:
-        - name: add-res-header
-          value: bar,baz
-        remove:
-        - server
-        set:
-        - name: set-res-header
-          value: foo
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        responseHeaderModifier:
+          add:
+          - name: add-res-header
+            value: bar,baz
+          remove:
+          - server
+          set:
+          - name: set-res-header
+            value: foo
 status:
-  ancestors:
-  - ancestorRef:
-      group: gateway.networking.k8s.io
-      kind: Gateway
-      name: test
-      namespace: default
-    conditions:
-    - lastTransitionTime: fake
-      message: Policy accepted
-      reason: Valid
-      status: "True"
-      type: Accepted
-    - lastTransitionTime: fake
-      message: Attached to all targets
-      reason: Attached
-      status: "True"
-      type: Attached
-    controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

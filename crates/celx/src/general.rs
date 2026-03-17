@@ -1,13 +1,14 @@
-use std::sync::Arc;
-
 use ::cel::extractors::{Argument, This};
 use ::cel::objects::{MapValue, StringValue, ValueType};
 use ::cel::{Context, FunctionContext, ResolveResult, Value};
+use base64::alphabet;
+use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
 use cel::ExecutionError;
 use cel::context::{SingleVarResolver, VariableResolver};
 use cel::objects::KeyRef;
 use rand::random_range;
 use serde::Deserializer;
+use std::sync::Arc;
 use uuid::Uuid;
 
 pub fn insert_all(ctx: &mut Context) {
@@ -19,6 +20,7 @@ pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("toJson", to_json);
 	ctx.add_function("with", with);
 	ctx.add_function("mapValues", map_values);
+	ctx.add_function("filterKeys", filter_keys);
 	ctx.add_function("merge", map_merge);
 	ctx.add_function("variables", variables);
 	ctx.add_function("random", random);
@@ -44,12 +46,18 @@ pub fn base64_encode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> Reso
 			.into(),
 	)
 }
-
+pub const STANDARD_MAYBE_PADDED: GeneralPurpose = GeneralPurpose::new(
+	&alphabet::STANDARD,
+	GeneralPurposeConfig::new()
+		.with_encode_padding(true)
+		.with_decode_allow_trailing_bits(false)
+		.with_decode_padding_mode(DecodePaddingMode::Indifferent),
+);
 pub fn base64_decode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
 	// The Go library requires strings, but we accept bytes too.
 	let v = v.load(ftx)?.always_materialize_owned();
 	use base64::Engine;
-	base64::prelude::BASE64_STANDARD
+	STANDARD_MAYBE_PADDED
 		.decode(v.as_bytes_pre_materialized()?)
 		.map(|v| v.into())
 		.map_err(|e| ftx.error(e))
@@ -115,6 +123,36 @@ fn map_values<'a, 'rf, 'b>(
 				res.insert(k.clone(), value.as_static());
 			}
 
+			Value::Map(MapValue::Borrow(res))
+		},
+		_ => return Err(this.error_expected_type(ValueType::Map)),
+	}
+	.into()
+}
+
+fn filter_keys<'a, 'rf, 'b>(
+	ftx: &'b mut FunctionContext<'a, 'rf>,
+	this: This,
+	ident: Argument,
+	expr: Argument,
+) -> ResolveResult<'a> {
+	let this: Value<'a> = this.load_value(ftx)?;
+	let ident = ident.load_identifier(ftx)?;
+	let expr = expr.load_expression(ftx)?;
+	let x: &'rf dyn VariableResolver<'a> = ftx.vars();
+	match this {
+		Value::Map(map) => {
+			let mut res = vector_map::VecMap::with_capacity(map.len());
+			for (k, v) in map.iter() {
+				let resolver = SingleVarResolver::<'a, 'rf>::new(x, ident, k.clone().into());
+				let keep = match Value::resolve(expr, ftx.ptx, &resolver)? {
+					Value::Bool(b) => b,
+					_ => return Err(ExecutionError::NoSuchOverload),
+				};
+				if keep {
+					res.insert(k.clone(), v.clone().as_static());
+				}
+			}
 			Value::Map(MapValue::Borrow(res))
 		},
 		_ => return Err(this.error_expected_type(ValueType::Map)),

@@ -2,6 +2,8 @@ package deployer
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -9,6 +11,8 @@ import (
 
 	"helm.sh/helm/v3/pkg/chart"
 	"istio.io/istio/pkg/kube/kclient"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -24,6 +28,8 @@ var (
 	// ErrNoValidPorts is returned when no valid ports are found for the Gateway
 	ErrNoValidPorts = errors.New("no valid ports")
 )
+
+const sessionKeyChecksumAnnotation = "checksum/session-key"
 
 func NewGatewayParameters(cli apiclient.Client, inputs *deployer.Inputs) *GatewayParameters {
 	gp := &GatewayParameters{
@@ -42,6 +48,13 @@ type GatewayParameters struct {
 
 func (gp *GatewayParameters) WithHelmValuesGeneratorOverride(generator deployer.HelmValuesGenerator) *GatewayParameters {
 	gp.helmValuesGeneratorOverride = generator
+	return gp
+}
+
+func (gp *GatewayParameters) WithSessionKeyGenerator(generator func() (string, error)) *GatewayParameters {
+	if gp.agwHelmValuesGenerator != nil && generator != nil {
+		gp.agwHelmValuesGenerator.sessionKeyGen = generator
+	}
 	return gp
 }
 
@@ -136,9 +149,46 @@ func (gp *GatewayParameters) PostProcessObjects(ctx context.Context, obj client.
 				return nil, err
 			}
 		}
+		if usesManagedSessionKeyResolvedParameters(resolved) {
+			sessionKeySecret, err := gp.agwHelmValuesGenerator.buildSessionKeySecret(
+				ctx,
+				gw,
+				gatewaySessionKeySecretName(gw.Name),
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to build session key secret for Gateway %s/%s: %w", gw.GetNamespace(), gw.GetName(), err)
+			}
+			if err := addSessionKeyChecksumAnnotation(rendered, sessionKeySecret); err != nil {
+				return nil, fmt.Errorf("failed to annotate session key checksum for Gateway %s/%s: %w", gw.GetNamespace(), gw.GetName(), err)
+			}
+			rendered = append(rendered, sessionKeySecret)
+		}
 	}
 
 	return rendered, nil
+}
+
+func addSessionKeyChecksumAnnotation(rendered []client.Object, secret *corev1.Secret) error {
+	key, found := secret.Data["key"]
+	if !found || len(key) == 0 {
+		return fmt.Errorf("session key secret %s/%s missing key entry", secret.Namespace, secret.Name)
+	}
+
+	checksum := sha256.Sum256(key)
+	checksumHex := hex.EncodeToString(checksum[:])
+
+	for _, obj := range rendered {
+		deployment, ok := obj.(*appsv1.Deployment)
+		if !ok {
+			continue
+		}
+		if deployment.Spec.Template.Annotations == nil {
+			deployment.Spec.Template.Annotations = map[string]string{}
+		}
+		deployment.Spec.Template.Annotations[sessionKeyChecksumAnnotation] = checksumHex
+	}
+
+	return nil
 }
 
 func GatewayReleaseNameAndNamespace(obj client.Object) (string, string) {

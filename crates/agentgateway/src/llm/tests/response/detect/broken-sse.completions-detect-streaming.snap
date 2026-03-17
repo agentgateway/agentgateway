@@ -1,0 +1,11 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/detect/broken-sse
+---
+data: {}
+
+data: ha this isn't json!
+
+this isn't sse at all!
+
+{}

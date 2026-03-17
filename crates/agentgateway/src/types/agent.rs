@@ -27,6 +27,7 @@ use crate::http::{
 	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, health, remoteratelimit, retry,
 	timeout,
 };
+use crate::mcp::FailureMode;
 use crate::mcp::McpAuthorization;
 use crate::telemetry::log::OrderedStringMap;
 use crate::transport::tls;
@@ -1186,6 +1187,9 @@ pub struct McpBackend {
 	pub targets: Vec<Arc<McpTarget>>,
 	pub stateful: bool,
 	pub always_use_prefix: bool,
+	/// Behavior when one or more MCP targets fail to initialize or fail during fanout.
+	/// Defaults to `failClosed`.
+	pub failure_mode: FailureMode,
 }
 
 impl McpBackend {
@@ -2015,6 +2019,7 @@ pub enum BackendPolicy {
 	HTTP(backend::HTTP),
 	#[serde(rename = "tcp")]
 	TCP(backend::TCP),
+	Tunnel(backend::Tunnel),
 	#[serde(rename = "backendTLS")]
 	BackendTLS(http::backendtls::BackendTLS),
 	BackendAuth(BackendAuth),
@@ -2474,6 +2479,12 @@ InvalidKeyData
 		// Ensure hostname:port still works
 		let target = Target::try_from("example.com:443").unwrap();
 		assert!(matches!(target, Target::Hostname(h, 443) if h.as_str() == "example.com"));
+	}
+
+	#[test]
+	fn test_target_deserializes_from_json_value() {
+		let target: Target = serde_json::from_value(serde_json::json!("127.0.0.1:8080")).unwrap();
+		assert!(matches!(target, Target::Address(addr) if addr.to_string() == "127.0.0.1:8080"));
 	}
 
 	#[test]

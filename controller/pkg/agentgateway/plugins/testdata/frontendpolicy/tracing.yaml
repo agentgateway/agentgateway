@@ -28,40 +28,51 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    frontend:
-      tracing:
-        path: /custom/v1/traces
-        providerBackend:
-          port: 4318
-          service:
-            hostname: otel-collector.default.svc.cluster.local
-            namespace: default
-    key: frontend/default/tracing-path-http:frontend-tracing:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: tracing-path-http
-      namespace: default
-    target:
-      gateway:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      frontend:
+        tracing:
+          path: /custom/v1/traces
+          providerBackend:
+            port: 4318
+            service:
+              hostname: otel-collector.default.svc.cluster.local
+              namespace: default
+      key: frontend/default/tracing-path-http:frontend-tracing:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: tracing-path-http
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: tracing-path-http
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
         name: test
         namespace: default
-status:
-  ancestors:
-  - ancestorRef:
-      group: gateway.networking.k8s.io
-      kind: Gateway
-      name: test
-      namespace: default
-    conditions:
-    - lastTransitionTime: fake
-      message: Policy accepted
-      reason: Valid
-      status: "True"
-      type: Accepted
-    - lastTransitionTime: fake
-      message: Attached to all targets
-      reason: Attached
-      status: "True"
-      type: Attached
-    controllerName: agentgateway.dev/agentgateway
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

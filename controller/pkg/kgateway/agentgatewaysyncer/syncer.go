@@ -84,7 +84,6 @@ type Syncer struct {
 }
 
 func NewAgwSyncer(
-	ctx context.Context,
 	controllerName string,
 	client apiclient.Client,
 	agwCollections *plugins.AgwCollections,
@@ -121,8 +120,9 @@ func (s *Syncer) StatusCollections() *status.StatusCollections {
 }
 
 type OutputCollections struct {
-	Resources krt.Collection[agwir.AgwResource]
-	Addresses krt.Collection[Address]
+	Resources  krt.Collection[agwir.AgwResource]
+	Addresses  krt.Collection[Address]
+	References plugins.ReferenceIndex
 }
 
 type CustomResourceCollectionsConfig struct {
@@ -161,7 +161,7 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	gatewayInitialStatus, gateways := s.buildGatewayCollection(gatewayClasses, listenerSets, refGrants, krtopts)
 
 	// Build Agw resources for gateway
-	agwResources, routeAttachments, policyStatuses, backendStatuses := s.buildAgwResources(gateways, refGrants, krtopts)
+	agwResources, routeAttachments, ancestorCollection, policyStatuses, backendStatuses := s.buildAgwResources(gateways, refGrants, krtopts)
 	status.RegisterStatus(s.statusCollections, backendStatuses, translator.GetStatus)
 	for _, col := range policyStatuses {
 		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
@@ -184,23 +184,26 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 
 	s.Outputs.Resources = agwResources
 	s.Outputs.Addresses = addresses
+	s.Outputs.References = ancestorCollection
 }
 
 func (s *Syncer) buildFinalGatewayStatus(
 	gatewayStatuses krt.StatusCollection[*gwv1.Gateway, gwv1.GatewayStatus],
-	routeAttachments krt.Collection[*translator.RouteAttachment],
+	routeAttachments krt.Collection[*plugins.RouteAttachment],
 	krtopts krtutil.KrtOptions,
 ) krt.StatusCollection[*gwv1.Gateway, gwv1.GatewayStatus] {
-	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "to", func(o *translator.RouteAttachment) []translator.ParentKey {
-		return []translator.ParentKey{o.To}
+	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "to", func(o *plugins.RouteAttachment) []utils.TypedNamespacedName {
+		return []utils.TypedNamespacedName{o.To}
 	})
 	return krt.NewCollection(
 		gatewayStatuses,
 		func(ctx krt.HandlerContext, i krt.ObjectWithStatus[*gwv1.Gateway, gwv1.GatewayStatus]) *krt.ObjectWithStatus[*gwv1.Gateway, gwv1.GatewayStatus] {
-			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, translator.ParentKey{
-				Kind:      wellknown.GatewayGVK,
-				Namespace: i.Obj.Namespace,
-				Name:      i.Obj.Name,
+			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, utils.TypedNamespacedName{
+				Kind: wellknown.GatewayGVK.Kind,
+				NamespacedName: types.NamespacedName{
+					Namespace: i.Obj.Namespace,
+					Name:      i.Obj.Name,
+				},
 			}))
 			counts := map[string]int32{}
 			for _, r := range routes {
@@ -221,11 +224,11 @@ func (s *Syncer) buildFinalGatewayStatus(
 func (s *Syncer) buildFinalListenerSetStatus(
 	gateways krt.Collection[*translator.GatewayListener],
 	listenerSetStatus krt.StatusCollection[*gwv1.ListenerSet, gwv1.ListenerSetStatus],
-	routeAttachments krt.Collection[*translator.RouteAttachment],
+	routeAttachments krt.Collection[*plugins.RouteAttachment],
 	krtopts krtutil.KrtOptions,
 ) krt.StatusCollection[*gwv1.ListenerSet, gwv1.ListenerSetStatus] {
-	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "to", func(o *translator.RouteAttachment) []translator.ParentKey {
-		return []translator.ParentKey{o.To}
+	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "to", func(o *plugins.RouteAttachment) []utils.TypedNamespacedName {
+		return []utils.TypedNamespacedName{o.To}
 	})
 
 	gatewayIndex := krt.NewIndex(gateways, "gateway-parent-section-name", func(gwl *translator.GatewayListener) []utils.SectionedNamespacedName {
@@ -246,10 +249,12 @@ func (s *Syncer) buildFinalListenerSetStatus(
 
 			invalidListenerCount := 0
 			lsStatus := i.Status.DeepCopy()
-			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, translator.ParentKey{
-				Kind:      wellknown.ListenerSetGVK,
-				Namespace: i.Obj.Namespace,
-				Name:      i.Obj.Name,
+			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, utils.TypedNamespacedName{
+				Kind: wellknown.ListenerSetGVK.Kind,
+				NamespacedName: types.NamespacedName{
+					Namespace: i.Obj.Namespace,
+					Name:      i.Obj.Name,
+				},
 			}))
 			counts := map[string]int32{}
 			for _, r := range routes {
@@ -372,29 +377,22 @@ func (s *Syncer) buildListenerSetCollection(
 	krt.StatusCollection[*gwv1.ListenerSet, gwv1.ListenerSetStatus],
 	krt.Collection[translator.ListenerSet],
 ) {
-	return translator.ListenerSetCollection(
-		s.controllerName,
-		s.agwCollections.ListenerSets,
-		s.agwCollections.Gateways,
-		gatewayClasses,
-		s.agwCollections.Namespaces,
-		refGrants,
-		s.agwCollections.Secrets,
-		s.agwCollections.ConfigMaps,
-		krtopts,
-	)
+	return krt.NewStatusManyCollection(s.agwCollections.ListenerSets,
+		func(ctx krt.HandlerContext, obj *gwv1.ListenerSet) (*gwv1.ListenerSetStatus, []translator.ListenerSet) {
+			return translator.ListenerSetBuilder(
+				ctx, obj,
+				s.controllerName,
+				s.agwCollections.Gateways,
+				gatewayClasses,
+				s.agwCollections.Namespaces,
+				refGrants,
+				s.agwCollections.Secrets,
+				s.agwCollections.ConfigMaps,
+			)
+		}, krtopts.ToOptions("ListenerSets")...)
 }
 
-func (s *Syncer) buildAgwResources(
-	gateways krt.Collection[*translator.GatewayListener],
-	refGrants translator.ReferenceGrants,
-	krtopts krtutil.KrtOptions,
-) (
-	krt.Collection[agwir.AgwResource],
-	krt.Collection[*translator.RouteAttachment],
-	PolicyStatusCollections,
-	krt.StatusCollection[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus],
-) {
+func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayListener], refGrants translator.ReferenceGrants, krtopts krtutil.KrtOptions) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], plugins.ReferenceIndex, PolicyStatusCollections, krt.StatusCollection[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus]) {
 	// filter gateway collections to only include gateways which use a built-in gateway class
 	// (resources for additional gateway classes should be created by the downstream providing them)
 	filteredGateways := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
@@ -464,20 +462,31 @@ func (s *Syncer) buildAgwResources(
 	if s.agwPlugins.AddResourceExtension != nil && s.agwPlugins.AddResourceExtension.Routes != nil {
 		agwRoutes = krt.JoinCollection([]krt.Collection[agwir.AgwResource]{agwRoutes, s.agwPlugins.AddResourceExtension.Routes})
 	}
+	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "from", func(o *plugins.RouteAttachment) []utils.TypedNamespacedName {
+		return []utils.TypedNamespacedName{o.From}
+	}).AsCollection(append(krtopts.ToOptions("RouteAttachments"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 
 	ancestorsIndex := krt.NewIndex(ancestorBackends, "ancestors", func(o *utils.AncestorBackend) []utils.TypedNamespacedName {
 		return []utils.TypedNamespacedName{o.Backend}
 	})
 	ancestorCollection := ancestorsIndex.AsCollection(append(krtopts.ToOptions("AncestorBackend"), utils.TypedNamespacedNameIndexCollectionFunc)...)
-	agwPolicies, policyStatuses := AgwPolicyCollection(s.agwPlugins, ancestorCollection, krtopts)
+	referenceIndex := plugins.BuildReferenceIndex(ancestorCollection, routeAttachmentsIndex)
+	agwPolicies, policyReferences, policyStatuses := AgwPolicyCollection(s.agwPlugins, referenceIndex, krtopts)
+	backendPolicyReferences := s.newAgwBackendPolicyReferences(s.agwCollections.Backends, krtopts)
+	joinedPolicyReferences := krt.JoinCollection([]krt.Collection[*plugins.PolicyAttachment]{policyReferences, backendPolicyReferences}, krtopts.ToOptions("JoinPolicyAttachment")...)
+	policyReferencesIndex := krt.NewIndex(joinedPolicyReferences, "policyReferences", func(o *plugins.PolicyAttachment) []utils.TypedNamespacedName {
+		return []utils.TypedNamespacedName{o.Backend}
+	})
+	policyReferencesIndexCollection := policyReferencesIndex.AsCollection(append(krtopts.ToOptions("PolicyReferencesIndex"), utils.TypedNamespacedNameIndexCollectionFunc)...)
+	referenceIndex = referenceIndex.WithPolicyAttachments(policyReferencesIndexCollection)
 
 	// Create an agentgateway backend collection from the kgateway backend resources
-	agwBackendStatus, agwBackends := s.newAgwBackendCollection(s.agwCollections.Backends, ancestorCollection, krtopts)
+	agwBackendStatus, agwBackends := s.newAgwBackendCollection(s.agwCollections.Backends, referenceIndex, krtopts)
 
 	// Join all Agw resources
 	allAgwResources := krt.JoinCollection([]krt.Collection[agwir.AgwResource]{binds, listeners, agwRoutes, agwPolicies, agwBackends}, krtopts.ToOptions("Resources")...)
 
-	return allAgwResources, routeAttachments, policyStatuses, agwBackendStatus
+	return allAgwResources, routeAttachments, referenceIndex, policyStatuses, agwBackendStatus
 }
 
 // buildListenerFromGateway creates a listener resource from a gateway
@@ -504,10 +513,21 @@ func (s *Syncer) buildListenerFromGateway(obj *translator.GatewayListener) *agwi
 	}, translator.AgwListener{l}))
 }
 
+// newAgwBackendPolicyReferences creates the ADP backend collection for agent gateway resources
+func (s *Syncer) newAgwBackendPolicyReferences(
+	finalBackends krt.Collection[*agentgateway.AgentgatewayBackend],
+	krtopts krtutil.KrtOptions,
+) krt.Collection[*plugins.PolicyAttachment] {
+	policyReferences := krt.NewManyCollection(finalBackends, func(ctx krt.HandlerContext, backend *agentgateway.AgentgatewayBackend) []*plugins.PolicyAttachment {
+		return agentgatewaybackend.BuildAgwBackendReferences(backend)
+	}, krtopts.ToOptions("BackendPolicyAttachments")...)
+	return policyReferences
+}
+
 // newAgwBackendCollection creates the ADP backend collection for agent gateway resources
 func (s *Syncer) newAgwBackendCollection(
 	finalBackends krt.Collection[*agentgateway.AgentgatewayBackend],
-	ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend],
+	references plugins.ReferenceIndex,
 	krtopts krtutil.KrtOptions,
 ) (
 	krt.StatusCollection[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus],
@@ -521,7 +541,7 @@ func (s *Syncer) newAgwBackendCollection(
 			Krt:         ctx,
 			Collections: s.agwCollections,
 		}
-		return agentgatewaybackend.TranslateAgwBackend(pc, backend, ancestors)
+		return agentgatewaybackend.TranslateAgwBackend(pc, backend, references)
 	}, krtopts.ToOptions("Backends")...)
 }
 

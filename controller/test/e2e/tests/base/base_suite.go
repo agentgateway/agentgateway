@@ -439,6 +439,9 @@ func (s *BaseTestingSuite) ApplyManifests(testCase *TestCase) {
 			ns = pod.Namespace
 			name = pod.Name
 		} else if deployment, ok := resource.(*appsv1.Deployment); ok {
+			if deployment.Spec.Replicas != nil && *deployment.Spec.Replicas == 0 {
+				continue
+			}
 			ns = deployment.Namespace
 			name = deployment.Name
 		} else {

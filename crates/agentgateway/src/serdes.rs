@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt::{Debug, Display};
 use std::io;
 use std::path::PathBuf;
@@ -246,28 +247,28 @@ pub fn ser_bytes<S: Serializer, T: AsRef<[u8]>>(t: &T, serializer: S) -> Result<
 	}
 }
 
-pub fn de_parse<'de: 'a, 'a, D, T>(deserializer: D) -> Result<T, D::Error>
+pub fn de_parse<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
 	D: Deserializer<'de>,
-	T: TryFrom<&'a str>,
-	<T as TryFrom<&'a str>>::Error: Display,
+	for<'a> T: TryFrom<&'a str>,
+	for<'a> <T as TryFrom<&'a str>>::Error: Display,
 {
-	let s: &'a str = <&str>::deserialize(deserializer)?;
-	match T::try_from(s) {
+	let s: Cow<'de, str> = Cow::<str>::deserialize(deserializer)?;
+	match T::try_from(s.as_ref()) {
 		Ok(t) => Ok(t),
 		Err(e) => Err(serde::de::Error::custom(e)),
 	}
 }
 
-pub fn de_parse_option<'de: 'a, 'a, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+pub fn de_parse_option<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
 	D: Deserializer<'de>,
-	T: TryFrom<&'a str>,
-	<T as TryFrom<&'a str>>::Error: Display,
+	for<'a> T: TryFrom<&'a str>,
+	for<'a> <T as TryFrom<&'a str>>::Error: Display,
 {
-	let s: Option<&'a str> = Option::deserialize(deserializer)?;
+	let s: Option<Cow<'de, str>> = Option::deserialize(deserializer)?;
 	let Some(s) = s else { return Ok(None) };
-	match T::try_from(s) {
+	match T::try_from(s.as_ref()) {
 		Ok(t) => Ok(Some(t)),
 		Err(e) => Err(serde::de::Error::custom(e)),
 	}

@@ -247,7 +247,7 @@
       "type": "object",
       "properties": {
         "key": {
-          "description": "The signing key to be used. If not set, sessions will not be encrypted.\nFor example, generated via `openssl rand -hex 32`.",
+          "description": "The AES-256-GCM session protection key to be used for session tokens.\nIf not set, sessions will not be encrypted.\nFor example, generated via `openssl rand -hex 32`.",
           "type": "string"
         }
       },
@@ -1106,6 +1106,18 @@
               "type": "null"
             }
           ]
+        },
+        "backendTunnel": {
+          "description": "Tunnel to the backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "backendAuth": {
           "description": "Authenticate to the backend.",
@@ -2165,6 +2177,18 @@
             }
           ],
           "default": null
+        },
+        "backendTunnel": {
+          "description": "Specify a tunnel to use when connecting to the backend",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
@@ -2664,7 +2688,7 @@
       "type": "object",
       "properties": {
         "unhealthyExpression": {
-          "description": "CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.",
+          "description": "CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.\nWhen unset, any 5xx or connection failure is treated as unhealthy.",
           "type": [
             "string",
             "null"
@@ -2679,20 +2703,6 @@
               "type": "null"
             }
           ]
-        },
-        "healthThreshold": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        },
-        "healthOnUnevict": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
         }
       },
       "additionalProperties": false
@@ -2706,9 +2716,43 @@
             "string",
             "null"
           ]
+        },
+        "restoreHealth": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "consecutiveFailures": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "healthThreshold": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
         }
       },
       "additionalProperties": false
+    },
+    "Tunnel": {
+      "type": "object",
+      "properties": {
+        "proxy": {
+          "description": "Reference to the proxy address",
+          "$ref": "#/$defs/SimpleLocalBackend"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "proxy"
+      ]
     },
     "BedrockGuardrails": {
       "description": "Configuration for AWS Bedrock Guardrails integration.",
@@ -2928,6 +2972,11 @@
           "description": "Send the request to the upstream LLM provider as-is",
           "type": "string",
           "const": "passthrough"
+        },
+        {
+          "description": "Send the request to the upstream LLM provider as-is but attempt to extract information from it\nand apply a subset of policies (rate limit and telemetry; no guardrails).",
+          "type": "string",
+          "const": "detect"
         },
         {
           "description": "OpenAI /responses",
@@ -3839,6 +3888,17 @@
         {
           "type": "object",
           "properties": {
+            "backend": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "host": {
               "type": "string"
             }
@@ -3910,6 +3970,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/McpPrefixMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failureMode": {
+          "description": "Behavior when one or more MCP targets fail to initialize or fail during fanout.\nDefaults to `failClosed`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FailureMode4"
             },
             {
               "type": "null"
@@ -4197,6 +4268,18 @@
           ],
           "default": null
         },
+        "backendTunnel": {
+          "description": "Specify a tunnel to use when connecting to the backend",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "mcpAuthorization": {
           "description": "Authorization policies for MCP access.",
           "anyOf": [
@@ -4224,6 +4307,20 @@
       "enum": [
         "always",
         "conditional"
+      ]
+    },
+    "FailureMode4": {
+      "oneOf": [
+        {
+          "description": "Fail the entire session if any target fails to initialize or any\nupstream fails during a fanout. This is the default and matches\ncurrent behavior.",
+          "type": "string",
+          "const": "failClosed"
+        },
+        {
+          "description": "Skip failed targets/upstreams and continue serving from healthy ones.\nIf ALL targets fail, still return an error.",
+          "type": "string",
+          "const": "failOpen"
+        }
       ]
     },
     "LocalAIBackend": {
@@ -4589,6 +4686,18 @@
           ],
           "default": null
         },
+        "backendTunnel": {
+          "description": "Specify a tunnel to use when connecting to the backend",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "mcpAuthorization": {
           "description": "Authorization policies for MCP access.",
           "anyOf": [
@@ -4840,6 +4949,18 @@
               "type": "null"
             }
           ]
+        },
+        "backendTunnel": {
+          "description": "Tunnel to the backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
@@ -5720,6 +5841,53 @@
           ],
           "default": null
         },
+        "responseHeaders": {
+          "description": "responseHeaders modifies headers in responses from the LLM provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeaderModifier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "backendTLS": {
+          "description": "backendTLS configures TLS when connecting to the LLM provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBackendTLS"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "health": {
+          "description": "health configures outlier detection for this model backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalHealthPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "backendTunnel": {
+          "description": "backendTunnel configures tunneling when connecting to the LLM provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "guardrails": {
           "description": "guardrails to apply to the request or response",
           "anyOf": [
@@ -5795,6 +5963,27 @@
             "string",
             "null"
           ]
+        },
+        "hostOverride": {
+          "description": "Override the upstream host for this provider.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "pathOverride": {
+          "description": "Override the upstream path for this provider.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "tokenize": {
+          "description": "Whether to tokenize the request before forwarding it upstream.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false
@@ -5934,6 +6123,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/McpPrefixMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failureMode": {
+          "description": "Behavior when one or more MCP targets fail to initialize or fail during fanout.\nDefaults to `failClosed`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FailureMode4"
             },
             {
               "type": "null"

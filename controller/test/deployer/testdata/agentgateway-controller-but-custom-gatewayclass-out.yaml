@@ -4,12 +4,11 @@ kind: ServiceAccount
 metadata:
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: a-lot-like-agentgateway-but-not-named-agentgateway
     gateway.networking.k8s.io/gateway-name: gw
-    kgateway: kube-gateway
   name: gw
 ---
 apiVersion: v1
@@ -20,12 +19,11 @@ kind: ConfigMap
 metadata:
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: a-lot-like-agentgateway-but-not-named-agentgateway
     gateway.networking.k8s.io/gateway-name: gw
-    kgateway: kube-gateway
   name: gw
 ---
 apiVersion: v1
@@ -33,12 +31,11 @@ kind: Service
 metadata:
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: a-lot-like-agentgateway-but-not-named-agentgateway
     gateway.networking.k8s.io/gateway-name: gw
-    kgateway: kube-gateway
   name: gw
 spec:
   ports:
@@ -59,12 +56,11 @@ kind: Deployment
 metadata:
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: a-lot-like-agentgateway-but-not-named-agentgateway
     gateway.networking.k8s.io/gateway-name: gw
-    kgateway: kube-gateway
   name: gw
 spec:
   selector:
@@ -76,7 +72,8 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: fe1cb40e04ec34ac00a439d4b02f061f7b7217ee3a312cda8c5e1fddf51c8112
+        checksum/config: 7e79fd6596c1da330ef08ae4b1dca51cb738c968c4ce05bfae61d08b5d320a1a
+        checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         gateway.kgateway.dev/gateway-full-name: gw
         prometheus.io/path: /metrics
         prometheus.io/port: "15020"
@@ -112,6 +109,11 @@ spec:
           value: "1"
         - name: RUST_LOG
           value: info
+        - name: SESSION_KEY
+          valueFrom:
+            secretKeyRef:
+              key: key
+              name: gw-session-key
         - name: XDS_ADDRESS
           value: http://xds.cluster.local:9978
         - name: NAMESPACE
@@ -183,9 +185,21 @@ spec:
         projected:
           sources:
           - serviceAccountToken:
-              audience: kgateway
+              audience: agentgateway
               expirationSeconds: 43200
               path: xds-token
       - emptyDir: {}
         name: tmp
 status: {}
+---
+apiVersion: v1
+data:
+  key: MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmYwMDExMjIzMzQ0NTU2Njc3ODg5OWFhYmJjY2RkZWVmZg==
+kind: Secret
+metadata:
+  labels:
+    gateway.networking.k8s.io/gateway-class-name: a-lot-like-agentgateway-but-not-named-agentgateway
+    gateway.networking.k8s.io/gateway-name: gw
+  name: gw-session-key
+  namespace: default
+type: Opaque

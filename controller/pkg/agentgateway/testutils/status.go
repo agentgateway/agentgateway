@@ -32,7 +32,7 @@ func (t *TestStatusQueue) Push(target status.Resource, data any) {
 func (t *TestStatusQueue) Run(ctx context.Context) {
 }
 
-func (t *TestStatusQueue) Dump() []any {
+func (t *TestStatusQueue) dump() []crd.IstioKind {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	objs := []crd.IstioKind{}
@@ -68,7 +68,12 @@ func (t *TestStatusQueue) Dump() []any {
 		}
 		return gocmp.Compare(a.Name, b.Name)
 	})
-	return slices.Map(objs, func(e crd.IstioKind) any {
+	return objs
+}
+
+// Dump returns all objects that had status written
+func (t *TestStatusQueue) Dump() []any {
+	return slices.Map(t.dump(), func(e crd.IstioKind) any {
 		return e
 	})
 }

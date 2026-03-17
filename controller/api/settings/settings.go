@@ -195,7 +195,7 @@ type Settings struct {
 	// Controls if leader election is disabled. Defaults to false.
 	DisableLeaderElection bool `split_words:"true" default:"false"`
 
-	// EnableExperimentalGatewayAPIFeatures enables kgateway to support experimental features and APIs
+	// EnableExperimentalGatewayAPIFeatures enables support for experimental features and APIs
 	EnableExperimentalGatewayAPIFeatures bool `split_words:"true" default:"true"`
 
 	// GatewayClassParametersRefs configures the GatewayParameters references to set on the default GatewayClasses.

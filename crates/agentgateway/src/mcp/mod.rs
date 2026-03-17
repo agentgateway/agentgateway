@@ -12,8 +12,9 @@ use std::fmt::{Display, Write};
 use std::io;
 use std::sync::Arc;
 
+#[cfg(feature = "schema")]
+use crate::JsonSchema;
 use crate::http::SendDirectResponse;
-use crate::http::{Request, Uri};
 use crate::proxy::ProxyError;
 use axum_core::BoxError;
 use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
@@ -21,6 +22,20 @@ pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
 use rmcp::model::RequestId;
 pub use router::App;
 use thiserror::Error;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum FailureMode {
+	/// Fail the entire session if any target fails to initialize or any
+	/// upstream fails during a fanout. This is the default and matches
+	/// current behavior.
+	#[default]
+	FailClosed,
+	/// Skip failed targets/upstreams and continue serving from healthy ones.
+	/// If ALL targets fail, still return an error.
+	FailOpen,
+}
 
 #[cfg(test)]
 #[path = "mcp_tests.rs"]
@@ -65,6 +80,8 @@ pub enum Error {
 	CreateSseUrl(String),
 	#[error("failed to parse openapi: {0}")]
 	OpenAPI(upstream::OpenAPIParseError),
+	#[error("no backends configured")]
+	NoBackends,
 }
 
 impl From<Error> for ProxyError {
@@ -127,14 +144,4 @@ pub struct MCPInfo {
 	pub target_name: Option<String>,
 	pub resource: Option<MCPOperation>,
 	pub session_id: Option<String>,
-}
-
-pub(crate) use auth::{
-	PassthroughProtectedResource, PassthroughWellKnown, passthrough_well_known,
-	rewrite_passthrough_protected_resource_metadata, rewrite_passthrough_www_authenticate,
-	rewrite_www_authenticate_for_request_uri,
-};
-
-pub(crate) fn pre_route_rewrite_uri(req: &Request) -> Option<Uri> {
-	auth::pre_route_rewrite_uri(req)
 }

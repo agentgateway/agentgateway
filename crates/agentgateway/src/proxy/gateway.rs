@@ -13,11 +13,14 @@ use futures_util::FutureExt;
 use http::StatusCode;
 use hyper_util::rt::TokioIo;
 use hyper_util::server::conn::auto;
+use rand::RngExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
 use tokio::task::{AbortHandle, JoinSet};
 use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, event, info, info_span, warn};
+
+use agent_core::strng;
 
 use crate::proxy::ProxyError;
 use crate::store::{Event, FrontendPolices};
@@ -303,10 +306,41 @@ impl Gateway {
 			};
 			let wait = drain_watch.wait_for_drain();
 			tokio::pin!(wait);
+			const BACKOFF_INITIAL: Duration = Duration::from_millis(5);
+			const BACKOFF_MAX: Duration = Duration::from_millis(100);
+			let mut backoff = BACKOFF_INITIAL;
 			// First, accept new connections until a drain is triggered
+			// NOTE: Do not use `Ok(...) = listener.accept()` as a select! pattern.
+			// If accept() returns Err, select! permanently disables that branch,
+			// hanging the loop. Match on the full Result instead.
 			let drain_mode = loop {
 				tokio::select! {
-					Ok((stream, _peer)) = listener.accept() => handle_stream(stream, &upgrader),
+					res = listener.accept() => match res {
+						Ok((stream, _peer)) => {
+							backoff = BACKOFF_INITIAL;
+							handle_stream(stream, &upgrader);
+						}
+						Err(e) => {
+							if is_accept_error_permanent(&e) {
+								error!(bind=?name, "fatal accept error, stopping listener: {e}");
+								return;
+							}
+							if is_accept_error_per_connection(&e) {
+								debug!(bind=?name, "per-connection accept error: {e}");
+								continue;
+							}
+							warn!(bind=?name, "accept error: {e}");
+							let jittered = Duration::from_millis(
+								rand::rng().random_range(0..=backoff.as_millis() as u64)
+							);
+							tokio::select! {
+								_ = tokio::time::sleep(jittered) => {},
+								res = &mut wait => { break res; }
+							}
+							backoff = (backoff * 2).min(BACKOFF_MAX);
+							continue;
+						}
+					},
 					res = &mut wait => {
 						break res;
 					}
@@ -325,9 +359,35 @@ impl Gateway {
 			};
 			tokio::pin!(drained_for_minimum);
 			// We still need to accept new connections during this time though, so race them
+			backoff = BACKOFF_INITIAL;
 			loop {
 				tokio::select! {
-					Ok((stream, _peer)) = listener.accept() => handle_stream(stream, &upgrader),
+					res = listener.accept() => match res {
+						Ok((stream, _peer)) => {
+							backoff = BACKOFF_INITIAL;
+							handle_stream(stream, &upgrader);
+						}
+						Err(e) => {
+							if is_accept_error_permanent(&e) {
+								error!(bind=?name, "fatal accept error during drain, stopping listener: {e}");
+								return;
+							}
+							if is_accept_error_per_connection(&e) {
+								debug!(bind=?name, "per-connection accept error during drain: {e}");
+								continue;
+							}
+							warn!(bind=?name, "accept error during drain: {e}");
+							let jittered = Duration::from_millis(
+								rand::rng().random_range(0..=backoff.as_millis() as u64)
+							);
+							tokio::select! {
+								_ = tokio::time::sleep(jittered) => {},
+								_ = &mut drained_for_minimum => { return; }
+							}
+							backoff = (backoff * 2).min(BACKOFF_MAX);
+							continue;
+						}
+					},
 					_ = &mut drained_for_minimum => {
 						// We are done! exit.
 						// This will stop accepting new connections
@@ -858,41 +918,61 @@ impl Gateway {
 			},
 		};
 
-		let hbone_addr = match parsed_addr {
-			HboneAddress::SocketAddr(addr) => HboneAddress::from(addr),
-			HboneAddress::SvcHostname(hostname, port) => {
-				// Try service registry lookup
-				let hostname_str = hostname.to_string();
-				let svc = find_service_by_hostname(&pi.stores.read_discovery(), &hostname_str);
+		// Resolve the HBONE address to a socket address and detect the service protocol
+		// in a single discovery store lookup to avoid redundant read locks.
+		let (socket_addr, is_http) = {
+			let discovery = pi.stores.read_discovery();
+			let network = &pi.cfg.network;
 
-				let vip = if let Some(svc) = svc {
-					// Found in service registry, get VIP for current network
-					let network = &pi.cfg.network;
-					if let Some(vip) = svc
-						.vips
-						.iter()
-						.find(|vip| vip.network == *network)
-						.or_else(|| svc.vips.first())
-					{
-						vip.address
+			let resolved_addr = match parsed_addr {
+				HboneAddress::SocketAddr(addr) => addr,
+				HboneAddress::SvcHostname(hostname, port) => {
+					let hostname_str = hostname.to_string();
+					let svc = find_service_by_hostname(&discovery, &hostname_str);
+
+					let vip = if let Some(svc) = svc {
+						if let Some(vip) = svc
+							.vips
+							.iter()
+							.find(|vip| vip.network == *network)
+							.or_else(|| svc.vips.first())
+						{
+							vip.address
+						} else {
+							warn!(
+								bind=?bind_name,
+								hostname=%hostname_str,
+								"serve_waypoint_connect: no VIP found for service"
+							);
+							return;
+						}
 					} else {
 						warn!(
 							bind=?bind_name,
 							hostname=%hostname_str,
-							"serve_waypoint_connect: no VIP found for service"
+							"serve_waypoint_connect: no service found for hostname"
 						);
 						return;
-					}
-				} else {
-					warn!(
-						bind=?bind_name,
-						hostname=%hostname_str,
-						"serve_waypoint_connect: no service found for hostname"
-					);
-					return;
-				};
-				HboneAddress::from(SocketAddr::from((vip, port)))
-			},
+					};
+					SocketAddr::from((vip, port))
+				},
+			};
+
+			// Determine protocol from service discovery. Default to HTTP since the vast
+			// majority of waypoint traffic is HTTP; only use TCP when there is a positive
+			// signal via explicit AppProtocol::Tcp/Tls (from istio/istio#59259).
+			let svc = discovery
+				.services
+				.get_by_vip(&crate::types::discovery::NetworkAddress {
+					network: network.clone(),
+					address: resolved_addr.ip(),
+				});
+			let is_http = match svc {
+				Some(svc) => !svc.port_is_tcp(resolved_addr.port()),
+				None => true,
+			};
+
+			(resolved_addr, is_http)
 		};
 
 		let Ok(resp) = req.send_response(build_response(StatusCode::OK)).await else {
@@ -905,22 +985,26 @@ impl Gateway {
 			drain_tx: None,
 		};
 
-		// TODO: for now, we only handle HTTP for waypoints. In the future, we should support other protocols.
-		// This could be done by sniffing at this layer, but is probably better handled by doing service-selection here
-		// and only falling back to sniffing when there is not an explicit protocol declaration
-		let socket_addr = hbone_addr
-			.socket_addr()
-			.ok_or_else(|| anyhow::anyhow!("hbone_addr should be resolved to SocketAddr"))
-			.unwrap();
-		let _ = Self::proxy(
-			bind_name,
-			pi,
-			None,
-			Socket::from_hbone(ext, socket_addr, con),
-			policies.clone(),
-			drain,
-		)
-		.await;
+		let socket = Socket::from_hbone(ext, socket_addr, con);
+		if is_http {
+			let _ = Self::proxy(bind_name, pi, None, socket, policies.clone(), drain).await;
+		} else {
+			// TCP: create a synthetic HBONE listener for the TCP proxy path
+			let listener = Arc::new(Listener {
+				key: Default::default(),
+				name: crate::types::agent::ListenerName {
+					gateway_name: strng::EMPTY,
+					gateway_namespace: strng::EMPTY,
+					listener_name: strng::literal!("_waypoint-tcp"),
+					listener_set: None,
+				},
+				hostname: Default::default(),
+				protocol: ListenerProtocol::HBONE,
+				tcp_routes: Default::default(),
+				routes: Default::default(),
+			});
+			Self::proxy_tcp(bind_name, pi, Some(listener), socket, drain).await;
+		}
 	}
 
 	/// serve_gateway_connect handles a single connection from a client.
@@ -1029,6 +1113,26 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 	}
 
 	b
+}
+
+/// The listening socket itself is broken; retrying won't help.
+/// EBADF/ENOTSOCK: fd is dead on all platforms.
+/// EINVAL: permanent on Linux (socket not listening), transient on macOS (can recover).
+fn is_accept_error_permanent(e: &std::io::Error) -> bool {
+	match e.raw_os_error() {
+		Some(libc::EBADF | libc::ENOTSOCK) => true,
+		#[cfg(target_os = "linux")]
+		Some(libc::EINVAL) => true,
+		_ => false,
+	}
+}
+
+/// Per-connection failure (client gone during handshake); harmless, no backoff needed.
+fn is_accept_error_per_connection(e: &std::io::Error) -> bool {
+	matches!(
+		e.raw_os_error(),
+		Some(libc::ECONNABORTED | libc::ECONNRESET | libc::EPERM)
+	)
 }
 
 fn build_response(status: StatusCode) -> ::http::Response<()> {

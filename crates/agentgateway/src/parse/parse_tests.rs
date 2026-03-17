@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::io;
 
 use ::http::HeaderMap;
+use bytes::BytesMut;
 use http_body_util::BodyExt;
 use tokio_sse_codec::{Event, Frame, SseDecoder};
+use tokio_util::codec::Decoder;
 
 use super::*;
 use crate::*;
@@ -84,6 +87,42 @@ async fn test_sse_json() {
 		ev_clone.lock().unwrap().clone(),
 		vec![Test { msg: 1 }, Test { msg: 2 },]
 	);
+}
+
+#[tokio::test]
+async fn test_full_passthrough_parser_flushes_decoder_on_eof() {
+	struct EofOnlyDecoder;
+
+	impl Decoder for EofOnlyDecoder {
+		type Item = Bytes;
+		type Error = io::Error;
+
+		fn decode(&mut self, _src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+			Ok(None)
+		}
+
+		fn decode_eof(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+			if src.is_empty() {
+				Ok(None)
+			} else {
+				Ok(Some(src.split().freeze()))
+			}
+		}
+	}
+
+	let msg = Bytes::from_static(b"tail");
+	let body = http::Body::from_stream(futures_util::stream::iter(vec![Ok::<_, io::Error>(
+		msg.clone(),
+	)]));
+
+	let events = Arc::new(Mutex::new(vec![]));
+	let ev_clone = events.clone();
+	let body = passthrough::full_passthrough_parser(body, EofOnlyDecoder, move |o| {
+		events.clone().lock().unwrap().push(o)
+	});
+	let got = body.collect().await.map(|col| col.to_bytes()).unwrap();
+	assert_eq!(got, msg);
+	assert_eq!(ev_clone.lock().unwrap().clone(), vec![msg]);
 }
 
 #[tokio::test]

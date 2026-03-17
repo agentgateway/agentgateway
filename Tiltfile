@@ -1,6 +1,7 @@
 # Tiltfile for AgentGateway development
 # This deploys both control plane (Go) and data plane (Rust) to Kind with live updates
 load('ext://restart_process', 'docker_build_with_restart')
+load('ext://helm_resource', 'helm_resource', 'helm_repo')
 
 # Configuration
 version = 'v1.0.1-dev'
@@ -33,14 +34,12 @@ run_controller_make('gie-crds')
 
 # Install CRDs
 print('Installing AgentGateway CRDs...')
-k8s_yaml(helm(
-    'controller/install/helm/agentgateway-crds',
-    name='agentgateway-crds',
-    namespace=install_namespace,
-    set=[
-        'version=' + version,
-    ]
-))
+helm_resource(
+  'agentgateway-crds',
+  'controller/install/helm/agentgateway-crds',
+  namespace=install_namespace,
+  flags=['--set=version=' + version],
+)
 
 # =============================================================================
 # Control Plane (Go-based controller)
@@ -48,7 +47,7 @@ k8s_yaml(helm(
 
 local_resource(
   'go-compile-controller',
-  'make -C ./controller VERSION=' + version + ' GCFLAGS=all="-N -l" agentgateway-controller && mv ./controller/_output/pkg/agentgateway/agentgateway-linux-$(go env GOARCH) ./hack/tilt/agentgateway-controller',
+  'make -C ./controller VERSION=' + version + ' GCFLAGS=all="-N -l" agentgateway-controller && mv ./controller/_output/pkg/agentgateway/agentgateway-linux-$(go env GOARCH) ./tools/tilt/agentgateway-controller',
   deps=['./controller/'],
   ignore=['./controller/_output/'],
 )
@@ -56,7 +55,7 @@ local_resource(
 # Build control plane Docker image
 docker_build_with_restart(
     image_registry + '/agentgateway-controller',
-    context='./hack/tilt/',
+    context='./tools/tilt/',
     entrypoint='/usr/local/bin/agentgateway-controller',
     dockerfile_contents="""
 FROM ubuntu:24.04
@@ -66,7 +65,7 @@ ENTRYPOINT /usr/local/bin/agentgateway-controller
     # Live update: sync Go binaries
     live_update=[
         # Sync Go code changes
-        sync('./hack/tilt/agentgateway-controller', '/usr/local/bin/agentgateway-controller'), 
+        sync('./tools/tilt/agentgateway-controller', '/usr/local/bin/agentgateway-controller'), 
     ],
     only=[
         './agentgateway-controller',
@@ -106,7 +105,7 @@ k8s_resource('agentgateway',
 
 local_resource(
   'rust-compile-dataplane',
-  'cargo build && if [ -f "./hack/tilt/agentgateway" ]; then rm "./hack/tilt/agentgateway"; fi && mv ./target/debug/agentgateway ./hack/tilt/agentgateway',
+  'cargo build && if [ -f "./tools/tilt/agentgateway" ]; then rm "./tools/tilt/agentgateway"; fi && mv ./target/debug/agentgateway ./tools/tilt/agentgateway',
   deps=['./crates',
         './Cargo.toml',
         './Cargo.lock',
@@ -115,7 +114,7 @@ local_resource(
 # Build data plane Docker image
 docker_build(
     'agentgateway',
-    context='./hack/tilt/',
+    context='./tools/tilt/',
     dockerfile_contents="""
 FROM ubuntu:24.04
 COPY start.sh /scripts/start.sh
@@ -124,7 +123,7 @@ COPY agentgateway /usr/local/bin/
 ENTRYPOINT ["/scripts/start.sh", "/usr/local/bin/agentgateway"]
     """,
     live_update=[
-        sync('./hack/tilt/agentgateway', '/usr/local/bin/agentgateway'),
+        sync('./tools/tilt/agentgateway', '/usr/local/bin/agentgateway'),
         run('/scripts/restart.sh'),
     ],
     only=[

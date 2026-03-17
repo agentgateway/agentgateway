@@ -95,6 +95,9 @@ spec:
     kind: AgentgatewayBackend
     name: openai-failover
   backend:
-    eviction:
-      condition: "response.code >= 500"
-      duration: 15s
+    health:
+      unhealthyCondition: "response.code >= 500"
+      eviction:
+        duration: 60s
+        consecutiveFailures: 3
+        restoreHealth: 100

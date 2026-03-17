@@ -13,7 +13,7 @@ import (
 
 const (
 	// DefaultNamespace is the default namespace used for all metrics.
-	DefaultNamespace = "kgateway"
+	DefaultNamespace = "agentgateway"
 )
 
 var (

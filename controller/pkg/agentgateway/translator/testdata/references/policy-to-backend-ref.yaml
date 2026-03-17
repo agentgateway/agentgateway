@@ -1,0 +1,65 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: policy-be
+  namespace: default
+spec:
+  static:
+    host: example.com
+    port: 80
+---
+# Policy is attached to gateway via HTTPRoute
+# policy-be should be attached via BE -> Policy -> Route -> Gateway
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  traffic:
+    extAuth:
+      grpc: {}
+      backendRef:
+        name: policy-be
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    backend:
+      key: default/policy-be
+      name:
+        name: policy-be
+        namespace: default
+      static:
+        host: example.com
+        port: 80
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/agw:extauth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+      traffic:
+        extAuthz:
+          grpc: {}
+          target:
+            backend: default/policy-be
+status: []

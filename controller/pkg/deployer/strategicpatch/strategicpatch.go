@@ -265,6 +265,7 @@ func createPodDisruptionBudget(deployment *appsv1.Deployment, overlay *shared.Ku
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deployment.Name,
 			Namespace: deployment.Namespace,
+			Labels:    maps.Clone(deployment.GetLabels()),
 		},
 		Spec: policyv1.PodDisruptionBudgetSpec{
 			Selector: deployment.Spec.Selector,
@@ -292,6 +293,7 @@ func createHorizontalPodAutoscaler(deployment *appsv1.Deployment, overlay *share
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deployment.Name,
 			Namespace: deployment.Namespace,
+			Labels:    maps.Clone(deployment.GetLabels()),
 		},
 		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
 			ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
@@ -334,6 +336,7 @@ func createVerticalPodAutoscaler(deployment *appsv1.Deployment, overlay *shared.
 		},
 	}
 	vpa.SetGroupVersionKind(wellknown.VerticalPodAutoscalerGVK)
+	vpa.SetLabels(maps.Clone(deployment.GetLabels()))
 
 	// Apply the overlay - for VPA we need to handle it specially since it's unstructured
 	if overlay.Metadata != nil {

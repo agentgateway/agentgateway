@@ -27,40 +27,51 @@ data:
 ---
 # Output
 output:
-- Policy:
-    backend:
-      auth:
-        aws:
-          explicitConfig:
-            accessKeyId: secret-accessKey
-            secretAccessKey: secret-secretKey
-            sessionToken: secret-sessionToken
-    key: backend/default/agw:backend-auth:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
-      route:
-        kind: HTTPRoute
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        auth:
+          aws:
+            explicitConfig:
+              accessKeyId: secret-accessKey
+              secretAccessKey: secret-secretKey
+              sessionToken: secret-sessionToken
+      key: backend/default/agw:backend-auth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
         name: test
         namespace: default
-status:
-  ancestors:
-  - ancestorRef:
-      group: gateway.networking.k8s.io
-      kind: Gateway
-      name: test
-      namespace: default
-    conditions:
-    - lastTransitionTime: fake
-      message: Policy accepted
-      reason: Valid
-      status: "True"
-      type: Accepted
-    - lastTransitionTime: fake
-      message: Attached to all targets
-      reason: Attached
-      status: "True"
-      type: Attached
-    controllerName: agentgateway.dev/agentgateway
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

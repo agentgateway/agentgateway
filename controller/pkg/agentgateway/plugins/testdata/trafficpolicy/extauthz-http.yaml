@@ -40,55 +40,66 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    key: traffic/default/http:extauth:default/test
-    name:
-      kind: AgentgatewayPolicy
-      name: http
-      namespace: default
-    target:
-      gateway:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/http:extauth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: http
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        extAuthz:
+          http:
+            addRequestHeaders:
+              x-custom-header: random()
+            includeResponseHeaders:
+            - x-custom-header
+            metadata:
+              githubUser: response.headers["x-auth-request-user"]
+            path: |
+              "/prefix/" + request.path
+            redirect: |
+              "/signin"
+          includeRequestBody:
+            allowPartialMessage: true
+            maxRequestBytes: 1024
+          includeRequestHeaders:
+          - authorization
+          target:
+            port: 1024
+            service:
+              hostname: extauthz.default.svc.cluster.local
+              namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: http
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
         name: test
         namespace: default
-    traffic:
-      extAuthz:
-        http:
-          addRequestHeaders:
-            x-custom-header: random()
-          includeResponseHeaders:
-          - x-custom-header
-          metadata:
-            githubUser: response.headers["x-auth-request-user"]
-          path: |
-            "/prefix/" + request.path
-          redirect: |
-            "/signin"
-        includeRequestBody:
-          allowPartialMessage: true
-          maxRequestBytes: 1024
-        includeRequestHeaders:
-        - authorization
-        target:
-          port: 1024
-          service:
-            hostname: extauthz.default.svc.cluster.local
-            namespace: default
-status:
-  ancestors:
-  - ancestorRef:
-      group: gateway.networking.k8s.io
-      kind: Gateway
-      name: test
-      namespace: default
-    conditions:
-    - lastTransitionTime: fake
-      message: Policy accepted
-      reason: Valid
-      status: "True"
-      type: Accepted
-    - lastTransitionTime: fake
-      message: Attached to all targets
-      reason: Attached
-      status: "True"
-      type: Attached
-    controllerName: agentgateway.dev/agentgateway
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

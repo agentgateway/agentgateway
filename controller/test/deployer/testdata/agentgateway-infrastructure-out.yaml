@@ -8,13 +8,12 @@ metadata:
     prometheus.io/path: /something/else
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: gw
     infra-and-params: infra
-    kgateway: kube-gateway
     my-label: my-value
   name: gw
 ---
@@ -30,13 +29,12 @@ metadata:
     prometheus.io/path: /something/else
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: gw
     infra-and-params: infra
-    kgateway: kube-gateway
     my-label: my-value
   name: gw
 ---
@@ -49,13 +47,12 @@ metadata:
     prometheus.io/path: /something/else
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: gw
     infra-and-params: infra
-    kgateway: kube-gateway
     my-label: my-value
   name: gw
 spec:
@@ -82,14 +79,13 @@ metadata:
     prometheus.io/path: /something/else
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     extra-label: v1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: gw
     infra-and-params: params-but-only-because-overlays-happen-last
-    kgateway: kube-gateway
     my-label: my-value
   name: gw
 spec:
@@ -102,7 +98,8 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: a1c83112dda602acaac811fc898dd49fe4c4736a4e4c7d895019293dc7ab1726
+        checksum/config: eecf8edcf37f75935e67bb280c4158573434f258386cad8ed2dc680782155efb
+        checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         extra-annotation: v1
         gateway.kgateway.dev/gateway-full-name: gw
         infra-and-params: params-but-only-because-overlays-happen-last
@@ -144,6 +141,11 @@ spec:
           value: "1"
         - name: RUST_LOG
           value: info
+        - name: SESSION_KEY
+          valueFrom:
+            secretKeyRef:
+              key: key
+              name: gw-session-key
         - name: XDS_ADDRESS
           value: http://xds.cluster.local:9978
         - name: NAMESPACE
@@ -215,9 +217,21 @@ spec:
         projected:
           sources:
           - serviceAccountToken:
-              audience: kgateway
+              audience: agentgateway
               expirationSeconds: 43200
               path: xds-token
       - emptyDir: {}
         name: tmp
 status: {}
+---
+apiVersion: v1
+data:
+  key: MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmYwMDExMjIzMzQ0NTU2Njc3ODg5OWFhYmJjY2RkZWVmZg==
+kind: Secret
+metadata:
+  labels:
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: gw
+  name: gw-session-key
+  namespace: default
+type: Opaque

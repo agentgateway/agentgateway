@@ -47,5 +47,6 @@ backends:
                   - "@modelcontextprotocol/server-everything"
           stateful: true
           alwaysUsePrefix: false
+          failureMode: failClosed
 workloads: []
 services: []

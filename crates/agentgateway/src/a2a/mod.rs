@@ -1,4 +1,6 @@
+use agent_core::strng::Strng;
 use http::{Request, Uri, header};
+use serde::Deserialize;
 use serde_json::Value;
 use tracing::warn;
 
@@ -29,18 +31,16 @@ async fn classify_request(req: &mut Request<Body>) -> RequestType {
 		},
 		(m, _) if m == http::Method::POST => {
 			let method = match crate::http::classify_content_type(req.headers()) {
-				crate::http::WellKnownContentTypes::Json => {
-					match json::inspect_body::<a2a_sdk::A2aRequest>(req).await {
-						Ok(call) => call.method(),
-						Err(e) => {
-							warn!("failed to read a2a request: {e}");
-							"unknown"
-						},
-					}
+				crate::http::WellKnownContentTypes::Json => match inspect_method(req).await {
+					Ok(method) => method,
+					Err(e) => {
+						warn!("failed to read a2a request: {e}");
+						Strng::from("unknown")
+					},
 				},
 				_ => {
 					warn!("unknown content type from A2A");
-					"unknown"
+					Strng::from("unknown")
 				},
 			};
 			RequestType::Call(method)
@@ -54,7 +54,7 @@ pub enum RequestType {
 	#[default]
 	Unknown,
 	AgentCard(http::Uri),
-	Call(&'static str),
+	Call(Strng),
 }
 
 pub async fn apply_to_response(
@@ -86,26 +86,20 @@ pub async fn apply_to_response(
 			Ok(())
 		},
 		RequestType::Call(_) => {
-			// TODO: we don't really do anything with the response... but if we did, we could do this.
+			// We don't currently inspect A2A responses.
 			Ok(())
-			// match crate::http::classify_content_type(resp.headers()) {
-			// 	crate::http::WellKnownContentTypes::Json => {
-			// 		let call = json::inspect_body::<a2a_sdk::JsonRpcMessage>(resp.body_mut()).await?;
-			// 	},
-			// 	crate::http::WellKnownContentTypes::Sse => {
-			// 		let orig = std::mem::replace(resp.body_mut(), crate::http::Body::empty());
-			// 		let new_body = parse::sse::json_parser::<a2a_sdk::JsonRpcMessage>(orig, |f| {
-			// 		});
-			// 		*resp.body_mut() = new_body;
-			// 	},
-			// 	_ => {
-			// 		warn!("unknown content type from A2A");
-			// 	}
-			// }
-			// Ok(())
 		},
 		RequestType::Unknown => Ok(()),
 	}
+}
+
+#[derive(Deserialize)]
+struct JsonRpcMethod {
+	method: Strng,
+}
+
+async fn inspect_method(req: &mut Request<Body>) -> anyhow::Result<Strng> {
+	Ok(json::inspect_body::<JsonRpcMethod>(req).await?.method)
 }
 
 fn build_agent_path(uri: Uri) -> String {

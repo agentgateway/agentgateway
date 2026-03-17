@@ -83,13 +83,8 @@ impl FrontendPolices {
 			},
 			FrontendPolicy::AccessLog(p) => {
 				self.access_log.get_or_insert_with(|| p.clone());
-				if let Some(otlp_cfg) = &p.otlp {
-					self.access_log_otlp.get_or_insert_with(|| {
-						Arc::new(crate::types::agent::AccessLogPolicy {
-							config: otlp_cfg.clone(),
-							logger: once_cell::sync::OnceCell::new(),
-						})
-					});
+				if let Some(alp) = &p.access_log_policy {
+					self.access_log_otlp.get_or_insert_with(|| alp.clone());
 				}
 			},
 			FrontendPolicy::Tracing(p) => {
@@ -103,6 +98,7 @@ impl FrontendPolices {
 			add: fields_add,
 			remove: _,
 			otlp: _,
+			access_log_policy: _,
 		}) = &self.access_log
 		else {
 			return;
@@ -130,6 +126,7 @@ pub struct BackendPolicies {
 
 	pub http: Option<types::backend::HTTP>,
 	pub tcp: Option<types::backend::TCP>,
+	pub tunnel: Option<types::backend::Tunnel>,
 
 	pub request_header_modifier: Option<filters::HeaderModifier>,
 	pub response_header_modifier: Option<filters::HeaderModifier>,
@@ -161,6 +158,7 @@ impl BackendPolicies {
 			inference_routing: other.inference_routing.or(self.inference_routing),
 			http: other.http.or(self.http),
 			tcp: other.tcp.or(self.tcp),
+			tunnel: other.tunnel.or(self.tunnel),
 			request_header_modifier: other
 				.request_header_modifier
 				.or(self.request_header_modifier),
@@ -656,6 +654,9 @@ impl Store {
 				},
 				BackendPolicy::TCP(p) => {
 					pol.tcp.get_or_insert_with(|| p.clone());
+				},
+				BackendPolicy::Tunnel(p) => {
+					pol.tunnel.get_or_insert_with(|| p.clone());
 				},
 
 				BackendPolicy::RequestHeaderModifier(p) => {
@@ -1329,6 +1330,7 @@ mod tests {
 			add: Arc::new(OrderedStringMap::default()),
 			remove: Arc::new(FzHashSet::new(vec![remove_item.into()])),
 			otlp: None,
+			access_log_policy: None,
 		})
 	}
 

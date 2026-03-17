@@ -4,8 +4,10 @@ use futures_core::stream::BoxStream;
 use futures_util::StreamExt;
 use itertools::Itertools;
 use rmcp::model::{RequestId, ServerJsonRpcMessage, ServerResult};
+use tracing::warn;
 
 use crate::mcp::ClientError;
+use crate::mcp::FailureMode;
 use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::*;
 
@@ -36,6 +38,12 @@ impl Stream for Messages {
 impl From<ServerJsonRpcMessage> for Messages {
 	fn from(value: ServerJsonRpcMessage) -> Self {
 		Messages(futures::stream::once(async { Ok(value) }).boxed())
+	}
+}
+
+impl From<Result<ServerJsonRpcMessage, ClientError>> for Messages {
+	fn from(value: Result<ServerJsonRpcMessage, ClientError>) -> Self {
+		Messages(futures::stream::once(async { value }).boxed())
 	}
 }
 
@@ -91,19 +99,26 @@ pub struct MergeStream {
 	complete: bool,
 	req_id: RequestId,
 	merge: Option<Box<MergeFn>>,
+	failure_mode: FailureMode,
 }
 
 impl MergeStream {
-	pub fn new_without_merge(streams: Vec<(Strng, Messages)>) -> Self {
-		Self::new_internal(streams, RequestId::Number(0), None)
+	pub fn new_without_merge(streams: Vec<(Strng, Messages)>, failure_mode: FailureMode) -> Self {
+		Self::new_internal(streams, RequestId::Number(0), None, failure_mode)
 	}
-	pub fn new(streams: Vec<(Strng, Messages)>, req_id: RequestId, merge: Box<MergeFn>) -> Self {
-		Self::new_internal(streams, req_id, Some(merge))
+	pub fn new(
+		streams: Vec<(Strng, Messages)>,
+		req_id: RequestId,
+		merge: Box<MergeFn>,
+		failure_mode: FailureMode,
+	) -> Self {
+		Self::new_internal(streams, req_id, Some(merge), failure_mode)
 	}
 	fn new_internal(
 		streams: Vec<(Strng, Messages)>,
 		req_id: RequestId,
 		merge: Option<Box<MergeFn>>,
+		failure_mode: FailureMode,
 	) -> Self {
 		let terminal_messages = streams.iter().map(|_| None).collect::<Vec<_>>();
 		Self {
@@ -112,6 +127,7 @@ impl MergeStream {
 			req_id,
 			complete: false,
 			merge,
+			failure_mode,
 		}
 	}
 
@@ -123,6 +139,7 @@ impl MergeStream {
 			.iter_mut()
 			.filter_map(Option::take)
 			.collect_vec();
+
 		let res = self
 			.merge
 			.take()
@@ -160,17 +177,33 @@ impl Stream for MergeStream {
 							// This stream is done, never look at it again
 						},
 						Err(e) => {
-							self.complete = true;
-							return Poll::Ready(Some(Err(e)));
+							if self.failure_mode == FailureMode::FailOpen {
+								warn!(
+									"upstream stream error, skipping (failure_mode=FailOpen): {}",
+									e
+								);
+								drop = true;
+							} else {
+								self.complete = true;
+								return Poll::Ready(Some(Err(e)));
+							}
 						},
 						_ => return Poll::Ready(Some(msg)),
 					}
 				},
 				Poll::Ready(None) => {
 					// Stream ended without terminal message (shouldn't happen in this design)
-					// Not much we can do here I guess.
-					drop = true;
+					if self.failure_mode == FailureMode::FailOpen {
+						warn!("upstream stream ended unexpectedly, skipping (failure_mode=FailOpen)");
+						drop = true;
+					} else {
+						self.complete = true;
+						return Poll::Ready(Some(Err(ClientError::new(anyhow::anyhow!(
+							"upstream stream ended unexpectedly"
+						)))));
+					}
 				},
+
 				Poll::Pending => {
 					any_pending = true;
 				},

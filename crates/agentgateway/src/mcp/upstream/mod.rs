@@ -14,6 +14,7 @@ use thiserror::Error;
 use tokio::process::Command;
 
 use crate::http::jwt::Claims;
+use crate::mcp::FailureMode;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
 use crate::mcp::streamablehttp::StreamableHttpPostResponse;
@@ -137,7 +138,7 @@ impl Upstream {
 		ctx: &IncomingRequestContext,
 	) -> Result<mergestream::Messages, UpstreamError> {
 		match &self {
-			Upstream::McpStdio(c) => Ok(c.get_event_stream().await),
+			Upstream::McpStdio(c) => Ok(c.get_event_stream().await?),
 			Upstream::McpSSE(c) => c.connect_to_event_stream(ctx).await,
 			Upstream::McpStreamable(c) => c
 				.get_event_stream(ctx)
@@ -207,11 +208,12 @@ pub(crate) struct UpstreamGroup {
 	// Else this is empty
 	pub default_target_name: Option<String>,
 	pub is_multiplexing: bool,
+	pub failure_mode: FailureMode,
 }
 
 impl UpstreamGroup {
 	pub fn size(&self) -> usize {
-		self.backend.targets.len()
+		self.by_name.len()
 	}
 
 	pub(crate) fn new(client: PolicyClient, backend: McpBackendGroup) -> Result<Self, mcp::Error> {
@@ -225,6 +227,7 @@ impl UpstreamGroup {
 			Some(backend.targets[0].name.to_string())
 		};
 		let mut s = Self {
+			failure_mode: backend.failure_mode,
 			backend,
 			client,
 			by_name: IndexMap::new(),
@@ -232,14 +235,36 @@ impl UpstreamGroup {
 			is_multiplexing,
 		};
 		s.setup_connections()?;
+		if s.by_name.is_empty() {
+			if s.backend.targets.is_empty() && s.failure_mode == FailureMode::FailOpen {
+				warn!(
+					"MCP backend configured with zero targets and failure_mode=failOpen; allowing startup to avoid downstream retry loops"
+				);
+				return Ok(s);
+			}
+			return Err(mcp::Error::NoBackends);
+		}
 		Ok(s)
 	}
 
 	pub(crate) fn setup_connections(&mut self) -> Result<(), mcp::Error> {
 		for tgt in &self.backend.targets {
 			debug!("initializing target: {}", tgt.name);
-			let transport = self.setup_upstream(tgt.as_ref())?;
-			self.by_name.insert(tgt.name.clone(), Arc::new(transport));
+			match self.setup_upstream(tgt.as_ref()) {
+				Ok(transport) => {
+					self.by_name.insert(tgt.name.clone(), Arc::new(transport));
+				},
+				Err(e) => {
+					if self.failure_mode == FailureMode::FailOpen {
+						warn!(
+							"failed to initialize target '{}', skipping (failure_mode=FailOpen): {}",
+							tgt.name, e
+						);
+					} else {
+						return Err(e);
+					}
+				},
+			}
 		}
 		Ok(())
 	}

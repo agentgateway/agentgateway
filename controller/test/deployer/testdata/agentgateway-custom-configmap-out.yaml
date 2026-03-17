@@ -4,12 +4,11 @@ kind: ServiceAccount
 metadata:
   labels:
     app.kubernetes.io/instance: agentgateway
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: agentgateway
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: agentgateway
-    kgateway: kube-gateway
   name: agentgateway
 ---
 apiVersion: v1
@@ -20,12 +19,11 @@ kind: ConfigMap
 metadata:
   labels:
     app.kubernetes.io/instance: agentgateway
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: agentgateway
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: agentgateway
-    kgateway: kube-gateway
   name: agentgateway
 ---
 apiVersion: v1
@@ -33,12 +31,11 @@ kind: Service
 metadata:
   labels:
     app.kubernetes.io/instance: agentgateway
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: agentgateway
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: agentgateway
-    kgateway: kube-gateway
   name: agentgateway
 spec:
   ports:
@@ -59,12 +56,11 @@ kind: Deployment
 metadata:
   labels:
     app.kubernetes.io/instance: agentgateway
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: agentgateway
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: agentgateway
-    kgateway: kube-gateway
   name: agentgateway
 spec:
   selector:
@@ -76,7 +72,8 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 63173967f10317253d918f3354b522fc6d25c8f116d0201f34cc3bd72be3d496
+        checksum/config: ec135fae21e21f5a5230963218b244d7bd004d0d21da900292b3f317e4545a22
+        checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         gateway.kgateway.dev/gateway-full-name: agentgateway
         prometheus.io/path: /metrics
         prometheus.io/port: "15020"
@@ -112,6 +109,11 @@ spec:
           value: "1"
         - name: RUST_LOG
           value: debug
+        - name: SESSION_KEY
+          valueFrom:
+            secretKeyRef:
+              key: key
+              name: agentgateway-session-key
         - name: XDS_ADDRESS
           value: http://xds.cluster.local:9978
         - name: NAMESPACE
@@ -183,9 +185,21 @@ spec:
         projected:
           sources:
           - serviceAccountToken:
-              audience: kgateway
+              audience: agentgateway
               expirationSeconds: 43200
               path: xds-token
       - emptyDir: {}
         name: tmp
 status: {}
+---
+apiVersion: v1
+data:
+  key: MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmYwMDExMjIzMzQ0NTU2Njc3ODg5OWFhYmJjY2RkZWVmZg==
+kind: Secret
+metadata:
+  labels:
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: agentgateway
+  name: agentgateway-session-key
+  namespace: default
+type: Opaque

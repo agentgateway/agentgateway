@@ -21,7 +21,7 @@ spec:
   template:
     metadata:
       annotations:
-      {{- /* Add configmap checksum to trigger rollout when config changes */}}
+      {{- /* Add managed resource checksums to trigger rollout when config changes */}}
       {{- $configChecksum := dict "checksum/config" (include (print $.Template.BasePath "/configmap.yaml") . | sha256sum) }}
       {{- toYaml (merge
           $configChecksum
@@ -122,6 +122,13 @@ spec:
             - name: RUST_LOG
               value: {{ ($gateway.logging).level | default "info" | quote }}
             {{- end }}
+            {{- if $gateway.sessionKeySecretName }}
+            - name: SESSION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "agentgateway.sessionKeySecretName is required" $gateway.sessionKeySecretName }}
+                  key: key
+            {{- end }}
             - name: XDS_ADDRESS
               {{- if and $gateway.xds.tls $gateway.xds.tls.enabled }}
               value: "https://{{ $gateway.xds.host }}:{{ $gateway.xds.port }}"
@@ -201,7 +208,7 @@ spec:
           projected:
             sources:
             - serviceAccountToken:
-                audience: kgateway
+                audience: agentgateway
                 expirationSeconds: 43200
                 path: xds-token
         - name: tmp

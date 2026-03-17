@@ -506,6 +506,27 @@ message FrontendPolicySpec {
 
     // Fields applied to logs
     Fields fields = 2;
+
+    // OTLP access log configuration for shipping access logs to an
+    // OpenTelemetry-compatible backend.
+    message OtlpAccessLog {
+      // Backend to send OTLP access logs to.
+      BackendReference provider_backend = 1;
+      // Inline backend policies (e.g. TLS, auth) for the OTLP backend.
+      repeated BackendPolicySpec inline_policies = 2;
+      // OTLP protocol variant. Default is HTTP.
+      Protocol protocol = 3;
+      // OTLP/HTTP path. Only applicable when protocol is HTTP. Default is /v1/logs.
+      optional string path = 4;
+
+      enum Protocol {
+        HTTP = 0;
+        GRPC = 1;
+      }
+    }
+
+    // Optional OTLP access log export configuration.
+    OtlpAccessLog otlp_access_log = 3;
   }
 
   message Tracing {
@@ -859,7 +880,7 @@ message BackendPolicySpec {
       string template_id = 1;
       string project_id = 2;
 
-      // default: us-central1 
+      // default: us-central1
       optional string location = 3;
 
       repeated BackendPolicySpec inline_policies = 4;
@@ -936,6 +957,8 @@ message BackendPolicySpec {
       MODELS = 3;
       // Sends requests to upstream as-is without LLM processing
       PASSTHROUGH = 4;
+      // Sends requests upstream as-is but attempts to detect usage/metadata for telemetry/rate limiting
+      DETECT = 9;
       // Processes OpenAI /responses format requests
       RESPONSES = 5;
       // Processes Anthropic /v1/messages/count_tokens format requests
@@ -963,13 +986,45 @@ message BackendPolicySpec {
     FailureMode failure_mode = 2;
   }
   message Eviction {
-    // specify the time to evict (e.g. 30s, 60s).
+    // Base time to evict (e.g. 3s, 10s). The actual ejection time equals
+    // base * times_ejected, growing without cap via multiplicative backoff.
+    // If all endpoints are evicted, the loadbalancer falls back to returning
+    // evicted endpoints rather than failing entirely.
     google.protobuf.Duration duration = 1;
+
+    reserved 2;
+    reserved "max_eviction_time";
+
+    // Health score (0.0–1.0) to assign to a backend when it returns from eviction.
+    // For example, 0.5 brings the backend back at half-health so it recovers gradually,
+    // while 1.0 restores it to full health immediately.
+    // When unset, the health score is left unchanged on recovery (i.e. the backend
+    // returns at whatever score it had when it was evicted).
+    optional double restore_health = 3;
+
+    reserved 4;
+    reserved "max_eviction_percent";
+
+    // Number of consecutive unhealthy responses required before evicting the backend.
+    // For example, 3 means the backend must fail 3 times in a row before being evicted.
+    // When both consecutive_failures and health_threshold are set, eviction triggers when
+    // either condition is met. When neither is set, a single unhealthy response triggers eviction.
+    optional int32 consecutive_failures = 5;
+
+    // EWMA health score threshold (0.0–1.0) below which an unhealthy backend is evicted.
+    // When set, the backend is only evicted if its exponentially-weighted moving average health
+    // score drops below this value. Unlike consecutive_failures (which counts consecutive failures),
+    // this uses a sliding-window average so a single success can delay eviction.
+    // When both health_threshold and consecutive_failures are set, eviction triggers when
+    // either condition is met. When neither is set, a single unhealthy response triggers eviction.
+    optional double health_threshold = 6;
   }
   message Health {
     // cel expression evaluated per request to determine if eviction should be triggered
     // `true`: treat this response as **unhealthy** (candidate for eviction).
     // `false`: treat as healthy (no eviction from this response alone).
+    // When empty, any 5xx response, or a connection failure, is treated as unhealthy.
+    // This default lowers the backend's health score but does not trigger eviction on its own.
     string unhealthy_condition = 1;
     Eviction eviction = 2;
   }
@@ -1003,6 +1058,9 @@ message BackendPolicySpec {
     }
     HttpVersion version = 1;
     google.protobuf.Duration request_timeout = 2;
+  }
+  message BackendTunnel {
+    BackendReference proxy = 1;
   }
   message BackendTCP {
     KeepaliveConfig keepalive = 1;
@@ -1061,6 +1119,7 @@ message BackendPolicySpec {
     BackendTCP backend_tcp = 13;
     TrafficPolicySpec.TransformationPolicy transformation = 14;
     Health health = 15;
+    BackendTunnel backend_tunnel = 16;
   }
 }
 
@@ -1151,6 +1210,14 @@ message MCPBackend {
   StatefulMode stateful_mode = 3;
   // Whether to always prefix the tool name using the target name
   PrefixMode prefix_mode = 4;
+
+  // failure_mode controls behavior when MCP targets fail to initialize or
+  // become unavailable at runtime. Defaults to FAIL_CLOSED.
+  enum FailureMode {
+    FAIL_CLOSED = 0;
+    FAIL_OPEN = 1;
+  }
+  FailureMode failure_mode = 5;
 }
 
 message MCPTarget {

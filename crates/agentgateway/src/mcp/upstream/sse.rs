@@ -163,21 +163,21 @@ impl Client {
 	async fn get_stream(&self, ctx: &IncomingRequestContext) -> Result<Arc<Process>, UpstreamError> {
 		let mut stream = self.active_stream.lock().await;
 		if let Some(s) = stream.clone() {
-			Ok(s)
-		} else {
-			let (post_uri, sse) = self.establish_sse(ctx).await?;
-			let transport = SseClient {
-				client: ClientCore {
-					uri: post_uri,
-					..self.client.clone()
-				},
-				events: sse,
-			};
-
-			let proc = Arc::new(Process::new(transport));
-			*stream = Some(proc.clone());
-			Ok(proc)
+			return Ok(s);
 		}
+
+		let (post_uri, sse) = self.establish_sse(ctx).await?;
+		let transport = SseClient {
+			client: ClientCore {
+				uri: post_uri,
+				..self.client.clone()
+			},
+			events: sse,
+		};
+
+		let proc = Arc::new(Process::new(transport));
+		*stream = Some(proc.clone());
+		Ok(proc)
 	}
 	async fn establish_sse(
 		&self,
@@ -207,7 +207,7 @@ impl Client {
 		ctx: &IncomingRequestContext,
 	) -> Result<Messages, UpstreamError> {
 		let stream = self.get_stream(ctx).await?;
-		Ok(stream.get_event_stream().await)
+		stream.get_event_stream().await
 	}
 	pub async fn send_message(
 		&self,

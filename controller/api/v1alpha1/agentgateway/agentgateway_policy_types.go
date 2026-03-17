@@ -129,6 +129,10 @@ type BackendSimple struct {
 	// +optional
 	HTTP *BackendHTTP `json:"http,omitempty"`
 
+	// tunnel defines settings for managing tunnel connections (like HTTPS_PROXY) to the backend.
+	// +optional
+	Tunnel *BackendTunnel `json:"tunnel,omitempty"`
+
 	// transformation is used to mutate and transform requests and responses sent to and from the backend.
 	// +optional
 	Transformation *Transformation `json:"transformation,omitempty"`
@@ -148,22 +152,60 @@ type Health struct {
 	//
 	// For example, to evict on 5xx responses: `response.code >= 500`.
 	//
-	// +required
-	UnhealthyCondition shared.CELExpression `json:"unhealthyCondition"`
+	// When unset, any 5xx response, or a connection failure, is treated as unhealthy.
+	// This default lowers the backend's health score but does not trigger eviction on its own.
+	//
+	// +optional
+	UnhealthyCondition *shared.CELExpression `json:"unhealthyCondition,omitempty"`
 
 	// Eviction defines settings for evicting unhealthy backends.
 	// +optional
 	Eviction *BackendEviction `json:"eviction,omitempty"`
 }
 
-// BackendEviction defines settings for evicting unhealthy backends based on response characteristics.
+// BackendEviction defines settings for evicting unhealthy backends.
 type BackendEviction struct {
-	// duration specifies how long a backend should be evicted after being marked unhealthy. If unset, defaults to 30s.
+	// Duration specifies the base time a backend should be evicted after being marked unhealthy.
+	// Subsequent evictions use multiplicative backoff (duration * times_evicted).
+	// If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
+	// rather than failing entirely.
+	// If unset, defaults to 3s.
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="evictionDuration must be at least 1 second"
-	// +kubebuilder:default="30s"
+	// +kubebuilder:default="3s"
 	// +optional
 	Duration *metav1.Duration `json:"duration,omitempty"`
+
+	// RestoreHealth is the health score (0–100) assigned to a backend when it returns from eviction.
+	// For gradual recovery, set below 100; for full recovery immediately, set 100.
+	// If unset, the backend resumes with the health it had when evicted.
+	//
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=100
+	// +optional
+	RestoreHealth *int32 `json:"restoreHealth,omitempty"`
+
+	// ConsecutiveFailures is the number of consecutive unhealthy responses required before the backend is evicted.
+	// For example, a value of 5 means the backend must receive 5 unhealthy responses in a row before being evicted.
+	// When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+	// When neither is set, a single unhealthy response can trigger eviction.
+	//
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	ConsecutiveFailures *int32 `json:"consecutiveFailures,omitempty"`
+
+	// HealthThreshold is the EWMA (exponentially-weighted moving average) health score threshold, expressed as 0–100.
+	// When set, a backend is only evicted if its computed health drops below this value after an unhealthy response.
+	// For example, 50 means the backend is evicted when its EWMA health falls below 50% following failures.
+	// Unlike consecutiveFailures (which counts consecutive failures), this uses a sliding-window average
+	// so a single success in a stream of failures can delay eviction.
+	// When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+	// When neither is set, a single unhealthy response triggers eviction.
+	//
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=100
+	// +optional
+	HealthThreshold *int32 `json:"healthThreshold,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -506,7 +548,6 @@ type Traffic struct {
 	// hostRewrite specifies how to rewrite the Host header for requests.
 	//
 	// If the HTTPRoute `urlRewrite` filter already specifies a host rewrite, this setting is ignored.
-	// +kubebuilder:validation:Enum=Auto;None
 	// +optional
 	HostnameRewrite *HostnameRewrite `json:"hostRewrite,omitempty"`
 
@@ -928,7 +969,7 @@ type BackendAI struct {
 
 // RouteType specifies how the AI gateway should process incoming requests
 // based on the URL path and the API format expected.
-// +kubebuilder:validation:Enum=Completions;Messages;Models;Passthrough;Responses;AnthropicTokenCount;Embeddings;Realtime
+// +kubebuilder:validation:Enum=Completions;Messages;Models;Passthrough;Detect;Responses;AnthropicTokenCount;Embeddings;Realtime
 type RouteType string
 
 const (
@@ -943,6 +984,9 @@ const (
 
 	// RouteTypePassthrough sends requests to upstream as-is without LLM processing
 	RouteTypePassthrough RouteType = "Passthrough"
+
+	// RouteTypeDetect sends requests as-is but attempts to extract request/response metadata for telemetry/rate limiting
+	RouteTypeDetect RouteType = "Detect"
 
 	// RouteTypeResponses processes OpenAI /v1/responses format requests
 	RouteTypeResponses RouteType = "Responses"
@@ -1009,6 +1053,13 @@ const (
 	Auth0    McpIDP = "Auth0"
 	Keycloak McpIDP = "Keycloak"
 )
+
+type BackendTunnel struct {
+	// backendRef references the proxy server to reach.
+	// Supported types: Service and Backend.
+	// +required
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+}
 
 type BackendHTTP struct {
 	// version specifies the HTTP protocol version to use when connecting to the backend.
@@ -1348,6 +1399,7 @@ type HostnameRewrite struct {
 	//
 	// This setting defaults to Auto when connecting to hostname-based Backend types, and None otherwise (for Service or
 	// IP-based Backends).
+	// +kubebuilder:validation:Enum=Auto;None
 	// +required
 	Mode HostnameRewriteMode `json:"mode"`
 }
@@ -1376,6 +1428,32 @@ type AccessLog struct {
 	// attributes specifies customizations to the key-value pairs that are logged
 	// +optional
 	Attributes *LogTracingAttributes `json:"attributes,omitempty"`
+
+	// otlp configures OTLP access log export to an OpenTelemetry-compatible backend.
+	// +optional
+	Otlp *OtlpAccessLog `json:"otlp,omitempty"`
+}
+
+// OtlpAccessLog defines configuration for shipping access logs to an
+// OpenTelemetry-compatible backend via OTLP.
+// +kubebuilder:validation:XValidation:rule="!has(self.path) || !has(self.protocol) || self.protocol == 'HTTP'",message="path is only valid with protocol HTTP"
+// +kubebuilder:validation:XValidation:rule="!has(self.path) || self.path.startsWith('/')",message="path must start with /"
+type OtlpAccessLog struct {
+	// backendRef references the OTLP server to send access logs to.
+	// Supported types: Service and AgentgatewayBackend.
+	// +required
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// protocol specifies the OTLP protocol variant to use.
+	// +kubebuilder:default=GRPC
+	// +kubebuilder:validation:Enum=HTTP;GRPC
+	// +optional
+	Protocol OTLPProtocol `json:"protocol,omitempty"`
+
+	// path specifies the OTLP/HTTP path to use. This is only applicable when protocol is HTTP.
+	// If unset, this defaults to /v1/logs.
+	// +optional
+	Path *LongString `json:"path,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -1400,11 +1478,11 @@ type AttributeAdd struct {
 	Expression shared.CELExpression `json:"expression"`
 }
 
-type TracingProtocol string
+type OTLPProtocol string
 
 const (
-	TracingProtocolHttp TracingProtocol = "HTTP"
-	TracingProtocolGrpc TracingProtocol = "GRPC"
+	OTLPProtocolHttp OTLPProtocol = "HTTP"
+	OTLPProtocolGrpc OTLPProtocol = "GRPC"
 )
 
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || !has(self.protocol) || self.protocol == 'HTTP'",message="path is only valid with protocol HTTP"
@@ -1418,7 +1496,7 @@ type Tracing struct {
 	// +kubebuilder:default=GRPC
 	// +kubebuilder:validation:Enum=HTTP;GRPC
 	// +optional
-	Protocol TracingProtocol `json:"protocol,omitempty"`
+	Protocol OTLPProtocol `json:"protocol,omitempty"`
 
 	// path specifies the OTLP path to use. This is only applicable when protocol is HTTP.
 	// If unset, this defaults to /v1/traces.

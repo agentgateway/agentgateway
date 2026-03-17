@@ -15,7 +15,7 @@ import (
 	"strings"
 )
 
-const defaultNamespace = "kgateway"
+const defaultNamespace = "agentgateway"
 
 type metricInfo struct {
 	File      string

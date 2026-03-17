@@ -137,6 +137,9 @@ type AgentgatewayParametersConfigs struct {
 	// discouraged. `$$(VAR_NAME)` avoids expansion and results in a literal
 	// `$(VAR_NAME)`.
 	//
+	// If `SESSION_KEY` is specified, it takes precedence over the
+	// controller-managed per-Gateway session key Secret.
+	//
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`
 

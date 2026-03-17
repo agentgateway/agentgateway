@@ -6,9 +6,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -327,4 +330,133 @@ func TestOverlayApplier_ApplyOverlays_MultipleObjects(t *testing.T) {
 	// Check configmap (should be unchanged, no overlay for it)
 	cm := objs[3].(*corev1.ConfigMap)
 	assert.Empty(t, cm.Labels)
+}
+
+// deploymentWithLabels returns a Deployment carrying the given labels and a
+// matching label selector, suitable for use as the base object when testing
+// PDB / HPA / VPA creation.
+func deploymentWithLabels(labels map[string]string) *appsv1.Deployment {
+	return &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw",
+			Namespace: "default",
+			Labels:    labels,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{MatchLabels: labels},
+		},
+	}
+}
+
+var gatewayLabels = map[string]string{
+	"app.kubernetes.io/instance":                   "gw",
+	"app.kubernetes.io/managed-by":                 "kgateway",
+	"app.kubernetes.io/name":                       "gw",
+	"app.kubernetes.io/version":                    "1.0.0-dev",
+	"gateway.networking.k8s.io/gateway-class-name": "agentgateway",
+	"gateway.networking.k8s.io/gateway-name":       "gw",
+	"kgateway":                                     "kube-gateway",
+}
+
+func TestCreatePodDisruptionBudget_InheritsDeploymentLabels(t *testing.T) {
+	dep := deploymentWithLabels(gatewayLabels)
+	overlay := &shared.KubernetesResourceOverlay{}
+
+	obj, err := createPodDisruptionBudget(dep, overlay)
+	require.NoError(t, err)
+
+	pdb := obj.(*policyv1.PodDisruptionBudget)
+	assert.Equal(t, gatewayLabels, pdb.GetLabels())
+}
+
+func TestCreatePodDisruptionBudget_OverlayLabelsMergeOnTop(t *testing.T) {
+	dep := deploymentWithLabels(gatewayLabels)
+	overlay := &shared.KubernetesResourceOverlay{
+		Metadata: &shared.ObjectMetadata{
+			Labels: map[string]string{"extra": "label"},
+		},
+	}
+
+	obj, err := createPodDisruptionBudget(dep, overlay)
+	require.NoError(t, err)
+
+	pdb := obj.(*policyv1.PodDisruptionBudget)
+	assert.Equal(t, "label", pdb.GetLabels()["extra"])
+	for k, v := range gatewayLabels {
+		assert.Equal(t, v, pdb.GetLabels()[k])
+	}
+}
+
+func TestCreateHorizontalPodAutoscaler_InheritsDeploymentLabels(t *testing.T) {
+	dep := deploymentWithLabels(gatewayLabels)
+	overlay := &shared.KubernetesResourceOverlay{}
+
+	obj, err := createHorizontalPodAutoscaler(dep, overlay)
+	require.NoError(t, err)
+
+	hpa := obj.(*autoscalingv2.HorizontalPodAutoscaler)
+	assert.Equal(t, gatewayLabels, hpa.GetLabels())
+}
+
+func TestCreateHorizontalPodAutoscaler_OverlayLabelsMergeOnTop(t *testing.T) {
+	dep := deploymentWithLabels(gatewayLabels)
+	overlay := &shared.KubernetesResourceOverlay{
+		Metadata: &shared.ObjectMetadata{
+			Labels: map[string]string{"extra": "label"},
+		},
+	}
+
+	obj, err := createHorizontalPodAutoscaler(dep, overlay)
+	require.NoError(t, err)
+
+	hpa := obj.(*autoscalingv2.HorizontalPodAutoscaler)
+	assert.Equal(t, "label", hpa.GetLabels()["extra"])
+	for k, v := range gatewayLabels {
+		assert.Equal(t, v, hpa.GetLabels()[k])
+	}
+}
+
+func TestCreateVerticalPodAutoscaler_InheritsDeploymentLabels(t *testing.T) {
+	dep := deploymentWithLabels(gatewayLabels)
+	overlay := &shared.KubernetesResourceOverlay{}
+
+	obj, err := createVerticalPodAutoscaler(dep, overlay)
+	require.NoError(t, err)
+
+	vpa := obj.(*unstructured.Unstructured)
+	assert.Equal(t, gatewayLabels, vpa.GetLabels())
+}
+
+func TestCreateVerticalPodAutoscaler_OverlayLabelsMergeOnTop(t *testing.T) {
+	dep := deploymentWithLabels(gatewayLabels)
+	overlay := &shared.KubernetesResourceOverlay{
+		Metadata: &shared.ObjectMetadata{
+			Labels: map[string]string{"extra": "label"},
+		},
+	}
+
+	obj, err := createVerticalPodAutoscaler(dep, overlay)
+	require.NoError(t, err)
+
+	vpa := obj.(*unstructured.Unstructured)
+	assert.Equal(t, "label", vpa.GetLabels()["extra"])
+	for k, v := range gatewayLabels {
+		assert.Equal(t, v, vpa.GetLabels()[k])
+	}
+}
+
+func TestCreatePodDisruptionBudget_DeploymentLabelsNotMutated(t *testing.T) {
+	dep := deploymentWithLabels(gatewayLabels)
+	overlay := &shared.KubernetesResourceOverlay{
+		Metadata: &shared.ObjectMetadata{
+			Labels: map[string]string{"extra": "label"},
+		},
+	}
+
+	_, err := createPodDisruptionBudget(dep, overlay)
+	require.NoError(t, err)
+
+	// The original deployment labels must not have been mutated.
+	assert.NotContains(t, dep.GetLabels(), "extra")
 }

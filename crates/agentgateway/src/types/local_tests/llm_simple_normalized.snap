@@ -207,9 +207,9 @@ backends:
                     provider:
                       anthropic:
                         model: claude-haiku-4-5-20251001
-                    hostOverride: ~
-                    pathOverride: ~
-                    tokenize: false
+                    hostOverride: "anthropic.internal:8443"
+                    pathOverride: /v1/messages
+                    tokenize: true
                     inlinePolicies:
                       - backendAuth:
                           key: "<redacted>"
@@ -218,12 +218,22 @@ backends:
                     request_latency: 0
                     pending_requests: 0
                     total_requests: 0
+                    consecutive_failures: 0
+                    times_ejected: 0
                     evicted_until: ~
               rejected: {}
     inlinePolicies:
+      - backendTLS: ~
       - requestHeaderModifier:
           remove:
             - x-gateway-model-name
+      - responseHeaderModifier:
+          remove:
+            - server
+      - health:
+          unhealthyExpression: response.code >= 500 || response.code == 429
+          eviction:
+            duration: 30s
       - ai: {}
   - backend:
       ai:
@@ -251,6 +261,8 @@ backends:
                     request_latency: 0
                     pending_requests: 0
                     total_requests: 0
+                    consecutive_failures: 0
+                    times_ejected: 0
                     evicted_until: ~
               rejected: {}
     inlinePolicies:
@@ -281,6 +293,8 @@ backends:
                     request_latency: 0
                     pending_requests: 0
                     total_requests: 0
+                    consecutive_failures: 0
+                    times_ejected: 0
                     evicted_until: ~
               rejected: {}
     inlinePolicies:
@@ -308,6 +322,8 @@ backends:
                     request_latency: 0
                     pending_requests: 0
                     total_requests: 0
+                    consecutive_failures: 0
+                    times_ejected: 0
                     evicted_until: ~
               rejected: {}
     inlinePolicies:

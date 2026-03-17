@@ -4,12 +4,11 @@ kind: ServiceAccount
 metadata:
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: gw
-    kgateway: kube-gateway
   name: gw
 ---
 apiVersion: v1
@@ -20,12 +19,11 @@ kind: ConfigMap
 metadata:
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: gw
-    kgateway: kube-gateway
   name: gw
 ---
 apiVersion: v1
@@ -35,12 +33,11 @@ metadata:
     service-overlay-annotation: from-overlay
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: gw
-    kgateway: kube-gateway
   name: gw
 spec:
   ports:
@@ -74,7 +71,6 @@ metadata:
     deployment-overlay-label2: from-overlay
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: gw
-    kgateway: kube-gateway
   name: gw
 spec:
   selector:
@@ -86,7 +82,8 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: bb8bdc8cacbd1ae4af6e9f72baafbd5859e9422ade140b725464c0ec0d7fee9d
+        checksum/config: 864542ed2e0b0de7cfd066cda1995c0816d7b62bfd2ec96fd7eaa6f50f2624aa
+        checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         gateway.kgateway.dev/gateway-full-name: gw
         prometheus.io/path: /metrics
         prometheus.io/port: "15020"
@@ -120,6 +117,11 @@ spec:
               fieldPath: metadata.name
         - name: RUST_BACKTRACE
           value: "1"
+        - name: SESSION_KEY
+          valueFrom:
+            secretKeyRef:
+              key: key
+              name: gw-session-key
         - name: XDS_ADDRESS
           value: http://xds.cluster.local:9978
         - name: NAMESPACE
@@ -197,3 +199,15 @@ spec:
           name: my-custom-config
         name: custom-config
 status: {}
+---
+apiVersion: v1
+data:
+  key: MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmYwMDExMjIzMzQ0NTU2Njc3ODg5OWFhYmJjY2RkZWVmZg==
+kind: Secret
+metadata:
+  labels:
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: gw
+  name: gw-session-key
+  namespace: default
+type: Opaque

@@ -28,7 +28,7 @@ func TestCounterInterface(t *testing.T) {
 	counter.Inc(Label{Name: "label1", Value: "value1"}, Label{Name: "label2", Value: "value2"})
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetric("kgateway_test_total", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("agentgateway_test_total", &metricstest.ExpectedMetric{
 		Labels: []Label{
 			{Name: "label1", Value: "value1"},
 			{Name: "label2", Value: "value2"},
@@ -38,7 +38,7 @@ func TestCounterInterface(t *testing.T) {
 
 	counter.Add(5.0, Label{Name: "label1", Value: "value1"}, Label{Name: "label2", Value: "value2"})
 	gathered = metricstest.MustGatherMetrics(t)
-	gathered.AssertMetric("kgateway_test_total", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("agentgateway_test_total", &metricstest.ExpectedMetric{
 		Labels: []Label{
 			{Name: "label1", Value: "value1"},
 			{Name: "label2", Value: "value2"},
@@ -49,7 +49,7 @@ func TestCounterInterface(t *testing.T) {
 	counter.Reset()
 	gathered = metricstest.MustGatherMetrics(t)
 	// After reset, counter exists with value 0 and empty label values
-	gathered.AssertMetric("kgateway_test_total", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("agentgateway_test_total", &metricstest.ExpectedMetric{
 		Labels: []Label{
 			{Name: "label1", Value: ""},
 			{Name: "label2", Value: ""},
@@ -72,7 +72,7 @@ func TestCounterPartialLabels(t *testing.T) {
 	counter.Inc(Label{Name: "label3", Value: "value3"}, Label{Name: "label1", Value: "value1"})
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetric("kgateway_test_total", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("agentgateway_test_total", &metricstest.ExpectedMetric{
 		Labels: []Label{
 			{Name: "label1", Value: "value1"},
 			{Name: "label2", Value: ""},
@@ -96,7 +96,7 @@ func TestCounterNoLabels(t *testing.T) {
 	counter.Add(2.5)
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetric("kgateway_test_total", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("agentgateway_test_total", &metricstest.ExpectedMetric{
 		Labels: []Label{},
 		Value:  3.5,
 	})
@@ -132,19 +132,19 @@ func TestHistogramInterface(t *testing.T) {
 	histogram.Observe(2.5, Label{Name: "label1", Value: "value1"}, Label{Name: "label2", Value: "value2"})
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricHistogramValue("kgateway_test_duration_seconds", metricstest.HistogramMetricOutput{
+	gathered.AssertMetricHistogramValue("agentgateway_test_duration_seconds", metricstest.HistogramMetricOutput{
 		SampleCount: 2,
 		SampleSum:   4.0,
 	})
-	gathered.AssertMetricLabels("kgateway_test_duration_seconds", []Label{
+	gathered.AssertMetricLabels("agentgateway_test_duration_seconds", []Label{
 		{Name: "label1", Value: "value1"},
 		{Name: "label2", Value: "value2"},
 	})
-	gathered.AssertHistogramBuckets("kgateway_test_duration_seconds", DefaultBuckets)
+	gathered.AssertHistogramBuckets("agentgateway_test_duration_seconds", DefaultBuckets)
 
 	histogram.Reset()
 	gathered = metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricNotExists("kgateway_test_duration_seconds")
+	gathered.AssertMetricNotExists("agentgateway_test_duration_seconds")
 }
 
 func TestHistogramBuckets(t *testing.T) {
@@ -163,15 +163,15 @@ func TestHistogramBuckets(t *testing.T) {
 	histogram.Observe(1.5, Label{Name: "label1", Value: "value1"}, Label{Name: "label2", Value: "value2"})
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricHistogramValue("kgateway_test_duration_seconds", metricstest.HistogramMetricOutput{
+	gathered.AssertMetricHistogramValue("agentgateway_test_duration_seconds", metricstest.HistogramMetricOutput{
 		SampleCount: 1,
 		SampleSum:   1.5,
 	})
-	gathered.AssertMetricLabels("kgateway_test_duration_seconds", []Label{
+	gathered.AssertMetricLabels("agentgateway_test_duration_seconds", []Label{
 		{Name: "label1", Value: "value1"},
 		{Name: "label2", Value: "value2"},
 	})
-	gathered.AssertHistogramBuckets("kgateway_test_duration_seconds", testBuckets)
+	gathered.AssertHistogramBuckets("agentgateway_test_duration_seconds", testBuckets)
 }
 
 func TestHistogramPartialLabels(t *testing.T) {
@@ -188,11 +188,11 @@ func TestHistogramPartialLabels(t *testing.T) {
 	histogram.Observe(3.14, Label{Name: "label1", Value: "value1"}, Label{Name: "label3", Value: "value3"})
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricHistogramValue("kgateway_test_duration_seconds_partial", metricstest.HistogramMetricOutput{
+	gathered.AssertMetricHistogramValue("agentgateway_test_duration_seconds_partial", metricstest.HistogramMetricOutput{
 		SampleCount: 1,
 		SampleSum:   3.14,
 	})
-	gathered.AssertMetricLabels("kgateway_test_duration_seconds_partial", []Label{
+	gathered.AssertMetricLabels("agentgateway_test_duration_seconds_partial", []Label{
 		{Name: "label1", Value: "value1"},
 		{Name: "label2", Value: ""},
 		{Name: "label3", Value: "value3"},
@@ -214,7 +214,7 @@ func TestHistogramNoLabels(t *testing.T) {
 	histogram.Observe(7.0)
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricHistogramValue("kgateway_test_duration_seconds_no_labels", metricstest.HistogramMetricOutput{
+	gathered.AssertMetricHistogramValue("agentgateway_test_duration_seconds_no_labels", metricstest.HistogramMetricOutput{
 		SampleCount: 3,
 		SampleSum:   9.0,
 	})
@@ -254,28 +254,28 @@ func TestGaugeInterface(t *testing.T) {
 	gauge.Set(10.0, labels...)
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetric("kgateway_tests", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("agentgateway_tests", &metricstest.ExpectedMetric{
 		Labels: labels,
 		Value:  10.0,
 	})
 
 	gauge.Add(5.0, labels...)
 	gathered = metricstest.MustGatherMetrics(t)
-	gathered.AssertMetric("kgateway_tests", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("agentgateway_tests", &metricstest.ExpectedMetric{
 		Labels: labels,
 		Value:  15.0,
 	})
 
 	gauge.Sub(3.0, labels...)
 	gathered = metricstest.MustGatherMetrics(t)
-	gathered.AssertMetric("kgateway_tests", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("agentgateway_tests", &metricstest.ExpectedMetric{
 		Labels: labels,
 		Value:  12.0,
 	})
 
 	gauge.Reset()
 	gathered = metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricNotExists("kgateway_tests")
+	gathered.AssertMetricNotExists("agentgateway_tests")
 }
 
 func TestGaugePartialLabels(t *testing.T) {
@@ -292,7 +292,7 @@ func TestGaugePartialLabels(t *testing.T) {
 	gauge.Set(42.0, Label{Name: "label3", Value: "value3"}, Label{Name: "label1", Value: "value1"})
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetric("kgateway_tests_partial", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("agentgateway_tests_partial", &metricstest.ExpectedMetric{
 		Labels: []Label{
 			{Name: "label1", Value: "value1"},
 			{Name: "label2", Value: ""},
@@ -317,7 +317,7 @@ func TestGaugeNoLabels(t *testing.T) {
 	gauge.Sub(25.0)
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetric("kgateway_tests_no_labels", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("agentgateway_tests_no_labels", &metricstest.ExpectedMetric{
 		Labels: []Label{},
 		Value:  125.0,
 	})
@@ -392,7 +392,7 @@ func TestValidateLabelsOrder(t *testing.T) {
 
 	gathered := metricstest.MustGatherMetrics(t)
 	// Labels are provided to the metric in the order they are defined, and gathered in alphabetical order.
-	gathered.AssertMetric("kgateway_test_label_order_total", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("agentgateway_test_label_order_total", &metricstest.ExpectedMetric{
 		Labels: []Label{
 			{Name: "a_label", Value: "a_value"},
 			{Name: "m_label", Value: "m_value"},
@@ -419,7 +419,7 @@ func TestLabelsWithEmptyValues(t *testing.T) {
 	)
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetric("kgateway_test_empty_labels_total", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("agentgateway_test_empty_labels_total", &metricstest.ExpectedMetric{
 		Labels: []Label{
 			{Name: "label1", Value: ""},
 			{Name: "label2", Value: "non_empty"},

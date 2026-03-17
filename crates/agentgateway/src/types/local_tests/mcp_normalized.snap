@@ -70,5 +70,6 @@ backends:
               name: remote
           stateful: true
           alwaysUsePrefix: false
+          failureMode: failClosed
 workloads: []
 services: []

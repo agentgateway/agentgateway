@@ -8,12 +8,11 @@ metadata:
       attack
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway-v2
     gateway.networking.k8s.io/gateway-name: gw
-    kgateway: kube-gateway
   name: gw
 ---
 apiVersion: v1
@@ -30,12 +29,11 @@ metadata:
       attack
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway-v2
     gateway.networking.k8s.io/gateway-name: gw
-    kgateway: kube-gateway
   name: gw
 ---
 apiVersion: v1
@@ -47,12 +45,11 @@ metadata:
       attack
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway-v2
     gateway.networking.k8s.io/gateway-name: gw
-    kgateway: kube-gateway
   name: gw
 spec:
   ports:
@@ -77,12 +74,11 @@ metadata:
       attack
   labels:
     app.kubernetes.io/instance: gw
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway-v2
     gateway.networking.k8s.io/gateway-name: gw
-    kgateway: kube-gateway
   name: gw
 spec:
   selector:
@@ -94,7 +90,8 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: b90a8eb34d3d5082498d2226b619beea258e6753371b9970790b026550cd2ec5
+        checksum/config: dd166b926ffac8d8a222e8cd90428a60e9ac01eff806f6aa3cb5b28ed9b54ac6
+        checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         foo: |-
           bar
           attack
@@ -135,6 +132,11 @@ spec:
           value: |-
             json
             attack
+        - name: SESSION_KEY
+          valueFrom:
+            secretKeyRef:
+              key: key
+              name: gw-session-key
         - name: XDS_ADDRESS
           value: http://xds.cluster.local:9978
         - name: NAMESPACE
@@ -209,9 +211,21 @@ spec:
         projected:
           sources:
           - serviceAccountToken:
-              audience: kgateway
+              audience: agentgateway
               expirationSeconds: 43200
               path: xds-token
       - emptyDir: {}
         name: tmp
 status: {}
+---
+apiVersion: v1
+data:
+  key: MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmYwMDExMjIzMzQ0NTU2Njc3ODg5OWFhYmJjY2RkZWVmZg==
+kind: Secret
+metadata:
+  labels:
+    gateway.networking.k8s.io/gateway-class-name: agentgateway-v2
+    gateway.networking.k8s.io/gateway-name: gw
+  name: gw-session-key
+  namespace: default
+type: Opaque

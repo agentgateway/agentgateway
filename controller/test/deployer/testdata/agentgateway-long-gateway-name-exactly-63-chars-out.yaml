@@ -4,12 +4,11 @@ kind: ServiceAccount
 metadata:
   labels:
     app.kubernetes.io/instance: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
-    kgateway: kube-gateway
   name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
 ---
 apiVersion: v1
@@ -20,12 +19,11 @@ kind: ConfigMap
 metadata:
   labels:
     app.kubernetes.io/instance: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
-    kgateway: kube-gateway
   name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
 ---
 apiVersion: v1
@@ -33,12 +31,11 @@ kind: Service
 metadata:
   labels:
     app.kubernetes.io/instance: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
-    kgateway: kube-gateway
   name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
 spec:
   ports:
@@ -59,12 +56,11 @@ kind: Deployment
 metadata:
   labels:
     app.kubernetes.io/instance: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
-    app.kubernetes.io/managed-by: kgateway
+    app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
     app.kubernetes.io/version: 1.0.0-ci1
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
-    kgateway: kube-gateway
   name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
 spec:
   selector:
@@ -76,7 +72,8 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: bd5a792abb7811a8cd7c81d8acfed9ae4be83332ee2972d4df458f37c4912c01
+        checksum/config: fc5678ba92359577972aaaa85efec2259cd1aa1e474fcbada2d474bfcb9a6512
+        checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         gateway.kgateway.dev/gateway-full-name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
         prometheus.io/path: /metrics
         prometheus.io/port: "15020"
@@ -112,6 +109,11 @@ spec:
           value: "1"
         - name: RUST_LOG
           value: info
+        - name: SESSION_KEY
+          valueFrom:
+            secretKeyRef:
+              key: key
+              name: very-long-gateway-name-that-is-exactly-sixty-three-b1cae6b4f8d3
         - name: XDS_ADDRESS
           value: http://xds.cluster.local:9978
         - name: NAMESPACE
@@ -183,9 +185,21 @@ spec:
         projected:
           sources:
           - serviceAccountToken:
-              audience: kgateway
+              audience: agentgateway
               expirationSeconds: 43200
               path: xds-token
       - emptyDir: {}
         name: tmp
 status: {}
+---
+apiVersion: v1
+data:
+  key: MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmYwMDExMjIzMzQ0NTU2Njc3ODg5OWFhYmJjY2RkZWVmZg==
+kind: Secret
+metadata:
+  labels:
+    gateway.networking.k8s.io/gateway-class-name: agentgateway
+    gateway.networking.k8s.io/gateway-name: very-long-gateway-name-that-is-exactly-sixty-three-characterslo
+  name: very-long-gateway-name-that-is-exactly-sixty-three-b1cae6b4f8d3
+  namespace: default
+type: Opaque

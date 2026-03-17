@@ -25,29 +25,40 @@ spec:
 ---
 # Output
 output:
-- Policy:
-    backend:
-      backendTls: {}
-    key: default/agw:tls:default/be
-    name:
-      kind: AgentgatewayPolicy
-      name: agw
-      namespace: default
-    target:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
       backend:
+        backendTls: {}
+      key: default/agw:tls:default/be
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        backend:
+          name: be
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
         name: be
         namespace: default
-status:
-  ancestors:
-  - ancestorRef:
-      group: agentgateway.dev
-      kind: AgentgatewayBackend
-      name: be
-      namespace: default
-    conditions:
-    - lastTransitionTime: fake
-      message: secret default/mtls not found
-      reason: PartiallyValid
-      status: "True"
-      type: Accepted
-    controllerName: agentgateway.dev/agentgateway
+      conditions:
+      - lastTransitionTime: fake
+        message: secret default/mtls not found
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway
