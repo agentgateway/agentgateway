@@ -81,6 +81,7 @@ type Syncer struct {
 	customResourceCollections   func(cfg CustomResourceCollectionsConfig)
 	workloadAddressProviderFunc func(model.WorkloadInfo) *workloadapi.Address
 	serviceAddressProviderFunc  func(model.ServiceInfo) *workloadapi.Address
+	extraNetworkGatewaysFunc    func(clusterID cluster.ID, gateways krt.Collection[*gwv1.Gateway], opts krt.OptionsBuilder) krt.Collection[ambient.NetworkGateway]
 }
 
 func NewAgwSyncer(
@@ -108,6 +109,7 @@ func NewAgwSyncer(
 		customResourceCollections:   cfg.CustomResourceCollections,
 		workloadAddressProviderFunc: cfg.WorkloadAddressProviderFunc,
 		serviceAddressProviderFunc:  cfg.ServiceAddressProviderFunc,
+		extraNetworkGatewaysFunc:    cfg.ExtraNetworkGatewaysFunc,
 	}
 	logger.Debug("init agentgateway Syncer", "controllername", controllerName)
 
@@ -613,6 +615,16 @@ func (s *Syncer) buildAddressCollections(krtopts krtutil.KrtOptions) krt.Collect
 		SystemNamespace: cols.IstioNamespace,
 		ClusterID:       clusterId,
 	}, opts)
+	if s.extraNetworkGatewaysFunc != nil {
+		extra := s.extraNetworkGatewaysFunc(clusterId, cols.Gateways, opts)
+		Networks.NetworkGateways = krt.JoinCollection(
+			[]krt.Collection[ambient.NetworkGateway]{Networks.NetworkGateways, extra},
+			opts.WithName("MergedNetworkGateways")...,
+		)
+		Networks.GatewaysByNetwork = krt.NewIndex(Networks.NetworkGateways, "network", func(o ambient.NetworkGateway) []network.ID {
+			return []network.ID{o.Network}
+		})
+	}
 	builder := ambient.Builder{
 		DomainSuffix:      kubeutils.GetClusterDomainName(),
 		ClusterID:         clusterId,

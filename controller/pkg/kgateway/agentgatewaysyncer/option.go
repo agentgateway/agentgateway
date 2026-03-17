@@ -2,7 +2,11 @@ package agentgatewaysyncer
 
 import (
 	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pilot/pkg/serviceregistry/kube/controller/ambient"
+	"istio.io/istio/pkg/cluster"
+	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/workloadapi"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
 )
@@ -12,6 +16,7 @@ type agentgatewaySyncerConfig struct {
 	CustomResourceCollections   func(cfg CustomResourceCollectionsConfig)
 	WorkloadAddressProviderFunc func(model.WorkloadInfo) *workloadapi.Address
 	ServiceAddressProviderFunc  func(model.ServiceInfo) *workloadapi.Address
+	ExtraNetworkGatewaysFunc    func(clusterID cluster.ID, gateways krt.Collection[*gwv1.Gateway], opts krt.OptionsBuilder) krt.Collection[ambient.NetworkGateway]
 }
 
 type AgentgatewaySyncerOption func(*agentgatewaySyncerConfig)
@@ -64,6 +69,17 @@ func WithServiceAddressProviderFunc(f func(model.ServiceInfo) *workloadapi.Addre
 	return func(o *agentgatewaySyncerConfig) {
 		if f != nil {
 			o.ServiceAddressProviderFunc = f
+		}
+	}
+}
+
+// WithExtraNetworkGatewaysFunc provides a function that produces additional NetworkGateway entries
+// to be merged with those derived by the Istio ambient.BuildNetworkCollections call in syncer.
+// This allows downstream implementations to extend the network gateway computation for workloads.
+func WithExtraNetworkGatewaysFunc(f func(clusterID cluster.ID, gateways krt.Collection[*gwv1.Gateway], opts krt.OptionsBuilder) krt.Collection[ambient.NetworkGateway]) AgentgatewaySyncerOption {
+	return func(o *agentgatewaySyncerConfig) {
+		if f != nil {
+			o.ExtraNetworkGatewaysFunc = f
 		}
 	}
 }
