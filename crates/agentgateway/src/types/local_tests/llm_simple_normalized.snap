@@ -29,7 +29,7 @@ binds:
                   pathPrefix: /models
             name: "admin:model-list"
             namespace: internal
-          "llm:model:0:claude-3-haiku":
+          "llm:model:000000:claude-3-haiku":
             backends:
               - backend: "/llm:model:claude-3-haiku:0"
                 weight: 1
@@ -43,7 +43,7 @@ binds:
                     /v1/responses: responses
                     ":rawPredict": messages
                     ":streamRawPredict": messages
-            key: "llm:model:0:claude-3-haiku"
+            key: "llm:model:000000:claude-3-haiku"
             matches:
               - headers:
                   - name: x-org
@@ -56,7 +56,7 @@ binds:
                   pathPrefix: /
             name: "model:claude-3-haiku"
             namespace: internal
-          "llm:model:1:gemini-0.5-pro":
+          "llm:model:000001:gemini-0.5-pro":
             backends:
               - backend: "/llm:model:gemini-0.5-pro:1"
                 weight: 1
@@ -70,7 +70,7 @@ binds:
                     /v1/responses: responses
                     ":rawPredict": messages
                     ":streamRawPredict": messages
-            key: "llm:model:1:gemini-0.5-pro"
+            key: "llm:model:000001:gemini-0.5-pro"
             matches:
               - headers:
                   - name: x-gateway-model-name
@@ -80,7 +80,7 @@ binds:
                   pathPrefix: /
             name: "model:gemini-0.5-pro"
             namespace: internal
-          "llm:model:2:gpt-7-max":
+          "llm:model:000002:gpt-7-max":
             backends:
               - backend: "/llm:model:gpt-7-max:2"
                 weight: 1
@@ -94,7 +94,7 @@ binds:
                     /v1/responses: responses
                     ":rawPredict": messages
                     ":streamRawPredict": messages
-            key: "llm:model:2:gpt-7-max"
+            key: "llm:model:000002:gpt-7-max"
             matches:
               - headers:
                   - name: x-gateway-model-name
@@ -104,7 +104,7 @@ binds:
                   pathPrefix: /
             name: "model:gpt-7-max"
             namespace: internal
-          "llm:model:3:gpt-3.5-turbo":
+          "llm:model:000003:gpt-3.5-turbo":
             backends:
               - backend: "/llm:model:gpt-3.5-turbo:3"
                 weight: 1
@@ -118,7 +118,7 @@ binds:
                     /v1/responses: responses
                     ":rawPredict": messages
                     ":streamRawPredict": messages
-            key: "llm:model:3:gpt-3.5-turbo"
+            key: "llm:model:000003:gpt-3.5-turbo"
             matches:
               - headers:
                   - name: x-gateway-model-name

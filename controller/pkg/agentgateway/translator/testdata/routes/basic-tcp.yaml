@@ -56,7 +56,7 @@ output:
             hostname: infra-backend-v1.default.svc.cluster.local
             namespace: default
         weight: 1
-      key: default/tcp-app-1.0.foo
+      key: default/tcp-app-1.00.foo
       listenerKey: default/tcp-gw.foo
       name:
         kind: TCPRoute
@@ -74,7 +74,7 @@ output:
             hostname: infra-backend-v2.default.svc.cluster.local
             namespace: default
         weight: 1
-      key: default/tcp-app-2.0.bar
+      key: default/tcp-app-2.00.bar
       listenerKey: default/tcp-gw.bar
       name:
         kind: TCPRoute

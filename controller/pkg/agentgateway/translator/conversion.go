@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"sort"
-	"strconv"
 	"strings"
 
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -42,10 +41,9 @@ import (
 func ConvertHTTPRouteToAgw(ctx RouteContext, r gwv1.HTTPRouteRule,
 	obj *gwv1.HTTPRoute, pos int,
 ) (*api.Route, *reporter.RouteCondition) {
-	routeRuleKey := strconv.Itoa(pos)
 	res := &api.Route{
 		// unique for route rule
-		Key:  utils.InternalRouteRuleKey(obj.Namespace, obj.Name, routeRuleKey),
+		Key:  utils.InternalRouteRuleKey(obj.Namespace, obj.Name, pos),
 		Name: utils.RouteName(wellknown.HTTPRouteKind, obj.Namespace, obj.Name, r.Name),
 		// filled in later
 		ListenerKey: "",
@@ -154,10 +152,9 @@ func isPolicyErrorCritical(filterError *reporter.RouteCondition) bool {
 func ConvertTCPRouteToAgw(ctx RouteContext, r gwv1a2.TCPRouteRule,
 	obj *gwv1a2.TCPRoute, pos int,
 ) (*api.TCPRoute, *reporter.RouteCondition) {
-	routeRuleKey := strconv.Itoa(pos)
 	res := &api.TCPRoute{
 		// unique for route rule
-		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, routeRuleKey),
+		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, pos),
 		Name:        utils.RouteName(wellknown.TCPRouteKind, obj.Namespace, obj.Name, r.Name),
 		ListenerKey: "",
 	}
@@ -177,11 +174,10 @@ func ConvertTCPRouteToAgw(ctx RouteContext, r gwv1a2.TCPRouteRule,
 func ConvertGRPCRouteToAgw(ctx RouteContext, r gwv1.GRPCRouteRule,
 	obj *gwv1.GRPCRoute, pos int,
 ) (*api.Route, *reporter.RouteCondition) {
-	routeRuleKey := strconv.Itoa(pos)
 	res := &api.Route{
 		// unique for route rule
 		// Add .grpc suffix to distinguish from HTTP
-		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, routeRuleKey) + ".grpc",
+		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, pos) + ".grpc",
 		Name:        utils.RouteName(wellknown.GRPCRouteKind, obj.Namespace, obj.Name, r.Name),
 		ListenerKey: "",
 	}
@@ -246,10 +242,9 @@ func ConvertGRPCRouteToAgw(ctx RouteContext, r gwv1.GRPCRouteRule,
 func ConvertTLSRouteToAgw(ctx RouteContext, r gwv1.TLSRouteRule,
 	obj *gwv1.TLSRoute, pos int,
 ) (*api.TCPRoute, *reporter.RouteCondition) {
-	routeRuleKey := strconv.Itoa(pos)
 	res := &api.TCPRoute{
 		// unique for route rule
-		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, routeRuleKey),
+		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, pos) + ".tls",
 		Name:        utils.RouteName(wellknown.TLSRouteKind, obj.Namespace, obj.Name, r.Name),
 		ListenerKey: "",
 	}
