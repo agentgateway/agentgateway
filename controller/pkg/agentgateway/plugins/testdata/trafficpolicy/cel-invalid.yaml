@@ -38,6 +38,8 @@ output:
         transformation:
           request:
             set:
+            - expression: foolen_{{header("content-length")}}
+              name: x-invalid-header
             - expression: '''foolen_'' + request.headers[''content-length'']'
               name: x-valid-header
 status:
