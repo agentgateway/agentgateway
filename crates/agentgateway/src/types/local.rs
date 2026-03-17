@@ -16,6 +16,7 @@ use crate::http::{
 use crate::llm::policy::PromptGuard;
 use crate::llm::{AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider};
 use crate::llm::{anthropic, openai};
+use crate::mcp::FailureMode;
 use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
 use crate::types::agent::{
@@ -730,6 +731,7 @@ impl LocalBackend {
 						McpPrefixMode::Always => true,
 						McpPrefixMode::Conditional => false,
 					}),
+					failure_mode: tgt.failure_mode.unwrap_or_default(),
 				};
 				backends.push(Backend::MCP(name, m).into());
 				backends
@@ -796,6 +798,10 @@ pub struct LocalMcpBackend {
 	pub stateful_mode: McpStatefulMode,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prefix_mode: Option<McpPrefixMode>,
+	/// Behavior when one or more MCP targets fail to initialize or fail during fanout.
+	/// Defaults to `failClosed`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub failure_mode: Option<FailureMode>,
 }
 
 #[apply(schema_de!)]

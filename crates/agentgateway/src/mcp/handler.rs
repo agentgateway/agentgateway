@@ -1,11 +1,13 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::cel::RequestSnapshot;
 use crate::http::Response;
 use crate::http::sessionpersistence::MCPSession;
 use crate::mcp;
-use crate::mcp::mergestream::MergeFn;
+use crate::mcp::FailureMode;
+use crate::mcp::mergestream::{MergeFn, Messages};
 use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
 use crate::mcp::streamablehttp::ServerSseMessage;
@@ -24,6 +26,7 @@ use rmcp::model::{
 	PromptsCapability, ProtocolVersion, RequestId, ResourcesCapability, ServerCapabilities,
 	ServerInfo, ServerJsonRpcMessage, ServerResult, Tool, ToolsCapability,
 };
+use tracing::warn;
 
 const DELIMITER: &str = "_";
 
@@ -94,15 +97,54 @@ impl Relay {
 		Some(sessions)
 	}
 
-	pub fn set_sessions(&self, sessions: Vec<MCPSession>) {
-		for ((_, us), session) in self.upstreams.iter_named().zip(sessions) {
+	pub fn set_sessions(&self, sessions: Vec<MCPSession>) -> anyhow::Result<()> {
+		if sessions.iter().all(|session| session.target_name.is_none()) {
+			if sessions.len() != self.upstreams.size() {
+				anyhow::bail!(
+					"session count {} did not match initialized upstreams {}",
+					sessions.len(),
+					self.upstreams.size()
+				);
+			}
+			for ((_, us), session) in self.upstreams.iter_named().zip(sessions) {
+				us.set_session_id(session.session.as_deref(), session.backend);
+			}
+			return Ok(());
+		}
+
+		if sessions.iter().any(|session| session.target_name.is_none()) {
+			anyhow::bail!("mixed keyed and unkeyed MCP session state is unsupported");
+		}
+
+		// Target-keyed resume is intentionally strict: if the initialized target set changed,
+		// failing the resume is safer than binding persisted session state to the wrong target.
+		let mut by_target = HashMap::with_capacity(sessions.len());
+		for session in sessions {
+			let target_name = session
+				.target_name
+				.clone()
+				.expect("checked all sessions are target-keyed above");
+			if by_target.insert(target_name.clone(), session).is_some() {
+				anyhow::bail!("duplicate persisted session for target {target_name}");
+			}
+		}
+
+		if by_target.len() != self.upstreams.size() {
+			anyhow::bail!(
+				"persisted target count {} did not match initialized upstreams {}",
+				by_target.len(),
+				self.upstreams.size()
+			);
+		}
+
+		for (target_name, us) in self.upstreams.iter_named() {
+			let session = by_target
+				.remove(target_name.as_str())
+				.ok_or_else(|| anyhow::anyhow!("missing persisted session for target {target_name}"))?;
 			us.set_session_id(session.session.as_deref(), session.backend);
 		}
+		Ok(())
 	}
-	pub fn count(&self) -> usize {
-		self.upstreams.size()
-	}
-
 	pub fn is_multiplexing(&self) -> bool {
 		self.upstreams.is_multiplexing
 	}
@@ -160,10 +202,16 @@ impl Relay {
 		Box::new(move |s| {
 			if !multiplexing {
 				// Happy case: we can forward everything
-				let (_, ServerResult::InitializeResult(ir)) = s.into_iter().next().unwrap() else {
-					return Ok(Self::get_info(pv, multiplexing).into());
-				};
-				return Ok(ir.clone().into());
+				let res = s.into_iter().next().and_then(|(_, r)| match r {
+					ServerResult::InitializeResult(ir) => Some(ir),
+					_ => None,
+				});
+				if let Some(ir) = res {
+					return Ok(ir.into());
+				}
+				// If we got here in FailOpen mode, it means the only target failed.
+				// Return a default info response to keep the client session alive.
+				return Ok(Self::get_info(pv, multiplexing).into());
 			}
 
 			// Multiplexing is more complex. We need to find the lowest protocol version that all servers support.
@@ -326,8 +374,20 @@ impl Relay {
 		&self,
 		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
-		for (_, con) in self.upstreams.iter_named() {
-			con.delete(&ctx).await?;
+		for (name, con) in self.upstreams.iter_named() {
+			match con.delete(&ctx).await {
+				Ok(_) => {},
+				Err(e) => {
+					if self.upstreams.failure_mode == FailureMode::FailOpen {
+						warn!(
+							"upstream '{}' failed during deletion, skipping: {}",
+							name, e
+						);
+					} else {
+						return Err(e);
+					}
+				},
+			}
 		}
 		Ok(accepted_response())
 	}
@@ -337,10 +397,26 @@ impl Relay {
 	) -> Result<Response, UpstreamError> {
 		let mut streams = Vec::new();
 		for (name, con) in self.upstreams.iter_named() {
-			streams.push((name, con.get_event_stream(&ctx).await?));
+			match con.get_event_stream(&ctx).await {
+				Ok(s) => streams.push((name, s)),
+				Err(e) => {
+					if self.upstreams.failure_mode == FailureMode::FailOpen {
+						warn!("upstream '{}' failed for GET stream, skipping: {}", name, e);
+					} else {
+						return Err(e);
+					}
+				},
+			}
 		}
 
-		let ms = mergestream::MergeStream::new_without_merge(streams);
+		if streams.is_empty() {
+			// FailClosed: unreachable — InitializeRequest would have failed with NoBackends.
+			// FailOpen: keep the SSE connection open so legacy SSE clients do not immediately
+			// reconnect in a tight loop after all upstream GET streams disappear.
+			return messages_to_response(RequestId::Number(0), Messages::pending());
+		}
+
+		let ms = mergestream::MergeStream::new_without_merge(streams, self.upstreams.failure_mode);
 		messages_to_response(RequestId::Number(0), ms)
 	}
 	pub async fn send_fanout(
@@ -352,10 +428,30 @@ impl Relay {
 		let id = r.id.clone();
 		let mut streams = Vec::new();
 		for (name, con) in self.upstreams.iter_named() {
-			streams.push((name, con.generic_stream(r.clone(), &ctx).await?));
+			match con.generic_stream(r.clone(), &ctx).await {
+				Ok(s) => streams.push((name, s)),
+				Err(e) => {
+					if self.upstreams.failure_mode == FailureMode::FailOpen {
+						warn!("upstream '{}' failed during fanout, skipping: {}", name, e);
+					} else {
+						return Err(e);
+					}
+				},
+			}
 		}
 
-		let ms = mergestream::MergeStream::new(streams, id.clone(), merge);
+		if streams.is_empty() {
+			// Unlike GET fanout, ordinary request fanout does not have a transport-level
+			// "stay connected" fallback, and most MCP methods do not have a safe generic
+			// synthetic success response. By the time we get here, every initialized
+			// upstream has failed this request, so we surface that as an error even in
+			// FailOpen rather than inventing a method-specific response.
+			return Err(UpstreamError::InvalidRequest(
+				"no upstreams available".to_string(),
+			));
+		}
+
+		let ms = mergestream::MergeStream::new(streams, id.clone(), merge, self.upstreams.failure_mode);
 		messages_to_response(id, ms)
 	}
 	pub async fn send_notification(
@@ -363,14 +459,20 @@ impl Relay {
 		r: JsonRpcNotification<ClientNotification>,
 		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
-		let mut streams = Vec::new();
 		for (name, con) in self.upstreams.iter_named() {
-			streams.push((
-				name,
-				con
-					.generic_notification(r.notification.clone(), &ctx)
-					.await?,
-			));
+			match con.generic_notification(r.notification.clone(), &ctx).await {
+				Ok(_) => {},
+				Err(e) => {
+					if self.upstreams.failure_mode == FailureMode::FailOpen {
+						warn!(
+							"upstream '{}' failed during notification, skipping: {}",
+							name, e
+						);
+					} else {
+						return Err(e);
+					}
+				},
+			}
 		}
 
 		Ok(accepted_response())

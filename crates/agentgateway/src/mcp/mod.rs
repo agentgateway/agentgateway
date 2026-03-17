@@ -12,6 +12,8 @@ use std::fmt::{Display, Write};
 use std::io;
 use std::sync::Arc;
 
+#[cfg(feature = "schema")]
+use crate::JsonSchema;
 use crate::http::SendDirectResponse;
 use crate::proxy::ProxyError;
 use axum_core::BoxError;
@@ -20,6 +22,20 @@ pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
 use rmcp::model::RequestId;
 pub use router::App;
 use thiserror::Error;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum FailureMode {
+	/// Fail the entire session if any target fails to initialize or any
+	/// upstream fails during a fanout. This is the default and matches
+	/// current behavior.
+	#[default]
+	FailClosed,
+	/// Skip failed targets/upstreams and continue serving from healthy ones.
+	/// If ALL targets fail, still return an error.
+	FailOpen,
+}
 
 #[cfg(test)]
 #[path = "mcp_tests.rs"]
@@ -64,6 +80,8 @@ pub enum Error {
 	CreateSseUrl(String),
 	#[error("failed to parse openapi: {0}")]
 	OpenAPI(upstream::OpenAPIParseError),
+	#[error("no backends configured")]
+	NoBackends,
 }
 
 impl From<Error> for ProxyError {

@@ -93,6 +93,10 @@ impl McpHttpClient {
 		Some((*self.pinned_dest.lock().unwrap())?.0)
 	}
 
+	pub fn target_name(&self) -> &str {
+		&self.target_name
+	}
+
 	pub fn backend(&self) -> &SimpleBackend {
 		&self.backend
 	}

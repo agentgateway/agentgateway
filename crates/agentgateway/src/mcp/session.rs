@@ -197,12 +197,12 @@ impl Session {
 		// It's very common to not have any notifications, though.
 		match message {
 			ClientJsonRpcMessage::Request(mut r) => {
-				let method = r.request.method();
+				let method = r.request.method().to_string();
 				let ctx = IncomingRequestContext::new(&parts);
-				let (_span, log, cel) = mcp::handler::setup_request_log(parts, method);
+				let (mut span, log, cel) = mcp::handler::setup_request_log(parts, &method);
 				let session_id = self.id.to_string();
 				log.non_atomic_mutate(|l| {
-					l.method_name = Some(method.to_string());
+					l.method_name = Some(method.clone());
 					l.session_id = Some(session_id);
 				});
 				match &mut r.request {
@@ -296,6 +296,7 @@ impl Session {
 					ClientRequest::CallToolRequest(ctr) => {
 						let name = ctr.params.name.clone();
 						let (service_name, tool) = self.relay.parse_resource_name(&name)?;
+						span.rename_span(format!("{method} {service_name}"));
 						log.non_atomic_mutate(|l| {
 							l.resource_name = Some(tool.to_string());
 							l.target_name = Some(service_name.to_string());
@@ -321,6 +322,7 @@ impl Session {
 					ClientRequest::GetPromptRequest(gpr) => {
 						let name = gpr.params.name.clone();
 						let (service_name, prompt) = self.relay.parse_resource_name(&name)?;
+						span.rename_span(format!("{method} {service_name}"));
 						log.non_atomic_mutate(|l| {
 							l.target_name = Some(service_name.to_string());
 							l.resource_name = Some(prompt.to_string());
@@ -344,6 +346,7 @@ impl Session {
 					ClientRequest::ReadResourceRequest(rrr) => {
 						if let Some(service_name) = self.relay.default_target_name() {
 							let uri = rrr.params.uri.clone();
+							span.rename_span(format!("{method} {service_name}"));
 							log.non_atomic_mutate(|l| {
 								l.target_name = Some(service_name.to_string());
 								l.resource_name = Some(uri.to_string());
@@ -459,16 +462,10 @@ impl SessionManager {
 			return Ok(None);
 		};
 		let relay = builder.build_new_connections()?;
-		let n = relay.count();
-		if state.sessions.len() != n {
-			warn!(
-				"failed to resume session: sessions {} did not match config {}",
-				state.sessions.len(),
-				n
-			);
+		if let Err(err) = relay.set_sessions(state.sessions) {
+			warn!("failed to resume session: {err}");
 			return Ok(None);
 		}
-		relay.set_sessions(state.sessions);
 
 		let sess = Session {
 			id: id.into(),

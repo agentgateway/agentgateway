@@ -44,7 +44,16 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		.or(filename)
 		.map(ConfigSource::File);
 
-	let (resolver_cfg, resolver_opts) = hickory_resolver::system_conf::read_system_conf()?;
+	let (resolver_cfg, resolver_opts) = {
+		let (cfg, opts) = hickory_resolver::system_conf::read_system_conf().unwrap_or_else(|e| {
+			warn!(err=?e, "failed to read system DNS config, using defaults");
+			(
+				hickory_resolver::config::ResolverConfig::default(),
+				hickory_resolver::config::ResolverOpts::default(),
+			)
+		});
+		resolve_dns_config(cfg, opts)
+	};
 	let cluster: String = parse("CLUSTER_ID")?
 		.or(raw.cluster_id.clone())
 		.unwrap_or("Kubernetes".to_string());
@@ -375,7 +384,6 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				.unwrap_or_default(),
 		},
 		dns: client::Config {
-			// TODO: read from file
 			resolver_cfg,
 			resolver_opts,
 		},
@@ -547,6 +555,32 @@ fn parse_otlp_headers(
 	}
 }
 
+/// If the resolved config has no nameservers, fall back to defaults while
+/// preserving the original resolver options.
+fn resolve_dns_config(
+	cfg: hickory_resolver::config::ResolverConfig,
+	opts: hickory_resolver::config::ResolverOpts,
+) -> (
+	hickory_resolver::config::ResolverConfig,
+	hickory_resolver::config::ResolverOpts,
+) {
+	let resolved_cfg = if cfg.name_servers().is_empty() {
+		warn!(
+			"no DNS nameservers found in system config, using defaults. /etc/hosts entries will still be resolved"
+		);
+		hickory_resolver::config::ResolverConfig::default()
+	} else {
+		cfg
+	};
+	let nameservers: Vec<_> = resolved_cfg
+		.name_servers()
+		.iter()
+		.map(|ns| ns.to_string())
+		.collect();
+	info!(nameservers = ?nameservers, "using DNS nameservers");
+	(resolved_cfg, opts)
+}
+
 fn get_cpu_count() -> anyhow::Result<usize> {
 	// Allow overriding the count with an env var. This can be used to pass the CPU limit on Kubernetes
 	// from the downward API.
@@ -666,6 +700,42 @@ config:
 		unsafe {
 			env::remove_var("SESSION_KEY");
 		}
+	}
+
+	#[test]
+	fn resolve_dns_config_uses_defaults_when_nameservers_empty() {
+		let empty_cfg = hickory_resolver::config::ResolverConfig::from_parts(
+			None,
+			vec![],
+			hickory_resolver::config::NameServerConfigGroup::new(),
+		);
+		let mut custom_opts = hickory_resolver::config::ResolverOpts::default();
+		custom_opts.ndots = 42;
+
+		let (resolved_cfg, resolved_opts) = resolve_dns_config(empty_cfg, custom_opts);
+
+		assert!(
+			!resolved_cfg.name_servers().is_empty(),
+			"should fall back to default config with nameservers"
+		);
+		assert_eq!(resolved_opts.ndots, 42, "should preserve original opts");
+	}
+
+	#[test]
+	fn resolve_dns_config_keeps_valid_config() {
+		let valid_cfg = hickory_resolver::config::ResolverConfig::default();
+		let mut custom_opts = hickory_resolver::config::ResolverOpts::default();
+		custom_opts.ndots = 7;
+
+		let original_count = valid_cfg.name_servers().len();
+		let (resolved_cfg, resolved_opts) = resolve_dns_config(valid_cfg, custom_opts);
+
+		assert_eq!(
+			resolved_cfg.name_servers().len(),
+			original_count,
+			"should keep original nameservers"
+		);
+		assert_eq!(resolved_opts.ndots, 7, "should preserve original opts");
 	}
 
 	#[test]

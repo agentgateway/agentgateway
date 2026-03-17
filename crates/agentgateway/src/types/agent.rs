@@ -27,6 +27,7 @@ use crate::http::{
 	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, health, remoteratelimit, retry,
 	timeout,
 };
+use crate::mcp::FailureMode;
 use crate::mcp::McpAuthorization;
 use crate::telemetry::log::OrderedStringMap;
 use crate::transport::tls;
@@ -1186,6 +1187,9 @@ pub struct McpBackend {
 	pub targets: Vec<Arc<McpTarget>>,
 	pub stateful: bool,
 	pub always_use_prefix: bool,
+	/// Behavior when one or more MCP targets fail to initialize or fail during fanout.
+	/// Defaults to `failClosed`.
+	pub failure_mode: FailureMode,
 }
 
 impl McpBackend {

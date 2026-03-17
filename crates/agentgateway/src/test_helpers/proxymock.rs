@@ -27,6 +27,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 use crate::http::backendtls::BackendTLS;
 use crate::http::{Body, Response};
 use crate::llm::AIProvider;
+use crate::mcp::FailureMode;
 use crate::proxy::Gateway;
 use crate::proxy::request_builder::RequestBuilder;
 use crate::store::Stores;
@@ -297,7 +298,7 @@ pub async fn tls_mock() -> (MockServer, MockTlsCertificates) {
 }
 
 pub struct TestBind {
-	pi: Arc<ProxyInputs>,
+	pub pi: Arc<ProxyInputs>,
 	drain_rx: DrainWatcher,
 	_drain_tx: DrainTrigger,
 
@@ -428,6 +429,7 @@ impl TestBind {
 				})],
 				stateful,
 				always_use_prefix: false,
+				failure_mode: FailureMode::FailClosed,
 			},
 		);
 		{
@@ -475,6 +477,7 @@ impl TestBind {
 					.collect_vec(),
 				stateful,
 				always_use_prefix: false,
+				failure_mode: FailureMode::FailClosed,
 			},
 		);
 		{

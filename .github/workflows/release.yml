@@ -13,6 +13,17 @@ on:
         required: false
         default: false
         type: boolean
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version number (without v prefix)'
+        required: true
+        type: string
+      extra_tag:
+        description: 'Additional Docker image tag to push (e.g. latest-dev)'
+        required: false
+        default: ''
+        type: string
 
 env:
   CARGO_TERM_COLOR: always
@@ -22,7 +33,7 @@ env:
   REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/agentgateway
   CONTROLLER_REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/controller
   # Note: /charts is added to this
-  CHART_REGISTRY_IMAGE_BASE: ghcr.io/${{ github.repository_owner }}
+  CHART_REGISTRY_IMAGE_BASE: ghcr.io/${{ github.repository }}
 
 jobs:
   setup:
@@ -37,8 +48,8 @@ jobs:
         id: version
         run: |
           # Determine version source
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
-            VERSION="${{ github.event.inputs.version }}"
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
           else
             VERSION="${{ github.ref_name }}"
           fi
@@ -153,6 +164,7 @@ jobs:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
             type=raw,value=v${{ env.VERSION }}
+            type=raw,value=${{ inputs.extra_tag }},enable=${{ inputs.extra_tag != '' }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
@@ -162,6 +174,10 @@ jobs:
 
       - name: Sign the container image
         run: cosign sign --yes ${{ env.REGISTRY_IMAGE }}:v${{ env.VERSION }}
+
+      - name: Sign the extra tag
+        if: ${{ inputs.extra_tag != '' }}
+        run: cosign sign --yes ${{ env.REGISTRY_IMAGE }}:${{ inputs.extra_tag }}
 
       - name: Inspect image
         run: |
@@ -275,6 +291,7 @@ jobs:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
             type=raw,value=v${{ env.VERSION }}
+            type=raw,value=${{ inputs.extra_tag }},enable=${{ inputs.extra_tag != '' }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests-musl
@@ -284,6 +301,10 @@ jobs:
 
       - name: Sign the container image
         run: cosign sign --yes ${{ env.REGISTRY_IMAGE }}:v${{ env.VERSION }}-musl
+
+      - name: Sign the extra tag
+        if: ${{ inputs.extra_tag != '' }}
+        run: cosign sign --yes ${{ env.REGISTRY_IMAGE }}:${{ inputs.extra_tag }}-musl
 
       - name: Inspect image
         run: |
@@ -428,6 +449,7 @@ jobs:
           images: ${{ env.CONTROLLER_REGISTRY_IMAGE }}
           tags: |
             type=raw,value=v${{ env.VERSION }}
+            type=raw,value=${{ inputs.extra_tag }},enable=${{ inputs.extra_tag != '' }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/controller-digests
@@ -437,6 +459,10 @@ jobs:
 
       - name: Sign the container image
         run: cosign sign --yes ${{ env.CONTROLLER_REGISTRY_IMAGE }}:v${{ env.VERSION }}
+
+      - name: Sign the extra tag
+        if: ${{ inputs.extra_tag != '' }}
+        run: cosign sign --yes ${{ env.CONTROLLER_REGISTRY_IMAGE }}:${{ inputs.extra_tag }}
 
       - name: Inspect image
         run: |
@@ -465,10 +491,12 @@ jobs:
           IMAGE_REGISTRY: ${{ env.CHART_REGISTRY_IMAGE_BASE }}
 
   build:
-    if: ${{ github.event_name == 'push' || ! github.event.inputs.skip_gh_release }}
+    if: ${{ github.event_name != 'workflow_call' && (github.event_name == 'push' || ! github.event.inputs.skip_gh_release) }}
     needs:
       - setup
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     env:
       VERSION: ${{ needs.setup.outputs.version }}
     strategy:
@@ -527,7 +555,7 @@ jobs:
           target/${{ matrix.target }}/release/agentgateway.exe
 
   release:
-    if: ${{ github.event_name == 'push' || ! github.event.inputs.skip_gh_release }}
+    if: ${{ github.event_name != 'workflow_call' && (github.event_name == 'push' || ! github.event.inputs.skip_gh_release) }}
     needs:
     - setup
     - push-image

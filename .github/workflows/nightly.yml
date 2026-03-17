@@ -1,0 +1,53 @@
+name: Nightly Release
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      has_commits: ${{ steps.check.outputs.has_commits }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Check for commits in the last 24 hours
+        id: check
+        run: |
+          LAST_COMMIT=$(git log -1 --format="%ct")
+          NOW=$(date +%s)
+          DIFF=$((NOW - LAST_COMMIT))
+          # 86400 = seconds in one day
+          if [ "$DIFF" -lt 86400 ]; then
+            echo "has_commits=true" >> $GITHUB_OUTPUT
+            echo "Recent commit found (${DIFF}s ago)"
+          else
+            echo "has_commits=false" >> $GITHUB_OUTPUT
+            echo "No recent commits (last commit was ${DIFF}s ago), skipping nightly release"
+          fi
+
+      - name: Compute nightly version
+        id: version
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "version=0.0.0-alpha.${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "Nightly version: 0.0.0-alpha.${SHORT_SHA}"
+
+  release:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.has_commits == 'true' || github.event_name == 'workflow_dispatch' }}
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      extra_tag: latest-dev
+    secrets: inherit

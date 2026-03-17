@@ -6604,6 +6604,16 @@ spec:
               mcp:
                 description: mcp represents an MCP backend
                 properties:
+                  failureMode:
+                    description: |-
+                      FailureMode controls behavior when MCP targets fail to initialize or
+                      become unavailable at runtime. "FailOpen" skips failed targets and
+                      continues serving from healthy ones. "FailClosed" (default) fails the
+                      entire session if any target fails.
+                    enum:
+                    - FailOpen
+                    - FailClosed
+                    type: string
                   sessionRouting:
                     description: |-
                       SessionRouting configures MCP session behavior for requests.

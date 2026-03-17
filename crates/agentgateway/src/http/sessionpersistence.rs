@@ -60,6 +60,8 @@ impl MCPSessionState {
 
 #[apply(schema!)]
 pub struct MCPSession {
+	#[serde(default, rename = "t", skip_serializing_if = "Option::is_none")]
+	pub target_name: Option<String>,
 	#[serde(default, rename = "s", skip_serializing_if = "Option::is_none")]
 	pub session: Option<String>,
 	#[serde(default, rename = "b", skip_serializing_if = "Option::is_none")]

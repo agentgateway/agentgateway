@@ -1215,6 +1215,14 @@ message MCPBackend {
   StatefulMode stateful_mode = 3;
   // Whether to always prefix the tool name using the target name
   PrefixMode prefix_mode = 4;
+
+  // failure_mode controls behavior when MCP targets fail to initialize or
+  // become unavailable at runtime. Defaults to FAIL_CLOSED.
+  enum FailureMode {
+    FAIL_CLOSED = 0;
+    FAIL_OPEN = 1;
+  }
+  FailureMode failure_mode = 5;
 }
 
 message MCPTarget {

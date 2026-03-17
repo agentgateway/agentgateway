@@ -10,7 +10,11 @@ use secrecy::SecretString;
 
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::{PolicySet, RuleSet};
+use crate::mcp::FailureMode;
 use crate::mcp::McpAuthorization;
+use crate::mcp::handler::Relay;
+use crate::mcp::router::{McpBackendGroup, McpTarget};
+use crate::proxy::httpproxy::PolicyClient;
 use crate::test_helpers::proxymock::{
 	BIND_KEY, TestBind, basic_named_route, basic_route, setup_proxy_test, simple_bind,
 };
@@ -1215,4 +1219,338 @@ mod legacymockserver {
 			Ok(self.get_info())
 		}
 	}
+}
+
+#[tokio::test]
+async fn test_zero_targets_fail_closed() {
+	let backend = McpBackendGroup {
+		targets: vec![],
+		stateful: true,
+		failure_mode: FailureMode::FailClosed,
+	};
+	let client = PolicyClient {
+		inputs: setup_proxy_test("{}").unwrap().pi,
+	};
+	let err = crate::mcp::upstream::UpstreamGroup::new(client, backend).unwrap_err();
+	assert!(matches!(err, crate::mcp::Error::NoBackends));
+}
+
+#[tokio::test]
+async fn test_zero_targets_fail_open() {
+	let backend = McpBackendGroup {
+		targets: vec![],
+		stateful: true,
+		failure_mode: FailureMode::FailOpen,
+	};
+	let client = PolicyClient {
+		inputs: setup_proxy_test("{}").unwrap().pi,
+	};
+	crate::mcp::upstream::UpstreamGroup::new(client, backend).unwrap();
+}
+
+#[tokio::test]
+async fn test_setup_partial_success_fail_open() {
+	// Test skipping failed stdio targets
+	let backend = McpBackendGroup {
+		targets: vec![
+			Arc::new(McpTarget {
+				name: "bad".into(),
+				spec: crate::types::agent::McpTargetSpec::Stdio {
+					cmd: "this-binary-does-not-exist-agentgateway-test".into(),
+					args: vec![],
+					env: Default::default(),
+				},
+				backend_policies: Default::default(),
+				backend: None,
+				always_use_prefix: false,
+			}),
+			Arc::new(McpTarget {
+				name: "ok".into(),
+				spec: crate::types::agent::McpTargetSpec::Stdio {
+					cmd: "cat".into(),
+					args: vec![],
+					env: Default::default(),
+				},
+				backend_policies: Default::default(),
+				backend: None,
+				always_use_prefix: false,
+			}),
+		],
+		stateful: false,
+		failure_mode: FailureMode::FailOpen,
+	};
+	let client = PolicyClient {
+		inputs: setup_proxy_test("{}").unwrap().pi,
+	};
+	let group = crate::mcp::upstream::UpstreamGroup::new(client, backend).unwrap();
+	assert_eq!(group.size(), 1);
+}
+
+#[tokio::test]
+async fn test_all_targets_fail_open_still_errors() {
+	let backend = McpBackendGroup {
+		targets: vec![
+			Arc::new(McpTarget {
+				name: "bad-1".into(),
+				spec: crate::types::agent::McpTargetSpec::Stdio {
+					cmd: "this-binary-does-not-exist-agentgateway-test-1".into(),
+					args: vec![],
+					env: Default::default(),
+				},
+				backend_policies: Default::default(),
+				backend: None,
+				always_use_prefix: false,
+			}),
+			Arc::new(McpTarget {
+				name: "bad-2".into(),
+				spec: crate::types::agent::McpTargetSpec::Stdio {
+					cmd: "this-binary-does-not-exist-agentgateway-test-2".into(),
+					args: vec![],
+					env: Default::default(),
+				},
+				backend_policies: Default::default(),
+				backend: None,
+				always_use_prefix: false,
+			}),
+		],
+		stateful: false,
+		failure_mode: FailureMode::FailOpen,
+	};
+	let client = PolicyClient {
+		inputs: setup_proxy_test("{}").unwrap().pi,
+	};
+	let err = crate::mcp::upstream::UpstreamGroup::new(client, backend).unwrap_err();
+	assert!(matches!(err, crate::mcp::Error::NoBackends));
+}
+
+fn fake_streamable_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
+	Arc::new(McpTarget {
+		name: name.into(),
+		spec: crate::types::agent::McpTargetSpec::Mcp(crate::types::agent::StreamableHTTPTargetSpec {
+			backend: crate::types::agent::SimpleBackendReference::Backend(strng::format!(
+				"/unused-{name}"
+			)),
+			path: "/mcp".to_string(),
+		}),
+		backend_policies: Default::default(),
+		backend: Some(crate::types::agent::SimpleBackend::Opaque(
+			crate::types::agent::ResourceName::new(strng::format!("backend-{name}"), "".into()),
+			crate::types::agent::Target::Address(addr),
+		)),
+		always_use_prefix: false,
+	})
+}
+
+fn empty_mcp_policies() -> crate::mcp::McpAuthorizationSet {
+	crate::mcp::McpAuthorizationSet::new(crate::http::authorization::RuleSets::from(Vec::new()))
+}
+
+fn persisted_session(
+	target_name: &str,
+	session: &str,
+	backend: SocketAddr,
+) -> http::sessionpersistence::MCPSession {
+	http::sessionpersistence::MCPSession {
+		target_name: Some(target_name.to_string()),
+		session: Some(session.to_string()),
+		backend: Some(backend),
+	}
+}
+
+#[tokio::test]
+async fn test_fanout_deletion_fail_open_skips_failed_upstreams() {
+	let good = mock_streamable_http_server(true).await;
+	let bad_addr = SocketAddr::from(([127, 0, 0, 1], 31999));
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("good", good.addr),
+				fake_streamable_target("bad", bad_addr),
+			],
+			stateful: true,
+			failure_mode: FailureMode::FailOpen,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	relay
+		.set_sessions(vec![
+			persisted_session("good", "session-good", good.addr),
+			persisted_session("bad", "session-bad", bad_addr),
+		])
+		.unwrap();
+
+	let response = relay
+		.send_fanout_deletion(crate::mcp::upstream::IncomingRequestContext::empty())
+		.await
+		.unwrap();
+
+	assert_eq!(response.status(), http::StatusCode::ACCEPTED);
+}
+
+#[test]
+fn test_set_sessions_matches_by_target_name() {
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30001))),
+				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30002))),
+			],
+			stateful: true,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	relay
+		.set_sessions(vec![
+			persisted_session(
+				"beta",
+				"session-beta",
+				SocketAddr::from(([127, 0, 0, 1], 31002)),
+			),
+			persisted_session(
+				"alpha",
+				"session-alpha",
+				SocketAddr::from(([127, 0, 0, 1], 31001)),
+			),
+		])
+		.unwrap();
+
+	let sessions = relay.get_sessions().unwrap();
+	assert_eq!(sessions.len(), 2);
+	assert_eq!(sessions[0].target_name.as_deref(), Some("alpha"));
+	assert_eq!(sessions[0].session.as_deref(), Some("session-alpha"));
+	assert_eq!(
+		sessions[0].backend,
+		Some(SocketAddr::from(([127, 0, 0, 1], 31001)))
+	);
+	assert_eq!(sessions[1].target_name.as_deref(), Some("beta"));
+	assert_eq!(sessions[1].session.as_deref(), Some("session-beta"));
+	assert_eq!(
+		sessions[1].backend,
+		Some(SocketAddr::from(([127, 0, 0, 1], 31002)))
+	);
+}
+
+#[test]
+fn test_set_sessions_rejects_mismatched_target_set() {
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30011))),
+				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30012))),
+			],
+			stateful: true,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	let err = relay
+		.set_sessions(vec![
+			persisted_session(
+				"beta",
+				"session-beta",
+				SocketAddr::from(([127, 0, 0, 1], 32012)),
+			),
+			persisted_session(
+				"gamma",
+				"session-gamma",
+				SocketAddr::from(([127, 0, 0, 1], 32013)),
+			),
+		])
+		.unwrap_err();
+
+	assert!(
+		err
+			.to_string()
+			.contains("missing persisted session for target alpha")
+	);
+}
+
+#[tokio::test]
+async fn test_runtime_fanout_fail_open() {
+	use crate::mcp::mergestream::{MergeStream, Messages};
+	use futures_util::StreamExt;
+	use rmcp::model::{ListToolsResult, RequestId, ServerJsonRpcMessage};
+
+	let ok_msg = ServerJsonRpcMessage::response(
+		rmcp::model::ServerResult::ListToolsResult(ListToolsResult {
+			tools: vec![],
+			next_cursor: None,
+			meta: None,
+		}),
+		RequestId::Number(1),
+	);
+	let ok_stream = Messages::from(ok_msg);
+	let err_stream = Messages::from(Err(crate::mcp::ClientError::new(anyhow::anyhow!(
+		"bad upstream"
+	))));
+
+	let streams = vec![("ok".into(), ok_stream), ("bad".into(), err_stream)];
+
+	let merge = Box::new(|results: Vec<(Strng, rmcp::model::ServerResult)>| {
+		// Just return the first one for simplicity in this test
+		Ok(results.into_iter().next().unwrap().1)
+	});
+
+	let mut ms = MergeStream::new(streams, RequestId::Number(1), merge, FailureMode::FailOpen);
+
+	let res = ms.next().await;
+	assert!(res.is_some());
+	let res = res.unwrap();
+	assert!(
+		res.is_ok(),
+		"expected success with FailOpen even if one upstream errors: {:?}",
+		res.err()
+	);
+}
+
+#[tokio::test]
+async fn test_runtime_fanout_fail_open_all_fail() {
+	use crate::mcp::mergestream::{MergeStream, Messages};
+	use futures_util::StreamExt;
+	use rmcp::model::{ListToolsResult, RequestId};
+
+	let err_stream1 = Messages::from(Err(crate::mcp::ClientError::new(anyhow::anyhow!("bad 1"))));
+	let err_stream2 = Messages::from(Err(crate::mcp::ClientError::new(anyhow::anyhow!("bad 2"))));
+
+	let streams = vec![("bad1".into(), err_stream1), ("bad2".into(), err_stream2)];
+
+	let merge = Box::new(|results: Vec<(Strng, rmcp::model::ServerResult)>| {
+		// All failed, so results should be empty.
+		// Return an empty success result (idiomatic for FailOpen).
+		assert!(results.is_empty());
+		Ok(rmcp::model::ServerResult::ListToolsResult(
+			ListToolsResult {
+				tools: vec![],
+				next_cursor: None,
+				meta: None,
+			},
+		))
+	});
+
+	let mut ms = MergeStream::new(streams, RequestId::Number(1), merge, FailureMode::FailOpen);
+
+	let res = ms.next().await;
+	assert!(res.is_some());
+	let res = res.unwrap();
+	assert!(
+		res.is_ok(),
+		"expected success with FailOpen even if ALL upstreams error mid-request: {:?}",
+		res.err()
+	);
 }

@@ -12,6 +12,7 @@ use super::agent::*;
 use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{HeaderOrPseudo, Scheme, auth, authorization, health};
+use crate::mcp::FailureMode;
 use crate::mcp::McpAuthorization;
 use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
@@ -855,6 +856,10 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 					always_use_prefix: match m.prefix_mode() {
 						proto::agent::mcp_backend::PrefixMode::Always => true,
 						proto::agent::mcp_backend::PrefixMode::Conditional => false,
+					},
+					failure_mode: match m.failure_mode() {
+						proto::agent::mcp_backend::FailureMode::FailOpen => FailureMode::FailOpen,
+						proto::agent::mcp_backend::FailureMode::FailClosed => FailureMode::FailClosed,
 					},
 				},
 			),

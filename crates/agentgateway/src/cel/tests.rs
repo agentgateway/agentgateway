@@ -24,6 +24,30 @@ fn eval_request(expr: &str, req: crate::http::Request) -> Result<Value, Error> {
 }
 
 #[test]
+fn test_permissive() {
+	let exec_serde = full_example_executor();
+	let exec = exec_serde.as_executor();
+	let assert_compile_failure = |expr: Expression| {
+		assert!(
+			exec
+				.eval(&expr)
+				.expect_err("must be an error")
+				.to_string()
+				.contains("could not be compiled")
+		);
+	};
+	let valid = Expression::new_permissive("1 + 1");
+	assert_eq!(2, exec.eval(&valid).unwrap().json().unwrap());
+
+	assert_compile_failure(Expression::new_permissive("1 +"));
+
+	assert_compile_failure(Expression::new_permissive("'"));
+
+	assert_compile_failure(Expression::new_permissive("\"h"));
+
+	assert_compile_failure(Expression::new_permissive(r#"" || true || "#));
+}
+#[test]
 fn test_eval() {
 	let req = ::http::Request::builder()
 		.method(Method::GET)
