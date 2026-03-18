@@ -108,15 +108,14 @@ dependencies = [
  "http 1.4.0",
  "prometheus-client",
  "prost",
- "prost-build",
  "prost-types",
- "protox",
+ "prost-wkt-types",
+ "protos",
  "split-iter",
  "thiserror 2.0.18",
  "tokio",
  "tonic",
  "tonic-prost",
- "tonic-prost-build",
  "tower",
  "tracing",
 ]
@@ -204,11 +203,9 @@ dependencies = [
  "pprof",
  "prometheus-client",
  "prost",
- "prost-build",
  "prost-types",
- "prost-wkt-build",
  "prost-wkt-types",
- "protox",
+ "protos",
  "rand 0.10.0",
  "rcgen 0.14.7",
  "regex",
@@ -245,9 +242,7 @@ dependencies = [
  "tokio-util",
  "tokio_sse_codec",
  "tonic",
- "tonic-build",
  "tonic-prost",
- "tonic-prost-build",
  "tower",
  "tower-http",
  "tower-serve-static",
@@ -4693,6 +4688,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e36c2f31e0a47f9280fb347ef5e461ffcd2c52dd520d8e216b52f93b0b0d7d6"
 dependencies = [
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "protos"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "prost",
+ "prost-build",
+ "prost-types",
+ "prost-wkt-build",
+ "prost-wkt-types",
+ "protox",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]

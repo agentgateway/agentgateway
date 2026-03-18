@@ -7,6 +7,7 @@ import "google/protobuf/wrappers.proto";
 import "google/protobuf/struct.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
+import "shared_envoy.proto";
 
 
 option go_package = "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3;authv3";
@@ -35,12 +36,12 @@ message CheckRequest {
 message DeniedHttpResponse {
   // This field allows the authorization service to send an HTTP response status code to the
   // downstream client. If not set, Envoy sends ``403 Forbidden`` HTTP status code by default.
-  HttpStatus status = 1;
+  envoy.service.common.v3.HttpStatus status = 1;
 
   // This field allows the authorization service to send HTTP response headers
   // to the downstream client. Note that the :ref:`append field in HeaderValueOption <envoy_v3_api_field_config.core.v3.HeaderValueOption.append>` defaults to
   // false when used in this message.
-  repeated HeaderValueOption headers = 2;
+  repeated envoy.service.common.v3.HeaderValueOption headers = 2;
 
   // This field allows the authorization service to send a response body data
   // to the downstream client.
@@ -57,7 +58,7 @@ message OkHttpResponse {
   // the filter will append the correspondent header value to the matched request header.
   // By leaving ``append`` as false, the filter will either add a new header, or override an existing
   // one if there is a match.
-  repeated HeaderValueOption headers = 2;
+  repeated envoy.service.common.v3.HeaderValueOption headers = 2;
 
   // HTTP entity headers to remove from the original request before dispatching
   // it to the upstream. This allows the authorization service to act on auth
@@ -85,7 +86,7 @@ message OkHttpResponse {
   // This field allows the authorization service to send HTTP response headers
   // to the downstream client on success. Note that the :ref:`append field in HeaderValueOption <envoy_v3_api_field_config.core.v3.HeaderValueOption.append>`
   // defaults to false when used in this message.
-  repeated HeaderValueOption response_headers_to_add = 6;
+  repeated envoy.service.common.v3.HeaderValueOption response_headers_to_add = 6;
 
   // This field allows the authorization service to set (and overwrite) query
   // string parameters on the original request before it is sent upstream.
@@ -102,7 +103,7 @@ message CheckResponse {
   // Status ``OK`` allows the request. Any other status indicates the request should be denied, and
   // for HTTP filter, if not overridden by :ref:`denied HTTP response status <envoy_v3_api_field_service.auth.v3.DeniedHttpResponse.status>`
   // Envoy sends ``403 Forbidden`` HTTP status code by default.
-  Status status = 1;
+  envoy.service.common.v3.Status status = 1;
 
   // An message that contains HTTP response attributes. This message is
   // used when the authorization service needs to send custom responses to the
@@ -290,7 +291,7 @@ message AttributeContext {
   map<string, string> context_extensions = 10;
 
   // Dynamic metadata associated with the request.
-  Metadata metadata_context = 11;
+  envoy.service.common.v3.Metadata metadata_context = 11;
 //
 //  // Metadata associated with the selected route.
 //  config.core.v3.Metadata route_metadata_context = 13;
@@ -305,237 +306,6 @@ message AttributeContext {
   TLSSession tls_session = 12;
 }
 
-message HttpStatus {
-  // Supplies HTTP response code.
-  StatusCode code = 1;
-}
-enum StatusCode {
-  // Empty - This code not part of the HTTP status code specification, but it is needed for proto
-  // `enum` type.
-  Empty = 0;
-
-  // Continue - ``100`` status code.
-  Continue = 100;
-
-  // OK - ``200`` status code.
-  OK = 200;
-
-  // Created - ``201`` status code.
-  Created = 201;
-
-  // Accepted - ``202`` status code.
-  Accepted = 202;
-
-  // NonAuthoritativeInformation - ``203`` status code.
-  NonAuthoritativeInformation = 203;
-
-  // NoContent - ``204`` status code.
-  NoContent = 204;
-
-  // ResetContent - ``205`` status code.
-  ResetContent = 205;
-
-  // PartialContent - ``206`` status code.
-  PartialContent = 206;
-
-  // MultiStatus - ``207`` status code.
-  MultiStatus = 207;
-
-  // AlreadyReported - ``208`` status code.
-  AlreadyReported = 208;
-
-  // IMUsed - ``226`` status code.
-  IMUsed = 226;
-
-  // MultipleChoices - ``300`` status code.
-  MultipleChoices = 300;
-
-  // MovedPermanently - ``301`` status code.
-  MovedPermanently = 301;
-
-  // Found - ``302`` status code.
-  Found = 302;
-
-  // SeeOther - ``303`` status code.
-  SeeOther = 303;
-
-  // NotModified - ``304`` status code.
-  NotModified = 304;
-
-  // UseProxy - ``305`` status code.
-  UseProxy = 305;
-
-  // TemporaryRedirect - ``307`` status code.
-  TemporaryRedirect = 307;
-
-  // PermanentRedirect - ``308`` status code.
-  PermanentRedirect = 308;
-
-  // BadRequest - ``400`` status code.
-  BadRequest = 400;
-
-  // Unauthorized - ``401`` status code.
-  Unauthorized = 401;
-
-  // PaymentRequired - ``402`` status code.
-  PaymentRequired = 402;
-
-  // Forbidden - ``403`` status code.
-  Forbidden = 403;
-
-  // NotFound - ``404`` status code.
-  NotFound = 404;
-
-  // MethodNotAllowed - ``405`` status code.
-  MethodNotAllowed = 405;
-
-  // NotAcceptable - ``406`` status code.
-  NotAcceptable = 406;
-
-  // ProxyAuthenticationRequired - ``407`` status code.
-  ProxyAuthenticationRequired = 407;
-
-  // RequestTimeout - ``408`` status code.
-  RequestTimeout = 408;
-
-  // Conflict - ``409`` status code.
-  Conflict = 409;
-
-  // Gone - ``410`` status code.
-  Gone = 410;
-
-  // LengthRequired - ``411`` status code.
-  LengthRequired = 411;
-
-  // PreconditionFailed - ``412`` status code.
-  PreconditionFailed = 412;
-
-  // PayloadTooLarge - ``413`` status code.
-  PayloadTooLarge = 413;
-
-  // URITooLong - ``414`` status code.
-  URITooLong = 414;
-
-  // UnsupportedMediaType - ``415`` status code.
-  UnsupportedMediaType = 415;
-
-  // RangeNotSatisfiable - ``416`` status code.
-  RangeNotSatisfiable = 416;
-
-  // ExpectationFailed - ``417`` status code.
-  ExpectationFailed = 417;
-
-  // MisdirectedRequest - ``421`` status code.
-  MisdirectedRequest = 421;
-
-  // UnprocessableEntity - ``422`` status code.
-  UnprocessableEntity = 422;
-
-  // Locked - ``423`` status code.
-  Locked = 423;
-
-  // FailedDependency - ``424`` status code.
-  FailedDependency = 424;
-
-  // UpgradeRequired - ``426`` status code.
-  UpgradeRequired = 426;
-
-  // PreconditionRequired - ``428`` status code.
-  PreconditionRequired = 428;
-
-  // TooManyRequests - ``429`` status code.
-  TooManyRequests = 429;
-
-  // RequestHeaderFieldsTooLarge - ``431`` status code.
-  RequestHeaderFieldsTooLarge = 431;
-
-  // InternalServerError - ``500`` status code.
-  InternalServerError = 500;
-
-  // NotImplemented - ``501`` status code.
-  NotImplemented = 501;
-
-  // BadGateway - ``502`` status code.
-  BadGateway = 502;
-
-  // ServiceUnavailable - ``503`` status code.
-  ServiceUnavailable = 503;
-
-  // GatewayTimeout - ``504`` status code.
-  GatewayTimeout = 504;
-
-  // HTTPVersionNotSupported - ``505`` status code.
-  HTTPVersionNotSupported = 505;
-
-  // VariantAlsoNegotiates - ``506`` status code.
-  VariantAlsoNegotiates = 506;
-
-  // InsufficientStorage - ``507`` status code.
-  InsufficientStorage = 507;
-
-  // LoopDetected - ``508`` status code.
-  LoopDetected = 508;
-
-  // NotExtended - ``510`` status code.
-  NotExtended = 510;
-
-  // NetworkAuthenticationRequired - ``511`` status code.
-  NetworkAuthenticationRequired = 511;
-}
-// Header name/value pair plus option to control append behavior.
-message HeaderValueOption {
-  // Describes the supported actions types for header append action.
-  enum HeaderAppendAction {
-    // If the header already exists, this action will result in:
-    //
-    // - Comma-concatenated for predefined inline headers.
-    // - Duplicate header added in the ``HeaderMap`` for other headers.
-    //
-    // If the header doesn't exist then this will add new header with specified key and value.
-    APPEND_IF_EXISTS_OR_ADD = 0;
-
-    // This action will add the header if it doesn't already exist. If the header
-    // already exists then this will be a no-op.
-    ADD_IF_ABSENT = 1;
-
-    // This action will overwrite the specified value by discarding any existing values if
-    // the header already exists. If the header doesn't exist then this will add the header
-    // with specified key and value.
-    OVERWRITE_IF_EXISTS_OR_ADD = 2;
-
-    // This action will overwrite the specified value by discarding any existing values if
-    // the header already exists. If the header doesn't exist then this will be no-op.
-    OVERWRITE_IF_EXISTS = 3;
-  }
-
-  // Header name/value pair that this option applies to.
-  HeaderValue header = 1;
-
-  // Should the value be appended? If true (default), the value is appended to
-  // existing values.
-  // This field is deprecated and please use append_action as replacement.
-  google.protobuf.BoolValue append = 2;
-
-  // Describes the action taken to append/overwrite the given value for an existing header
-  // or to only add this header if it's absent.
-  // Value defaults to APPEND_IF_EXISTS_OR_ADD.
-  HeaderAppendAction append_action = 3;
-}
-
-// Header name/value pair.
-message HeaderValue {
-  // Header name.
-  string key = 1;
-  
-  string value = 2;
-  // Header value.
-  //
-  // The same :ref:`format specifier <config_access_log_format>` as used for
-  // :ref:`HTTP access logging <config_access_log>` applies here, however
-  // unknown header values are replaced with the empty string instead of ``-``.
-  //  string value = 2;
-  bytes raw_value = 3;
-}
 message QueryParameter {
   // The key of the query parameter. Case sensitive.
   string key = 1;
@@ -611,22 +381,4 @@ message SocketAddress {
   // .. attention::
   //     Network namespaces are only configurable on Linux. Otherwise, this field has no effect.
   string network_namespace_filepath = 7;
-}
-
-message Metadata {
-  // Key is the reverse DNS filter name, e.g. com.acme.widget. The ``envoy.*``
-  // namespace is reserved for Envoy's built-in filters.
-  // If both ``filter_metadata`` and
-  // :ref:`typed_filter_metadata <envoy_v3_api_field_config.core.v3.Metadata.typed_filter_metadata>`
-  // fields are present in the metadata with same keys,
-  // only ``typed_filter_metadata`` field will be parsed.
-  map<string, google.protobuf.Struct> filter_metadata = 1;
-
-  // Key is the reverse DNS filter name, e.g. com.acme.widget. The ``envoy.*``
-  // namespace is reserved for Envoy's built-in filters.
-  // The value is encoded as google.protobuf.Any.
-  // If both :ref:`filter_metadata <envoy_v3_api_field_config.core.v3.Metadata.filter_metadata>`
-  // and ``typed_filter_metadata`` fields are present in the metadata with same keys,
-  // only ``typed_filter_metadata`` field will be parsed.
-//  map<string, google.protobuf.Any> typed_filter_metadata = 2;
 }

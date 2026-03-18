@@ -610,10 +610,8 @@ impl Bind {
 	}
 }
 
-impl TryFrom<&proto::agent::Listener> for (Listener, BindKey) {
-	type Error = ProtoError;
-
-	fn try_from(s: &proto::agent::Listener) -> Result<Self, Self::Error> {
+impl Listener {
+	pub fn try_from_xds(s: &proto::agent::Listener) -> Result<(Self, BindKey), ProtoError> {
 		let proto = proto::agent::Protocol::try_from(s.protocol)?;
 		let protocol = ListenerProtocol::try_from((proto, s.tls.as_ref()))
 			.map_err(|e| ProtoError::Generic(format!("{e}")))?;
@@ -633,10 +631,8 @@ impl TryFrom<&proto::agent::Listener> for (Listener, BindKey) {
 	}
 }
 
-impl TryFrom<&proto::agent::TcpRoute> for (TCPRoute, ListenerKey) {
-	type Error = ProtoError;
-
-	fn try_from(s: &proto::agent::TcpRoute) -> Result<Self, Self::Error> {
+impl TCPRoute {
+	pub fn try_from_xds(s: &proto::agent::TcpRoute) -> Result<(Self, ListenerKey), ProtoError> {
 		let r = TCPRoute {
 			key: strng::new(&s.key),
 			name: s
@@ -661,10 +657,8 @@ impl TryFrom<&proto::agent::TcpRoute> for (TCPRoute, ListenerKey) {
 	}
 }
 
-impl TryFrom<&proto::agent::Route> for (Route, ListenerKey) {
-	type Error = ProtoError;
-
-	fn try_from(s: &proto::agent::Route) -> Result<Self, Self::Error> {
+impl Route {
+	pub fn try_from_xds(s: &proto::agent::Route) -> Result<(Self, ListenerKey), ProtoError> {
 		let name: RouteName = s
 			.name
 			.as_ref()

@@ -89,6 +89,7 @@ phonenumber.workspace = true
 pin-project-lite.workspace = true
 ppp.workspace = true
 prometheus-client.workspace = true
+protos.workspace = true
 prost-types.workspace = true
 prost-wkt-types.workspace = true
 prost.workspace = true
@@ -158,14 +159,6 @@ tokio = { workspace = true, features = ["taskdump"] }
 
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 tokio = { workspace = true }
-
-[build-dependencies]
-anyhow.workspace = true
-prost-build.workspace = true
-tonic-prost-build.workspace = true
-tonic-build.workspace = true
-protox.workspace = true
-prost-wkt-build.workspace = true
 
 [dev-dependencies]
 assert_matches.workspace = true

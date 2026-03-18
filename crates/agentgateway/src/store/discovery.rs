@@ -65,7 +65,7 @@ impl Store {
 		// In theory, I think we could avoid this if Workload::try_from returning the services.
 		// let services = w.services.clone();
 		// Convert the workload.
-		let (workload, services): (Workload, HashMap<String, PortList>) = w.try_into()?;
+		let (workload, services) = Workload::try_from_xds_with_services(w)?;
 		let workload = Arc::new(workload);
 
 		// First, remove the entry entirely to make sure things are cleaned up properly.
@@ -254,7 +254,7 @@ impl ServiceStore {
 				namespaced_host,
 				Endpoint {
 					workload_uid: workload.uid.clone(),
-					port: ports.into(),
+					port: crate::types::discovery::ports_from_xds(ports),
 					status: workload.status,
 				},
 			)
@@ -574,7 +574,7 @@ impl StoreUpdater {
 			let services: HashMap<String, PortList> = wl
 				.services
 				.into_iter()
-				.map(|(k, v)| (k, PortList::from(v)))
+				.map(|(k, v)| (k, crate::types::discovery::port_list_from_ports(v)))
 				.collect();
 			s.services.insert_endpoint_for_services(&w, &services)?;
 			old_workloads.remove(&w.uid);

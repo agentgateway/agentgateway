@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -11,8 +11,8 @@ use agent_core::strng;
 use agent_core::strng::Strng;
 use http::Request;
 use prost::{DecodeError, EncodeError};
-use prost_types::value::Kind;
-use prost_types::{Struct, Value};
+use prost_wkt_types::value::Kind;
+use prost_wkt_types::{Struct, Value};
 use split_iter::Splittable;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
@@ -23,6 +23,7 @@ use super::Error;
 use crate::metrics::{ConnectionTerminationReason, Metrics};
 use crate::service::discovery::v3::aggregated_discovery_service_client::AggregatedDiscoveryServiceClient;
 use crate::service::discovery::v3::{Resource as ProtoResource, *};
+use protos::envoy::service::common::v3::Status;
 
 const INSTANCE_IPS: &str = "INSTANCE_IPS";
 const DEFAULT_IP: &str = "1.1.1.1";
@@ -323,7 +324,7 @@ impl Config {
 	}
 
 	fn build_struct<T: IntoIterator<Item = (S, S)>, S: ToString>(a: T) -> Struct {
-		let fields = BTreeMap::from_iter(a.into_iter().map(|(k, v)| {
+		let fields = HashMap::from_iter(a.into_iter().map(|(k, v)| {
 			(
 				k.to_string(),
 				Value {
@@ -350,7 +351,7 @@ impl Config {
 		]);
 		metadata
 			.fields
-			.append(&mut Self::build_struct(self.proxy_metadata.clone()).fields);
+			.extend(Self::build_struct(self.proxy_metadata.clone()).fields);
 
 		Node {
 			id: format!(
