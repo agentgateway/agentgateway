@@ -1587,10 +1587,17 @@ json(request.body).model
 			},
 		],
 		backends: vec![],
-		inline_policies: vec![TrafficPolicy::ResponseHeaderModifier(crate::http::filters::HeaderModifier { set: vec![(strng::new("Content-Type"), strng::new("application/json"))], add: vec![], remove: vec![] }), TrafficPolicy::DirectResponse(filters::DirectResponse {
-			body: Bytes::copy_from_slice(model_list_body.as_bytes()),
-			status: ::http::StatusCode::OK,
-		})],
+		inline_policies: vec![
+			TrafficPolicy::ResponseHeaderModifier(crate::http::filters::HeaderModifier {
+				set: vec![(strng::new("Content-Type"), strng::new("application/json"))],
+				add: vec![],
+				remove: vec![],
+			}),
+			TrafficPolicy::DirectResponse(filters::DirectResponse {
+				body: Bytes::copy_from_slice(model_list_body.as_bytes()),
+				status: ::http::StatusCode::OK,
+			}),
+		],
 	};
 	routes.insert(model_list_route);
 
