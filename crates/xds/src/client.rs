@@ -469,6 +469,7 @@ impl Demander {
 
 const INITIAL_BACKOFF: Duration = Duration::from_millis(10);
 const MAX_BACKOFF: Duration = Duration::from_secs(15);
+const MAX_PENDING_SENDS: usize = 100;
 
 impl AdsClient {
 	fn is_initial_request_on_demand(r: &DeltaDiscoveryRequest) -> bool {
@@ -663,7 +664,7 @@ impl AdsClient {
 
 		loop {
 			tokio::select! {
-				_demand_event = self.state.demand.recv() => {
+				_demand_event = self.state.demand.recv(), if pending_demand_sends.len() < MAX_PENDING_SENDS => {
 					if let Some(req) = self.handle_demand_event(_demand_event)? {
 						let tx = discovery_req_tx.clone();
 						pending_demand_sends.push( async move { tx.send(req).await });
