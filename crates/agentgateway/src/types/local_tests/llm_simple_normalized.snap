@@ -18,6 +18,9 @@ binds:
         routes:
           "llm:admin:model-list":
             inlinePolicies:
+              - responseHeaderModifier:
+                  set:
+                    Content-Type: application/json
               - directResponse:
                   body: eyJkYXRhIjpbeyJpZCI6ImNsYXVkZS0zLWhhaWt1Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJnZW1pbmktMC41LXBybyIsIm9iamVjdCI6Im1vZGVsIiwiY3JlYXRlZCI6MCwib3duZWRfYnkiOiJvcGVuYWkifSx7ImlkIjoiZ3B0LTctbWF4Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJncHQtMy41LXR1cmJvIiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9XSwib2JqZWN0IjoibGlzdCJ9
                   status: 200

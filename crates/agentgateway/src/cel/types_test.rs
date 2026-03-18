@@ -148,6 +148,18 @@ fn test_executor_serde_complete() {
 	assert_eq!(json1, json3, "Round-trip serialization mismatch");
 }
 
+#[test]
+fn test_env() {
+	let exec = full_example_executor();
+	let executor = exec.as_executor();
+	let expr = Expression::new_strict(
+		"env.podName == 'pod-1' && env.namespace == 'ns-1' && env.gateway == 'gw-1'",
+	)
+	.unwrap();
+
+	assert!(executor.eval_bool(&expr));
+}
+
 fn exec_to_json(exec: &Executor) -> serde_json::Value {
 	let expr = Expression::new_strict("variables()").expect("failed to compile");
 	let cel_value = exec.eval(&expr).expect("failed to evaluate");

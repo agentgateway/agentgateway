@@ -19,7 +19,8 @@ mod tests;
 #[allow(warnings)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 pub mod proto {
-	tonic::include_proto!("envoy.service.ratelimit.v3");
+	pub use protos::envoy::service::common::v3::HeaderValue;
+	pub use protos::envoy::service::ratelimit::v3::*;
 }
 
 /// Defines how the proxy behaves when the remote rate limit service is

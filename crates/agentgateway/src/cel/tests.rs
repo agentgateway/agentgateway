@@ -186,6 +186,103 @@ mod headers {
 				.unwrap()
 			);
 	}
+
+	#[test]
+	fn cookie() {
+		let req = || {
+			::http::Request::builder()
+				.method(http::Method::GET)
+				.uri("http://example.com")
+				.header("cookie", "session=abc; theme=light")
+				.header("cookie", "session=def")
+				.body(crate::http::Body::empty())
+				.unwrap()
+		};
+		assert_eq!(
+			"abc",
+			eval_request(r#"request.headers.cookie("session")"#, req())
+				.unwrap()
+				.as_str()
+				.unwrap()
+				.as_ref()
+		);
+		assert_eq!(
+			"light",
+			eval_request(r#"request.headers.cookie("theme")"#, req())
+				.unwrap()
+				.as_str()
+				.unwrap()
+				.as_ref()
+		);
+	}
+
+	#[test]
+	fn cookie_missing() {
+		let req = ::http::Request::builder()
+			.method(http::Method::GET)
+			.uri("http://example.com")
+			.header("cookie", "session=abc")
+			.body(crate::http::Body::empty())
+			.unwrap();
+		let err = eval_request(r#"request.headers.cookie("theme")"#, req).unwrap_err();
+		assert!(err.to_string().contains("No such key: theme"));
+	}
+}
+
+mod query_accessors {
+	use crate::cel::tests::eval_request;
+	use crate::http::Body;
+	use cel::Value;
+	use http::Method;
+
+	fn request() -> crate::http::Request {
+		::http::Request::builder()
+			.method(Method::GET)
+			.uri("http://example.com/api/test?foo=bar&foo=baz&zap=zip")
+			.body(Body::empty())
+			.unwrap()
+	}
+
+	#[test]
+	fn path_stays_string_compatible() {
+		assert_eq!(
+			Value::Bool(true),
+			eval_request(r#"request.path == "/api/test""#, request()).unwrap()
+		);
+	}
+
+	#[test]
+	fn query_reads_from_path_and_uri() {
+		assert_eq!(
+			Value::Bool(true),
+			eval_request(
+				r#"request.pathAndQuery.query("foo") == ["bar", "baz"] && request.uri.query("zap") == ["zip"]"#,
+				request()
+			)
+			.unwrap()
+		);
+	}
+
+	#[test]
+	fn missing_query_is_no_such_key() {
+		let err = eval_request(r#"request.pathAndQuery.query("missing")"#, request()).unwrap_err();
+		assert!(err.to_string().contains("No such key: missing"), "{err}");
+	}
+
+	#[test]
+	fn add_and_set_query_return_new_values() {
+		assert_eq!(
+			Value::Bool(true),
+			eval_request(
+				r#"request.pathAndQuery == "/api/test?foo=bar&foo=baz&zap=zip" &&
+request.pathAndQuery.addQuery("foo", "qux") == "/api/test?foo=bar&foo=baz&zap=zip&foo=qux" &&
+request.pathAndQuery.setQuery("foo", "qux") == "/api/test?zap=zip&foo=qux" &&
+request.uri.setQuery("foo", "qux") == "http://example.com/api/test?zap=zip&foo=qux""#,
+				request()
+			)
+			.unwrap()
+		);
+	}
 }
 
 #[test]

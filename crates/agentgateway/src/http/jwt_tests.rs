@@ -481,7 +481,6 @@ pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header()
 fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 	use std::sync::Arc;
-	use std::time::Instant;
 
 	use frozen_collections::FzHashSet;
 	use prometheus_client::registry::Registry;
@@ -500,11 +499,11 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	let cel = log::CelLogging::new(log_cfg, MetricsConfig::default());
 	let mut prom = Registry::default();
 	let metrics = Arc::new(Metrics::new(&mut prom, FzHashSet::default()));
-	let start = Instant::now();
+	let start = agent_core::Timestamp::now();
 	let tcp_info = TCPConnectionInfo {
 		peer_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345),
 		local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080),
-		start,
+		start: start.as_instant(),
 		raw_peer_addr: None,
 	};
 	RequestLog::new(cel, metrics, start, tcp_info)

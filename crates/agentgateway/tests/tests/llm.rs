@@ -698,7 +698,12 @@ async fn assert_count_log(path: &str, test_id: &str) {
 	}
 }
 
-async fn assert_embeddings_log(path: &str, test_id: &str, expected: u64) {
+async fn assert_embeddings_log(
+	path: &str,
+	test_id: &str,
+	expected: u64,
+	expected_input_tokens: u64,
+) {
 	let log = agent_core::telemetry::testing::eventually_find(&[
 		("scope", "request"),
 		("http.path", path),
@@ -708,6 +713,15 @@ async fn assert_embeddings_log(path: &str, test_id: &str, expected: u64) {
 	.unwrap();
 	let count = log.get("embeddings").unwrap().as_i64().unwrap();
 	assert_eq!(count, expected as i64, "unexpected count tokens: {count}");
+	let got_token_count = log
+		.get("gen_ai.usage.input_tokens")
+		.unwrap()
+		.as_i64()
+		.unwrap();
+	assert_eq!(
+		got_token_count, expected_input_tokens as i64,
+		"unexpected input tokens: {expected_input_tokens}"
+	);
 	let stream = log.get("streaming").unwrap().as_bool().unwrap();
 	assert!(!stream, "unexpected streaming value: {stream}");
 	let dim_count = log
@@ -1283,6 +1297,7 @@ async fn send_embeddings(gw: &AgentGateway, expected_dimensions: Option<usize>) 
 		"/v1/embeddings",
 		&test_id,
 		expected_dimensions.unwrap_or(256) as u64,
+		prompt_tokens,
 	)
 	.await;
 }

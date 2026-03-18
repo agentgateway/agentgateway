@@ -1,7 +1,5 @@
 use std::collections::HashMap;
-use std::ops::Sub;
 use std::sync::Arc;
-use std::time::SystemTime;
 
 use agent_core::telemetry::ValueBag;
 use http::Version;
@@ -167,6 +165,7 @@ impl Tracer {
 	pub fn send<'v>(
 		&self,
 		request: &RequestLog,
+		end: &agent_core::Timestamp,
 		cel_exec: &CelLoggingExecutor,
 		attrs: &[(&str, Option<ValueBag<'v>>)],
 	) {
@@ -180,8 +179,8 @@ impl Tracer {
 		if !out_span.is_sampled() {
 			return;
 		}
-		let end = SystemTime::now();
-		let elapsed = request.tcp_info.start.elapsed();
+		let start = request.start.as_system_time();
+		let end = end.as_system_time();
 
 		// For now we only accept HTTP(?)
 		attributes.push(KeyValue::new(semconv::URL_SCHEME.clone(), "http"));
@@ -223,8 +222,8 @@ impl Tracer {
 		let sb = self
 			.tracer
 			.span_builder(span_name)
-			.with_start_time(end.sub(elapsed))
-			.with_end_time(SystemTime::now())
+			.with_start_time(start)
+			.with_end_time(end)
 			.with_kind(SpanKind::Server)
 			.with_attributes(attributes)
 			.with_trace_id(out_span.trace_id.into())
@@ -464,9 +463,8 @@ pub fn set_resource_defaults_from_config(cfg: &crate::Config) {
 	push_if_present("k8s.pod.name", pm.pod_name.as_str());
 	push_if_present("k8s.namespace.name", pm.pod_namespace.as_str());
 	push_if_present("k8s.node.name", pm.node_name.as_str());
-	// `INSTANCE_IP` defaults to "1.1.1.1" when unset, avoid exporting placeholder values.
-	if !pm.instance_ip.is_empty() && pm.instance_ip != "1.1.1.1" {
-		attrs.push(KeyValue::new("k8s.pod.ip", pm.instance_ip.clone()));
+	if let Some(instance_ip) = &pm.instance_ip {
+		attrs.push(KeyValue::new("k8s.pod.ip", instance_ip.clone()));
 	}
 	// `node_id` is derived from pod name/namespace, only set if we have those set
 	if !pm.node_id.is_empty() && !pm.pod_name.is_empty() && !pm.pod_namespace.is_empty() {
@@ -591,7 +589,7 @@ mod tests {
 	use std::sync::{Arc, Mutex};
 	use std::time::Instant;
 
-	use agent_core::strng;
+	use agent_core::{Timestamp, strng};
 	use opentelemetry::trace::SpanKind;
 	use opentelemetry_sdk::error::OTelSdkResult;
 	use opentelemetry_sdk::trace::{SimpleSpanProcessor, SpanData, SpanExporter};
@@ -653,7 +651,7 @@ mod tests {
 		RequestLog::new(
 			cel,
 			metrics,
-			Instant::now(),
+			Timestamp::now(),
 			TCPConnectionInfo {
 				peer_addr: "127.0.0.1:12345".parse::<SocketAddr>().unwrap(),
 				local_addr: "127.0.0.1:8080".parse::<SocketAddr>().unwrap(),
@@ -687,7 +685,7 @@ mod tests {
 			metric_fields: &metric_fields,
 		};
 
-		tracer.send(&request, &cel_exec, &[]);
+		tracer.send(&request, &Timestamp::now(), &cel_exec, &[]);
 		let _ = tracer.provider.force_flush();
 
 		let spans = exporter.finished_spans();

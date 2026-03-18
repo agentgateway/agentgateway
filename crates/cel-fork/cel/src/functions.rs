@@ -2,6 +2,8 @@ use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::sync::Arc;
 
+use chrono::{SecondsFormat, Timelike};
+
 use crate::context::{Context, VariableResolver};
 use crate::magic::{Argument, FromValue, This};
 use crate::objects::{BytesValue, KeyRef, OpaqueValue, OptionalValue, StringValue, Value};
@@ -9,6 +11,26 @@ use crate::parser::Expression;
 use crate::{ExecutionError, ResolveResult};
 
 type Result<T> = std::result::Result<T, ExecutionError>;
+
+pub fn format_timestamp(dt: &chrono::DateTime<chrono::FixedOffset>) -> String {
+	let utc = dt.with_timezone(&chrono::Utc);
+	let mut s = utc.to_rfc3339_opts(SecondsFormat::Secs, true);
+	let mut nano = dt.nanosecond();
+	// This gets rounded up to a second in to_rfc3339_opts
+	if nano >= 1_000_000_000 {
+		nano -= 1_000_000_000;
+	}
+	// golang format expects to output exactly the right number of decimal seconds. We handle this ourselves
+	if nano != 0 {
+		// Take Z off
+		s.pop();
+		s.push('.');
+		let ns = format!("{nano:09}");
+		s.push_str(ns.trim_end_matches('0'));
+		s.push('Z');
+	}
+	s
+}
 
 /// `FunctionContext` is a context object passed to functions when they are called.
 ///
@@ -244,7 +266,7 @@ pub fn string<'a>(ftx: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
 	Ok(match this {
 		Value::String(v) => Value::String(v.clone()),
 
-		Value::Timestamp(t) => Value::String(t.to_rfc3339().into()),
+		Value::Timestamp(t) => Value::String(format_timestamp(&t).into()),
 
 		Value::Duration(v) => Value::String(crate::duration::format_duration(&v).into()),
 		Value::Int(v) => Value::String(v.to_string().into()),
@@ -876,7 +898,19 @@ mod tests {
 			),
 			(
 				"timestamp string",
-				"timestamp('2023-05-28T00:00:00Z').string() == '2023-05-28T00:00:00+00:00'",
+				"timestamp('2023-05-28T00:00:00Z').string() == '2023-05-28T00:00:00Z'",
+			),
+			(
+				"timestamp string with 1 decimal",
+				"timestamp('2023-05-28T00:00:00.1Z').string()  == '2023-05-28T00:00:00.1Z'",
+			),
+			(
+				"timestamp string with 2 decimal",
+				"timestamp('2023-05-28T00:00:00.12Z').string() == '2023-05-28T00:00:00.12Z'",
+			),
+			(
+				"timestamp string with 10 decimal",
+				"timestamp('2023-05-28T00:00:00.0123456789Z').string() == '2023-05-28T00:00:00.012345678Z'",
 			),
 			(
 				"timestamp getFullYear",
@@ -1018,7 +1052,7 @@ mod tests {
 			("duration", "duration('1h30m').string() == '1h30m0s'"),
 			(
 				"timestamp",
-				"timestamp('2023-05-29T00:00:00Z').string() == '2023-05-29T00:00:00+00:00'",
+				"timestamp('2023-05-29T00:00:00Z').string() == '2023-05-29T00:00:00Z'",
 			),
 		]
 		.iter()

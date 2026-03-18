@@ -95,6 +95,7 @@ pub struct UsageCompletionDetails {
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct UsagePromptDetails {
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cached_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,

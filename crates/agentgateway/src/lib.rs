@@ -583,7 +583,7 @@ pub fn ipv6_enabled_on_localhost() -> io::Result<bool> {
 #[derive(serde::Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProxyMetadata {
-	pub instance_ip: String,
+	pub instance_ip: Option<String>,
 	pub pod_name: String,
 	pub pod_namespace: String,
 	pub node_name: String,

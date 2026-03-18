@@ -31,7 +31,10 @@ mod tests;
 #[allow(warnings)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 pub mod proto {
-	tonic::include_proto!("envoy.service.auth.v3");
+	pub use protos::envoy::service::auth::v3::*;
+	pub use protos::envoy::service::common::v3::{
+		HeaderValue, HeaderValueOption, HttpStatus, Metadata, Status, StatusCode, header_value_option,
+	};
 }
 
 #[apply(schema!)]

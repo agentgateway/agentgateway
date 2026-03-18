@@ -5661,6 +5661,7 @@
 |`llm.models[].params`|params customizes parameters for the outgoing request|
 |`llm.models[].params.model`|The model to send to the provider.<br>If unset, the same model will be used from the request.|
 |`llm.models[].params.apiKey`|An API key to attach to the request.<br>If unset this will be automatically detected from the environment.|
+|`llm.models[].params.apiKey.(any)(any)file`||
 |`llm.models[].params.awsRegion`||
 |`llm.models[].params.vertexRegion`||
 |`llm.models[].params.vertexProject`||

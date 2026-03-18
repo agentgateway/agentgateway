@@ -9,6 +9,7 @@ See the [CEL documentation](https://agentgateway.dev/docs/standalone/latest/refe
 |--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `json`             | Parse a string or bytes as JSON. Example: `json(request.body).some_field`.                                                                                                                                                                                                       |
 | `toJson`           | Convert a CEL value into a JSON string. Example: `toJson({"hello": "world"})`.                                                                                                                                                                                                   |
+| `unvalidatedJwtPayload` | Parse the payload section of a JWT without verifying the signature. This splits the token, base64url-decodes the middle segment, and parses it as JSON. Example: `unvalidatedJwtPayload(request.headers.authorization.split(" ")[1]).sub`                          |
 | `with`             | CEL does not allow variable bindings. `with` allows doing this. Example: `json(request.body).with(b, b.field_a + b.field_b)`                                                                                                                                                     |
 | `variables`        | `variables` exposes all of the variables available as a value. CEL otherwise does not allow accessing all variables without knowing them ahead of time. Warning: this automatically enables all fields to be captured.                                                           |
 | `mapValues`        | `mapValues` applies a function to all values in a map. `map` in CEL only applies to map keys.                                                                                                                                                                                    |
@@ -48,6 +49,7 @@ Available methods:
 | `join()`     | Joins all header entries with `,`. Example: `["a,b", "c"] -> "a,b,c"`.                                                                                                                          |
 | `raw()`      | Returns the raw header entries as a list. Example: `["a,b", "c"] -> ["a,b", "c"]`.                                                                                                              |
 | `split()`    | Returns all header entries split on `,` as a list. Example: `["a,b", "c"] -> ["a", "b", "c"]`.                                                                                                  |
+| `cookie(name)` | Parses the request `Cookie` header and returns the first cookie value for the given name. If the cookie is missing, evaluation fails with `NoSuchKey`.                                         |
 
 Examples:
 
@@ -55,5 +57,27 @@ Examples:
 * `request.headers.join()["x-forwarded-for"]`
 * `request.headers.raw()["set-cookie"]`
 * `request.headers.redacted().split()["authorization"]`
+* `request.headers.cookie("session")`
 
 `redacted()` can be combined with any of the other methods. `join()`, `raw()`, and `split()` are mutually exclusive; if multiple are chained, the last one wins.
+
+## Query Accessors
+
+`request.pathAndQuery` and `request.uri` expose query-aware string values with chainable methods.
+
+Available methods:
+
+| Method | Purpose |
+|--------|---------|
+| `query(name)` | Returns a list of all values for the given query parameter. If the parameter is missing, evaluation fails with `NoSuchKey`. |
+| `addQuery(name, value)` | Returns a new `pathAndQuery`/`uri` with the query parameter appended. The original value is unchanged. |
+| `setQuery(name, value)` | Returns a new `pathAndQuery`/`uri` with all existing values for the key replaced by the provided value. The original value is unchanged. |
+
+Examples:
+
+* `request.pathAndQuery.query("foo") == ["bar", "baz"]`
+* `request.uri.query("zap") == ["zip"]`
+* `request.pathAndQuery.addQuery("foo", "qux") == "/api/test?foo=bar&foo=baz&foo=qux"`
+* `request.uri.setQuery("foo", "qux") == "http://example.com/api/test?foo=qux"`
+
+These values remain usable as strings for standard CEL string functions and comparisons.

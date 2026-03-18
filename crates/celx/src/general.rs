@@ -15,6 +15,7 @@ pub fn insert_all(ctx: &mut Context) {
 	// Custom to agentgateway
 	ctx.add_function("json", json_parse);
 	ctx.add_function("jsonField", json_parse_field);
+	ctx.add_function("unvalidatedJwtPayload", unvalidated_jwt_payload);
 	ctx.add_function("to_json", to_json);
 	// Keep old and new name for compatibility
 	ctx.add_function("toJson", to_json);
@@ -49,6 +50,13 @@ pub fn base64_encode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> Reso
 }
 pub const STANDARD_MAYBE_PADDED: GeneralPurpose = GeneralPurpose::new(
 	&alphabet::STANDARD,
+	GeneralPurposeConfig::new()
+		.with_encode_padding(true)
+		.with_decode_allow_trailing_bits(false)
+		.with_decode_padding_mode(DecodePaddingMode::Indifferent),
+);
+pub const URL_SAFE_MAYBE_PADDED: GeneralPurpose = GeneralPurpose::new(
+	&alphabet::URL_SAFE,
 	GeneralPurposeConfig::new()
 		.with_encode_padding(true)
 		.with_decode_allow_trailing_bits(false)
@@ -94,6 +102,7 @@ pub fn variables<'a, 'rf>(ftx: &mut FunctionContext<'a, 'rf>) -> ResolveResult<'
 		"backend",
 		"extauthz",
 		"extproc",
+		"env",
 	];
 	let mut res = vector_map::VecMap::with_capacity(keys.len());
 	for k in keys {
@@ -194,6 +203,27 @@ fn json_parse<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResu
 		_ => return Err(ftx.error(format!("invalid type {}", v.type_of()))),
 	};
 	let sv: serde_json::Value = sv.map_err(|e| ftx.error(e))?;
+	cel::to_value(sv).map_err(|e| ftx.error(e))
+}
+
+fn unvalidated_jwt_payload<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	v: Argument,
+) -> ResolveResult<'a> {
+	let v: StringValue = v.load_value(ftx)?;
+	let parts: Vec<&str> = v.as_ref().split('.').collect();
+	if parts.len() != 3 {
+		return Err(ftx.error(format!(
+			"invalid JWT: expected 3 segments, got {}",
+			parts.len()
+		)));
+	}
+
+	use base64::Engine;
+	let payload = URL_SAFE_MAYBE_PADDED
+		.decode(parts[1].as_bytes())
+		.map_err(|e| ftx.error(e))?;
+	let sv: serde_json::Value = serde_json::from_slice(&payload).map_err(|e| ftx.error(e))?;
 	cel::to_value(sv).map_err(|e| ftx.error(e))
 }
 

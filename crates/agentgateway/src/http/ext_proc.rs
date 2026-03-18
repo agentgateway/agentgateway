@@ -61,7 +61,10 @@ pub struct ExtProcDynamicMetadata(serde_json::Map<String, JsonValue>);
 #[allow(warnings)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 pub mod proto {
-	tonic::include_proto!("envoy.service.ext_proc.v3");
+	pub use protos::envoy::service::common::v3::{
+		HeaderValue, HeaderValueOption, HttpStatus, Metadata, StatusCode, header_value_option,
+	};
+	pub use protos::envoy::service::ext_proc::v3::*;
 }
 
 #[apply(schema!)]
