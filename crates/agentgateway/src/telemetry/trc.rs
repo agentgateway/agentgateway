@@ -150,7 +150,7 @@ impl Tracer {
 				)
 				.build()
 		};
-		let tracer = provider.tracer(tracer_name);
+		let tracer = provider.tracer("agentgateway");
 		Ok(Tracer {
 			tracer: Arc::new(tracer),
 			provider,
