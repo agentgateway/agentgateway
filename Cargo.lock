@@ -104,6 +104,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "axum-core",
+ "futures",
  "http 1.4.0",
  "prometheus-client",
  "prost",

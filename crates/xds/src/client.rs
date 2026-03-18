@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
+use std::mem;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
@@ -387,7 +388,7 @@ impl Config {
 		}
 	}
 
-	pub fn build(self, metrics: Metrics, block_ready: tokio::sync::oneshot::Sender<()>) -> AdsClient {
+	pub fn build(self, metrics: Metrics, block_ready: tokio::sync::watch::Sender<()>) -> AdsClient {
 		AdsClient::new(self, metrics, block_ready)
 	}
 }
@@ -408,7 +409,7 @@ pub struct AdsClient {
 	state: State,
 
 	pub(crate) metrics: Metrics,
-	block_ready: Option<tokio::sync::oneshot::Sender<()>>,
+	block_ready: Option<tokio::sync::watch::Sender<()>>,
 
 	connection_id: u32,
 	types_to_expect: HashSet<String>,
@@ -471,7 +472,7 @@ impl AdsClient {
 		!r.resource_names_subscribe.is_empty()
 	}
 
-	fn new(config: Config, metrics: Metrics, block_ready: tokio::sync::oneshot::Sender<()>) -> Self {
+	fn new(config: Config, metrics: Metrics, block_ready: tokio::sync::watch::Sender<()>) -> Self {
 		let (tx, rx) = mpsc::channel(100);
 		let state = State {
 			known_resources: Default::default(),
@@ -654,16 +655,15 @@ impl AdsClient {
 
 		info!("Stream established");
 
-		let mut pending_demand_sends  = FuturesUnordered::new();
-		let mut pending_ack_sends =
-			FuturesUnordered::new();
+		let mut pending_demand_sends = FuturesUnordered::new();
+		let mut pending_ack_sends = FuturesUnordered::new();
 
 		loop {
 			tokio::select! {
 				_demand_event = self.state.demand.recv() => {
 					if let Some(req) = self.handle_demand_event(_demand_event)? {
 						let tx = discovery_req_tx.clone();
-						pending_demand_sends.push(Box::pin(async move { tx.send(req).await }));
+						pending_demand_sends.push( async move { tx.send(req).await });
 					}
 				}
 				msg = response_stream.message() => {
@@ -676,19 +676,19 @@ impl AdsClient {
 					if !self.types_to_expect.is_empty() {
 						received_type = Some(msg.type_url.clone())
 					}
+
 					let (signal, req) = self.handle_stream_event(msg)?;
-					let tx = discovery_req_tx.clone();
-					pending_ack_sends.push(Box::pin(async move { tx.send(req).await }));
 					if let XdsSignal::Ack = signal {
 						if let Some(received_type) = received_type {
 							self.types_to_expect.remove(&received_type);
 							if self.types_to_expect.is_empty() {
-								if let Some(tx) = self.block_ready.take() {
-									let _ = tx.send(());
-								}
+								mem::drop(mem::take(&mut self.block_ready));
 							}
 						}
 					};
+
+					let tx = discovery_req_tx.clone();
+					pending_ack_sends.push(async move { tx.send(req).await });
 				}
 				Some(result) = pending_demand_sends.next() => {
 					result.map_err(|e| Error::RequestFailure(Box::new(e)))?;
@@ -708,7 +708,7 @@ impl AdsClient {
 		let nonce = response.nonce.clone();
 		self.metrics.record(&response, ());
 		debug!(
-			type_url = type_url, // this is a borrow, it's OK
+			type_url = type_url,
 			size = response.resources.len(),
 			removes = response.removed_resources.len(),
 			"received response"
@@ -753,8 +753,8 @@ impl AdsClient {
 		};
 
 		let req = DeltaDiscoveryRequest {
-			type_url,              // this is owned, OK to move
-			response_nonce: nonce, // this is owned, OK to move
+			type_url,
+			response_nonce: nonce,
 			error_detail: error.map(|msg| Status {
 				message: msg,
 				..Default::default()
