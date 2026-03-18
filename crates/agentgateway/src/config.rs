@@ -5,6 +5,7 @@ use std::time::Duration;
 use std::{cmp, env};
 
 use agent_core::durfmt;
+use agent_core::env::ENV;
 use agent_core::prelude::*;
 use secrecy::ExposeSecret;
 use serde::de::DeserializeOwned;
@@ -388,21 +389,12 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			resolver_opts,
 		},
 		proxy_metadata: crate::ProxyMetadata {
-			instance_ip: std::env::var("INSTANCE_IP").unwrap_or_else(|_| "1.1.1.1".to_string()),
-			pod_name: std::env::var("POD_NAME").unwrap_or_else(|_| "".to_string()),
-			pod_namespace: std::env::var("NAMESPACE").unwrap_or_else(|_| "".to_string()),
-			node_name: std::env::var("NODE_NAME").unwrap_or_else(|_| "".to_string()),
-			role: format!(
-				"{ns}~{name}",
-				ns = std::env::var("NAMESPACE").unwrap_or_else(|_| "".to_string()),
-				name = std::env::var("GATEWAY").unwrap_or_else(|_| "".to_string())
-			),
-			node_id: format!(
-				"agentgateway~{ip}~{pod_name}.{ns}~{ns}.svc.cluster.local",
-				ip = std::env::var("INSTANCE_IP").unwrap_or_else(|_| "1.1.1.1".to_string()),
-				pod_name = std::env::var("POD_NAME").unwrap_or_else(|_| "".to_string()),
-				ns = std::env::var("NAMESPACE").unwrap_or_else(|_| "".to_string())
-			),
+			instance_ip: ENV.instance_ip.clone(),
+			pod_name: ENV.pod_name.clone(),
+			pod_namespace: ENV.pod_namespace.clone(),
+			node_name: ENV.node_name.clone(),
+			role: ENV.role.clone(),
+			node_id: ENV.node_id.clone(),
 		},
 		session_encoder,
 		hbone: Arc::new(agent_hbone::Config {

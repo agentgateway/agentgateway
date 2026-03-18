@@ -5,6 +5,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use std::{fmt, mem};
 
+use agent_core::env::ENV;
 use agent_core::metrics::{IncrementRecorder, Recorder};
 use agent_core::strng;
 use agent_core::strng::Strng;
@@ -23,11 +24,8 @@ use crate::metrics::{ConnectionTerminationReason, Metrics};
 use crate::service::discovery::v3::aggregated_discovery_service_client::AggregatedDiscoveryServiceClient;
 use crate::service::discovery::v3::{Resource as ProtoResource, *};
 
-const INSTANCE_IP: &str = "INSTANCE_IP";
 const INSTANCE_IPS: &str = "INSTANCE_IPS";
 const DEFAULT_IP: &str = "1.1.1.1";
-const POD_NAME: &str = "POD_NAME";
-const POD_NAMESPACE: &str = "NAMESPACE";
 const NODE_NAME: &str = "NODE_NAME";
 const NAME: &str = "NAME";
 const NAMESPACE: &str = "NAMESPACE";
@@ -247,6 +245,7 @@ pub struct Config {
 
 impl Config {
 	pub fn new(client: GrpcClient, gateway_name: Strng, namespace: Strng) -> Self {
+		let env = &ENV;
 		Self {
 			client,
 			handlers: HashMap::new(),
@@ -256,10 +255,13 @@ impl Config {
 				("GATEWAY_NAME".to_string(), gateway_name.to_string()),
 				("NAMESPACE".to_string(), namespace.to_string()),
 			]),
-			instance_ip: std::env::var(INSTANCE_IP).unwrap_or_else(|_| DEFAULT_IP.to_string()),
-			pod_name: std::env::var(POD_NAME).unwrap_or_else(|_| EMPTY_STR.to_string()),
-			pod_namespace: std::env::var(POD_NAMESPACE).unwrap_or_else(|_| EMPTY_STR.to_string()),
-			node_name: std::env::var(NODE_NAME).unwrap_or_else(|_| EMPTY_STR.to_string()),
+			instance_ip: env
+				.instance_ip
+				.clone()
+				.unwrap_or_else(|| DEFAULT_IP.to_string()),
+			pod_name: env.pod_name.clone(),
+			pod_namespace: env.pod_namespace.clone(),
+			node_name: env.node_name.clone(),
 		}
 	}
 }

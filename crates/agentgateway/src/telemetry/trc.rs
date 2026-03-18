@@ -464,9 +464,8 @@ pub fn set_resource_defaults_from_config(cfg: &crate::Config) {
 	push_if_present("k8s.pod.name", pm.pod_name.as_str());
 	push_if_present("k8s.namespace.name", pm.pod_namespace.as_str());
 	push_if_present("k8s.node.name", pm.node_name.as_str());
-	// `INSTANCE_IP` defaults to "1.1.1.1" when unset, avoid exporting placeholder values.
-	if !pm.instance_ip.is_empty() && pm.instance_ip != "1.1.1.1" {
-		attrs.push(KeyValue::new("k8s.pod.ip", pm.instance_ip.clone()));
+	if let Some(instance_ip) = &pm.instance_ip {
+		attrs.push(KeyValue::new("k8s.pod.ip", instance_ip.clone()));
 	}
 	// `node_id` is derived from pod name/namespace, only set if we have those set
 	if !pm.node_id.is_empty() && !pm.pod_name.is_empty() && !pm.pod_namespace.is_empty() {

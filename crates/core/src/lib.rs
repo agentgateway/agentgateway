@@ -3,6 +3,7 @@ pub mod bow;
 pub mod copy;
 pub mod drain;
 pub mod durfmt;
+pub mod env;
 pub mod metrics;
 pub mod prelude;
 pub mod readiness;
