@@ -94,6 +94,7 @@ pub fn variables<'a, 'rf>(ftx: &mut FunctionContext<'a, 'rf>) -> ResolveResult<'
 		"backend",
 		"extauthz",
 		"extproc",
+		"env",
 	];
 	let mut res = vector_map::VecMap::with_capacity(keys.len());
 	for k in keys {

@@ -4,6 +4,7 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 use std::time::Instant;
 
+use agent_core::env::ENV;
 use agent_core::strng::Strng;
 use bytes::Bytes;
 use cel::Value;
@@ -40,6 +41,8 @@ pub struct Executor<'a> {
 
 	#[dynamic(skip_serializing_if = "Option::is_none")]
 	pub response: Option<ResponseRef<'a>>,
+
+	pub env: EnvContext,
 
 	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub source: ExtensionOrDirect<'a, SourceContext>,
@@ -80,6 +83,24 @@ pub struct Executor<'a> {
 
 fn is_extension_or_direct_none<T: Send + Sync + 'static>(e: &ExtensionOrDirect<T>) -> bool {
 	e.deref().is_none()
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+pub struct EnvContext {
+	pub pod_name: String,
+	pub namespace: String,
+	pub gateway: String,
+}
+
+impl Default for EnvContext {
+	fn default() -> Self {
+		Self {
+			pod_name: ENV.pod_name.clone(),
+			namespace: ENV.pod_namespace.clone(),
+			gateway: ENV.gateway.clone(),
+		}
+	}
 }
 
 #[apply(schema!)]
@@ -1145,6 +1166,10 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub response: Option<ResponseRefSerde>,
 
+	/// `env` contains selected process environment attributes exposed to CEL.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub env: Option<EnvContext>,
+
 	/// `jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub jwt: Option<jwt::Claims>,
@@ -1231,6 +1256,9 @@ impl ExecutorSerde {
 	/// are `None` in the snapshot will be absent in the executor.
 	pub fn as_executor(&self) -> Executor<'_> {
 		let mut exec = Executor::new_empty();
+		if let Some(env) = &self.env {
+			exec.env = env.clone();
+		}
 
 		// Set request if present
 		if let Some(req) = &self.request {
@@ -1303,6 +1331,11 @@ pub fn full_example_executor() -> ExecutorSerde {
 			code: 200,
 			headers: resp_headers,
 			body: Some(BufferedBody(Bytes::from(r#"{"ok": true}"#))),
+		}),
+		env: Some(EnvContext {
+			pod_name: "pod-1".to_string(),
+			namespace: "ns-1".to_string(),
+			gateway: "gw-1".to_string(),
 		}),
 		source: Some(SourceContext {
 			address: "127.0.0.1".parse().unwrap(),
