@@ -39,6 +39,7 @@ azure_core.workspace = true
 azure_identity.workspace = true
 base64.workspace = true
 bytes.workspace = true
+cookie.workspace = true
 cel.workspace = true
 chrono.workspace = true
 clocksource.workspace = true

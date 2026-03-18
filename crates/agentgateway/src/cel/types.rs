@@ -20,7 +20,7 @@ use bytes::Bytes;
 use cel::Value;
 use cel::common::ast::OptimizedExpr;
 use cel::context::VariableResolver;
-use cel::objects::{BytesValue, ListValue};
+use cel::objects::{BytesValue, ListValue, StringValue};
 use cel::types::dynamic::{DynamicType, DynamicValue};
 use cel::{ExecutionError, FunctionContext};
 use chrono::{DateTime, FixedOffset};
@@ -937,6 +937,31 @@ impl<'a> Headers<'a> {
 		self
 	}
 
+	fn cookie_headers(&self) -> impl Iterator<Item = Result<&str, ExecutionError>> + '_ {
+		self
+			.as_ref()
+			.get_all(http::header::COOKIE)
+			.iter()
+			.map(|value| {
+				value
+					.to_str()
+					.map_err(|err| ExecutionError::function_error("cookie", err))
+			})
+	}
+
+	fn cookie_value(&self, name: &str) -> Result<Value<'static>, ExecutionError> {
+		for header in self.cookie_headers() {
+			let header = header?;
+			for cookie in cookie::Cookie::split_parse(header) {
+				let cookie = cookie.map_err(|err| ExecutionError::function_error("cookie", err))?;
+				if cookie.name() == name {
+					return Ok(Value::from(cookie.value().to_string()));
+				}
+			}
+		}
+		Err(ExecutionError::no_such_key(name))
+	}
+
 	fn raw_values(&self, name: &str) -> Option<Vec<Cow<'_, str>>> {
 		let values = self
 			.as_ref()
@@ -1058,6 +1083,19 @@ impl DynamicType for Headers<'_> {
 	where
 		Self: 'a,
 	{
+		if name == "cookie" {
+			if ftx.args.len() != 1 {
+				return Some(Err(ExecutionError::invalid_argument_count(
+					1,
+					ftx.args.len(),
+				)));
+			}
+			let name = match ftx.arg::<StringValue>(0) {
+				Ok(name) => name,
+				Err(err) => return Some(Err(err)),
+			};
+			return Some(self.cookie_value(name.as_ref()));
+		}
 		if !ftx.args.is_empty() {
 			return Some(Err(ExecutionError::invalid_argument_count(
 				0,

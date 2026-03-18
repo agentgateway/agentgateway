@@ -186,6 +186,47 @@ mod headers {
 				.unwrap()
 			);
 	}
+
+	#[test]
+	fn cookie() {
+		let req = || {
+			::http::Request::builder()
+				.method(http::Method::GET)
+				.uri("http://example.com")
+				.header("cookie", "session=abc; theme=light")
+				.header("cookie", "session=def")
+				.body(crate::http::Body::empty())
+				.unwrap()
+		};
+		assert_eq!(
+			"abc",
+			eval_request(r#"request.headers.cookie("session")"#, req())
+				.unwrap()
+				.as_str()
+				.unwrap()
+				.as_ref()
+		);
+		assert_eq!(
+			"light",
+			eval_request(r#"request.headers.cookie("theme")"#, req())
+				.unwrap()
+				.as_str()
+				.unwrap()
+				.as_ref()
+		);
+	}
+
+	#[test]
+	fn cookie_missing() {
+		let req = ::http::Request::builder()
+			.method(http::Method::GET)
+			.uri("http://example.com")
+			.header("cookie", "session=abc")
+			.body(crate::http::Body::empty())
+			.unwrap();
+		let err = eval_request(r#"request.headers.cookie("theme")"#, req).unwrap_err();
+		assert!(err.to_string().contains("No such key: theme"));
+	}
 }
 
 mod query_accessors {

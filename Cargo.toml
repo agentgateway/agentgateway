@@ -65,6 +65,7 @@ azure_identity = { version = "0.31", default-features = false }
 azure_core = { version = "0.31", default-features = false }
 typespec_client_core = { default-features = false, version = "0.10" }
 base64 = "0.22"
+cookie = { version = "0.18", default-features = false }
 bcrypt = "0.18"
 bytes = { version = "1.10", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }
