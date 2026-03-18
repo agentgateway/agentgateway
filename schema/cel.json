@@ -112,6 +112,33 @@
       },
       "additionalProperties": false
     },
+    "env": {
+      "description": "`env` contains selected process environment attributes exposed to CEL.\nThis does NOT expose raw environment variables, but rather a subset of well-known variables.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "podName": {
+          "description": "The name of the pod (when running on Kubernetes)",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "The namespace of the pod (when running on Kubernetes)",
+          "type": "string"
+        },
+        "gateway": {
+          "description": "The Gateway we are running as (when running on Kubernetes)",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "podName",
+        "namespace",
+        "gateway"
+      ]
+    },
     "jwt": {
       "description": "`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.",
       "type": [

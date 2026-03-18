@@ -88,8 +88,11 @@ fn is_extension_or_direct_none<T: Send + Sync + 'static>(e: &ExtensionOrDirect<T
 #[apply(schema!)]
 #[derive(cel::DynamicType)]
 pub struct EnvContext {
+	/// The name of the pod (when running on Kubernetes)
 	pub pod_name: String,
+	/// The namespace of the pod (when running on Kubernetes)
 	pub namespace: String,
+	/// The Gateway we are running as (when running on Kubernetes)
 	pub gateway: String,
 }
 
@@ -1167,6 +1170,8 @@ pub struct ExecutorSerde {
 	pub response: Option<ResponseRefSerde>,
 
 	/// `env` contains selected process environment attributes exposed to CEL.
+	/// This does NOT expose raw environment variables, but rather a subset of well-known variables.
+	//  TODO: in the future we can, but we should add an allow-list of vars to avoid security issues.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub env: Option<EnvContext>,
 
