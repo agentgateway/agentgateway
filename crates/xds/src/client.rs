@@ -19,7 +19,7 @@ use prost_wkt_types::value::Kind;
 use prost_wkt_types::{Struct, Value};
 use split_iter::Splittable;
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 use tonic::body::Body;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
@@ -93,9 +93,6 @@ pub fn handle_single_resource<T: prost::Message, F: FnMut(XdsUpdate<T>) -> anyho
 // Handler is responsible for handling a discovery response.
 // Handlers can mutate state and return a list of rejected configurations (if there are any).
 pub trait Handler<T: prost::Message>: Send + Sync + 'static {
-	fn no_on_demand(&self) -> bool {
-		false
-	}
 	fn handle(
 		&self,
 		res: Box<&mut dyn Iterator<Item = XdsUpdate<T>>>,
@@ -145,8 +142,6 @@ impl<T: 'static + prost::Message + Default + Debug> RawHandler for HandlerWrappe
 			.map(XdsUpdate::Update)
 			.chain(removes.iter().cloned().map(|s| XdsUpdate::Remove(s.into())));
 
-		// First, call handlers that update the agentgateway state.
-		// other wise on-demand notifications might observe a cache without their resource
 		let updates: Box<&mut dyn Iterator<Item = XdsUpdate<T>>> = Box::new(&mut updates);
 		let result = self.h.handle(updates);
 
@@ -156,8 +151,6 @@ impl<T: 'static + prost::Message + Default + Debug> RawHandler for HandlerWrappe
 			.map(|r| r.expect_err("must be err"))
 			.collect();
 
-		// after we update the agentgateway cache, we can update our xds cache. it's important that we do this after
-		// as we make on demand notifications here, so the agentgateway cache must be updated first.
 		for name in res.removed_resources {
 			let k = ResourceKey {
 				name: name.into(),
@@ -167,7 +160,6 @@ impl<T: 'static + prost::Message + Default + Debug> RawHandler for HandlerWrappe
 			if let Some(rm) = state.known_resources.get_mut(&k.type_url) {
 				rm.remove(&k.name);
 			}
-			state.notify_on_demand(&k);
 		}
 
 		for r in res.resources {
@@ -175,7 +167,6 @@ impl<T: 'static + prost::Message + Default + Debug> RawHandler for HandlerWrappe
 				name: r.name.into(),
 				type_url: type_url.clone(),
 			};
-			state.notify_on_demand(&key);
 			state.add_resource(key.type_url, key.name);
 		}
 
@@ -240,7 +231,6 @@ pub struct Config {
 	proxy_metadata: HashMap<String, String>,
 	handlers: HashMap<Strng, Box<dyn RawHandler>>,
 	initial_requests: Vec<DeltaDiscoveryRequest>,
-	on_demand: bool,
 	// Environment variables
 	instance_ip: String,
 	pod_name: String,
@@ -255,7 +245,6 @@ impl Config {
 			client,
 			handlers: HashMap::new(),
 			initial_requests: Vec::new(),
-			on_demand: false,
 			proxy_metadata: HashMap::from([
 				("GATEWAY_NAME".to_string(), gateway_name.to_string()),
 				("NAMESPACE".to_string(), namespace.to_string()),
@@ -274,23 +263,9 @@ impl Config {
 pub struct State {
 	/// Stores all known workload resources. Map from type_url to name
 	known_resources: HashMap<Strng, HashSet<Strng>>,
-
-	/// pending stores a list of all resources that are pending and XDS push
-	pending: HashMap<ResourceKey, oneshot::Sender<()>>,
-
-	demand: mpsc::Receiver<(oneshot::Sender<()>, ResourceKey)>,
-	demand_tx: mpsc::Sender<(oneshot::Sender<()>, ResourceKey)>,
 }
 
 impl State {
-	fn notify_on_demand(&mut self, key: &ResourceKey) {
-		if let Some(send) = self.pending.remove(key) {
-			debug!("on demand notify {}", key.name);
-			if send.send(()).is_err() {
-				warn!("on demand dropped event for {}", key.name)
-			}
-		}
-	}
 	fn add_resource(&mut self, type_url: Strng, name: Strng) {
 		self
 			.known_resources
@@ -305,10 +280,7 @@ impl Config {
 	where
 		F: 'static + prost::Message + Default + Debug,
 	{
-		let no_on_demand = f.no_on_demand();
-		self
-			.with_handler(type_url.clone(), f)
-			.watch(type_url, no_on_demand)
+		self.with_handler(type_url.clone(), f).watch(type_url)
 	}
 
 	fn with_handler<F>(mut self, type_url: Strng, f: impl Handler<F>) -> Config
@@ -320,10 +292,10 @@ impl Config {
 		self
 	}
 
-	fn watch(mut self, type_url: Strng, no_on_demand: bool) -> Config {
+	fn watch(mut self, type_url: Strng) -> Config {
 		self
 			.initial_requests
-			.push(self.construct_initial_request(type_url, no_on_demand));
+			.push(self.construct_initial_request(type_url));
 		self
 	}
 
@@ -368,25 +340,11 @@ impl Config {
 			..Default::default()
 		}
 	}
-	fn construct_initial_request(
-		&self,
-		request_type: Strng,
-		no_on_demand: bool,
-	) -> DeltaDiscoveryRequest {
+	fn construct_initial_request(&self, request_type: Strng) -> DeltaDiscoveryRequest {
 		let node = self.node();
-
-		let (sub, unsub) = if (!no_on_demand) && self.on_demand {
-			// XDS doesn't have a way to subscribe to zero resources. We workaround this by subscribing and unsubscribing
-			// in one event, effectively giving us "subscribe to nothing".
-			(vec!["*".to_string()], vec!["*".to_string()])
-		} else {
-			(vec![], vec![])
-		};
 		DeltaDiscoveryRequest {
 			type_url: request_type.to_string(),
 			node: Some(node.clone()),
-			resource_names_subscribe: sub,
-			resource_names_unsubscribe: unsub,
 			..Default::default()
 		}
 	}
@@ -402,8 +360,6 @@ impl Config {
 /// These handlers can do whatever they want with incoming responses, but are responsible for maintaining their own state.
 /// For example, if a usage wants to keep track of all Foo resources received, it needs to handle the add/removes in the configured handler.
 ///
-/// The client also supports on-demand lookup of resources; see demander() for more information.
-///
 /// Currently, this is not quite a fully general purpose XDS client, as there is no dependant resource support.
 /// This could be added if needed, though.
 pub struct AdsClient {
@@ -416,26 +372,6 @@ pub struct AdsClient {
 
 	connection_id: u32,
 	types_to_expect: HashSet<String>,
-}
-
-/// Demanded allows awaiting for an on-demand XDS resource
-pub struct Demanded {
-	b: oneshot::Receiver<()>,
-}
-
-impl Demanded {
-	/// recv awaits for the requested resource
-	/// Note: the actual resource is not directly returned. Instead, callers are notified that the event
-	/// has been handled through the configured resource handler.
-	pub async fn recv(self) {
-		let _ = self.b.await;
-	}
-}
-
-/// Demander allows requesting XDS resources on-demand
-#[derive(Debug, Clone)]
-pub struct Demander {
-	demand: mpsc::Sender<(oneshot::Sender<()>, ResourceKey)>,
 }
 
 #[derive(Debug)]
@@ -453,41 +389,17 @@ impl Display for XdsSignal {
 	}
 }
 
-impl Demander {
-	/// Demand requests a given workload by name
-	pub async fn demand(&self, type_url: Strng, name: Strng) -> Demanded {
-		let (tx, rx) = oneshot::channel::<()>();
-		self
-			.demand
-			.send((tx, ResourceKey { name, type_url }))
-			.await
-			// TODO: is this guaranteed? How can we handle the failure
-			.expect("demand channel should not close");
-		Demanded { b: rx }
-	}
-}
-
 const INITIAL_BACKOFF: Duration = Duration::from_millis(10);
 const MAX_BACKOFF: Duration = Duration::from_secs(15);
-const MAX_PENDING_SENDS: usize = 100;
 
 impl AdsClient {
-	fn is_initial_request_on_demand(r: &DeltaDiscoveryRequest) -> bool {
-		!r.resource_names_subscribe.is_empty()
-	}
-
 	fn new(config: Config, metrics: Metrics, block_ready: tokio::sync::watch::Sender<()>) -> Self {
-		let (tx, rx) = mpsc::channel(100);
 		let state = State {
 			known_resources: Default::default(),
-			pending: Default::default(),
-			demand: rx,
-			demand_tx: tx,
 		};
 		let types_to_expect: HashSet<String> = config
 			.initial_requests
 			.iter()
-			.filter(|e| !Self::is_initial_request_on_demand(e)) // is_empty implies not ondemand
 			.map(|e| e.type_url.clone())
 			.collect();
 		AdsClient {
@@ -503,17 +415,6 @@ impl AdsClient {
 	/// Get a reference to the XDS configuration
 	pub fn config(&self) -> &Config {
 		&self.config
-	}
-
-	/// demander returns a Demander instance which can be used to request resources on-demand
-	pub fn demander(&self) -> Option<Demander> {
-		if self.config.on_demand {
-			Some(Demander {
-				demand: self.state.demand_tx.clone(),
-			})
-		} else {
-			None
-		}
 	}
 
 	async fn run_loop(&mut self, backoff: Duration) -> Duration {
@@ -659,17 +560,10 @@ impl AdsClient {
 
 		info!("Stream established");
 
-		let mut pending_demand_sends = FuturesUnordered::new();
 		let mut pending_ack_sends = FuturesUnordered::new();
 
 		loop {
 			tokio::select! {
-				_demand_event = self.state.demand.recv(), if pending_demand_sends.len() < MAX_PENDING_SENDS => {
-					if let Some(req) = self.handle_demand_event(_demand_event)? {
-						let tx = discovery_req_tx.clone();
-						pending_demand_sends.push( async move { tx.send(req).await });
-					}
-				}
 				msg = response_stream.message() => {
 					let Some(msg) = msg? else {
 						// If we got a None message, the stream ended without error.
@@ -693,9 +587,6 @@ impl AdsClient {
 
 					let tx = discovery_req_tx.clone();
 					pending_ack_sends.push(async move { tx.send(req).await });
-				}
-				Some(result) = pending_demand_sends.next() => {
-					result.map_err(|e| Error::RequestFailure(Box::new(e)))?;
 				}
 				Some(result) = pending_ack_sends.next() => {
 					result.map_err(|e| Error::RequestFailure(Box::new(e)))?;
@@ -766,24 +657,6 @@ impl AdsClient {
 			..Default::default()
 		};
 		Ok((response_type, req))
-	}
-
-	fn handle_demand_event(
-		&mut self,
-		demand_event: Option<(oneshot::Sender<()>, ResourceKey)>,
-	) -> Result<Option<DeltaDiscoveryRequest>, Error> {
-		let Some((tx, demand_event)) = demand_event else {
-			return Ok(None);
-		};
-		info!("received on demand request {demand_event}");
-		let ResourceKey { type_url, name } = demand_event.clone();
-		self.state.pending.insert(demand_event, tx);
-		self.state.add_resource(type_url.clone(), name.clone());
-		Ok(Some(DeltaDiscoveryRequest {
-			type_url: type_url.to_string(),
-			resource_names_subscribe: vec![name.to_string()],
-			..Default::default()
-		}))
 	}
 }
 
