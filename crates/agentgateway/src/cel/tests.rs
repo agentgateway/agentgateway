@@ -354,3 +354,26 @@ fn dynamic_index_key() {
 fn has_on_dynamic_map() {
 	assert_eq!(json!(true), eval(r#"has(request.headers.foo)"#).unwrap());
 }
+
+#[test]
+fn unset_values() {
+	let req = || {
+		::http::Request::builder()
+			.method(Method::GET)
+			.uri("http://example.com")
+			.header("x-example", "value")
+			.body(Body::empty())
+			.unwrap()
+	};
+	assert_eq!(Value::Null, eval_request("jwt", req()).unwrap());
+	assert_eq!(
+		Value::Bool(true),
+		eval_request("jwt == null", req()).unwrap()
+	);
+	// This is just invalid syntax
+	assert!(eval_request("has(jwt)", req()).is_err());
+	assert_eq!(
+		Value::Bool(false),
+		eval_request("has(jwt.sub)", req()).unwrap()
+	);
+}

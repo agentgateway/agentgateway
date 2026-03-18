@@ -35,48 +35,35 @@ use serde_json::json;
 #[derive(Debug, Default, cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
 pub struct Executor<'a> {
-	#[dynamic(skip_serializing_if = "Option::is_none")]
 	pub request: Option<RequestRef<'a>>,
 
-	#[dynamic(skip_serializing_if = "Option::is_none")]
 	pub response: Option<ResponseRef<'a>>,
 
 	pub env: EnvContext,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub source: ExtensionOrDirect<'a, SourceContext>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub jwt: ExtensionOrDirect<'a, jwt::Claims>,
 
-	#[dynamic(rename = "apiKey", skip_serializing_if = "is_extension_or_direct_none")]
+	#[dynamic(rename = "apiKey")]
 	pub api_key: ExtensionOrDirect<'a, apikey::Claims>,
 
-	#[dynamic(
-		rename = "basicAuth",
-		skip_serializing_if = "is_extension_or_direct_none"
-	)]
+	#[dynamic(rename = "basicAuth")]
 	pub basic_auth: ExtensionOrDirect<'a, basicauth::Claims>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub llm: ExtensionOrDirect<'a, LLMContext>,
 
-	#[dynamic(rename = "llmRequest", skip_serializing_if = "Option::is_none")]
+	#[dynamic(rename = "llmRequest")]
 	pub llm_request: Option<&'a serde_json::Value>,
 
-	#[dynamic(skip_serializing_if = "Option::is_none")]
 	pub mcp: Option<&'a ResourceType>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub backend: ExtensionOrDirect<'a, BackendContext>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub extauthz: ExtensionOrDirect<'a, ExtAuthzDynamicMetadata>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub extproc: ExtensionOrDirect<'a, ExtProcDynamicMetadata>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
 }
 
