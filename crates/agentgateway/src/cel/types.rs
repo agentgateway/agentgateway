@@ -89,19 +89,22 @@ fn is_extension_or_direct_none<T: Send + Sync + 'static>(e: &ExtensionOrDirect<T
 #[derive(cel::DynamicType)]
 pub struct EnvContext {
 	/// The name of the pod (when running on Kubernetes)
-	pub pod_name: String,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub pod_name: Option<String>,
 	/// The namespace of the pod (when running on Kubernetes)
-	pub namespace: String,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub namespace: Option<String>,
 	/// The Gateway we are running as (when running on Kubernetes)
-	pub gateway: String,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub gateway: Option<String>,
 }
 
 impl Default for EnvContext {
 	fn default() -> Self {
 		Self {
-			pod_name: ENV.pod_name.clone(),
-			namespace: ENV.pod_namespace.clone(),
-			gateway: ENV.gateway.clone(),
+			pod_name: (!ENV.pod_name.is_empty()).then(|| ENV.pod_name.clone()),
+			namespace: (!ENV.pod_namespace.is_empty()).then(|| ENV.pod_namespace.clone()),
+			gateway: (!ENV.gateway.is_empty()).then(|| ENV.gateway.clone()),
 		}
 	}
 }
@@ -1338,9 +1341,9 @@ pub fn full_example_executor() -> ExecutorSerde {
 			body: Some(BufferedBody(Bytes::from(r#"{"ok": true}"#))),
 		}),
 		env: Some(EnvContext {
-			pod_name: "pod-1".to_string(),
-			namespace: "ns-1".to_string(),
-			gateway: "gw-1".to_string(),
+			pod_name: Some("pod-1".to_string()),
+			namespace: Some("ns-1".to_string()),
+			gateway: Some("gw-1".to_string()),
 		}),
 		source: Some(SourceContext {
 			address: "127.0.0.1".parse().unwrap(),

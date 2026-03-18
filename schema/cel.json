@@ -121,23 +121,27 @@
       "properties": {
         "podName": {
           "description": "The name of the pod (when running on Kubernetes)",
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "namespace": {
           "description": "The namespace of the pod (when running on Kubernetes)",
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "gateway": {
           "description": "The Gateway we are running as (when running on Kubernetes)",
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "podName",
-        "namespace",
-        "gateway"
-      ]
+      "additionalProperties": false
     },
     "jwt": {
       "description": "`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.",
