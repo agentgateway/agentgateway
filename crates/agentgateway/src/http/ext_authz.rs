@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -793,7 +793,7 @@ fn apply_query_parameters_to_request(
 		}
 
 		if !query_parameters_to_remove.is_empty() {
-			pairs.retain(|(key, _)| !query_parameters_to_remove.contains(&key));
+			pairs.retain(|(key, _)| !query_parameters_to_remove.contains(key));
 		}
 
 		let mut serializer = form_urlencoded::Serializer::new(String::new());
@@ -805,7 +805,7 @@ fn apply_query_parameters_to_request(
 		url.set_query((!query.is_empty()).then_some(query.as_str()));
 		Ok(())
 	})
-	.map_err(|e| ProxyError::Processing(e.into()))
+	.map_err(ProxyError::Processing)
 }
 
 fn process_headers(
