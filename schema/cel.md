@@ -8,6 +8,7 @@
 |`request.host`|The hostname of the request. For example, `example.com`.|
 |`request.scheme`|The scheme of the request. For example, `https`.|
 |`request.path`|The path of the request URI. For example, `/path`.|
+|`request.pathAndQuery`|The path and query of the request URI. For example, `/path?foo=bar`.|
 |`request.version`|The version of the request. For example, `HTTP/1.1`.|
 |`request.headers`|The headers of the request.|
 |`request.body`|The body of the request. Warning: accessing the body will cause the body to be buffered.|

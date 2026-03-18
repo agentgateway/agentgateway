@@ -58,3 +58,24 @@ Examples:
 * `request.headers.redacted().split()["authorization"]`
 
 `redacted()` can be combined with any of the other methods. `join()`, `raw()`, and `split()` are mutually exclusive; if multiple are chained, the last one wins.
+
+## Query Accessors
+
+`request.pathAndQuery` and `request.uri` expose query-aware string values with chainable methods.
+
+Available methods:
+
+| Method | Purpose |
+|--------|---------|
+| `query(name)` | Returns a list of all values for the given query parameter. If the parameter is missing, evaluation fails with `NoSuchKey`. |
+| `addQuery(name, value)` | Returns a new `pathAndQuery`/`uri` with the query parameter appended. The original value is unchanged. |
+| `setQuery(name, value)` | Returns a new `pathAndQuery`/`uri` with all existing values for the key replaced by the provided value. The original value is unchanged. |
+
+Examples:
+
+* `request.pathAndQuery.query("foo") == ["bar", "baz"]`
+* `request.uri.query("zap") == ["zip"]`
+* `request.pathAndQuery.addQuery("foo", "qux") == "/api/test?foo=bar&foo=baz&foo=qux"`
+* `request.uri.setQuery("foo", "qux") == "http://example.com/api/test?foo=qux"`
+
+These values remain usable as strings for standard CEL string functions and comparisons.

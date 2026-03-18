@@ -42,6 +42,11 @@
           "type": "string",
           "default": ""
         },
+        "pathAndQuery": {
+          "description": "The path and query of the request URI. For example, `/path?foo=bar`.",
+          "type": "string",
+          "default": "/"
+        },
         "version": {
           "description": "The version of the request. For example, `HTTP/1.1`.",
           "type": "string",

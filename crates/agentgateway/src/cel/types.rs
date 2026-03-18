@@ -4,6 +4,16 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::cel::{Error, Expression, ROOT_CONTEXT, query};
+use crate::http::ext_authz::ExtAuthzDynamicMetadata;
+use crate::http::ext_proc::ExtProcDynamicMetadata;
+use crate::http::transformation_cel::TransformationMetadata;
+use crate::http::{apikey, basicauth, jwt};
+use crate::llm::{LLMInfo, LLMRequest};
+use crate::mcp::{ResourceId, ResourceType};
+use crate::serdes::schema;
+use crate::transport::tls::TlsInfo;
+use crate::{apply, llm};
 use agent_core::env::ENV;
 use agent_core::strng::Strng;
 use bytes::Bytes;
@@ -21,17 +31,6 @@ pub use schemars::JsonSchema;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::json;
-
-use crate::cel::{Error, Expression, ROOT_CONTEXT};
-use crate::http::ext_authz::ExtAuthzDynamicMetadata;
-use crate::http::ext_proc::ExtProcDynamicMetadata;
-use crate::http::transformation_cel::TransformationMetadata;
-use crate::http::{apikey, basicauth, jwt};
-use crate::llm::{LLMInfo, LLMRequest};
-use crate::mcp::{ResourceId, ResourceType};
-use crate::serdes::schema;
-use crate::transport::tls::TlsInfo;
-use crate::{apply, llm};
 
 #[derive(Debug, Default, cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
@@ -480,11 +479,13 @@ pub struct RequestRef<'a> {
 	#[dynamic(with_value = "to_value_str")]
 	pub method: &'a http::Method,
 
-	/// The request's URI
-	#[serde(with = "http_serde::uri")]
-	#[dynamic(with_value = "to_value_owned_string")]
-	pub uri: &'a http::Uri,
+	/// The request's URI. For example, `https://example.com/path?key=value`
+	pub uri: query::QueryAccessor<'a>,
+	/// The request's path. For example, `/path`.
 	pub path: &'a str,
+	/// The request's path with query params. For example, `/path?key=value`.
+	pub path_and_query: query::QueryAccessor<'a>,
+
 	/// The hostname of the request. For example, `example.com`.
 	#[serde(serialize_with = "crate::serde_authority_opt")]
 	#[dynamic(with_value = "to_value_str_opt")]
@@ -572,6 +573,11 @@ pub struct RequestRefSerde {
 	#[serde(default)]
 	pub path: String,
 
+	/// The path and query of the request URI. For example, `/path?foo=bar`.
+	#[serde(default, with = "http_serde::uri", rename = "pathAndQuery")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub path_and_query: http::Uri,
+
 	/// The version of the request. For example, `HTTP/1.1`.
 	#[serde(default, with = "http_serde::version")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
@@ -620,8 +626,9 @@ impl<'a> From<&'a RequestSnapshot> for RequestRef<'a> {
 	fn from(value: &'a RequestSnapshot) -> Self {
 		Self {
 			method: &value.method,
-			uri: &value.path,
+			uri: query::QueryAccessor::uri_from_uri(&value.path),
 			path: value.path.path(),
+			path_and_query: query::QueryAccessor::path_and_query_from_uri(&value.path),
 			host: value.host.as_ref(),
 			scheme: value.scheme.as_ref(),
 			version: value.version,
@@ -636,8 +643,9 @@ impl<'a, B> From<&'a ::http::Request<B>> for RequestRef<'a> {
 	fn from(req: &'a ::http::Request<B>) -> Self {
 		Self {
 			method: req.method(),
-			uri: req.uri(),
+			uri: query::QueryAccessor::uri_from_uri(req.uri()),
 			path: req.uri().path(),
+			path_and_query: query::QueryAccessor::path_and_query_from_uri(req.uri()),
 			host: req.uri().authority(),
 			scheme: req.uri().scheme(),
 			version: req.version(),
@@ -870,9 +878,6 @@ pub fn to_value_redacted<'a>(c: &'a SecretString) -> Value<'a> {
 }
 fn version_to_value<'a>(c: &'a http::Version) -> Value<'a> {
 	Value::String(crate::http::version_str(c).into())
-}
-fn to_value_owned_string<'a, T: ToString>(c: &'a &'a T) -> Value<'a> {
-	Value::String(c.to_string().into())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1272,8 +1277,9 @@ impl ExecutorSerde {
 		if let Some(req) = &self.request {
 			exec.request = Some(RequestRef {
 				method: &req.method,
-				uri: &req.uri,
+				uri: query::QueryAccessor::uri_from_uri(&req.uri),
 				path: &req.path,
+				path_and_query: query::QueryAccessor::path_and_query_from_uri(&req.path_and_query),
 				host: req.host.as_ref(),
 				scheme: req.scheme.as_ref(),
 				version: req.version,
@@ -1321,10 +1327,11 @@ pub fn full_example_executor() -> ExecutorSerde {
 	ExecutorSerde {
 		request: Some(RequestRefSerde {
 			method: Method::GET,
-			uri: "http://example.com/api/test".parse::<Uri>().unwrap(),
+			uri: "http://example.com/api/test?k=v".parse::<Uri>().unwrap(),
 			host: Some("example.com".parse().unwrap()),
 			scheme: Some(::http::uri::Scheme::HTTP),
 			path: "/api/test".to_string(),
+			path_and_query: "/api/test?k=v".parse::<Uri>().unwrap(),
 			version: Version::HTTP_11,
 			headers: req_headers,
 			body: Some(BufferedBody(Bytes::from(r#"{"model": "fast"}"#))),

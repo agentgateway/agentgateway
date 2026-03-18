@@ -325,3 +325,4 @@ mod tests;
 #[path = "benches.rs"]
 mod benches;
 mod properties;
+mod query;

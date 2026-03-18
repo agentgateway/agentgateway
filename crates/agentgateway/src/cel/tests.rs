@@ -188,6 +188,62 @@ mod headers {
 	}
 }
 
+mod query_accessors {
+	use crate::cel::tests::eval_request;
+	use crate::http::Body;
+	use cel::Value;
+	use http::Method;
+
+	fn request() -> crate::http::Request {
+		::http::Request::builder()
+			.method(Method::GET)
+			.uri("http://example.com/api/test?foo=bar&foo=baz&zap=zip")
+			.body(Body::empty())
+			.unwrap()
+	}
+
+	#[test]
+	fn path_stays_string_compatible() {
+		assert_eq!(
+			Value::Bool(true),
+			eval_request(r#"request.path == "/api/test""#, request()).unwrap()
+		);
+	}
+
+	#[test]
+	fn query_reads_from_path_and_uri() {
+		assert_eq!(
+			Value::Bool(true),
+			eval_request(
+				r#"request.pathAndQuery.query("foo") == ["bar", "baz"] && request.uri.query("zap") == ["zip"]"#,
+				request()
+			)
+			.unwrap()
+		);
+	}
+
+	#[test]
+	fn missing_query_is_no_such_key() {
+		let err = eval_request(r#"request.pathAndQuery.query("missing")"#, request()).unwrap_err();
+		assert!(err.to_string().contains("No such key: missing"), "{err}");
+	}
+
+	#[test]
+	fn add_and_set_query_return_new_values() {
+		assert_eq!(
+			Value::Bool(true),
+			eval_request(
+				r#"request.pathAndQuery == "/api/test?foo=bar&foo=baz&zap=zip" &&
+request.pathAndQuery.addQuery("foo", "qux") == "/api/test?foo=bar&foo=baz&zap=zip&foo=qux" &&
+request.pathAndQuery.setQuery("foo", "qux") == "/api/test?zap=zip&foo=qux" &&
+request.uri.setQuery("foo", "qux") == "http://example.com/api/test?zap=zip&foo=qux""#,
+				request()
+			)
+			.unwrap()
+		);
+	}
+}
+
 #[test]
 fn test_properties() {
 	let test = |e: &str, want: &[&str]| {
