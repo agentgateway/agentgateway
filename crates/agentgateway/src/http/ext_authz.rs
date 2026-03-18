@@ -1,10 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use ::http::{HeaderMap, StatusCode, Uri, header};
 use prost_types::Timestamp;
 use serde_json::Value as JsonValue;
+use url::form_urlencoded;
 
 use crate::cel::{BufferedBody, Expression, Value};
 use crate::http::ext_authz::proto::attribute_context::HttpRequest;
@@ -471,8 +472,8 @@ impl ExtAuthz {
 				headers,
 				headers_to_remove,
 				response_headers_to_add,
-				query_parameters_to_set: _,
-				query_parameters_to_remove: _,
+				query_parameters_to_set,
+				query_parameters_to_remove,
 				..
 			}) => {
 				for header_name in headers_to_remove {
@@ -500,12 +501,11 @@ impl ExtAuthz {
 
 				process_headers(req.headers_mut(), filtered_headers, None);
 
-				// for param in query_parameters_to_set {
-				// TODO
-				// }
-				// for param_name in query_parameters_to_remove {
-				// TODO
-				// }
+				apply_query_parameters_to_request(
+					req,
+					&query_parameters_to_set,
+					&query_parameters_to_remove,
+				)?;
 
 				if !response_headers_to_add.is_empty() {
 					let mut hm = HeaderMap::new();
@@ -766,6 +766,46 @@ fn apply_pseudo_headers_to_request(req: &mut Request, headers: &[HeaderValueOpti
 			let _ = crate::http::apply_header_or_pseudo(&mut rr, &pseudo, raw);
 		}
 	}
+}
+
+fn apply_query_parameters_to_request(
+	req: &mut Request,
+	query_parameters_to_set: &[proto::QueryParameter],
+	query_parameters_to_remove: &[String],
+) -> Result<(), ProxyError> {
+	if query_parameters_to_set.is_empty() && query_parameters_to_remove.is_empty() {
+		return Ok(());
+	}
+
+	crate::http::modify_url(req.uri_mut(), |url| {
+		let mut pairs = url
+			.query()
+			.map(|query| {
+				form_urlencoded::parse(query.as_bytes())
+					.map(|(key, value)| (key.into_owned(), value.into_owned()))
+					.collect::<Vec<_>>()
+			})
+			.unwrap_or_default();
+
+		for param in query_parameters_to_set {
+			pairs.retain(|(key, _)| key != &param.key);
+			pairs.push((param.key.clone(), param.value.clone()));
+		}
+
+		if !query_parameters_to_remove.is_empty() {
+			pairs.retain(|(key, _)| !query_parameters_to_remove.contains(&key));
+		}
+
+		let mut serializer = form_urlencoded::Serializer::new(String::new());
+		for (key, value) in pairs {
+			serializer.append_pair(&key, &value);
+		}
+
+		let query = serializer.finish();
+		url.set_query((!query.is_empty()).then_some(query.as_str()));
+		Ok(())
+	})
+	.map_err(|e| ProxyError::Processing(e.into()))
 }
 
 fn process_headers(
