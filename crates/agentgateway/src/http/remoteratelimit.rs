@@ -1,12 +1,13 @@
 use ::http::{HeaderMap, StatusCode};
 
 use crate::cel::Expression;
+use crate::http::envoy_proto_common;
 use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::localratelimit::RateLimitType;
 use crate::http::remoteratelimit::proto::rate_limit_descriptor::Entry;
 use crate::http::remoteratelimit::proto::rate_limit_service_client::RateLimitServiceClient;
 use crate::http::remoteratelimit::proto::{RateLimitDescriptor, RateLimitRequest};
-use crate::http::{HeaderName, HeaderValue, PolicyResponse, Request};
+use crate::http::{PolicyResponse, Request};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{BackendPolicy, SimpleBackendReference};
@@ -416,19 +417,6 @@ impl RemoteRateLimit {
 
 fn process_headers(hm: &mut HeaderMap, headers: Vec<proto::HeaderValue>) {
 	for h in headers {
-		let Ok(hn) = HeaderName::from_bytes(h.key.as_bytes()) else {
-			continue;
-		};
-		let hv = if !h.value.is_empty() {
-			HeaderValue::from_bytes(h.value.as_bytes())
-		} else if !h.raw_value.is_empty() {
-			HeaderValue::from_bytes(&h.raw_value)
-		} else {
-			continue;
-		};
-		let Ok(hv) = hv else {
-			continue;
-		};
-		hm.insert(hn, hv);
+		let _ = envoy_proto_common::apply_header_value(hm, &h);
 	}
 }

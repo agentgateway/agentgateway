@@ -8,6 +8,7 @@ use serde_json::Value as JsonValue;
 use url::form_urlencoded;
 
 use crate::cel::{BufferedBody, Expression, Value};
+use crate::http::envoy_proto_common;
 use crate::http::ext_authz::proto::attribute_context::HttpRequest;
 use crate::http::ext_authz::proto::authorization_client::AuthorizationClient;
 use crate::http::ext_authz::proto::check_response::HttpResponse;
@@ -17,9 +18,7 @@ use crate::http::ext_authz::proto::{
 use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::filters::BackendRequestTimeout;
 use crate::http::transformation_cel::SerAsStr;
-use crate::http::{
-	HeaderName, HeaderOrPseudo, HeaderValue, PolicyResponse, Request, Response, jwt,
-};
+use crate::http::{HeaderName, HeaderOrPseudo, PolicyResponse, Request, Response, jwt};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
@@ -425,7 +424,7 @@ impl ExtAuthz {
 			for (key, value) in metadata.fields {
 				dynamic_metadata
 					.0
-					.insert(key, convert_prost_value_to_json(&value)?);
+					.insert(key, envoy_proto_common::prost_value_to_json(&value)?);
 			}
 
 			if !dynamic_metadata.0.is_empty() {
@@ -708,7 +707,9 @@ impl ExtAuthz {
 					Some(Metadata {
 						filter_metadata: HashMap::from([(
 							"envoy.filters.http.jwt_authn".to_string(),
-							json_to_struct(serde_json::json!({"jwt_payload": jc.inner.clone()}))?,
+							envoy_proto_common::json_to_struct(
+								serde_json::json!({"jwt_payload": jc.inner.clone()}),
+							)?,
 						)]),
 					})
 				} else {
@@ -722,7 +723,7 @@ impl ExtAuthz {
 		let exec = cel::Executor::new_request(req);
 		let res = exec.eval(v)?;
 		let js = res.json().map_err(|_| cel::Error::JsonConvert)?;
-		let pb = json_to_struct(js)?;
+		let pb = envoy_proto_common::json_to_struct(js)?;
 		Ok(pb)
 	}
 
@@ -738,14 +739,6 @@ impl ExtAuthz {
 	}
 }
 
-fn convert_prost_value_to_json(value: &prost_wkt_types::Value) -> Result<JsonValue, ProxyError> {
-	serde_json::to_value(value).map_err(|e| ProxyError::Processing(e.into()))
-}
-
-fn json_to_struct(value: serde_json::Value) -> Result<prost_wkt_types::Struct, ProxyError> {
-	serde_json::from_value(value).map_err(|e| ProxyError::Processing(e.into()))
-}
-
 /// Apply HTTP/2 pseudo-headers returned by the ext_authz server to the inbound request
 fn apply_pseudo_headers_to_request(req: &mut Request, headers: &[HeaderValueOption]) {
 	for header in headers {
@@ -756,15 +749,8 @@ fn apply_pseudo_headers_to_request(req: &mut Request, headers: &[HeaderValueOpti
 		if !h.key.starts_with(':') {
 			continue;
 		}
-		if let Ok(pseudo) = HeaderOrPseudo::try_from(h.key.as_str()) {
-			let raw = if !h.raw_value.is_empty() {
-				h.raw_value.as_slice()
-			} else {
-				h.value.as_bytes()
-			};
-			let mut rr = crate::http::RequestOrResponse::Request(req);
-			let _ = crate::http::apply_header_or_pseudo(&mut rr, &pseudo, raw);
-		}
+		let mut rr = crate::http::RequestOrResponse::Request(req);
+		let _ = envoy_proto_common::apply_pseudo_header_option(&mut rr, header);
 	}
 }
 
@@ -813,10 +799,8 @@ fn process_headers(
 	headers: Vec<HeaderValueOption>,
 	allowlist: Option<&[String]>,
 ) {
-	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
-
 	for header in headers {
-		let Some(h) = header.header else { continue };
+		let Some(ref h) = header.header else { continue };
 
 		// If allowlist is provided, only process headers in the allowlist
 		if let Some(allowed) = allowlist {
@@ -833,58 +817,6 @@ fn process_headers(
 			warn!("Invalid header name: {}", h.key);
 			continue;
 		};
-		let hv = if h.raw_value.is_empty() {
-			HeaderValue::from_bytes(h.value.as_bytes())
-		} else {
-			HeaderValue::from_bytes(&h.raw_value)
-		};
-		let Ok(hv) = hv else {
-			warn!("Invalid header value for key: {}", h.key);
-			continue;
-		};
-
-		// Determine the action to take.
-		// If append_action is explicitly set (non-zero), use it.
-		// If append_action is default (0), fallback to deprecated append (default=false to overwrite).
-		let action = if header.append_action == 0 {
-			match header.append {
-				Some(true) => HeaderAppendAction::AppendIfExistsOrAdd,
-				_ => HeaderAppendAction::OverwriteIfExistsOrAdd,
-			}
-		} else {
-			match HeaderAppendAction::try_from(header.append_action) {
-				Ok(action) => action,
-				Err(_) => {
-					warn!(
-						"Unexpected header append_action `{:?}` falling back to APPEND_IF_EXISTS_OR_ADD",
-						header.append_action
-					);
-					HeaderAppendAction::AppendIfExistsOrAdd
-				},
-			}
-		};
-
-		match action {
-			HeaderAppendAction::AppendIfExistsOrAdd => {
-				// Append to existing or add new
-				hm.append(hn, hv);
-			},
-			HeaderAppendAction::AddIfAbsent => {
-				// Only add if header doesn't exist
-				if !hm.contains_key(&hn) {
-					hm.insert(hn, hv);
-				}
-			},
-			HeaderAppendAction::OverwriteIfExistsOrAdd => {
-				// Replace existing or add new
-				hm.insert(hn, hv);
-			},
-			HeaderAppendAction::OverwriteIfExists => {
-				// Replace existing, no-op if doesn't exist
-				if hm.contains_key(&hn) {
-					hm.insert(hn, hv);
-				}
-			},
-		}
+		let _ = envoy_proto_common::apply_header_value_option(hm, &hn, &header);
 	}
 }
