@@ -349,6 +349,16 @@ pub struct LLMRouteMatch {
 	pub headers: Vec<HeaderMatch>,
 }
 
+#[apply(schema!)]
+pub struct SecretFromFile(
+	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
+	#[serde(
+		serialize_with = "ser_redact",
+		deserialize_with = "deser_key_from_file"
+	)]
+	SecretString,
+);
+
 #[apply(schema_de!)]
 #[derive(Default)]
 pub struct LocalLLMParams {
@@ -359,7 +369,7 @@ pub struct LocalLLMParams {
 	/// An API key to attach to the request.
 	/// If unset this will be automatically detected from the environment.
 	#[serde(default)]
-	api_key: Option<String>,
+	api_key: Option<SecretFromFile>,
 	// For Bedorkc: The AWS region to use
 	aws_region: Option<Strng>,
 	// For Vertex: The Google region to use
@@ -1631,7 +1641,7 @@ json(request.body).model
 		// Create backend auth policy
 		let mut pols = vec![];
 		if let Some(key) = p.api_key.as_ref() {
-			let backend_auth = BackendAuth::Key(SecretString::new(key.clone().into_boxed_str()));
+			let backend_auth = BackendAuth::Key(key.0.clone());
 			pols.push(BackendPolicy::BackendAuth(backend_auth));
 		}
 

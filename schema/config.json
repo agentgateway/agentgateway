@@ -5926,9 +5926,13 @@
         },
         "apiKey": {
           "description": "An API key to attach to the request.\nIf unset this will be automatically detected from the environment.",
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretFromFile"
+            },
+            {
+              "type": "null"
+            }
           ],
           "default": null
         },
@@ -5987,6 +5991,9 @@
         }
       },
       "additionalProperties": false
+    },
+    "SecretFromFile": {
+      "$ref": "#/$defs/FileOrInline"
     },
     "LocalModelAIProvider": {
       "type": "string",
