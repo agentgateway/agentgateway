@@ -1279,6 +1279,12 @@ type ExtAuth struct {
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 
+	// FailureMode controls behavior when the external authorization service is
+	// unavailable or returns an error. "FailOpen" allows the request to continue.
+	// "FailClosed" (default) denies the request.
+	// +optional
+	FailureMode FailureMode `json:"failureMode,omitempty"`
+
 	// grpc specifies that the gRPC External Authorization
 	// [protocol](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/auth/v3/external_auth.proto) should be used.
 	// +optional
@@ -1394,6 +1400,12 @@ type GlobalRateLimit struct {
 	// Supported types: `Service` and `Backend`.
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// `failureMode` controls behavior when the remote rate limit service is
+	// unavailable or returns an error. `FailOpen` allows the request to continue.
+	// `FailClosed` (default) denies the request.
+	// +optional
+	FailureMode FailureMode `json:"failureMode,omitempty"`
 
 	// `domain` specifies the domain under which this limit should apply.
 	// This is an arbitrary string that enables a rate limit server to distinguish between different applications.

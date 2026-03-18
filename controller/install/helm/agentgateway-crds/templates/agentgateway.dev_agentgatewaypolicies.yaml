@@ -7073,6 +7073,15 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
+                      failureMode:
+                        description: |-
+                          FailureMode controls behavior when the external authorization service is
+                          unavailable or returns an error. "FailOpen" allows the request to continue.
+                          "FailClosed" (default) denies the request.
+                        enum:
+                        - FailOpen
+                        - FailClosed
+                        type: string
                       forwardBody:
                         description: |-
                           `forwardBody` configures whether to include the HTTP body in the request.
@@ -7920,6 +7929,15 @@ spec:
                               This is an arbitrary string that enables a rate limit server to distinguish between different applications.
                             maxLength: 256
                             minLength: 1
+                            type: string
+                          failureMode:
+                            description: |-
+                              `failureMode` controls behavior when the remote rate limit service is
+                              unavailable or returns an error. `FailOpen` allows the request to continue.
+                              `FailClosed` (default) denies the request.
+                            enum:
+                            - FailOpen
+                            - FailClosed
                             type: string
                         required:
                         - backendRef

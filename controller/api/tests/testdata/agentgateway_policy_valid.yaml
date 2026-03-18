@@ -308,6 +308,7 @@ spec:
         name: auth-server
         kind: AgentgatewayBackend
         group: agentgateway.dev
+      failureMode: FailOpen
       forwardBody:
         maxSize: 1048576
 ---
@@ -358,6 +359,7 @@ spec:
           name: ratelimit-service
           kind: Service
           port: 8080
+        failureMode: FailOpen
         domain: example.com
         descriptors:
           - entries:

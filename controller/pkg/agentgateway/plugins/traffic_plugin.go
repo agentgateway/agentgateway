@@ -880,7 +880,7 @@ func processExtAuthPolicy(
 
 	spec := &api.TrafficPolicySpec_ExternalAuth{
 		Target:      be,
-		FailureMode: api.TrafficPolicySpec_ExternalAuth_DENY,
+		FailureMode: extAuthFailureMode(extAuth.FailureMode),
 	}
 	if g := extAuth.GRPC; g != nil {
 		metadata := castCELMap(g.RequestMetadata, func(key string, expr shared.CELExpression) {
@@ -1204,6 +1204,7 @@ func processGlobalRateLimitPolicy(
 						Domain:      grl.Domain,
 						Target:      be,
 						Descriptors: descriptors,
+						FailureMode: remoteRateLimitFailureMode(grl.FailureMode),
 					},
 				},
 			},
@@ -1236,6 +1237,20 @@ func processRateLimitDescriptor(descriptor agentgateway.RateLimitDescriptor) (*a
 		Entries: entries,
 		Type:    rlType,
 	}, errors.Join(errs...)
+}
+
+func extAuthFailureMode(mode agentgateway.FailureMode) api.TrafficPolicySpec_ExternalAuth_FailureMode {
+	if mode == agentgateway.FailOpen {
+		return api.TrafficPolicySpec_ExternalAuth_ALLOW
+	}
+	return api.TrafficPolicySpec_ExternalAuth_DENY
+}
+
+func remoteRateLimitFailureMode(mode agentgateway.FailureMode) api.TrafficPolicySpec_RemoteRateLimit_FailureMode {
+	if mode == agentgateway.FailOpen {
+		return api.TrafficPolicySpec_RemoteRateLimit_FAIL_OPEN
+	}
+	return api.TrafficPolicySpec_RemoteRateLimit_FAIL_CLOSED
 }
 
 func buildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS string) (*api.BackendReference, error) {
