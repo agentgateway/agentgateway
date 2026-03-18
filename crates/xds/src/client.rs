@@ -1,13 +1,16 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
+use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
-use std::{fmt, mem};
 
 use agent_core::metrics::{IncrementRecorder, Recorder};
 use agent_core::strng;
 use agent_core::strng::Strng;
+use futures::StreamExt as _;
+use futures::stream::FuturesUnordered;
 use http::Request;
 use prost::{DecodeError, EncodeError};
 use prost_types::value::Kind;
@@ -384,7 +387,7 @@ impl Config {
 		}
 	}
 
-	pub fn build(self, metrics: Metrics, block_ready: tokio::sync::watch::Sender<()>) -> AdsClient {
+	pub fn build(self, metrics: Metrics, block_ready: tokio::sync::oneshot::Sender<()>) -> AdsClient {
 		AdsClient::new(self, metrics, block_ready)
 	}
 }
@@ -405,7 +408,7 @@ pub struct AdsClient {
 	state: State,
 
 	pub(crate) metrics: Metrics,
-	block_ready: Option<tokio::sync::watch::Sender<()>>,
+	block_ready: Option<tokio::sync::oneshot::Sender<()>>,
 
 	connection_id: u32,
 	types_to_expect: HashSet<String>,
@@ -468,7 +471,7 @@ impl AdsClient {
 		!r.resource_names_subscribe.is_empty()
 	}
 
-	fn new(config: Config, metrics: Metrics, block_ready: tokio::sync::watch::Sender<()>) -> Self {
+	fn new(config: Config, metrics: Metrics, block_ready: tokio::sync::oneshot::Sender<()>) -> Self {
 		let (tx, rx) = mpsc::channel(100);
 		let state = State {
 			known_resources: Default::default(),
@@ -650,10 +653,18 @@ impl AdsClient {
 		debug!("connected established");
 
 		info!("Stream established");
+
+		let mut pending_demand_sends  = FuturesUnordered::new();
+		let mut pending_ack_sends =
+			FuturesUnordered::new();
+
 		loop {
 			tokio::select! {
 				_demand_event = self.state.demand.recv() => {
-					self.handle_demand_event(_demand_event, &discovery_req_tx).await?;
+					if let Some(req) = self.handle_demand_event(_demand_event)? {
+						let tx = discovery_req_tx.clone();
+						pending_demand_sends.push(Box::pin(async move { tx.send(req).await }));
+					}
 				}
 				msg = response_stream.message() => {
 					let Some(msg) = msg? else {
@@ -665,24 +676,34 @@ impl AdsClient {
 					if !self.types_to_expect.is_empty() {
 						received_type = Some(msg.type_url.clone())
 					}
-					if let XdsSignal::Ack = self.handle_stream_event(msg, &discovery_req_tx).await? {
+					let (signal, req) = self.handle_stream_event(msg)?;
+					let tx = discovery_req_tx.clone();
+					pending_ack_sends.push(Box::pin(async move { tx.send(req).await }));
+					if let XdsSignal::Ack = signal {
 						if let Some(received_type) = received_type {
 							self.types_to_expect.remove(&received_type);
 							if self.types_to_expect.is_empty() {
-								mem::drop(mem::take(&mut self.block_ready));
+								if let Some(tx) = self.block_ready.take() {
+									let _ = tx.send(());
+								}
 							}
 						}
 					};
+				}
+				Some(result) = pending_demand_sends.next() => {
+					result.map_err(|e| Error::RequestFailure(Box::new(e)))?;
+				}
+				Some(result) = pending_ack_sends.next() => {
+					result.map_err(|e| Error::RequestFailure(Box::new(e)))?;
 				}
 			}
 		}
 	}
 
-	async fn handle_stream_event(
+	fn handle_stream_event(
 		&mut self,
 		response: DeltaDiscoveryResponse,
-		send: &mpsc::Sender<DeltaDiscoveryRequest>,
-	) -> Result<XdsSignal, Error> {
+	) -> Result<(XdsSignal, DeltaDiscoveryRequest), Error> {
 		let type_url = response.type_url.clone();
 		let nonce = response.nonce.clone();
 		self.metrics.record(&response, ());
@@ -731,42 +752,34 @@ impl AdsClient {
 			),
 		};
 
-		send
-			.send(DeltaDiscoveryRequest {
-				type_url,              // this is owned, OK to move
-				response_nonce: nonce, // this is owned, OK to move
-				error_detail: error.map(|msg| Status {
-					message: msg,
-					..Default::default()
-				}),
+		let req = DeltaDiscoveryRequest {
+			type_url,              // this is owned, OK to move
+			response_nonce: nonce, // this is owned, OK to move
+			error_detail: error.map(|msg| Status {
+				message: msg,
 				..Default::default()
-			})
-			.await
-			.map_err(|e| Error::RequestFailure(Box::new(e)))
-			.map(|_| response_type)
+			}),
+			..Default::default()
+		};
+		Ok((response_type, req))
 	}
 
-	async fn handle_demand_event(
+	fn handle_demand_event(
 		&mut self,
 		demand_event: Option<(oneshot::Sender<()>, ResourceKey)>,
-		send: &mpsc::Sender<DeltaDiscoveryRequest>,
-	) -> Result<(), Error> {
+	) -> Result<Option<DeltaDiscoveryRequest>, Error> {
 		let Some((tx, demand_event)) = demand_event else {
-			return Ok(());
+			return Ok(None);
 		};
 		info!("received on demand request {demand_event}");
 		let ResourceKey { type_url, name } = demand_event.clone();
 		self.state.pending.insert(demand_event, tx);
 		self.state.add_resource(type_url.clone(), name.clone());
-		send
-			.send(DeltaDiscoveryRequest {
-				type_url: type_url.to_string(),
-				resource_names_subscribe: vec![name.to_string()],
-				..Default::default()
-			})
-			.await
-			.map_err(|e| Error::RequestFailure(Box::new(e)))?;
-		Ok(())
+		Ok(Some(DeltaDiscoveryRequest {
+			type_url: type_url.to_string(),
+			resource_names_subscribe: vec![name.to_string()],
+			..Default::default()
+		}))
 	}
 }
 

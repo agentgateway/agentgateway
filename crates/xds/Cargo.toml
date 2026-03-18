@@ -12,6 +12,7 @@ axum-core.workspace = true
 agent-core.workspace = true
 anyhow.workspace = true
 async-stream.workspace = true
+futures.workspace = true
 prometheus-client.workspace = true
 prost.workspace = true
 prost-types.workspace = true
