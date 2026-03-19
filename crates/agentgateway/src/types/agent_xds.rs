@@ -909,7 +909,7 @@ impl TryFrom<&proto::agent::RouteMatch> for RouteMatch {
 			}) => PathMatch::Exact(strng::new(prefix)),
 			Some(proto::agent::PathMatch {
 				kind: Some(Kind::Regex(r)),
-			}) => PathMatch::Regex(regex::Regex::new(r)?, r.len()),
+			}) => PathMatch::Regex(regex::Regex::new(r)?),
 			Some(proto::agent::PathMatch { kind: None }) => {
 				return Err(ProtoError::Generic("invalid path match".to_string()));
 			},

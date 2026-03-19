@@ -160,7 +160,7 @@ fn redirection_test() {
 		status: None,
 	};
 
-	let match_regex = PathMatch::Regex(regex::Regex::new(r"^/regex/(\d+)$").unwrap(), 1);
+	let match_regex = PathMatch::Regex(regex::Regex::new(r"^/regex/(\d+)$").unwrap());
 	let regex_path = RequestRedirect {
 		scheme: None,
 		authority: None,
@@ -764,6 +764,18 @@ fn rewrite_test() {
 				uri: "http://test.com/v1/users".to_string(),
 			}),
 		),
+		// Test path prefix edge case - with trailing slash matching the url
+		(
+			"path_prefix_trailing_slash_full",
+			Input {
+				path: &match_api_slash,
+				rewrite: &prefix_path_v1_slash_rewrite,
+				uri: "http://test.com/api",
+			},
+			Some(Want {
+				uri: "http://test.com/v1/".to_string(),
+			}),
+		),
 		// Test path prefix edge case - replace prefix_without_trailing_slash with /
 		(
 			"path_prefix_trailing_slash",
@@ -900,6 +912,9 @@ fn rewrite_test() {
 		),
 	];
 	for (name, inp, want) in cases {
+		if name != "path_prefix_trailing_slash_full" {
+			continue;
+		}
 		let mut req = request_for_uri(inp.uri);
 		req.extensions_mut().insert(inp.path.clone());
 

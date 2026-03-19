@@ -839,7 +839,6 @@ pub enum PathMatch {
 		#[serde(with = "serde_regex")]
 		#[cfg_attr(feature = "schema", schemars(with = "String"))]
 		regex::Regex,
-		usize,
 	),
 }
 
@@ -1683,7 +1682,7 @@ fn get_path_rank(path: &PathMatch) -> i32 {
 		PathMatch::Exact(_) => 3,
 		// Prefix/Regex -- we will defer to the length
 		PathMatch::PathPrefix(_) => 2,
-		PathMatch::Regex(_, _) => 2,
+		PathMatch::Regex(_) => 2,
 	}
 }
 
@@ -1691,7 +1690,7 @@ fn get_path_length(path: &PathMatch) -> usize {
 	match path {
 		PathMatch::Exact(s) => s.len(),
 		PathMatch::PathPrefix(s) => s.len(),
-		PathMatch::Regex(_, l) => *l,
+		PathMatch::Regex(r) => r.as_str().len(),
 	}
 }
 

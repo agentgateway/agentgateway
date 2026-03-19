@@ -244,7 +244,8 @@ fn rewrite_path(
 				));
 			};
 			let mut new_path = r.to_string();
-			let (_, rest) = orig.path().split_at(match_pfx.len());
+			// path prefix ignores trailing / so trim those out
+			let (_, rest) = orig.path().split_at(match_pfx.trim_end_matches("/").len());
 			if !new_path.ends_with('/') && !rest.is_empty() && !rest.starts_with('/') {
 				new_path.push('/');
 			}

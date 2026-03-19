@@ -608,7 +608,7 @@ impl HTTPProxy {
 					strng::format!("{}/*", p)
 				}
 			},
-			PathMatch::Regex(r, _) => r.as_str().into(),
+			PathMatch::Regex(r) => r.as_str().into(),
 		});
 		req.extensions_mut().insert(path_match);
 

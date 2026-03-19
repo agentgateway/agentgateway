@@ -884,19 +884,7 @@
           "type": "object",
           "properties": {
             "regex": {
-              "type": "array",
-              "prefixItems": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer",
-                  "format": "uint",
-                  "minimum": 0
-                }
-              ],
-              "minItems": 2,
-              "maxItems": 2
+              "type": "string"
             }
           },
           "required": [
