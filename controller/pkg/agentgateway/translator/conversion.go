@@ -1,6 +1,7 @@
 package translator
 
 import (
+	"cmp"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -977,7 +978,7 @@ func extractParentReferenceInfo(ctx RouteContext, parents RouteParents, obj cont
 
 			rpi := RouteParentReference{
 				ParentGateway:     pr.ParentGateway,
-				InternalName:      pr.InternalName,
+				ListenerKey:       pr.ListenerKey,
 				InternalKind:      ir.Kind,
 				Hostname:          pr.OriginalHostname,
 				DeniedReason:      deniedReason,
@@ -1022,11 +1023,10 @@ func (p ParentReference) String() string {
 // ParentInfo holds info about a "Parent" - something that can be referenced as a ParentRef in the API.
 // Today, this is just Gateway
 type ParentInfo struct {
-	ParentGateway types.NamespacedName
-	// +krtEqualsTodo ensure gateway class changes trigger equality differences
+	ParentGateway          types.NamespacedName
 	ParentGatewayClassName string
-	// InternalName refers to the internal name we can reference it by. For example "my-ns/my-gateway"
-	InternalName string
+	// ListenerKey is the internal key of the listener resource created for this parent.
+	ListenerKey string
 	// AllowedKinds indicates which kinds can be admitted by this Parent
 	AllowedKinds []gwv1.RouteGroupKind
 	// Hostnames is the hostnames that must be match to reference to the Parent. For gateway this is listener hostname
@@ -1045,8 +1045,8 @@ type ParentInfo struct {
 
 // RouteParentReference holds information about a route's parent reference
 type RouteParentReference struct {
-	// InternalName refers to the internal name of the parent we can reference it by. For example "my-ns/my-gateway"
-	InternalName string
+	// ListenerKey is the internal key of the listener resource created for this parent.
+	ListenerKey string
 	// InternalKind is the Kind of the Parent
 	InternalKind string
 	// DeniedReason, if present, indicates why the reference was not valid
@@ -1073,10 +1073,15 @@ func FilteredReferences(parents []RouteParentReference) []RouteParentReference {
 		ret = append(ret, p)
 	}
 	// To ensure deterministic order, sort them
-	sort.Slice(ret, func(i, j int) bool {
-		return ret[i].InternalName < ret[j].InternalName
+	return slices.SortFunc(ret, func(a, b RouteParentReference) int {
+		if r := cmp.Compare(a.ListenerKey, b.ListenerKey); r != 0 {
+			return r
+		}
+		if r := cmp.Compare(a.ParentGateway.Namespace, b.ParentGateway.Namespace); r != 0 {
+			return r
+		}
+		return cmp.Compare(a.ParentGateway.Name, b.ParentGateway.Name)
 	})
-	return ret
 }
 
 // IsManaged checks if a Gateway is managed (ie we create the Deployment and Service) or unmanaged.

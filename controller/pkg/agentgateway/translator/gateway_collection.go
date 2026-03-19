@@ -197,7 +197,8 @@ func (g GatewayListener) Equals(other GatewayListener) bool {
 
 func (g ParentInfo) Equals(other ParentInfo) bool {
 	return g.ParentGateway == other.ParentGateway &&
-		g.InternalName == other.InternalName &&
+		g.ParentGatewayClassName == other.ParentGatewayClassName &&
+		g.ListenerKey == other.ListenerKey &&
 		g.OriginalHostname == other.OriginalHostname &&
 		g.SectionName == other.SectionName &&
 		g.Port == other.Port &&
@@ -301,7 +302,7 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			pri := ParentInfo{
 				ParentGateway:          config.NamespacedName(obj),
 				ParentGatewayClassName: string(obj.Spec.GatewayClassName),
-				InternalName:           utils.InternalGatewayName(obj.Namespace, name, ""),
+				ListenerKey:            name,
 				AllowedKinds:           allowed,
 				Hostnames:              hostnames,
 				OriginalHostname:       string(ptr.OrEmpty(l.Hostname)),
@@ -505,7 +506,7 @@ func ListenerSetBuilder(
 		allowed, _ := GenerateSupportedKinds(standardListener)
 		pri := ParentInfo{
 			ParentGateway:    config.NamespacedName(parentGwObj),
-			InternalName:     obj.Namespace + "/" + name,
+			ListenerKey:      name,
 			AllowedKinds:     allowed,
 			Hostnames:        hostnames,
 			OriginalHostname: string(ptr.OrEmpty(l.Hostname)),
