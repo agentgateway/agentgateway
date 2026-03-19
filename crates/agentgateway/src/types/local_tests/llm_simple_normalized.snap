@@ -44,6 +44,7 @@ binds:
                     /v1/embeddings: embeddings
                     /v1/messages: messages
                     /v1/responses: responses
+                    /v1/responses/compact: detect
                     ":rawPredict": messages
                     ":streamRawPredict": messages
             key: "llm:model:000000:claude-3-haiku"
@@ -71,6 +72,7 @@ binds:
                     /v1/embeddings: embeddings
                     /v1/messages: messages
                     /v1/responses: responses
+                    /v1/responses/compact: detect
                     ":rawPredict": messages
                     ":streamRawPredict": messages
             key: "llm:model:000001:gemini-0.5-pro"
@@ -95,6 +97,7 @@ binds:
                     /v1/embeddings: embeddings
                     /v1/messages: messages
                     /v1/responses: responses
+                    /v1/responses/compact: detect
                     ":rawPredict": messages
                     ":streamRawPredict": messages
             key: "llm:model:000002:gpt-7-max"
@@ -119,6 +122,7 @@ binds:
                     /v1/embeddings: embeddings
                     /v1/messages: messages
                     /v1/responses: responses
+                    /v1/responses/compact: detect
                     ":rawPredict": messages
                     ":streamRawPredict": messages
             key: "llm:model:000003:gpt-3.5-turbo"

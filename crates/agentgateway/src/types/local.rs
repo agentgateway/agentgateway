@@ -1782,6 +1782,10 @@ json(request.body).model
 						crate::llm::RouteType::Responses,
 					),
 					(
+						strng::new("/v1/responses/compact"),
+						crate::llm::RouteType::Detect,
+					),
+					(
 						strng::new("/v1/embeddings"),
 						crate::llm::RouteType::Embeddings,
 					),
