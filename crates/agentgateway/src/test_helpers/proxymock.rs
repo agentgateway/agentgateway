@@ -1,3 +1,4 @@
+use std::convert::Infallible;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -11,17 +12,19 @@ use agent_core::{drain, metrics, strng};
 use axum::body::to_bytes;
 use bytes::Bytes;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Uri};
+use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use itertools::Itertools;
 use prometheus_client::registry::Registry;
-use rustls_pki_types::ServerName;
+use rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::io::DuplexStream;
+use tokio::net::TcpListener;
+use tokio::sync::oneshot;
 use tokio_rustls::TlsConnector;
 use tracing::{info, trace};
-use wiremock::tls_certs::MockTlsCertificates;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::http::backendtls::BackendTLS;
@@ -101,25 +104,69 @@ pub struct RequestDump {
 	pub body: Bytes,
 }
 
-pub async fn basic_setup() -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+pub trait HasAddress {
+	fn address(&self) -> &SocketAddr;
+}
+
+impl HasAddress for MockServer {
+	fn address(&self) -> &SocketAddr {
+		MockServer::address(self)
+	}
+}
+
+#[derive(Debug)]
+pub struct LocalMockServer {
+	scheme: &'static str,
+	address: SocketAddr,
+	shutdown_tx: Option<oneshot::Sender<()>>,
+}
+
+impl LocalMockServer {
+	pub fn address(&self) -> &SocketAddr {
+		&self.address
+	}
+
+	pub fn uri(&self) -> String {
+		format!("{}://{}", self.scheme, self.address)
+	}
+}
+
+impl HasAddress for LocalMockServer {
+	fn address(&self) -> &SocketAddr {
+		&self.address
+	}
+}
+
+impl Drop for LocalMockServer {
+	fn drop(&mut self) {
+		if let Some(shutdown_tx) = self.shutdown_tx.take() {
+			let _ = shutdown_tx.send(());
+		}
+	}
+}
+
+pub type EchoMockServer = LocalMockServer;
+pub type TlsMockServer = LocalMockServer;
+
+pub async fn basic_setup() -> (EchoMockServer, TestBind, Client<MemoryConnector, Body>) {
 	let mock = simple_mock().await;
 	setup_mock(mock)
 }
 
-pub fn setup_mock(mock: MockServer) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+pub fn setup_mock<M: HasAddress>(mock: M) -> (M, TestBind, Client<MemoryConnector, Body>) {
 	let t = base_gateway(&mock);
 	let io = t.serve_http(BIND_KEY);
 	(mock, t, io)
 }
 
-pub fn base_gateway(mock: &MockServer) -> TestBind {
+pub fn base_gateway(mock: &impl HasAddress) -> TestBind {
 	setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
 		.with_bind(simple_bind(basic_route(*mock.address())))
 }
 
-pub fn setup_tcp_mock(mock: MockServer) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+pub fn setup_tcp_mock<M: HasAddress>(mock: M) -> (M, TestBind, Client<MemoryConnector, Body>) {
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
@@ -131,21 +178,21 @@ pub fn setup_tcp_mock(mock: MockServer) -> (MockServer, TestBind, Client<MemoryC
 	(mock, t, io)
 }
 
-pub fn setup_llm_mock(
-	mock: MockServer,
+pub fn setup_llm_mock<M: HasAddress>(
+	mock: M,
 	provider: AIProvider,
 	tokenize: bool,
 	config: &str,
-) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+) -> (M, TestBind, Client<MemoryConnector, Body>) {
 	let provider = llm_named_provider(&mock, provider, tokenize);
 	setup_llm_named_provider_mock(mock, provider, config)
 }
 
-pub fn setup_llm_named_provider_mock(
-	mock: MockServer,
+pub fn setup_llm_named_provider_mock<M: HasAddress>(
+	mock: M,
 	provider: LocalNamedAIProvider,
 	config: &str,
-) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+) -> (M, TestBind, Client<MemoryConnector, Body>) {
 	let t = setup_proxy_test(config).unwrap();
 	let be = crate::types::local::LocalAIBackend::Provider(provider)
 		.translate()
@@ -161,7 +208,7 @@ pub fn setup_llm_named_provider_mock(
 }
 
 pub fn llm_named_provider(
-	mock: &MockServer,
+	mock: &impl HasAddress,
 	provider: AIProvider,
 	tokenize: bool,
 ) -> LocalNamedAIProvider {
@@ -298,45 +345,199 @@ pub async fn body_mock(body: &[u8]) -> MockServer {
 	mock
 }
 
-pub async fn simple_mock() -> MockServer {
-	let mock = wiremock::MockServer::start().await;
-	Mock::given(wiremock::matchers::path_regex("/.*"))
-		.respond_with(|req: &wiremock::Request| {
-			let r = RequestDump {
-				method: req.method.clone(),
-				uri: req.url.to_string().parse().unwrap(),
-				headers: req.headers.clone(),
-				body: Bytes::copy_from_slice(&req.body),
-				version: req.version,
-			};
-			ResponseTemplate::new(200).set_body_json(r)
-		})
-		.mount(&mock)
-		.await;
-	mock
+pub async fn simple_mock() -> EchoMockServer {
+	spawn_http_mock(echo_request).await
 }
 
-// Spawn a mock TLS server. It will always respond on h2,http/1.1 ALPN
-pub async fn tls_mock() -> (MockServer, MockTlsCertificates) {
+pub async fn tls_mock() -> (TlsMockServer, TlsMockCertificates) {
 	let _ = rustls::crypto::CryptoProvider::install_default(Arc::unwrap_or_clone(tls::provider()));
-	let certs = wiremock::tls_certs::MockTlsCertificates::random();
-	let mock = wiremock::MockServer::builder()
-		.start_https(certs.get_server_config())
-		.await;
-	Mock::given(wiremock::matchers::path_regex("/.*"))
-		.respond_with(|req: &wiremock::Request| {
-			let r = RequestDump {
-				method: req.method.clone(),
-				uri: req.url.to_string().parse().unwrap(),
-				headers: req.headers.clone(),
-				body: Bytes::copy_from_slice(&req.body),
-				version: req.version,
-			};
-			ResponseTemplate::new(200).set_body_json(r)
-		})
-		.mount(&mock)
-		.await;
+	let (server_config, certs) = build_tls_mock_config();
+	let mock = spawn_tls_mock_with_config(server_config, echo_request).await;
 	(mock, certs)
+}
+
+#[derive(Clone, Debug)]
+pub struct TlsMockCertificates {
+	pub root_cert: rcgen::Certificate,
+}
+
+fn build_tls_mock_config() -> (rustls::ServerConfig, TlsMockCertificates) {
+	use rcgen::{
+		BasicConstraints, CertificateParams, CertifiedIssuer, DistinguishedName, DnType,
+		ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
+	};
+
+	let mut ca_params = CertificateParams::default();
+	let mut ca_dn = DistinguishedName::new();
+	ca_dn.push(DnType::CommonName, "agentgateway test ca");
+	ca_params.distinguished_name = ca_dn;
+	ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	ca_params.key_usages = vec![
+		KeyUsagePurpose::DigitalSignature,
+		KeyUsagePurpose::KeyCertSign,
+		KeyUsagePurpose::CrlSign,
+	];
+	let ca_key = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let ca = CertifiedIssuer::self_signed(ca_params, ca_key).unwrap();
+
+	let mut leaf_params = CertificateParams::new(vec!["localhost".to_string()]).unwrap();
+	let mut leaf_dn = DistinguishedName::new();
+	leaf_dn.push(DnType::CommonName, "localhost");
+	leaf_params.distinguished_name = leaf_dn;
+	leaf_params
+		.subject_alt_names
+		.push(SanType::IpAddress("127.0.0.1".parse().unwrap()));
+	leaf_params
+		.subject_alt_names
+		.push(SanType::IpAddress("::1".parse().unwrap()));
+	leaf_params.key_usages = vec![
+		KeyUsagePurpose::DigitalSignature,
+		KeyUsagePurpose::KeyEncipherment,
+	];
+	leaf_params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
+	let leaf_key = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let leaf_cert = leaf_params.signed_by(&leaf_key, &ca).unwrap();
+
+	let certs = TlsMockCertificates {
+		root_cert: ca.as_ref().clone(),
+	};
+	let cert_chain = vec![
+		CertificateDer::from(leaf_cert),
+		CertificateDer::from(ca.as_ref().clone()),
+	];
+	let key_der: PrivateKeyDer<'static> = PrivatePkcs8KeyDer::from(leaf_key).into();
+	let mut server_config = rustls::ServerConfig::builder_with_provider(tls::provider())
+		.with_protocol_versions(tls::ALL_TLS_VERSIONS)
+		.expect("tls mock config must be valid")
+		.with_no_client_auth()
+		.with_single_cert(cert_chain, key_der)
+		.unwrap();
+	server_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+
+	(server_config, certs)
+}
+
+pub async fn echo_request(
+	req: hyper::Request<hyper::body::Incoming>,
+) -> Result<Response, Infallible> {
+	let (parts, body) = req.into_parts();
+	let body = body.collect().await.unwrap().to_bytes();
+	let dump = RequestDump {
+		method: parts.method,
+		uri: parts.uri,
+		headers: parts.headers,
+		version: parts.version,
+		body,
+	};
+
+	Ok(
+		::http::Response::builder()
+			.status(200)
+			.header(::http::header::CONTENT_TYPE, "application/json")
+			.body(Body::from(serde_json::to_vec(&dump).unwrap()))
+			.unwrap(),
+	)
+}
+
+async fn spawn_tcp_mock_server<F, Fut>(
+	listener: TcpListener,
+	scheme: &'static str,
+	listener_name: &'static str,
+	on_accept: F,
+) -> LocalMockServer
+where
+	F: Fn(tokio::net::TcpStream) -> Fut + Clone + Send + 'static,
+	Fut: std::future::Future<Output = ()> + Send + 'static,
+{
+	let address = listener.local_addr().unwrap();
+	let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
+
+	tokio::spawn(async move {
+		loop {
+			tokio::select! {
+				_ = &mut shutdown_rx => break,
+				accepted = listener.accept() => {
+					let (stream, _) = match accepted {
+						Ok(conn) => conn,
+						Err(err) => {
+							trace!("{listener_name} failed: {err:?}");
+							break;
+						},
+					};
+					let on_accept = on_accept.clone();
+					tokio::spawn(on_accept(stream));
+				},
+			}
+		}
+	});
+
+	LocalMockServer {
+		scheme,
+		address,
+		shutdown_tx: Some(shutdown_tx),
+	}
+}
+
+pub async fn spawn_http_mock<H, Fut>(handler: H) -> LocalMockServer
+where
+	H: Fn(hyper::Request<hyper::body::Incoming>) -> Fut + Clone + Send + 'static,
+	Fut: std::future::Future<Output = Result<Response, Infallible>> + Send + 'static,
+{
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	spawn_tcp_mock_server(listener, "http", "mock listener", move |stream| {
+		let handler = handler.clone();
+		async move {
+			let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+			let service = hyper::service::service_fn(move |req| {
+				let handler = handler.clone();
+				async move { handler(req).await }
+			});
+			if let Err(err) = builder
+				.serve_connection(TokioIo::new(stream), service)
+				.await
+			{
+				trace!("mock connection failed: {err:?}");
+			}
+		}
+	})
+	.await
+}
+
+pub async fn spawn_tls_mock_with_config<H, Fut>(
+	server_config: rustls::ServerConfig,
+	handler: H,
+) -> LocalMockServer
+where
+	H: Fn(hyper::Request<hyper::body::Incoming>) -> Fut + Clone + Send + 'static,
+	Fut: std::future::Future<Output = Result<Response, Infallible>> + Send + 'static,
+{
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(server_config));
+	spawn_tcp_mock_server(listener, "https", "mock tls listener", move |stream| {
+		let acceptor = acceptor.clone();
+		let handler = handler.clone();
+		async move {
+			let tls_stream = match acceptor.accept(stream).await {
+				Ok(stream) => stream,
+				Err(err) => {
+					trace!("mock tls accept failed: {err:?}");
+					return;
+				},
+			};
+			let builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+			let service = hyper::service::service_fn(move |req| {
+				let handler = handler.clone();
+				async move { handler(req).await }
+			});
+			if let Err(err) = builder
+				.serve_connection(TokioIo::new(tls_stream), service)
+				.await
+			{
+				trace!("mock tls connection failed: {err:?}");
+			}
+		}
+	})
+	.await
 }
 
 pub struct TestBind {
