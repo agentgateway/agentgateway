@@ -703,6 +703,9 @@ func (s *Syncer) setupSyncDependencies(
 	addresses krt.Collection[Address],
 	additionalSync func() bool,
 ) {
+	if additionalSync == nil {
+		additionalSync = func() bool { return true }
+	}
 	s.waitForSync = []cache.InformerSynced{
 		agwResources.HasSynced,
 		addresses.HasSynced,
