@@ -6,10 +6,10 @@ import (
 
 	"google.golang.org/protobuf/types/known/durationpb"
 	"istio.io/istio/pkg/ptr"
-	"istio.io/istio/pkg/slices"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 )
 
@@ -71,17 +71,19 @@ func translateFrontendPolicyToAgw(
 
 func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	tracing := policy.Spec.Frontend.Tracing
-
-	var backendErr error
+	var errs []error
 	provider, err := buildBackendRef(ctx, tracing.BackendRef, policy.Namespace)
 	if err != nil {
-		backendErr = fmt.Errorf("failed to translate tracing backend ref: %v", err)
+		errs = append(errs, fmt.Errorf("failed to translate tracing backend ref: %v", err))
 	}
 
 	var addAttributes []*api.FrontendPolicySpec_TracingAttribute
 	var rmAttributes []string
 	if tracing.Attributes != nil {
 		for _, add := range tracing.Attributes.Add {
+			if !isCEL(add.Expression) {
+				errs = append(errs, fmt.Errorf("frontend tracing attribute %q is not a valid CEL expression: %s", add.Name, add.Expression))
+			}
 			addAttributes = append(addAttributes, &api.FrontendPolicySpec_TracingAttribute{
 				Name:  add.Name,
 				Value: string(add.Expression),
@@ -95,6 +97,9 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 	var addResources []*api.FrontendPolicySpec_TracingAttribute
 	if tracing.Resources != nil {
 		for _, add := range tracing.Resources {
+			if !isCEL(add.Expression) {
+				errs = append(errs, fmt.Errorf("frontend tracing resource %q is not a valid CEL expression: %s", add.Name, add.Expression))
+			}
 			addResources = append(addResources, &api.FrontendPolicySpec_TracingAttribute{
 				Name:  add.Name,
 				Value: string(add.Expression),
@@ -104,12 +109,16 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 
 	var randomSampling *string
 	if tracing.RandomSampling != nil {
-		randomSampling = ptr.Of(string(*tracing.RandomSampling))
+		randomSampling = castCELPtr(tracing.RandomSampling, func(expr shared.CELExpression) {
+			errs = append(errs, fmt.Errorf("frontend tracing randomSampling is not a valid CEL expression: %s", expr))
+		})
 	}
 
 	var clientSampling *string
 	if tracing.ClientSampling != nil {
-		clientSampling = ptr.Of(string(*tracing.ClientSampling))
+		clientSampling = castCELPtr(tracing.ClientSampling, func(expr shared.CELExpression) {
+			errs = append(errs, fmt.Errorf("frontend tracing clientSampling is not a valid CEL expression: %s", expr))
+		})
 	}
 
 	var path *string
@@ -151,32 +160,39 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 		"policy", policy.Name,
 		"agentgateway_policy", tracingPolicy.Name)
 
-	return tracingPolicy, backendErr
+	return tracingPolicy, errors.Join(errs...)
 }
 
 func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	logging := policy.Spec.Frontend.AccessLog
 	spec := &api.FrontendPolicySpec_Logging{}
-	var backendErr error
+	var errs []error
 	if f := logging.Filter; f != nil {
-		spec.Filter = (*string)(f)
+		spec.Filter = castCELPtr(f, func(expr shared.CELExpression) {
+			errs = append(errs, fmt.Errorf("frontend accessLog filter is not a valid CEL expression: %s", expr))
+		})
 	}
 	if a := logging.Attributes; a != nil {
+		fields := make([]*api.FrontendPolicySpec_Logging_Field, 0, len(a.Add))
+		for _, add := range a.Add {
+			if !isCEL(add.Expression) {
+				errs = append(errs, fmt.Errorf("frontend accessLog field %q is not a valid CEL expression: %s", add.Name, add.Expression))
+			}
+			fields = append(fields, &api.FrontendPolicySpec_Logging_Field{
+				Name:       add.Name,
+				Expression: string(add.Expression),
+			})
+		}
 		f := &api.FrontendPolicySpec_Logging_Fields{
 			Remove: a.Remove,
-			Add: slices.Map(a.Add, func(e agentgateway.AttributeAdd) *api.FrontendPolicySpec_Logging_Field {
-				return &api.FrontendPolicySpec_Logging_Field{
-					Name:       e.Name,
-					Expression: string(e.Expression),
-				}
-			}),
+			Add:    fields,
 		}
 		spec.Fields = f
 	}
 	if otlp := logging.Otlp; otlp != nil {
 		provider, err := buildBackendRef(ctx, otlp.BackendRef, policy.Namespace)
 		if err != nil {
-			backendErr = fmt.Errorf("failed to translate access log OTLP backend ref: %v", err)
+			errs = append(errs, fmt.Errorf("failed to translate access log OTLP backend ref: %v", err))
 		}
 
 		var protocol api.FrontendPolicySpec_Logging_OtlpAccessLog_Protocol
@@ -217,7 +233,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 		"policy", policy.Name,
 		"agentgateway_policy", loggingPolicy.Name)
 
-	return loggingPolicy, backendErr
+	return loggingPolicy, errors.Join(errs...)
 }
 
 func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {

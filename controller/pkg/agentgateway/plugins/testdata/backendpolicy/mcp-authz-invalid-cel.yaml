@@ -1,0 +1,61 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: mcp-authz-invalid-cel
+  namespace: default
+spec:
+  targetRefs:
+  - kind: HTTPRoute
+    name: test
+    group: gateway.networking.k8s.io
+  backend:
+    mcp:
+      authorization:
+        policy:
+          matchExpressions:
+          - foolen_{{mcp.tool.name}}
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        mcpAuthorization:
+          allow:
+          - foolen_{{mcp.tool.name}}
+      key: default/mcp-authz-invalid-cel:mcp-authorization:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: mcp-authz-invalid-cel
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: mcp-authz-invalid-cel
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: 'backend MCP authorization matchExpression is not a valid CEL expression:
+          foolen_{{mcp.tool.name}}'
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway
