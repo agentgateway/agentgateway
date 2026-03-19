@@ -1673,30 +1673,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.status`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.health.eviction.healthThreshold`|number||
-|`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
-|`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request`|[]object||
@@ -2572,30 +2548,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.status`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.healthThreshold`|number||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request`|[]object||
@@ -3472,6 +3424,15 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`binds[].listeners[].routes[].backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
+|`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker`|object|Reference to the endpoint picker.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker.service`|object||
+|`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker.service.name`|object||
+|`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request`|[]object||
@@ -6409,30 +6370,6 @@
 |`backends[].ai.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].ai.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`backends[].ai.policies.responseHeaderModifier.add`|object||
-|`backends[].ai.policies.responseHeaderModifier.set`|object||
-|`backends[].ai.policies.responseHeaderModifier.remove`|[]string||
-|`backends[].ai.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`backends[].ai.policies.requestRedirect.scheme`|string||
-|`backends[].ai.policies.requestRedirect.authority`|string||
-|`backends[].ai.policies.requestRedirect.authority.full`|string||
-|`backends[].ai.policies.requestRedirect.authority.host`|string||
-|`backends[].ai.policies.requestRedirect.authority.port`|integer||
-|`backends[].ai.policies.requestRedirect.path`|object||
-|`backends[].ai.policies.requestRedirect.path.full`|string||
-|`backends[].ai.policies.requestRedirect.path.prefix`|string||
-|`backends[].ai.policies.requestRedirect.status`|integer||
-|`backends[].ai.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`backends[].ai.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`backends[].ai.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`backends[].ai.policies.health.eviction.duration`|string||
-|`backends[].ai.policies.health.eviction.restoreHealth`|number||
-|`backends[].ai.policies.health.eviction.consecutiveFailures`|integer||
-|`backends[].ai.policies.health.eviction.healthThreshold`|number||
-|`backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
-|`backends[].ai.policies.mcpAuthorization.rules`|[]string||
-|`backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`backends[].ai.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`backends[].ai.policies.ai.promptGuard`|object||
 |`backends[].ai.policies.ai.promptGuard.request`|[]object||
@@ -7308,30 +7245,6 @@
 |`backends[].ai.groups[].providers[].policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].ai.groups[].providers[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.groups[].providers[].policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`backends[].ai.groups[].providers[].policies.responseHeaderModifier.add`|object||
-|`backends[].ai.groups[].providers[].policies.responseHeaderModifier.set`|object||
-|`backends[].ai.groups[].providers[].policies.responseHeaderModifier.remove`|[]string||
-|`backends[].ai.groups[].providers[].policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`backends[].ai.groups[].providers[].policies.requestRedirect.scheme`|string||
-|`backends[].ai.groups[].providers[].policies.requestRedirect.authority`|string||
-|`backends[].ai.groups[].providers[].policies.requestRedirect.authority.full`|string||
-|`backends[].ai.groups[].providers[].policies.requestRedirect.authority.host`|string||
-|`backends[].ai.groups[].providers[].policies.requestRedirect.authority.port`|integer||
-|`backends[].ai.groups[].providers[].policies.requestRedirect.path`|object||
-|`backends[].ai.groups[].providers[].policies.requestRedirect.path.full`|string||
-|`backends[].ai.groups[].providers[].policies.requestRedirect.path.prefix`|string||
-|`backends[].ai.groups[].providers[].policies.requestRedirect.status`|integer||
-|`backends[].ai.groups[].providers[].policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`backends[].ai.groups[].providers[].policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`backends[].ai.groups[].providers[].policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`backends[].ai.groups[].providers[].policies.health.eviction.duration`|string||
-|`backends[].ai.groups[].providers[].policies.health.eviction.restoreHealth`|number||
-|`backends[].ai.groups[].providers[].policies.health.eviction.consecutiveFailures`|integer||
-|`backends[].ai.groups[].providers[].policies.health.eviction.healthThreshold`|number||
-|`backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
-|`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
-|`backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`backends[].ai.groups[].providers[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request`|[]object||
@@ -10556,30 +10469,6 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`routeGroups[].routes[].backends[].ai.policies.responseHeaderModifier.add`|object||
-|`routeGroups[].routes[].backends[].ai.policies.responseHeaderModifier.set`|object||
-|`routeGroups[].routes[].backends[].ai.policies.responseHeaderModifier.remove`|[]string||
-|`routeGroups[].routes[].backends[].ai.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`routeGroups[].routes[].backends[].ai.policies.requestRedirect.scheme`|string||
-|`routeGroups[].routes[].backends[].ai.policies.requestRedirect.authority`|string||
-|`routeGroups[].routes[].backends[].ai.policies.requestRedirect.authority.full`|string||
-|`routeGroups[].routes[].backends[].ai.policies.requestRedirect.authority.host`|string||
-|`routeGroups[].routes[].backends[].ai.policies.requestRedirect.authority.port`|integer||
-|`routeGroups[].routes[].backends[].ai.policies.requestRedirect.path`|object||
-|`routeGroups[].routes[].backends[].ai.policies.requestRedirect.path.full`|string||
-|`routeGroups[].routes[].backends[].ai.policies.requestRedirect.path.prefix`|string||
-|`routeGroups[].routes[].backends[].ai.policies.requestRedirect.status`|integer||
-|`routeGroups[].routes[].backends[].ai.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`routeGroups[].routes[].backends[].ai.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`routeGroups[].routes[].backends[].ai.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`routeGroups[].routes[].backends[].ai.policies.health.eviction.duration`|string||
-|`routeGroups[].routes[].backends[].ai.policies.health.eviction.restoreHealth`|number||
-|`routeGroups[].routes[].backends[].ai.policies.health.eviction.consecutiveFailures`|integer||
-|`routeGroups[].routes[].backends[].ai.policies.health.eviction.healthThreshold`|number||
-|`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
-|`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
-|`routeGroups[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].backends[].ai.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request`|[]object||
@@ -11455,30 +11344,6 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.responseHeaderModifier.add`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.responseHeaderModifier.set`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.responseHeaderModifier.remove`|[]string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.scheme`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.authority`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.authority.full`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.authority.host`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.authority.port`|integer||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.path`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.path.full`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.path.prefix`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.status`|integer||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.duration`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.restoreHealth`|number||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.consecutiveFailures`|integer||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.healthThreshold`|number||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request`|[]object||
@@ -12355,6 +12220,15 @@
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`routeGroups[].routes[].backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
+|`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker`|object|Reference to the endpoint picker.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker.service`|object||
+|`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker.service.name`|object||
+|`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker.service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker.service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker.service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].backends[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request`|[]object||

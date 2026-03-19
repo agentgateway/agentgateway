@@ -528,7 +528,7 @@ pub struct FullLocalBackend {
 	#[serde(flatten)]
 	pub spec: FullLocalBackendSpec,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub policies: Option<LocalBackendPolicies>,
+	pub policies: Option<LocalNamedBackendPolicies>,
 }
 
 #[apply(schema_de!)]
@@ -655,7 +655,7 @@ pub struct LocalNamedAIProvider {
 	#[serde(default)]
 	pub tokenize: bool,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub policies: Option<LocalBackendPolicies>,
+	pub policies: Option<LocalAIProviderPolicies>,
 }
 
 impl LocalAIBackend {
@@ -705,11 +705,12 @@ impl LocalBackend {
 			.map(|p| LocalBackendPolicies {
 				simple: p.simple,
 				mcp_authorization: p.mcp_authorization,
-				health: None,
+				a2a: None,
+				inference_routing: None,
+				ai: None,
 				response_header_modifier: None,
 				request_redirect: None,
-				a2a: None,
-				ai: None,
+				health: None,
 			})
 			.map(LocalBackendPolicies::translate)
 			.transpose()?
@@ -1216,6 +1217,24 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 }
 
 #[apply(schema_de!)]
+pub struct LocalInferenceRouting {
+	/// Reference to the endpoint picker.
+	pub endpoint_picker: Arc<SimpleBackendReference>,
+}
+
+impl From<LocalInferenceRouting> for crate::http::ext_proc::InferenceRouting {
+	fn from(val: LocalInferenceRouting) -> Self {
+		let LocalInferenceRouting { endpoint_picker } = val;
+		Self {
+			target: endpoint_picker,
+			// TODO: expose fail-open configuration for standalone EPP once the fallback behavior is
+			// explicitly supported and documented end-to-end.
+			failure_mode: crate::http::ext_proc::FailureMode::FailClosed,
+		}
+	}
+}
+
+#[apply(schema_de!)]
 #[derive(Default)]
 pub struct SimpleLocalBackendPolicies {
 	// Filters. Keep in sync with RouteFilter
@@ -1263,7 +1282,7 @@ pub struct MCPLocalBackendPolicies {
 
 #[apply(schema_de!)]
 #[derive(Default)]
-pub struct LocalBackendPolicies {
+pub struct LocalNamedBackendPolicies {
 	#[serde(flatten)]
 	simple: SimpleLocalBackendPolicies,
 
@@ -1290,9 +1309,9 @@ pub struct LocalBackendPolicies {
 	pub ai: Option<llm::Policy>,
 }
 
-impl LocalBackendPolicies {
+impl LocalNamedBackendPolicies {
 	pub fn translate(self) -> anyhow::Result<Vec<BackendPolicy>> {
-		let LocalBackendPolicies {
+		let LocalNamedBackendPolicies {
 			simple:
 				SimpleLocalBackendPolicies {
 					request_header_modifier,
@@ -1337,6 +1356,164 @@ impl LocalBackendPolicies {
 		}
 		if let Some(p) = a2a {
 			pols.push(BackendPolicy::A2a(p))
+		}
+		if let Some(p) = backend_tls {
+			pols.push(BackendPolicy::BackendTLS(p.try_into()?))
+		}
+		if let Some(p) = backend_auth {
+			pols.push(BackendPolicy::BackendAuth(p))
+		}
+		if let Some(mut p) = ai {
+			p.compile_model_alias_patterns();
+			pols.push(BackendPolicy::AI(Arc::new(p)))
+		}
+		if let Some(p) = health {
+			pols.push(BackendPolicy::Health(p.try_into().map_err(
+				|e: crate::cel::Error| anyhow::anyhow!("health.unhealthyExpression: {}", e),
+			)?));
+		}
+		Ok(pols)
+	}
+}
+
+#[apply(schema_de!)]
+#[derive(Default)]
+pub struct LocalBackendPolicies {
+	#[serde(flatten)]
+	simple: SimpleLocalBackendPolicies,
+
+	/// Headers to be modified in the response.
+	#[serde(default)]
+	pub response_header_modifier: Option<filters::HeaderModifier>,
+
+	/// Directly respond to the request with a redirect.
+	#[serde(default)]
+	pub request_redirect: Option<filters::RequestRedirect>,
+
+	/// Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.
+	#[serde(default)]
+	pub health: Option<health::LocalHealthPolicy>,
+
+	/// Authorization policies for MCP access.
+	#[serde(default)]
+	pub mcp_authorization: Option<McpAuthorization>,
+	/// Mark this traffic as A2A to enable A2A processing and telemetry.
+	#[serde(default)]
+	pub a2a: Option<A2aPolicy>,
+	/// Route requests through an endpoint picker before forwarding to the selected backend.
+	#[serde(default)]
+	pub inference_routing: Option<LocalInferenceRouting>,
+	/// Mark this as LLM traffic to enable LLM processing.
+	#[serde(default)]
+	pub ai: Option<llm::Policy>,
+}
+
+#[apply(schema_de!)]
+#[derive(Default)]
+pub struct LocalAIProviderPolicies {
+	#[serde(flatten)]
+	simple: SimpleLocalBackendPolicies,
+	/// Mark this as LLM traffic to enable LLM processing.
+	#[serde(default)]
+	pub ai: Option<llm::Policy>,
+}
+
+impl LocalAIProviderPolicies {
+	pub fn translate(self) -> anyhow::Result<Vec<BackendPolicy>> {
+		let LocalAIProviderPolicies {
+			simple:
+				SimpleLocalBackendPolicies {
+					request_header_modifier,
+					transformations,
+					backend_tls,
+					backend_auth,
+					http,
+					tcp,
+					backend_tunnel,
+				},
+			ai,
+		} = self;
+		let mut pols = vec![];
+		if let Some(p) = tcp {
+			pols.push(BackendPolicy::TCP(p));
+		}
+		if let Some(p) = backend_tunnel {
+			pols.push(BackendPolicy::Tunnel(p));
+		}
+		if let Some(p) = http {
+			pols.push(BackendPolicy::HTTP(p));
+		}
+		if let Some(p) = request_header_modifier {
+			pols.push(BackendPolicy::RequestHeaderModifier(p));
+		}
+		if let Some(p) = transformations {
+			pols.push(BackendPolicy::Transformation(p));
+		}
+		if let Some(p) = backend_tls {
+			pols.push(BackendPolicy::BackendTLS(p.try_into()?))
+		}
+		if let Some(p) = backend_auth {
+			pols.push(BackendPolicy::BackendAuth(p))
+		}
+		if let Some(mut p) = ai {
+			p.compile_model_alias_patterns();
+			pols.push(BackendPolicy::AI(Arc::new(p)))
+		}
+		Ok(pols)
+	}
+}
+
+impl LocalBackendPolicies {
+	pub fn translate(self) -> anyhow::Result<Vec<BackendPolicy>> {
+		let LocalBackendPolicies {
+			simple:
+				SimpleLocalBackendPolicies {
+					request_header_modifier,
+					transformations,
+					backend_tls,
+					backend_auth,
+					http,
+					tcp,
+					backend_tunnel,
+				},
+			mcp_authorization,
+			a2a,
+			inference_routing,
+			ai,
+			response_header_modifier,
+			request_redirect,
+			health,
+		} = self;
+		let mut pols = vec![];
+		if let Some(p) = tcp {
+			pols.push(BackendPolicy::TCP(p));
+		}
+		if let Some(p) = backend_tunnel {
+			pols.push(BackendPolicy::Tunnel(p));
+		}
+		if let Some(p) = http {
+			pols.push(BackendPolicy::HTTP(p));
+		}
+		if let Some(p) = request_header_modifier {
+			pols.push(BackendPolicy::RequestHeaderModifier(p));
+		}
+		if let Some(p) = response_header_modifier {
+			pols.push(BackendPolicy::ResponseHeaderModifier(p));
+		}
+		if let Some(p) = request_redirect {
+			pols.push(BackendPolicy::RequestRedirect(p));
+		}
+		if let Some(p) = transformations {
+			pols.push(BackendPolicy::Transformation(p));
+		}
+		if let Some(p) = mcp_authorization {
+			pols.push(BackendPolicy::McpAuthorization(p))
+		}
+		if let Some(p) = a2a {
+			pols.push(BackendPolicy::A2a(p))
+		}
+		if let Some(p) = inference_routing {
+			pols.push(BackendPolicy::InferenceRouting(p.into()))
 		}
 		if let Some(p) = backend_tls {
 			pols.push(BackendPolicy::BackendTLS(p.try_into()?))
@@ -2405,6 +2582,15 @@ pub async fn convert_route(
 	let mut backend_refs = Vec::new();
 	let mut external_backends = Vec::new();
 	for (idx, b) in backends.iter().enumerate() {
+		if b
+			.policies
+			.as_ref()
+			.and_then(|p| p.inference_routing.as_ref())
+			.is_some()
+			&& !matches!(b.backend, LocalBackend::Service { .. })
+		{
+			bail!("inferenceRouting is only supported on service route backends");
+		}
 		let backend_key = strng::format!("{key}/backend{idx}");
 		let policies = b
 			.policies
