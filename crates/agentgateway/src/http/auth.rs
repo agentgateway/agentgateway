@@ -229,6 +229,7 @@ pub async fn apply_late_backend_auth(
 mod tests;
 
 mod gcp {
+	use std::borrow::Cow;
 	use std::collections::HashMap;
 	use std::sync::{Arc, Mutex};
 
@@ -319,11 +320,11 @@ mod gcp {
 		let token = match g {
 			GcpAuth::IdToken { audience, .. } => {
 				let aud = match (audience, call_target) {
-					(Some(aud), _) => aud.as_str(),
-					(None, Target::Hostname(host, _)) => host.as_str(),
+					(Some(aud), _) => Cow::Borrowed(aud.as_str()),
+					(None, Target::Hostname(host, _)) => Cow::Owned(format!("https://{host}")),
 					_ => anyhow::bail!("idToken auth requires a hostname target or explicit audience"),
 				};
-				fetch_id_token(aud).await?
+				fetch_id_token(aud.as_ref()).await?
 			},
 			GcpAuth::AccessToken { .. } => {
 				let token = creds()?.access_token().await?;
