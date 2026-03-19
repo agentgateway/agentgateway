@@ -102,8 +102,7 @@ var timestampRegex = regexp.MustCompile(`lastTransitionTime:.*`)
 //
 // The output is generally created by running the test with `REFRESH_GOLDEN=true`.
 func RunForDirectory[Status any, Output any](t *testing.T, base string, run func(t *testing.T, ctx plugins.PolicyCtx) (Status, []Output)) {
-	val := apitests.NewAgentgatewayValidator(t)
-	val.SkipMissing = true
+	val := apitests.NewAgentgatewayValidatorSkipMissing(t)
 	defaults, defaultsErr := file.AsString(filepath.Join(base, "_defaults.yaml"))
 	for _, f := range file.ReadDirOrFail(t, base) {
 		name := filepath.Base(f)
