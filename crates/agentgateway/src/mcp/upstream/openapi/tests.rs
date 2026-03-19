@@ -183,9 +183,14 @@ async fn setup() -> (MockServer, Handler) {
 async fn test_call_tool_full_url_server_prefix() {
 	// When OpenAPI spec has servers: [{ url: "https://api.example.com/" }],
 	// get_server_prefix returns "" so the request goes to /users/{id} (no double host).
-	let prefix = super::get_server_prefix(&openapi_with_servers(json!([{ "url": "https://api.example.com/" }])))
-		.expect("should parse");
-	assert_eq!(prefix, "", "full URL with root path should yield empty prefix");
+	let prefix = super::get_server_prefix(&openapi_with_servers(
+		json!([{ "url": "https://api.example.com/" }]),
+	))
+	.expect("should parse");
+	assert_eq!(
+		prefix, "",
+		"full URL with root path should yield empty prefix"
+	);
 
 	let (server, handler) = setup_with_prefix(&prefix).await;
 	let user_id = "123";
@@ -199,10 +204,17 @@ async fn test_call_tool_full_url_server_prefix() {
 
 	let args = json!({ "path": { "user_id": user_id } });
 	let result = handler
-		.call_tool("get_user", Some(args.as_object().unwrap().clone()), &IncomingRequestContext::empty())
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
 		.await;
 
-	assert!(result.is_ok(), "full-URL server prefix should not cause invalid authority");
+	assert!(
+		result.is_ok(),
+		"full-URL server prefix should not cause invalid authority"
+	);
 	assert_eq!(result.unwrap(), expected_response);
 }
 
@@ -210,8 +222,10 @@ async fn test_call_tool_full_url_server_prefix() {
 async fn test_call_tool_path_prefix_server() {
 	// When OpenAPI spec has servers: [{ url: "https://api.example.com/v2" }],
 	// get_server_prefix returns "/v2" and requests go to /v2/users/{id}.
-	let prefix = super::get_server_prefix(&openapi_with_servers(json!([{ "url": "https://api.example.com/v2" }])))
-		.expect("should parse");
+	let prefix = super::get_server_prefix(&openapi_with_servers(
+		json!([{ "url": "https://api.example.com/v2" }]),
+	))
+	.expect("should parse");
 	assert_eq!(prefix, "/v2", "full URL with path should yield path prefix");
 
 	let (server, handler) = setup_with_prefix(&prefix).await;
@@ -226,7 +240,11 @@ async fn test_call_tool_path_prefix_server() {
 
 	let args = json!({ "path": { "user_id": user_id } });
 	let result = handler
-		.call_tool("get_user", Some(args.as_object().unwrap().clone()), &IncomingRequestContext::empty())
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
 		.await;
 
 	assert!(result.is_ok());
