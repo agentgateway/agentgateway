@@ -49,8 +49,21 @@ pub enum ParseError {
 
 pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> {
 	match server.servers.len() {
-		0 => Ok("".to_string()), // Return empty string instead of "/" to avoid double slash
-		1 => Ok(server.servers[0].url.clone()),
+		0 => Ok("".to_string()),
+		1 => {
+			let raw = &server.servers[0].url;
+			if let Ok(parsed) = url::Url::parse(raw) {
+				let path = parsed.path().trim_end_matches('/').to_string();
+				if path.is_empty() || path == "/" {
+					Ok("".to_string())
+				} else {
+					Ok(path)
+				}
+			} else {
+				// Not a full URL -- treat as a relative path prefix (existing behavior)
+				Ok(raw.clone())
+			}
+		},
 		_ => Err(ParseError::UnsupportedReference(format!(
 			"multiple servers are not supported: {:?}",
 			server.servers
