@@ -912,9 +912,6 @@ fn rewrite_test() {
 		),
 	];
 	for (name, inp, want) in cases {
-		if name != "path_prefix_trailing_slash_full" {
-			continue;
-		}
 		let mut req = request_for_uri(inp.uri);
 		req.extensions_mut().insert(inp.path.clone());
 
