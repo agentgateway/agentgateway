@@ -339,6 +339,7 @@ mod gcp {
 	// The SDK doesn't make it easy to use idtokens with user ADC. See https://github.com/googleapis/google-cloud-rust/issues/4215
 	// To allow this (for development use cases primarily), we copy-paste some of their code.
 	mod adc {
+		use std::io;
 		use std::path::PathBuf;
 
 		use anyhow::anyhow;
@@ -379,6 +380,7 @@ mod gcp {
 				None => Ok(None),
 				Some(path) => match fs_err::read_to_string(&path) {
 					Ok(contents) => Ok(Some(contents)),
+					Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
 					Err(e) => Err(anyhow::Error::new(e)),
 				},
 			}?
