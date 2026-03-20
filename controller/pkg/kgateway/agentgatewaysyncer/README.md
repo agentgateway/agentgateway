@@ -1,8 +1,19 @@
 # agentgateway syncer
 
-This syncer configures xds updates for the [agentgateway](https://agentgateway.dev/) data plane.
+This syncer configures xDS updates for the [agentgateway](https://agentgateway.dev/) data plane, translating Kubernetes Gateway API resources into agentgateway configurations.
 
-You can configure the agentgateway Gateway class to use a specific image by setting the image field on the
+### Terminology
+
+To help beginners get started, here are key terms used in kgateway:
+
+- **GatewayClass**: A template that defines which controller manages a group of Gateways and sets parameters like the agentgateway image version.
+- **Gateway**: The entry point for traffic into the cluster. It defines which ports, protocols, and TLS settings to use.
+- **ListenerSet**: A custom resource that allows you to add additional listeners to an existing Gateway dynamically.
+- **Route (HTTPRoute, TCPRoute, etc.)**: Rules that match specific traffic (e.g., URL paths or hostnames) and direct it to backends.
+- **Backend**: The final destination for traffic, such as an AI provider (OpenAI, Bedrock), an MCP server, or a Kubernetes Service.
+- **Policy (e.g., AgentgatewayPolicy)**: Fine-grained rules that control traffic behavior, security (like authentication), and transformations (like URL rewrites).
+
+### Configuration
 AgentgatewayParameters:
 ```yaml
 kind: AgentgatewayParameters
