@@ -57,8 +57,6 @@ jobs:
         cargo clean -p htpasswd-verify-fork || true
         cargo clean -p hyper-util-fork || true
         cargo clean -p agent-xds || true
-
-  echo "./tools" >> $GITHUB_PATH
     - name: Setup
       run: TEST_MODE=e2e ./controller/test/setup/setup-kind-ci.sh
     - name: E2E
