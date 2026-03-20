@@ -2,16 +2,16 @@
 
 This syncer configures xDS updates for the [agentgateway](https://agentgateway.dev/) data plane, translating Kubernetes Gateway API resources into agentgateway configurations.
 
-### Terminology
+## Key Concepts
 
-To help beginners get started, here are key terms used in kgateway:
+Below are key concepts relevant to how the agentgateway syncer maps Kubernetes Gateway API resources to the data plane.
 
-- **GatewayClass**: A template that defines which controller manages a group of Gateways and sets parameters like the agentgateway image version.
-- **Gateway**: The entry point for traffic into the cluster. It defines which ports, protocols, and TLS settings to use.
-- **ListenerSet**: A custom resource that allows you to add additional listeners to an existing Gateway dynamically.
-- **Route (HTTPRoute, TCPRoute, etc.)**: Rules that match specific traffic (e.g., URL paths or hostnames) and direct it to backends.
-- **Backend**: The final destination for traffic, such as an AI provider (OpenAI, Bedrock), an MCP server, or a Kubernetes Service.
-- **Policy (e.g., AgentgatewayPolicy)**: Fine-grained rules that control traffic behavior, security (like authentication), and transformations (like URL rewrites).
+- **GatewayClass**: Specifies which controller is responsible for a group of Gateways and provides global configuration parameters.
+- **Gateway**: Defines how incoming traffic enters the cluster, including ports, protocols, and TLS configuration used by the agentgateway data plane.
+- **ListenerSet**: A custom resource used to extend an existing Gateway with additional listeners without modifying the original Gateway resource.
+- **Route (HTTPRoute, TCPRoute, etc.)**: Rules that match incoming traffic and direct it to specific backends.
+- **Backend**: The destination where matched traffic is forwarded, such as a Kubernetes Service or external endpoint.
+- **Policy**: Configurable rules that control traffic behavior, security, and transformations for routes and backends.
 
 ### Configuration
 AgentgatewayParameters:
