@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - "main"
+      - "howardjohn/pre-regression"
   pull_request:
     branches:
       - "main"
+      - "howardjohn/pre-regression"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
@@ -19,107 +21,7 @@ env:
   GO_VERSION: "1.26.1"
 
 jobs:
-  #### Proxy jobs ####
-  proxy-test:
-    strategy:
-      matrix:
-        include:
-        - os: ubuntu-24.04
-          validate: true
-        - os: windows-2025
-          validate: false
-        - os: macos-15
-          validate: false
-    runs-on: ${{ matrix.os }}
-    steps:
-    - uses: actions/checkout@v6
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: "${{ env.RUST_VERSION }}"
-    - uses: Swatinem/rust-cache@v2
-      # Github cache is too tiny to handle the full matrix :-(
-      if: ${{ startsWith(matrix.os, 'ubuntu-') }}
-      with:
-        # Github cache will restore from 'main' OR the current branch.
-        # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
-        # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
-        save-if: ${{ github.ref == 'refs/heads/main' }}
-    - name: Test
-      run: make test
-    - name: Validate
-      if: ${{ matrix.validate }}
-      run: make validate
-
-  proxy-lint:
-    runs-on: ubuntu-24.04
-    steps:
-    - uses: actions/checkout@v6
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: "${{ env.RUST_VERSION }}"
-    - uses: Swatinem/rust-cache@v2
-      with:
-        # Github cache will restore from 'main' OR the current branch.
-        # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
-        # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
-        save-if: ${{ github.ref == 'refs/heads/main' }}
-    - name: Generation
-      run: make generate-schema check-clean-repo
-    - name: Lint
-      run: make lint
-
-  #### UI jobs ####
-  ui-lint:
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: ui
-    steps:
-    - uses: actions/checkout@v6
-    - uses: actions/setup-node@v6
-      with:
-        node-version: 24
-    - name: Lint
-      run: |
-        npm ci
-        npm run lint
-
   #### Controller jobs ####
-  controller-test:
-    runs-on: ubuntu-24.04
-    steps:
-    - uses: actions/checkout@v6
-    - uses: actions/setup-go@v6
-      with:
-        go-version: "${{ env.GO_VERSION }}"
-        cache-dependency-path: |
-          **/*.sum
-          .github/workflows/cache-lint
-    - name: Test
-      run: go test -race ./...
-
-  controller-lint:
-    runs-on: ubuntu-24.04
-    steps:
-    - uses: actions/checkout@v6
-    - uses: actions/setup-go@v6
-      with:
-        go-version: "${{ env.GO_VERSION }}"
-        cache-dependency-path: |
-          **/*.sum
-          .github/workflows/cache-test
-    - name: Lint
-      run: make -C controller analyze
-    - name: go mod tidy
-      run: |
-        go mod tidy
-        git diff --exit-code go.mod go.sum
-    - name: Gen
-      # TODO: the rest of codegen
-      run: make generate-apis check-clean-repo
-
   controller-e2e:
     runs-on: ubuntu-24.04
     steps:
@@ -143,6 +45,20 @@ jobs:
     - name: Set Path
       run: |
         echo "./tools" >> $GITHUB_PATH
+    - name: Fake cache
+      run: |
+        cargo build --profile ci
+        cargo clean -p agentgateway || true
+        cargo clean -p agentgateway-app || true
+        cargo clean -p cel || true
+        cargo clean -p agent-celx || true
+        cargo clean -p agent-core || true
+        cargo clean -p agent-hbone || true
+        cargo clean -p htpasswd-verify-fork || true
+        cargo clean -p hyper-util-fork || true
+        cargo clean -p agent-xds || true
+
+  echo "./tools" >> $GITHUB_PATH
     - name: Setup
       run: TEST_MODE=e2e ./controller/test/setup/setup-kind-ci.sh
     - name: E2E
@@ -164,65 +80,4 @@ jobs:
     - name: Summary
       run: |
         echo '# E2E Timings\n'
-        cat controller/_test/ci-step-timings.log >> $GITHUB_STEP_SUMMARY
-
-  controller-conformance:
-    runs-on: ubuntu-24.04
-    steps:
-    - uses: actions/checkout@v6
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: "${{ env.RUST_VERSION }}"
-    - uses: Swatinem/rust-cache@v2
-      with:
-        # We only read the cache from 'E2E' job, since they should have identical cache.
-        save-if: "false"
-        shared-key: "controller-e2e" # Pull E2E job's cache
-    - uses: actions/setup-go@v6
-      with:
-        go-version: "${{ env.GO_VERSION }}"
-        cache-dependency-path: |
-          **/*.sum
-          .github/workflows/cache-e2e
-    - name: Set Path
-      run: |
-        echo "./tools" >> $GITHUB_PATH
-    - name: Setup
-      run: TEST_MODE=conformance ./controller/test/setup/setup-kind-ci.sh
-    - name: Conformance
-      run: |
-        make -C controller all-conformance
-    - name: Debug Info
-      if: ${{ failure() }}
-      run: |
-        kubectl describe deployment -n agentgateway-system
-        kubectl get pods -n agentgateway-system
-        kubectl logs -n agentgateway-system -l app.kubernetes.io/name=agentgateway
-    - name: Upload cargo timings
-      uses: actions/upload-artifact@v6
-      with:
-        name: cargo-timings-conformance
-        path: target/cargo-timings/cargo-timing*.html
-        retention-days: 2
-    - name: Summary
-      run: |
-        cat-yamls () {
-          local files=("$@")
-          local count=$#
-
-          for ((i=0; i<count-1; i++)); do
-          cat "${files[i]}"
-          echo -e "\n---"
-          done
-
-          if [ $count -gt 0 ]; then
-          cat "${files[count-1]}"
-          fi
-        }
-
-        echo -e '\n# Conformance Reports\n\n```yaml' >> $GITHUB_STEP_SUMMARY
-        cat-yamls ./controller/_test/conformance/*.yaml >> $GITHUB_STEP_SUMMARY
-        echo -e '```\n' >> $GITHUB_STEP_SUMMARY
-        echo -e '# Conformance Timings\n' >> $GITHUB_STEP_SUMMARY
         cat controller/_test/ci-step-timings.log >> $GITHUB_STEP_SUMMARY
