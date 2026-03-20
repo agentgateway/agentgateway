@@ -145,7 +145,7 @@ reqwest.workspace = true
 websocket-sans-io.workspace = true
 vector-map.workspace = true
 flagset.workspace = true
-
+wiremock.workspace = true
 
 # Linux only dependencies
 [target.'cfg(target_family = "unix")'.dependencies]
@@ -188,7 +188,6 @@ legacy-rmcp = { package = "rmcp", version = "0.10.0", features = ["transport-sse
     "client",
     "reqwest"
 ] }
-wiremock.workspace = true
 reqwest.workspace = true
 # TODO(https://github.com/modelcontextprotocol/rust-sdk/pull/667)
 legacyreqwest = { package = "reqwest", version = "0.12", default-features = false, features = [
