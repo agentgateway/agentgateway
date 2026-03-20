@@ -6,12 +6,12 @@ This syncer configures xDS updates for the [agentgateway](https://agentgateway.d
 
 Below are key concepts relevant to how the agentgateway syncer maps Kubernetes Gateway API resources to the data plane.
 
-- **GatewayClass**: Specifies which controller is responsible for a group of Gateways and provides global configuration parameters.
+- **GatewayClass**: Specifies which controller manages Gateways and provides configuration that the agentgateway syncer uses when reconciling resources.
 - **Gateway**: Defines how incoming traffic enters the cluster, including ports, protocols, and TLS configuration used by the agentgateway data plane.
 - **ListenerSet**: A custom resource used to extend an existing Gateway with additional listeners without modifying the original Gateway resource.
-- **Route (HTTPRoute, TCPRoute, etc.)**: Rules that match incoming traffic and direct it to specific backends.
+- **Route (HTTPRoute, TCPRoute, etc.)**: Defines how incoming traffic is matched and routed to backends based on rules such as hostnames or paths.
 - **Backend**: The destination where matched traffic is forwarded, such as a Kubernetes Service or external endpoint.
-- **Policy**: Configurable rules that control traffic behavior, security, and transformations for routes and backends.
+- **Policy**: Defines additional behavior (such as security or request handling rules) that the syncer applies when generating data plane configuration.
 
 ### Configuration
 AgentgatewayParameters:
