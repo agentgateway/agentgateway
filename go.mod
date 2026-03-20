@@ -47,7 +47,7 @@ require (
 	sigs.k8s.io/controller-tools v0.20.1
 	sigs.k8s.io/gateway-api v1.5.1
 	sigs.k8s.io/gateway-api-inference-extension v1.4.0
-	sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260316135939-f0ca6aef5114
+	sigs.k8s.io/gateway-api-inference-extension/conformance v0.0.0-20260319184001-6e787dd396f0
 	sigs.k8s.io/gateway-api/conformance v1.5.1
 	sigs.k8s.io/yaml v1.6.0
 )
