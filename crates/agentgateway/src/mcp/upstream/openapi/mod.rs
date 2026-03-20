@@ -52,16 +52,39 @@ pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> 
 		0 => Ok("".to_string()),
 		1 => {
 			let raw = &server.servers[0].url;
-			if let Ok(parsed) = url::Url::parse(raw) {
-				let path = parsed.path().trim_end_matches('/').to_string();
-				if path.is_empty() || path == "/" {
-					Ok("".to_string())
+			
+			let extract_path = |after_scheme: &str| -> String {
+				if let Some(path_idx) = after_scheme.find('/') {
+					let path = &after_scheme[path_idx..];
+					let path = path.split('?').next().unwrap_or(path);
+					let path = path.split('#').next().unwrap_or(path);
+					let path = path.trim_end_matches('/');
+					if path.is_empty() || path == "/" {
+						"".to_string()
+					} else {
+						path.to_string()
+					}
 				} else {
-					Ok(path)
+					"".to_string()
 				}
+			};
+
+			if let Some(idx) = raw.find("://") {
+				Ok(extract_path(&raw[idx + 3..]))
+			} else if raw.starts_with("//") {
+				Ok(extract_path(&raw[2..]))
 			} else {
-				// Not a full URL -- treat as a relative path prefix (existing behavior)
-				Ok(raw.clone())
+				// Not an absolute URL -- treat as a relative path prefix (existing behavior)
+				if let Ok(parsed) = url::Url::parse(raw) {
+					let path = parsed.path().trim_end_matches('/').to_string();
+					if path.is_empty() || path == "/" {
+						Ok("".to_string())
+					} else {
+						Ok(path)
+					}
+				} else {
+					Ok(raw.clone())
+				}
 			}
 		},
 		_ => Err(ParseError::UnsupportedReference(format!(

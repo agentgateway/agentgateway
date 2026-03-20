@@ -689,6 +689,10 @@ fn openapi_with_servers(servers: serde_json::Value) -> OpenAPI {
 #[case::full_url_no_trailing_slash("https://api.example.com", "")]
 #[case::full_url_with_path("https://api.example.com/v2", "/v2")]
 #[case::full_url_with_path_trailing_slash("https://api.example.com/v2/", "/v2")]
+#[case::full_url_with_host_variable("https://{tenant}.example.com/v1", "/v1")]
+#[case::full_url_with_host_variable_no_path("https://{tenant}.example.com", "")]
+#[case::full_url_with_host_variable_root("https://{tenant}.example.com/", "")]
+#[case::full_url_with_path_variable("https://api.example.com/v1/{version}", "/v1/{version}")]
 #[case::relative_path("/api/v1", "/api/v1")]
 #[case::empty_string("", "")]
 fn test_get_server_prefix(#[case] server_url: &str, #[case] expected: &str) {
