@@ -349,6 +349,16 @@ pub struct LLMRouteMatch {
 	pub headers: Vec<HeaderMatch>,
 }
 
+#[apply(schema!)]
+pub struct SecretFromFile(
+	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
+	#[serde(
+		serialize_with = "ser_redact",
+		deserialize_with = "deser_key_from_file"
+	)]
+	SecretString,
+);
+
 #[apply(schema_de!)]
 #[derive(Default)]
 pub struct LocalLLMParams {
@@ -359,7 +369,7 @@ pub struct LocalLLMParams {
 	/// An API key to attach to the request.
 	/// If unset this will be automatically detected from the environment.
 	#[serde(default)]
-	api_key: Option<String>,
+	api_key: Option<SecretFromFile>,
 	// For Bedorkc: The AWS region to use
 	aws_region: Option<Strng>,
 	// For Vertex: The Google region to use
@@ -1587,10 +1597,17 @@ json(request.body).model
 			},
 		],
 		backends: vec![],
-		inline_policies: vec![TrafficPolicy::DirectResponse(filters::DirectResponse {
-			body: Bytes::copy_from_slice(model_list_body.as_bytes()),
-			status: ::http::StatusCode::OK,
-		})],
+		inline_policies: vec![
+			TrafficPolicy::ResponseHeaderModifier(crate::http::filters::HeaderModifier {
+				set: vec![(strng::new("Content-Type"), strng::new("application/json"))],
+				add: vec![],
+				remove: vec![],
+			}),
+			TrafficPolicy::DirectResponse(filters::DirectResponse {
+				body: Bytes::copy_from_slice(model_list_body.as_bytes()),
+				status: ::http::StatusCode::OK,
+			}),
+		],
 	};
 	routes.insert(model_list_route);
 
@@ -1632,7 +1649,7 @@ json(request.body).model
 		// Create backend auth policy
 		let mut pols = vec![];
 		if let Some(key) = p.api_key.as_ref() {
-			let backend_auth = BackendAuth::Key(SecretString::new(key.clone().into_boxed_str()));
+			let backend_auth = BackendAuth::Key(key.0.clone());
 			pols.push(BackendPolicy::BackendAuth(backend_auth));
 		}
 
@@ -1697,7 +1714,11 @@ json(request.body).model
 
 		// Create route for this model
 		// Index is needed because the same name can be used with different match criteria
-		let route_key = strng::format!("llm:model:{}:{idx}", model_config.name);
+		// Important: index is before model, to ensure we rank ties by order of first-in-list
+		// This ensures if I have '*' and 'foo/*', I can prefer `foo/*` by making it first.
+		// TODO: should we automatically make more explicit prefixes higher ranked?
+		// 999999 routes ought to be enough for anyone.
+		let route_key = strng::format!("llm:model:{idx:06}:{}", model_config.name);
 		let user_matches = if model_config.matches.is_empty() {
 			vec![RouteMatch {
 				path: PathMatch::PathPrefix(strng::new("/")),
@@ -1760,6 +1781,10 @@ json(request.body).model
 					(
 						strng::new("/v1/responses"),
 						crate::llm::RouteType::Responses,
+					),
+					(
+						strng::new("/v1/responses/compact"),
+						crate::llm::RouteType::Detect,
 					),
 					(
 						strng::new("/v1/embeddings"),

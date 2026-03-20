@@ -15,6 +15,7 @@ use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, MCPInfo, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
+use agent_core::version::BuildInfo;
 use futures_core::Stream;
 use http::StatusCode;
 use http::request::Parts;
@@ -508,7 +509,11 @@ impl Relay {
 		ServerInfo {
 			protocol_version: pv,
 			capabilities,
-			server_info: Implementation::from_build_env(),
+			server_info: Implementation {
+				name: "agentgateway".to_string(),
+				version: BuildInfo::new().version.to_string(),
+				..Default::default()
+			},
 			instructions,
 		}
 	}

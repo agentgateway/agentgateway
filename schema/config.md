@@ -4,6 +4,9 @@
 |-|-|
 |`config`||
 |`config.enableIpv6`||
+|`config.dns`|DNS resolver settings.|
+|`config.dns.lookupFamily`|Controls which IP address families the DNS resolver will query for<br>upstream connections.<br>Accepted values: All, Auto, V4Preferred, V4Only, V6Only.<br>Defaults to Auto (IPv4-only when enableIpv6 is false, both when true).|
+|`config.dns.edns0`|Whether to enable EDNS0 (Extension Mechanisms for DNS) in the resolver.<br>When `None`, the system-provided resolver setting is preserved.<br>Can also be set via the `DNS_EDNS0` environment variable.|
 |`config.localXdsPath`|Local XDS path. If not specified, the current configuration file will be used.|
 |`config.caAddress`||
 |`config.caAuthToken`||
@@ -5708,6 +5711,7 @@
 |`llm.models[].params`|params customizes parameters for the outgoing request|
 |`llm.models[].params.model`|The model to send to the provider.<br>If unset, the same model will be used from the request.|
 |`llm.models[].params.apiKey`|An API key to attach to the request.<br>If unset this will be automatically detected from the environment.|
+|`llm.models[].params.apiKey.(any)(any)file`||
 |`llm.models[].params.awsRegion`||
 |`llm.models[].params.vertexRegion`||
 |`llm.models[].params.vertexProject`||

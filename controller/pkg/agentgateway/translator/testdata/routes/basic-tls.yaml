@@ -51,7 +51,7 @@ output:
         weight: 1
       hostnames:
       - abc.example.com
-      key: default/tcp-app-1.0.https
+      key: default/tcp-app-1.00.tls.https
       listenerKey: default/tls-gw.https
       name:
         kind: TLSRoute

@@ -866,26 +866,7 @@ impl AIProvider {
 				return Ok(resp);
 			}
 
-			let (llm_resp, bytes) = match self {
-				AIProvider::Bedrock(_) => {
-					let translated = conversion::bedrock::from_embeddings::translate_response(
-						&bytes,
-						&parts.headers,
-						&req.request_model,
-					)?;
-					let llm_resp = translated.to_llm_response(false);
-					let body = translated.serialize().map_err(AIError::ResponseParsing)?;
-					(llm_resp, Bytes::from(body))
-				},
-				AIProvider::Vertex(p) if !p.is_anthropic_model(Some(&req.request_model)) => {
-					let translated =
-						conversion::vertex::from_embeddings::translate_response(&bytes, &req.request_model)?;
-					let llm_resp = translated.to_llm_response(false);
-					let body = translated.serialize().map_err(AIError::ResponseParsing)?;
-					(llm_resp, Bytes::from(body))
-				},
-				_ => (LLMResponse::default(), bytes),
-			};
+			let (llm_resp, bytes) = self.process_embeddings_response(&req, &parts.headers, bytes)?;
 
 			parts.headers.remove(header::CONTENT_LENGTH);
 			let resp = Response::from_parts(parts, bytes.into());
@@ -938,6 +919,44 @@ impl AIProvider {
 		amend_tokens(rate_limit, &llm_info);
 		log.store(Some(llm_info));
 		Ok(resp)
+	}
+
+	fn process_embeddings_response(
+		&self,
+		req: &LLMRequest,
+		headers: &::http::HeaderMap,
+		bytes: Bytes,
+	) -> Result<(LLMResponse, Bytes), AIError> {
+		match self {
+			AIProvider::Bedrock(_) => {
+				let translated = conversion::bedrock::from_embeddings::translate_response(
+					&bytes,
+					headers,
+					&req.request_model,
+				)?;
+				let llm_resp = translated.to_llm_response(false);
+				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
+				Ok((llm_resp, Bytes::from(body)))
+			},
+			AIProvider::Vertex(p) if !p.is_anthropic_model(Some(&req.request_model)) => {
+				let translated =
+					conversion::vertex::from_embeddings::translate_response(&bytes, &req.request_model)?;
+				let llm_resp = translated.to_llm_response(false);
+				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
+				Ok((llm_resp, Bytes::from(body)))
+			},
+			_ => {
+				let resp: types::embeddings::Response = serde_json::from_slice(&bytes).map_err(|e| {
+					warn!(
+						error = %e,
+						body = %String::from_utf8_lossy(&bytes),
+						"failed to parse embeddings response"
+					);
+					AIError::ResponseParsing(e)
+				})?;
+				Ok((resp.to_llm_response(false), bytes))
+			},
+		}
 	}
 
 	fn process_success(

@@ -173,8 +173,8 @@ mod requests {
 		("with_system", &[ANTHROPIC, BEDROCK, VERTEX]),
 	];
 	const EMBEDDINGS_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[BEDROCK_TITAN, BEDROCK_COHERE, VERTEX]),
-		("array", &[BEDROCK_COHERE, VERTEX]),
+		("basic", &[OPENAI, BEDROCK_TITAN, BEDROCK_COHERE, VERTEX]),
+		("array", &[OPENAI, BEDROCK_COHERE, VERTEX]),
 	];
 
 	#[test]
@@ -291,6 +291,7 @@ mod requests {
 		let titan_request = |i| conversion::bedrock::from_embeddings::translate(&i, &titan_provider);
 		let cohere_request = |i| conversion::bedrock::from_embeddings::translate(&i, &cohere_provider);
 		let vertex_request = |i: types::embeddings::Request| i.to_vertex(&vertex_provider);
+		let openai_request = |i: types::embeddings::Request| i.to_openai();
 		for (name, providers) in EMBEDDINGS_REQUESTS {
 			for provider in *providers {
 				match *provider {
@@ -311,6 +312,13 @@ mod requests {
 							VERTEX,
 							&format!("requests/embeddings/{name}.json"),
 							vertex_request,
+						);
+					},
+					OPENAI => {
+						test_request(
+							OPENAI,
+							&format!("requests/embeddings/{name}.json"),
+							openai_request,
 						);
 					},
 					other => panic!("unsupported provider in EMBEDDINGS_REQUESTS: {other}"),
@@ -404,6 +412,7 @@ mod response {
 		("response/bedrock-titan/embeddings.json", &[BEDROCK_TITAN]),
 		("response/bedrock-cohere/embeddings.json", &[BEDROCK_COHERE]),
 		("response/vertex/embeddings.json", &[VERTEX]),
+		("response/openai/embeddings.json", &[OPENAI]),
 	];
 	const COUNT_TOKEN_RESPONSES: &[(&str, &[&str])] = &[("count_tokens", &[ANTHROPIC])];
 
@@ -590,6 +599,11 @@ mod response {
 		};
 		let vertex =
 			|i: Bytes| conversion::vertex::from_embeddings::translate_response(&i, "text-embedding-004");
+		let openai = |i: Bytes| {
+			serde_json::from_slice::<types::embeddings::Response>(&i)
+				.map(|e| Box::new(e) as Box<dyn ResponseType>)
+				.map_err(AIError::ResponseParsing)
+		};
 
 		for (test, providers) in EMBEDDING_RESPONSES {
 			for provider in *providers {
@@ -597,6 +611,7 @@ mod response {
 					BEDROCK_TITAN => test_response(BEDROCK_TITAN, test, titan),
 					BEDROCK_COHERE => test_response(BEDROCK_COHERE, test, cohere),
 					VERTEX => test_response(VERTEX, test, vertex),
+					OPENAI => test_response(OPENAI, test, openai),
 					other => panic!("unsupported provider in EMBEDDING_RESPONSES: {other}"),
 				}
 			}

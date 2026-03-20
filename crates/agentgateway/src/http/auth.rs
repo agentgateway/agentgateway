@@ -272,6 +272,7 @@ pub async fn apply_late_backend_auth(
 mod tests;
 
 mod gcp {
+	use std::borrow::Cow;
 	use std::collections::HashMap;
 	use std::sync::{Arc, Mutex};
 
@@ -362,11 +363,11 @@ mod gcp {
 		let token = match g {
 			GcpAuth::IdToken { audience, .. } => {
 				let aud = match (audience, call_target) {
-					(Some(aud), _) => aud.as_str(),
-					(None, Target::Hostname(host, _)) => host.as_str(),
+					(Some(aud), _) => Cow::Borrowed(aud.as_str()),
+					(None, Target::Hostname(host, _)) => Cow::Owned(format!("https://{host}")),
 					_ => anyhow::bail!("idToken auth requires a hostname target or explicit audience"),
 				};
-				fetch_id_token(aud).await?
+				fetch_id_token(aud.as_ref()).await?
 			},
 			GcpAuth::AccessToken { .. } => {
 				let token = creds()?.access_token().await?;
@@ -382,6 +383,7 @@ mod gcp {
 	// The SDK doesn't make it easy to use idtokens with user ADC. See https://github.com/googleapis/google-cloud-rust/issues/4215
 	// To allow this (for development use cases primarily), we copy-paste some of their code.
 	mod adc {
+		use std::io;
 		use std::path::PathBuf;
 
 		use anyhow::anyhow;
@@ -422,6 +424,7 @@ mod gcp {
 				None => Ok(None),
 				Some(path) => match fs_err::read_to_string(&path) {
 					Ok(contents) => Ok(Some(contents)),
+					Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
 					Err(e) => Err(anyhow::Error::new(e)),
 				},
 			}?

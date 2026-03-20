@@ -44,7 +44,7 @@ func toInferencePoolAppProtocol(appProtocol inf.AppProtocol) workloadapi.AppProt
 	}
 }
 
-func inferencePoolBuilder() krt.TransformationSingle[*inf.InferencePool, model.ServiceInfo] {
+func InferencePoolBuilder() krt.TransformationSingle[*inf.InferencePool, model.ServiceInfo] {
 	domainSuffix := kubeutils.GetClusterDomainName()
 	return func(ctx krt.HandlerContext, s *inf.InferencePool) *model.ServiceInfo {
 		portNames := map[int32]model.ServicePortName{}

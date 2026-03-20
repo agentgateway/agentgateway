@@ -30,7 +30,7 @@ pub struct TCPProxy {
 
 impl TCPProxy {
 	pub async fn proxy(&self, connection: Socket) {
-		let start = Instant::now();
+		let start = agent_core::Timestamp::now();
 
 		let tcp = connection
 			.ext::<TCPConnectionInfo>()

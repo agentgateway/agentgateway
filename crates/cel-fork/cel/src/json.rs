@@ -3,6 +3,7 @@ use chrono::Duration;
 use thiserror::Error;
 
 use crate::Value;
+use crate::functions::format_timestamp;
 
 #[derive(Debug, Clone, Error)]
 #[error("unable to convert value to json: {0:?}")]
@@ -56,7 +57,7 @@ impl<'a> Value<'a> {
 			Value::Bytes(ref b) => BASE64_STANDARD.encode(b.as_ref()).to_string().into(),
 			Value::Null => serde_json::Value::Null,
 
-			Value::Timestamp(ref dt) => dt.to_rfc3339().into(),
+			Value::Timestamp(ref dt) => format_timestamp(dt).into(),
 
 			Value::Duration(ref v) => serde_json::Value::Number(serde_json::Number::from(
 				v.num_nanoseconds()

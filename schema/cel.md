@@ -8,6 +8,7 @@
 |`request.host`|The hostname of the request. For example, `example.com`.|
 |`request.scheme`|The scheme of the request. For example, `https`.|
 |`request.path`|The path of the request URI. For example, `/path`.|
+|`request.pathAndQuery`|The path and query of the request URI. For example, `/path?foo=bar`.|
 |`request.version`|The version of the request. For example, `HTTP/1.1`.|
 |`request.headers`|The headers of the request.|
 |`request.body`|The body of the request. Warning: accessing the body will cause the body to be buffered.|
@@ -17,6 +18,10 @@
 |`response.code`|The HTTP status code of the response.|
 |`response.headers`|The headers of the response.|
 |`response.body`|The body of the response. Warning: accessing the body will cause the body to be buffered.|
+|`env`|`env` contains selected process environment attributes exposed to CEL.<br>This does NOT expose raw environment variables, but rather a subset of well-known variables.|
+|`env.podName`|The name of the pod (when running on Kubernetes)|
+|`env.namespace`|The namespace of the pod (when running on Kubernetes)|
+|`env.gateway`|The Gateway we are running as (when running on Kubernetes)|
 |`jwt`|`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.|
 |`apiKey`|`apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.|
 |`apiKey.key`||

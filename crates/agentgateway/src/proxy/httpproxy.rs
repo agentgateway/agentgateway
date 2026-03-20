@@ -388,8 +388,7 @@ impl HTTPProxy {
 		connection: Arc<Extension>,
 		mut req: ::http::Request<Incoming>,
 	) -> Response {
-		let start = Instant::now();
-		let start_time = chrono::Utc::now().fixed_offset();
+		let start = agent_core::Timestamp::now();
 
 		// Copy connection level attributes into request level attributes
 		connection.copy::<TCPConnectionInfo>(req.extensions_mut());
@@ -405,7 +404,9 @@ impl HTTPProxy {
 			tls: tls.and_then(|t| t.src_identity.clone()),
 		};
 		req.extensions_mut().insert(src);
-		req.extensions_mut().insert(RequestTime(start_time));
+		req
+			.extensions_mut()
+			.insert(RequestTime(start.as_datetime()));
 		let log = RequestLog::new(
 			log::CelLogging::new(
 				self.inputs.cfg.logging.clone(),
@@ -607,7 +608,7 @@ impl HTTPProxy {
 					strng::format!("{}/*", p)
 				}
 			},
-			PathMatch::Regex(r, _) => r.as_str().into(),
+			PathMatch::Regex(r) => r.as_str().into(),
 		});
 		req.extensions_mut().insert(path_match);
 
@@ -786,7 +787,7 @@ impl HTTPProxy {
 			last_res = Some(res);
 			if let Some(bo) = retry_backoff {
 				let fut = if let Some(request_timeout) = request_timeout {
-					let deadline = tokio::time::Instant::from_std(log.start + request_timeout);
+					let deadline = tokio::time::Instant::from_std(log.start.as_instant() + request_timeout);
 					tokio::time::timeout_at(deadline, tokio::time::sleep(bo)).await
 				} else {
 					tokio::time::sleep(bo).await;
@@ -969,7 +970,7 @@ impl HTTPProxy {
 
 		// Setup timeout
 		let call_result = if let Some(timeout) = timeout {
-			let deadline = tokio::time::Instant::from_std(start + timeout);
+			let deadline = tokio::time::Instant::from_std(start.as_instant() + timeout);
 			let fut = tokio::time::timeout_at(deadline, call);
 			fut.await
 		} else {

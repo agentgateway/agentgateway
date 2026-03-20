@@ -549,7 +549,7 @@ impl<'a> Value<'a> {
 	) -> ResolveResult<'a> {
 		Self::resolve(expr, ctx, resolver).map(|v| v.always_materialize_owned())
 	}
-	#[inline(always)]
+
 	pub fn resolve<'vars: 'a, 'rf>(
 		expr: &'vars Expression,
 		ctx: &'vars Context,

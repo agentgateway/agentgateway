@@ -82,6 +82,19 @@ fn json_field() {
 }
 
 #[test]
+fn unvalidated_jwt_payload() {
+	let expr = r#"unvalidatedJwtPayload("eyJhbGciOiJub25lIn0.eyJzdWIiOiIxMjMiLCJhZG1pbiI6dHJ1ZX0.")"#;
+	assert(json!({"sub": "123", "admin": true}), expr);
+	// This payload contains a `-` in the encoded JWT segment, so it verifies we use
+	// base64url decoding rather than standard base64.
+	let expr = r#"unvalidatedJwtPayload("eyJhbGciOiJub25lIn0.eyJkYXRhIjoifn5-In0.").data"#;
+	assert(json!("~~~"), expr);
+
+	assert_fails(r#"unvalidatedJwtPayload("not-a-jwt")"#);
+	assert_fails(r#"unvalidatedJwtPayload("a.b.c")"#);
+}
+
+#[test]
 fn random() {
 	let expr = r#"int(random() * 10.0)"#;
 	let v = eval_with_optimizations_check(expr, false)
@@ -192,6 +205,28 @@ fn default() {
 
 	// default() should not materialize
 	eval_non_static("default(a.b, vars)", |r| {
+		assert_matches!(r, Value::Dynamic(_));
+	})
+	.unwrap();
+}
+
+#[test]
+fn coalesce() {
+	let expr = r#"coalesce(a, "b")"#;
+	assert(json!("b"), expr);
+	let expr = r#"coalesce({"a":1}["b"], {"a":2}["a"], 3)"#;
+	assert(json!(2), expr);
+	let expr = r#"coalesce(fail("bad"), 1 / 0, "fallback")"#;
+	assert(json!("fallback"), expr);
+	let expr = r#"coalesce(null, "fallback")"#;
+	assert(json!("fallback"), expr);
+	let expr = r#"coalesce(null)"#;
+	assert(json!(null), expr);
+	assert_fails(r#"coalesce(fail("bad"), 1 / 0)"#);
+	assert_fails(r#"coalesce()"#);
+
+	// coalesce() should not materialize the selected value
+	eval_non_static("coalesce(fail('bad'), vars)", |r| {
 		assert_matches!(r, Value::Dynamic(_));
 	})
 	.unwrap();

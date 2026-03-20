@@ -775,11 +775,16 @@ pub struct TCPRouteBackend {
 pub struct RouteMatch {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub headers: Vec<HeaderMatch>,
+	#[serde(default = "default_route_match_path")]
 	pub path: PathMatch,
 	#[serde(default, flatten, skip_serializing_if = "Option::is_none")]
 	pub method: Option<MethodMatch>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub query: Vec<QueryMatch>,
+}
+
+fn default_route_match_path() -> PathMatch {
+	PathMatch::PathPrefix("/".into())
 }
 
 #[apply(schema!)]
@@ -834,7 +839,6 @@ pub enum PathMatch {
 		#[serde(with = "serde_regex")]
 		#[cfg_attr(feature = "schema", schemars(with = "String"))]
 		regex::Regex,
-		usize,
 	),
 }
 
@@ -1678,7 +1682,7 @@ fn get_path_rank(path: &PathMatch) -> i32 {
 		PathMatch::Exact(_) => 3,
 		// Prefix/Regex -- we will defer to the length
 		PathMatch::PathPrefix(_) => 2,
-		PathMatch::Regex(_, _) => 2,
+		PathMatch::Regex(_) => 2,
 	}
 }
 
@@ -1686,7 +1690,7 @@ fn get_path_length(path: &PathMatch) -> usize {
 	match path {
 		PathMatch::Exact(s) => s.len(),
 		PathMatch::PathPrefix(s) => s.len(),
-		PathMatch::Regex(_, l) => *l,
+		PathMatch::Regex(r) => r.as_str().len(),
 	}
 }
 

@@ -79,7 +79,7 @@ export interface HeaderMatch {
 export interface PathMatch {
   exact?: string;
   pathPrefix?: string;
-  regex?: [string, number]; // [pattern, flags]
+  regex?: string;
 }
 
 export interface MethodMatch {

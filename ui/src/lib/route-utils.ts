@@ -25,7 +25,7 @@ export const buildMatch = (routeForm: typeof DEFAULT_HTTP_ROUTE_FORM): Match => 
   const match: Match = {
     path:
       routeForm.pathType === "regex"
-        ? { regex: [routeForm.pathPrefix, 0] }
+        ? { regex: routeForm.pathPrefix }
         : { [routeForm.pathType]: routeForm.pathPrefix },
   };
 
@@ -70,7 +70,7 @@ export const populateEditForm = (route: RouteType): typeof DEFAULT_HTTP_ROUTE_FO
     ruleName: route.ruleName || "",
     hostnames: route.hostnames?.join(", ") || "",
     pathPrefix:
-      firstMatch?.path.pathPrefix || firstMatch?.path.exact || firstMatch?.path.regex?.[0] || "/",
+      firstMatch?.path.pathPrefix || firstMatch?.path.exact || firstMatch?.path.regex || "/",
     pathType: firstMatch?.path.pathPrefix
       ? "pathPrefix"
       : firstMatch?.path.exact
@@ -97,7 +97,7 @@ export const populateTcpEditForm = (tcpRoute: TcpRoute): typeof DEFAULT_TCP_ROUT
 export const getPathDisplayString = (match: Match): string => {
   if (match.path.exact) return `= ${match.path.exact}`;
   if (match.path.pathPrefix) return `${match.path.pathPrefix}*`;
-  if (match.path.regex) return `~ ${match.path.regex[0]}`;
+  if (match.path.regex) return `~ ${match.path.regex}`;
   return "/";
 };
 

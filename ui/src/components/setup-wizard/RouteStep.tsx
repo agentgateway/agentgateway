@@ -79,7 +79,7 @@ export function RouteStep({ onNext, onPrevious, config, onConfigChange }: RouteS
           ? { exact: pathValue }
           : pathType === "prefix"
             ? { pathPrefix: pathValue }
-            : { regex: [pathValue, 0] as [string, number] };
+            : { regex: pathValue };
 
       const newRoute: Route = {
         name: routeName,

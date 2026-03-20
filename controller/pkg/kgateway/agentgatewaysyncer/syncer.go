@@ -79,8 +79,7 @@ type Syncer struct {
 	gatewayCollectionOptions []translator.GatewayCollectionConfigOption
 
 	customResourceCollections   func(cfg CustomResourceCollectionsConfig)
-	workloadAddressProviderFunc func(model.WorkloadInfo) *workloadapi.Address
-	serviceAddressProviderFunc  func(model.ServiceInfo) *workloadapi.Address
+	buildAddressCollectionsFunc AgentgatewayAddressBuilderFunc
 }
 
 func NewAgwSyncer(
@@ -106,8 +105,7 @@ func NewAgwSyncer(
 			translator.WithGatewayTransformationFunc(cfg.GatewayTransformationFunc),
 		},
 		customResourceCollections:   cfg.CustomResourceCollections,
-		workloadAddressProviderFunc: cfg.WorkloadAddressProviderFunc,
-		serviceAddressProviderFunc:  cfg.ServiceAddressProviderFunc,
+		buildAddressCollectionsFunc: cfg.BuildAddressCollectionsFunc,
 	}
 	logger.Debug("init agentgateway Syncer", "controllername", controllerName)
 
@@ -174,13 +172,17 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	status.RegisterStatus(s.statusCollections, listenerSetFinalStatus, translator.GetStatus)
 
 	// Build address collections
-	addresses := s.buildAddressCollections(krtopts)
+	addressBuilder := s.buildAddressCollectionsFunc
+	if addressBuilder == nil {
+		addressBuilder = defaultBuildAddressCollections
+	}
+	addresses, hasSynced := addressBuilder(s.agwCollections, krtopts)
 
 	// Build XDS collection
 	s.buildXDSCollection(agwResources, addresses, krtopts)
 
 	// Set up sync dependencies
-	s.setupSyncDependencies(agwResources, addresses)
+	s.setupSyncDependencies(agwResources, addresses, hasSynced)
 
 	s.Outputs.Resources = agwResources
 	s.Outputs.Addresses = addresses
@@ -605,8 +607,9 @@ func (s *Syncer) getBindProtocol(obj *translator.GatewayListener) api.Bind_Proto
 	}
 }
 
-func (s *Syncer) buildAddressCollections(krtopts krtutil.KrtOptions) krt.Collection[Address] {
-	cols := s.agwCollections
+// defaultBuildAddressCollections is the default implementation for building address collections
+// using the istio ambient builder. It can be passed via WithBuildAddressCollections to the syncer.
+func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtutil.KrtOptions) (krt.Collection[Address], func() bool) {
 	opts := krtopts.ToIstio()
 	clusterId := cluster.ID(cols.ClusterID)
 	Networks := ambient.BuildNetworkCollections(cols.Namespaces, cols.Gateways, ambient.Options{
@@ -650,15 +653,14 @@ func (s *Syncer) buildAddressCollections(krtopts krtutil.KrtOptions) krt.Collect
 		true,
 	)
 	// Istio doesn't include InferencePools, but we need them; add our own after the Istio build
-	inferencePoolsInfo := krt.NewCollection(cols.InferencePools, inferencePoolBuilder(),
+	inferencePoolsInfo := krt.NewCollection(cols.InferencePools, InferencePoolBuilder(),
 		krtopts.ToOptions("InferencePools")...)
 	services = krt.JoinCollection([]krt.Collection[model.ServiceInfo]{services, inferencePoolsInfo}, krt.WithJoinUnchecked())
 
-	// TODO: add InferencePools
 	nodeLocality := ambient.NodesCollection(cols.Nodes, opts.WithName("NodeLocality")...)
 	workloads := builder.WorkloadsCollection(
 		cols.Pods,
-		nodeLocality, // NodeLocality,
+		nodeLocality,
 		meshConfig,
 		// Authz/Authn are not use for agentgateway, ignore
 		krt.NewStaticCollection[model.WorkloadAuthorization](nil, nil),
@@ -672,32 +674,15 @@ func (s *Syncer) buildAddressCollections(krtopts krtutil.KrtOptions) krt.Collect
 		opts,
 	)
 
-	// Build address collections
 	workloadAddresses := krt.MapCollection(workloads, func(t model.WorkloadInfo) Address {
-		// If AsAddress is not populated and we have a provider function, use it to populate AsAddress
-		// This is called after WorkloadInfo objects are created from Kubernetes resources by Istio's
-		// ambient workload builder, but before they are wrapped in Address structs for XDS.
-		if t.AsAddress.Address == nil && s.workloadAddressProviderFunc != nil {
-			if addr := s.workloadAddressProviderFunc(t); addr != nil {
-				setWorkloadAddress(&t, addr)
-			}
-		}
 		return Address{Workload: &t}
 	})
 	svcAddresses := krt.MapCollection(services, func(t model.ServiceInfo) Address {
-		// If AsAddress is not populated and we have a provider function, use it to populate AsAddress
-		// This is called after ServiceInfo objects are created from Kubernetes resources by Istio's
-		// ambient service builder, but before they are wrapped in Address structs for XDS.
-		if t.AsAddress.Address == nil && s.serviceAddressProviderFunc != nil {
-			if addr := s.serviceAddressProviderFunc(t); addr != nil {
-				setServiceAddress(&t, addr)
-			}
-		}
 		return Address{Service: &t}
 	})
 
 	adpAddresses := krt.JoinCollection([]krt.Collection[Address]{svcAddresses, workloadAddresses}, krtopts.ToOptions("Addresses")...)
-	return adpAddresses
+	return adpAddresses, func() bool { return true }
 }
 
 func (s *Syncer) buildXDSCollection(
@@ -716,11 +701,16 @@ func (s *Syncer) buildXDSCollection(
 func (s *Syncer) setupSyncDependencies(
 	agwResources krt.Collection[agwir.AgwResource],
 	addresses krt.Collection[Address],
+	additionalSync func() bool,
 ) {
+	if additionalSync == nil {
+		additionalSync = func() bool { return true }
+	}
 	s.waitForSync = []cache.InformerSynced{
 		agwResources.HasSynced,
 		addresses.HasSynced,
 		s.NackPublisher.HasSynced,
+		additionalSync,
 	}
 }
 

@@ -160,7 +160,7 @@ fn test_path_matching() {
 		("prefix-path", PathMatch::PathPrefix("/api/".into())),
 		(
 			"regex-path",
-			PathMatch::Regex(Regex::new(r"^/api/v\d+/users$").unwrap(), 18),
+			PathMatch::Regex(Regex::new(r"^/api/v\d+/users$").unwrap()),
 		),
 		("root-prefix", PathMatch::PathPrefix("/".into())),
 	];

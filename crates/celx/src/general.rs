@@ -15,6 +15,7 @@ pub fn insert_all(ctx: &mut Context) {
 	// Custom to agentgateway
 	ctx.add_function("json", json_parse);
 	ctx.add_function("jsonField", json_parse_field);
+	ctx.add_function("unvalidatedJwtPayload", unvalidated_jwt_payload);
 	ctx.add_function("to_json", to_json);
 	// Keep old and new name for compatibility
 	ctx.add_function("toJson", to_json);
@@ -25,6 +26,7 @@ pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("variables", variables);
 	ctx.add_function("random", random);
 	ctx.add_function("default", default);
+	ctx.add_function("coalesce", coalesce);
 	ctx.add_function("regexReplace", regex_replace);
 	ctx.add_function("fail", fail);
 	ctx.add_function("uuid", uuid_generate);
@@ -48,6 +50,13 @@ pub fn base64_encode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> Reso
 }
 pub const STANDARD_MAYBE_PADDED: GeneralPurpose = GeneralPurpose::new(
 	&alphabet::STANDARD,
+	GeneralPurposeConfig::new()
+		.with_encode_padding(true)
+		.with_decode_allow_trailing_bits(false)
+		.with_decode_padding_mode(DecodePaddingMode::Indifferent),
+);
+pub const URL_SAFE_MAYBE_PADDED: GeneralPurpose = GeneralPurpose::new(
+	&alphabet::URL_SAFE,
 	GeneralPurposeConfig::new()
 		.with_encode_padding(true)
 		.with_decode_allow_trailing_bits(false)
@@ -93,6 +102,7 @@ pub fn variables<'a, 'rf>(ftx: &mut FunctionContext<'a, 'rf>) -> ResolveResult<'
 		"backend",
 		"extauthz",
 		"extproc",
+		"env",
 	];
 	let mut res = vector_map::VecMap::with_capacity(keys.len());
 	for k in keys {
@@ -196,6 +206,27 @@ fn json_parse<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResu
 	cel::to_value(sv).map_err(|e| ftx.error(e))
 }
 
+fn unvalidated_jwt_payload<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	v: Argument,
+) -> ResolveResult<'a> {
+	let v: StringValue = v.load_value(ftx)?;
+	let parts: Vec<&str> = v.as_ref().split('.').collect();
+	if parts.len() != 3 {
+		return Err(ftx.error(format!(
+			"invalid JWT: expected 3 segments, got {}",
+			parts.len()
+		)));
+	}
+
+	use base64::Engine;
+	let payload = URL_SAFE_MAYBE_PADDED
+		.decode(parts[1].as_bytes())
+		.map_err(|e| ftx.error(e))?;
+	let sv: serde_json::Value = serde_json::from_slice(&payload).map_err(|e| ftx.error(e))?;
+	cel::to_value(sv).map_err(|e| ftx.error(e))
+}
+
 fn to_json<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
 	let v: Value = v.load_value(ftx)?;
 	let pj = v.json().map_err(|e| ftx.error(e))?;
@@ -248,6 +279,30 @@ fn default<'a>(ftx: &mut FunctionContext<'a, '_>, exp: Argument, d: Argument) ->
 		Some(v) => Ok(v),
 		None => Ok(d.load_unmaterialized(ftx)?),
 	}
+}
+
+fn coalesce<'a>(ftx: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
+	if ftx.args.is_empty() {
+		return Err(ExecutionError::invalid_argument_count(1, 0));
+	}
+
+	let mut last_error = None;
+	let mut saw_null = false;
+	for exp in ftx.expr_iter() {
+		match Value::resolve(exp, ftx.ptx, ftx.vars()) {
+			Ok(Value::Null) => {
+				saw_null = true;
+			},
+			Ok(v) => return Ok(v),
+			Err(err) => last_error = Some(err),
+		}
+	}
+
+	if saw_null {
+		return Ok(Value::Null);
+	}
+
+	Err(last_error.unwrap_or_else(|| ExecutionError::invalid_argument_count(1, 0)))
 }
 
 mod json_field {

@@ -1,17 +1,17 @@
 package agentgatewaysyncer
 
 import (
-	"istio.io/istio/pilot/pkg/model"
-	"istio.io/istio/pkg/workloadapi"
+	"istio.io/istio/pkg/kube/krt"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 )
 
 type agentgatewaySyncerConfig struct {
 	GatewayTransformationFunc   translator.GatewayTransformationFunction
 	CustomResourceCollections   func(cfg CustomResourceCollectionsConfig)
-	WorkloadAddressProviderFunc func(model.WorkloadInfo) *workloadapi.Address
-	ServiceAddressProviderFunc  func(model.ServiceInfo) *workloadapi.Address
+	BuildAddressCollectionsFunc AgentgatewayAddressBuilderFunc
 }
 
 type AgentgatewaySyncerOption func(*agentgatewaySyncerConfig)
@@ -40,30 +40,16 @@ func WithCustomResourceCollections(f func(cfg CustomResourceCollectionsConfig)) 
 	}
 }
 
-// WithWorkloadAddressProviderFunc provides a function to compute the Address for WorkloadInfo objects
-// when AsAddress is not populated. This function is called during buildAddressCollections, after WorkloadInfo
-// objects are created from Kubernetes resources (Pods, WorkloadEntries, etc.) by Istio's ambient workload builder,
-// but before they are wrapped in Address structs and used for XDS generation. If the function returns a non-nil
-// Address, it will be used to populate AsAddress (similar to PrecomputeWorkload).
-// This allows downstream implementations to extend the address computation for workloads.
-func WithWorkloadAddressProviderFunc(f func(model.WorkloadInfo) *workloadapi.Address) AgentgatewaySyncerOption {
-	return func(o *agentgatewaySyncerConfig) {
-		if f != nil {
-			o.WorkloadAddressProviderFunc = f
-		}
-	}
-}
+type AgentgatewayAddressBuilderFunc func(agw *plugins.AgwCollections, krtopts krtutil.KrtOptions) (krt.Collection[Address], func() bool)
 
-// WithServiceAddressProviderFunc provides a function to compute the Address for ServiceInfo objects
-// when AsAddress is not populated. This function is called during buildAddressCollections, after ServiceInfo
-// objects are created from Kubernetes resources (Services, ServiceEntries, etc.) by Istio's ambient service builder,
-// but before they are wrapped in Address structs and used for XDS generation. If the function returns a non-nil
-// Address, it will be used to populate AsAddress (similar to precomputeService).
-// This allows downstream implementations to extend the address computation for services.
-func WithServiceAddressProviderFunc(f func(model.ServiceInfo) *workloadapi.Address) AgentgatewaySyncerOption {
+// WithBuildAddressCollections provides a function to build the address collections for the syncer.
+// This gives full control over how ServiceInfo and WorkloadInfo are constructed from the
+// AgwCollections. The default implementation uses the istio ambient builder (see
+// defaultBuildAddressCollections in syncer.go).
+func WithBuildAddressCollections(f AgentgatewayAddressBuilderFunc) AgentgatewaySyncerOption {
 	return func(o *agentgatewaySyncerConfig) {
 		if f != nil {
-			o.ServiceAddressProviderFunc = f
+			o.BuildAddressCollectionsFunc = f
 		}
 	}
 }

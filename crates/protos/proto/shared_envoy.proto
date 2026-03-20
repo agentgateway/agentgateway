@@ -1,0 +1,160 @@
+syntax = "proto3";
+
+package envoy.service.common.v3;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+message Status {
+  // The status code, which should be an enum value of [google.rpc.Code][google.rpc.Code].
+  int32 code = 1;
+
+  // A developer-facing error message, which should be in English. Any
+  // user-facing error message should be localized and sent in the
+  // [google.rpc.Status.details][google.rpc.Status.details] field, or localized by the client.
+  string message = 2;
+
+  // A list of messages that carry the error details. There is a common set of
+  // message types for APIs to use.
+  repeated google.protobuf.Any details = 3;
+}
+
+// Header name/value pair.
+message HeaderValue {
+  // Header name.
+  string key = 1;
+
+  string value = 2;
+  // Header value.
+  //
+  // The same :ref:`format specifier <config_access_log_format>` as used for
+  // :ref:`HTTP access logging <config_access_log>` applies here, however
+  // unknown header values are replaced with the empty string instead of ``-``.
+  bytes raw_value = 3;
+}
+
+// Header name/value pair plus option to control append behavior.
+message HeaderValueOption {
+  // Describes the supported actions types for header append action.
+  enum HeaderAppendAction {
+    // If the header already exists, this action will result in:
+    //
+    // - Comma-concatenated for predefined inline headers.
+    // - Duplicate header added in the ``HeaderMap`` for other headers.
+    //
+    // If the header doesn't exist then this will add new header with specified key and value.
+    APPEND_IF_EXISTS_OR_ADD = 0;
+
+    // This action will add the header if it doesn't already exist. If the header
+    // already exists then this will be a no-op.
+    ADD_IF_ABSENT = 1;
+
+    // This action will overwrite the specified value by discarding any existing values if
+    // the header already exists. If the header doesn't exist then this will add the header
+    // with specified key and value.
+    OVERWRITE_IF_EXISTS_OR_ADD = 2;
+
+    // This action will overwrite the specified value by discarding any existing values if
+    // the header already exists. If the header doesn't exist then this will be no-op.
+    OVERWRITE_IF_EXISTS = 3;
+  }
+
+  // Header name/value pair that this option applies to.
+  HeaderValue header = 1;
+
+  // Should the value be appended? If true (default), the value is appended to
+  // existing values.
+  // This field is deprecated and please use append_action as replacement.
+  google.protobuf.BoolValue append = 2;
+
+  // Describes the action taken to append/overwrite the given value for an existing header
+  // or to only add this header if it's absent.
+  // Value defaults to APPEND_IF_EXISTS_OR_ADD.
+  HeaderAppendAction append_action = 3;
+}
+
+enum StatusCode {
+  // Empty - This code not part of the HTTP status code specification, but it is needed for proto
+  // `enum` type.
+  Empty = 0;
+  Continue = 100;
+  OK = 200;
+  Created = 201;
+  Accepted = 202;
+  NonAuthoritativeInformation = 203;
+  NoContent = 204;
+  ResetContent = 205;
+  PartialContent = 206;
+  MultiStatus = 207;
+  AlreadyReported = 208;
+  IMUsed = 226;
+  MultipleChoices = 300;
+  MovedPermanently = 301;
+  Found = 302;
+  SeeOther = 303;
+  NotModified = 304;
+  UseProxy = 305;
+  TemporaryRedirect = 307;
+  PermanentRedirect = 308;
+  BadRequest = 400;
+  Unauthorized = 401;
+  PaymentRequired = 402;
+  Forbidden = 403;
+  NotFound = 404;
+  MethodNotAllowed = 405;
+  NotAcceptable = 406;
+  ProxyAuthenticationRequired = 407;
+  RequestTimeout = 408;
+  Conflict = 409;
+  Gone = 410;
+  LengthRequired = 411;
+  PreconditionFailed = 412;
+  PayloadTooLarge = 413;
+  URITooLong = 414;
+  UnsupportedMediaType = 415;
+  RangeNotSatisfiable = 416;
+  ExpectationFailed = 417;
+  MisdirectedRequest = 421;
+  UnprocessableEntity = 422;
+  Locked = 423;
+  FailedDependency = 424;
+  UpgradeRequired = 426;
+  PreconditionRequired = 428;
+  TooManyRequests = 429;
+  RequestHeaderFieldsTooLarge = 431;
+  InternalServerError = 500;
+  NotImplemented = 501;
+  BadGateway = 502;
+  ServiceUnavailable = 503;
+  GatewayTimeout = 504;
+  HTTPVersionNotSupported = 505;
+  VariantAlsoNegotiates = 506;
+  InsufficientStorage = 507;
+  LoopDetected = 508;
+  NotExtended = 510;
+  NetworkAuthenticationRequired = 511;
+}
+
+message HttpStatus {
+  // Supplies HTTP response code.
+  StatusCode code = 1;
+}
+
+message Metadata {
+  // Key is the reverse DNS filter name, e.g. com.acme.widget. The ``envoy.*``
+  // namespace is reserved for Envoy's built-in filters.
+  // If both ``filter_metadata`` and
+  // :ref:`typed_filter_metadata <envoy_v3_api_field_config.core.v3.Metadata.typed_filter_metadata>`
+  // fields are present in the metadata with same keys,
+  // only ``typed_filter_metadata`` field will be parsed.
+  map<string, google.protobuf.Struct> filter_metadata = 1;
+
+  // Key is the reverse DNS filter name, e.g. com.acme.widget. The ``envoy.*``
+  // namespace is reserved for Envoy's built-in filters.
+  // The value is encoded as google.protobuf.Any.
+  // If both :ref:`filter_metadata <envoy_v3_api_field_config.core.v3.Metadata.filter_metadata>`
+  // and ``typed_filter_metadata`` fields are present in the metadata with same keys,
+  // only ``typed_filter_metadata`` field will be parsed.
+  //  map<string, google.protobuf.Any> typed_filter_metadata = 2;
+}

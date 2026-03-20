@@ -1,0 +1,42 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/openai/embeddings.json
+info:
+  object: list
+  data:
+    - object: embedding
+      index: 0
+      embedding:
+        - -0.029852388
+        - 0.00078823726
+        - -0.08126111
+  model: text-embedding-3-small
+  usage:
+    prompt_tokens: 8
+    total_tokens: 8
+---
+{
+  "response": {
+    "object": "list",
+    "model": "text-embedding-3-small",
+    "data": [
+      {
+        "index": 0,
+        "object": "embedding",
+        "embedding": [
+          -0.029852388,
+          0.00078823726,
+          -0.08126111
+        ]
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8,
+      "total_tokens": 8
+    }
+  },
+  "parsed": {
+    "input_tokens": 8,
+    "total_tokens": 8
+  }
+}

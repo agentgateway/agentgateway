@@ -13,6 +13,7 @@ members = [
     "crates/celx",
     "crates/core",
     "crates/hbone",
+    "crates/protos",
     "crates/xds",
     "crates/xtask",
 ]
@@ -24,6 +25,7 @@ default-members = [
     "crates/celx",
     "crates/core",
     "crates/hbone",
+    "crates/protos",
     "crates/xds",
 ]
 
@@ -42,6 +44,7 @@ agent-xds = { path = "crates/xds" }
 agentgateway = { path = "crates/agentgateway" }
 cel = { path = "crates/cel-fork/cel" }
 cel-derive = { path = "crates/cel-fork/cel-derive" }
+protos = { path = "crates/protos" }
 atomic_float = { version = "1.1.0", features = ["serde"] }
 anyhow = "1.0"
 arc-swap = "1.7.1"
@@ -65,6 +68,7 @@ azure_identity = { version = "0.31", default-features = false }
 azure_core = { version = "0.31", default-features = false }
 typespec_client_core = { default-features = false, version = "0.10" }
 base64 = "0.22"
+cookie = { version = "0.18", default-features = false }
 bcrypt = "0.18"
 bytes = { version = "1.10", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }

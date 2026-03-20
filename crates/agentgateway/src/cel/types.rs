@@ -4,12 +4,23 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::cel::{Error, Expression, ROOT_CONTEXT, query};
+use crate::http::ext_authz::ExtAuthzDynamicMetadata;
+use crate::http::ext_proc::ExtProcDynamicMetadata;
+use crate::http::transformation_cel::TransformationMetadata;
+use crate::http::{apikey, basicauth, jwt};
+use crate::llm::{LLMInfo, LLMRequest};
+use crate::mcp::{ResourceId, ResourceType};
+use crate::serdes::schema;
+use crate::transport::tls::TlsInfo;
+use crate::{apply, llm};
+use agent_core::env::ENV;
 use agent_core::strng::Strng;
 use bytes::Bytes;
 use cel::Value;
 use cel::common::ast::OptimizedExpr;
 use cel::context::VariableResolver;
-use cel::objects::{BytesValue, ListValue};
+use cel::objects::{BytesValue, ListValue, StringValue};
 use cel::types::dynamic::{DynamicType, DynamicValue};
 use cel::{ExecutionError, FunctionContext};
 use chrono::{DateTime, FixedOffset};
@@ -21,65 +32,67 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::json;
 
-use crate::cel::{Error, Expression, ROOT_CONTEXT};
-use crate::http::ext_authz::ExtAuthzDynamicMetadata;
-use crate::http::ext_proc::ExtProcDynamicMetadata;
-use crate::http::transformation_cel::TransformationMetadata;
-use crate::http::{apikey, basicauth, jwt};
-use crate::llm::{LLMInfo, LLMRequest};
-use crate::mcp::{ResourceId, ResourceType};
-use crate::serdes::schema;
-use crate::transport::tls::TlsInfo;
-use crate::{apply, llm};
-
 #[derive(Debug, Default, cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
 pub struct Executor<'a> {
-	#[dynamic(skip_serializing_if = "Option::is_none")]
 	pub request: Option<RequestRef<'a>>,
 
-	#[dynamic(skip_serializing_if = "Option::is_none")]
 	pub response: Option<ResponseRef<'a>>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
+	pub env: EnvContext,
+
 	pub source: ExtensionOrDirect<'a, SourceContext>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub jwt: ExtensionOrDirect<'a, jwt::Claims>,
 
-	#[dynamic(rename = "apiKey", skip_serializing_if = "is_extension_or_direct_none")]
+	#[dynamic(rename = "apiKey")]
 	pub api_key: ExtensionOrDirect<'a, apikey::Claims>,
 
-	#[dynamic(
-		rename = "basicAuth",
-		skip_serializing_if = "is_extension_or_direct_none"
-	)]
+	#[dynamic(rename = "basicAuth")]
 	pub basic_auth: ExtensionOrDirect<'a, basicauth::Claims>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub llm: ExtensionOrDirect<'a, LLMContext>,
 
-	#[dynamic(rename = "llmRequest", skip_serializing_if = "Option::is_none")]
+	#[dynamic(rename = "llmRequest")]
 	pub llm_request: Option<&'a serde_json::Value>,
 
-	#[dynamic(skip_serializing_if = "Option::is_none")]
 	pub mcp: Option<&'a ResourceType>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub backend: ExtensionOrDirect<'a, BackendContext>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub extauthz: ExtensionOrDirect<'a, ExtAuthzDynamicMetadata>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub extproc: ExtensionOrDirect<'a, ExtProcDynamicMetadata>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
 }
 
 fn is_extension_or_direct_none<T: Send + Sync + 'static>(e: &ExtensionOrDirect<T>) -> bool {
 	e.deref().is_none()
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+pub struct EnvContext {
+	/// The name of the pod (when running on Kubernetes)
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub pod_name: Option<String>,
+	/// The namespace of the pod (when running on Kubernetes)
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub namespace: Option<String>,
+	/// The Gateway we are running as (when running on Kubernetes)
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub gateway: Option<String>,
+}
+
+impl Default for EnvContext {
+	fn default() -> Self {
+		Self {
+			pod_name: (!ENV.pod_name.is_empty()).then(|| ENV.pod_name.clone()),
+			namespace: (!ENV.pod_namespace.is_empty()).then(|| ENV.pod_namespace.clone()),
+			gateway: (!ENV.gateway.is_empty()).then(|| ENV.gateway.clone()),
+		}
+	}
 }
 
 #[apply(schema!)]
@@ -453,11 +466,13 @@ pub struct RequestRef<'a> {
 	#[dynamic(with_value = "to_value_str")]
 	pub method: &'a http::Method,
 
-	/// The request's URI
-	#[serde(with = "http_serde::uri")]
-	#[dynamic(with_value = "to_value_owned_string")]
-	pub uri: &'a http::Uri,
+	/// The request's URI. For example, `https://example.com/path?key=value`
+	pub uri: query::QueryAccessor<'a>,
+	/// The request's path. For example, `/path`.
 	pub path: &'a str,
+	/// The request's path with query params. For example, `/path?key=value`.
+	pub path_and_query: query::QueryAccessor<'a>,
+
 	/// The hostname of the request. For example, `example.com`.
 	#[serde(serialize_with = "crate::serde_authority_opt")]
 	#[dynamic(with_value = "to_value_str_opt")]
@@ -545,6 +560,11 @@ pub struct RequestRefSerde {
 	#[serde(default)]
 	pub path: String,
 
+	/// The path and query of the request URI. For example, `/path?foo=bar`.
+	#[serde(default, with = "http_serde::uri", rename = "pathAndQuery")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub path_and_query: http::Uri,
+
 	/// The version of the request. For example, `HTTP/1.1`.
 	#[serde(default, with = "http_serde::version")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
@@ -593,8 +613,9 @@ impl<'a> From<&'a RequestSnapshot> for RequestRef<'a> {
 	fn from(value: &'a RequestSnapshot) -> Self {
 		Self {
 			method: &value.method,
-			uri: &value.path,
+			uri: query::QueryAccessor::uri_from_uri(&value.path),
 			path: value.path.path(),
+			path_and_query: query::QueryAccessor::path_and_query_from_uri(&value.path),
 			host: value.host.as_ref(),
 			scheme: value.scheme.as_ref(),
 			version: value.version,
@@ -609,8 +630,9 @@ impl<'a, B> From<&'a ::http::Request<B>> for RequestRef<'a> {
 	fn from(req: &'a ::http::Request<B>) -> Self {
 		Self {
 			method: req.method(),
-			uri: req.uri(),
+			uri: query::QueryAccessor::uri_from_uri(req.uri()),
 			path: req.uri().path(),
+			path_and_query: query::QueryAccessor::path_and_query_from_uri(req.uri()),
 			host: req.uri().authority(),
 			scheme: req.uri().scheme(),
 			version: req.version(),
@@ -687,7 +709,7 @@ mod serde_rfc3339 {
 	where
 		S: Serializer,
 	{
-		serializer.serialize_str(&value.to_rfc3339())
+		serializer.serialize_str(&cel::functions::format_timestamp(value))
 	}
 
 	pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<FixedOffset>, D::Error>
@@ -844,9 +866,6 @@ pub fn to_value_redacted<'a>(c: &'a SecretString) -> Value<'a> {
 fn version_to_value<'a>(c: &'a http::Version) -> Value<'a> {
 	Value::String(crate::http::version_str(c).into())
 }
-fn to_value_owned_string<'a, T: ToString>(c: &'a &'a T) -> Value<'a> {
-	Value::String(c.to_string().into())
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HeadersMode {
@@ -903,6 +922,31 @@ impl<'a> Headers<'a> {
 	fn split(mut self) -> Self {
 		self.mode = HeadersMode::Split;
 		self
+	}
+
+	fn cookie_headers(&self) -> impl Iterator<Item = Result<&str, ExecutionError>> + '_ {
+		self
+			.as_ref()
+			.get_all(http::header::COOKIE)
+			.iter()
+			.map(|value| {
+				value
+					.to_str()
+					.map_err(|err| ExecutionError::function_error("cookie", err))
+			})
+	}
+
+	fn cookie_value(&self, name: &str) -> Result<Value<'static>, ExecutionError> {
+		for header in self.cookie_headers() {
+			let header = header?;
+			for cookie in cookie::Cookie::split_parse(header) {
+				let cookie = cookie.map_err(|err| ExecutionError::function_error("cookie", err))?;
+				if cookie.name() == name {
+					return Ok(Value::from(cookie.value().to_string()));
+				}
+			}
+		}
+		Err(ExecutionError::no_such_key(name))
 	}
 
 	fn raw_values(&self, name: &str) -> Option<Vec<Cow<'_, str>>> {
@@ -1026,6 +1070,19 @@ impl DynamicType for Headers<'_> {
 	where
 		Self: 'a,
 	{
+		if name == "cookie" {
+			if ftx.args.len() != 1 {
+				return Some(Err(ExecutionError::invalid_argument_count(
+					1,
+					ftx.args.len(),
+				)));
+			}
+			let name = match ftx.arg::<StringValue>(0) {
+				Ok(name) => name,
+				Err(err) => return Some(Err(err)),
+			};
+			return Some(self.cookie_value(name.as_ref()));
+		}
 		if !ftx.args.is_empty() {
 			return Some(Err(ExecutionError::invalid_argument_count(
 				0,
@@ -1145,6 +1202,12 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub response: Option<ResponseRefSerde>,
 
+	/// `env` contains selected process environment attributes exposed to CEL.
+	/// This does NOT expose raw environment variables, but rather a subset of well-known variables.
+	//  TODO: in the future we can, but we should add an allow-list of vars to avoid security issues.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub env: Option<EnvContext>,
+
 	/// `jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub jwt: Option<jwt::Claims>,
@@ -1231,13 +1294,17 @@ impl ExecutorSerde {
 	/// are `None` in the snapshot will be absent in the executor.
 	pub fn as_executor(&self) -> Executor<'_> {
 		let mut exec = Executor::new_empty();
+		if let Some(env) = &self.env {
+			exec.env = env.clone();
+		}
 
 		// Set request if present
 		if let Some(req) = &self.request {
 			exec.request = Some(RequestRef {
 				method: &req.method,
-				uri: &req.uri,
+				uri: query::QueryAccessor::uri_from_uri(&req.uri),
 				path: &req.path,
+				path_and_query: query::QueryAccessor::path_and_query_from_uri(&req.path_and_query),
 				host: req.host.as_ref(),
 				scheme: req.scheme.as_ref(),
 				version: req.version,
@@ -1285,10 +1352,11 @@ pub fn full_example_executor() -> ExecutorSerde {
 	ExecutorSerde {
 		request: Some(RequestRefSerde {
 			method: Method::GET,
-			uri: "http://example.com/api/test".parse::<Uri>().unwrap(),
+			uri: "http://example.com/api/test?k=v".parse::<Uri>().unwrap(),
 			host: Some("example.com".parse().unwrap()),
 			scheme: Some(::http::uri::Scheme::HTTP),
 			path: "/api/test".to_string(),
+			path_and_query: "/api/test?k=v".parse::<Uri>().unwrap(),
 			version: Version::HTTP_11,
 			headers: req_headers,
 			body: Some(BufferedBody(Bytes::from(r#"{"model": "fast"}"#))),
@@ -1296,13 +1364,18 @@ pub fn full_example_executor() -> ExecutorSerde {
 				chrono::DateTime::parse_from_rfc3339("2000-01-01T12:00:00Z").unwrap(),
 			)),
 			end_time: Some(RequestTime(
-				chrono::DateTime::parse_from_rfc3339("2000-01-01T12:00:01Z").unwrap(),
+				chrono::DateTime::parse_from_rfc3339("2000-01-01T12:00:01.12345678Z").unwrap(),
 			)),
 		}),
 		response: Some(ResponseRefSerde {
 			code: 200,
 			headers: resp_headers,
 			body: Some(BufferedBody(Bytes::from(r#"{"ok": true}"#))),
+		}),
+		env: Some(EnvContext {
+			pod_name: Some("pod-1".to_string()),
+			namespace: Some("ns-1".to_string()),
+			gateway: Some("gw-1".to_string()),
 		}),
 		source: Some(SourceContext {
 			address: "127.0.0.1".parse().unwrap(),

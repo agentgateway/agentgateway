@@ -3,7 +3,9 @@ use std::sync::Arc;
 use ::http::HeaderMap;
 
 use crate::http::HeaderOrPseudo;
-use crate::http::ext_authz::proto::{HeaderValue as ProtoHeaderValue, HeaderValueOption};
+use crate::http::ext_authz::proto::{
+	HeaderValue as ProtoHeaderValue, HeaderValueOption, QueryParameter,
+};
 use crate::http::ext_authz::{BodyOptions, ExtAuthz, ExtAuthzDynamicMetadata, FailureMode};
 use crate::types::agent::SimpleBackendReference;
 use crate::*;
@@ -703,4 +705,66 @@ fn test_append_action_multiple_set_cookie_headers() {
 	assert_eq!(values[0], "access_token=abc123; Path=/; HttpOnly");
 	assert_eq!(values[1], "id_token=xyz789; Path=/; HttpOnly");
 	assert_eq!(values[2], "session=def456; Path=/; Secure");
+}
+
+#[test]
+fn test_apply_query_parameters_to_request() {
+	use ::http::Request;
+
+	let mut req = Request::builder()
+		.uri("https://example.com/resource?keep=1&set=old&set=older&remove=gone")
+		.body(http::Body::empty())
+		.unwrap();
+
+	super::apply_query_parameters_to_request(
+		&mut req,
+		&[
+			QueryParameter {
+				key: "set".to_string(),
+				value: "updated".to_string(),
+			},
+			QueryParameter {
+				key: "new".to_string(),
+				value: "added value".to_string(),
+			},
+		],
+		&["remove".to_string()],
+	)
+	.unwrap();
+
+	assert_eq!(
+		req.uri().to_string(),
+		"https://example.com/resource?keep=1&set=updated&new=added+value"
+	);
+}
+
+#[test]
+fn test_apply_query_parameters_to_request_is_case_sensitive() {
+	use ::http::Request;
+
+	let mut req = Request::builder()
+		.uri("https://example.com/resource?token=keep&Token=drop")
+		.body(http::Body::empty())
+		.unwrap();
+
+	super::apply_query_parameters_to_request(&mut req, &[], &["Token".to_string()]).unwrap();
+
+	assert_eq!(
+		req.uri().to_string(),
+		"https://example.com/resource?token=keep"
+	);
+}
+
+#[test]
+fn test_apply_query_parameters_to_request_clears_query_when_empty() {
+	use ::http::Request;
+
+	let mut req = Request::builder()
+		.uri("https://example.com/resource?remove=1")
+		.body(http::Body::empty())
+		.unwrap();
+
+	super::apply_query_parameters_to_request(&mut req, &[], &["remove".to_string()]).unwrap();
+
+	assert_eq!(req.uri().to_string(), "https://example.com/resource");
 }
