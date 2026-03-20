@@ -815,7 +815,7 @@ stringData:
 type: Opaque
 EOF
 ```
-Agentgateway provides a unified API to send requests to different providers using a consistent format.
+
 
 ```shell
 curl localhost:8080/ \
@@ -973,7 +973,7 @@ curl "http://localhost:8080/mcp" \
   }'
 ```
 
-Or inspect the mcp tool with [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
+Or inspect the MCP tool with [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
 ```shell
 npx @modelcontextprotocol/inspector
 ```
@@ -1121,7 +1121,7 @@ spec:
 EOF
 ```
 
-
+To test the configuration, send a request:
 ```shell
 curl -X POST http://localhost:8080/ \
   -H "Content-Type: application/json" \
@@ -1147,7 +1147,8 @@ curl -X POST http://localhost:8080/ \
 
 ### Observability
 
-The agentgateway data plane supports comprehensive observability through OpenTelemetry (OTEL) tracing. You can configure tracing using the `rawConfig` field in AgentgatewayParameters to integrate with various observability platforms and add custom trace fields for enhanced monitoring of your AI/LLM traffic.
+The agentgateway data plane supports observability through OpenTelemetry (OTEL) tracing.
+ You can configure tracing using the `rawConfig` field in AgentgatewayParameters to integrate with various observability platforms and add custom trace fields for enhanced monitoring of your AI/LLM traffic.
 
 For detailed information about tracing configuration and observability features, see the [agentgateway observability documentation](https://agentgateway.dev/docs/reference/observability/traces/).
 
@@ -1586,13 +1587,15 @@ To verify tracing:
 2. Invoke a tool (e.g., echo)
 3. Inspect traces in Jaeger
 
-This configuration provides comprehensive tracing for your MCP tool interactions, making it easy to debug issues and monitor performance of your agent-to-agent communications.
+
+This configuration enables tracing for MCP tool interactions.
 
 
 ### Policy Examples
 
 #### JWT Authentication
-Use `AgentgatewayPolicy.spec.traffic.jwtAuthentication` to validate JWTs at the Gateway or Route. You can configure multiple providers and supply keys via remote JWKS (`jwks.remote.jwksUri`) or inline JWKS (`jwks.inline`). JWT auth can be combined with `authorization.policy.matchExpressions` for simple RBAC-style allow rules.
+Configures JWT validation using `AgentgatewayPolicy.spec.traffic.jwtAuthentication`.
+ You can configure multiple providers and supply keys via remote JWKS (`jwks.remote.jwksUri`) or inline JWKS (`jwks.inline`). JWT auth can be combined with `authorization.policy.matchExpressions` for simple RBAC-style allow rules.
 
 ```shell
 kubectl apply -f- <<EOF
@@ -1735,7 +1738,7 @@ spec:
           inline: '{"keys":[{...}]}'
 EOF
 ```
-#### Rate limit (local + global)
+#### Rate Limiting (Local + Global)
 Configure request limiting with `AgentgatewayPolicy.spec.traffic.rateLimit`. Local limits apply per proxy instance, while global limits use an external rate limit service (provide `backendRef`, `domain`, and `descriptors`). Combine `requests`, `unit`, and `burst` to shape traffic precisely.
 
 ```shell
@@ -1867,7 +1870,7 @@ spec:
 EOF
 ```
 
-#### Anthropic token counting
+#### Anthropic Token Counting
 Map provider-specific endpoints to behavior using `AgentgatewayPolicy.spec.backend.ai.routes`. The `anthropic_token_count` route type processes Anthropic `/v1/messages/count_tokens` requests to return token usage estimates.
 
 ```shell
