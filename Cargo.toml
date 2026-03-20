@@ -64,12 +64,12 @@ axum-core = "0.5"
 axum-extra = { version = "0.12", features = ["json-lines", "typed-header"] }
 # Disable default features to avoid pulling in native-tls and requiring openssl
 # TODO: allow default features if we ever add an openssl feature
-azure_identity = { version = "0.31", default-features = false }
-azure_core = { version = "0.31", default-features = false }
-typespec_client_core = { default-features = false, version = "0.10" }
+azure_identity = { version = "0.33", default-features = false }
+azure_core = { version = "0.33", default-features = false }
+typespec_client_core = { default-features = false, version = "0.12" }
 base64 = "0.22"
 cookie = { version = "0.18", default-features = false }
-bcrypt = "0.18"
+bcrypt = "0.19"
 bytes = { version = "1.10", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
@@ -127,7 +127,7 @@ parking_lot = "0.12"
 percent-encoding = "2.3"
 phonenumber = "0.3"
 pin-project-lite = "0.2"
-pingora-pool = "0.7"
+pingora-pool = "0.8"
 ppp = "2.3"
 pprof = { version = "0.15", features = [
     "protobuf",
@@ -235,7 +235,7 @@ async-compression = { version = "0.4.27", features = [
     "tokio",
 ] }
 core_affinity = "0.8.3"
-frozen-collections = "0.8.0"
+frozen-collections = "0.9.1"
 heck = "0.5"
 macro_rules_attribute = "0.2.2"
 
