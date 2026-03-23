@@ -274,7 +274,7 @@ where
 						s.push_str(hostname);
 						s.push(':');
 						s.push_str(port.as_str());
-						HeaderValue::from_str(&s)
+						HeaderValue::from_maybe_shared(hyper::body::Bytes::from(s))
 					} else {
 						HeaderValue::from_str(hostname)
 					}
