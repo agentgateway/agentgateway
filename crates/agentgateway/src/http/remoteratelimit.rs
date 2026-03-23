@@ -10,7 +10,7 @@ use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{BackendPolicy, SimpleBackendReference};
 use crate::*;
-use ::http::{HeaderMap, StatusCode};
+use ::http::{HeaderMap, HeaderValue, StatusCode};
 
 #[cfg(test)]
 #[path = "remoteratelimit_tests.rs"]
@@ -350,24 +350,33 @@ impl RemoteRateLimit {
 	}
 
 	fn apply(req: &mut Request, cr: proto::RateLimitResponse) -> Result<PolicyResponse, ProxyError> {
+		let proto::RateLimitResponse {
+			overall_code,
+			statuses,
+			response_headers_to_add,
+			request_headers_to_add,
+			raw_body,
+			..
+		} = cr;
 		let mut res = PolicyResponse::default();
 		// if not OK, we directly respond
-		if cr.overall_code != (proto::rate_limit_response::Code::Ok as i32) {
+		if overall_code != (proto::rate_limit_response::Code::Ok as i32) {
 			let mut rb = ::http::response::Builder::new().status(StatusCode::TOO_MANY_REQUESTS);
 			if let Some(hm) = rb.headers_mut() {
-				process_headers(hm, cr.response_headers_to_add)
+				process_headers(hm, response_headers_to_add);
+				process_ratelimit_status_headers(hm, &statuses);
 			}
 			let resp = rb
-				.body(http::Body::from(cr.raw_body))
+				.body(http::Body::from(raw_body))
 				.map_err(|e| ProxyError::Processing(e.into()))?;
 			res.direct_response = Some(resp);
 			return Ok(res);
 		}
 
-		process_headers(req.headers_mut(), cr.request_headers_to_add);
-		if !cr.response_headers_to_add.is_empty() {
+		process_headers(req.headers_mut(), request_headers_to_add);
+		if !response_headers_to_add.is_empty() {
 			let mut hm = HeaderMap::new();
-			process_headers(&mut hm, cr.response_headers_to_add);
+			process_headers(&mut hm, response_headers_to_add);
 			res.response_headers = Some(hm);
 		}
 		Ok(res)
@@ -417,5 +426,47 @@ impl RemoteRateLimit {
 fn process_headers(hm: &mut HeaderMap, headers: Vec<proto::HeaderValue>) {
 	for h in headers {
 		let _ = envoy_proto_common::apply_header_value(hm, &h);
+	}
+}
+
+fn process_ratelimit_status_headers(
+	hm: &mut HeaderMap,
+	statuses: &[proto::rate_limit_response::DescriptorStatus],
+) {
+	let Some(best) = statuses
+		.iter()
+		.filter(|status| status.current_limit.is_some())
+		.min_by_key(|status| status.limit_remaining)
+	else {
+		return;
+	};
+
+	let Some(limit) = best.current_limit.as_ref() else {
+		return;
+	};
+
+	insert_header(
+		hm,
+		http::x_headers::X_RATELIMIT_LIMIT,
+		limit.requests_per_unit.to_string(),
+	);
+	insert_header(
+		hm,
+		http::x_headers::X_RATELIMIT_REMAINING,
+		best.limit_remaining.to_string(),
+	);
+
+	if let Some(duration_until_reset) = best.duration_until_reset.as_ref() {
+		insert_header(
+			hm,
+			http::x_headers::X_RATELIMIT_RESET,
+			duration_until_reset.seconds.to_string(),
+		);
+	}
+}
+
+fn insert_header(hm: &mut HeaderMap, name: ::http::HeaderName, value: String) {
+	if let Ok(hv) = HeaderValue::try_from(value) {
+		hm.insert(name, hv);
 	}
 }
