@@ -49,7 +49,7 @@ func TranslateInlineBackendPolicy(
 		},
 		Spec: agentgateway.AgentgatewayPolicySpec{Backend: policy},
 	}
-	res, err := translateBackendPolicyToAgw(ctx, dummy, nil)
+	res, err := translateBackendPolicyToAgw(ctx, dummy)
 	return slices.MapFilter(res, func(e *api.Policy) **api.BackendPolicySpec {
 		return ptr.Of(e.GetBackend())
 	}), err
@@ -58,7 +58,6 @@ func TranslateInlineBackendPolicy(
 func translateBackendPolicyToAgw(
 	ctx PolicyCtx,
 	policy *agentgateway.AgentgatewayPolicy,
-	policyTarget *api.PolicyTarget,
 ) ([]*api.Policy, error) {
 	backend := policy.Spec.Backend
 	if backend == nil {
@@ -82,51 +81,51 @@ func translateBackendPolicyToAgw(
 	}
 
 	if s := backend.HTTP; s != nil {
-		appendPolicy("backendHTTP")(translateBackendHTTP(policy, policyTarget), nil)
+		appendPolicy("backendHTTP")(translateBackendHTTP(policy), nil)
 	}
 
 	if s := backend.Tunnel; s != nil {
-		appendPolicy("backendTunnel")(translateBackendTunnel(ctx, policy, policyTarget))
+		appendPolicy("backendTunnel")(translateBackendTunnel(ctx, policy))
 	}
 
 	if s := backend.TLS; s != nil {
-		appendPolicy("backendTLS")(translateBackendTLS(ctx, policy, policyTarget))
+		appendPolicy("backendTLS")(translateBackendTLS(ctx, policy))
 	}
 
 	if s := backend.TCP; s != nil {
-		appendPolicy("backendTCP")(translateBackendTCP(ctx, policy, policyName, policyTarget))
+		appendPolicy("backendTCP")(translateBackendTCP(ctx, policy, policyName))
 	}
 
 	if s := backend.Health; s != nil {
-		appendPolicy("backendHealth")(translateBackendHealthPolicy(policy, policyTarget))
+		appendPolicy("backendHealth")(translateBackendHealthPolicy(policy))
 	}
 
 	if s := backend.Transformation; s != nil {
-		appendPolicy("backendTransformation")(translateBackendTransformation(policy, policyTarget))
+		appendPolicy("backendTransformation")(translateBackendTransformation(policy))
 	}
 
 	if s := backend.MCP; s != nil {
 		if backend.MCP.Authorization != nil {
-			appendPolicy("backendMCPAuthorization")(translateBackendMCPAuthorization(policy, policyTarget), nil)
+			appendPolicy("backendMCPAuthorization")(translateBackendMCPAuthorization(policy), nil)
 		}
 
 		if backend.MCP.Authentication != nil {
-			appendPolicy("backendMCPAuthentication")(translateBackendMCPAuthentication(ctx, policy, policyTarget))
+			appendPolicy("backendMCPAuthentication")(translateBackendMCPAuthentication(ctx, policy))
 		}
 	}
 
 	if s := backend.AI; s != nil {
-		appendPolicy("backendAI")(translateBackendAI(ctx, policy, policyName, policyTarget))
+		appendPolicy("backendAI")(translateBackendAI(ctx, policy, policyName))
 	}
 
 	if s := backend.Auth; s != nil {
-		appendPolicy("backendAuth")(translateBackendAuth(ctx, policy, policyName, policyTarget))
+		appendPolicy("backendAuth")(translateBackendAuth(ctx, policy, policyName))
 	}
 
 	return agwPolicies, errors.Join(errs...)
 }
 
-func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) (*api.Policy, error) {
+func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
 	var errs []error
 
 	healthPolicy := policy.Spec.Backend.Health
@@ -168,9 +167,8 @@ func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy, targe
 		Eviction:           evictionProto,
 	}
 	evictPolicy := &api.Policy{
-		Key:    policy.Namespace + "/" + policy.Name + healthPolicySuffix + attachmentName(target),
-		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  policy.Namespace + "/" + policy.Name + healthPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_Health_{
@@ -183,14 +181,13 @@ func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy, targe
 	return evictPolicy, errors.Join(errs...)
 }
 
-func translateBackendTCP(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) (*api.Policy, error) {
+func translateBackendTCP(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	// TODO
 	return nil, nil
 }
 
 func translateBackendTransformation(
 	policy *agentgateway.AgentgatewayPolicy,
-	target *api.PolicyTarget,
 ) (*api.Policy, error) {
 	var errs []error
 	transformation := policy.Spec.Backend.Transformation
@@ -205,9 +202,8 @@ func translateBackendTransformation(
 	}
 
 	tp := &api.Policy{
-		Key:    policy.Namespace + "/" + policy.Name + backendTransformationSuffix + attachmentName(target),
-		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  policy.Namespace + "/" + policy.Name + backendTransformationSuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_Transformation{
@@ -225,7 +221,7 @@ func translateBackendTransformation(
 	return tp, errors.Join(errs...)
 }
 
-func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) (*api.Policy, error) {
+func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
 	var errs []error
 	tls := policy.Spec.Backend.TLS
 
@@ -298,9 +294,8 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy,
 	}
 
 	tlsPolicy := &api.Policy{
-		Key:    policy.Namespace + "/" + policy.Name + tlsPolicySuffix + attachmentName(target),
-		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  policy.Namespace + "/" + policy.Name + tlsPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_BackendTls{
@@ -317,7 +312,7 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy,
 	return tlsPolicy, errors.Join(errs...)
 }
 
-func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) *api.Policy {
+func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy) *api.Policy {
 	http := policy.Spec.Backend.HTTP
 	p := &api.BackendPolicySpec_BackendHTTP{}
 	if v := http.Version; v != nil {
@@ -332,9 +327,8 @@ func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy, target *api.P
 		p.RequestTimeout = durationpb.New(rt.Duration)
 	}
 	tp := &api.Policy{
-		Key:    policy.Namespace + "/" + policy.Name + backendHttpPolicySuffix + attachmentName(target),
-		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  policy.Namespace + "/" + policy.Name + backendHttpPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_BackendHttp{
@@ -350,15 +344,14 @@ func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy, target *api.P
 	return tp
 }
 
-func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) (*api.Policy, error) {
+func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
 	tunnel := policy.Spec.Backend.Tunnel
 
 	proxy, err := buildBackendRef(ctx, tunnel.BackendRef, policy.Namespace)
 
 	tunnelPolicy := &api.Policy{
-		Key:    policy.Namespace + "/" + policy.Name + backendTunnelPolicySuffix + attachmentName(target),
-		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  policy.Namespace + "/" + policy.Name + backendTunnelPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_BackendTunnel_{
@@ -377,7 +370,7 @@ func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 	return tunnelPolicy, err
 }
 
-func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) *api.Policy {
+func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy) *api.Policy {
 	backend := policy.Spec.Backend
 	if backend == nil || backend.MCP == nil || backend.MCP.Authorization == nil {
 		return nil
@@ -391,9 +384,8 @@ func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy, t
 	}
 
 	mcpPolicy := &api.Policy{
-		Key:    policy.Namespace + "/" + policy.Name + mcpAuthorizationPolicySuffix + attachmentName(target),
-		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  policy.Namespace + "/" + policy.Name + mcpAuthorizationPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_McpAuthorization_{
@@ -413,7 +405,7 @@ func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy, t
 	return mcpPolicy
 }
 
-func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) (*api.Policy, error) {
+func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
 	authnPolicy := policy.Spec.Backend.MCP.Authentication
 
 	idp := api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
@@ -478,9 +470,8 @@ func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.Agent
 		Mode:       mode,
 	}
 	mcpAuthnPolicy := &api.Policy{
-		Key:    policy.Namespace + "/" + policy.Name + mcpAuthenticationPolicySuffix + attachmentName(target),
-		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  policy.Namespace + "/" + policy.Name + mcpAuthenticationPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_McpAuthentication_{
@@ -498,7 +489,7 @@ func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.Agent
 }
 
 // translateBackendAI processes AI configuration and creates corresponding Agw policies
-func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolicy, name string, policyTarget *api.PolicyTarget) (*api.Policy, error) {
+func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	var errs []error
 	aiSpec := agwPolicy.Spec.Backend.AI
 
@@ -592,9 +583,8 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 	}
 
 	aiPolicy := &api.Policy{
-		Key:    name + aiPolicySuffix + attachmentName(policyTarget),
-		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, agwPolicy),
-		Target: policyTarget,
+		Key:  name + aiPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, agwPolicy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_Ai_{
@@ -611,7 +601,7 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 	return aiPolicy, errors.Join(errs...)
 }
 
-func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) (*api.Policy, error) {
+func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	var errs []error
 	auth := policy.Spec.Backend.Auth
 
@@ -673,9 +663,8 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 	}
 
 	authPolicy := &api.Policy{
-		Key:    name + backendauthPolicySuffix + attachmentName(target),
-		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  name + backendauthPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_Auth{
