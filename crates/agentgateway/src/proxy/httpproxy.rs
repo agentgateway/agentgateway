@@ -7,6 +7,7 @@ use std::sync::Arc;
 use ::http::uri::PathAndQuery;
 use ::http::{HeaderMap, header};
 use anyhow::anyhow;
+use frozen_collections::Len;
 use headers::HeaderMapExt;
 use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
