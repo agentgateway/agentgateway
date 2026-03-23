@@ -162,7 +162,11 @@ impl ContextBuilder {
 			None
 		}
 	}
-	pub fn maybe_snapshot_request(&self, res: &mut crate::http::Request) -> Option<RequestSnapshot> {
+	pub fn maybe_snapshot_request(
+		&self,
+		res: &mut crate::http::Request,
+		clear: bool,
+	) -> Option<RequestSnapshot> {
 		if self.any_has(Attributes::Source)
 			|| self.any_has(Attributes::Request)
 			|| self.any_has(Attributes::Llm)
@@ -175,7 +179,7 @@ impl ContextBuilder {
 			|| self.any_has(Attributes::Metadata)
 		{
 			// TODO: support partial snapshots based on what is requested
-			Some(types::snapshot_request(res))
+			Some(types::snapshot_request(res, clear))
 		} else {
 			None
 		}

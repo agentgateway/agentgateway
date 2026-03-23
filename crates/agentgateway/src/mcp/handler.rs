@@ -2,7 +2,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::cel::RequestSnapshot;
 use crate::http::Response;
 use crate::http::sessionpersistence::MCPSession;
 use crate::mcp;
@@ -529,19 +528,12 @@ pub fn setup_request_log(
 		.cloned()
 		.unwrap_or_default();
 
-	let snap = http
-		.extensions
-		.get::<Arc<Option<RequestSnapshot>>>()
-		.cloned()
-		.unwrap_or_else(|| Arc::new(None));
-
-	let cel = CelExecWrapper::new(snap);
-
 	let tracer = http
 		.extensions
 		.get::<SpanWriter>()
 		.cloned()
 		.unwrap_or_default();
+	let cel = CelExecWrapper::new(::http::Request::from_parts(http, ()));
 	let _span = tracer.start(span_name.to_string());
 	(_span, log, cel)
 }
