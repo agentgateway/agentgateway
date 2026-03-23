@@ -57,6 +57,8 @@ pub enum JwkError {
 		algorithm: AlgorithmParameters,
 		key_id: String,
 	},
+	#[error("invalid claim mapper {0:?}")]
+	InvalidClaimMapper(cel::Error),
 }
 
 #[derive(Clone)]
@@ -69,6 +71,7 @@ pub struct Jwt {
 pub struct Provider {
 	issuer: String,
 	keys: HashMap<String, Jwk>,
+	claim_mappings: HashMap<String, Arc<cel::Expression>>,
 }
 
 // TODO: can we give anything useful here?
@@ -99,10 +102,12 @@ impl serde::Serialize for Provider {
 		pub struct Serde<'a> {
 			issuer: &'a str,
 			keys: Vec<&'a str>,
+			claim_mappings: &'a HashMap<String, Arc<cel::Expression>>,
 		}
 		Serde {
 			issuer: &self.issuer,
 			keys: self.keys.keys().map(|x| x.as_str()).collect::<Vec<_>>(),
+			claim_mappings: &self.claim_mappings,
 		}
 		.serialize(serializer)
 	}
@@ -133,6 +138,7 @@ pub enum LocalJwtConfig {
 		jwks: serdes::FileInlineOrRemote,
 		#[serde(default)]
 		jwt_validation_options: JWTValidationOptions,
+		claims_mapping: Option<HashMap<String, String>>,
 	},
 }
 
@@ -145,6 +151,7 @@ pub struct ProviderConfig {
 	pub jwks: serdes::FileInlineOrRemote,
 	#[serde(default)]
 	pub jwt_validation_options: JWTValidationOptions,
+	pub claims_mapping: Option<HashMap<String, String>>,
 }
 
 #[apply(schema_enum!)]
@@ -225,6 +232,7 @@ impl LocalJwtConfig {
 				audiences,
 				jwks,
 				jwt_validation_options,
+				claims_mapping,
 			} => (
 				mode,
 				vec![ProviderConfig {
@@ -232,6 +240,7 @@ impl LocalJwtConfig {
 					audiences,
 					jwks,
 					jwt_validation_options,
+					claims_mapping,
 				}],
 			),
 		};
@@ -243,7 +252,13 @@ impl LocalJwtConfig {
 				.load::<JwkSet>(client.clone())
 				.await
 				.map_err(JwkError::JwkLoadError)?;
-			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
+			let provider = Provider::from_jwks(
+				jwks,
+				pc.issuer,
+				pc.audiences,
+				pc.jwt_validation_options,
+				pc.claims_mapping.as_ref(),
+			)?;
 			providers.push(provider);
 		}
 		Ok(Jwt { mode, providers })
@@ -256,6 +271,7 @@ impl Provider {
 		issuer: String,
 		audiences: Option<Vec<String>>,
 		jwt_validation_options: JWTValidationOptions,
+		claim_mapping: Option<&HashMap<String, String>>,
 	) -> Result<Provider, JwkError> {
 		warn_unsupported_claims(&jwt_validation_options.required_claims);
 
@@ -331,8 +347,16 @@ impl Provider {
 				},
 			);
 		}
-
-		Ok(Provider { issuer, keys })
+		let claim_mappings: Result<HashMap<String, _>, _> = claim_mapping
+			.unwrap_or(&HashMap::new())
+			.iter()
+			.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
+			.collect();
+		Ok(Provider {
+			issuer,
+			keys,
+			claim_mappings: claim_mappings.map_err(|e| JwkError::InvalidClaimMapper(e))?,
+		})
 	}
 }
 
@@ -406,8 +430,8 @@ impl Jwt {
 			// Otherwise with no, don't attempt to authenticate.
 			return Ok(());
 		};
-		let claims = match self.validate_claims(bearer.token()) {
-			Ok(claims) => claims,
+		let (provider, mut claims) = match self.validate_claims(bearer.token()) {
+			Ok(provider_and_claims) => provider_and_claims,
 			Err(e) if self.mode == Mode::Permissive => {
 				debug!("token verification failed ({e}), continue due to permissive mode");
 				return Ok(());
@@ -421,12 +445,47 @@ impl Jwt {
 		};
 		// Remove the token.
 		req.headers_mut().remove(http::header::AUTHORIZATION);
+		// add the claim mappings
+		for (claim, expr) in &provider.claim_mappings {
+			let res = {
+				// The reason we need to create a new executor in each iteration, is because the 
+				// claim mapping expressions is borrowed by the executor, so for us to insert new values to it,
+				// the executor needs to be end before we can insert the result of the execution to the claims.
+				// As creating a new executor is cheap, this should be ok.
+				let mut exec = cel::Executor::new_request(req);
+				exec.jwt = cel::ExtensionOrDirect::Direct(Some(&claims));
+				exec.eval(expr.as_ref()).map(|v| Self::cel_to_json(v))
+			};
+			let value = match res {
+				Ok(value) => value,
+				Err(e) => {
+					debug!(%claim, ?e, "failed to evaluate claim mapping expression, default to null");
+					serde_json::Value::Null
+				},
+			};
+			debug!(%claim, ?value, "mapped claim to request extension");
+			claims.inner.insert(claim.clone(), value);
+		}
 		// Insert the claims into extensions so we can reference it later
 		req.extensions_mut().insert(claims);
 		Ok(())
 	}
 
-	pub fn validate_claims(&self, token: &str) -> Result<Claims, TokenError> {
+	fn cel_to_json(value: cel::Value) -> serde_json::Value {
+		match value {
+			// for now, only support string cel outputs. we shouldn't need more complex outputs for claim mapping, and this keeps things simple for now
+			cel::Value::String(s) => serde_json::Value::String(s.to_string()),
+			_ => {
+				debug!(
+					?value,
+					"unsupported CEL value type for claim mapping, default to null"
+				);
+				serde_json::Value::Null
+			},
+		}
+	}
+
+	fn validate_claims(&self, token: &str) -> Result<(&Provider, Claims), TokenError> {
 		let header = decode_header(token).map_err(|error| {
 			debug!(?error, "Received token with invalid header.");
 
@@ -439,10 +498,10 @@ impl Jwt {
 		})?;
 
 		// Search for the key across all providers
-		let key = self
+		let (provider, key) = self
 			.providers
 			.iter()
-			.find_map(|provider| provider.keys.get(kid))
+			.find_map(|provider| provider.keys.get(kid).map(|key| (provider, key)))
 			.ok_or_else(|| {
 				debug!(%kid, "Token refers to an unknown key.");
 
@@ -460,6 +519,6 @@ impl Jwt {
 			inner: decoded_token.claims,
 			jwt: SecretString::new(token.into()),
 		};
-		Ok(claims)
+		Ok((provider, claims))
 	}
 }

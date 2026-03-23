@@ -2165,6 +2165,7 @@ impl LocalMcpAuthentication {
 			audiences: Some(self.audiences.clone()),
 			jwks,
 			jwt_validation_options: self.jwt_validation_options.clone(),
+			claims_mapping: None,
 		})
 	}
 

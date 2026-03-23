@@ -665,6 +665,13 @@ message TrafficPolicySpec {
     repeated string allow = 1;
     repeated string deny = 2;
   }
+
+  message ClaimMapping {
+    // Mapping between a name and a CEL expression to extract the claim value from the token.
+    // the name will be appear as a JWT claim for purposes of policy.
+    map<string, string> mapping = 1;
+  }
+
   message JWTProvider {
     // JWT issuer that must match the 'iss' claim
     string issuer = 1;
@@ -680,18 +687,22 @@ message TrafficPolicySpec {
 
     // JWT validation options controlling which claims must be present.
     JWTValidationOptions jwt_validation_options = 4;
+
+    // These map jwt claims to internal metadata fields that can be used in later policies.
+    ClaimMapping claim_mapping = 5;
   }
+
   // JWT authentication configuration
   message JWT {
     // Validation mode for JWT authentication
-    enum Mode {
-      // Default mode - if a token exists, validate it
-      OPTIONAL = 0;
-      // A valid token must be present
-      STRICT = 1;
-      // Requests are never rejected (useful for claims in later steps)
-      PERMISSIVE = 2;
-    }
+      enum Mode {
+        // Default mode - if a token exists, validate it
+        OPTIONAL = 0;
+        // A valid token must be present
+        STRICT = 1;
+        // Requests are never rejected (useful for claims in later steps)
+        PERMISSIVE = 2;
+      }
 
     // How the JWT validation should behave
     Mode mode = 1;

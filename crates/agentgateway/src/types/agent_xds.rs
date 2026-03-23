@@ -220,13 +220,18 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthentication> for McpAuthe
 				required_claims: vo.required_claims.iter().cloned().collect(),
 			})
 			.unwrap_or_default();
-		let jwt_provider =
-			http::jwt::Provider::from_jwks(jwk_set, m.issuer.clone(), audiences, jwt_validation_options)
-				.map_err(|e| {
-					ProtoError::Generic(format!(
-						"failed to create JWT provider for MCP Authentication: {e}"
-					))
-				})?;
+		let jwt_provider = http::jwt::Provider::from_jwks(
+			jwk_set,
+			m.issuer.clone(),
+			audiences,
+			jwt_validation_options,
+			None,
+		)
+		.map_err(|e| {
+			ProtoError::Generic(format!(
+				"failed to create JWT provider for MCP Authentication: {e}"
+			))
+		})?;
 
 		let mode = match proto::agent::backend_policy_spec::mcp_authentication::Mode::try_from(m.mode)
 			.map_err(|_| ProtoError::EnumParse("invalid JWT mode".to_string()))?
@@ -1415,6 +1420,7 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 							p.issuer.clone(),
 							audiences,
 							jwt_validation_options,
+							p.claim_mapping.as_ref().map(|x| &x.mapping),
 						)
 						.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))
 					})
@@ -2413,5 +2419,99 @@ mod tests {
 		assert!(path.starts_with("/runtimes/"));
 		assert!(path.contains("qualifier=v1"));
 		Ok(())
+	}
+
+	#[test]
+	fn test_jwt_claim_mapping_xds_conversion_accepts_valid_mapping() -> Result<(), ProtoError> {
+		let jwks = json!({
+			"keys": [
+				{
+					"use": "sig",
+					"kty": "EC",
+					"kid": "jwt-claim-map-kid",
+					"crv": "P-256",
+					"alg": "ES256",
+					"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+					"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+				}
+			]
+		});
+
+		let spec = proto::agent::TrafficPolicySpec {
+			phase: proto::agent::traffic_policy_spec::PolicyPhase::Route as i32,
+			kind: Some(proto::agent::traffic_policy_spec::Kind::Jwt(
+				proto::agent::traffic_policy_spec::Jwt {
+					mode: proto::agent::traffic_policy_spec::jwt::Mode::Strict as i32,
+					providers: vec![proto::agent::traffic_policy_spec::JwtProvider {
+						issuer: "https://issuer.example.com".to_string(),
+						audiences: vec!["aud-1".to_string()],
+						jwks_source: Some(
+							proto::agent::traffic_policy_spec::jwt_provider::JwksSource::Inline(
+								jwks.to_string(),
+							),
+						),
+						jwt_validation_options: None,
+						claim_mapping: Some(proto::agent::traffic_policy_spec::ClaimMapping {
+							mapping: [("issuerAlias".to_string(), "jwt.iss".to_string())]
+								.into_iter()
+								.collect(),
+						}),
+					}],
+				},
+			)),
+		};
+
+		let policy = TrafficPolicy::try_from(&spec)?;
+		assert!(matches!(policy, TrafficPolicy::JwtAuth(_)));
+		Ok(())
+	}
+
+	#[test]
+	fn test_jwt_claim_mapping_xds_conversion_rejects_invalid_mapping() {
+		let jwks = json!({
+			"keys": [
+				{
+					"use": "sig",
+					"kty": "EC",
+					"kid": "jwt-claim-map-kid-invalid",
+					"crv": "P-256",
+					"alg": "ES256",
+					"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+					"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+				}
+			]
+		});
+
+		let spec = proto::agent::TrafficPolicySpec {
+			phase: proto::agent::traffic_policy_spec::PolicyPhase::Route as i32,
+			kind: Some(proto::agent::traffic_policy_spec::Kind::Jwt(
+				proto::agent::traffic_policy_spec::Jwt {
+					mode: proto::agent::traffic_policy_spec::jwt::Mode::Strict as i32,
+					providers: vec![proto::agent::traffic_policy_spec::JwtProvider {
+						issuer: "https://issuer.example.com".to_string(),
+						audiences: vec!["aud-1".to_string()],
+						jwks_source: Some(
+							proto::agent::traffic_policy_spec::jwt_provider::JwksSource::Inline(
+								jwks.to_string(),
+							),
+						),
+						jwt_validation_options: None,
+						claim_mapping: Some(proto::agent::traffic_policy_spec::ClaimMapping {
+							mapping: [("bad".to_string(), "jwt.".to_string())]
+								.into_iter()
+								.collect(),
+						}),
+					}],
+				},
+			)),
+		};
+
+		let err = TrafficPolicy::try_from(&spec).unwrap_err();
+		assert!(
+			err
+				.to_string()
+				.contains("failed to create JWT config"),
+			"unexpected error: {err}"
+		);
 	}
 }

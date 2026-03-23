@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use super::{JWTValidationOptions, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
 use crate::telemetry::log::MetricsConfig;
@@ -153,6 +153,7 @@ pub fn test_azure_jwks() {
 		"https://login.microsoftonline.com/test/v2.0".to_string(),
 		Some(vec!["test-aud".to_string()]),
 		JWTValidationOptions::default(),
+		None,
 	)
 	.unwrap();
 	assert_eq!(
@@ -182,6 +183,7 @@ pub fn test_basic_jwks() {
 		"https://example.com".to_string(),
 		Some(vec!["test-aud".to_string()]),
 		JWTValidationOptions::default(),
+		None,
 	)
 	.unwrap();
 	assert_eq!(
@@ -215,6 +217,7 @@ fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
 		issuer.to_string(),
 		Some(vec![allowed_aud.to_string()]),
 		JWTValidationOptions::default(),
+		None,
 	)
 	.unwrap();
 	// Test-only: allow synthetic tokens without a real signature
@@ -307,7 +310,8 @@ pub fn test_jwt_rejections_table() {
 				Expected::Iss => assert!(matches!(e.kind(), ErrorKind::InvalidIssuer), "{name}"),
 				Expected::Exp => assert!(matches!(e.kind(), ErrorKind::ExpiredSignature), "{name}"),
 			},
-			other => panic!("{name}: expected Invalid(..), got {:?}", other),
+			Err(e) => panic!("{name}: expected Invalid(..), got {:?}", e),
+			Ok(_) => panic!("{name}: expected Invalid(..), got Ok(..)"),
 		}
 	}
 
@@ -551,6 +555,7 @@ fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 		issuer1.to_string(),
 		Some(vec![aud1.to_string()]),
 		JWTValidationOptions::default(),
+		None,
 	)
 	.unwrap();
 	#[allow(deprecated)]
@@ -568,6 +573,7 @@ fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 		issuer2.to_string(),
 		Some(vec![aud2.to_string()]),
 		JWTValidationOptions::default(),
+		None,
 	)
 	.unwrap();
 	#[allow(deprecated)]
@@ -662,6 +668,7 @@ pub fn test_empty_required_claims_accepts_token_without_exp() {
 		issuer.to_string(),
 		Some(vec![aud.to_string()]),
 		jwt_validation_options,
+		None,
 	)
 	.unwrap();
 
@@ -687,7 +694,7 @@ pub fn test_empty_required_claims_accepts_token_without_exp() {
 		"empty required_claims should accept tokens without exp claim"
 	);
 
-	let claims = result.unwrap();
+	let (_, claims) = result.unwrap();
 	assert_eq!(
 		claims.inner.get("sub"),
 		Some(&serde_json::Value::String("test-user".to_string()))
@@ -720,6 +727,7 @@ pub fn test_default_required_claims_rejects_token_without_exp() {
 		issuer.to_string(),
 		Some(vec![aud.to_string()]),
 		JWTValidationOptions::default(),
+		None,
 	)
 	.unwrap();
 
@@ -776,6 +784,7 @@ pub fn test_empty_required_claims_still_rejects_expired_tokens() {
 		issuer.to_string(),
 		Some(vec![aud.to_string()]),
 		jwt_validation_options,
+		None,
 	)
 	.unwrap();
 
@@ -832,6 +841,7 @@ pub fn test_required_claims_with_nbf_rejects_missing_nbf() {
 		issuer.to_string(),
 		Some(vec![aud.to_string()]),
 		jwt_validation_options,
+		None,
 	)
 	.unwrap();
 
@@ -861,5 +871,143 @@ pub fn test_required_claims_with_nbf_rejects_missing_nbf() {
 	assert!(
 		result.is_err(),
 		"required_claims with nbf should reject tokens missing nbf claim"
+	);
+}
+
+#[test]
+pub fn test_provider_from_jwks_compiles_claim_mappings() {
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "mapping-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+
+	let claim_mapping = HashMap::from([(
+		"mappedIssuer".to_string(),
+		"jwt.iss".to_string(),
+	)]);
+
+	let provider = Provider::from_jwks(
+		jwks,
+		"https://mapping-idp.example.com".to_string(),
+		Some(vec!["mapping-aud".to_string()]),
+		JWTValidationOptions::default(),
+		Some(&claim_mapping),
+	)
+	.unwrap();
+
+	assert!(provider.claim_mappings.contains_key("mappedIssuer"));
+}
+
+#[test]
+pub fn test_provider_from_jwks_rejects_invalid_claim_mapping_expression() {
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "mapping-kid-invalid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+
+	let claim_mapping = HashMap::from([("bad".to_string(), "jwt.".to_string())]);
+
+	let provider = Provider::from_jwks(
+		jwks,
+		"https://mapping-idp.example.com".to_string(),
+		Some(vec!["mapping-aud".to_string()]),
+		JWTValidationOptions::default(),
+		Some(&claim_mapping),
+	);
+
+	assert!(matches!(provider, Err(super::JwkError::InvalidClaimMapper(_))));
+}
+
+#[tokio::test]
+pub async fn test_apply_inserts_claim_from_claim_mapping() {
+	use std::time::{SystemTime, UNIX_EPOCH};
+
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "mapping-apply-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
+				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+	let issuer = "https://mapped-claim-idp.example.com";
+	let aud = "mapped-claim-aud";
+	let kid = "mapping-apply-kid";
+
+	let claim_mapping = HashMap::from([(
+		"issuerAlias".to_string(),
+		"jwt.iss".to_string(),
+	)]);
+
+	let mut provider = Provider::from_jwks(
+		jwks,
+		issuer.to_string(),
+		Some(vec![aud.to_string()]),
+		JWTValidationOptions::default(),
+		Some(&claim_mapping),
+	)
+	.unwrap();
+
+	#[allow(deprecated)]
+	{
+		provider
+			.keys
+			.get_mut(kid)
+			.unwrap()
+			.validation
+			.insecure_disable_signature_validation();
+	}
+
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: vec![provider],
+	};
+
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs();
+	let token = build_unsigned_token(kid, issuer, aud, now + 600);
+
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	req.headers_mut().insert(
+		crate::http::header::AUTHORIZATION,
+		crate::http::HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+	);
+	let mut log = make_min_req_log();
+
+	let res = jwt.apply(Some(&mut log), &mut req).await;
+	assert!(res.is_ok());
+
+	let claims = req.extensions().get::<super::Claims>().unwrap();
+	assert_eq!(
+		claims.inner.get("issuerAlias"),
+		Some(&serde_json::Value::String(issuer.to_string()))
 	);
 }
