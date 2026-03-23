@@ -314,9 +314,7 @@ impl<'a, T: Poolable + 'a, K: Debug> IdlePopper<'a, T, K> {
 
 impl<T: Poolable, K: Key> PoolInner<T, K> {
 	fn now(&self) -> Instant {
-		self.timer
-			.as_ref()
-			.map_or_else(|| Instant::now(), |t| t.now())
+		self.timer.as_ref().map_or_else(Instant::now, |t| t.now())
 	}
 
 	fn put(&mut self, key: K, value: T, __pool_ref: &Arc<Mutex<PoolInner<T, K>>>) {
