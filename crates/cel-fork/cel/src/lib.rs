@@ -85,6 +85,9 @@ pub enum ExecutionError {
 	/// called with at least one parameter.
 	#[error("Missing argument or target")]
 	MissingArgumentOrTarget,
+	/// Indicates that struct field is used.
+	#[error("Struct syntax is not supported")]
+	UnsupportedStruct,
 	/// Indicates that a comparison could not be performed.
 	#[error("{0:?} can not be compared to {1:?}")]
 	ValuesNotComparable(Value<'static>, Value<'static>),

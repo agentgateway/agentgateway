@@ -1009,7 +1009,7 @@ impl<'a> Value<'a> {
 				let comp_resolver = SingleVarResolver::new(resolver, &comprehension.accu_var, accu);
 				Value::resolve(&comprehension.result, ctx, &comp_resolver)
 			},
-			Expr::Struct(_) => todo!("Support structs!"),
+			Expr::Struct(_) => Err(ExecutionError::UnsupportedStruct),
 			Expr::Unspecified => panic!("Can't evaluate Unspecified Expr"),
 		}
 	}

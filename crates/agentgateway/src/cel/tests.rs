@@ -333,6 +333,12 @@ fn map() {
 }
 
 #[test]
+fn test_struct() {
+	let expr = r#"foo{}"#;
+	eval(expr).expect_err("expected an error");
+}
+
+#[test]
 fn map_filter_dynamic_bool() {
 	let expr = r#"[1, 2].map(x, llm.streaming, x + 1)"#;
 	assert_eq!(json!([]), eval(expr).unwrap());
