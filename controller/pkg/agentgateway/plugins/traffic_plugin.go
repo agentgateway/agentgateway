@@ -179,9 +179,11 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 		})
 	}
 
+	baseTranslatedPolicies, baseErr := translatePolicyToAgw(pctx, policy)
+
 	var ancestors []gwv1.PolicyAncestorStatus
 	for _, policyTarget := range policyTargets {
-		translatedPolicies, err := translatePolicyToAgw(pctx, policy, policyTarget.AgentgatewayTarget)
+		translatedPolicies := clonePoliciesForTarget(baseTranslatedPolicies, policyTarget.AgentgatewayTarget)
 		for _, translatedPolicy := range translatedPolicies {
 			for _, gatewayTarget := range policyTarget.GatewayTargets {
 				agwPolicies = append(agwPolicies, AgwPolicy{
@@ -191,14 +193,14 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 			}
 		}
 		var conds []metav1.Condition
-		if err != nil {
+		if baseErr != nil {
 			// If we produced some policies alongside errors, treat as partial validity
 			if len(translatedPolicies) > 0 {
 				meta.SetStatusCondition(&conds, metav1.Condition{
 					Type:    string(shared.PolicyConditionAccepted),
 					Status:  metav1.ConditionTrue,
 					Reason:  string(shared.PolicyReasonPartiallyValid),
-					Message: err.Error(),
+					Message: baseErr.Error(),
 				})
 			} else {
 				// No policies produced and error present -> invalid
@@ -206,7 +208,7 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 					Type:    string(shared.PolicyConditionAccepted),
 					Status:  metav1.ConditionTrue,
 					Reason:  string(shared.PolicyReasonInvalid),
-					Message: err.Error(),
+					Message: baseErr.Error(),
 				})
 				meta.SetStatusCondition(&conds, metav1.Condition{
 					Type:    string(shared.PolicyConditionAttached),
@@ -377,7 +379,6 @@ func policyTargetExists(ctx krt.HandlerContext, agw *AgwCollections, target util
 func translatePolicyToAgw(
 	ctx PolicyCtx,
 	policy *agentgateway.AgentgatewayPolicy,
-	policyTarget *api.PolicyTarget,
 ) ([]*api.Policy, error) {
 	agwPolicies := make([]*api.Policy, 0)
 	var errs []error
@@ -399,12 +400,22 @@ func translatePolicyToAgw(
 	if err != nil {
 		errs = append(errs, err)
 	}
-	for _, p := range agwPolicies {
-		p.Key += attachmentName(policyTarget)
-		p.Target = policyTarget
-	}
 
 	return agwPolicies, errors.Join(errs...)
+}
+
+func clonePoliciesForTarget(base []*api.Policy, policyTarget *api.PolicyTarget) []*api.Policy {
+	if len(base) == 0 {
+		return nil
+	}
+	out := make([]*api.Policy, 0, len(base))
+	for _, p := range base {
+		clone := protomarshal.ShallowClone(p)
+		clone.Key += attachmentName(policyTarget)
+		clone.Target = policyTarget
+		out = append(out, clone)
+	}
+	return out
 }
 
 func translateTrafficPolicyToAgw(
