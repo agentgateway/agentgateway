@@ -82,11 +82,11 @@ pub struct TunnelConfig {
 pub enum Transport {
 	Plain(ApplicationTransport),
 	Tunnel(ApplicationTransport, TunnelConfig),
-	Hbone(ApplicationTransport, Identity),
+	Hbone(ApplicationTransport, Vec<Identity>),
 	DoubleHbone {
 		gateway_address: SocketAddr, // Address of network gateway to connect to
 		gateway_identity: Identity,  // Identity of network gateway
-		waypoint_identity: Identity, // Identity of waypoint/workload
+		waypoint_identities: Vec<Identity>, // Identities of waypoint/workload (workload + service SANs)
 		inner: ApplicationTransport,
 	},
 }
@@ -241,18 +241,18 @@ impl Connector {
 				socket.ext_mut().insert(stream::HttpProxy);
 				socket
 			},
-			Transport::Hbone(_, identity) => {
+			Transport::Hbone(_, identities) => {
 				let pool = self
 					.hbone_pool
 					.clone()
 					.ok_or_else(|| crate::http::Error::new(anyhow::anyhow!("hbone pool disabled")))?;
-				hbone_tunnel::handshake(pool, ep, identity).await?
+				hbone_tunnel::handshake(pool, ep, identities).await?
 			},
 
 			Transport::DoubleHbone {
 				gateway_address,
 				gateway_identity,
-				waypoint_identity,
+				waypoint_identities,
 				inner: _,
 			} => {
 				let pool = self
@@ -265,7 +265,7 @@ impl Connector {
 					ep,
 					gateway_address,
 					gateway_identity,
-					waypoint_identity,
+					waypoint_identities,
 				)
 				.await?
 			},

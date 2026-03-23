@@ -288,6 +288,16 @@ impl serde::Serialize for Identity {
 	}
 }
 
+impl<'de> serde::Deserialize<'de> for Identity {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let s = String::deserialize(deserializer)?;
+		Identity::from_str(&s).map_err(serde::de::Error::custom)
+	}
+}
+
 impl FromStr for Identity {
 	type Err = anyhow::Error;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -461,7 +471,7 @@ pub struct Service {
 	#[serde(default, skip_deserializing)]
 	pub endpoints: loadbalancer::EndpointSet<Endpoint>,
 	#[serde(default)]
-	pub subject_alt_names: Vec<Strng>,
+	pub subject_alt_names: Vec<Identity>,
 
 	#[serde(default, skip_serializing_if = "is_default")]
 	pub waypoint: Option<GatewayAddress>,
@@ -850,7 +860,20 @@ impl TryFrom<&XdsService> for Service {
 			}),
 			app_protocols,
 			endpoints: Default::default(), // Will be populated once inserted into the store.
-			subject_alt_names: s.subject_alt_names.iter().map(strng::new).collect(),
+			subject_alt_names: s
+				.subject_alt_names
+				.iter()
+				.filter_map(|san| match Identity::from_str(san) {
+					Ok(id) => Some(id),
+					Err(err) => {
+						warn!(
+							"service {}/{} SAN {:?} could not be parsed: {err}",
+							s.namespace, s.hostname, san
+						);
+						None
+					},
+				})
+				.collect(),
 			waypoint,
 			load_balancer: lb,
 			ip_families,

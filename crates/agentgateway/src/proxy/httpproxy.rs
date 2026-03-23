@@ -1124,7 +1124,7 @@ pub async fn build_transport(
 	// Check if we need double hbone
 	if let (
 		Some((gw_addr, gw_identity)),
-		Some((InboundProtocol::HBONE, waypoint_identity)),
+		Some((InboundProtocol::HBONE, waypoint_identities)),
 		Some(ca),
 	) = (
 		&backend_call.network_gateway,
@@ -1151,7 +1151,7 @@ pub async fn build_transport(
 			return Ok(Transport::DoubleHbone {
 				gateway_address: gateway_socket_addr,
 				gateway_identity: gw_identity.clone(),
-				waypoint_identity: waypoint_identity.clone(),
+				waypoint_identities: waypoint_identities.clone(),
 				inner: app_transport,
 			});
 		} else {
@@ -1163,12 +1163,12 @@ pub async fn build_transport(
 	Ok(match (&backend_call.transport_override, &inputs.ca) {
 		// Use legacy mTLS if they did not define a TLS policy. We could do double TLS but Istio doesn't,
 		// so maintain bug-for-bug parity
-		(Some((InboundProtocol::LegacyIstioMtls, ident)), Some(ca))
+		(Some((InboundProtocol::LegacyIstioMtls, idents)), Some(ca))
 			if matches!(app_transport, ApplicationTransport::Plaintext) =>
 		{
 			if let Ok(id) = ca.get_identity().await {
 				Some(
-					id.legacy_mtls(vec![ident.clone()])
+					id.legacy_mtls(idents.clone())
 						.map_err(|e| ProxyError::Processing(anyhow!("{e}")))?,
 				)
 				.into()
@@ -1177,9 +1177,9 @@ pub async fn build_transport(
 				app_transport.into()
 			}
 		},
-		(Some((InboundProtocol::HBONE, ident)), Some(ca)) => {
+		(Some((InboundProtocol::HBONE, idents)), Some(ca)) => {
 			if ca.get_identity().await.is_ok() {
-				Transport::Hbone(app_transport, ident.clone())
+				Transport::Hbone(app_transport, idents.clone())
 			} else {
 				warn!("wanted TLS but CA is not available");
 				app_transport.into()
@@ -1786,10 +1786,23 @@ pub fn build_service_call(
 	Ok(BackendCall {
 		target,
 		http_version_override,
-		transport_override: Some((wl.protocol, wl.identity())),
+		transport_override: Some((wl.protocol, workload_and_service_sans(&wl, svc))),
 		network_gateway,
 		backend_policies,
 	})
+}
+
+/// Combines workload identity with service SANs.
+fn workload_and_service_sans(wl: &Workload, svc: &Service) -> Vec<Identity> {
+	let wl_id = wl.identity();
+	let mut ids = Vec::with_capacity(1 + svc.subject_alt_names.len());
+	ids.push(wl_id.clone());
+	for id in &svc.subject_alt_names {
+		if *id != wl_id {
+			ids.push(id.clone());
+		}
+	}
+	ids
 }
 
 fn should_retry(res: &Result<Response, SnapshottedProxyResponse>, pol: &retry::Policy) -> bool {
@@ -1935,7 +1948,7 @@ fn normalize_uri(connection: &Extension, req: &mut Request) -> anyhow::Result<()
 pub struct BackendCall {
 	pub target: Target,
 	pub http_version_override: Option<::http::Version>,
-	pub transport_override: Option<(InboundProtocol, Identity)>,
+	pub transport_override: Option<(InboundProtocol, Vec<Identity>)>,
 	pub network_gateway: Option<(GatewayAddress, Identity)>, /* For double hbone: (gateway_address, gateway_identity) */
 	pub backend_policies: BackendPolicies,
 }
