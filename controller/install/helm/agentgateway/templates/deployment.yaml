@@ -104,9 +104,30 @@ spec:
             - name: AGW_DISCOVERY_NAMESPACE_SELECTORS
               value: {{ .Values.discoveryNamespaceSelectors | toJson | quote }}
             {{- if .Values.controller.extraEnv }}
-            {{- range $key, $value := .Values.controller.extraEnv }}
+            {{- $extraEnv := .Values.controller.extraEnv }}
+            {{- range $key := keys $extraEnv | sortAlpha }}
+            {{- $value := index $extraEnv $key }}
             - name: {{ $key }}
+              {{- if kindIs "map" $value }}
+              {{- $hasValue := hasKey $value "value" }}
+              {{- $hasValueFrom := hasKey $value "valueFrom" }}
+              {{- if and $hasValue $hasValueFrom }}
+              {{- fail (printf "controller.extraEnv.%s cannot set both value and valueFrom" $key) }}
+              {{- else if $hasValue }}
+              value: {{ get $value "value" | quote }}
+              {{- else if $hasValueFrom }}
+              {{- $valueFrom := get $value "valueFrom" }}
+              {{- if not $valueFrom }}
+              {{- fail (printf "controller.extraEnv.%s.valueFrom must be non-empty" $key) }}
+              {{- end }}
+              valueFrom:
+{{- toYaml $valueFrom | nindent 16 }}
+              {{- else }}
+              {{- fail (printf "controller.extraEnv.%s must set either value or valueFrom" $key) }}
+              {{- end }}
+              {{- else }}
               value: {{ $value | quote }}
+              {{- end }}
             {{- end }}
             {{- end }}
             {{- if .Values.inferenceExtension.enabled }}
