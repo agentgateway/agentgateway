@@ -11,9 +11,6 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react({
         jsxImportSource: "@emotion/react",
-        babel: {
-          plugins: ["@emotion/babel-plugin"],
-        },
       }),
     ],
     server: {
@@ -25,15 +22,10 @@ export default defineConfig(({ mode }) => {
       sourcemap: true,
       rollupOptions: {
         output: {
-          manualChunks: {
-            "react-vendor": ["react", "react-dom", "react-router-dom"],
-            "ui-vendor": [
-              "antd",
-              "@emotion/react",
-              "@emotion/styled",
-              "framer-motion",
-            ],
-            "chart-vendor": ["chart.js"],
+          manualChunks(id) {
+            if (["react", "react-dom", "react-router-dom"].some((p) => id.includes(`/node_modules/${p}/`))) return "react-vendor";
+            if (["antd", "@emotion/react", "@emotion/styled", "framer-motion"].some((p) => id.includes(`/node_modules/${p}/`))) return "ui-vendor";
+            if (id.includes("/node_modules/chart.js/")) return "chart-vendor";
           },
         },
       },
