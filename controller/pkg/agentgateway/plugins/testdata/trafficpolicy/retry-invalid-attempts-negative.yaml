@@ -13,7 +13,23 @@ spec:
       attempts: -4
 ---
 # Output
-output: []
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/agw:retry:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        retry: {}
 status:
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy
@@ -31,12 +47,7 @@ status:
       conditions:
       - lastTransitionTime: fake
         message: failed to parse retry attempts should be positive int32 (-4)
-        reason: Invalid
+        reason: PartiallyValid
         status: "True"
         type: Accepted
-      - lastTransitionTime: fake
-        message: Policy is not attached due to invalid status
-        reason: Pending
-        status: "False"
-        type: Attached
       controllerName: agentgateway.dev/agentgateway
