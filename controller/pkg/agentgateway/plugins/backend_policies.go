@@ -353,11 +353,7 @@ func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy, target *api.P
 func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) (*api.Policy, error) {
 	tunnel := policy.Spec.Backend.Tunnel
 
-	var proxyErr error
 	proxy, err := buildBackendRef(ctx, tunnel.BackendRef, policy.Namespace)
-	if err != nil {
-		proxyErr = err
-	}
 
 	tunnelPolicy := &api.Policy{
 		Key:    policy.Namespace + "/" + policy.Name + backendTunnelPolicySuffix + attachmentName(target),
@@ -378,7 +374,7 @@ func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 		"policy", policy.Name,
 		"agentgateway_policy", tunnelPolicy.Name)
 
-	return tunnelPolicy, proxyErr
+	return tunnelPolicy, err
 }
 
 func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy, target *api.PolicyTarget) *api.Policy {
@@ -674,11 +670,6 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 				Passthrough: &api.Passthrough{},
 			},
 		}
-	}
-
-	if translatedAuth == nil {
-		kindErrs = append(kindErrs, errors.New("no valid backend auth method provided"))
-		translatedAuth = &api.BackendAuthPolicy{}
 	}
 
 	authPolicy := &api.Policy{
