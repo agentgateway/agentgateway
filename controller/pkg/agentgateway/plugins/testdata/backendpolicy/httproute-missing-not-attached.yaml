@@ -30,8 +30,8 @@ status:
         name: StatusSummary
       conditions:
       - lastTransitionTime: fake
-        message: Policy accepted
-        reason: Valid
+        message: secret default/aws-auth-secret not found
+        reason: PartiallyValid
         status: "True"
         type: Accepted
       - lastTransitionTime: fake

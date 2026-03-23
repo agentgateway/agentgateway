@@ -127,10 +127,12 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 	var agwPolicies []AgwPolicy
 
 	pctx := PolicyCtx{Krt: ctx, Collections: agw}
-	var policyTargets []ResolvedTarget
+	var ancestors []gwv1.PolicyAncestorStatus
+	var attachmentErrors []string
 	// TODO: add selectors
+	baseTranslatedPolicies, baseErr := translatePolicyToAgw(pctx, policy)
+	baseConds := setPolicyConditions(baseErr, len(baseTranslatedPolicies) > 0)
 	for _, target := range policy.Spec.TargetRefs {
-		var policyTarget *api.PolicyTarget
 		gk := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
 
 		gatewayTargets := references.LookupGatewaysForTarget(ctx, utils.TypedNamespacedName{
@@ -138,6 +140,7 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 			Kind:           gk.Kind,
 		}).UnsortedList()
 
+		var policyTarget *api.PolicyTarget
 		switch gk {
 		case wellknown.GatewayGVK.GroupKind():
 			policyTarget = &api.PolicyTarget{
@@ -169,123 +172,47 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 			continue
 		}
 
-		ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(ctx, policy.Namespace, gk, target.Name, agw, references)
-
-		policyTargets = append(policyTargets, ResolvedTarget{
-			AgentgatewayTarget: policyTarget,
-			GatewayTargets:     gatewayTargets,
-			AncestorRefs:       ancestorRefs,
-			AttachmentError:    attachmentErr,
-		})
-	}
-
-	baseTranslatedPolicies, baseErr := translatePolicyToAgw(pctx, policy)
-
-	var ancestors []gwv1.PolicyAncestorStatus
-	for _, policyTarget := range policyTargets {
-		translatedPolicies := clonePoliciesForTarget(baseTranslatedPolicies, policyTarget.AgentgatewayTarget)
+		translatedPolicies := clonePoliciesForTarget(baseTranslatedPolicies, policyTarget)
 		for _, translatedPolicy := range translatedPolicies {
-			for _, gatewayTarget := range policyTarget.GatewayTargets {
+			for _, gatewayTarget := range gatewayTargets {
 				agwPolicies = append(agwPolicies, AgwPolicy{
 					Gateway: ptr.Of(gatewayTarget),
 					Policy:  translatedPolicy,
 				})
 			}
 		}
-		var conds []metav1.Condition
-		if baseErr != nil {
-			// If we produced some policies alongside errors, treat as partial validity
-			if len(translatedPolicies) > 0 {
-				meta.SetStatusCondition(&conds, metav1.Condition{
-					Type:    string(shared.PolicyConditionAccepted),
-					Status:  metav1.ConditionTrue,
-					Reason:  string(shared.PolicyReasonPartiallyValid),
-					Message: baseErr.Error(),
-				})
-			} else {
-				// No policies produced and error present -> invalid
-				meta.SetStatusCondition(&conds, metav1.Condition{
-					Type:    string(shared.PolicyConditionAccepted),
-					Status:  metav1.ConditionTrue,
-					Reason:  string(shared.PolicyReasonInvalid),
-					Message: baseErr.Error(),
-				})
-				meta.SetStatusCondition(&conds, metav1.Condition{
-					Type:    string(shared.PolicyConditionAttached),
-					Status:  metav1.ConditionFalse,
-					Reason:  string(shared.PolicyReasonPending),
-					Message: "Policy is not attached due to invalid status",
-				})
-			}
-		} else {
-			// Check for partial validity
-			// Build success conditions per ancestor
-			meta.SetStatusCondition(&conds, metav1.Condition{
-				Type:    string(shared.PolicyConditionAccepted),
-				Status:  metav1.ConditionTrue,
-				Reason:  string(shared.PolicyReasonValid),
-				Message: reporter.PolicyAcceptedMsg,
-			})
-			meta.SetStatusCondition(&conds, metav1.Condition{
-				Type:    string(shared.PolicyConditionAttached),
-				Status:  metav1.ConditionTrue,
-				Reason:  string(shared.PolicyReasonAttached),
-				Message: reporter.PolicyAttachedMsg,
-			})
+
+		ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(ctx, policy.Namespace, gk, target.Name, agw, references)
+		if attachmentErr != "" {
+			attachmentErrors = append(attachmentErrors, attachmentErr)
 		}
 
-		// If we cannot resolve this policy target to a Gateway (e.g., missing HTTPRoute),
-		// report the policy as not attached instead of falling back to a higher-cardinality ancestor.
-		if policyTarget.AttachmentError != "" {
-			meta.SetStatusCondition(&conds, metav1.Condition{
-				Type:    string(shared.PolicyConditionAccepted),
-				Status:  metav1.ConditionTrue,
-				Reason:  string(shared.PolicyReasonValid),
-				Message: reporter.PolicyAcceptedMsg,
-			})
-			meta.SetStatusCondition(&conds, metav1.Condition{
-				Type:    string(shared.PolicyConditionAttached),
-				Status:  metav1.ConditionFalse,
-				Reason:  string(shared.PolicyReasonPending),
-				Message: policyTarget.AttachmentError,
-			})
-		}
-		// TODO: validate the target exists with dataplane https://github.com/kgateway-dev/kgateway/issues/12275
-		// Ensure LastTransitionTime is set for all conditions
-		for i := range conds {
-			if conds[i].LastTransitionTime.IsZero() {
-				conds[i].LastTransitionTime = metav1.Now()
-			}
-		}
-
-		// Policy status SHOULD be reported per Gateway
-		// If we couldn't resolve a Gateway ancestor, report status against a summary ref.
-		appendAncestor := func(ar gwv1.ParentReference) {
+		for _, ar := range ancestorRefs {
 			// A policy should report at most one status per Gateway parent, even if multiple
 			// targetRefs resolve to the same Gateway.
 			if slices.IndexFunc(ancestors, func(existing gwv1.PolicyAncestorStatus) bool {
 				return existing.ControllerName == v1alpha2.GatewayController(agw.ControllerName) && parentRefEqual(existing.AncestorRef, ar)
 			}) != -1 {
-				return
+				continue
 			}
 			ancestors = append(ancestors, gwv1.PolicyAncestorStatus{
 				AncestorRef:    ar,
 				ControllerName: v1alpha2.GatewayController(agw.ControllerName),
-				Conditions:     conds,
+				Conditions:     baseConds,
 			})
 		}
-		if len(policyTarget.AncestorRefs) > 0 {
-			for _, ar := range policyTarget.AncestorRefs {
-				appendAncestor(ar)
-			}
-		} else if policyTarget.AttachmentError != "" {
-			// no ancestor refs resolved due to attachment error, report status against a summary ref
-			logger.Warn("failed to resolve ancestor refs", "error", policyTarget.AttachmentError)
-			appendAncestor(gwv1.ParentReference{
+	}
+
+	if len(attachmentErrors) > 0 {
+		logger.Warn("failed to resolve one or more ancestor refs", "errors", attachmentErrors)
+		ancestors = append(ancestors, gwv1.PolicyAncestorStatus{
+			AncestorRef: gwv1.ParentReference{
 				Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayPolicyGVK.Group)),
 				Name:  "StatusSummary",
-			})
-		}
+			},
+			ControllerName: gwv1.GatewayController(agw.ControllerName),
+			Conditions:     setAttachmentErrorConditions(baseConds, attachmentErrors),
+		})
 	}
 
 	// Build final status from accumulated ancestors
@@ -319,6 +246,69 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 	})
 
 	return &status, agwPolicies
+}
+
+func setPolicyConditions(err error, hasTranslatedPolicies bool) []metav1.Condition {
+	var conds []metav1.Condition
+	if err != nil {
+		// If we produced some policies alongside errors, treat as partial validity
+		if hasTranslatedPolicies {
+			meta.SetStatusCondition(&conds, metav1.Condition{
+				Type:    string(shared.PolicyConditionAccepted),
+				Status:  metav1.ConditionTrue,
+				Reason:  string(shared.PolicyReasonPartiallyValid),
+				Message: err.Error(),
+			})
+		} else {
+			// No policies produced and error present -> invalid
+			meta.SetStatusCondition(&conds, metav1.Condition{
+				Type:    string(shared.PolicyConditionAccepted),
+				Status:  metav1.ConditionTrue,
+				Reason:  string(shared.PolicyReasonInvalid),
+				Message: err.Error(),
+			})
+			meta.SetStatusCondition(&conds, metav1.Condition{
+				Type:    string(shared.PolicyConditionAttached),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(shared.PolicyReasonPending),
+				Message: "Policy is not attached due to invalid status",
+			})
+		}
+	} else {
+		// Check for partial validity
+		// Build success conditions per ancestor
+		meta.SetStatusCondition(&conds, metav1.Condition{
+			Type:    string(shared.PolicyConditionAccepted),
+			Status:  metav1.ConditionTrue,
+			Reason:  string(shared.PolicyReasonValid),
+			Message: reporter.PolicyAcceptedMsg,
+		})
+		meta.SetStatusCondition(&conds, metav1.Condition{
+			Type:    string(shared.PolicyConditionAttached),
+			Status:  metav1.ConditionTrue,
+			Reason:  string(shared.PolicyReasonAttached),
+			Message: reporter.PolicyAttachedMsg,
+		})
+	}
+	// TODO: validate the target exists with dataplane https://github.com/kgateway-dev/kgateway/issues/12275
+	// Ensure LastTransitionTime is set for all conditions
+	for i := range conds {
+		if conds[i].LastTransitionTime.IsZero() {
+			conds[i].LastTransitionTime = metav1.Now()
+		}
+	}
+	return conds
+}
+
+func setAttachmentErrorConditions(baseConds []metav1.Condition, attachmentErrors []string) []metav1.Condition {
+	conds := append([]metav1.Condition(nil), baseConds...)
+	meta.SetStatusCondition(&conds, metav1.Condition{
+		Type:    string(shared.PolicyConditionAttached),
+		Status:  metav1.ConditionFalse,
+		Reason:  string(shared.PolicyReasonPending),
+		Message: strings.Join(attachmentErrors, "\n"),
+	})
+	return conds
 }
 
 func resolvePolicyAncestorRefs(
