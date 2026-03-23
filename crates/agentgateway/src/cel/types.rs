@@ -1382,7 +1382,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			port: 12345,
 			tls: Some(TlsInfo {
 				identity: None,
-				subject_alt_names: vec![],
+				subject_alt_names: vec!["san".into()],
 				issuer: Default::default(),
 				subject: Default::default(),
 				subject_cn: Some("cn".into()),

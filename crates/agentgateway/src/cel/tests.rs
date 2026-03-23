@@ -69,6 +69,14 @@ fn expression() {
 	assert_eq!(Value::Bool(true), eval_request(expr, req).unwrap());
 }
 
+#[test]
+fn list_in() {
+	let expr = "'san' in source.subjectAltNames";
+	assert_eq!(json!(true), eval(expr).unwrap());
+	let expr = "'not-san' in source.subjectAltNames";
+	assert_eq!(json!(false), eval(expr).unwrap());
+}
+
 fn request_with_header_modes() -> crate::http::Request {
 	let mut req = ::http::Request::builder()
 		.method(Method::GET)
