@@ -47,7 +47,7 @@ cel-derive = { path = "crates/cel-fork/cel-derive" }
 protos = { path = "crates/protos" }
 atomic_float = { version = "1.1.0", features = ["serde"] }
 anyhow = "1.0"
-arc-swap = "1.7.1"
+arc-swap = "1.9.0"
 arcstr = { version = "1.2", features = ["serde"] }
 assert_matches = "1.5.0"
 async-openai = { git = "https://github.com/64bit/async-openai", rev = "6e482db7185e3e186fe49bae0ec2f214fc822e4a", default-features = false, features = ["chat-completion-types", "moderation-types", "response-types", "realtime-types"] }
@@ -64,16 +64,16 @@ axum-core = "0.5"
 axum-extra = { version = "0.12", features = ["json-lines", "typed-header"] }
 # Disable default features to avoid pulling in native-tls and requiring openssl
 # TODO: allow default features if we ever add an openssl feature
-azure_identity = { version = "0.31", default-features = false }
-azure_core = { version = "0.31", default-features = false }
-typespec_client_core = { default-features = false, version = "0.10" }
+azure_identity = { version = "0.33", default-features = false }
+azure_core = { version = "0.33", default-features = false }
+typespec_client_core = { default-features = false, version = "0.12" }
 base64 = "0.22"
 cookie = { version = "0.18", default-features = false }
-bcrypt = "0.18"
+bcrypt = "0.19"
 bytes = { version = "1.10", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
-clocksource = "0.8"
+clocksource = "1.0"
 crossbeam = "0.8"
 divan = "0.1"
 durationfmt = "0.1"
@@ -127,7 +127,7 @@ parking_lot = "0.12"
 percent-encoding = "2.3"
 phonenumber = "0.3"
 pin-project-lite = "0.2"
-pingora-pool = "0.7"
+pingora-pool = "0.8"
 ppp = "2.3"
 pprof = { version = "0.15", features = [
     "protobuf",
@@ -235,7 +235,7 @@ async-compression = { version = "0.4.27", features = [
     "tokio",
 ] }
 core_affinity = "0.8.3"
-frozen-collections = "0.8.0"
+frozen-collections = "0.9.1"
 heck = "0.5"
 macro_rules_attribute = "0.2.2"
 
