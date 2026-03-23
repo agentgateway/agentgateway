@@ -8,8 +8,6 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "generate-config-schema": "yarn run json2ts ../schema/config.json > src/config.d.ts",
-    "generate-cel-schema": "yarn run json2ts ../schema/cel.json > src/cel.d.ts",
     "generate-schema": "node scripts/generate-schema.mjs"
   },
   "dependencies": {
