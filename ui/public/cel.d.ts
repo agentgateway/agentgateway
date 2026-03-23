@@ -39,6 +39,10 @@ export interface ExecutorSerde {
      */
     path?: string;
     /**
+     * The path and query of the request URI. For example, `/path?foo=bar`.
+     */
+    pathAndQuery?: string;
+    /**
      * The version of the request. For example, `HTTP/1.1`.
      */
     version?: string;
@@ -79,6 +83,24 @@ export interface ExecutorSerde {
      * The body of the response. Warning: accessing the body will cause the body to be buffered.
      */
     body?: string | null;
+  } | null;
+  /**
+   * `env` contains selected process environment attributes exposed to CEL.
+   * This does NOT expose raw environment variables, but rather a subset of well-known variables.
+   */
+  env?: {
+    /**
+     * The name of the pod (when running on Kubernetes)
+     */
+    podName?: string | null;
+    /**
+     * The namespace of the pod (when running on Kubernetes)
+     */
+    namespace?: string | null;
+    /**
+     * The Gateway we are running as (when running on Kubernetes)
+     */
+    gateway?: string | null;
   } | null;
   /**
    * `jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.
@@ -322,6 +344,9 @@ export interface ExecutorSerde {
 declare const request: ExecutorSerde['request'];
 /** `response` contains attributes about the HTTP response */
 declare const response: ExecutorSerde['response'];
+/** `env` contains selected process environment attributes exposed to CEL.
+This does NOT expose raw environment variables, but rather a subset of well-known variables. */
+declare const env: ExecutorSerde['env'];
 /** `jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled. */
 declare const jwt: ExecutorSerde['jwt'];
 /** `apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled. */

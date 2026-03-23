@@ -42,6 +42,11 @@
           "type": "string",
           "default": ""
         },
+        "pathAndQuery": {
+          "description": "The path and query of the request URI. For example, `/path?foo=bar`.",
+          "type": "string",
+          "default": "/"
+        },
         "version": {
           "description": "The version of the request. For example, `HTTP/1.1`.",
           "type": "string",
@@ -104,6 +109,37 @@
         },
         "body": {
           "description": "The body of the response. Warning: accessing the body will cause the body to be buffered.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "env": {
+      "description": "`env` contains selected process environment attributes exposed to CEL.\nThis does NOT expose raw environment variables, but rather a subset of well-known variables.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "podName": {
+          "description": "The name of the pod (when running on Kubernetes)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "namespace": {
+          "description": "The namespace of the pod (when running on Kubernetes)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gateway": {
+          "description": "The Gateway we are running as (when running on Kubernetes)",
           "type": [
             "string",
             "null"

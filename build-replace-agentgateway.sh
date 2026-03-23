@@ -7,11 +7,12 @@ while true; do sudo -n true; sleep 60; done 2>/dev/null &
 SUDO_REFRESH_PID=$!
 trap 'kill "$SUDO_REFRESH_PID" 2>/dev/null' EXIT
 
+# Make sure that the schemas are up to date.
+make generate-schema
+
 # Build the UI.
 BASE_PATH=/ui/ yarn --cwd=ui build
 
-# Make sure that the schemas are up to date.
-make generate-schema
 
 # Build and install binary
 make build

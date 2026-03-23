@@ -5,6 +5,18 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
+/**
+ * Controls which IP address families the DNS resolver will query for
+ * upstream (backend) connections.
+ *
+ *  Maps to hickory_resolver's `LookupIpStrategy` under the hood.
+ *
+ * Can be set via the `DNS_LOOKUP_FAMILY` environment variable or the
+ * `dns.lookupFamily` field in the config file.
+ *
+ * See: <https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto#enum-config-cluster-v3-cluster-dnslookupfamily>
+ */
+export type DnsLookupFamily = "All" | "Auto" | "V4Preferred" | "V4Only" | "V6Only";
 export type StringBoolFloat = string | number | boolean;
 export type RawLoggingLevel = string | string[];
 export type LoggingFormat = "text" | "json";
@@ -16,20 +28,6 @@ export type HeaderValueMatch =
     }
   | {
       regex: string;
-    };
-export type PathMatch =
-  | {
-      exact: string;
-    }
-  | {
-      pathPrefix: string;
-    }
-  | {
-      /**
-       * @minItems 2
-       * @maxItems 2
-       */
-      regex: [unknown, unknown];
     };
 export type QueryValueMatch =
   | {
@@ -195,6 +193,9 @@ export type AzureAuth =
     }
   | {
       developerImplicit: {};
+    }
+  | {
+      implicit: {};
     };
 export type AzureUserAssignedIdentity =
   | {
@@ -522,6 +523,7 @@ export type LocalMcpTarget1 =
     };
 export type McpStatefulMode = "stateless" | "stateful";
 export type McpPrefixMode = "always" | "conditional";
+export type FailureMode4 = "failClosed" | "failOpen";
 export type LocalAIBackend =
   | LocalNamedAIProvider
   | {
@@ -710,6 +712,10 @@ export interface LocalConfig {
 export interface RawConfig {
   enableIpv6?: boolean | null;
   /**
+   * DNS resolver settings.
+   */
+  dns?: RawDnsConfig | null;
+  /**
    * Local XDS path. If not specified, the current configuration file will be used.
    */
   localXdsPath?: string | null;
@@ -747,6 +753,21 @@ export interface RawConfig {
   metrics?: RawMetrics | null;
   backend?: BackendConfig;
   hbone?: RawHBONE | null;
+}
+export interface RawDnsConfig {
+  /**
+   * Controls which IP address families the DNS resolver will query for
+   * upstream connections.
+   * Accepted values: All, Auto, V4Preferred, V4Only, V6Only.
+   * Defaults to Auto (IPv4-only when enableIpv6 is false, both when true).
+   */
+  lookupFamily?: DnsLookupFamily | null;
+  /**
+   * Whether to enable EDNS0 (Extension Mechanisms for DNS) in the resolver.
+   * When `None`, the system-provided resolver setting is preserved.
+   * Can also be set via the `DNS_EDNS0` environment variable.
+   */
+  edns0?: boolean | null;
 }
 export interface RawSession {
   /**
@@ -880,7 +901,16 @@ export interface LocalRoute {
 }
 export interface RouteMatch {
   headers?: HeaderMatch[];
-  path: PathMatch;
+  path?:
+    | {
+        exact: string;
+      }
+    | {
+        pathPrefix: string;
+      }
+    | {
+        regex: string;
+      };
   method?: string;
   query?: QueryMatch[];
 }
@@ -1512,6 +1542,11 @@ export interface LocalMcpBackend {
   targets: LocalMcpTarget[];
   statefulMode?: McpStatefulMode;
   prefixMode?: McpPrefixMode | null;
+  /**
+   * Behavior when one or more MCP targets fail to initialize or fail during fanout.
+   * Defaults to `failClosed`.
+   */
+  failureMode?: FailureMode4 | null;
 }
 export interface MCPLocalBackendPolicies {
   /**
@@ -1838,7 +1873,7 @@ export interface LocalLLMParams {
    * An API key to attach to the request.
    * If unset this will be automatically detected from the environment.
    */
-  apiKey?: string | null;
+  apiKey?: FileOrInline | null;
   awsRegion?: string | null;
   vertexRegion?: string | null;
   vertexProject?: string | null;
@@ -1901,5 +1936,10 @@ export interface LocalSimpleMcpConfig {
   targets: LocalMcpTarget[];
   statefulMode?: McpStatefulMode;
   prefixMode?: McpPrefixMode | null;
+  /**
+   * Behavior when one or more MCP targets fail to initialize or fail during fanout.
+   * Defaults to `failClosed`.
+   */
+  failureMode?: FailureMode4 | null;
   policies?: FilterOrPolicy | null;
 }

@@ -130,9 +130,11 @@ export const RoutesPage = () => {
       render: (_, record) => {
         const paths = (record.matches || [])
           .map((m) => {
-            if ("exact" in m.path) return m.path.exact;
-            if ("prefix" in m.path) return m.path.prefix + "*";
-            if ("regex" in m.path) return `regex: ${m.path.regex}`;
+            if (!!m.path) {
+              if ("exact" in m.path) return m.path.exact;
+              if ("prefix" in m.path) return m.path.prefix + "*";
+              if ("regex" in m.path) return `regex: ${m.path.regex}`;
+            }
             return null;
           })
           .filter(Boolean);
