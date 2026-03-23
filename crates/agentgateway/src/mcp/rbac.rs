@@ -3,7 +3,7 @@ use ::cel::objects::{KeyRef, MapValue};
 use serde::{Deserialize, Serialize};
 use vector_map::VecMap;
 
-use crate::cel::{ContextBuilder, RequestSnapshot};
+use crate::cel::ContextBuilder;
 use crate::http::authorization::{RuleSet, RuleSets};
 use crate::*;
 
@@ -20,11 +20,11 @@ impl McpAuthorization {
 	}
 }
 
-pub struct CelExecWrapper(Arc<Option<RequestSnapshot>>);
+pub struct CelExecWrapper(::http::Request<()>);
 
 impl CelExecWrapper {
-	pub fn new(snap: Arc<Option<RequestSnapshot>>) -> CelExecWrapper {
-		CelExecWrapper(snap)
+	pub fn new(req: ::http::Request<()>) -> CelExecWrapper {
+		CelExecWrapper(req)
 	}
 }
 #[derive(Clone, Debug)]
@@ -36,7 +36,7 @@ impl McpAuthorizationSet {
 	}
 	pub fn validate(&self, res: &ResourceType, cel: &CelExecWrapper) -> bool {
 		tracing::debug!("Checking RBAC for resource: {:?}", res);
-		let exec = crate::cel::Executor::new_mcp(cel.0.as_ref().as_ref(), res);
+		let exec = crate::cel::Executor::new_mcp_request(&cel.0, res);
 		self.0.validate(&exec)
 	}
 

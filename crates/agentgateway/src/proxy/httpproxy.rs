@@ -361,7 +361,7 @@ where
 		req: &mut Request,
 	) -> Result<T, SnapshottedProxyResponse> {
 		self.map_err(|e| {
-			log.request_snapshot = log.cel.cel_context.maybe_snapshot_request(req);
+			log.request_snapshot = log.cel.cel_context.maybe_snapshot_request(req, true);
 			SnapshottedProxyResponse(e.into())
 		})
 	}
@@ -372,7 +372,7 @@ where
 	) -> Result<T, SnapshottedProxyResponse> {
 		self.map_err(|e| {
 			if let Some(req) = req.as_mut() {
-				log.request_snapshot = log.cel.cel_context.maybe_snapshot_request(req);
+				log.request_snapshot = log.cel.cel_context.maybe_snapshot_request(req, true);
 			}
 			SnapshottedProxyResponse(e.into())
 		})
@@ -649,7 +649,6 @@ impl HTTPProxy {
 		)
 		.await
 		.snapshot_on_err(log, &mut req)?;
-
 		let selected_backend = select_backend(selected_route.as_ref(), &req)
 			.ok_or(ProxyError::NoValidBackends)
 			.snapshot_on_err(log, &mut req)?;
@@ -1214,13 +1213,27 @@ impl<'a> MustSnapshot<'a> {
 	pub fn new(req: &'a mut Option<Request>) -> Self {
 		Self(req)
 	}
-	pub fn take_and_snapshot(
+	pub fn take_and_snapshot_clearing_extensions(
+		self,
+		log: Option<&mut &mut RequestLog>,
+	) -> Result<Request, ProxyError> {
+		self.take_and_snapshot(log, true)
+	}
+	pub fn take_and_snapshot_without_clearing_extensions(
+		self,
+		log: Option<&mut &mut RequestLog>,
+	) -> Result<Request, ProxyError> {
+		self.take_and_snapshot(log, false)
+	}
+	fn take_and_snapshot(
 		self,
 		mut log: Option<&mut &mut RequestLog>,
+		clear: bool,
 	) -> Result<Request, ProxyError> {
 		if let Some(mut req) = self.0.take() {
 			if let Some(l) = log.take() {
-				l.request_snapshot = l.cel.cel_context.maybe_snapshot_request(&mut req);
+				// Do not clear extensions
+				l.request_snapshot = l.cel.cel_context.maybe_snapshot_request(&mut req, clear);
 			};
 			Ok(req)
 		} else {
@@ -1453,7 +1466,8 @@ async fn make_backend_call(
 
 	let (mut req, llm_response_policies, llm_request) =
 		if let Some(llm) = &backend_call.backend_policies.llm_provider {
-			let mut req = req.take_and_snapshot(log.as_mut())?;
+			// LLM requires CEL execution after the snapshot so we do not clear extensions
+			let mut req = req.take_and_snapshot_without_clearing_extensions(log.as_mut())?;
 			let route_type = llm_request_policies
 				.llm
 				.as_ref()
@@ -1601,7 +1615,8 @@ async fn make_backend_call(
 			}
 		} else {
 			(
-				req.take_and_snapshot(log.as_mut())?,
+				// Clearing extensions is fine; the HTTP codepath doesn't require usage after this point.
+				req.take_and_snapshot_clearing_extensions(log.as_mut())?,
 				LLMResponsePolicies::default(),
 				None,
 			)

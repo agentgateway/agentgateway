@@ -71,7 +71,7 @@ fn build_test_request() -> crate::http::Request {
 #[test]
 fn test_snapshot_matches_ref() {
 	let mut req = build_test_request();
-	let snapshot = snapshot_request(&mut req);
+	let snapshot = snapshot_request(&mut req, true);
 	let req = build_test_request();
 	let snapshot_exec =
 		Executor::new_logger(Some(&snapshot), None, snapshot.llm.as_ref(), None, None);
@@ -92,7 +92,7 @@ fn test_request_start_time_is_native_timestamp() {
 #[test]
 fn test_executor_snapshot_round_trip() {
 	let mut req = build_test_request();
-	let req_snapshot = snapshot_request(&mut req);
+	let req_snapshot = snapshot_request(&mut req, true);
 
 	// Create executor from snapshot
 	let executor1 = Executor::new_logger(Some(&req_snapshot), None, None, None, None);

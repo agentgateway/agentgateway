@@ -31,6 +31,7 @@ pub use schemars::JsonSchema;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::json;
+use tracing::event;
 
 #[derive(Debug, Default, cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
@@ -274,6 +275,12 @@ impl<'a> Executor<'a> {
 		this.mcp = Some(mcp);
 		this
 	}
+	pub fn new_mcp_request<B>(req: &'a ::http::Request<B>, mcp: &'a ResourceType) -> Self {
+		let mut this = Self::new_empty();
+		this.set_request(req);
+		this.mcp = Some(mcp);
+		this
+	}
 	pub fn new_llm(req: Option<&'a RequestSnapshot>, llm_body: &'a serde_json::Value) -> Self {
 		let mut this = Self::new_empty();
 		if let Some(req) = req {
@@ -350,7 +357,12 @@ impl<'a> Executor<'a> {
 		) {
 			Ok(v) => Ok(v),
 			Err(e) => {
-				tracing::trace!("failed to evaluate expression: {}", e);
+				event!(
+					target: "cel",
+					tracing::Level::TRACE,
+					"failed to evaluate expression: {}",
+					e,
+				);
 				Err(e.into())
 			},
 		}
@@ -382,9 +394,16 @@ impl<'a> Executor<'a> {
 	}
 }
 
+fn ext<T: Clone + Send + Sync + 'static>(req: &mut crate::http::Request, clear: bool) -> Option<T> {
+	if clear {
+		req.extensions_mut().remove()
+	} else {
+		req.extensions_mut().get().cloned()
+	}
+}
 /// snapshot_request takes a request and returns a snapshot of its attributes.
-/// EXTENSIONS ARE CLEARED. Do not use this if you still need the extensions later.
-pub fn snapshot_request(req: &mut crate::http::Request) -> RequestSnapshot {
+/// Conditionally, EXTENSIONS ARE CLEARED. Do not use this if you still need the extensions later.
+pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestSnapshot {
 	RequestSnapshot {
 		method: req.method().clone(),
 		path: req.uri().clone(),
@@ -393,18 +412,17 @@ pub fn snapshot_request(req: &mut crate::http::Request) -> RequestSnapshot {
 		version: req.version(),
 		headers: req.headers().clone(),
 		body: req.extensions_mut().remove::<BufferedBody>(),
-		// This one we do not remove, as it's used downstream of the snapshot for auth in MCP case
-		// TODO: structure this better
-		jwt: req.extensions_mut().get::<jwt::Claims>().cloned(),
-		api_key: req.extensions_mut().remove::<apikey::Claims>(),
-		basic_auth: req.extensions_mut().remove::<basicauth::Claims>(),
-		backend: req.extensions_mut().remove::<BackendContext>(),
-		source: req.extensions_mut().remove::<SourceContext>(),
-		extauthz: req.extensions_mut().remove::<ExtAuthzDynamicMetadata>(),
-		extproc: req.extensions_mut().remove::<ExtProcDynamicMetadata>(),
-		metadata: req.extensions_mut().remove::<TransformationMetadata>(),
-		llm: req.extensions_mut().remove::<LLMContext>(),
-		start_time: req.extensions_mut().remove::<RequestTime>(),
+
+		jwt: ext::<jwt::Claims>(req, clear),
+		api_key: ext::<apikey::Claims>(req, clear),
+		basic_auth: ext::<basicauth::Claims>(req, clear),
+		backend: ext::<BackendContext>(req, clear),
+		source: ext::<SourceContext>(req, clear),
+		extauthz: ext::<ExtAuthzDynamicMetadata>(req, clear),
+		extproc: ext::<ExtProcDynamicMetadata>(req, clear),
+		metadata: ext::<TransformationMetadata>(req, clear),
+		llm: ext::<LLMContext>(req, clear),
+		start_time: ext::<RequestTime>(req, clear),
 	}
 }
 

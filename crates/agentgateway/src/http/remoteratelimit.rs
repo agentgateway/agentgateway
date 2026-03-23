@@ -1,5 +1,3 @@
-use ::http::{HeaderMap, StatusCode};
-
 use crate::cel::Expression;
 use crate::http::envoy_proto_common;
 use crate::http::ext_proc::GrpcReferenceChannel;
@@ -12,6 +10,7 @@ use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{BackendPolicy, SimpleBackendReference};
 use crate::*;
+use ::http::{HeaderMap, StatusCode};
 
 #[cfg(test)]
 #[path = "remoteratelimit_tests.rs"]
