@@ -1317,28 +1317,6 @@ func buildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS s
 	}
 	namespace := string(ptr.OrDefault(ref.Namespace, gwv1.Namespace(defaultNS)))
 	switch gk {
-	case wellknown.InferencePoolGVK.GroupKind():
-		if strings.Contains(string(ref.Name), ".") {
-			return nil, errors.New("service name invalid; the name of the InferencePool, not the hostname")
-		}
-		hostname := kubeutils.GetInferenceServiceHostname(string(ref.Name), namespace)
-		key := namespace + "/" + string(ref.Name)
-		svc := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.InferencePools, krt.FilterKey(key)))
-		logger.Debug("found pull pool for service", "svc", svc, "key", key)
-		if svc == nil {
-			return nil, fmt.Errorf("unable to find the InferencePool %v", key)
-		} else {
-			return &api.BackendReference{
-				Kind: &api.BackendReference_Service_{
-					Service: &api.BackendReference_Service{
-						Hostname:  hostname,
-						Namespace: namespace,
-					},
-				},
-				// InferencePool only supports single port
-				Port: uint32(svc.Spec.TargetPorts[0].Number), //nolint:gosec // G115: InferencePool TargetPort is int32 with validation 1-65535, always safe
-			}, nil
-		}
 	case wellknown.ServiceGVK.GroupKind():
 		port := ref.Port
 		if strings.Contains(string(ref.Name), ".") {
