@@ -45,7 +45,7 @@ type AgentGwStatusSyncer struct {
 	client apiclient.Client
 
 	agentgatewayPolicies StatusSyncer[*agentgateway.AgentgatewayPolicy, gwv1.PolicyStatus]
-	agentgatewayBackends StatusSyncer[*agentgateway.AgentgatewayBackend, *agentgateway.AgentgatewayBackendStatus]
+	agentgatewayBackends StatusSyncer[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus]
 
 	// Configuration
 	controllerName string
@@ -98,14 +98,14 @@ func NewAgwStatusSyncer(
 				}
 			},
 		},
-		agentgatewayBackends: StatusSyncer[*agentgateway.AgentgatewayBackend, *agentgateway.AgentgatewayBackendStatus]{
-			name:           "agentgatewayPolicy",
+		agentgatewayBackends: StatusSyncer[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus]{
+			name:           "agentgatewayBackend",
 			controllerName: controllerName,
 			client:         kclient.NewFilteredDelayed[*agentgateway.AgentgatewayBackend](client, wellknown.AgentgatewayBackendGVR, f),
-			build: func(om metav1.ObjectMeta, s *agentgateway.AgentgatewayBackendStatus) *agentgateway.AgentgatewayBackend {
+			build: func(om metav1.ObjectMeta, s agentgateway.AgentgatewayBackendStatus) *agentgateway.AgentgatewayBackend {
 				return &agentgateway.AgentgatewayBackend{
 					ObjectMeta: om,
-					Status:     *s,
+					Status:     s,
 				}
 			},
 		},

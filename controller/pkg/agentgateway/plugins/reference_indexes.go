@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/agentgateway/agentgateway/api"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/util/sets"
@@ -12,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/controller"
 	networkingclient "istio.io/client-go/pkg/apis/networking/v1"
 	"istio.io/istio/pilot/test/util"
 	"istio.io/istio/pkg/kube"
@@ -32,6 +31,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/status"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/controller"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
