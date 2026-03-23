@@ -1,4 +1,4 @@
-# Fix CVEs
+# Fix UI CVEs
 
 Audit and remediate security vulnerabilities in the `ui` package using `yarn npm audit`.
 
@@ -12,9 +12,11 @@ Audit and remediate security vulnerabilities in the `ui` package using `yarn npm
    - If neither tool is available and the Node version is wrong, **stop and report the error** — do not proceed with the wrong Node version.
 
 2. **Run the audit** from the `ui` directory:
+
    ```
    cd ui && yarn npm audit
    ```
+
    If there are no vulnerabilities, report that and stop.
 
 3. **For each vulnerability found**, try in order:
@@ -22,16 +24,19 @@ Audit and remediate security vulnerabilities in the `ui` package using `yarn npm
    a. **Direct upgrade first** — bump the affected package to a non-vulnerable version in `ui/package.json` dependencies or devDependencies, then run `yarn install` inside `ui/`.
 
    b. **If a direct upgrade isn't possible** (e.g. the affected package is a transitive dependency), add a `resolutions` entry to `ui/package.json`:
-      ```json
-      "resolutions": {
-        "vulnerable-package": ">=safe-version"
-      }
-      ```
-      Then run `yarn install` inside `ui/`.
+
+   ```json
+   "resolutions": {
+     "vulnerable-package": ">=safe-version"
+   }
+   ```
+
+   Then run `yarn install` inside `ui/`.
 
 4. **Re-run the audit** to confirm the vulnerability is resolved. If issues remain, repeat step 3 with a different approach.
 
 5. **Run a build** to verify nothing is broken:
+
    ```
    cd ui && yarn build
    ```
