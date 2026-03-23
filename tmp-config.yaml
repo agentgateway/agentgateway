@@ -1,0 +1,25 @@
+binds:
+- port: 3002
+  listeners:
+  - routes:
+    - backends:
+      - mcp:
+          targets:
+          - name: time
+            stdio:
+              cmd: uvx
+              args:
+              - mcp-server-time
+          - name: everything
+            stdio:
+              cmd: npx
+              args:
+              - '@modelcontextprotocol/server-everything'
+      policies:
+        cors:
+          allowOrigins:
+          - '*'
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          - cache-control
