@@ -45,7 +45,7 @@ func NewBackendTLSPlugin(agw *AgwCollections) AgwPlugin {
 					st, o := krt.NewStatusManyCollection(agw.BackendTLSPolicies, func(krtctx krt.HandlerContext, btls *gwv1.BackendTLSPolicy) (*gwv1.PolicyStatus, []AgwPolicy) {
 						return translatePoliciesForBackendTLS(krtctx, agw.ControllerName, input.References, agw.ConfigMaps, agw.Secrets, agw.Services, backendTLSTarget, agw.Gateways, btls)
 					}, agw.KrtOpts.ToOptions("agentgateway/BackendTLSPolicy")...)
-					return convertStatusCollection(st), o
+					return ConvertStatusCollection(st), o
 				},
 			},
 		},

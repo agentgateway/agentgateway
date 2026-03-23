@@ -12,6 +12,7 @@ type agentgatewaySyncerConfig struct {
 	GatewayTransformationFunc   translator.GatewayTransformationFunction
 	CustomResourceCollections   func(cfg CustomResourceCollectionsConfig)
 	BuildAddressCollectionsFunc AgentgatewayAddressBuilderFunc
+	BuildReferenceTypesFunc     func(agw *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes
 }
 
 type AgentgatewaySyncerOption func(*agentgatewaySyncerConfig)
@@ -50,6 +51,14 @@ func WithBuildAddressCollections(f AgentgatewayAddressBuilderFunc) AgentgatewayS
 	return func(o *agentgatewaySyncerConfig) {
 		if f != nil {
 			o.BuildAddressCollectionsFunc = f
+		}
+	}
+}
+
+func WithBuildReferenceTypes(f func(agw *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes) AgentgatewaySyncerOption {
+	return func(o *agentgatewaySyncerConfig) {
+		if f != nil {
+			o.BuildReferenceTypesFunc = f
 		}
 	}
 }

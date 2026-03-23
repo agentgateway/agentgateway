@@ -23,6 +23,11 @@ type PolicyPluginInput struct {
 	References ReferenceIndex
 }
 
+type BackendPlugin struct {
+	Build           func(PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[ir.AgwResource])
+	BuildReferences func() krt.Collection[*PolicyAttachment]
+}
+
 type PolicyPlugin struct {
 	Build           func(PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy])
 	BuildReferences func(input PolicyPluginInput) krt.Collection[*PolicyAttachment]

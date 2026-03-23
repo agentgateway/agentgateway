@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/controller"
 	networkingclient "istio.io/client-go/pkg/apis/networking/v1"
 	"istio.io/istio/pilot/test/util"
 	"istio.io/istio/pkg/kube"
@@ -189,7 +190,7 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 // agwPluginFactory is a factory function that returns the agent gateway plugins
 // It is based on agwPluginFactory(cfg)(ctx, cfg.AgwCollections) in start.go
 func agwPluginFactory(agwCollections *plugins.AgwCollections) plugins.AgwPlugin {
-	agwPlugins := plugins.Plugins(agwCollections)
+	agwPlugins := controller.Plugins(agwCollections)
 	mergedPlugins := plugins.MergePlugins(agwPlugins...)
 	return mergedPlugins
 }

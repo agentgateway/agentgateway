@@ -499,6 +499,7 @@ type RouteContextInputs struct {
 	Namespaces     krt.Collection[*corev1.Namespace]
 	ServiceEntries krt.Collection[*networkingclient.ServiceEntry]
 	Backends       krt.Collection[*agentgateway.AgentgatewayBackend]
+	References     plugins.ReferenceTypes
 	ControllerName string
 }
 

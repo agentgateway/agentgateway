@@ -35,7 +35,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
-	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
 
 const (
@@ -73,9 +72,9 @@ func init() {
 	}
 }
 
-// convertStatusCollection converts the specific TrafficPolicy status collection
+// ConvertStatusCollection converts the specific TrafficPolicy status collection
 // to the generic controllers.Object status collection expected by the interface
-func convertStatusCollection[T controllers.Object, S any](col krt.Collection[krt.ObjectWithStatus[T, S]]) krt.StatusCollection[controllers.Object, any] {
+func ConvertStatusCollection[T controllers.Object, S any](col krt.Collection[krt.ObjectWithStatus[T, S]]) krt.StatusCollection[controllers.Object, any] {
 	return krt.MapCollection(col, func(item krt.ObjectWithStatus[T, S]) krt.ObjectWithStatus[controllers.Object, any] {
 		return krt.ObjectWithStatus[controllers.Object, any]{
 			Obj:    controllers.Object(item.Obj),
@@ -99,7 +98,7 @@ func NewAgentPlugin(agw *AgwCollections) AgwPlugin {
 					) {
 						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References)
 					}, agw.KrtOpts.ToOptions("AgentgatewayPolicy")...)
-					return convertStatusCollection(policyStatusCol), policyCol
+					return ConvertStatusCollection(policyStatusCol), policyCol
 				},
 				BuildReferences: func(input PolicyPluginInput) krt.Collection[*PolicyAttachment] {
 					return backendReferences
@@ -112,6 +111,7 @@ func NewAgentPlugin(agw *AgwCollections) AgwPlugin {
 type PolicyCtx struct {
 	Krt         krt.HandlerContext
 	Collections *AgwCollections
+	References  ReferenceIndex
 }
 
 type ResolvedTarget struct {
@@ -125,7 +125,7 @@ type ResolvedTarget struct {
 func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy, agw *AgwCollections, references ReferenceIndex) (*gwv1.PolicyStatus, []AgwPolicy) {
 	var agwPolicies []AgwPolicy
 
-	pctx := PolicyCtx{Krt: ctx, Collections: agw}
+	pctx := PolicyCtx{Krt: ctx, Collections: agw, References: references}
 	var ancestors []gwv1.PolicyAncestorStatus
 	var attachmentErrors []string
 	// TODO: add selectors
@@ -139,34 +139,9 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 			Kind:           gk.Kind,
 		}).UnsortedList()
 
-		var policyTarget *api.PolicyTarget
-		switch gk {
-		case wellknown.GatewayGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.GatewayTarget(policy.Namespace, string(target.Name), target.SectionName),
-			}
-		case wellknown.HTTPRouteGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.RouteTarget(policy.Namespace, string(target.Name), wellknown.HTTPRouteGVK.Kind, target.SectionName),
-			}
-		case wellknown.GRPCRouteGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.RouteTarget(policy.Namespace, string(target.Name), wellknown.GRPCRouteGVK.Kind, target.SectionName),
-			}
-		case wellknown.AgentgatewayBackendGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.BackendTarget(policy.Namespace, string(target.Name), target.SectionName),
-			}
-		case wellknown.ServiceGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.ServiceTarget(policy.Namespace, string(target.Name), target.SectionName),
-			}
-			// TODO: add support for inferencepool https://github.com/kgateway-dev/kgateway/issues/13295
-			// TODO: add support for ListenerSet https://github.com/kgateway-dev/kgateway/issues/13296
-			// If we add ListenerSet, we MUST update ReferenceIndex
-
-		default:
-			// TODO(npolshak): support attaching policies to k8s services, serviceentries, and other backends
+		policyTarget := references.PolicyTarget(policy.Namespace, target.Name, gk, target.SectionName)
+		if policyTarget == nil {
+			// This should be impossible, verified by CEL validation
 			logger.Warn("unsupported target kind", "kind", target.Kind, "policy", policy.Name)
 			continue
 		}
@@ -1236,48 +1211,7 @@ func buildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS s
 		Group: string(group),
 		Kind:  string(kind),
 	}
-	namespace := string(ptr.OrDefault(ref.Namespace, gwv1.Namespace(defaultNS)))
-	switch gk {
-	case wellknown.ServiceGVK.GroupKind():
-		port := ref.Port
-		if strings.Contains(string(ref.Name), ".") {
-			return nil, errors.New("service name invalid; the name of the Service, not the hostname")
-		}
-		hostname := kubeutils.GetServiceHostname(string(ref.Name), namespace)
-		key := namespace + "/" + string(ref.Name)
-		svc := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Services, krt.FilterKey(key)))
-		if svc == nil {
-			return nil, fmt.Errorf("unable to find the Service %v", key)
-		}
-		// TODO: All kubernetes service types currently require a Port, so we do this for everything; consider making this per-type if we have future types
-		// that do not require port.
-		if port == nil {
-			// "Port is required when the referent is a Kubernetes Service."
-			return nil, errors.New("port is required for Service targets")
-		}
-		return &api.BackendReference{
-			Kind: &api.BackendReference_Service_{
-				Service: &api.BackendReference_Service{
-					Hostname:  hostname,
-					Namespace: namespace,
-				},
-			},
-			Port: uint32(*port), //nolint:gosec // G115: Gateway API PortNumber is int32 with validation 1-65535, always safe
-		}, nil
-	case wellknown.AgentgatewayBackendGVK.GroupKind():
-		key := namespace + "/" + string(ref.Name)
-		be := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Backends, krt.FilterKey(key)))
-		if be == nil {
-			return nil, fmt.Errorf("unable to find the Backend %v", key)
-		}
-		return &api.BackendReference{
-			Kind: &api.BackendReference_Backend{
-				Backend: key,
-			},
-		}, nil
-	default:
-		return nil, fmt.Errorf("unsupported backend %v", gk)
-	}
+	return ctx.References.PolicyBackend(ctx.Krt, defaultNS, gk, ref.Name, ref.Namespace, ref.Port)
 }
 
 func toJSONValue(j apiextensionsv1.JSON) (string, error) {
