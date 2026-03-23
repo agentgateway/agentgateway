@@ -35,13 +35,21 @@ Audit and remediate security vulnerabilities in the `ui` package using `yarn npm
 
 4. **Re-run the audit** to confirm the vulnerability is resolved. If issues remain, repeat step 3 with a different approach.
 
-5. **Run a build** to verify nothing is broken:
+5. **Check for peer dependency misalignment** after any upgrade. When upgrading a package that is part of a suite (e.g. `storybook`, `eslint`, `babel`, `jest`), scan `package.json` for other packages in the same suite that may now declare mismatched peer dependencies against the newly upgraded version:
+   - Look for sibling packages (e.g. `@storybook/*` when upgrading `storybook`) still pinned to an older major.
+   - Run `yarn install` and look for `YN0060` peer dependency warnings involving the upgraded package.
+   - For each misaligned package:
+     - Check if the suite now bundles the API into the root package (e.g. `storybook/manager-api` in v9 replaces `@storybook/manager-api`). If so, update all import paths and remove the now-redundant direct dependency.
+     - If a matching version exists in the registry, upgrade the sibling to match.
+     - If no compatible version is available and the API is unchanged, document the mismatch clearly but do not force an incompatible version.
+
+6. **Run a build** to verify nothing is broken:
 
    ```
    cd ui && yarn build
    ```
 
-6. **Report** what was changed: which packages were upgraded directly, which required resolutions, and confirm the final audit is clean.
+7. **Report** what was changed: which packages were upgraded directly, which required resolutions, any peer dependency realignments or import path migrations, and confirm the final audit is clean.
 
 ## Notes
 
