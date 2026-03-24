@@ -1242,7 +1242,7 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub llm: Option<LLMContext>,
 
-	/// `llm_request` contains the raw LLM request before processing. This is only present *during* LLM policies;
+	/// `llmRequest` contains the raw LLM request before processing. This is only present *during* LLM policies;
 	/// policies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests.
 	#[serde(rename = "llmRequest", skip_serializing_if = "Option::is_none")]
 	pub llm_request: Option<serde_json::Value>,
