@@ -7,9 +7,9 @@ WORKDIR /app
 
 COPY ui .
 
-RUN --mount=type=cache,target=/app/npm/cache npm install
+RUN --mount=type=cache,target=/app/.yarn/cache yarn install
 
-RUN --mount=type=cache,target=/app/npm/cache npm run build
+RUN --mount=type=cache,target=/app/.yarn/cache BASE_PATH=/ui/ yarn build
 
 FROM docker.io/library/rust:1.93.0-trixie AS musl-builder
 

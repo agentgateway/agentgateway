@@ -1,0 +1,15 @@
+arrowParens: avoid
+bracketSpacing: true
+endOfLine: auto
+htmlWhitespaceSensitivity: css
+jsxSingleQuote: true
+parser: "typescript"
+plugins: 
+  - "prettier-plugin-organize-imports"
+semi: true
+singleQuote: true
+tabWidth: 2
+printWidth: 120
+trailingComma: none
+useTabs: false
+bracketSameLine: true

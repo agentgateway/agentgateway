@@ -1,0 +1,1650 @@
+/* Global Styles */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  color: var(--color-text-base);
+  background-color: var(--color-bg-layout);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Typography */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-base);
+}
+
+h1 {
+  font-size: 38px;
+}
+
+h2 {
+  font-size: 30px;
+}
+
+h3 {
+  font-size: 24px;
+}
+
+h4 {
+  font-size: 20px;
+}
+
+h5 {
+  font-size: 16px;
+}
+
+h6 {
+  font-size: 14px;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--color-link);
+  text-decoration: none;
+  transition: color var(--transition-base) var(--transition-timing);
+}
+
+a:hover {
+  color: var(--color-link-hover);
+}
+
+a:active {
+  color: var(--color-link-active);
+}
+
+/* Button reset */
+button {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+/* Input reset */
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* List reset */
+ul,
+ol {
+  list-style: none;
+}
+
+/* Code */
+code {
+  font-family:
+    "Monaco", "Menlo", "Ubuntu Mono", "Consolas", "source-code-pro", monospace;
+  font-size: 0.9em;
+  padding: 2px 6px;
+  background: var(--color-bg-spotlight);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-sm);
+}
+
+pre {
+  font-family:
+    "Monaco", "Menlo", "Ubuntu Mono", "Consolas", "source-code-pro", monospace;
+  padding: var(--spacing-md);
+  background: var(--color-bg-spotlight);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-md);
+  overflow-x: auto;
+}
+
+pre code {
+  padding: 0;
+  background: none;
+  border: none;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-container);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-base);
+  border-radius: var(--border-radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+/* Selection */
+::selection {
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+/* Focus outline */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Common Layout Classes */
+.flex-row {
+  display: flex;
+  flex-direction: row;
+}
+
+.flex-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-start {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.flex-end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.flex-grow {
+  flex-grow: 1;
+}
+
+.flex-shrink-0 {
+  flex-shrink: 0;
+}
+
+/* Gap utilities */
+.gap-xs {
+  gap: var(--spacing-xs);
+}
+
+.gap-sm {
+  gap: var(--spacing-sm);
+}
+
+.gap-md {
+  gap: var(--spacing-md);
+}
+
+.gap-lg {
+  gap: var(--spacing-lg);
+}
+
+.gap-xl {
+  gap: var(--spacing-xl);
+}
+
+.gap-xxl {
+  gap: var(--spacing-xxl);
+}
+
+/* Overflow utilities */
+.overflow-auto {
+  overflow: auto;
+}
+
+.overflow-hidden {
+  overflow: hidden;
+}
+
+.overflow-x-auto {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.overflow-y-auto {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Width/Height utilities */
+.w-full {
+  width: 100%;
+}
+
+.h-full {
+  height: 100%;
+}
+
+.full-size {
+  width: 100%;
+  height: 100%;
+}
+
+/* Text alignment */
+.text-left {
+  text-align: left;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+/* Cursor utilities */
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.cursor-not-allowed {
+  cursor: not-allowed;
+}
+
+/* User select */
+.select-none {
+  user-select: none;
+}
+
+/* Pointer events */
+.pointer-events-none {
+  pointer-events: none;
+}
+
+/* Responsive utilities */
+@media (max-width: 576px) {
+  .hide-mobile {
+    display: none !important;
+  }
+}
+
+@media (min-width: 577px) and (max-width: 992px) {
+  .hide-tablet {
+    display: none !important;
+  }
+}
+
+@media (min-width: 993px) {
+  .hide-desktop {
+    display: none !important;
+  }
+}
+/* Styled Select dropdown overrides for dark mode */
+.ant-select-dropdown {
+  background-color: var(--color-bg-elevated) !important;
+  border: 1px solid var(--color-border-base) !important;
+  box-shadow:
+    0 6px 16px 0 rgba(0, 0, 0, 0.08),
+    0 3px 6px -4px rgba(0, 0, 0, 0.12),
+    0 9px 28px 8px rgba(0, 0, 0, 0.05) !important;
+  border-radius: var(--border-radius-md) !important;
+}
+
+[data-theme="dark"] .ant-select-dropdown {
+  box-shadow:
+    0 6px 16px 0 rgba(0, 0, 0, 0.32),
+    0 3px 6px -4px rgba(0, 0, 0, 0.48),
+    0 9px 28px 8px rgba(0, 0, 0, 0.2) !important;
+}
+
+.ant-select-item {
+  color: var(--color-text-base) !important;
+  transition:
+    background-color 0.12s cubic-bezier(0.645, 0.045, 0.355, 1),
+    color 0.12s ease,
+    box-shadow 0.12s ease !important;
+  cursor: pointer !important;
+  border-radius: 4px !important;
+  margin: 2px 4px !important;
+}
+
+.ant-select-item-option-content {
+  color: var(--color-text-base) !important;
+  transition: color 0.12s ease !important;
+}
+
+/* Hover effect - enhanced visibility */
+.ant-select-item-option-active:not(.ant-select-item-option-disabled):not(
+    .ant-select-item-option-selected
+  ) {
+  background-color: rgba(0, 0, 0, 0.06) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme="dark"]
+  .ant-select-item-option-active:not(.ant-select-item-option-disabled):not(
+    .ant-select-item-option-selected
+  ) {
+  background-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Hover effect on selected item - more pronounced */
+.ant-select-item-option-active.ant-select-item-option-selected:not(
+    .ant-select-item-option-disabled
+  ) {
+  background-color: rgba(22, 119, 255, 0.2) !important;
+  box-shadow: 0 1px 3px rgba(22, 119, 255, 0.15) !important;
+}
+
+[data-theme="dark"]
+  .ant-select-item-option-active.ant-select-item-option-selected:not(
+    .ant-select-item-option-disabled
+  ) {
+  background-color: rgba(22, 119, 255, 0.28) !important;
+  box-shadow: 0 1px 3px rgba(22, 119, 255, 0.25) !important;
+}
+
+/* Selected state */
+.ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+  background-color: rgba(22, 119, 255, 0.12) !important;
+  color: var(--color-primary) !important;
+  font-weight: 500;
+}
+
+[data-theme="dark"]
+  .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+  background-color: rgba(22, 119, 255, 0.18) !important;
+}
+
+/* Active (clicked) state - significantly more pronounced */
+.ant-select-item-option:active:not(.ant-select-item-option-disabled) {
+  background-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+[data-theme="dark"]
+  .ant-select-item-option:active:not(.ant-select-item-option-disabled) {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+.ant-select-item-option-disabled {
+  color: var(--color-text-disabled) !important;
+  cursor: not-allowed !important;
+  opacity: 0.5;
+}
+
+.ant-select-item-empty {
+  color: var(--color-text-secondary) !important;
+}
+
+/* Form and Card styling overrides for theme support */
+.ant-card {
+  background-color: var(--color-bg-container) !important;
+  border-color: var(--color-border-secondary) !important;
+}
+
+.ant-card-bordered {
+  border-color: var(--color-border-secondary) !important;
+}
+
+.ant-card-head {
+  border-bottom-color: var(--color-border-secondary) !important;
+  color: var(--color-text-base) !important;
+}
+
+.ant-card-head-title {
+  color: var(--color-text-base) !important;
+}
+
+/* Form field borders */
+.ant-input,
+.ant-input-number,
+.ant-picker,
+.ant-select-selector {
+  background-color: var(--color-bg-base) !important;
+  border-color: var(--color-border-base) !important;
+  color: var(--color-text-base) !important;
+}
+
+.ant-input:hover,
+.ant-input-number:hover,
+.ant-picker:hover,
+.ant-select-selector:hover {
+  border-color: var(--color-primary-hover) !important;
+}
+
+.ant-input:focus,
+.ant-input-number:focus,
+.ant-picker-focused,
+.ant-select-focused .ant-select-selector {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1) !important;
+}
+
+.ant-input-disabled,
+.ant-input-number-disabled,
+.ant-picker-disabled,
+.ant-select-disabled .ant-select-selector {
+  background-color: var(--color-bg-elevated) !important;
+  border-color: var(--color-border-secondary) !important;
+  color: var(--color-text-tertiary) !important;
+}
+
+/* Form item labels */
+.ant-form-item-label > label {
+  color: var(--color-text-base) !important;
+}
+
+/* Textarea */
+.ant-input-textarea textarea {
+  background-color: var(--color-bg-base) !important;
+  border-color: var(--color-border-base) !important;
+  color: var(--color-text-base) !important;
+}
+
+/* Checkbox and Radio */
+.ant-checkbox-inner,
+.ant-radio-inner {
+  background-color: var(--color-bg-base) !important;
+  border-color: var(--color-border-base) !important;
+}
+
+.ant-checkbox-wrapper,
+.ant-radio-wrapper {
+  color: var(--color-text-base) !important;
+}
+
+/* Switch */
+.ant-switch {
+  background-color: var(--color-text-quaternary) !important;
+}
+
+.ant-switch-checked {
+  background-color: var(--color-primary) !important;
+}
+
+/* Divider in forms */
+.ant-divider {
+  border-color: var(--color-border-secondary) !important;
+}
+
+/* Form validation states - ensure visibility in dark mode */
+.ant-form-item-has-error .ant-input,
+.ant-form-item-has-error .ant-input-number,
+.ant-form-item-has-error .ant-select-selector,
+.ant-form-item-has-error .ant-picker {
+  border-color: var(--color-error) !important;
+}
+
+.ant-form-item-has-error .ant-input:focus,
+.ant-form-item-has-error .ant-input-number:focus,
+.ant-form-item-has-error .ant-select-focused .ant-select-selector,
+.ant-form-item-has-error .ant-picker-focused {
+  border-color: var(--color-error) !important;
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.1) !important;
+}
+
+/* Tooltip styling for dark mode */
+.ant-tooltip {
+  max-width: 400px;
+}
+
+.ant-tooltip-inner {
+  background-color: var(--color-bg-elevated) !important;
+  color: var(--color-text-base) !important;
+  border: 1px solid var(--color-border-base) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.ant-tooltip-arrow-content {
+  background-color: var(--color-bg-elevated) !important;
+  border-color: var(--color-border-base) !important;
+}
+
+[data-theme="dark"] .ant-tooltip-inner {
+  box-shadow:
+    0 6px 16px 0 rgba(0, 0, 0, 0.32),
+    0 3px 6px -4px rgba(0, 0, 0, 0.48),
+    0 9px 28px 8px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* ========================================
+   Alert Styling - Enhanced for both themes
+   ======================================== */
+
+/* Base alert styling */
+.ant-alert {
+  border-radius: 6px !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+  padding: 12px 16px !important;
+  transition: all 0.12s ease !important;
+}
+
+/* Light mode - default alert */
+.ant-alert {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: var(--color-text-base) !important;
+}
+
+/* Light mode - success alert */
+.ant-alert.ant-alert-success {
+  background-color: rgba(82, 196, 26, 0.08) !important;
+  border-color: rgba(82, 196, 26, 0.3) !important;
+}
+
+.ant-alert.ant-alert-success .ant-alert-message {
+  color: #389e0d !important;
+}
+
+.ant-alert.ant-alert-success .ant-alert-icon {
+  color: #52c41a !important;
+}
+
+/* Light mode - error alert */
+.ant-alert.ant-alert-error {
+  background-color: rgba(255, 77, 79, 0.08) !important;
+  border-color: rgba(255, 77, 79, 0.3) !important;
+}
+
+.ant-alert.ant-alert-error .ant-alert-message {
+  color: #cf1322 !important;
+}
+
+.ant-alert.ant-alert-error .ant-alert-icon {
+  color: #ff4d4f !important;
+}
+
+/* Light mode - warning alert */
+.ant-alert.ant-alert-warning {
+  background-color: rgba(250, 173, 20, 0.08) !important;
+  border-color: rgba(250, 173, 20, 0.3) !important;
+}
+
+.ant-alert.ant-alert-warning .ant-alert-message {
+  color: #d48806 !important;
+}
+
+.ant-alert.ant-alert-warning .ant-alert-icon {
+  color: #faad14 !important;
+}
+
+/* Light mode - info alert (blue) */
+.ant-alert.ant-alert-info {
+  background-color: rgba(22, 119, 255, 0.08) !important;
+  border-color: rgba(22, 119, 255, 0.3) !important;
+}
+
+.ant-alert.ant-alert-info .ant-alert-message {
+  color: #1677ff !important;
+}
+
+.ant-alert.ant-alert-info .ant-alert-icon {
+  color: #4096ff !important;
+}
+
+/* Dark mode - default alert */
+[data-theme="dark"] .ant-alert {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Dark mode - success alert */
+[data-theme="dark"] .ant-alert.ant-alert-success {
+  background-color: rgba(82, 196, 26, 0.15) !important;
+  border-color: rgba(82, 196, 26, 0.45) !important;
+}
+
+[data-theme="dark"] .ant-alert.ant-alert-success .ant-alert-message {
+  color: #95de64 !important;
+}
+
+[data-theme="dark"] .ant-alert.ant-alert-success .ant-alert-icon {
+  color: #73d13d !important;
+}
+
+/* Dark mode - error alert */
+[data-theme="dark"] .ant-alert.ant-alert-error {
+  background-color: rgba(255, 77, 79, 0.15) !important;
+  border-color: rgba(255, 77, 79, 0.45) !important;
+}
+
+[data-theme="dark"] .ant-alert.ant-alert-error .ant-alert-message {
+  color: #ff9c9e !important;
+}
+
+[data-theme="dark"] .ant-alert.ant-alert-error .ant-alert-icon {
+  color: #ff7875 !important;
+}
+
+/* Dark mode - warning alert */
+[data-theme="dark"] .ant-alert.ant-alert-warning {
+  background-color: rgba(250, 173, 20, 0.15) !important;
+  border-color: rgba(250, 173, 20, 0.45) !important;
+}
+
+[data-theme="dark"] .ant-alert.ant-alert-warning .ant-alert-message {
+  color: #ffc53d !important;
+}
+
+[data-theme="dark"] .ant-alert.ant-alert-warning .ant-alert-icon {
+  color: #faad14 !important;
+}
+
+/* Dark mode - info alert (blue) */
+[data-theme="dark"] .ant-alert.ant-alert-info {
+  background-color: rgba(22, 119, 255, 0.15) !important;
+  border-color: rgba(22, 119, 255, 0.45) !important;
+}
+
+[data-theme="dark"] .ant-alert.ant-alert-info .ant-alert-message {
+  color: #69b1ff !important;
+}
+
+[data-theme="dark"] .ant-alert.ant-alert-info .ant-alert-icon {
+  color: #4096ff !important;
+}
+
+/* Alert message and description text */
+.ant-alert-message {
+  font-weight: 500 !important;
+  margin-bottom: 4px !important;
+}
+
+.ant-alert-description {
+  color: var(--color-text-secondary) !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+}
+
+/* Alert with description layout */
+.ant-alert-with-description {
+  padding: 16px 20px !important;
+}
+
+.ant-alert-with-description .ant-alert-icon {
+  font-size: 24px !important;
+  margin-top: 2px !important;
+}
+
+/* Alert close button */
+.ant-alert-close-icon {
+  color: var(--color-text-tertiary) !important;
+  transition: color 0.12s ease !important;
+}
+
+.ant-alert-close-icon:hover {
+  color: var(--color-text-base) !important;
+}
+
+/* Traffic Form Styling - Clean borderless design */
+/* Remove borders from form items */
+.ant-form-item {
+  border: none !important;
+  margin-bottom: var(--spacing-lg) !important;
+}
+
+/* Form item labels - clean and minimal */
+.ant-form-item-label {
+  padding-bottom: 4px !important;
+}
+
+.ant-form-item-label > label {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--color-text-secondary) !important;
+}
+
+.ant-form-item-label > label.ant-form-item-required::before {
+  color: var(--color-error) !important;
+}
+
+/* Remove borders from inputs - use subtle background instead */
+.ant-input,
+.ant-input-number,
+.ant-input-number-input,
+.ant-picker,
+.ant-select-selector {
+  background-color: var(--color-bg-base) !important;
+  border: 1px solid transparent !important;
+  color: var(--color-text-base) !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-theme="dark"] .ant-input,
+[data-theme="dark"] .ant-input-number,
+[data-theme="dark"] .ant-input-number-input,
+[data-theme="dark"] .ant-picker,
+[data-theme="dark"] .ant-select-selector {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Hover state - subtle border */
+.ant-input:hover,
+.ant-input-number:hover,
+.ant-input-number-input:hover,
+.ant-picker:hover,
+.ant-select-selector:hover {
+  border-color: var(--color-border-base) !important;
+  background-color: var(--color-bg-elevated) !important;
+}
+
+[data-theme="dark"] .ant-input:hover,
+[data-theme="dark"] .ant-input-number:hover,
+[data-theme="dark"] .ant-input-number-input:hover,
+[data-theme="dark"] .ant-picker:hover,
+[data-theme="dark"] .ant-select-selector:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Focus state - primary color border */
+.ant-input:focus,
+.ant-input-number:focus,
+.ant-input-number-input:focus,
+.ant-picker-focused,
+.ant-select-focused .ant-select-selector {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1) !important;
+  background-color: var(--color-bg-base) !important;
+}
+
+[data-theme="dark"] .ant-input:focus,
+[data-theme="dark"] .ant-input-number:focus,
+[data-theme="dark"] .ant-input-number-input:focus,
+[data-theme="dark"] .ant-picker-focused,
+[data-theme="dark"] .ant-select-focused .ant-select-selector {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Disabled state */
+.ant-input-disabled,
+.ant-input-number-disabled,
+.ant-input-number-input-disabled,
+.ant-picker-disabled,
+.ant-select-disabled .ant-select-selector {
+  background-color: var(--color-bg-container) !important;
+  border-color: transparent !important;
+  color: var(--color-text-tertiary) !important;
+  opacity: 0.6;
+}
+
+[data-theme="dark"] .ant-input-disabled,
+[data-theme="dark"] .ant-input-number-disabled,
+[data-theme="dark"] .ant-input-number-input-disabled,
+[data-theme="dark"] .ant-picker-disabled,
+[data-theme="dark"] .ant-select-disabled .ant-select-selector {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+}
+
+/* Textarea */
+.ant-input-textarea textarea {
+  background-color: var(--color-bg-base) !important;
+  border: 1px solid transparent !important;
+  color: var(--color-text-base) !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-theme="dark"] .ant-input-textarea textarea {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+.ant-input-textarea textarea:hover {
+  border-color: var(--color-border-base) !important;
+  background-color: var(--color-bg-elevated) !important;
+}
+
+[data-theme="dark"] .ant-input-textarea textarea:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.ant-input-textarea textarea:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1) !important;
+  background-color: var(--color-bg-base) !important;
+}
+
+[data-theme="dark"] .ant-input-textarea textarea:focus {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Checkbox and Radio - cleaner design */
+.ant-checkbox-inner,
+.ant-radio-inner {
+  background-color: var(--color-bg-base) !important;
+  border-color: var(--color-border-base) !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-theme="dark"] .ant-checkbox-inner,
+[data-theme="dark"] .ant-radio-inner {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+.ant-checkbox:hover .ant-checkbox-inner,
+.ant-radio:hover .ant-radio-inner {
+  border-color: var(--color-primary) !important;
+}
+
+.ant-checkbox-checked .ant-checkbox-inner,
+.ant-radio-checked .ant-radio-inner {
+  background-color: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+}
+
+/* Field descriptions and help text */
+.ant-form-item-extra,
+.ant-form-item-explain {
+  font-size: 12px !important;
+  color: var(--color-text-tertiary) !important;
+}
+
+/* Form validation - error state */
+.ant-form-item-has-error .ant-input,
+.ant-form-item-has-error .ant-input-number,
+.ant-form-item-has-error .ant-input-number-input,
+.ant-form-item-has-error .ant-select-selector,
+.ant-form-item-has-error .ant-picker,
+.ant-form-item-has-error .ant-input-textarea textarea {
+  background-color: rgba(255, 77, 79, 0.05) !important;
+  border-color: var(--color-error) !important;
+}
+
+[data-theme="dark"] .ant-form-item-has-error .ant-input,
+[data-theme="dark"] .ant-form-item-has-error .ant-input-number,
+[data-theme="dark"] .ant-form-item-has-error .ant-input-number-input,
+[data-theme="dark"] .ant-form-item-has-error .ant-select-selector,
+[data-theme="dark"] .ant-form-item-has-error .ant-picker,
+[data-theme="dark"] .ant-form-item-has-error .ant-input-textarea textarea {
+  background-color: rgba(255, 77, 79, 0.1) !important;
+}
+
+.ant-form-item-has-error .ant-input:focus,
+.ant-form-item-has-error .ant-input-number:focus,
+.ant-form-item-has-error .ant-input-number-input:focus,
+.ant-form-item-has-error .ant-select-focused .ant-select-selector,
+.ant-form-item-has-error .ant-picker-focused,
+.ant-form-item-has-error .ant-input-textarea textarea:focus {
+  border-color: var(--color-error) !important;
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.1) !important;
+}
+
+.ant-form-item-explain-error {
+  color: var(--color-error) !important;
+}
+
+/* Collapse/Fieldset styling for nested fields */
+.ant-collapse {
+  background-color: transparent !important;
+  border: none !important;
+}
+
+.ant-collapse-item {
+  border: none !important;
+  margin-bottom: var(--spacing-md) !important;
+}
+
+.ant-collapse-header {
+  background-color: var(--color-bg-elevated) !important;
+  border: none !important;
+  padding: var(--spacing-sm) var(--spacing-md) !important;
+  border-radius: var(--border-radius-md) !important;
+  color: var(--color-text-base) !important;
+  font-weight: 500 !important;
+}
+
+[data-theme="dark"] .ant-collapse-header {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+.ant-collapse-header:hover {
+  background-color: var(--color-bg-hover) !important;
+}
+
+[data-theme="dark"] .ant-collapse-header:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.ant-collapse-content {
+  background-color: transparent !important;
+  border: none !important;
+}
+
+.ant-collapse-content-box {
+  padding: var(--spacing-md) 0 !important;
+}
+
+/* Array field buttons */
+.array-item-toolbox {
+  display: flex;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-xs);
+}
+
+/* Object field styling */
+fieldset {
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+legend {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--color-text-secondary) !important;
+  margin-bottom: var(--spacing-sm) !important;
+  padding: 0 !important;
+}
+
+/* ========================================================================
+   GLOBAL BUTTON STYLING - Site-wide muted, dark-theme optimized
+   ======================================================================== */
+
+/* Base button improvements */
+.ant-btn {
+  font-weight: 500 !important;
+  transition: all 0.12s cubic-bezier(0.645, 0.045, 0.355, 1) !important;
+  height: 32px !important;
+  padding: 4px 16px !important;
+  font-size: 14px !important;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Small buttons */
+.ant-btn-sm {
+  height: 24px !important;
+  padding: 0px 12px !important;
+  font-size: 13px !important;
+  border-radius: 4px !important;
+}
+
+/* Large buttons */
+.ant-btn-lg {
+  height: 40px !important;
+  padding: 6.4px 20px !important;
+  font-size: 16px !important;
+  border-radius: 8px !important;
+}
+
+/* Icon-only buttons */
+.ant-btn-icon-only {
+  padding: 4px !important;
+  width: 32px !important;
+}
+
+.ant-btn-sm.ant-btn-icon-only {
+  width: 24px !important;
+}
+
+.ant-btn-lg.ant-btn-icon-only {
+  width: 40px !important;
+}
+
+/* Default buttons - muted gray */
+.ant-btn-default {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.75) !important;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    transform: translateY(0);
+  }
+}
+
+[data-theme="light"] .ant-btn-default {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: rgba(0, 0, 0, 0.75) !important;
+
+  &:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.06) !important;
+    border-color: rgba(0, 0, 0, 0.2) !important;
+    color: rgba(0, 0, 0, 0.85) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08) !important;
+  }
+
+  &:active:not(:disabled) {
+    background: rgba(0, 0, 0, 0.04) !important;
+    border-color: rgba(0, 0, 0, 0.15) !important;
+  }
+}
+
+/* Primary buttons - muted blue */
+.ant-btn-primary {
+  background: rgba(64, 150, 255, 0.18) !important;
+  border-color: rgba(64, 150, 255, 0.45) !important;
+  color: #5a9fff !important;
+
+  &:hover:not(:disabled) {
+    background: rgba(64, 150, 255, 0.28) !important;
+    border-color: rgba(64, 150, 255, 0.65) !important;
+    color: #7db3ff !important;
+    box-shadow: 0 2px 6px rgba(64, 150, 255, 0.25) !important;
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    background: rgba(64, 150, 255, 0.22) !important;
+    border-color: rgba(64, 150, 255, 0.55) !important;
+    transform: translateY(0);
+  }
+}
+
+[data-theme="light"] .ant-btn-primary {
+  background: rgba(22, 119, 255, 0.1) !important;
+  border-color: rgba(22, 119, 255, 0.35) !important;
+  color: #1677ff !important;
+
+  &:hover:not(:disabled) {
+    background: rgba(22, 119, 255, 0.18) !important;
+    border-color: rgba(22, 119, 255, 0.55) !important;
+    color: #0958d9 !important;
+    box-shadow: 0 2px 6px rgba(22, 119, 255, 0.2) !important;
+  }
+
+  &:active:not(:disabled) {
+    background: rgba(22, 119, 255, 0.14) !important;
+    border-color: rgba(22, 119, 255, 0.45) !important;
+  }
+}
+
+/* Danger buttons - muted red */
+.ant-btn-dangerous,
+.ant-btn-dangerous.ant-btn-default,
+.ant-btn-dangerous.ant-btn-primary {
+  background: rgba(255, 77, 79, 0.14) !important;
+  border-color: rgba(255, 77, 79, 0.4) !important;
+  color: #ff7875 !important;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 77, 79, 0.22) !important;
+    border-color: rgba(255, 77, 79, 0.55) !important;
+    color: #ff9c9e !important;
+    box-shadow: 0 2px 6px rgba(255, 77, 79, 0.25) !important;
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    background: rgba(255, 77, 79, 0.18) !important;
+    border-color: rgba(255, 77, 79, 0.48) !important;
+    transform: translateY(0);
+  }
+}
+
+[data-theme="light"] .ant-btn-dangerous,
+[data-theme="light"] .ant-btn-dangerous.ant-btn-default,
+[data-theme="light"] .ant-btn-dangerous.ant-btn-primary {
+  background: rgba(255, 77, 79, 0.1) !important;
+  border-color: rgba(255, 77, 79, 0.35) !important;
+  color: #cf1322 !important;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 77, 79, 0.18) !important;
+    border-color: rgba(255, 77, 79, 0.5) !important;
+    color: #a8071a !important;
+    box-shadow: 0 2px 6px rgba(255, 77, 79, 0.2) !important;
+  }
+
+  &:active:not(:disabled) {
+    background: rgba(255, 77, 79, 0.14) !important;
+    border-color: rgba(255, 77, 79, 0.42) !important;
+  }
+}
+
+/* Text/Link buttons - keep subtle */
+.ant-btn-text,
+.ant-btn-link {
+  color: rgba(255, 255, 255, 0.65) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+
+  &:hover:not(:disabled) {
+    color: rgba(255, 255, 255, 0.85) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+  }
+
+  &:active:not(:disabled) {
+    color: rgba(255, 255, 255, 0.75) !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+  }
+}
+
+[data-theme="light"] .ant-btn-text,
+[data-theme="light"] .ant-btn-link {
+  color: rgba(0, 0, 0, 0.65) !important;
+
+  &:hover:not(:disabled) {
+    color: rgba(0, 0, 0, 0.85) !important;
+    background: rgba(0, 0, 0, 0.04) !important;
+  }
+
+  &:active:not(:disabled) {
+    color: rgba(0, 0, 0, 0.75) !important;
+    background: rgba(0, 0, 0, 0.06) !important;
+  }
+}
+
+/* Disabled buttons */
+.ant-btn:disabled,
+.ant-btn[disabled] {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.35) !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+  opacity: 0.5;
+}
+
+[data-theme="light"] .ant-btn:disabled,
+[data-theme="light"] .ant-btn[disabled] {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Loading buttons */
+.ant-btn-loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Button groups */
+.ant-btn-group .ant-btn:not(:first-child):not(:last-child) {
+  border-radius: 0 !important;
+}
+
+.ant-btn-group .ant-btn:first-child {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+.ant-btn-group .ant-btn:last-child {
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+}
+
+/* Dropdown button */
+.ant-dropdown-button .ant-btn {
+  border-radius: 6px 0 0 6px !important;
+}
+
+.ant-dropdown-button .ant-btn:last-child {
+  border-radius: 0 6px 6px 0 !important;
+  padding: 4px 8px !important;
+}
+
+/* Dropdown menu styling */
+.ant-dropdown-menu {
+  background-color: var(--color-bg-elevated) !important;
+  border: 1px solid var(--color-border-base) !important;
+  box-shadow:
+    0 6px 16px 0 rgba(0, 0, 0, 0.08),
+    0 3px 6px -4px rgba(0, 0, 0, 0.12),
+    0 9px 28px 8px rgba(0, 0, 0, 0.05) !important;
+  border-radius: 6px !important;
+  padding: 4px !important;
+}
+
+[data-theme="dark"] .ant-dropdown-menu {
+  box-shadow:
+    0 6px 16px 0 rgba(0, 0, 0, 0.32),
+    0 3px 6px -4px rgba(0, 0, 0, 0.48),
+    0 9px 28px 8px rgba(0, 0, 0, 0.2) !important;
+}
+
+.ant-dropdown-menu-item {
+  border-radius: 4px !important;
+  margin: 2px 0 !important;
+  padding: 6px 12px !important;
+  transition:
+    background-color 0.12s cubic-bezier(0.645, 0.045, 0.355, 1),
+    color 0.12s ease,
+    box-shadow 0.12s ease !important;
+  color: var(--color-text-base) !important;
+}
+
+/* Hover effect - enhanced visibility */
+.ant-dropdown-menu-item:hover:not(.ant-dropdown-menu-item-disabled) {
+  background-color: rgba(0, 0, 0, 0.06) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme="dark"]
+  .ant-dropdown-menu-item:hover:not(.ant-dropdown-menu-item-disabled) {
+  background-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Active (clicked) state - significantly more pronounced */
+.ant-dropdown-menu-item:active:not(.ant-dropdown-menu-item-disabled) {
+  background-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+[data-theme="dark"]
+  .ant-dropdown-menu-item:active:not(.ant-dropdown-menu-item-disabled) {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Dropdown menu item icon */
+.ant-dropdown-menu-item .anticon,
+.ant-dropdown-menu-item svg {
+  color: var(--color-text-secondary) !important;
+  transition: color 0.12s ease !important;
+}
+
+.ant-dropdown-menu-item:hover .anticon,
+.ant-dropdown-menu-item:hover svg {
+  color: var(--color-text-base) !important;
+}
+
+/* Disabled state */
+.ant-dropdown-menu-item-disabled {
+  color: var(--color-text-disabled) !important;
+  cursor: not-allowed !important;
+  opacity: 0.5;
+}
+
+/* Divider */
+.ant-dropdown-menu-item-divider {
+  margin: 4px 0 !important;
+  background-color: var(--color-border-base) !important;
+}
+
+/* ========================================
+   Sidebar Navigation Improvements
+   ======================================== */
+
+/* Enhanced sidebar menu styling with purple accents */
+.ant-menu-inline,
+.ant-menu-vertical {
+  background: transparent !important;
+  border-right: none !important;
+}
+
+/* Menu item base styling */
+.ant-menu-item,
+.ant-menu-submenu-title {
+  height: 40px !important;
+  line-height: 40px !important;
+  margin: 4px 8px !important;
+  padding: 0 12px !important;
+  border-radius: 6px !important;
+  transition: all 0.12s cubic-bezier(0.645, 0.045, 0.355, 1) !important;
+  color: var(--color-text-secondary) !important;
+}
+
+/* Menu item icons */
+.ant-menu-item .ant-menu-item-icon,
+.ant-menu-submenu-title .ant-menu-item-icon,
+.ant-menu-item .anticon,
+.ant-menu-submenu-title .anticon {
+  color: var(--color-text-tertiary) !important;
+  transition: color 0.12s ease !important;
+  font-size: 18px !important;
+}
+
+/* Hover state - enhanced with purple hint */
+.ant-menu-item:hover:not(.ant-menu-item-selected),
+.ant-menu-submenu-title:hover:not(.ant-menu-submenu-selected) {
+  background: color-mix(
+    in srgb,
+    var(--color-sidebar) 8%,
+    transparent
+  ) !important;
+  color: var(--color-text-base) !important;
+}
+
+.ant-menu-item:hover .ant-menu-item-icon,
+.ant-menu-submenu-title:hover .ant-menu-item-icon,
+.ant-menu-item:hover .anticon,
+.ant-menu-submenu-title:hover .anticon {
+  color: var(--color-sidebar-hover) !important;
+}
+
+/* Active (clicked) state */
+.ant-menu-item:active,
+.ant-menu-submenu-title:active {
+  background: color-mix(
+    in srgb,
+    var(--color-sidebar) 12%,
+    transparent
+  ) !important;
+}
+
+/* Selected state - strong purple accent */
+.ant-menu-item-selected,
+.ant-menu-submenu-selected > .ant-menu-submenu-title {
+  background: color-mix(
+    in srgb,
+    var(--color-sidebar) 18%,
+    transparent
+  ) !important;
+  color: var(--color-sidebar-hover) !important;
+  font-weight: 500 !important;
+  box-shadow: inset 3px 0 0 var(--color-sidebar) !important;
+}
+
+.ant-menu-item-selected .ant-menu-item-icon,
+.ant-menu-submenu-selected > .ant-menu-submenu-title .ant-menu-item-icon,
+.ant-menu-item-selected .anticon,
+.ant-menu-submenu-selected > .ant-menu-submenu-title .anticon {
+  color: var(--color-sidebar-hover) !important;
+}
+
+/* Submenu styling */
+.ant-menu-submenu {
+  margin: 4px 0 !important;
+}
+
+.ant-menu-submenu > .ant-menu {
+  background: transparent !important;
+}
+
+/* Submenu arrow */
+.ant-menu-submenu-arrow {
+  color: var(--color-text-tertiary) !important;
+  transition:
+    color 0.12s ease,
+    transform 0.12s ease !important;
+}
+
+.ant-menu-submenu:hover > .ant-menu-submenu-title .ant-menu-submenu-arrow,
+.ant-menu-submenu-selected > .ant-menu-submenu-title .ant-menu-submenu-arrow {
+  color: var(--color-sidebar-hover) !important;
+}
+
+/* Nested menu items */
+.ant-menu-sub .ant-menu-item {
+  height: 36px !important;
+  line-height: 36px !important;
+  margin: 2px 8px 2px 16px !important;
+  padding-left: 24px !important;
+}
+
+/* Divider in menu */
+.ant-menu-item-divider {
+  margin: 8px 12px !important;
+  background-color: var(--color-border-secondary) !important;
+}
+
+/* Disabled menu items */
+.ant-menu-item-disabled,
+.ant-menu-submenu-disabled {
+  color: var(--color-text-disabled) !important;
+  opacity: 0.5;
+  cursor: not-allowed !important;
+}
+
+.ant-menu-item-disabled .ant-menu-item-icon,
+.ant-menu-submenu-disabled .ant-menu-item-icon {
+  color: var(--color-text-disabled) !important;
+}
+
+/* Open submenu state */
+.ant-menu-submenu-open > .ant-menu-submenu-title {
+  background: color-mix(
+    in srgb,
+    var(--color-sidebar) 8%,
+    transparent
+  ) !important;
+  color: var(--color-text-base) !important;
+}
+
+/* ========================================
+   Tag Styling
+   ======================================== */
+
+/* Base tag */
+.ant-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+  padding: 2px 8px !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+}
+
+/* ── Default (no color) ── */
+.ant-tag-default,
+.ant-tag:not([class*="ant-tag-"]) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+[data-theme="light"] .ant-tag-default,
+[data-theme="light"] .ant-tag:not([class*="ant-tag-"]) {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+/* ── Blue ── */
+.ant-tag-blue {
+  background: rgba(22, 119, 255, 0.15) !important;
+  border-color: rgba(64, 150, 255, 0.45) !important;
+  color: #69b1ff !important;
+}
+[data-theme="light"] .ant-tag-blue {
+  background: rgba(22, 119, 255, 0.08) !important;
+  border-color: rgba(22, 119, 255, 0.3) !important;
+  color: #1677ff !important;
+}
+
+/* ── Green ── */
+.ant-tag-green,
+.ant-tag-success {
+  background: rgba(82, 196, 26, 0.15) !important;
+  border-color: rgba(115, 209, 61, 0.45) !important;
+  color: #95de64 !important;
+}
+[data-theme="light"] .ant-tag-green,
+[data-theme="light"] .ant-tag-success {
+  background: rgba(82, 196, 26, 0.08) !important;
+  border-color: rgba(82, 196, 26, 0.3) !important;
+  color: #389e0d !important;
+}
+
+/* ── Red / Error ── */
+.ant-tag-red,
+.ant-tag-error {
+  background: rgba(255, 77, 79, 0.15) !important;
+  border-color: rgba(255, 120, 117, 0.45) !important;
+  color: #ff9c9e !important;
+}
+[data-theme="light"] .ant-tag-red,
+[data-theme="light"] .ant-tag-error {
+  background: rgba(255, 77, 79, 0.08) !important;
+  border-color: rgba(255, 77, 79, 0.3) !important;
+  color: #cf1322 !important;
+}
+
+/* ── Orange ── */
+.ant-tag-orange {
+  background: rgba(250, 140, 22, 0.15) !important;
+  border-color: rgba(255, 169, 64, 0.45) !important;
+  color: #ffa940 !important;
+}
+[data-theme="light"] .ant-tag-orange {
+  background: rgba(250, 140, 22, 0.08) !important;
+  border-color: rgba(250, 140, 22, 0.3) !important;
+  color: #d46b08 !important;
+}
+
+/* ── Gold / Warning ── */
+.ant-tag-gold,
+.ant-tag-warning {
+  background: rgba(250, 173, 20, 0.15) !important;
+  border-color: rgba(255, 197, 61, 0.45) !important;
+  color: #ffc53d !important;
+}
+[data-theme="light"] .ant-tag-gold,
+[data-theme="light"] .ant-tag-warning {
+  background: rgba(250, 173, 20, 0.08) !important;
+  border-color: rgba(250, 173, 20, 0.3) !important;
+  color: #d48806 !important;
+}
+
+/* ── Cyan ── */
+.ant-tag-cyan {
+  background: rgba(19, 194, 194, 0.15) !important;
+  border-color: rgba(92, 219, 211, 0.45) !important;
+  color: #5cdbd3 !important;
+}
+[data-theme="light"] .ant-tag-cyan {
+  background: rgba(19, 194, 194, 0.08) !important;
+  border-color: rgba(19, 194, 194, 0.3) !important;
+  color: #08979c !important;
+}
+
+/* ── Purple ── */
+.ant-tag-purple {
+  background: rgba(114, 46, 209, 0.15) !important;
+  border-color: rgba(179, 127, 235, 0.45) !important;
+  color: #b37feb !important;
+}
+[data-theme="light"] .ant-tag-purple {
+  background: rgba(114, 46, 209, 0.08) !important;
+  border-color: rgba(114, 46, 209, 0.3) !important;
+  color: #531dab !important;
+}
+
+/* ── Geekblue ── */
+.ant-tag-geekblue {
+  background: rgba(47, 84, 235, 0.15) !important;
+  border-color: rgba(133, 165, 255, 0.45) !important;
+  color: #85a5ff !important;
+}
+[data-theme="light"] .ant-tag-geekblue {
+  background: rgba(47, 84, 235, 0.08) !important;
+  border-color: rgba(47, 84, 235, 0.3) !important;
+  color: #1d39c4 !important;
+}
+
+/* ── Magenta / Pink ── */
+.ant-tag-magenta,
+.ant-tag-pink {
+  background: rgba(235, 47, 150, 0.15) !important;
+  border-color: rgba(255, 133, 192, 0.45) !important;
+  color: #ff85c2 !important;
+}
+[data-theme="light"] .ant-tag-magenta,
+[data-theme="light"] .ant-tag-pink {
+  background: rgba(235, 47, 150, 0.08) !important;
+  border-color: rgba(235, 47, 150, 0.3) !important;
+  color: #c41d7f !important;
+}
+
+/* ── Volcano ── */
+.ant-tag-volcano {
+  background: rgba(250, 84, 28, 0.15) !important;
+  border-color: rgba(255, 122, 69, 0.45) !important;
+  color: #ff7a45 !important;
+}
+[data-theme="light"] .ant-tag-volcano {
+  background: rgba(250, 84, 28, 0.08) !important;
+  border-color: rgba(250, 84, 28, 0.3) !important;
+  color: #d4380d !important;
+}
+
+/* ── Lime ── */
+.ant-tag-lime {
+  background: rgba(160, 217, 17, 0.15) !important;
+  border-color: rgba(209, 247, 79, 0.45) !important;
+  color: #d3f261 !important;
+}
+[data-theme="light"] .ant-tag-lime {
+  background: rgba(160, 217, 17, 0.08) !important;
+  border-color: rgba(160, 217, 17, 0.3) !important;
+  color: #7cb305 !important;
+}
+
+/* ── Yellow ── */
+.ant-tag-yellow {
+  background: rgba(250, 219, 20, 0.15) !important;
+  border-color: rgba(255, 236, 61, 0.45) !important;
+  color: #fffb00 !important;
+}
+[data-theme="light"] .ant-tag-yellow {
+  background: rgba(250, 219, 20, 0.08) !important;
+  border-color: rgba(250, 219, 20, 0.3) !important;
+  color: #d4b106 !important;
+}
+
+/* ── Processing ── */
+.ant-tag-processing {
+  background: rgba(22, 119, 255, 0.15) !important;
+  border-color: rgba(64, 150, 255, 0.45) !important;
+  color: #69b1ff !important;
+}
+[data-theme="light"] .ant-tag-processing {
+  background: rgba(22, 119, 255, 0.08) !important;
+  border-color: rgba(22, 119, 255, 0.3) !important;
+  color: #1677ff !important;
+}

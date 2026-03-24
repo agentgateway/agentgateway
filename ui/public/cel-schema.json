@@ -1,0 +1,620 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExecutorSerde",
+  "description": "Owned version of Executor for JSON serialization/deserialization.\n\n`ExecutorSerde` is a fully-owned representation that can be deserialized from JSON,\nstored, and later converted to an `Executor<'_>` for use with CEL expressions.\n\nJSON -> ExecutorSerde -> Executor<'_> -> CEL -> JSON should be consistent.",
+  "type": "object",
+  "properties": {
+    "request": {
+      "description": "`request` contains attributes about the incoming HTTP request",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "method": {
+          "description": "The HTTP method of the request. For example, `GET`",
+          "type": "string",
+          "default": "GET"
+        },
+        "uri": {
+          "description": "The complete URI of the request. For example, `http://example.com/path`.",
+          "type": "string",
+          "default": "/"
+        },
+        "host": {
+          "description": "The hostname of the request. For example, `example.com`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "scheme": {
+          "description": "The scheme of the request. For example, `https`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "path": {
+          "description": "The path of the request URI. For example, `/path`.",
+          "type": "string",
+          "default": ""
+        },
+        "pathAndQuery": {
+          "description": "The path and query of the request URI. For example, `/path?foo=bar`.",
+          "type": "string",
+          "default": "/"
+        },
+        "version": {
+          "description": "The version of the request. For example, `HTTP/1.1`.",
+          "type": "string",
+          "default": "HTTP/1.1"
+        },
+        "headers": {
+          "description": "The headers of the request.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "body": {
+          "description": "The body of the request. Warning: accessing the body will cause the body to be buffered.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "startTime": {
+          "description": "The time the request started",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "endTime": {
+          "description": "The time the request completed",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "response": {
+      "description": "`response` contains attributes about the HTTP response",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "code": {
+          "description": "The HTTP status code of the response.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 0
+        },
+        "headers": {
+          "description": "The headers of the response.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "body": {
+          "description": "The body of the response. Warning: accessing the body will cause the body to be buffered.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "env": {
+      "description": "`env` contains selected process environment attributes exposed to CEL.\nThis does NOT expose raw environment variables, but rather a subset of well-known variables.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "podName": {
+          "description": "The name of the pod (when running on Kubernetes)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "namespace": {
+          "description": "The namespace of the pod (when running on Kubernetes)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gateway": {
+          "description": "The Gateway we are running as (when running on Kubernetes)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "jwt": {
+      "description": "`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "apiKey": {
+      "description": "`apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "additionalProperties": true
+    },
+    "basicAuth": {
+      "description": "`basicAuth` contains the claims from a verified basic authentication Key. This is only present if the Basic authentication policy is enabled.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "username": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "username"
+      ]
+    },
+    "llm": {
+      "description": "`llm` contains attributes about an LLM request or response. This is only present when using an `ai` backend.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "streaming": {
+          "description": "Whether the LLM response is streamed.",
+          "type": "boolean"
+        },
+        "requestModel": {
+          "description": "The model requested for the LLM request. This may differ from the actual model used.",
+          "type": "string"
+        },
+        "responseModel": {
+          "description": "The model that actually served the LLM response.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider": {
+          "description": "The provider of the LLM.",
+          "type": "string"
+        },
+        "inputTokens": {
+          "description": "The number of tokens in the input/prompt.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "cachedInputTokens": {
+          "description": "The number of tokens in the input/prompt read from cache (savings)",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "cacheCreationInputTokens": {
+          "description": "Tokens written to cache (costs)\nNot present with OpenAI",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "description": "The number of tokens in the output/completion.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "reasoningTokens": {
+          "description": "The number of reasoning tokens in the output/completion.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "totalTokens": {
+          "description": "The total number of tokens for the request.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "countTokens": {
+          "description": "The number of tokens in the request, when using the token counting endpoint\nThese are not counted as 'input tokens' since they do not consume input tokens.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "prompt": {
+          "description": "The prompt sent to the LLM. Warning: accessing this has some performance impacts for large prompts.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "description": "SimpleChatCompletionMessage is a simplified chat message",
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "role",
+              "content"
+            ]
+          }
+        },
+        "completion": {
+          "description": "The completion from the LLM. Warning: accessing this has some performance impacts for large responses.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "params": {
+          "description": "The parameters for the LLM request.",
+          "type": "object",
+          "properties": {
+            "temperature": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "top_p": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "frequency_penalty": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "presence_penalty": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "seed": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            "max_tokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0
+            },
+            "encoding_format": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "dimensions": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "streaming",
+        "requestModel",
+        "provider",
+        "params"
+      ]
+    },
+    "llmRequest": {
+      "description": "`llm_request` contains the raw LLM request before processing. This is only present *during* LLM policies;\npolicies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests."
+    },
+    "source": {
+      "description": "`source` contains attributes about the source of the request.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "address": {
+          "description": "The IP address of the downstream connection.",
+          "type": "string",
+          "format": "ip",
+          "default": "0.0.0.0"
+        },
+        "port": {
+          "description": "The port of the downstream connection.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 0
+        },
+        "identity": {
+          "description": "The (Istio SPIFFE) identity of the downstream connection, if available.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "trustDomain": {
+              "description": "The trust domain of the identity.",
+              "type": "string"
+            },
+            "namespace": {
+              "description": "The namespace of the identity.",
+              "type": "string"
+            },
+            "serviceAccount": {
+              "description": "The service account of the identity.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "trustDomain",
+            "namespace",
+            "serviceAccount"
+          ],
+          "default": null
+        },
+        "subjectAltNames": {
+          "description": "The subject alt names from the downstream certificate, if available.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "issuer": {
+          "description": "The issuer from the downstream certificate, if available.",
+          "type": "string",
+          "default": ""
+        },
+        "subject": {
+          "description": "The subject from the downstream certificate, if available.",
+          "type": "string",
+          "default": ""
+        },
+        "subjectCn": {
+          "description": "The CN of the subject from the downstream certificate, if available.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "mcp": {
+      "description": "`mcp` contains attributes about the MCP request.",
+      "anyOf": [
+        {
+          "oneOf": [
+            {
+              "description": "The tool being accessed",
+              "type": "object",
+              "properties": {
+                "tool": {
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "description": "The target of the resource",
+                      "type": "string",
+                      "default": ""
+                    },
+                    "name": {
+                      "description": "The name of the resource",
+                      "type": "string",
+                      "default": ""
+                    }
+                  }
+                }
+              },
+              "required": [
+                "tool"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "description": "The prompt being accessed",
+              "type": "object",
+              "properties": {
+                "prompt": {
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "description": "The target of the resource",
+                      "type": "string",
+                      "default": ""
+                    },
+                    "name": {
+                      "description": "The name of the resource",
+                      "type": "string",
+                      "default": ""
+                    }
+                  }
+                }
+              },
+              "required": [
+                "prompt"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "description": "The resource being accessed",
+              "type": "object",
+              "properties": {
+                "resource": {
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "description": "The target of the resource",
+                      "type": "string",
+                      "default": ""
+                    },
+                    "name": {
+                      "description": "The name of the resource",
+                      "type": "string",
+                      "default": ""
+                    }
+                  }
+                }
+              },
+              "required": [
+                "resource"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "backend": {
+      "description": "`backend` contains information about the backend being used.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "name": {
+          "description": "The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.",
+          "type": "string",
+          "default": ""
+        },
+        "type": {
+          "description": "The type of backend. For example, `ai`, `mcp`, `static`, `dynamic`, or `service`.",
+          "type": "string",
+          "enum": [
+            "ai",
+            "mcp",
+            "static",
+            "dynamic",
+            "service",
+            "unknown"
+          ],
+          "default": "unknown"
+        },
+        "protocol": {
+          "description": "The protocol of backend. For example, `http`, `tcp`, `a2a`, `mcp`, or `llm`.",
+          "type": "string",
+          "enum": [
+            "http",
+            "tcp",
+            "a2a",
+            "mcp",
+            "llm"
+          ],
+          "default": "http"
+        }
+      },
+      "additionalProperties": false
+    },
+    "extauthz": {
+      "description": "`extauthz` contains dynamic metadata from ext_authz filters",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "extproc": {
+      "description": "`extproc` contains dynamic metadata from ext_proc filters",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "metadata": {
+      "description": "`metadata` contains values set by transformation metadata expressions.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
