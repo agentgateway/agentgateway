@@ -10,15 +10,19 @@ spec:
   - backendRefs:
     - name: unknown
       port: 8080
+      weight: 2
     - name: cross-ns-no-ref-grant
       namespace: other
       port: 8080
+      weight: 4
     - name: unknown-backend
       group: agentgateway.dev
       kind: AgentgatewayBackend
+      weight: 6
     - name: unknown-kind
       group: example.com
       kind: NotBackend
+      weight: 8
 ---
 # Output
 output:
@@ -33,10 +37,13 @@ output:
           service:
             hostname: unknown.default.svc.cluster.local
             namespace: default
-        weight: 1
-      - {}
-      - weight: 1
-      - {}
+        weight: 2
+      - weight: 4
+      - backend:
+          backend: default/unknown-backend
+        weight: 6
+      - backend: {}
+        weight: 8
       key: default/missing-dest.00.http
       listenerKey: default/test-gateway.http
       name:
