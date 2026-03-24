@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "antd";
 
 interface ResponseDisplayProps {
   connectionType: "mcp" | "a2a" | null;
@@ -20,15 +20,20 @@ export function ResponseDisplay({
   }
 
   return (
-    <Card className="mt-4">
-      <CardHeader>
-        <CardTitle>Response</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-[500px]">
-          {JSON.stringify(responseData, null, 2)}
-        </pre>
-      </CardContent>
+    <Card title="Response">
+      <pre
+        style={{
+          background: "#f5f5f5",
+          padding: "1rem",
+          borderRadius: "4px",
+          overflow: "auto",
+          maxHeight: "500px",
+          fontSize: "13px",
+          fontFamily: "monospace",
+        }}
+      >
+        {JSON.stringify(responseData, null, 2)}
+      </pre>
     </Card>
   );
 }

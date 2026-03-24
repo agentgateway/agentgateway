@@ -1,0 +1,170 @@
+/* Theme CSS Variables */
+
+:root {
+  /* Colors - Light Mode */
+  --color-primary: #1677ff;
+  --color-primary-hover: #4096ff;
+  --color-primary-active: #0958d9;
+  --color-success: #52c41a;
+  --color-warning: #faad14;
+  --color-error: #ff4d4f;
+  --color-info: #1677ff;
+
+  /* Status Background Colors */
+  --color-success-bg: #f6ffed;
+  --color-error-bg: #fff2f0;
+  --color-info-bg: #e6f7ff;
+
+  /* Background Colors */
+  --color-bg-base: #ffffff;
+  --color-bg-container: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-bg-layout: #f5f5f5;
+  --color-bg-spotlight: #fafafa;
+  --color-bg-hover: #f5f5f5;
+  --color-bg-selected: #e6f7ff;
+
+  /* Text Colors */
+  --color-text-base: rgba(0, 0, 0, 0.88);
+  --color-text-secondary: rgba(0, 0, 0, 0.65);
+  --color-text-tertiary: rgba(0, 0, 0, 0.45);
+  --color-text-quaternary: rgba(0, 0, 0, 0.25);
+  --color-text-inverse: #ffffff;
+
+  /* Border Colors */
+  --color-border-base: #d9d9d9;
+  --color-border-secondary: #f0f0f0;
+  --color-border-split: rgba(5, 5, 5, 0.06);
+
+  /* Link Colors */
+  --color-link: #1677ff;
+  --color-link-hover: #4096ff;
+  --color-link-active: #0958d9;
+
+  /* Sidebar Logo Color - Purple from logo */
+  --color-sidebar: #7734be;
+  --color-sidebar-hover: #9554d8;
+  --color-sidebar-active: #5f2a9d;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-xxl: 32px;
+  --spacing-xxxl: 48px;
+
+  /* Border Radius */
+  --border-radius-sm: 2px;
+  --border-radius-md: 6px;
+  --border-radius-lg: 8px;
+  --border-radius-xl: 16px;
+
+  /* Shadows */
+  --shadow-sm:
+    0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02),
+    0 2px 4px 0 rgba(0, 0, 0, 0.02);
+  --shadow-md:
+    0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12),
+    0 9px 28px 8px rgba(0, 0, 0, 0.05);
+  --shadow-lg:
+    0 9px 28px 8px rgba(0, 0, 0, 0.05), 0 6px 16px 0 rgba(0, 0, 0, 0.08),
+    0 3px 6px -4px rgba(0, 0, 0, 0.12);
+
+  /* Layout */
+  --sidebar-width: 240px;
+  --header-height: 64px;
+  --footer-height: 48px;
+
+  /* Typography */
+  --font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-size-sm: 12px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-xxl: 24px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Line Height */
+  --line-height-base: 1.5715;
+  --line-height-heading: 1.35;
+
+  /* Z-Index */
+  --z-index-base: 0;
+  --z-index-dropdown: 1000;
+  --z-index-modal: 1050;
+  --z-index-popover: 1060;
+  --z-index-tooltip: 1070;
+
+  /* Transitions */
+  --transition-fast: 0.1s;
+  --transition-base: 0.2s;
+  --transition-slow: 0.3s;
+  --transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dark Mode */
+[data-theme="dark"] {
+  /* Colors - Dark Mode */
+  --color-primary: #1677ff;
+  --color-primary-hover: #4096ff;
+  --color-primary-active: #0958d9;
+
+  /* Sidebar Logo Color - Lighter purple for dark mode */
+  --color-sidebar: #9554d8;
+  --color-sidebar-hover: #b37feb;
+  --color-sidebar-active: #7734be;
+
+  /* Status Background Colors */
+  --color-success-bg: #162312;
+  --color-error-bg: #2a1215;
+  --color-info-bg: #111a2c;
+
+  /* Background Colors */
+  --color-bg-base: #0a0a0a;
+  --color-bg-container: #181818;
+  --color-bg-elevated: #242424;
+  --color-bg-layout: #0f0f0f;
+  --color-bg-spotlight: #242424;
+  --color-bg-hover: #242424;
+  --color-bg-selected: #1f2937;
+
+  /* Text Colors */
+  --color-text-base: rgba(255, 255, 255, 0.85);
+  --color-text-secondary: rgba(255, 255, 255, 0.65);
+  --color-text-tertiary: rgba(255, 255, 255, 0.45);
+  --color-text-quaternary: rgba(255, 255, 255, 0.25);
+  --color-text-inverse: #000000;
+
+  /* Border Colors */
+  --color-border-base: #424242;
+  --color-border-secondary: #303030;
+  --color-border-split: rgba(253, 253, 253, 0.12);
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 576px) {
+  :root {
+    --sidebar-width: 0px;
+    --spacing-lg: 12px;
+    --spacing-xl: 16px;
+  }
+}
+
+@media (min-width: 577px) and (max-width: 768px) {
+  :root {
+    --sidebar-width: 80px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 992px) {
+  :root {
+    --sidebar-width: 200px;
+  }
+}
