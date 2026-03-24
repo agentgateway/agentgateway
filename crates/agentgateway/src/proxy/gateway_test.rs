@@ -1464,3 +1464,122 @@ fn accept_error_classification() {
 		"again"
 	)));
 }
+
+/// BindProtocol::auto should detect plaintext HTTP and proxy it successfully.
+#[tokio::test]
+async fn auto_protocol_plaintext_http() {
+	let mock = simple_mock().await;
+	let route = basic_route(*mock.address());
+	let bind = Bind {
+		key: BIND_KEY,
+		address: "127.0.0.1:0".parse().unwrap(),
+		listeners: ListenerSet::from_list([Listener {
+			key: LISTENER_KEY,
+			name: Default::default(),
+			hostname: Default::default(),
+			protocol: ListenerProtocol::HTTP,
+			tcp_routes: Default::default(),
+			routes: RouteSet::from_list(vec![route]),
+		}]),
+		protocol: BindProtocol::auto,
+		tunnel_protocol: Default::default(),
+	};
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(bind);
+	let io = t.serve_http(strng::new("bind"));
+	let res = RequestBuilder::new(Method::GET, "http://lo")
+		.send(io)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), 200);
+	let body = read_body(res.into_body()).await;
+	assert_eq!(body.method, Method::GET);
+}
+
+/// BindProtocol::auto should detect a TLS ClientHello (first byte 0x16) and
+/// dispatch through TLS termination, just like BindProtocol::tls.
+#[tokio::test]
+async fn auto_protocol_tls_detection() {
+	let mock = simple_mock().await;
+	let route = basic_route(*mock.address());
+	let bind = Bind {
+		key: BIND_KEY,
+		address: "127.0.0.1:0".parse().unwrap(),
+		listeners: ListenerSet::from_list([Listener {
+			key: LISTENER_KEY,
+			name: Default::default(),
+			hostname: strng::new("*.example.com"),
+			protocol: ListenerProtocol::HTTPS(
+				types::local::LocalTLSServerConfig {
+					cert: "../../examples/tls/certs/cert.pem".into(),
+					key: "../../examples/tls/certs/key.pem".into(),
+					root: None,
+					cipher_suites: None,
+					min_tls_version: None,
+					max_tls_version: None,
+				}
+				.try_into()
+				.unwrap(),
+			),
+			tcp_routes: Default::default(),
+			routes: RouteSet::from_list(vec![route]),
+		}]),
+		protocol: BindProtocol::auto,
+		tunnel_protocol: Default::default(),
+	};
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(bind);
+	let io = t.serve_https(strng::new("bind"), Some("a.example.com"));
+	let res = RequestBuilder::new(Method::GET, "http://a.example.com")
+		.send(io)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), 200);
+}
+
+/// BindProtocol::auto with TLS should reject connections that don't match the SNI,
+/// just like BindProtocol::tls does.
+#[tokio::test]
+async fn auto_protocol_tls_wrong_sni() {
+	let mock = simple_mock().await;
+	let route = basic_route(*mock.address());
+	let bind = Bind {
+		key: BIND_KEY,
+		address: "127.0.0.1:0".parse().unwrap(),
+		listeners: ListenerSet::from_list([Listener {
+			key: LISTENER_KEY,
+			name: Default::default(),
+			hostname: strng::new("*.example.com"),
+			protocol: ListenerProtocol::HTTPS(
+				types::local::LocalTLSServerConfig {
+					cert: "../../examples/tls/certs/cert.pem".into(),
+					key: "../../examples/tls/certs/key.pem".into(),
+					root: None,
+					cipher_suites: None,
+					min_tls_version: None,
+					max_tls_version: None,
+				}
+				.try_into()
+				.unwrap(),
+			),
+			tcp_routes: Default::default(),
+			routes: RouteSet::from_list(vec![route]),
+		}]),
+		protocol: BindProtocol::auto,
+		tunnel_protocol: Default::default(),
+	};
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(bind);
+	let io = t.serve_https(strng::new("bind"), Some("not-the-domain"));
+	let res = RequestBuilder::new(Method::GET, "http://lo").send(io).await;
+	assert_matches!(res, Err(_));
+}

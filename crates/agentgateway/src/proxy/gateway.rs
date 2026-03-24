@@ -489,6 +489,81 @@ impl Gateway {
 					},
 				}
 			},
+			BindProtocol::auto => {
+				// Auto-detect: peek at first byte to distinguish TLS from plaintext HTTP.
+				let (ext, metrics, inner) = raw_stream.into_parts();
+				let mut rewind = Socket::new_rewind(inner);
+				let mut buf = [0u8; 1];
+				match tokio::io::AsyncReadExt::read_exact(&mut rewind, &mut buf).await {
+					Ok(_) => {
+						rewind.rewind();
+						let stream = Socket::from_rewind(ext, metrics, rewind);
+						if buf[0] == 0x16 {
+							// TLS ClientHello — dispatch as TLS
+							match Self::maybe_terminate_tls(
+								inputs.clone(),
+								stream,
+								&policies,
+								bind_name.clone(),
+								false,
+							)
+							.await
+							{
+								Ok((selected_listener, tls_stream)) => match selected_listener.protocol {
+									ListenerProtocol::HTTPS(_) => {
+										let _ = Self::proxy(
+											bind_name,
+											inputs,
+											Some(selected_listener),
+											tls_stream,
+											Arc::new(policies),
+											drain,
+										)
+										.await;
+									},
+									ListenerProtocol::TLS(_) => {
+										Self::proxy_tcp(
+											bind_name,
+											inputs,
+											Some(selected_listener),
+											tls_stream,
+											drain,
+										)
+										.await
+									},
+									_ => {
+										error!(
+											"invalid: TLS listener protocol is neither HTTPS nor TLS: {:?}",
+											selected_listener.protocol
+										)
+									},
+								},
+								Err(e) => {
+									event!(
+										target: "downstream connection",
+										parent: None,
+										tracing::Level::WARN,
+										src.addr = %peer_addr,
+										protocol = ?bind_protocol,
+										error = ?e.to_string(),
+										"failed to terminate TLS (auto-detected)",
+									);
+								},
+							}
+						} else {
+							// Plaintext HTTP
+							let err =
+								Self::proxy(bind_name, inputs, None, stream, Arc::new(policies), drain).await;
+							if let Err(e) = err {
+								warn!(src.addr = %peer_addr, "proxy error: {e}");
+							}
+						}
+					},
+					Err(e) => {
+						warn!(src.addr = %peer_addr, "auto-detect read failed: {e}");
+					},
+				}
+			},
 		}
 	}
 

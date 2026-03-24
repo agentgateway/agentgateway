@@ -37,7 +37,7 @@ pub mod proxy;
 pub mod serdes;
 pub mod state_manager;
 pub mod store;
-mod telemetry;
+pub mod telemetry;
 #[cfg(any(test, feature = "internal_benches"))]
 pub mod test_helpers;
 pub mod transport;
@@ -480,15 +480,40 @@ impl ConfigSource {
 
 #[derive(Debug, Clone)]
 pub struct ProxyInputs {
-	cfg: Arc<Config>,
-	stores: Stores,
+	pub cfg: Arc<Config>,
+	pub stores: Stores,
 
-	upstream: client::Client,
+	pub upstream: client::Client,
 
-	metrics: Arc<metrics::Metrics>,
+	pub metrics: Arc<metrics::Metrics>,
 
-	mcp_state: mcp::App,
-	ca: Option<Arc<CaClient>>,
+	pub mcp_state: mcp::App,
+	pub ca: Option<Arc<CaClient>>,
+}
+
+impl ProxyInputs {
+	/// Create a new `ProxyInputs` for embedding agentgateway as a library.
+	///
+	/// This constructor is intended for use cases where the gateway is embedded
+	/// directly into another application, bypassing [`app::run`] which creates
+	/// its own admin servers, signal handlers, and XDS state management.
+	pub fn new(
+		cfg: Arc<Config>,
+		stores: Stores,
+		upstream: client::Client,
+		metrics: Arc<metrics::Metrics>,
+		mcp_state: mcp::App,
+		ca: Option<Arc<CaClient>>,
+	) -> Self {
+		Self {
+			cfg,
+			stores,
+			upstream,
+			metrics,
+			mcp_state,
+			ca,
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy, serde::Serialize)]

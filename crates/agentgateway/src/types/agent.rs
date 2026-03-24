@@ -478,6 +478,9 @@ pub enum BindProtocol {
 	// Note: TLS can be TLS (passthrough or termination) or HTTPS
 	tls,
 	tcp,
+	/// Auto-detect protocol by peeking at the first byte of each connection.
+	/// If the byte is 0x16 (TLS ClientHello), dispatch as `tls`; otherwise as `http`.
+	auto,
 }
 
 #[apply(schema!)]
