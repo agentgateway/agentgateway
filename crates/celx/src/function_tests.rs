@@ -132,6 +132,22 @@ fn base64() {
 }
 
 #[test]
+fn hashes() {
+	assert(
+		json!("aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d"),
+		r#"sha1.encode("hello")"#,
+	);
+	assert(
+		json!("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"),
+		r#"sha256.encode("hello")"#,
+	);
+	assert(
+		json!("5d41402abc4b2a76b9719d911017c592"),
+		r#"md5.encode("hello")"#,
+	);
+}
+
+#[test]
 fn map_values() {
 	let expr = r#"{"a": 1, "b": 2}.mapValues(v, v * 2)"#;
 	assert(json!({"a": 2, "b": 4}), expr);

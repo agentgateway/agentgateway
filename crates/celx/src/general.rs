@@ -6,8 +6,12 @@ use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
 use cel::ExecutionError;
 use cel::context::{SingleVarResolver, VariableResolver};
 use cel::objects::KeyRef;
+use md5::Md5;
 use rand::random_range;
 use serde::Deserializer;
+use sha1::Sha1;
+use sha2::Sha256;
+use sha2::digest::Digest;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -36,6 +40,9 @@ pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("base64Decode", base64_decode);
 	ctx.add_qualified_function("base64", "encode", base64_encode);
 	ctx.add_qualified_function("base64", "decode", base64_decode);
+	ctx.add_qualified_function("sha1", "encode", sha1_encode);
+	ctx.add_qualified_function("sha256", "encode", sha256_encode);
+	ctx.add_qualified_function("md5", "encode", md5_encode);
 }
 
 pub fn base64_encode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
@@ -70,6 +77,26 @@ pub fn base64_decode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> Reso
 		.decode(v.as_bytes_pre_materialized()?)
 		.map(|v| v.into())
 		.map_err(|e| ftx.error(e))
+}
+
+fn hash_encode<'a, D>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a>
+where
+	D: Digest,
+{
+	let v = v.load(ftx)?.always_materialize_owned();
+	Ok(hex::encode(D::digest(v.as_bytes_pre_materialized()?)).into())
+}
+
+pub fn sha256_encode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
+	hash_encode::<Sha256>(ftx, v)
+}
+
+pub fn sha1_encode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
+	hash_encode::<Sha1>(ftx, v)
+}
+
+pub fn md5_encode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
+	hash_encode::<Md5>(ftx, v)
 }
 
 fn with<'a, 'rf, 'b>(
