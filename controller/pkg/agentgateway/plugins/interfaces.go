@@ -1,7 +1,6 @@
 package plugins
 
 import (
-	"context"
 	"sort"
 
 	"istio.io/istio/pilot/pkg/util/protoconv"
@@ -13,11 +12,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
-	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 )
-
-// AgwResourceStatusSyncHandler defines a function that handles status syncing for a specific resource type in AgentGateway
-type AgwResourceStatusSyncHandler func(ctx context.Context, client apiclient.Client, namespacedName types.NamespacedName, status any) error
 
 type PolicyPluginInput struct {
 	References ReferenceIndex

@@ -64,7 +64,7 @@ type Options struct {
 	KrtDebugger                    *krt.DebugHandler
 	GlobalSettings                 *apisettings.Settings
 	LeaderElectionID               string
-	ExtraAgwResourceStatusHandlers map[schema.GroupVersionKind]agwplugins.AgwResourceStatusSyncHandler
+	ExtraAgwResourceStatusHandlers map[schema.GroupVersionKind]agentgatewaysyncer.ResourceStatusSyncer
 
 	AgentGatewaySyncerOptions []agentgatewaysyncer.AgentgatewaySyncerOption
 }

@@ -134,17 +134,17 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 	for _, target := range policy.Spec.TargetRefs {
 		gk := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
 
-		gatewayTargets := references.LookupGatewaysForTarget(ctx, utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: string(target.Name)},
-			Kind:           gk.Kind,
-		}).UnsortedList()
-
-		policyTarget := references.PolicyTarget(policy.Namespace, target.Name, gk, target.SectionName)
+		policyTarget, targetExists := references.PolicyTarget(ctx, policy.Namespace, target.Name, gk, target.SectionName)
 		if policyTarget == nil {
 			// This should be impossible, verified by CEL validation
 			logger.Warn("unsupported target kind", "kind", target.Kind, "policy", policy.Name)
 			continue
 		}
+
+		gatewayTargets := references.LookupGatewaysForTarget(ctx, utils.TypedNamespacedName{
+			NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: string(target.Name)},
+			Kind:           gk.Kind,
+		}).UnsortedList()
 
 		translatedPolicies := clonePoliciesForTarget(baseTranslatedPolicies, policyTarget)
 		for _, translatedPolicy := range translatedPolicies {
@@ -156,7 +156,7 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 			}
 		}
 
-		ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(ctx, policy.Namespace, gk, target.Name, agw, references)
+		ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(ctx, policy.Namespace, gk, target.Name, targetExists, references)
 		if attachmentErr != "" {
 			attachmentErrors = append(attachmentErrors, attachmentErr)
 		}
@@ -290,17 +290,17 @@ func resolvePolicyAncestorRefs(
 	policyNamespace string,
 	targetGK schema.GroupKind,
 	targetName gwv1.ObjectName,
-	agw *AgwCollections,
+	targetExists bool,
 	references ReferenceIndex,
 ) ([]gwv1.ParentReference, string) {
+	if !targetExists {
+		return nil, fmt.Sprintf("Policy is not attached: %s %s/%s not found", targetGK.Kind, policyNamespace, targetName)
+	}
+
 	object := utils.TypedNamespacedName{
 		NamespacedName: types.NamespacedName{Namespace: policyNamespace, Name: string(targetName)},
 		Kind:           targetGK.Kind,
 	}
-	if !policyTargetExists(ctx, agw, object) {
-		return nil, fmt.Sprintf("Policy is not attached: %s %s/%s not found", targetGK.Kind, policyNamespace, targetName)
-	}
-
 	gatewayTargets := references.LookupGatewaysForTarget(ctx, object).UnsortedList()
 	if len(gatewayTargets) == 0 {
 		return nil, fmt.Sprintf("Policy is not attached: %s %s/%s is not attached to any Gateway", targetGK.Kind, policyNamespace, targetName)
@@ -319,24 +319,6 @@ func resolvePolicyAncestorRefs(
 		return strings.Compare(reports.ParentString(a), reports.ParentString(b))
 	})
 	return refs, ""
-}
-
-func policyTargetExists(ctx krt.HandlerContext, agw *AgwCollections, target utils.TypedNamespacedName) bool {
-	key := target.Namespace + "/" + target.Name
-	switch target.Kind {
-	case wellknown.GatewayGVK.Kind:
-		return ptr.Flatten(krt.FetchOne(ctx, agw.Gateways, krt.FilterKey(key))) != nil
-	case wellknown.HTTPRouteGVK.Kind:
-		return ptr.Flatten(krt.FetchOne(ctx, agw.HTTPRoutes, krt.FilterKey(key))) != nil
-	case wellknown.GRPCRouteGVK.Kind:
-		return ptr.Flatten(krt.FetchOne(ctx, agw.GRPCRoutes, krt.FilterKey(key))) != nil
-	case wellknown.AgentgatewayBackendGVK.Kind:
-		return ptr.Flatten(krt.FetchOne(ctx, agw.Backends, krt.FilterKey(key))) != nil
-	case wellknown.ServiceGVK.Kind:
-		return ptr.Flatten(krt.FetchOne(ctx, agw.Services, krt.FilterKey(key))) != nil
-	default:
-		return false
-	}
 }
 
 // translateTrafficPolicyToAgw converts a TrafficPolicy to agentgateway Policy resources

@@ -77,7 +77,7 @@ type StartConfig struct {
 	CommonCollections *collections.CommonCollections
 
 	KrtOptions                     krtutil.KrtOptions
-	ExtraAgwResourceStatusHandlers map[schema.GroupVersionKind]agwplugins.AgwResourceStatusSyncHandler
+	ExtraAgwResourceStatusHandlers map[schema.GroupVersionKind]agentgatewaysyncer.ResourceStatusSyncer
 
 	// GatewayControllerExtension is an extension that can be used to extend Gateway controller
 	GatewayControllerExtension pluginsdk.GatewayControllerExtension

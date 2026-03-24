@@ -18,7 +18,7 @@ import (
 )
 
 type ReferenceTypes struct {
-	PolicyTargets func(namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) *api.PolicyTarget
+	PolicyTargets func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) (*api.PolicyTarget, bool)
 	PolicyBackend func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error)
 	RouteBackend  func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error)
 }
@@ -44,30 +44,31 @@ func (e *BackendReferenceError) Error() string {
 func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 	return ReferenceTypes{
 		// AgentgatewayPolicy targets
-		PolicyTargets: func(namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) *api.PolicyTarget {
+		PolicyTargets: func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) (*api.PolicyTarget, bool) {
+			key := namespace + "/" + string(name)
 			switch gk {
 			case wellknown.GatewayGVK.GroupKind():
 				return &api.PolicyTarget{
 					Kind: utils.GatewayTarget(namespace, string(name), sectionName),
-				}
+				}, ptr.Flatten(krt.FetchOne(krtctx, agw.Gateways, krt.FilterKey(key))) != nil
 			case wellknown.HTTPRouteGVK.GroupKind():
 				return &api.PolicyTarget{
 					Kind: utils.RouteTarget(namespace, string(name), wellknown.HTTPRouteGVK.Kind, sectionName),
-				}
+				}, ptr.Flatten(krt.FetchOne(krtctx, agw.HTTPRoutes, krt.FilterKey(key))) != nil
 			case wellknown.GRPCRouteGVK.GroupKind():
 				return &api.PolicyTarget{
 					Kind: utils.RouteTarget(namespace, string(name), wellknown.GRPCRouteGVK.Kind, sectionName),
-				}
+				}, ptr.Flatten(krt.FetchOne(krtctx, agw.GRPCRoutes, krt.FilterKey(key))) != nil
 			case wellknown.AgentgatewayBackendGVK.GroupKind():
 				return &api.PolicyTarget{
 					Kind: utils.BackendTarget(namespace, string(name), sectionName),
-				}
+				}, ptr.Flatten(krt.FetchOne(krtctx, agw.Backends, krt.FilterKey(key))) != nil
 			case wellknown.ServiceGVK.GroupKind():
 				return &api.PolicyTarget{
 					Kind: utils.ServiceTarget(namespace, string(name), sectionName),
-				}
+				}, ptr.Flatten(krt.FetchOne(krtctx, agw.Services, krt.FilterKey(key))) != nil
 			}
-			return nil
+			return nil, false
 		},
 		// AgentgatewayPolicy targets to backends (for things like ext_authz, etc)
 		PolicyBackend: func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error) {
@@ -338,8 +339,8 @@ func (p ReferenceIndex) WithPolicyAttachments(references krt.IndexCollection[uti
 	return p
 }
 
-func (p ReferenceIndex) PolicyTarget(namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) *api.PolicyTarget {
-	return p.explicitReferences.PolicyTargets(namespace, name, gk, sectionName)
+func (p ReferenceIndex) PolicyTarget(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) (*api.PolicyTarget, bool) {
+	return p.explicitReferences.PolicyTargets(krtctx, namespace, name, gk, sectionName)
 }
 
 func (p ReferenceIndex) PolicyBackend(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error) {
