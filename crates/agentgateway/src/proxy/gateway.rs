@@ -491,11 +491,17 @@ impl Gateway {
 			},
 			BindProtocol::auto => {
 				// Auto-detect: peek at first byte to distinguish TLS from plaintext HTTP.
+				const AUTO_DETECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 				let (ext, metrics, inner) = raw_stream.into_parts();
 				let mut rewind = Socket::new_rewind(inner);
 				let mut buf = [0u8; 1];
-				match tokio::io::AsyncReadExt::read_exact(&mut rewind, &mut buf).await {
-					Ok(_) => {
+				match tokio::time::timeout(
+					AUTO_DETECT_TIMEOUT,
+					tokio::io::AsyncReadExt::read_exact(&mut rewind, &mut buf),
+				)
+				.await
+				{
+					Ok(Ok(_)) => {
 						rewind.rewind();
 						let stream = Socket::from_rewind(ext, metrics, rewind);
 						if buf[0] == 0x16 {
@@ -559,8 +565,11 @@ impl Gateway {
 							}
 						}
 					},
-					Err(e) => {
+					Ok(Err(e)) => {
 						warn!(src.addr = %peer_addr, "auto-detect read failed: {e}");
+					},
+					Err(_) => {
+						warn!(src.addr = %peer_addr, "auto-detect timed out waiting for first byte");
 					},
 				}
 			},
@@ -767,7 +776,7 @@ impl Gateway {
 			let ch = start.client_hello();
 			let sni = ch.server_name().unwrap_or_default();
 			let best = listeners
-				.best_match(sni)
+				.best_match_tls(sni)
 				.ok_or(anyhow!("no TLS listener match for {sni}"))?;
 			match best.protocol.tls(tls_pol) {
 				Some(Err(e)) => {

@@ -1302,13 +1302,35 @@ impl ListenerSet {
 	}
 
 	pub fn best_match(&self, host: &str) -> Option<Arc<Listener>> {
-		if let Some(best) = self.inner.values().find(|l| l.hostname == host) {
+		self.best_match_filtered(host, |_| true)
+	}
+
+	/// Match only listeners with HTTP protocol (no TLS).
+	pub fn best_match_http(&self, host: &str) -> Option<Arc<Listener>> {
+		self.best_match_filtered(host, |p| matches!(p, ListenerProtocol::HTTP))
+	}
+
+	/// Match only listeners with TLS-capable protocol (HTTPS or TLS).
+	pub fn best_match_tls(&self, host: &str) -> Option<Arc<Listener>> {
+		self.best_match_filtered(host, |p| {
+			matches!(p, ListenerProtocol::HTTPS(_) | ListenerProtocol::TLS(_))
+		})
+	}
+
+	fn best_match_filtered(
+		&self,
+		host: &str,
+		filter: impl Fn(&ListenerProtocol) -> bool,
+	) -> Option<Arc<Listener>> {
+		let candidates = self.inner.values().filter(|l| filter(&l.protocol));
+		// Clone into a vec so we can iterate multiple times
+		let candidates: Vec<_> = candidates.cloned().collect();
+		if let Some(best) = candidates.iter().find(|l| l.hostname == host) {
 			trace!("found best match for {host} (exact)");
 			return Some(best.clone());
 		}
-		if let Some(best) = self
-			.inner
-			.values()
+		if let Some(best) = candidates
+			.iter()
 			.sorted_by_key(|l| -(l.hostname.len() as i64))
 			.find(|l| l.hostname.starts_with("*") && host.ends_with(&l.hostname.as_str()[1..]))
 		{
@@ -1316,7 +1338,7 @@ impl ListenerSet {
 			return Some(best.clone());
 		}
 		trace!("trying to find best match for {host} (empty hostname)");
-		self.inner.values().find(|l| l.hostname.is_empty()).cloned()
+		candidates.iter().find(|l| l.hostname.is_empty()).cloned()
 	}
 
 	pub fn insert(&mut self, v: Listener) {
