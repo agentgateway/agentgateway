@@ -10,6 +10,15 @@ spec:
   - backendRefs:
     - name: unknown
       port: 8080
+    - name: cross-ns-no-ref-grant
+      namespace: other
+      port: 8080
+    - name: unknown-backend
+      group: agentgateway.dev
+      kind: AgentgatewayBackend
+    - name: unknown-kind
+      group: example.com
+      kind: NotBackend
 ---
 # Output
 output:
@@ -25,6 +34,9 @@ output:
             hostname: unknown.default.svc.cluster.local
             namespace: default
         weight: 1
+      - {}
+      - weight: 1
+      - {}
       key: default/missing-dest.00.http
       listenerKey: default/test-gateway.http
       name:
@@ -47,8 +59,8 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: backend(unknown.default.svc.cluster.local) not found
-        reason: BackendNotFound
+        message: 'referencing unsupported backendRef: group "example.com" kind "NotBackend"'
+        reason: InvalidKind
         status: "False"
         type: ResolvedRefs
       controllerName: agentgateway.dev/agentgateway
