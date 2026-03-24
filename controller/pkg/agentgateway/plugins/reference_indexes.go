@@ -139,7 +139,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 				if svc == nil {
 					return nil, &BackendReferenceError{
 						Reason:  BackendReferenceErrorReasonBackendNotFound,
-						Message: fmt.Sprintf("backendRef %s  not found", key),
+						Message: fmt.Sprintf("backendRef %s not found", key),
 					}
 				}
 				return &api.BackendReference{
@@ -211,7 +211,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 				if be == nil {
 					return nil, &BackendReferenceError{
 						Reason:  BackendReferenceErrorReasonBackendNotFound,
-						Message: fmt.Sprintf("kgateway Backend not found: %s", key),
+						Message: fmt.Sprintf("Backend not found: %s", key),
 					}
 				}
 				return &api.BackendReference{
@@ -256,10 +256,12 @@ func (r RouteAttachment) Equals(other RouteAttachment) bool {
 func BuildReferenceIndex(
 	ancestors krt.IndexCollection[utils.TypedNamespacedName, *utils.AncestorBackend],
 	attachments krt.IndexCollection[utils.TypedNamespacedName, *RouteAttachment],
+	referenceTypes ReferenceTypes,
 ) ReferenceIndex {
 	return ReferenceIndex{
-		Ancestors:   ancestors,
-		attachments: attachments,
+		Ancestors:          ancestors,
+		attachments:        attachments,
+		explicitReferences: referenceTypes,
 	}
 }
 
@@ -333,11 +335,6 @@ func (p ReferenceIndex) lookupGatewaysForBackend(ctx krt.HandlerContext, object 
 
 func (p ReferenceIndex) WithPolicyAttachments(references krt.IndexCollection[utils.TypedNamespacedName, *PolicyAttachment]) ReferenceIndex {
 	p.PolicyAttachments = references
-	return p
-}
-
-func (p ReferenceIndex) WithReferenceTypes(referenceTypes ReferenceTypes) ReferenceIndex {
-	p.explicitReferences = referenceTypes
 	return p
 }
 
