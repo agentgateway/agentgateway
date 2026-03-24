@@ -765,7 +765,7 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 							Some(proto::agent::ai_backend::provider::Provider::Vertex(vertex)) => {
 								AIProvider::Vertex(llm::vertex::Provider {
 									model: vertex.model.as_deref().map(strng::new),
-									region: Some(strng::new(&vertex.region)),
+									region: (!vertex.region.is_empty()).then(|| strng::new(&vertex.region)),
 									project_id: strng::new(&vertex.project_id),
 								})
 							},
@@ -2412,6 +2412,90 @@ mod tests {
 		let path = config.get_path();
 		assert!(path.starts_with("/runtimes/"));
 		assert!(path.contains("qualifier=v1"));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_vertex_provider_empty_region_is_none() -> Result<(), ProtoError> {
+		use proto::agent::ai_backend::Vertex;
+		use proto::agent::ai_backend::provider::Provider;
+
+		let proto_backend = proto::agent::Backend {
+			key: "test-ns/vertex-backend".to_string(),
+			name: Some(proto::agent::ResourceName {
+				name: "vertex-backend".to_string(),
+				namespace: "test-ns".to_string(),
+			}),
+			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
+				provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
+					providers: vec![proto::agent::ai_backend::Provider {
+						name: "vertex".to_string(),
+						host_override: None,
+						path_override: None,
+						provider: Some(Provider::Vertex(Vertex {
+							model: None,
+							region: "".to_string(),
+							project_id: "my-project".to_string(),
+						})),
+						inline_policies: vec![],
+					}],
+				}],
+			})),
+			inline_policies: vec![],
+		};
+
+		let bw = BackendWithPolicies::try_from(&proto_backend)?;
+		let Backend::AI(_, ai_backend) = &bw.backend else {
+			panic!("Expected Backend::AI, got {:?}", bw.backend);
+		};
+		let providers = ai_backend.providers.iter();
+		let (provider, _) = providers.iter().next().unwrap();
+		let AIProvider::Vertex(vertex) = &provider.provider else {
+			panic!("Expected AIProvider::Vertex");
+		};
+		assert!(vertex.region.is_none(), "empty region should map to None");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_vertex_provider_with_region() -> Result<(), ProtoError> {
+		use proto::agent::ai_backend::Vertex;
+		use proto::agent::ai_backend::provider::Provider;
+
+		let proto_backend = proto::agent::Backend {
+			key: "test-ns/vertex-backend".to_string(),
+			name: Some(proto::agent::ResourceName {
+				name: "vertex-backend".to_string(),
+				namespace: "test-ns".to_string(),
+			}),
+			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
+				provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
+					providers: vec![proto::agent::ai_backend::Provider {
+						name: "vertex".to_string(),
+						host_override: None,
+						path_override: None,
+						provider: Some(Provider::Vertex(Vertex {
+							model: None,
+							region: "us-central1".to_string(),
+							project_id: "my-project".to_string(),
+						})),
+						inline_policies: vec![],
+					}],
+				}],
+			})),
+			inline_policies: vec![],
+		};
+
+		let bw = BackendWithPolicies::try_from(&proto_backend)?;
+		let Backend::AI(_, ai_backend) = &bw.backend else {
+			panic!("Expected Backend::AI, got {:?}", bw.backend);
+		};
+		let providers = ai_backend.providers.iter();
+		let (provider, _) = providers.iter().next().unwrap();
+		let AIProvider::Vertex(vertex) = &provider.provider else {
+			panic!("Expected AIProvider::Vertex");
+		};
+		assert_eq!(vertex.region.as_deref(), Some("us-central1"));
 		Ok(())
 	}
 }
