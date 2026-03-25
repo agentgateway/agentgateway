@@ -5,12 +5,12 @@ import { Server, Shield } from "lucide-react";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
-import {
-  HierarchyTree,
-  NodeDetailView,
-  useTrafficHierarchy,
-} from "../../components/TrafficHierarchy";
 import type { UrlParams } from "../../components/TrafficHierarchy";
+import {
+    HierarchyTree,
+    NodeDetailView,
+    useTrafficHierarchy,
+} from "../../components/TrafficHierarchy";
 
 // ---------------------------------------------------------------------------
 // Styled components (shared layout with TrafficPage / LLMPage)
@@ -127,6 +127,14 @@ const Description = styled.p`
 // ---------------------------------------------------------------------------
 
 function parseMCPPath(pathname: string): UrlParams | null {
+  const targetMatch = pathname.match(/^\/mcp\/mcp\/target\/(\d+)/);
+  if (targetMatch) {
+    return { topLevelType: "mcp", mcpTargetIndex: parseInt(targetMatch[1], 10) };
+  }
+  const policyMatch = pathname.match(/^\/mcp\/mcp\/policy\/(.+)/);
+  if (policyMatch) {
+    return { topLevelType: "mcp", mcpPolicyType: policyMatch[1] };
+  }
   if (pathname.startsWith("/mcp/mcp")) {
     return { topLevelType: "mcp" };
   }

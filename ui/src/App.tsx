@@ -81,6 +81,7 @@ function App() {
                   <Route path="/llm" element={<LLMPage />} />
                   <Route path="/llm/llm" element={<LLMPage />} />
                   <Route path="/llm/llm/model/:modelIndex" element={<LLMPage />} />
+                  <Route path="/llm/llm/policy/:policyType" element={<LLMPage />} />
                   <Route path="/llm/raw-config" element={<TrafficRawConfigPage />} />
                   <Route path="/llm/logs" element={<LLMLogsPage />} />
                   <Route path="/llm/metrics" element={<LLMMetricsPage />} />
@@ -92,6 +93,8 @@ function App() {
                   {/* MCP Section */}
                   <Route path="/mcp" element={<MCPPage />} />
                   <Route path="/mcp/mcp" element={<MCPPage />} />
+                  <Route path="/mcp/mcp/target/:targetIndex" element={<MCPPage />} />
+                  <Route path="/mcp/mcp/policy/:policyType" element={<MCPPage />} />
                   <Route path="/mcp/raw-config" element={<TrafficRawConfigPage />} />
                   <Route path="/mcp/logs" element={<MCPLogsPage />} />
                   <Route path="/mcp/metrics" element={<MCPMetricsPage />} />
@@ -117,6 +120,10 @@ function App() {
                     element={<TrafficPage />}
                   />
                   <Route path="/traffic/mcp" element={<TrafficPage />} />
+                  <Route
+                    path="/traffic/mcp/target/:targetIndex"
+                    element={<TrafficPage />}
+                  />
                   <Route
                     path="/traffic/frontendPolicies"
                     element={<TrafficPage />}

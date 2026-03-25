@@ -15,11 +15,6 @@ export const schema: RJSFSchema = {
       title: "Port",
       description: "Port for LLM gateway (optional, defaults to main gateway)",
     },
-    policies: {
-      type: "object",
-      description: "Policies for handling incoming requests before model selection",
-      additionalProperties: true,
-    },
   },
 };
 

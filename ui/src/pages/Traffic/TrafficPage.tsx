@@ -4,12 +4,12 @@ import { Button, Spin } from "antd";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
-import {
-  HierarchyTree,
-  NodeDetailView,
-  useTrafficHierarchy,
-} from "../../components/TrafficHierarchy";
 import type { UrlParams } from "../../components/TrafficHierarchy";
+import {
+    HierarchyTree,
+    NodeDetailView,
+    useTrafficHierarchy,
+} from "../../components/TrafficHierarchy";
 
 // ---------------------------------------------------------------------------
 // Styled components
@@ -109,6 +109,15 @@ function parseTrafficPath(pathname: string): UrlParams | null {
     return {
       topLevelType: "llm",
       modelIndex: parseInt(modelMatch[1], 10),
+    };
+  }
+
+  // Check for MCP target routes (must be before general MCP route)
+  const mcpTargetMatch = pathname.match(/\/traffic\/mcp\/target\/(\d+)/);
+  if (mcpTargetMatch) {
+    return {
+      topLevelType: "mcp",
+      mcpTargetIndex: parseInt(mcpTargetMatch[1], 10),
     };
   }
 

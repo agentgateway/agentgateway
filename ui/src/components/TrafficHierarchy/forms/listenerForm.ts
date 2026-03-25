@@ -9,7 +9,7 @@ import type { LocalListener } from "../../../config";
 export const schema: RJSFSchema = {
   type: "object",
   required: [],
-  additionalProperties: false,
+  additionalProperties: true,
   properties: {
     name: {
       type: "string",

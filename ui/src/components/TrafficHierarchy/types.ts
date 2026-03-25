@@ -7,4 +7,7 @@ export interface UrlParams {
   policyType?: string;
   topLevelType?: "llm" | "mcp" | "frontendPolicies";
   modelIndex?: number;
+  llmPolicyType?: string;
+  mcpPolicyType?: string;
+  mcpTargetIndex?: number;
 }

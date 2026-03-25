@@ -131,6 +131,10 @@ function parseLLMPath(pathname: string): UrlParams | null {
   if (modelMatch) {
     return { topLevelType: "llm", modelIndex: parseInt(modelMatch[1], 10) };
   }
+  const policyMatch = pathname.match(/^\/llm\/llm\/policy\/(.+)/);
+  if (policyMatch) {
+    return { topLevelType: "llm", llmPolicyType: policyMatch[1] };
+  }
   if (pathname.startsWith("/llm/llm")) {
     return { topLevelType: "llm" };
   }

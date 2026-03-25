@@ -19,6 +19,8 @@ import * as requestHeaderModifierPolicyForm from "./requestHeaderModifierPolicyF
 import * as responseHeaderModifierPolicyForm from "./responseHeaderModifierPolicyForm";
 import * as routeForm from "./routeForm";
 import * as routePolicyForm from "./routePolicyForm";
+import * as genericPolicyForm from "./genericPolicyForm";
+import * as mcpTargetForm from "./mcpTargetForm";
 import * as topLevelBackendForm from "./topLevelBackendForm";
 
 export const forms = {
@@ -36,6 +38,9 @@ export const forms = {
   model: modelForm,
   mcp: mcpForm,
   frontendPolicies: frontendPoliciesForm,
+  llmPolicy: genericPolicyForm,
+  mcpPolicy: genericPolicyForm,
+  mcpTarget: mcpTargetForm,
 };
 
 export type ResourceType = keyof typeof forms;
@@ -79,4 +84,7 @@ export const resourceLabels: Record<
     singular: "Frontend Policies",
     plural: "Frontend Policies",
   },
+  llmPolicy: { singular: "LLM Policy", plural: "LLM Policies" },
+  mcpPolicy: { singular: "MCP Policy", plural: "MCP Policies" },
+  mcpTarget: { singular: "MCP Target", plural: "MCP Targets" },
 };

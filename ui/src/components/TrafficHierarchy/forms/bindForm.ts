@@ -8,7 +8,7 @@ import type { LocalBind } from "../../../config";
 export const schema: RJSFSchema = {
   type: "object",
   required: ["port"],
-  additionalProperties: false,
+  additionalProperties: true,
   properties: {
     port: {
       type: "integer",

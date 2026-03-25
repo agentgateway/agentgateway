@@ -85,7 +85,7 @@ function checkNodeExists(
   hierarchy: ReturnType<typeof useTrafficHierarchy>,
   urlParams: UrlParams,
 ): boolean {
-  const { port, li, ri, bi, isTcpRoute, policyType, modelIndex, topLevelType } =
+  const { port, li, ri, bi, isTcpRoute, policyType, modelIndex, mcpTargetIndex, topLevelType } =
     urlParams;
 
   // Handle model nodes
@@ -100,6 +100,21 @@ function checkNodeExists(
       return false;
     }
     console.log(`[checkNodeExists] Model found at index ${modelIndex}`);
+    return true;
+  }
+
+  // Handle MCP target nodes
+  if (mcpTargetIndex !== undefined) {
+    if (!hierarchy.mcp) {
+      console.log(`[checkNodeExists] MCP config not found`);
+      return false;
+    }
+    const targetNode = hierarchy.mcp.targets[mcpTargetIndex];
+    if (!targetNode) {
+      console.log(`[checkNodeExists] MCP target not found at index ${mcpTargetIndex}`);
+      return false;
+    }
+    console.log(`[checkNodeExists] MCP target found at index ${mcpTargetIndex}`);
     return true;
   }
 
@@ -127,7 +142,7 @@ function checkNodeExists(
   // These require a port
   if (port === undefined) {
     console.log(
-      `[checkNodeExists] No port, modelIndex, or topLevelType - cannot check node`,
+      `[checkNodeExists] No port, modelIndex, mcpTargetIndex, or topLevelType - cannot check node`,
     );
     return false;
   }

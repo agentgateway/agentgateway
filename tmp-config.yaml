@@ -1,5 +1,6 @@
 binds:
-- port: 3002
+- port: 30303
+  tunnelProtocol: direct
   listeners:
   - protocol: HTTP
     name: asdf
@@ -18,24 +19,36 @@ binds:
               cmd: npx
               args:
               - '@modelcontextprotocol/server-everything'
+          statefulMode: stateless
+        weight: 3
       policies:
-        cors:
-          allowOrigins:
-          - '*'
-          allowHeaders:
-          - mcp-protocol-version
-          - content-type
-          - cache-control
+        requestHeaderModifier: {}
+        responseHeaderModifier: {}
+        transformations: {}
 - port: 8080
   tunnelProtocol: direct
   listeners: []
-- port: 8081
+- port: 8083
   tunnelProtocol: direct
   listeners: []
 llm:
+  port: 1223
   models:
-  - name: model-1
+  - name: model-1234
     provider: openAI
+    requestHeaders:
+      remove: []
+    guardrails:
+      request: []
+      response: []
+    matches: []
 mcp:
-  targets: []
+  port: 23
+  targets:
+  - name: target-123
+    sse:
+      host: localhost
+      port: 8080
+      path: /sse
+  statefulMode: stateless
 frontendPolicies: {}

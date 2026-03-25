@@ -6,8 +6,10 @@ import type {
   LocalListenerProtocol,
   LocalLLMConfig,
   LocalLLMModels,
+  LocalMcpTarget,
   LocalRoute,
   LocalRouteBackend,
+  LocalSimpleMcpConfig,
   LocalTCPRoute,
 } from "../../../config";
 
@@ -81,11 +83,37 @@ export interface BindNode {
   validationErrors: ValidationError[];
 }
 
+export interface LLMPolicyNode {
+  policyType: string;
+  policy: unknown;
+}
+
+export interface MCPPolicyNode {
+  policyType: string;
+  policy: unknown;
+}
+
+export interface MCPTargetNode {
+  target: LocalMcpTarget;
+  targetIndex: number;
+}
+
 export interface LLMNode {
-  /** Raw LLM config (without models - they're in children) */
-  config: Omit<LocalLLMConfig, "models">;
+  /** Raw LLM config (without models and policies - they're in children) */
+  config: Omit<LocalLLMConfig, "models" | "policies">;
   /** Models defined under this LLM config */
   models: ModelNode[];
+  /** Policies defined under this LLM config */
+  policies: LLMPolicyNode[];
+}
+
+export interface MCPNode {
+  /** Raw MCP config (without targets and policies - they're in children) */
+  config: Omit<LocalSimpleMcpConfig, "targets" | "policies">;
+  /** Targets defined under this MCP config */
+  targets: MCPTargetNode[];
+  /** Policies defined under this MCP config */
+  policies: MCPPolicyNode[];
 }
 
 export interface TrafficHierarchy {
@@ -93,7 +121,7 @@ export interface TrafficHierarchy {
   policies: unknown[];
   backends: unknown[];
   llm: LLMNode | null;
-  mcp: unknown | null;
+  mcp: MCPNode | null;
   frontendPolicies: unknown | null;
   stats: {
     totalBinds: number;
@@ -359,7 +387,7 @@ export function useTrafficHierarchy(): TrafficHierarchy {
       };
     });
 
-    // Parse LLM config and models
+    // Parse LLM config, models, and policies
     let llmNode: LLMNode | null = null;
     if (config?.llm) {
       const llmConfig = config.llm as LocalLLMConfig;
@@ -371,11 +399,54 @@ export function useTrafficHierarchy(): TrafficHierarchy {
         };
       });
 
-      // Separate models from the config
-      const { models: _, ...configWithoutModels } = llmConfig;
+      const llmPolicies: LLMPolicyNode[] =
+        llmConfig.policies &&
+        typeof llmConfig.policies === "object" &&
+        !Array.isArray(llmConfig.policies)
+          ? Object.entries(llmConfig.policies)
+              .filter(([, v]) => v != null)
+              .map(([policyType, policyConfig]) => ({
+                policyType,
+                policy: policyConfig,
+              }))
+          : [];
+
+      // Separate models and policies from the config
+      const { models: _, policies: _p, ...configWithoutChildren } = llmConfig;
       llmNode = {
-        config: configWithoutModels,
+        config: configWithoutChildren,
         models,
+        policies: llmPolicies,
+      };
+    }
+
+    // Parse MCP config and policies
+    let mcpNode: MCPNode | null = null;
+    if (config?.mcp) {
+      const mcpConfig = config.mcp as LocalSimpleMcpConfig;
+
+      const mcpTargets: MCPTargetNode[] = (mcpConfig.targets ?? []).map((target, idx) => ({
+        target,
+        targetIndex: idx,
+      }));
+
+      const mcpPolicies: MCPPolicyNode[] =
+        mcpConfig.policies &&
+        typeof mcpConfig.policies === "object" &&
+        !Array.isArray(mcpConfig.policies)
+          ? Object.entries(mcpConfig.policies)
+              .filter(([, v]) => v != null)
+              .map(([policyType, policyConfig]) => ({
+                policyType,
+                policy: policyConfig,
+              }))
+          : [];
+
+      const { targets: _mt, policies: _mp, ...mcpConfigWithoutChildren } = mcpConfig;
+      mcpNode = {
+        config: mcpConfigWithoutChildren,
+        targets: mcpTargets,
+        policies: mcpPolicies,
       };
     }
 
@@ -384,7 +455,7 @@ export function useTrafficHierarchy(): TrafficHierarchy {
       policies: config?.policies ?? [],
       backends: config?.backends ?? [],
       llm: llmNode,
-      mcp: config?.mcp ?? null,
+      mcp: mcpNode,
       frontendPolicies: config?.frontendPolicies ?? null,
       stats: {
         totalBinds: binds.length,

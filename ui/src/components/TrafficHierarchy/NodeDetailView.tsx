@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useConfig } from "../../api";
 import * as api from "../../api/crud";
+import { validator } from "../../utils/validator";
 import {
   ArrayFieldTemplate,
   CollapsibleObjectFieldTemplate,
@@ -17,18 +18,21 @@ import {
 } from "../FormTemplates";
 import { ProtocolTag } from "../ProtocolTag";
 import { StyledAlert } from "../StyledAlert";
-import { validator } from "../../utils/validator";
 import { forms } from "./forms";
 import { useNodePolling } from "./hooks/useNodePolling";
 import type {
   BackendNode,
   BindNode,
+  LLMPolicyNode,
   ListenerNode,
+  MCPPolicyNode,
+  MCPTargetNode,
   ModelNode,
   PolicyNode,
   RouteNode,
   useTrafficHierarchy,
 } from "./hooks/useTrafficHierarchy";
+import { getPolicyLabel } from "./policyTypes";
 import type { UrlParams } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -225,7 +229,10 @@ function findSelectedNode(
     }
   | { type: "llm"; data: unknown }
   | { type: "model"; node: ModelNode }
+  | { type: "llmPolicy"; node: LLMPolicyNode }
   | { type: "mcp"; data: unknown }
+  | { type: "mcpTarget"; node: MCPTargetNode }
+  | { type: "mcpPolicy"; node: MCPPolicyNode }
   | { type: "frontendPolicies"; data: unknown }
   | null {
   // Handle model routes first
@@ -236,16 +243,45 @@ function findSelectedNode(
     return { type: "model", node: modelNode };
   }
 
+  // Handle MCP target routes
+  if (urlParams.mcpTargetIndex !== undefined) {
+    if (!hierarchy.mcp) return null;
+    const targetNode = hierarchy.mcp.targets[urlParams.mcpTargetIndex];
+    if (!targetNode) return null;
+    return { type: "mcpTarget", node: targetNode };
+  }
+
+  // Handle LLM policy routes
+  if (urlParams.llmPolicyType) {
+    if (!hierarchy.llm) return null;
+    const policyNode = hierarchy.llm.policies.find(
+      (p) => p.policyType === urlParams.llmPolicyType,
+    );
+    if (!policyNode) return null;
+    return { type: "llmPolicy", node: policyNode };
+  }
+
+  // Handle MCP policy routes
+  if (urlParams.mcpPolicyType) {
+    if (!hierarchy.mcp) return null;
+    const policyNode = hierarchy.mcp.policies.find(
+      (p) => p.policyType === urlParams.mcpPolicyType,
+    );
+    if (!policyNode) return null;
+    return { type: "mcpPolicy", node: policyNode };
+  }
+
   // Handle top-level types
   if (urlParams.topLevelType) {
     switch (urlParams.topLevelType) {
       case "llm":
-        // Return just the config part (without models - they're managed separately)
         return hierarchy.llm
           ? { type: "llm", data: hierarchy.llm.config }
           : null;
       case "mcp":
-        return hierarchy.mcp ? { type: "mcp", data: hierarchy.mcp } : null;
+        return hierarchy.mcp
+          ? { type: "mcp", data: hierarchy.mcp.config }
+          : null;
       case "frontendPolicies":
         return hierarchy.frontendPolicies
           ? { type: "frontendPolicies", data: hierarchy.frontendPolicies }
@@ -410,8 +446,32 @@ function generateBreadcrumbItems(
     items.push({
       title: selected.node.model.name ?? `Model ${selected.node.modelIndex}`,
     });
+  } else if (selected.type === "llmPolicy") {
+    items.push({
+      title: "LLM Configuration",
+      onClick: () => navigate(`${basePath}/llm`),
+    });
+    items.push({
+      title: `${getPolicyLabel(selected.node.policyType)} Policy`,
+    });
   } else if (selected.type === "mcp") {
     items.push({ title: "MCP Configuration" });
+  } else if (selected.type === "mcpTarget") {
+    items.push({
+      title: "MCP Configuration",
+      onClick: () => navigate(`${basePath}/mcp`),
+    });
+    items.push({
+      title: selected.node.target.name ?? `Target ${selected.node.targetIndex}`,
+    });
+  } else if (selected.type === "mcpPolicy") {
+    items.push({
+      title: "MCP Configuration",
+      onClick: () => navigate(`${basePath}/mcp`),
+    });
+    items.push({
+      title: `${getPolicyLabel(selected.node.policyType)} Policy`,
+    });
   } else if (selected.type === "frontendPolicies") {
     items.push({ title: "Frontend Policies" });
   }
@@ -699,7 +759,9 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     if (!isEditing && selected) {
       // Reset to original data from the node
       if (selected.type === "bind") {
-        setFormData(selected.node.bind as unknown as Record<string, unknown>);
+        // Filter out listeners - they're managed separately via the tree
+        const { listeners: _listeners, ...bindData } = selected.node.bind as any;
+        setFormData(bindData);
       } else if (selected.type === "listener") {
         // Filter out routes and tcpRoutes - they're managed separately via the tree
         const { routes: _routes, tcpRoutes: _tcpRoutes, ...listenerData } = selected.node
@@ -722,8 +784,18 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         setFormData(transformedData as Record<string, unknown>);
       } else if (selected.type === "policy") {
         setFormData(selected.node.policy as Record<string, unknown>);
+      } else if (selected.type === "llmPolicy" || selected.type === "mcpPolicy") {
+        setFormData(selected.node.policy as Record<string, unknown>);
       } else if (selected.type === "model") {
         setFormData(selected.node.model as unknown as Record<string, unknown>);
+      } else if (selected.type === "mcpTarget") {
+        // Transform target data from API format to form format
+        const form = forms.mcpTarget as any;
+        const targetData = selected.node.target as Record<string, unknown>;
+        const transformedData = form?.transformForForm
+          ? form.transformForForm(targetData)
+          : targetData;
+        setFormData(transformedData as Record<string, unknown>);
       } else if (
         selected.type === "llm" ||
         selected.type === "mcp" ||
@@ -787,6 +859,21 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         return;
       }
 
+      // Handle MCP target updates
+      if (selected.type === "mcpTarget") {
+        // Apply form transformation if available
+        const form = forms.mcpTarget as any;
+        let dataToSave = fd;
+        if (form?.transformBeforeSubmit) {
+          dataToSave = form.transformBeforeSubmit(fd) as Record<string, unknown>;
+        }
+        await api.updateMCPTargetByIndex(selected.node.targetIndex, dataToSave);
+        toast.success("Target updated successfully");
+        await mutate();
+        navigate(`${basePath}/mcp/target/${selected.node.targetIndex}`);
+        return;
+      }
+
       const { port, li, ri, bi, isTcpRoute } = urlParams;
 
       // Guard: these types require a port
@@ -802,7 +889,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       }
 
       if (selected.type === "bind") {
-        await api.updateBind(port, dataToSave);
+        // Merge back the listeners that we filtered out from the form
+        const bindWithListeners = {
+          ...dataToSave,
+          listeners: selected.node.bind.listeners,
+        };
+        await api.updateBind(port, bindWithListeners);
       } else if (selected.type === "listener") {
         // Merge back the routes/tcpRoutes that we filtered out from the form
         const listenerWithRoutes = {
@@ -854,6 +946,30 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         } else {
           await api.updateRouteByIndex(port, li!, ri!, updatedRoute as any);
         }
+      } else if (selected.type === "llmPolicy") {
+        // Update the specific policy in the LLM config
+        if (!hierarchy.llm) throw new Error("LLM config not found");
+        const currentConfig = { ...hierarchy.llm.config, models: hierarchy.llm.models.map((m) => m.model) };
+        const currentPolicies = hierarchy.llm.policies.reduce((acc, p) => {
+          acc[p.policyType] = p.policy;
+          return acc;
+        }, {} as Record<string, unknown>);
+        await api.createOrUpdateLLM({
+          ...currentConfig,
+          policies: { ...currentPolicies, [selected.node.policyType]: dataToSave },
+        } as any);
+      } else if (selected.type === "mcpPolicy") {
+        // Update the specific policy in the MCP config
+        if (!hierarchy.mcp) throw new Error("MCP config not found");
+        const currentConfig = { ...hierarchy.mcp.config };
+        const currentPolicies = hierarchy.mcp.policies.reduce((acc, p) => {
+          acc[p.policyType] = p.policy;
+          return acc;
+        }, {} as Record<string, unknown>);
+        await api.createOrUpdateMCP({
+          ...currentConfig,
+          policies: { ...currentPolicies, [selected.node.policyType]: dataToSave },
+        } as any);
       }
 
       toast.success(
@@ -893,6 +1009,15 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         toast.success("Model deleted successfully");
         await mutate();
         navigate(`${basePath}/llm`);
+        return;
+      }
+
+      // Handle MCP target deletion
+      if (selected.type === "mcpTarget") {
+        await api.removeMCPTargetByIndex(selected.node.targetIndex);
+        toast.success("Target deleted successfully");
+        await mutate();
+        navigate(`${basePath}/mcp`);
         return;
       }
 
@@ -951,6 +1076,28 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         navigate(
           `${basePath}/bind/${port}/listener/${li}/${isTcpRoute ? "tcproute" : "route"}/${ri}`,
         );
+      } else if (selected.type === "llmPolicy") {
+        if (!hierarchy.llm) throw new Error("LLM config not found");
+        const currentConfig = { ...hierarchy.llm.config, models: hierarchy.llm.models.map((m) => m.model) };
+        const remainingPolicies = hierarchy.llm.policies
+          .filter((p) => p.policyType !== selected.node.policyType)
+          .reduce((acc, p) => { acc[p.policyType] = p.policy; return acc; }, {} as Record<string, unknown>);
+        await api.createOrUpdateLLM({
+          ...currentConfig,
+          policies: Object.keys(remainingPolicies).length > 0 ? remainingPolicies : null,
+        } as any);
+        navigate(`${basePath}/llm`);
+      } else if (selected.type === "mcpPolicy") {
+        if (!hierarchy.mcp) throw new Error("MCP config not found");
+        const currentConfig = { ...hierarchy.mcp.config };
+        const remainingPolicies = hierarchy.mcp.policies
+          .filter((p) => p.policyType !== selected.node.policyType)
+          .reduce((acc, p) => { acc[p.policyType] = p.policy; return acc; }, {} as Record<string, unknown>);
+        await api.createOrUpdateMCP({
+          ...currentConfig,
+          policies: Object.keys(remainingPolicies).length > 0 ? remainingPolicies : null,
+        } as any);
+        navigate(`${basePath}/mcp`);
       }
 
       toast.success(
@@ -1531,6 +1678,95 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     );
   }
 
+  // Handle LLM/MCP policy types
+  if (selected.type === "llmPolicy" || selected.type === "mcpPolicy") {
+    const displayName = getPolicyLabel(selected.node.policyType);
+    const scope = selected.type === "llmPolicy" ? "LLM" : "MCP";
+    const formId = `${selected.type}-form`;
+    const formSchema = selected.type === "llmPolicy" ? forms.llmPolicy : forms.mcpPolicy;
+    const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
+
+    return (
+      <Container>
+        <Header>
+          <BreadcrumbWrapper>
+            <Breadcrumb items={breadcrumbItems} />
+          </BreadcrumbWrapper>
+          <TitleRow>
+            <TitleLeft>
+              <Title>
+                {isEditing ? "Edit: " : ""}
+                {displayName}
+              </Title>
+              <TypeBadge>{scope} Policy</TypeBadge>
+            </TitleLeft>
+            {!isEditing && (
+              <Button
+                type="primary"
+                icon={<Edit2 size={14} />}
+                onClick={() => navigate(location.pathname + "?edit=true")}
+              >
+                Edit
+              </Button>
+            )}
+            {isEditing && (
+              <Space>
+                <Popconfirm
+                  title={`Delete "${displayName}" policy?`}
+                  description="This cannot be undone."
+                  onConfirm={handleDelete}
+                  okText="Delete"
+                  okButtonProps={{ danger: true }}
+                >
+                  <Button danger icon={<DeleteOutlined />} disabled={saving}>
+                    Delete
+                  </Button>
+                </Popconfirm>
+                <Button
+                  icon={<X size={14} />}
+                  onClick={() => navigate(location.pathname)}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  form={formId}
+                  loading={saving}
+                >
+                  Save
+                </Button>
+              </Space>
+            )}
+          </TitleRow>
+          <Description>
+            {displayName} policy for {scope} configuration
+          </Description>
+        </Header>
+
+        <SectionTitle>Policy Details</SectionTitle>
+        <FormWrapper>
+          <Form
+            id={formId}
+            key={isEditing ? "editing" : "viewing"}
+            schema={formSchema.schema}
+            uiSchema={formSchema.uiSchema}
+            formData={formData}
+            validator={validator}
+            disabled={!isEditing || saving}
+            onChange={({ formData: fd }) => setFormData(fd)}
+            onSubmit={handleSubmit}
+            onError={handleError}
+            templates={formTemplates}
+          >
+            <></>
+          </Form>
+        </FormWrapper>
+      </Container>
+    );
+  }
+
   // Handle model type
   if (selected.type === "model") {
     const { node } = selected;
@@ -1616,6 +1852,91 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     );
   }
 
+  // Handle MCP target type
+  if (selected.type === "mcpTarget") {
+    const { node } = selected;
+    const targetName = node.target.name || `Target ${node.targetIndex + 1}`;
+    const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
+
+    return (
+      <Container>
+        <Header>
+          <BreadcrumbWrapper>
+            <Breadcrumb items={breadcrumbItems} />
+          </BreadcrumbWrapper>
+          <TitleRow>
+            <TitleLeft>
+              <Title>
+                {isEditing ? "Edit: " : ""}
+                {targetName}
+              </Title>
+              <TypeBadge>MCP Target</TypeBadge>
+            </TitleLeft>
+            {!isEditing && (
+              <Button
+                type="primary"
+                icon={<Edit2 size={14} />}
+                onClick={() => navigate(location.pathname + "?edit=true")}
+              >
+                Edit
+              </Button>
+            )}
+            {isEditing && (
+              <Space>
+                <Popconfirm
+                  title={`Delete target "${targetName}"?`}
+                  description="This cannot be undone."
+                  onConfirm={handleDelete}
+                  okText="Delete"
+                  okButtonProps={{ danger: true }}
+                >
+                  <Button danger icon={<DeleteOutlined />} disabled={saving}>
+                    Delete
+                  </Button>
+                </Popconfirm>
+                <Button
+                  icon={<X size={14} />}
+                  onClick={() => navigate(location.pathname)}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  form="mcp-target-form"
+                  loading={saving}
+                >
+                  Save
+                </Button>
+              </Space>
+            )}
+          </TitleRow>
+          <Description>MCP server target configuration</Description>
+        </Header>
+
+        <SectionTitle>Target Details</SectionTitle>
+        <FormWrapper>
+          <Form
+            id="mcp-target-form"
+            key={isEditing ? "editing" : "viewing"}
+            schema={forms.mcpTarget.schema}
+            uiSchema={forms.mcpTarget.uiSchema}
+            formData={formData}
+            validator={validator}
+            disabled={!isEditing || saving}
+            onChange={({ formData: fd }) => setFormData(fd)}
+            onSubmit={handleSubmit}
+            onError={handleError}
+            templates={formTemplates}
+          >
+            <></>
+          </Form>
+        </FormWrapper>
+      </Container>
+    );
+  }
+
   // Handle top-level config types (llm, mcp, frontendPolicies)
   if (
     selected.type === "llm" ||
@@ -1632,9 +1953,31 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       setSaving(true);
       try {
         if (selected.type === "llm") {
-          await api.createOrUpdateLLM(fd);
+          // Reconstruct full config: form data + models + policies (managed as child nodes)
+          const models = hierarchy.llm?.models.map((m) => m.model) ?? [];
+          const policies = hierarchy.llm?.policies.reduce((acc, p) => {
+            acc[p.policyType] = p.policy;
+            return acc;
+          }, {} as Record<string, unknown>);
+          const fullConfig = {
+            ...fd,
+            models,
+            ...(policies && Object.keys(policies).length > 0 ? { policies } : {}),
+          };
+          await api.createOrUpdateLLM(fullConfig);
         } else if (selected.type === "mcp") {
-          await api.createOrUpdateMCP(fd);
+          // Reconstruct full config: form data + targets + policies (managed as child nodes)
+          const targets = hierarchy.mcp?.targets.map((t) => t.target) ?? [];
+          const policies = hierarchy.mcp?.policies.reduce((acc, p) => {
+            acc[p.policyType] = p.policy;
+            return acc;
+          }, {} as Record<string, unknown>);
+          const fullConfig = {
+            ...fd,
+            targets,
+            ...(policies && Object.keys(policies).length > 0 ? { policies } : {}),
+          };
+          await api.createOrUpdateMCP(fullConfig);
         } else if (selected.type === "frontendPolicies") {
           await api.createOrUpdateFrontendPolicies(fd);
         }
@@ -1717,12 +2060,23 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
               </Space>
             )}
             {isEditing && (
-              <Button
-                icon={<X size={14} />}
-                onClick={() => navigate(location.pathname)}
-              >
-                Cancel
-              </Button>
+              <Space>
+                <Button
+                  icon={<X size={14} />}
+                  onClick={() => navigate(location.pathname)}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  form="top-level-form"
+                  loading={saving}
+                >
+                  Save
+                </Button>
+              </Space>
             )}
           </TitleRow>
           <Description>
@@ -1737,6 +2091,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         <SectionTitle>{typeLabels[selected.type]} Details</SectionTitle>
         <FormWrapper>
           <Form
+            id="top-level-form"
             key={isEditing ? "editing" : "viewing"}
             schema={forms[selected.type].schema}
             uiSchema={forms[selected.type].uiSchema}

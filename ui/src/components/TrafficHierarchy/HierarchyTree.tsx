@@ -3,29 +3,29 @@ import { Global, css } from "@emotion/react";
 import styled from "@emotion/styled";
 import type { MenuProps } from "antd";
 import {
-  App,
-  Badge,
-  Button,
-  Card,
-  Dropdown,
-  Empty,
-  Space,
-  Tooltip,
-  Tree,
+    App,
+    Badge,
+    Button,
+    Card,
+    Dropdown,
+    Empty,
+    Space,
+    Tooltip,
+    Tree,
 } from "antd";
 import type { DataNode } from "antd/es/tree";
 import {
-  Bot,
-  ChevronsDownUp,
-  ChevronsUpDown,
-  Headphones,
-  MoreVertical,
-  Network,
-  Pencil,
-  Route,
-  Server,
-  Settings,
-  TriangleAlert,
+    Bot,
+    ChevronsDownUp,
+    ChevronsUpDown,
+    Headphones,
+    MoreVertical,
+    Network,
+    Pencil,
+    Route,
+    Server,
+    Settings,
+    TriangleAlert,
 } from "lucide-react";
 import type { Key, ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
@@ -33,19 +33,23 @@ import toast from "react-hot-toast";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useConfig } from "../../api";
 import * as api from "../../api/crud";
-import { ProtocolTag } from "../ProtocolTag";
 import type { LocalRouteBackend } from "../../config";
 import { getResourceColor } from "../../utils/colorPalette";
+import { ProtocolTag } from "../ProtocolTag";
 import type {
-  BackendNode,
-  BindNode,
-  ListenerNode,
-  ModelNode,
-  PolicyNode,
-  RouteNode,
-  TrafficHierarchy,
-  ValidationError,
+    BackendNode,
+    BindNode,
+    LLMPolicyNode,
+    ListenerNode,
+    MCPPolicyNode,
+    MCPTargetNode,
+    ModelNode,
+    PolicyNode,
+    RouteNode,
+    TrafficHierarchy,
+    ValidationError,
 } from "./hooks/useTrafficHierarchy";
+import { getPolicyLabel, getPolicyTypesForScope } from "./policyTypes";
 import { ResourceIcon } from "./ResourceIcon";
 
 // ---------------------------------------------------------------------------
@@ -338,6 +342,17 @@ function urlToSelectedKey(pathname: string, basePath: string): string | null {
   // Check for model routes first (must be before general LLM route)
   const modelMatch = rel.match(/^\/llm\/model\/(\d+)/);
   if (modelMatch) return `model-${modelMatch[1]}`;
+
+  // Check for MCP target routes (must be before general MCP route)
+  const mcpTargetMatch = rel.match(/^\/mcp\/target\/(\d+)/);
+  if (mcpTargetMatch) return `mcp-target-${mcpTargetMatch[1]}`;
+
+  // Check for LLM/MCP policy routes (must be before general top-level match)
+  const llmPolicyMatch = rel.match(/^\/llm\/policy\/([^/?]+)/);
+  if (llmPolicyMatch) return `llm-policy-${llmPolicyMatch[1]}`;
+
+  const mcpPolicyMatch = rel.match(/^\/mcp\/policy\/([^/?]+)/);
+  if (mcpPolicyMatch) return `mcp-policy-${mcpPolicyMatch[1]}`;
 
   // Check for top-level config routes
   const topLevelMatch = rel.match(/^\/(llm|mcp|frontendPolicies)/);
@@ -862,13 +877,19 @@ function buildRouteTitle(
 
   // Check which policy types already exist
   const existingPolicyTypes = new Set(rn.policies.map((p) => p.policyType));
-  const hasCors = existingPolicyTypes.has("cors");
-  const hasRequestHeaderModifier = existingPolicyTypes.has(
-    "requestHeaderModifier",
-  );
-  const hasResponseHeaderModifier = existingPolicyTypes.has(
-    "responseHeaderModifier",
-  );
+
+  const routePolicyMenuItems: MenuProps["items"] = getPolicyTypesForScope("route").map((pt) => {
+    const item: NonNullable<MenuProps["items"]>[number] = {
+      key: `add-policy-${pt.key}`,
+      label: pt.label,
+      disabled: existingPolicyTypes.has(pt.key),
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        onAddRoutePolicy(bindPort, listenerIndex, rn.categoryIndex, rn.isTcp, pt.key);
+      },
+    };
+    return item;
+  });
 
   const menuItems: MenuProps["items"] = [
     {
@@ -890,62 +911,10 @@ function buildRouteTitle(
       },
     },
     {
-      key: "addCors",
-      label: hasCors ? "CORS policy already exists" : "Add CORS Policy",
+      key: "addPolicy",
+      label: "Add Policy",
       icon: <PlusOutlined />,
-      disabled: hasCors,
-      onClick: ({ domEvent }) => {
-        domEvent.stopPropagation();
-        if (!hasCors) {
-          onAddRoutePolicy(
-            bindPort,
-            listenerIndex,
-            rn.categoryIndex,
-            rn.isTcp,
-            "cors",
-          );
-        }
-      },
-    },
-    {
-      key: "addRequestHeaderModifier",
-      label: hasRequestHeaderModifier
-        ? "Request Header Modifier already exists"
-        : "Add Request Header Modifier",
-      icon: <PlusOutlined />,
-      disabled: hasRequestHeaderModifier,
-      onClick: ({ domEvent }) => {
-        domEvent.stopPropagation();
-        if (!hasRequestHeaderModifier) {
-          onAddRoutePolicy(
-            bindPort,
-            listenerIndex,
-            rn.categoryIndex,
-            rn.isTcp,
-            "requestHeaderModifier",
-          );
-        }
-      },
-    },
-    {
-      key: "addResponseHeaderModifier",
-      label: hasResponseHeaderModifier
-        ? "Response Header Modifier already exists"
-        : "Add Response Header Modifier",
-      icon: <PlusOutlined />,
-      disabled: hasResponseHeaderModifier,
-      onClick: ({ domEvent }) => {
-        domEvent.stopPropagation();
-        if (!hasResponseHeaderModifier) {
-          onAddRoutePolicy(
-            bindPort,
-            listenerIndex,
-            rn.categoryIndex,
-            rn.isTcp,
-            "responseHeaderModifier",
-          );
-        }
-      },
+      children: routePolicyMenuItems,
     },
     { type: "divider" },
     {
@@ -1079,16 +1048,100 @@ function buildTopLevelItemTitle(
   );
 }
 
+function buildTopLevelPolicyTitle(
+  pn: LLMPolicyNode | MCPPolicyNode,
+  scope: "llm" | "mcp",
+  navigate: (path: string) => void,
+  onDelete: (policyType: string, parentPath: string) => void,
+  confirmDelete: ConfirmDeleteFn,
+  basePath: string,
+): ReactNode {
+  const label = getPolicyLabel(pn.policyType);
+  const policyPath = `${basePath}/${scope}/policy/${pn.policyType}`;
+  const parentPath = `${basePath}/${scope}`;
+
+  const menuItems: MenuProps["items"] = [
+    {
+      key: "edit",
+      label: "Edit",
+      icon: <Pencil size={13} />,
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        navigate(policyPath + "?edit=true");
+      },
+    },
+    { type: "divider" },
+    {
+      key: "delete",
+      label: "Delete",
+      icon: <DeleteOutlined />,
+      danger: true,
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        confirmDelete(
+          `Delete "${label}" policy?`,
+          "This cannot be undone.",
+          () => onDelete(pn.policyType, parentPath),
+        );
+      },
+    },
+  ];
+
+  return (
+    <NodeRow
+      onClick={(e) => {
+        e.stopPropagation();
+        navigate(policyPath);
+      }}
+    >
+      <ResourceIcon
+        icon={<Settings />}
+        color={getResourceColor("frontendPolicies")}
+        size="small"
+      />
+      <NodeLabel>{label}</NodeLabel>
+      <Dropdown
+        menu={{ items: menuItems }}
+        trigger={["click"]}
+        placement="bottomRight"
+        overlayClassName="hierarchy-menu"
+      >
+        <MoreButton
+          type="text"
+          size="small"
+          icon={<MoreVertical size={14} />}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </Dropdown>
+    </NodeRow>
+  );
+}
+
 function buildLLMItemTitle(
   label: string,
   icon: ReactNode,
   onEdit: () => void,
   onDelete: () => void,
   onAddModel: () => void,
+  onAddPolicy: (policyType: string) => void,
+  existingPolicyTypes: Set<string>,
   confirmDelete: ConfirmDeleteFn,
   navigate: (path: string) => void,
   path: string,
 ): ReactNode {
+  const policyMenuItems: MenuProps["items"] = getPolicyTypesForScope("llm").map((pt) => {
+    const item: NonNullable<MenuProps["items"]>[number] = {
+      key: pt.key,
+      label: pt.label,
+      disabled: existingPolicyTypes.has(pt.key),
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        onAddPolicy(pt.key);
+      },
+    };
+    return item;
+  });
+
   const menuItems: MenuProps["items"] = [
     {
       key: "add-model",
@@ -1098,6 +1151,169 @@ function buildLLMItemTitle(
         domEvent.stopPropagation();
         onAddModel();
       },
+    },
+    {
+      key: "add-policy",
+      label: "Add Policy",
+      icon: <PlusOutlined />,
+      children: policyMenuItems,
+    },
+    { type: "divider" },
+    {
+      key: "edit",
+      label: "Edit",
+      icon: <Pencil size={13} />,
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        onEdit();
+      },
+    },
+    { type: "divider" },
+    {
+      key: "delete",
+      label: "Delete",
+      icon: <DeleteOutlined />,
+      danger: true,
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        confirmDelete(`Delete ${label}?`, "This cannot be undone.", onDelete);
+      },
+    },
+  ];
+
+  return (
+    <NodeRow
+      onClick={(e) => {
+        e.stopPropagation();
+        navigate(path);
+      }}
+    >
+      {icon}
+      <NodeLabel>{label}</NodeLabel>
+      <Dropdown
+        menu={{ items: menuItems }}
+        trigger={["click"]}
+        placement="bottomRight"
+        overlayClassName="hierarchy-menu"
+      >
+        <MoreButton
+          type="text"
+          size="small"
+          icon={<MoreVertical size={14} />}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </Dropdown>
+    </NodeRow>
+  );
+}
+
+function buildMCPTargetTitle(
+  tn: MCPTargetNode,
+  navigate: (path: string) => void,
+  onDelete: (targetIndex: number) => void,
+  confirmDelete: ConfirmDeleteFn,
+  basePath: string,
+): ReactNode {
+  const targetName = tn.target.name || `Target ${tn.targetIndex + 1}`;
+  const targetPath = `${basePath}/mcp/target/${tn.targetIndex}`;
+
+  const menuItems: MenuProps["items"] = [
+    {
+      key: "edit",
+      label: "Edit",
+      icon: <Pencil size={13} />,
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        navigate(targetPath + "?edit=true");
+      },
+    },
+    { type: "divider" },
+    {
+      key: "delete",
+      label: "Delete",
+      icon: <DeleteOutlined />,
+      danger: true,
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        confirmDelete(
+          `Delete target "${targetName}"?`,
+          "This cannot be undone.",
+          () => onDelete(tn.targetIndex),
+        );
+      },
+    },
+  ];
+
+  return (
+    <NodeRow
+      onClick={(e) => {
+        e.stopPropagation();
+        navigate(targetPath);
+      }}
+    >
+      <ResourceIcon
+        icon={<Server />}
+        color={getResourceColor("mcp")}
+        size="small"
+      />
+      <NodeLabel>{targetName}</NodeLabel>
+      <Dropdown
+        menu={{ items: menuItems }}
+        trigger={["click"]}
+        placement="bottomRight"
+        overlayClassName="hierarchy-menu"
+      >
+        <MoreButton
+          type="text"
+          size="small"
+          icon={<MoreVertical size={14} />}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </Dropdown>
+    </NodeRow>
+  );
+}
+
+function buildMCPItemTitle(
+  label: string,
+  icon: ReactNode,
+  onEdit: () => void,
+  onDelete: () => void,
+  onAddTarget: () => void,
+  onAddPolicy: (policyType: string) => void,
+  existingPolicyTypes: Set<string>,
+  confirmDelete: ConfirmDeleteFn,
+  navigate: (path: string) => void,
+  path: string,
+): ReactNode {
+  const policyMenuItems: MenuProps["items"] = getPolicyTypesForScope("mcp").map((pt) => {
+    const item: NonNullable<MenuProps["items"]>[number] = {
+      key: pt.key,
+      label: pt.label,
+      disabled: existingPolicyTypes.has(pt.key),
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        onAddPolicy(pt.key);
+      },
+    };
+    return item;
+  });
+
+  const menuItems: MenuProps["items"] = [
+    {
+      key: "add-target",
+      label: "Add Target",
+      icon: <PlusOutlined />,
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        onAddTarget();
+      },
+    },
+    {
+      key: "add-policy",
+      label: "Add Policy",
+      icon: <PlusOutlined />,
+      children: policyMenuItems,
     },
     { type: "divider" },
     {
@@ -1202,8 +1418,14 @@ function buildTreeData(
   onDeleteLLM: () => void,
   onAddModel: () => void,
   onDeleteModel: (modelIndex: number) => void,
+  onAddLLMPolicy: (policyType: string) => void,
+  onDeleteLLMPolicy: (policyType: string, parentPath: string) => void,
   onEditMCP: () => void,
   onDeleteMCP: () => void,
+  onAddMCPTarget: () => void,
+  onDeleteMCPTarget: (targetIndex: number) => void,
+  onAddMCPPolicy: (policyType: string) => void,
+  onDeleteMCPPolicy: (policyType: string, parentPath: string) => void,
   onEditFrontendPolicies: () => void,
   onDeleteFrontendPolicies: () => void,
 ): DataNode[] {
@@ -1229,6 +1451,18 @@ function buildTreeData(
         selectable: true,
       }));
 
+    const llmPolicyChildren: DataNode[] = hierarchy.llm.policies
+      .slice()
+      .sort((a, b) => a.policyType.localeCompare(b.policyType))
+      .map((pn) => ({
+        key: `llm-policy-${pn.policyType}`,
+        title: buildTopLevelPolicyTitle(pn, "llm", navigate, onDeleteLLMPolicy, confirmDelete, basePath),
+        selectable: true,
+      }));
+
+    const llmChildren = [...modelChildren, ...llmPolicyChildren];
+    const existingLLMPolicies = new Set(hierarchy.llm.policies.map((p) => p.policyType));
+
     nodes.push({
       key: "llm",
       title: buildLLMItemTitle(
@@ -1237,29 +1471,59 @@ function buildTreeData(
         onEditLLM,
         onDeleteLLM,
         onAddModel,
+        onAddLLMPolicy,
+        existingLLMPolicies,
         confirmDelete,
         navigate,
         `${basePath}/llm`,
       ),
       selectable: true,
-      children: modelChildren.length > 0 ? modelChildren : undefined,
+      children: llmChildren.length > 0 ? llmChildren : undefined,
     });
   }
 
   if (hierarchy.mcp && showMCP) {
+    const mcpTargetChildren: DataNode[] = hierarchy.mcp.targets
+      .slice()
+      .sort((a, b) => {
+        const nameA = a.target.name || "";
+        const nameB = b.target.name || "";
+        return nameA.localeCompare(nameB);
+      })
+      .map((target) => ({
+        key: `mcp-target-${target.targetIndex}`,
+        title: buildMCPTargetTitle(target, navigate, onDeleteMCPTarget, confirmDelete, basePath),
+        selectable: true,
+      }));
+
+    const mcpPolicyChildren: DataNode[] = hierarchy.mcp.policies
+      .slice()
+      .sort((a, b) => a.policyType.localeCompare(b.policyType))
+      .map((pn) => ({
+        key: `mcp-policy-${pn.policyType}`,
+        title: buildTopLevelPolicyTitle(pn, "mcp", navigate, onDeleteMCPPolicy, confirmDelete, basePath),
+        selectable: true,
+      }));
+
+    const mcpChildren = [...mcpTargetChildren, ...mcpPolicyChildren];
+    const existingMCPPolicies = new Set(hierarchy.mcp.policies.map((p) => p.policyType));
+
     nodes.push({
       key: "mcp",
-      title: buildTopLevelItemTitle(
+      title: buildMCPItemTitle(
         "MCP Configuration",
         <ResourceIcon icon={<Headphones />} color={getResourceColor("mcp")} />,
-        true,
         onEditMCP,
         onDeleteMCP,
+        onAddMCPTarget,
+        onAddMCPPolicy,
+        existingMCPPolicies,
         confirmDelete,
         navigate,
         `${basePath}/mcp`,
       ),
       selectable: true,
+      children: mcpChildren.length > 0 ? mcpChildren : undefined,
     });
   }
 
@@ -1924,6 +2188,45 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
     }
   }, [mutate]);
 
+  const handleAddMCPTarget = useCallback(async () => {
+    try {
+      const newTarget = {
+        name: `target-${(hierarchy.mcp?.targets.length ?? 0) + 1}`,
+        sse: {
+          host: "localhost",
+          port: 8080,
+          path: "/sse",
+        },
+      };
+      await api.createMCPTarget(newTarget);
+      toast.success("Target created successfully");
+
+      // Wait for config to refresh and get the updated data
+      const freshConfig = await mutate();
+
+      // Find the index of the newly created target from fresh data
+      const mcpConfig = freshConfig?.mcp as any;
+      const newIndex = mcpConfig?.targets ? mcpConfig.targets.length - 1 : 0;
+      navigate(`${basePath}/mcp/target/${newIndex}?edit=true&creating=true`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to create target");
+    }
+  }, [basePath, hierarchy.mcp?.targets.length, mutate, navigate]);
+
+  const handleDeleteMCPTarget = useCallback(
+    async (targetIndex: number) => {
+      try {
+        await api.removeMCPTargetByIndex(targetIndex);
+        toast.success("Target deleted successfully");
+        await mutate();
+        navigate(`${basePath}/mcp`);
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "Failed to delete target");
+      }
+    },
+    [basePath, mutate, navigate],
+  );
+
   const handleDeleteFrontendPolicies = useCallback(async () => {
     try {
       await api.deleteFrontendPolicies();
@@ -1935,6 +2238,80 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       );
     }
   }, [mutate]);
+
+  const handleAddLLMPolicy = useCallback(async (policyType: string) => {
+    try {
+      if (!hierarchy.llm) return;
+      const currentConfig = { ...hierarchy.llm.config, models: hierarchy.llm.models.map((m) => m.model) };
+      const currentPolicies = (currentConfig as any).policies ?? {};
+      const updatedConfig = {
+        ...currentConfig,
+        policies: { ...currentPolicies, [policyType]: {} },
+      };
+      await api.createOrUpdateLLM(updatedConfig as any);
+      toast.success(`${getPolicyLabel(policyType)} policy added`);
+      await mutate();
+      navigate(`${basePath}/llm/policy/${policyType}?edit=true&creating=true`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to add policy");
+    }
+  }, [basePath, hierarchy.llm, mutate, navigate]);
+
+  const handleDeleteLLMPolicy = useCallback(async (policyType: string, parentPath: string) => {
+    try {
+      if (!hierarchy.llm) return;
+      const currentConfig = { ...hierarchy.llm.config, models: hierarchy.llm.models.map((m) => m.model) };
+      const currentPolicies = { ...((currentConfig as any).policies ?? {}) };
+      delete currentPolicies[policyType];
+      const updatedConfig = {
+        ...currentConfig,
+        policies: Object.keys(currentPolicies).length > 0 ? currentPolicies : null,
+      };
+      await api.createOrUpdateLLM(updatedConfig as any);
+      toast.success(`${getPolicyLabel(policyType)} policy deleted`);
+      mutate();
+      navigate(parentPath);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete policy");
+    }
+  }, [hierarchy.llm, mutate, navigate]);
+
+  const handleAddMCPPolicy = useCallback(async (policyType: string) => {
+    try {
+      if (!hierarchy.mcp) return;
+      const currentConfig = { ...hierarchy.mcp.config };
+      const currentPolicies = (currentConfig as any).policies ?? {};
+      const updatedConfig = {
+        ...currentConfig,
+        policies: { ...currentPolicies, [policyType]: {} },
+      };
+      await api.createOrUpdateMCP(updatedConfig as any);
+      toast.success(`${getPolicyLabel(policyType)} policy added`);
+      await mutate();
+      navigate(`${basePath}/mcp/policy/${policyType}?edit=true&creating=true`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to add policy");
+    }
+  }, [basePath, hierarchy.mcp, mutate, navigate]);
+
+  const handleDeleteMCPPolicy = useCallback(async (policyType: string, parentPath: string) => {
+    try {
+      if (!hierarchy.mcp) return;
+      const currentConfig = { ...hierarchy.mcp.config };
+      const currentPolicies = { ...((currentConfig as any).policies ?? {}) };
+      delete currentPolicies[policyType];
+      const updatedConfig = {
+        ...currentConfig,
+        policies: Object.keys(currentPolicies).length > 0 ? currentPolicies : null,
+      };
+      await api.createOrUpdateMCP(updatedConfig as any);
+      toast.success(`${getPolicyLabel(policyType)} policy deleted`);
+      mutate();
+      navigate(parentPath);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete policy");
+    }
+  }, [hierarchy.mcp, mutate, navigate]);
 
   // Helper to collect all keys from tree data
   const getAllKeys = useCallback((nodes: DataNode[]): Key[] => {
@@ -1970,8 +2347,14 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       handleDeleteLLM,
       handleAddModel,
       handleDeleteModel,
+      handleAddLLMPolicy,
+      handleDeleteLLMPolicy,
       handleEditMCP,
       handleDeleteMCP,
+      handleAddMCPTarget,
+      handleDeleteMCPTarget,
+      handleAddMCPPolicy,
+      handleDeleteMCPPolicy,
       handleEditFrontendPolicies,
       handleDeleteFrontendPolicies,
     );
@@ -1994,8 +2377,14 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
     handleDeleteLLM,
     handleAddModel,
     handleDeleteModel,
+    handleAddLLMPolicy,
+    handleDeleteLLMPolicy,
     handleEditMCP,
     handleDeleteMCP,
+    handleAddMCPTarget,
+    handleDeleteMCPTarget,
+    handleAddMCPPolicy,
+    handleDeleteMCPPolicy,
     handleEditFrontendPolicies,
     handleDeleteFrontendPolicies,
   ]);
