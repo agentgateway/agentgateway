@@ -58,7 +58,7 @@ func translatePoliciesForService(krtctx krt.HandlerContext, svc *corev1.Service,
 				Target: &api.PolicyTarget{Kind: &api.PolicyTarget_Service{Service: &api.PolicyTarget_ServiceTarget{
 					Namespace: svc.Namespace,
 					Hostname:  hostname,
-					Port:      ptr.Of(uint32(port.Port)), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+					Port:      new(uint32(port.Port)), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
 				}}},
 				Kind: &api.Policy_Backend{
 					Backend: &api.BackendPolicySpec{

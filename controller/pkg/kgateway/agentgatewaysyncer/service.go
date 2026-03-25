@@ -777,7 +777,7 @@ func (m *AddressMap) ForEach(fn func(c cluster.ID, addresses []string)) {
 }
 
 func precomputeServicePtr(w *model.ServiceInfo) *model.ServiceInfo {
-	return ptr.Of(precomputeService(*w))
+	return new(precomputeService(*w))
 }
 
 func precomputeService(w model.ServiceInfo) model.ServiceInfo {

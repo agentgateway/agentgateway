@@ -107,7 +107,7 @@ func NewDeployerWithMultipleCharts(
 func applyPatch(client apiclient.Client, fieldManager string, gvr schema.GroupVersionResource, name string, namespace string, data []byte, subresources ...string) error {
 	c := client.Dynamic().Resource(gvr).Namespace(namespace)
 	_, err := c.Patch(context.Background(), name, types.ApplyPatchType, data, metav1.PatchOptions{
-		Force:        ptr.To(true),
+		Force:        new(true),
 		FieldManager: fieldManager,
 	}, subresources...)
 	return err
@@ -245,7 +245,7 @@ func (d *Deployer) SetNamespaceAndOwnerWithGVK(owner client.Object, ownerGVK sch
 				Kind:       ownerGVK.Kind,
 				Name:       owner.GetName(),
 				UID:        owner.GetUID(),
-				Controller: ptr.To(true),
+				Controller: new(true),
 			}})
 		} else {
 			// TODO [danehans]: Not sure why a ns must be set for cluster-scoped objects:

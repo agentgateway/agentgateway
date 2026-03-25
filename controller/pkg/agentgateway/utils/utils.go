@@ -67,7 +67,7 @@ func ListenerName(namespace, name string, listener string) *api.ListenerName {
 func RouteName[T ~string](kind string, namespace, name string, routeRule *T) *api.RouteName {
 	var ls *string
 	if routeRule != nil {
-		ls = ptr.Of((string)(*routeRule))
+		ls = new((string)(*routeRule))
 	}
 	return &api.RouteName{
 		Name:      name,
@@ -81,7 +81,7 @@ func ServiceTarget[T ~string](namespace, name string, port *T) *api.PolicyTarget
 	hostname := fmt.Sprintf("%s.%s.svc.%s", name, namespace, kubeutils.GetClusterDomainName())
 	var ls *string
 	if port != nil {
-		ls = ptr.Of((string)(*port))
+		ls = new((string)(*port))
 	}
 	return ServiceTargetWithHostname(namespace, hostname, ls)
 }
@@ -101,7 +101,7 @@ func InferencePoolTarget[T ~string](namespace, name string, port *T) *api.Policy
 	hostname := fmt.Sprintf("%s.%s.inference.%s", name, namespace, kubeutils.GetClusterDomainName())
 	var ls *string
 	if port != nil {
-		ls = ptr.Of((string)(*port))
+		ls = new((string)(*port))
 	}
 	return ServiceTargetWithHostname(namespace, hostname, ls)
 }
@@ -110,7 +110,7 @@ func ServiceTargetWithHostname(namespace, hostname string, port *string) *api.Po
 	var portNum *uint32
 	if port != nil {
 		parsed, _ := strconv.Atoi(*port)
-		portNum = ptr.Of(uint32(parsed)) // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		portNum = new(uint32(parsed)) // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
 	}
 	return &api.PolicyTarget_Service{
 		Service: &api.PolicyTarget_ServiceTarget{
@@ -124,7 +124,7 @@ func ServiceTargetWithHostname(namespace, hostname string, port *string) *api.Po
 func GatewayTarget[T ~string](namespace, name string, listener *T) *api.PolicyTarget_Gateway {
 	var ls *string
 	if listener != nil {
-		ls = ptr.Of((string)(*listener))
+		ls = new((string)(*listener))
 	}
 	return &api.PolicyTarget_Gateway{
 		Gateway: &api.PolicyTarget_GatewayTarget{
@@ -138,7 +138,7 @@ func GatewayTarget[T ~string](namespace, name string, listener *T) *api.PolicyTa
 func RouteTarget[T ~string](namespace, name, kind string, ruleName *T) *api.PolicyTarget_Route {
 	var ls *string
 	if ruleName != nil {
-		ls = ptr.Of((string)(*ruleName))
+		ls = new((string)(*ruleName))
 	}
 	return &api.PolicyTarget_Route{
 		Route: &api.PolicyTarget_RouteTarget{
@@ -153,7 +153,7 @@ func RouteTarget[T ~string](namespace, name, kind string, ruleName *T) *api.Poli
 func BackendTarget[T ~string](backendNamespace, backendName string, section *T) *api.PolicyTarget_Backend {
 	var ls *string
 	if section != nil {
-		ls = ptr.Of((string)(*section))
+		ls = new((string)(*section))
 	}
 	return &api.PolicyTarget_Backend{
 		Backend: &api.PolicyTarget_BackendTarget{

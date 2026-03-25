@@ -122,10 +122,10 @@ func setupDummyAncestorMapping(ctx plugins.PolicyCtx) []*gwv1.HTTPRoute {
 					BackendRefs: []gwv1.HTTPBackendRef{{
 						BackendRef: gwv1.BackendRef{
 							BackendObjectReference: gwv1.BackendObjectReference{
-								Group:     ptr.Of(gwv1.Group(backend.GetObjectKind().GroupVersionKind().Group)),
-								Kind:      ptr.Of(gwv1.Kind(backend.GetObjectKind().GroupVersionKind().Kind)),
+								Group:     new(gwv1.Group(backend.GetObjectKind().GroupVersionKind().Group)),
+								Kind:      new(gwv1.Kind(backend.GetObjectKind().GroupVersionKind().Kind)),
 								Name:      gwv1.ObjectName(backend.GetName()),
-								Namespace: ptr.Of(gwv1.Namespace(backend.GetNamespace())),
+								Namespace: new(gwv1.Namespace(backend.GetNamespace())),
 								Port:      nil,
 							},
 						},

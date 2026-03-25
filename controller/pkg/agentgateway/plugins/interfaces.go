@@ -103,7 +103,7 @@ func appendPolicyForGateways(policies []AgwPolicy, gatewayTargets []types.Namesp
 	})
 	for _, gatewayTarget := range gatewayTargets {
 		policies = append(policies, AgwPolicy{
-			Gateway: ptr.Of(gatewayTarget),
+			Gateway: new(gatewayTarget),
 			Policy:  policy,
 		})
 	}

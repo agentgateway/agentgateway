@@ -264,9 +264,9 @@ func DefaultDeployerInputs(dt DeployerTester, commonCols *collections.CommonColl
 		AgentgatewayClassName:      dt.AgwClassName,
 		AgentgatewayControllerName: dt.AgwControllerName,
 		ImageDefaults: &agentgateway.Image{
-			Registry:   ptr.Of("cr.agentgateway.dev"),
-			Repository: ptr.Of("agentgateway"),
-			Tag:        ptr.Of("99.99.99"),
+			Registry:   new("cr.agentgateway.dev"),
+			Repository: new("agentgateway"),
+			Tag:        new("99.99.99"),
 			Digest:     nil,
 			PullPolicy: nil,
 		},

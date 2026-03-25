@@ -263,7 +263,7 @@ func TestPruneRemovedResources(t *testing.T) {
 					Kind: "Deployment",
 					Name: deployName,
 				},
-				MinReplicas: ptr.To(int32(1)),
+				MinReplicas: new(int32(1)),
 				MaxReplicas: 10,
 			},
 		}

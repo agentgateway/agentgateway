@@ -404,7 +404,7 @@ func createRouteCollectionGeneric[T controllers.Object, R comparable, ST any](
 			routeReporter,
 		)
 		status := rm.BuildRouteStatusWithParentRefDefaulting(context.Background(), obj, inputs.ControllerName, true)
-		return ptr.Of(buildStatus(*status)), resources
+		return new(buildStatus(*status)), resources
 	}, krtopts.ToOptions(collectionName)...)
 }
 
@@ -548,7 +548,7 @@ func gatewayRouteAttachmentCountCollection[T controllers.Object](
 			if e.ParentKey.Kind != wellknown.GatewayGVK.Kind && e.ParentKey.Kind != wellknown.ListenerSetGVK.Kind {
 				return nil
 			}
-			return ptr.Of(&plugins.RouteAttachment{
+			return new(&plugins.RouteAttachment{
 				From:         from,
 				To:           e.ParentKey,
 				Gateway:      e.ParentGateway,

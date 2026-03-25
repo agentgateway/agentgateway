@@ -109,7 +109,7 @@ func (f Fake) ConnectDeltaADS() *istioxds.DeltaAdsTest {
 
 var (
 	testWorkload1 = agentgatewaysyncer.Address{
-		Workload: ptr.Of(agentgatewaysyncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl1"}})),
+		Workload: new(agentgatewaysyncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl1"}})),
 	}
 )
 
@@ -132,7 +132,7 @@ func TestXDSUpdate(t *testing.T) {
 	ads.RequestResponseAck(nil)
 
 	wl1Updated := agentgatewaysyncer.Address{
-		Workload: ptr.Of(agentgatewaysyncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl1", ClusterId: "cluster1"}})),
+		Workload: new(agentgatewaysyncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl1", ClusterId: "cluster1"}})),
 	}
 	s.Addresses.UpdateObject(wl1Updated)
 	resp := ads.ExpectResponse()
@@ -154,7 +154,7 @@ func TestXDSDisconnect(t *testing.T) {
 		ads.Cleanup()
 
 		wl2 := agentgatewaysyncer.Address{
-			Workload: ptr.Of(agentgatewaysyncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl2", ClusterId: "cluster1"}})),
+			Workload: new(agentgatewaysyncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl2", ClusterId: "cluster1"}})),
 		}
 		s.Addresses.DeleteObject("wl1")
 		s.Addresses.UpdateObject(wl2)

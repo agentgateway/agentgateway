@@ -51,7 +51,7 @@ func (t *TestStatusQueue) dump() []crd.IstioKind {
 				Namespace: k.Namespace,
 			},
 			Spec:   nil,
-			Status: ptr.Of(json.RawMessage(statusj)),
+			Status: new(json.RawMessage(statusj)),
 		}
 		objs = append(objs, obj)
 	}

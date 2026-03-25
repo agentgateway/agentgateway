@@ -104,17 +104,17 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 
 	var randomSampling *string
 	if tracing.RandomSampling != nil {
-		randomSampling = ptr.Of(string(*tracing.RandomSampling))
+		randomSampling = new(string(*tracing.RandomSampling))
 	}
 
 	var clientSampling *string
 	if tracing.ClientSampling != nil {
-		clientSampling = ptr.Of(string(*tracing.ClientSampling))
+		clientSampling = new(string(*tracing.ClientSampling))
 	}
 
 	var path *string
 	if tracing.Path != nil {
-		path = ptr.Of(string(*tracing.Path))
+		path = new(string(*tracing.Path))
 	}
 
 	var protocol api.FrontendPolicySpec_Tracing_Protocol
@@ -191,7 +191,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 
 		var path *string
 		if otlp.Path != nil {
-			path = ptr.Of(string(*otlp.Path))
+			path = new(string(*otlp.Path))
 		}
 
 		spec.OtlpAccessLog = &api.FrontendPolicySpec_Logging_OtlpAccessLog{
@@ -256,7 +256,7 @@ func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string) 
 }
 
 func castUint32[T ~int32](ka *T) *uint32 {
-	return ptr.Of((uint32)(*ka))
+	return new((uint32)(*ka))
 }
 
 func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {

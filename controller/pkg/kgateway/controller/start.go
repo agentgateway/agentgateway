@@ -216,12 +216,12 @@ func (c *ControllerBuilder) Build(ctx context.Context) (*agentgatewaysyncer.Sync
 	if defaultTag == nil {
 		// Else, the binary is built with an explicit version
 		if version.Version != "" {
-			defaultTag = ptr.Of("v" + version.Version)
+			defaultTag = new("v" + version.Version)
 		} else {
 			// Else, detect automatically based on the build.
 			// TODO: probably what we really want here is to have a file in the repo that has a floating version like v1.0.0-dev
 			// that is used here + for nightly builds.
-			defaultTag = ptr.Of(version.GitVersion)
+			defaultTag = new(version.GitVersion)
 		}
 	}
 	gwCfg := GatewayConfig{
