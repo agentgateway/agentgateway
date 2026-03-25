@@ -1327,8 +1327,9 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.azureOpenAI.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.azureOpenAI.host`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.azureOpenAI.apiVersion`|string||
-|`binds[].listeners[].routes[].backends[].ai.hostOverride`|string||
-|`binds[].listeners[].routes[].backends[].ai.pathOverride`|string||
+|`binds[].listeners[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
+|`binds[].listeners[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
+|`binds[].listeners[].routes[].backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.tokenize`|boolean|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
 |`binds[].listeners[].routes[].backends[].ai.policies`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
@@ -2023,8 +2024,9 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azureOpenAI.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azureOpenAI.host`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azureOpenAI.apiVersion`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].hostOverride`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathOverride`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].tokenize`|boolean|Whether to tokenize on the request flow. This enables us to do more accurate rate limits,<br>since we know (part of) the cost of the request upfront.<br>This comes with the cost of an expensive operation.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
@@ -5719,6 +5721,7 @@
 |`llm.models[].params.azureApiVersion`|string|For Azure: the API version to use|
 |`llm.models[].params.hostOverride`|string|Override the upstream host for this provider.|
 |`llm.models[].params.pathOverride`|string|Override the upstream path for this provider.|
+|`llm.models[].params.pathPrefix`|string|Override the default base path prefix for this provider.|
 |`llm.models[].params.tokenize`|boolean|Whether to tokenize the request before forwarding it upstream.|
 |`llm.models[].provider`|string|provider of the LLM we are connecting too|
 |`llm.models[].defaults`|object|defaults allows setting default values for the request. If these are not present in the request body, they will be set.<br>To override even when set, use `overrides`.|

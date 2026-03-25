@@ -216,6 +216,7 @@ backends:
                         model: claude-haiku-4-5-20251001
                     hostOverride: "anthropic.internal:8443"
                     pathOverride: /v1/messages
+                    pathPrefix: ~
                     tokenize: true
                     inlinePolicies:
                       - backendAuth:
@@ -259,6 +260,7 @@ backends:
                         projectId: my-vertex-project
                     hostOverride: ~
                     pathOverride: ~
+                    pathPrefix: ~
                     tokenize: false
                     inlinePolicies:
                       - backendAuth:
@@ -294,6 +296,7 @@ backends:
                         apiVersion: v1
                     hostOverride: ~
                     pathOverride: ~
+                    pathPrefix: ~
                     tokenize: false
                   info:
                     health: 1
@@ -323,6 +326,7 @@ backends:
                       openAI: {}
                     hostOverride: ~
                     pathOverride: ~
+                    pathPrefix: ~
                     tokenize: false
                   info:
                     health: 1

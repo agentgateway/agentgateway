@@ -997,3 +997,55 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		"translated error should preserve the original message, got: {message}",
 	);
 }
+
+#[test]
+fn setup_request_openai_applies_prefixed_path_without_host_override() {
+	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/messages?trace=repro",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Messages,
+			None,
+			None,
+			Some("/v1/custom"),
+			false,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(
+		req.uri().authority().map(|a| a.as_str()),
+		Some("api.openai.com")
+	);
+	assert_eq!(req.uri().path(), "/v1/custom/chat/completions");
+	assert_eq!(req.uri().query(), Some("trace=repro"));
+}
+
+#[test]
+fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
+	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/messages?trace=repro",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Messages,
+			None,
+			None,
+			Some("/v1/custom/"),
+			false,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), "/v1/custom/chat/completions");
+	assert_eq!(req.uri().query(), Some("trace=repro"));
+}

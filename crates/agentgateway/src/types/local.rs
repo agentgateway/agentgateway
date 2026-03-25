@@ -387,6 +387,9 @@ pub struct LocalLLMParams {
 	/// Override the upstream path for this provider.
 	#[serde(default)]
 	path_override: Option<Strng>,
+	/// Override the default base path prefix for this provider.
+	#[serde(default)]
+	path_prefix: Option<Strng>,
 	/// Whether to tokenize the request before forwarding it upstream.
 	#[serde(default)]
 	tokenize: bool,
@@ -599,8 +602,12 @@ pub struct LocalAIProviders {
 pub struct LocalNamedAIProvider {
 	pub name: Strng,
 	pub provider: AIProvider,
+	/// Override the upstream host for this provider.
 	pub host_override: Option<Target>,
+	/// Override the upstream path for this provider.
 	pub path_override: Option<Strng>,
+	/// Override the default base path prefix for this provider.
+	pub path_prefix: Option<Strng>,
 	/// Whether to tokenize on the request flow. This enables us to do more accurate rate limits,
 	/// since we know (part of) the cost of the request upfront.
 	/// This comes with the cost of an expensive operation.
@@ -634,6 +641,7 @@ impl LocalAIBackend {
 						provider: p.provider,
 						host_override: p.host_override,
 						path_override: p.path_override,
+						path_prefix: p.path_prefix,
 						tokenize: p.tokenize,
 						inline_policies: policies,
 					},
@@ -1661,6 +1669,7 @@ json(request.body).model
 			provider,
 			host_override: p.host_override,
 			path_override: p.path_override,
+			path_prefix: p.path_prefix,
 			tokenize: p.tokenize,
 			inline_policies: pols,
 		};

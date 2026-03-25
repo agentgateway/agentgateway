@@ -4422,12 +4422,21 @@
           "$ref": "#/$defs/AIProvider"
         },
         "hostOverride": {
+          "description": "Override the upstream host for this provider.",
           "type": [
             "string",
             "null"
           ]
         },
         "pathOverride": {
+          "description": "Override the upstream path for this provider.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pathPrefix": {
+          "description": "Override the default base path prefix for this provider.",
           "type": [
             "string",
             "null"
@@ -6045,6 +6054,14 @@
         },
         "pathOverride": {
           "description": "Override the upstream path for this provider.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "pathPrefix": {
+          "description": "Override the default base path prefix for this provider.",
           "type": [
             "string",
             "null"

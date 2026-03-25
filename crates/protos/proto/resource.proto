@@ -1185,6 +1185,7 @@ message AIBackend {
     string name = 1;
     HostOverride host_override = 2;
     optional string path_override = 3;
+    optional string path_prefix = 12;
     oneof provider {
       OpenAI openai = 4;
       Gemini gemini = 5;

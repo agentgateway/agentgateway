@@ -10797,6 +10797,7 @@ type AIBackend_Provider struct {
 	Name         string                  `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	HostOverride *AIBackend_HostOverride `protobuf:"bytes,2,opt,name=host_override,json=hostOverride,proto3" json:"host_override,omitempty"`
 	PathOverride *string                 `protobuf:"bytes,3,opt,name=path_override,json=pathOverride,proto3,oneof" json:"path_override,omitempty"`
+	PathPrefix   *string                 `protobuf:"bytes,12,opt,name=path_prefix,json=pathPrefix,proto3,oneof" json:"path_prefix,omitempty"`
 	// Types that are valid to be assigned to Provider:
 	//
 	//	*AIBackend_Provider_Openai
@@ -10858,6 +10859,13 @@ func (x *AIBackend_Provider) GetHostOverride() *AIBackend_HostOverride {
 func (x *AIBackend_Provider) GetPathOverride() string {
 	if x != nil && x.PathOverride != nil {
 		return *x.PathOverride
+	}
+	return ""
+}
+
+func (x *AIBackend_Provider) GetPathPrefix() string {
+	if x != nil && x.PathPrefix != nil {
+		return *x.PathPrefix
 	}
 	return ""
 }
@@ -11854,7 +11862,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x11agent_runtime_arn\x18\x01 \x01(\tR\x0fagentRuntimeArn\x12!\n" +
 	"\tqualifier\x18\x02 \x01(\tH\x00R\tqualifier\x88\x01\x01B\f\n" +
 	"\n" +
-	"_qualifier\"\xb1\f\n" +
+	"_qualifier\"\xe7\f\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -11889,11 +11897,13 @@ const file_resource_proto_rawDesc = "" +
 	"\vapi_version\x18\x03 \x01(\tH\x01R\n" +
 	"apiVersion\x88\x01\x01B\b\n" +
 	"\x06_modelB\x0e\n" +
-	"\f_api_version\x1a\xda\x05\n" +
+	"\f_api_version\x1a\x90\x06\n" +
 	"\bProvider\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12V\n" +
 	"\rhost_override\x18\x02 \x01(\v21.agentgateway.dev.resource.AIBackend.HostOverrideR\fhostOverride\x12(\n" +
-	"\rpath_override\x18\x03 \x01(\tH\x01R\fpathOverride\x88\x01\x01\x12E\n" +
+	"\rpath_override\x18\x03 \x01(\tH\x01R\fpathOverride\x88\x01\x01\x12$\n" +
+	"\vpath_prefix\x18\f \x01(\tH\x02R\n" +
+	"pathPrefix\x88\x01\x01\x12E\n" +
 	"\x06openai\x18\x04 \x01(\v2+.agentgateway.dev.resource.AIBackend.OpenAIH\x00R\x06openai\x12E\n" +
 	"\x06gemini\x18\x05 \x01(\v2+.agentgateway.dev.resource.AIBackend.GeminiH\x00R\x06gemini\x12E\n" +
 	"\x06vertex\x18\x06 \x01(\v2+.agentgateway.dev.resource.AIBackend.VertexH\x00R\x06vertex\x12N\n" +
@@ -11904,7 +11914,8 @@ const file_resource_proto_rawDesc = "" +
 	" \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0einlinePoliciesB\n" +
 	"\n" +
 	"\bproviderB\x10\n" +
-	"\x0e_path_override\x1a\\\n" +
+	"\x0e_path_overrideB\x0e\n" +
+	"\f_path_prefix\x1a\\\n" +
 	"\rProviderGroup\x12K\n" +
 	"\tproviders\x18\x01 \x03(\v2-.agentgateway.dev.resource.AIBackend.ProviderR\tproviders\"\xd5\x03\n" +
 	"\n" +

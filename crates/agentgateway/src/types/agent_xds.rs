@@ -820,7 +820,6 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 							name: provider_name.clone(),
 							provider,
 							tokenize: false,
-							path_override: provider_config.path_override.as_ref().map(strng::new),
 							host_override: provider_config
 								.r#host_override
 								.as_ref()
@@ -829,6 +828,8 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 										.map_err(|e| ProtoError::Generic(e.to_string()))
 								})
 								.transpose()?,
+							path_override: provider_config.path_override.as_ref().map(strng::new),
+							path_prefix: provider_config.path_prefix.as_ref().map(strng::new),
 							inline_policies: pols,
 						};
 						local_provider_group.push((provider_name, np));
@@ -2445,6 +2446,7 @@ mod tests {
 						name: "vertex".to_string(),
 						host_override: None,
 						path_override: None,
+						path_prefix: None,
 						provider: Some(Provider::Vertex(Vertex {
 							model: None,
 							region: "".to_string(),
@@ -2487,6 +2489,7 @@ mod tests {
 						name: "vertex".to_string(),
 						host_override: None,
 						path_override: None,
+						path_prefix: None,
 						provider: Some(Provider::Vertex(Vertex {
 							model: None,
 							region: "us-central1".to_string(),

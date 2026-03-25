@@ -137,17 +137,19 @@ pub fn setup_llm_mock(
 	tokenize: bool,
 	config: &str,
 ) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+	let provider = llm_named_provider(&mock, provider, tokenize);
+	setup_llm_named_provider_mock(mock, provider, config)
+}
+
+pub fn setup_llm_named_provider_mock(
+	mock: MockServer,
+	provider: LocalNamedAIProvider,
+	config: &str,
+) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
 	let t = setup_proxy_test(config).unwrap();
-	let be = crate::types::local::LocalAIBackend::Provider(LocalNamedAIProvider {
-		name: "default".into(),
-		provider,
-		host_override: Some(Target::Address(*mock.address())),
-		path_override: None,
-		tokenize,
-		policies: None,
-	})
-	.translate()
-	.unwrap();
+	let be = crate::types::local::LocalAIBackend::Provider(provider)
+		.translate()
+		.unwrap();
 	let b = Backend::AI(
 		ResourceName::new(strng::format!("{}", mock.address()), "".into()),
 		be,
@@ -156,6 +158,22 @@ pub fn setup_llm_mock(
 	let t = t.with_bind(simple_bind(basic_route(*mock.address())));
 	let io = t.serve_http(BIND_KEY);
 	(mock, t, io)
+}
+
+pub fn llm_named_provider(
+	mock: &MockServer,
+	provider: AIProvider,
+	tokenize: bool,
+) -> LocalNamedAIProvider {
+	LocalNamedAIProvider {
+		name: "default".into(),
+		provider,
+		host_override: Some(Target::Address(*mock.address())),
+		path_override: None,
+		path_prefix: None,
+		tokenize,
+		policies: None,
+	}
 }
 
 pub fn basic_route(target: SocketAddr) -> Route {
