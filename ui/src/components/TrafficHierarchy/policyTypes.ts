@@ -75,3 +75,116 @@ export function getPolicyLabel(key: string): string {
 export function getPolicyDescription(key: string): string {
   return typeMap.get(key)?.description ?? "";
 }
+
+/**
+ * Get default value for a policy type.
+ * Provides sensible defaults with required fields populated.
+ */
+export function getDefaultPolicyValue(policyType: string): Record<string, unknown> {
+  switch (policyType) {
+    // Authorization policies require rules array
+    case "authorization":
+    case "mcpAuthorization":
+      return { rules: [] };
+    
+    // Authentication policies have complex required fields - return minimal structure
+    case "jwtAuth":
+      return {
+        issuer: "",
+        audiences: [],
+        jwks: { inline: "" },
+      };
+    
+    case "basicAuth":
+      return {
+        htpasswd: "",
+      };
+    
+    case "apiKey":
+      return {
+        keys: [],
+      };
+    
+    case "mcpAuthentication":
+      return {
+        issuer: "",
+        audiences: [],
+        resourceMetadata: {},
+        jwks: { inline: "" },
+      };
+    
+    // External auth requires URL
+    case "extAuthz":
+      return {
+        http: {
+          service: {
+            name: {
+              namespace: "default",
+              hostname: "",
+            },
+            port: 80,
+          },
+        },
+      };
+    
+    case "extProc":
+      return {
+        service: {
+          name: {
+            namespace: "default",
+            hostname: "",
+          },
+          port: 80,
+        },
+      };
+    
+    // Rate limiting requires configuration
+    case "localRateLimit":
+      return {
+        spec: {
+          fillInterval: "1s",
+          tokensPerFill: 100,
+        },
+      };
+    
+    case "remoteRateLimit":
+      return {
+        service: {
+          name: {
+            namespace: "default",
+            hostname: "",
+          },
+          port: 80,
+        },
+        spec: {
+          fillInterval: "1s",
+          tokensPerFill: 100,
+        },
+      };
+    
+    // Backend TLS
+    case "backendTLS":
+      return {
+        hostname: "",
+      };
+    
+    // Backend tunnel requires proxy
+    case "backendTunnel":
+      return {
+        proxy: {
+          host: "",
+        },
+      };
+    
+    // Backend auth
+    case "backendAuth":
+      return {
+        username: "",
+        password: "",
+      };
+    
+    // Most other policies can start empty or with minimal structure
+    default:
+      return {};
+  }
+}

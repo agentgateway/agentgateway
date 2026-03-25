@@ -49,7 +49,7 @@ import type {
     TrafficHierarchy,
     ValidationError,
 } from "./hooks/useTrafficHierarchy";
-import { getPolicyLabel, getPolicyTypesForScope } from "./policyTypes";
+import { getDefaultPolicyValue, getPolicyLabel, getPolicyTypesForScope } from "./policyTypes";
 import { ResourceIcon } from "./ResourceIcon";
 
 // ---------------------------------------------------------------------------
@@ -2355,7 +2355,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
   const handleAddMCPTargetPolicy = useCallback(
     async (targetIndex: number, policyType: string) => {
       try {
-        await api.updateMCPTargetPolicy(targetIndex, policyType, {});
+        await api.updateMCPTargetPolicy(targetIndex, policyType, getDefaultPolicyValue(policyType));
         toast.success(`${getPolicyLabel(policyType)} policy added`);
         await mutate();
         navigate(`${basePath}/mcp/target/${targetIndex}/policy/${policyType}?edit=true&creating=true`);
@@ -2399,7 +2399,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       const currentPolicies = (currentConfig as any).policies ?? {};
       const updatedConfig = {
         ...currentConfig,
-        policies: { ...currentPolicies, [policyType]: {} },
+        policies: { ...currentPolicies, [policyType]: getDefaultPolicyValue(policyType) },
       };
       await api.createOrUpdateLLM(updatedConfig as any);
       toast.success(`${getPolicyLabel(policyType)} policy added`);
@@ -2436,7 +2436,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       const currentPolicies = (currentConfig as any).policies ?? {};
       const updatedConfig = {
         ...currentConfig,
-        policies: { ...currentPolicies, [policyType]: {} },
+        policies: { ...currentPolicies, [policyType]: getDefaultPolicyValue(policyType) },
       };
       await api.createOrUpdateMCP(updatedConfig as any);
       toast.success(`${getPolicyLabel(policyType)} policy added`);

@@ -49,5 +49,9 @@ mcp:
     stdio:
       cmd: echo
       args: []
+    policies:
+      mcpAuthorization:
+        rules: []
+      transformations: {}
   statefulMode: stateless
 frontendPolicies: {}
