@@ -1057,6 +1057,56 @@ export async function removeMCPTargetByIndex(targetIndex: number): Promise<void>
 }
 
 /**
+ * Update a specific policy in an MCP target's policies
+ */
+export async function updateMCPTargetPolicy(
+  targetIndex: number,
+  policyType: string,
+  policyData: Record<string, unknown>,
+): Promise<void> {
+  const config = await fetchConfig();
+  if (!config.mcp) {
+    throw new Error("MCP configuration not found");
+  }
+  const targets = (config.mcp as any).targets;
+  if (!Array.isArray(targets) || targetIndex < 0 || targetIndex >= targets.length) {
+    throw new Error(`Target at index ${targetIndex} not found`);
+  }
+  const target = targets[targetIndex];
+  if (!target.policies) {
+    target.policies = {};
+  }
+  target.policies[policyType] = policyData;
+  await updateConfig(config);
+}
+
+/**
+ * Remove a specific policy from an MCP target's policies
+ */
+export async function removeMCPTargetPolicy(
+  targetIndex: number,
+  policyType: string,
+): Promise<void> {
+  const config = await fetchConfig();
+  if (!config.mcp) {
+    throw new Error("MCP configuration not found");
+  }
+  const targets = (config.mcp as any).targets;
+  if (!Array.isArray(targets) || targetIndex < 0 || targetIndex >= targets.length) {
+    throw new Error(`Target at index ${targetIndex} not found`);
+  }
+  const target = targets[targetIndex];
+  if (target.policies && target.policies[policyType]) {
+    delete target.policies[policyType];
+    // If policies object is empty, remove it
+    if (Object.keys(target.policies).length === 0) {
+      delete target.policies;
+    }
+  }
+  await updateConfig(config);
+}
+
+/**
  * Create or update Frontend Policies
  */
 export async function createOrUpdateFrontendPolicies(

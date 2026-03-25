@@ -27,6 +27,7 @@ import type {
   ListenerNode,
   MCPPolicyNode,
   MCPTargetNode,
+  MCPTargetPolicyNode,
   ModelNode,
   PolicyNode,
   RouteNode,
@@ -232,6 +233,7 @@ function findSelectedNode(
   | { type: "llmPolicy"; node: LLMPolicyNode }
   | { type: "mcp"; data: unknown }
   | { type: "mcpTarget"; node: MCPTargetNode }
+  | { type: "mcpTargetPolicy"; node: MCPTargetPolicyNode; target: MCPTargetNode }
   | { type: "mcpPolicy"; node: MCPPolicyNode }
   | { type: "frontendPolicies"; data: unknown }
   | null {
@@ -241,6 +243,18 @@ function findSelectedNode(
     const modelNode = hierarchy.llm.models[urlParams.modelIndex];
     if (!modelNode) return null;
     return { type: "model", node: modelNode };
+  }
+
+  // Handle MCP target policy routes
+  if (urlParams.mcpTargetIndex !== undefined && urlParams.mcpTargetPolicyType) {
+    if (!hierarchy.mcp) return null;
+    const targetNode = hierarchy.mcp.targets[urlParams.mcpTargetIndex];
+    if (!targetNode) return null;
+    const policyNode = targetNode.policies.find(
+      (p) => p.policyType === urlParams.mcpTargetPolicyType,
+    );
+    if (!policyNode) return null;
+    return { type: "mcpTargetPolicy", node: policyNode, target: targetNode };
   }
 
   // Handle MCP target routes
@@ -463,6 +477,18 @@ function generateBreadcrumbItems(
     });
     items.push({
       title: selected.node.target.name ?? `Target ${selected.node.targetIndex}`,
+    });
+  } else if (selected.type === "mcpTargetPolicy") {
+    items.push({
+      title: "MCP Configuration",
+      onClick: () => navigate(`${basePath}/mcp`),
+    });
+    items.push({
+      title: selected.target.target.name ?? `Target ${selected.target.targetIndex}`,
+      onClick: () => navigate(`${basePath}/mcp/target/${selected.target.targetIndex}`),
+    });
+    items.push({
+      title: `${getPolicyLabel(selected.node.policyType)} Policy`,
     });
   } else if (selected.type === "mcpPolicy") {
     items.push({
@@ -796,6 +822,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           ? form.transformForForm(targetData)
           : targetData;
         setFormData(transformedData as Record<string, unknown>);
+      } else if (selected.type === "mcpTargetPolicy") {
+        setFormData(selected.node.policy as Record<string, unknown>);
       } else if (
         selected.type === "llm" ||
         selected.type === "mcp" ||
@@ -882,7 +910,10 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       }
 
       // Apply form-specific transformation if available
-      const form = forms[selected.type] as any;
+      // Skip for types that don't have a corresponding form entry
+      const form = (selected.type !== "llmPolicy" && selected.type !== "mcpPolicy" && selected.type !== "mcpTargetPolicy")
+        ? (forms[selected.type] as any)
+        : undefined;
       let dataToSave = fd;
       if (form?.transformBeforeSubmit) {
         dataToSave = form.transformBeforeSubmit(fd) as Record<string, unknown>;
@@ -970,6 +1001,17 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           ...currentConfig,
           policies: { ...currentPolicies, [selected.node.policyType]: dataToSave },
         } as any);
+      } else if (selected.type === "mcpTargetPolicy") {
+        // Update the specific policy in the MCP target
+        await api.updateMCPTargetPolicy(
+          selected.target.targetIndex,
+          selected.node.policyType,
+          dataToSave,
+        );
+        toast.success(`${getPolicyLabel(selected.node.policyType)} policy updated`);
+        await mutate();
+        navigate(`${basePath}/mcp/target/${selected.target.targetIndex}/policy/${selected.node.policyType}`);
+        return;
       }
 
       toast.success(
@@ -1018,6 +1060,18 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         toast.success("Target deleted successfully");
         await mutate();
         navigate(`${basePath}/mcp`);
+        return;
+      }
+
+      // Handle MCP target policy deletion
+      if (selected.type === "mcpTargetPolicy") {
+        await api.removeMCPTargetPolicy(
+          selected.target.targetIndex,
+          selected.node.policyType,
+        );
+        toast.success(`${getPolicyLabel(selected.node.policyType)} policy deleted`);
+        await mutate();
+        navigate(`${basePath}/mcp/target/${selected.target.targetIndex}`);
         return;
       }
 
@@ -1758,6 +1812,93 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             onChange={({ formData: fd }) => setFormData(fd)}
             onSubmit={handleSubmit}
             onError={handleError}
+            templates={formTemplates}
+          >
+            <></>
+          </Form>
+        </FormWrapper>
+      </Container>
+    );
+  }
+
+  // Handle MCP target policy types
+  if (selected.type === "mcpTargetPolicy") {
+    const displayName = getPolicyLabel(selected.node.policyType);
+    const formId = `mcpTargetPolicy-form`;
+    const formSchema = forms.llmPolicy; // Use generic policy form (llmPolicy is the generic one)
+    const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
+    const targetName = selected.target.target.name ?? `Target ${selected.target.targetIndex}`;
+
+    return (
+      <Container>
+        <Header>
+          <BreadcrumbWrapper>
+            <Breadcrumb items={breadcrumbItems} />
+          </BreadcrumbWrapper>
+          <TitleRow>
+            <TitleLeft>
+              <Title>
+                {isEditing ? "Edit: " : ""}
+                {displayName}
+              </Title>
+              <TypeBadge>Target Policy</TypeBadge>
+            </TitleLeft>
+            {!isEditing && (
+              <Button
+                type="primary"
+                icon={<Edit2 size={14} />}
+                onClick={() => navigate(location.pathname + "?edit=true")}
+              >
+                Edit
+              </Button>
+            )}
+            {isEditing && (
+              <Space>
+                <Popconfirm
+                  title={`Delete "${displayName}" policy?`}
+                  description="This cannot be undone."
+                  onConfirm={handleDelete}
+                  okText="Delete"
+                  okButtonProps={{ danger: true }}
+                >
+                  <Button danger icon={<DeleteOutlined />} disabled={saving}>
+                    Delete
+                  </Button>
+                </Popconfirm>
+                <Button
+                  icon={<X size={14} />}
+                  onClick={() => navigate(location.pathname)}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  form={formId}
+                  loading={saving}
+                >
+                  Save
+                </Button>
+              </Space>
+            )}
+          </TitleRow>
+          <Description>
+            {displayName} policy for target "{targetName}"
+          </Description>
+        </Header>
+
+        <SectionTitle>Policy Details</SectionTitle>
+        <FormWrapper>
+          <Form
+            id={formId}
+            schema={formSchema.schema}
+            uiSchema={formSchema.uiSchema}
+            formData={formData}
+            onChange={(e) => setFormData(e.formData)}
+            onSubmit={handleSubmit}
+            onError={handleError}
+            validator={validator}
             templates={formTemplates}
           >
             <></>

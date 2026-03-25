@@ -663,6 +663,76 @@ function buildPolicyTitle(
   );
 }
 
+function buildMCPTargetPolicyTitle(
+  policyType: string,
+  policyData: unknown,
+  targetIndex: number,
+  navigate: (path: string) => void,
+  onDelete: (targetIndex: number, policyType: string) => void,
+  confirmDelete: ConfirmDeleteFn,
+  basePath: string,
+): ReactNode {
+  const policyPath = `${basePath}/mcp/target/${targetIndex}/policy/${policyType}`;
+  const targetPath = `${basePath}/mcp/target/${targetIndex}`;
+  const displayName = getPolicyLabel(policyType);
+
+  const menuItems: MenuProps["items"] = [
+    {
+      key: "edit",
+      label: "Edit",
+      icon: <Pencil size={13} />,
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        navigate(policyPath + "?edit=true");
+      },
+    },
+    { type: "divider" },
+    {
+      key: "delete",
+      label: "Delete",
+      icon: <DeleteOutlined />,
+      danger: true,
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        confirmDelete(
+          `Delete ${displayName} policy?`,
+          "This cannot be undone.",
+          () => onDelete(targetIndex, policyType),
+        );
+      },
+    },
+  ];
+
+  return (
+    <NodeRow
+      onClick={(e) => {
+        e.stopPropagation();
+        navigate(policyPath);
+      }}
+    >
+      <ResourceIcon
+        icon={<Settings />}
+        color={getResourceColor("policy")}
+        size="small"
+      />
+      <NodeLabel>{displayName}</NodeLabel>
+      <Dropdown
+        menu={{ items: menuItems }}
+        trigger={["click"]}
+        placement="bottomRight"
+        overlayClassName="hierarchy-menu"
+      >
+        <MoreButton
+          type="text"
+          size="small"
+          icon={<MoreVertical size={14} />}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </Dropdown>
+    </NodeRow>
+  );
+}
+
 function describeBackend(backend: LocalRouteBackend | unknown): {
   label: string;
   detail: string;
@@ -1211,11 +1281,26 @@ function buildMCPTargetTitle(
   tn: MCPTargetNode,
   navigate: (path: string) => void,
   onDelete: (targetIndex: number) => void,
+  onAddPolicy: (targetIndex: number, policyType: string) => void,
+  existingPolicies: Set<string>,
   confirmDelete: ConfirmDeleteFn,
   basePath: string,
 ): ReactNode {
   const targetName = tn.target.name || `Target ${tn.targetIndex + 1}`;
   const targetPath = `${basePath}/mcp/target/${tn.targetIndex}`;
+
+  // Build submenu for available policy types
+  const availablePolicyTypes = getPolicyTypesForScope("mcpTarget").filter(
+    (pt) => !existingPolicies.has(pt.key),
+  );
+  const policySubmenu: MenuProps["items"] = availablePolicyTypes.map((pt) => ({
+    key: pt.key,
+    label: pt.label,
+    onClick: ({ domEvent }) => {
+      domEvent.stopPropagation();
+      onAddPolicy(tn.targetIndex, pt.key);
+    },
+  }));
 
   const menuItems: MenuProps["items"] = [
     {
@@ -1226,6 +1311,13 @@ function buildMCPTargetTitle(
         domEvent.stopPropagation();
         navigate(targetPath + "?edit=true");
       },
+    },
+    {
+      key: "add-policy",
+      label: "Add Policy",
+      icon: <PlusOutlined />,
+      disabled: policySubmenu.length === 0,
+      children: policySubmenu.length > 0 ? policySubmenu : undefined,
     },
     { type: "divider" },
     {
@@ -1424,6 +1516,8 @@ function buildTreeData(
   onDeleteMCP: () => void,
   onAddMCPTarget: () => void,
   onDeleteMCPTarget: (targetIndex: number) => void,
+  onAddMCPTargetPolicy: (targetIndex: number, policyType: string) => void,
+  onDeleteMCPTargetPolicy: (targetIndex: number, policyType: string) => void,
   onAddMCPPolicy: (policyType: string) => void,
   onDeleteMCPPolicy: (policyType: string, parentPath: string) => void,
   onEditFrontendPolicies: () => void,
@@ -1490,11 +1584,42 @@ function buildTreeData(
         const nameB = b.target.name || "";
         return nameA.localeCompare(nameB);
       })
-      .map((target) => ({
-        key: `mcp-target-${target.targetIndex}`,
-        title: buildMCPTargetTitle(target, navigate, onDeleteMCPTarget, confirmDelete, basePath),
-        selectable: true,
-      }));
+      .map((target) => {
+        // Build policy children for this target
+        const targetPolicyChildren: DataNode[] = target.policies
+          .slice()
+          .sort((a, b) => a.policyType.localeCompare(b.policyType))
+          .map((policy) => ({
+            key: `mcp-target-${target.targetIndex}-policy-${policy.policyType}`,
+            title: buildMCPTargetPolicyTitle(
+              policy.policyType,
+              policy.policy,
+              target.targetIndex,
+              navigate,
+              onDeleteMCPTargetPolicy,
+              confirmDelete,
+              basePath,
+            ),
+            selectable: true,
+          }));
+
+        const existingTargetPolicies = new Set(target.policies.map((p) => p.policyType));
+
+        return {
+          key: `mcp-target-${target.targetIndex}`,
+          title: buildMCPTargetTitle(
+            target,
+            navigate,
+            onDeleteMCPTarget,
+            onAddMCPTargetPolicy,
+            existingTargetPolicies,
+            confirmDelete,
+            basePath,
+          ),
+          selectable: true,
+          children: targetPolicyChildren.length > 0 ? targetPolicyChildren : undefined,
+        };
+      });
 
     const mcpPolicyChildren: DataNode[] = hierarchy.mcp.policies
       .slice()
@@ -2227,6 +2352,34 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
     [basePath, mutate, navigate],
   );
 
+  const handleAddMCPTargetPolicy = useCallback(
+    async (targetIndex: number, policyType: string) => {
+      try {
+        await api.updateMCPTargetPolicy(targetIndex, policyType, {});
+        toast.success(`${getPolicyLabel(policyType)} policy added`);
+        await mutate();
+        navigate(`${basePath}/mcp/target/${targetIndex}/policy/${policyType}?edit=true&creating=true`);
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "Failed to add policy");
+      }
+    },
+    [basePath, mutate, navigate],
+  );
+
+  const handleDeleteMCPTargetPolicy = useCallback(
+    async (targetIndex: number, policyType: string) => {
+      try {
+        await api.removeMCPTargetPolicy(targetIndex, policyType);
+        toast.success(`${getPolicyLabel(policyType)} policy deleted`);
+        await mutate();
+        navigate(`${basePath}/mcp/target/${targetIndex}`);
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "Failed to delete policy");
+      }
+    },
+    [basePath, mutate, navigate],
+  );
+
   const handleDeleteFrontendPolicies = useCallback(async () => {
     try {
       await api.deleteFrontendPolicies();
@@ -2353,6 +2506,8 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       handleDeleteMCP,
       handleAddMCPTarget,
       handleDeleteMCPTarget,
+      handleAddMCPTargetPolicy,
+      handleDeleteMCPTargetPolicy,
       handleAddMCPPolicy,
       handleDeleteMCPPolicy,
       handleEditFrontendPolicies,
@@ -2383,6 +2538,8 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
     handleDeleteMCP,
     handleAddMCPTarget,
     handleDeleteMCPTarget,
+    handleAddMCPTargetPolicy,
+    handleDeleteMCPTargetPolicy,
     handleAddMCPPolicy,
     handleDeleteMCPPolicy,
     handleEditFrontendPolicies,

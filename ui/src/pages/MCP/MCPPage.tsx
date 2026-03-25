@@ -127,6 +127,15 @@ const Description = styled.p`
 // ---------------------------------------------------------------------------
 
 function parseMCPPath(pathname: string): UrlParams | null {
+  // Check for target policy first (more specific pattern)
+  const targetPolicyMatch = pathname.match(/^\/mcp\/mcp\/target\/(\d+)\/policy\/(.+)/);
+  if (targetPolicyMatch) {
+    return {
+      topLevelType: "mcp",
+      mcpTargetIndex: parseInt(targetPolicyMatch[1], 10),
+      mcpTargetPolicyType: targetPolicyMatch[2],
+    };
+  }
   const targetMatch = pathname.match(/^\/mcp\/mcp\/target\/(\d+)/);
   if (targetMatch) {
     return { topLevelType: "mcp", mcpTargetIndex: parseInt(targetMatch[1], 10) };

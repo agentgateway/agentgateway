@@ -3,6 +3,9 @@ import type { RJSFSchema, UiSchema } from "@rjsf/utils";
 /**
  * Form for a single MCP Target (LocalMcpTarget).
  * Extracted from the mcpForm targets array item schema.
+ * 
+ * Note: The `policies` field is managed separately via the tree hierarchy
+ * and is not shown in this form.
  */
 export const schema: RJSFSchema = {
   type: "object",
@@ -20,12 +23,6 @@ export const schema: RJSFSchema = {
       enum: ["sse", "mcp", "stdio", "openapi"],
       default: "sse",
       description: "Type of connection to the MCP server",
-    },
-    policies: {
-      type: "object",
-      title: "Target Policies",
-      description: "Optional policies for this specific target",
-      additionalProperties: true,
     },
   },
   dependencies: {
@@ -198,7 +195,8 @@ export function transformForForm(data: unknown): unknown {
   }
 
   const targetData = data as Record<string, unknown>;
-  const result: Record<string, unknown> = { ...targetData };
+  // Filter out policies - they're managed separately via the tree
+  const { policies: _policies, ...result } = targetData;
 
   // Determine connectionType based on which field is present
   if ("sse" in targetData) {

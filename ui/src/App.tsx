@@ -94,6 +94,7 @@ function App() {
                   <Route path="/mcp" element={<MCPPage />} />
                   <Route path="/mcp/mcp" element={<MCPPage />} />
                   <Route path="/mcp/mcp/target/:targetIndex" element={<MCPPage />} />
+                  <Route path="/mcp/mcp/target/:targetIndex/policy/:policyType" element={<MCPPage />} />
                   <Route path="/mcp/mcp/policy/:policyType" element={<MCPPage />} />
                   <Route path="/mcp/raw-config" element={<TrafficRawConfigPage />} />
                   <Route path="/mcp/logs" element={<MCPLogsPage />} />
@@ -122,6 +123,10 @@ function App() {
                   <Route path="/traffic/mcp" element={<TrafficPage />} />
                   <Route
                     path="/traffic/mcp/target/:targetIndex"
+                    element={<TrafficPage />}
+                  />
+                  <Route
+                    path="/traffic/mcp/target/:targetIndex/policy/:policyType"
                     element={<TrafficPage />}
                   />
                   <Route

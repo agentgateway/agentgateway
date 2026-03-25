@@ -45,7 +45,7 @@ llm:
 mcp:
   port: 23
   targets:
-  - name: target-123
+  - name: target-1232
     stdio:
       cmd: echo
       args: []

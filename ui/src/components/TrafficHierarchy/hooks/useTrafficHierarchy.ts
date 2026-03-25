@@ -96,6 +96,13 @@ export interface MCPPolicyNode {
 export interface MCPTargetNode {
   target: LocalMcpTarget;
   targetIndex: number;
+  /** Policies defined for this specific MCP target */
+  policies: MCPTargetPolicyNode[];
+}
+
+export interface MCPTargetPolicyNode {
+  policyType: string;
+  policy: unknown;
 }
 
 export interface LLMNode {
@@ -425,10 +432,26 @@ export function useTrafficHierarchy(): TrafficHierarchy {
     if (config?.mcp) {
       const mcpConfig = config.mcp as LocalSimpleMcpConfig;
 
-      const mcpTargets: MCPTargetNode[] = (mcpConfig.targets ?? []).map((target, idx) => ({
-        target,
-        targetIndex: idx,
-      }));
+      const mcpTargets: MCPTargetNode[] = (mcpConfig.targets ?? []).map((target, idx) => {
+        // Extract policies from the target 
+        const targetPolicies: MCPTargetPolicyNode[] =
+          target.policies &&
+          typeof target.policies === "object" &&
+          !Array.isArray(target.policies)
+            ? Object.entries(target.policies)
+                .filter(([, v]) => v != null)
+                .map(([policyType, policyConfig]) => ({
+                  policyType,
+                  policy: policyConfig,
+                }))
+            : [];
+
+        return {
+          target,
+          targetIndex: idx,
+          policies: targetPolicies,
+        };
+      });
 
       const mcpPolicies: MCPPolicyNode[] =
         mcpConfig.policies &&

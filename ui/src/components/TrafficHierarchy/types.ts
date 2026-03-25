@@ -10,4 +10,5 @@ export interface UrlParams {
   llmPolicyType?: string;
   mcpPolicyType?: string;
   mcpTargetIndex?: number;
+  mcpTargetPolicyType?: string;
 }

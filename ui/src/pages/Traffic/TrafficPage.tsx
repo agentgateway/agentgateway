@@ -112,6 +112,16 @@ function parseTrafficPath(pathname: string): UrlParams | null {
     };
   }
 
+  // Check for MCP target policy routes (must be before target route)
+  const mcpTargetPolicyMatch = pathname.match(/\/traffic\/mcp\/target\/(\d+)\/policy\/(.+)/);
+  if (mcpTargetPolicyMatch) {
+    return {
+      topLevelType: "mcp",
+      mcpTargetIndex: parseInt(mcpTargetPolicyMatch[1], 10),
+      mcpTargetPolicyType: mcpTargetPolicyMatch[2],
+    };
+  }
+
   // Check for MCP target routes (must be before general MCP route)
   const mcpTargetMatch = pathname.match(/\/traffic\/mcp\/target\/(\d+)/);
   if (mcpTargetMatch) {
