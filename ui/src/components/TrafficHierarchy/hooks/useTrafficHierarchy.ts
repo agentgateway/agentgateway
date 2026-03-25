@@ -1,16 +1,16 @@
 import { useMemo } from "react";
 import { useConfig } from "../../../api";
 import type {
-  LocalBind,
-  LocalListener,
-  LocalListenerProtocol,
-  LocalLLMConfig,
-  LocalLLMModels,
-  LocalMcpTarget,
-  LocalRoute,
-  LocalRouteBackend,
-  LocalSimpleMcpConfig,
-  LocalTCPRoute,
+    LocalBind,
+    LocalListener,
+    LocalListenerProtocol,
+    LocalLLMConfig,
+    LocalLLMModels,
+    LocalMcpTarget,
+    LocalRoute,
+    LocalRouteBackend,
+    LocalSimpleMcpConfig,
+    LocalTCPRoute,
 } from "../../../config";
 
 // ---------------------------------------------------------------------------
