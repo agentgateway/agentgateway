@@ -67,6 +67,8 @@ pub struct FrontendPolices {
 	pub access_log: Option<frontend::LoggingPolicy>,
 	pub tracing: Option<Arc<crate::types::agent::TracingPolicy>>,
 	pub access_log_otlp: Option<Arc<crate::types::agent::AccessLogPolicy>>,
+	/// Channel sender for in-process access log consumers (e.g. moat).
+	pub channel_access_log_tx: Option<Arc<crate::telemetry::log::ChannelAccessLogger>>,
 }
 
 impl FrontendPolices {

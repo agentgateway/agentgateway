@@ -599,6 +599,7 @@ impl RequestLog {
 			tracer: None,
 			trace_spans: Arc::new(Mutex::new(Default::default())),
 			otel_logger: None,
+			channel_logger: None,
 			endpoint: None,
 			bind_name: None,
 			listener_name: None,
@@ -668,6 +669,9 @@ pub struct RequestLog {
 
 	// Set only if OTLP logging is configured
 	pub otel_logger: Option<std::sync::Arc<OtelAccessLogger>>,
+
+	// Set only if channel-based access logging is configured (in-process embedder)
+	pub channel_logger: Option<std::sync::Arc<ChannelAccessLogger>>,
 
 	pub endpoint: Option<Target>,
 
@@ -1128,6 +1132,10 @@ impl Drop for DropOnLog {
 			if let Some(otel) = &log.otel_logger {
 				otel.emit("info", "request", &kv);
 			}
+
+			if let Some(ch) = &log.channel_logger {
+				ch.emit("info", "request", &kv);
+			}
 		}
 	}
 }
@@ -1447,6 +1455,55 @@ impl OtelLogSink for OtelAccessLogger {
 	}
 }
 
+fn valuebag_to_json(v: &ValueBag) -> serde_json::Value {
+	if let Some(s) = v.to_str() {
+		serde_json::Value::String(s.to_string())
+	} else if let Some(i) = v.to_i64() {
+		serde_json::Value::Number(i.into())
+	} else if let Some(f) = v.to_f64() {
+		serde_json::json!(f)
+	} else if let Some(b) = v.to_bool() {
+		serde_json::Value::Bool(b)
+	} else {
+		serde_json::Value::String(v.to_string())
+	}
+}
+
+/// Access logger that sends records over a tokio mpsc channel.
+/// Used by in-process embedders (e.g. moat) to receive access logs
+/// without going through the OTel export pipeline.
+#[derive(Debug, Clone)]
+pub struct ChannelAccessLogger {
+	tx: tokio::sync::mpsc::Sender<agent_core::telemetry::AccessLogRecord>,
+}
+
+impl ChannelAccessLogger {
+	pub fn new(tx: tokio::sync::mpsc::Sender<agent_core::telemetry::AccessLogRecord>) -> Self {
+		Self { tx }
+	}
+
+	pub fn emit<'v>(&self, level: &str, target: &str, kv: &[(&str, Option<ValueBag<'v>>)]) {
+		let mut map = serde_json::Map::with_capacity(kv.len() + 2);
+		map.insert(
+			"level".to_string(),
+			serde_json::Value::String(level.to_string()),
+		);
+		map.insert(
+			"target".to_string(),
+			serde_json::Value::String(target.to_string()),
+		);
+
+		for &(k, ref v) in kv {
+			let Some(v) = v else { continue };
+			map.insert(k.to_string(), valuebag_to_json(v));
+		}
+
+		// Use try_send to avoid blocking the proxy hot path.
+		// If the channel is full, the record is dropped.
+		let _ = self.tx.try_send(map);
+	}
+}
+
 // SpanWriter is a construct that can start otel spans
 #[derive(Debug, Default, Clone)]
 pub struct SpanWriter {
@@ -1656,5 +1713,30 @@ mod tests {
 		assert_eq!(child.parent_span_id, outgoing.span_id.into());
 		assert_eq!(child.span_context.trace_id(), outgoing.trace_id.into());
 		assert!(child.parent_span_is_remote);
+	}
+
+	#[tokio::test]
+	async fn channel_access_logger_sends_records() {
+		let (tx, mut rx) = tokio::sync::mpsc::channel(16);
+		let logger = ChannelAccessLogger::new(tx);
+
+		logger.emit(
+			"info",
+			"request",
+			&[
+				("listener", Some(ValueBag::from("my-listener"))),
+				("http.status", Some(ValueBag::from(200i64))),
+				("duration", Some(ValueBag::from("1.23ms"))),
+				("skipped", None),
+			],
+		);
+
+		let record = rx.try_recv().expect("should receive a record");
+		assert_eq!(record["level"], "info");
+		assert_eq!(record["target"], "request");
+		assert_eq!(record["listener"], "my-listener");
+		assert_eq!(record["http.status"], 200);
+		assert_eq!(record["duration"], "1.23ms");
+		assert!(!record.contains_key("skipped"), "None values should be skipped");
 	}
 }

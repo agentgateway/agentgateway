@@ -824,6 +824,10 @@ impl HTTPProxy {
 				});
 		}
 
+		if let Some(ch) = &frontend_policies.channel_access_log_tx {
+			log.channel_logger = Some(ch.clone());
+		}
+
 		let mut sampler = TraceSampler::default();
 		if let Some(tp) = frontend_policies.tracing.as_deref() {
 			// Apply sampling overrides if present
