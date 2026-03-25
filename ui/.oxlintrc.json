@@ -1,0 +1,13 @@
+{
+  "plugins": ["react", "typescript"],
+  "env": {
+    "browser": true,
+    "es2022": true
+  },
+  "rules": {
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "warn",
+    "no-extra-boolean-cast": "off"
+  },
+  "ignore_patterns": ["dist/", "out/", "node_modules/"]
+}

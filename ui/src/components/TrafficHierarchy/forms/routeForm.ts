@@ -158,7 +158,7 @@ export function transformBeforeSubmit(data: unknown): unknown {
     return data;
   }
 
-  const { backends, policies, ...rest } = data as Record<string, unknown> & {
+  const { backends: _backends, policies: _policies, ...rest } = data as Record<string, unknown> & {
     backends?: unknown;
     policies?: unknown;
   };

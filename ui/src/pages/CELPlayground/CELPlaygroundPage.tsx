@@ -188,7 +188,7 @@ export const CELPlaygroundPage = () => {
     if (inputData.trim().length > 0) {
       try {
         parsed = yaml.load(inputData);
-      } catch (err) {
+      } catch {
         toast.error("Input data is not valid YAML");
         return;
       }
@@ -251,20 +251,6 @@ export const CELPlaygroundPage = () => {
     setResultError(null);
     setHasEvaluated(false);
     toast("Reset to example template");
-  };
-
-  const handleCopyResult = async () => {
-    try {
-      const text = resultError
-        ? resultError
-        : resultValue !== null
-          ? JSON.stringify(resultValue, null, 2)
-          : "";
-      await navigator.clipboard.writeText(text);
-      toast.success("Copied to clipboard");
-    } catch (e) {
-      toast.error("Failed to copy result");
-    }
   };
 
   const evaluateRef = useRef(handleEvaluate);

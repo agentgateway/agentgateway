@@ -12,7 +12,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useConfig, useLLMConfig, useMCPConfig } from "../../api";
 import { StyledAlert } from "../../components/StyledAlert";
-import { useTrafficHierarchy } from "../Traffic/hooks/useTrafficHierarchy";
+import { useTrafficHierarchy } from "../../components/TrafficHierarchy";
 
 const Container = styled.div`
   display: flex;

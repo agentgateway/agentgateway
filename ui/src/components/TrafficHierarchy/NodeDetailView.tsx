@@ -7,19 +7,19 @@ import { Edit2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useConfig } from "../../../api";
-import * as api from "../../../api/crud";
+import { useConfig } from "../../api";
+import * as api from "../../api/crud";
 import {
   ArrayFieldTemplate,
   CollapsibleObjectFieldTemplate,
   FieldTemplate,
   WrapIfAdditionalTemplate,
-} from "../../../components/FormTemplates";
-import { ProtocolTag } from "../../../components/ProtocolTag";
-import { StyledAlert } from "../../../components/StyledAlert";
-import { validator } from "../../../utils/validator";
-import { forms } from "../forms";
-import { useNodePolling } from "../hooks/useNodePolling";
+} from "../FormTemplates";
+import { ProtocolTag } from "../ProtocolTag";
+import { StyledAlert } from "../StyledAlert";
+import { validator } from "../../utils/validator";
+import { forms } from "./forms";
+import { useNodePolling } from "./hooks/useNodePolling";
 import type {
   BackendNode,
   BindNode,
@@ -29,7 +29,7 @@ import type {
   RouteNode,
   useTrafficHierarchy,
 } from "../hooks/useTrafficHierarchy";
-import type { UrlParams } from "../TrafficPage";
+import type { UrlParams } from "../types";
 
 // ---------------------------------------------------------------------------
 // Form templates configuration
@@ -322,7 +322,7 @@ function generateBreadcrumbItems(
   const items: { title: React.ReactNode; onClick?: () => void }[] = [
     {
       title: "Traffic",
-      onClick: () => navigate("/traffic"),
+      onClick: () => navigate(basePath),
     },
   ];
 
@@ -331,7 +331,7 @@ function generateBreadcrumbItems(
   } else if (selected.type === "listener") {
     items.push({
       title: `Port ${selected.bind.bind.port}`,
-      onClick: () => navigate(`/traffic/bind/${selected.bind.bind.port}`),
+      onClick: () => navigate(`${basePath}/bind/${selected.bind.bind.port}`),
     });
     items.push({
       title: selected.node.listener.name ?? "(unnamed listener)",
@@ -341,11 +341,11 @@ function generateBreadcrumbItems(
     const li = selected.listener.listenerIndex;
     items.push({
       title: `Port ${port}`,
-      onClick: () => navigate(`/traffic/bind/${port}`),
+      onClick: () => navigate(`${basePath}/bind/${port}`),
     });
     items.push({
       title: selected.listener.listener.name ?? "(unnamed listener)",
-      onClick: () => navigate(`/traffic/bind/${port}/listener/${li}`),
+      onClick: () => navigate(`${basePath}/bind/${port}/listener/${li}`),
     });
     items.push({
       title:
@@ -358,18 +358,18 @@ function generateBreadcrumbItems(
     const routeType = selected.route.isTcp ? "tcp" : "";
     items.push({
       title: `Port ${port}`,
-      onClick: () => navigate(`/traffic/bind/${port}`),
+      onClick: () => navigate(`${basePath}/bind/${port}`),
     });
     items.push({
       title: selected.listener.listener.name ?? "(unnamed listener)",
-      onClick: () => navigate(`/traffic/bind/${port}/listener/${li}`),
+      onClick: () => navigate(`${basePath}/bind/${port}/listener/${li}`),
     });
     items.push({
       title:
         (selected.route.route.name as string | undefined) ?? "(unnamed route)",
       onClick: () =>
         navigate(
-          `/traffic/bind/${port}/listener/${li}/${routeType}route/${ri}`,
+          `${basePath}/bind/${port}/listener/${li}/${routeType}route/${ri}`,
         ),
     });
     items.push({
@@ -382,18 +382,18 @@ function generateBreadcrumbItems(
     const routeType = selected.route.isTcp ? "tcp" : "";
     items.push({
       title: `Port ${port}`,
-      onClick: () => navigate(`/traffic/bind/${port}`),
+      onClick: () => navigate(`${basePath}/bind/${port}`),
     });
     items.push({
       title: selected.listener.listener.name ?? "(unnamed listener)",
-      onClick: () => navigate(`/traffic/bind/${port}/listener/${li}`),
+      onClick: () => navigate(`${basePath}/bind/${port}/listener/${li}`),
     });
     items.push({
       title:
         (selected.route.route.name as string | undefined) ?? "(unnamed route)",
       onClick: () =>
         navigate(
-          `/traffic/bind/${port}/listener/${li}/${routeType}route/${ri}`,
+          `${basePath}/bind/${port}/listener/${li}/${routeType}route/${ri}`,
         ),
     });
     items.push({
@@ -404,7 +404,7 @@ function generateBreadcrumbItems(
   } else if (selected.type === "model") {
     items.push({
       title: "LLM Configuration",
-      onClick: () => navigate("/traffic/llm"),
+      onClick: () => navigate(`${basePath}/llm`),
     });
     items.push({
       title: selected.node.model.name ?? `Model ${selected.node.modelIndex}`,
@@ -431,6 +431,16 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { mutate } = useConfig();
+
+  const basePath = useMemo(() => {
+    const knownSegments = ["bind", "llm", "mcp", "frontendPolicies", "raw-config"];
+    const pathname = location.pathname;
+    for (const seg of knownSegments) {
+      const idx = pathname.indexOf(`/${seg}`);
+      if (idx !== -1) return pathname.substring(0, idx);
+    }
+    return pathname.replace(/\/$/, "") || "/";
+  }, [location.pathname]);
 
   // Edit mode is URL-driven
   const searchParams = new URLSearchParams(location.search);
@@ -465,7 +475,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         const bind = freshConfig?.binds?.find((b: any) => b.port === port);
         const listenerIndex = bind ? bind.listeners.length - 1 : 0;
         navigate(
-          `/traffic/bind/${port}/listener/${listenerIndex}?edit=true&creating=true`,
+          `${basePath}/bind/${port}/listener/${listenerIndex}?edit=true&creating=true`,
         );
       } catch (e: unknown) {
         toast.error(
@@ -515,7 +525,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           : (freshListener?.routes?.length ?? 1) - 1;
         const routeSeg = isTcp ? "tcproute" : "route";
         navigate(
-          `/traffic/bind/${port}/listener/${li}/${routeSeg}/${routeIndex}?edit=true&creating=true`,
+          `${basePath}/bind/${port}/listener/${li}/${routeSeg}/${routeIndex}?edit=true&creating=true`,
         );
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Failed to create route");
@@ -576,7 +586,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         const backendIndex = (freshRoute?.backends?.length ?? 1) - 1;
         const routeSeg = isTcp ? "tcproute" : "route";
         navigate(
-          `/traffic/bind/${port}/listener/${li}/${routeSeg}/${ri}/backend/${backendIndex}?edit=true&creating=true`,
+          `${basePath}/bind/${port}/listener/${li}/${routeSeg}/${ri}/backend/${backendIndex}?edit=true&creating=true`,
         );
       } catch (e: unknown) {
         toast.error(
@@ -633,7 +643,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
 
         const routeSeg = isTcp ? "tcproute" : "route";
         navigate(
-          `/traffic/bind/${port}/listener/${li}/${routeSeg}/${ri}/policy/${policyType}?edit=true&creating=true`,
+          `${basePath}/bind/${port}/listener/${li}/${routeSeg}/${ri}/policy/${policyType}?edit=true&creating=true`,
         );
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Failed to create policy");
@@ -650,12 +660,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         setFormData(sel.node.bind as unknown as Record<string, unknown>);
       } else if (sel.type === "listener") {
         // Filter out routes and tcpRoutes - they're managed separately via the tree
-        const { routes, tcpRoutes, ...listenerData } = sel.node
+        const { routes: _routes, tcpRoutes: _tcpRoutes, ...listenerData } = sel.node
           .listener as Record<string, unknown>;
         setFormData(listenerData);
       } else if (sel.type === "route") {
         // Filter out backends - they're managed separately via the tree
-        const { backends, ...routeData } = sel.node.route as Record<
+        const { backends: _backends, ...routeData } = sel.node.route as Record<
           string,
           unknown
         >;
@@ -691,12 +701,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         setFormData(selected.node.bind as unknown as Record<string, unknown>);
       } else if (selected.type === "listener") {
         // Filter out routes and tcpRoutes - they're managed separately via the tree
-        const { routes, tcpRoutes, ...listenerData } = selected.node
+        const { routes: _routes, tcpRoutes: _tcpRoutes, ...listenerData } = selected.node
           .listener as Record<string, unknown>;
         setFormData(listenerData);
       } else if (selected.type === "route") {
         // Filter out backends - they're managed separately via the tree
-        const { backends, ...routeData } = selected.node.route as Record<
+        const { backends: _backends, ...routeData } = selected.node.route as Record<
           string,
           unknown
         >;
@@ -772,7 +782,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         await api.updateLLMModelByIndex(selected.node.modelIndex, fd);
         toast.success("Model updated successfully");
         await mutate();
-        navigate(`/traffic/llm/model/${selected.node.modelIndex}`);
+        navigate(`${basePath}/llm/model/${selected.node.modelIndex}`);
         return;
       }
 
@@ -881,7 +891,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         await api.removeLLMModelByIndex(selected.node.modelIndex);
         toast.success("Model deleted successfully");
         await mutate();
-        navigate("/traffic/llm");
+        navigate(`${basePath}/llm`);
         return;
       }
 
@@ -894,17 +904,17 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
 
       if (selected.type === "bind") {
         await api.removeBind(port);
-        navigate("/traffic");
+        navigate(basePath);
       } else if (selected.type === "listener") {
         await api.removeListenerByIndex(port, li!);
-        navigate(`/traffic/bind/${port}`);
+        navigate(`${basePath}/bind/${port}`);
       } else if (selected.type === "route") {
         if (isTcpRoute) {
           await api.removeTCPRouteByIndex(port, li!, ri!);
         } else {
           await api.removeRouteByIndex(port, li!, ri!);
         }
-        navigate(`/traffic/bind/${port}/listener/${li}`);
+        navigate(`${basePath}/bind/${port}/listener/${li}`);
       } else if (selected.type === "backend") {
         if (isTcpRoute) {
           await api.removeTCPRouteBackendByIndex(port, li!, ri!, bi!);
@@ -912,7 +922,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           await api.removeRouteBackendByIndex(port, li!, ri!, bi!);
         }
         navigate(
-          `/traffic/bind/${port}/listener/${li}/${isTcpRoute ? "tcproute" : "route"}/${ri}`,
+          `${basePath}/bind/${port}/listener/${li}/${isTcpRoute ? "tcproute" : "route"}/${ri}`,
         );
       } else if (selected.type === "policy") {
         // For policy, remove the specific policy type from the parent route
@@ -922,7 +932,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             ? selected.route.route.policies
             : {};
 
-        const { [selected.node.policyType]: removed, ...remainingPolicies } =
+        const { [selected.node.policyType]: _removed, ...remainingPolicies } =
           currentPolicies as Record<string, unknown>;
 
         const updatedRoute = {
@@ -938,7 +948,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           await api.updateRouteByIndex(port, li!, ri!, updatedRoute as any);
         }
         navigate(
-          `/traffic/bind/${port}/listener/${li}/${isTcpRoute ? "tcproute" : "route"}/${ri}`,
+          `${basePath}/bind/${port}/listener/${li}/${isTcpRoute ? "tcproute" : "route"}/${ri}`,
         );
       }
 
@@ -1682,7 +1692,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
                           ? llmConfig.models.length - 1
                           : 0;
                         navigate(
-                          `/traffic/llm/model/${newIndex}?edit=true&creating=true`,
+                          `${basePath}/llm/model/${newIndex}?edit=true&creating=true`,
                         );
                       } catch (e: unknown) {
                         toast.error(

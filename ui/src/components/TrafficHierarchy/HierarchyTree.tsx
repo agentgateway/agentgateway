@@ -31,11 +31,11 @@ import type { Key, ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useConfig } from "../../../api";
-import * as api from "../../../api/crud";
-import { ProtocolTag } from "../../../components/ProtocolTag";
-import type { LocalRouteBackend } from "../../../config";
-import { getResourceColor } from "../../../utils/colorPalette";
+import { useConfig } from "../../api";
+import * as api from "../../api/crud";
+import { ProtocolTag } from "../ProtocolTag";
+import type { LocalRouteBackend } from "../../config";
+import { getResourceColor } from "../../utils/colorPalette";
 import type {
   BackendNode,
   BindNode,
@@ -45,7 +45,7 @@ import type {
   RouteNode,
   TrafficHierarchy,
   ValidationError,
-} from "../hooks/useTrafficHierarchy";
+} from "./hooks/useTrafficHierarchy";
 import { ResourceIcon } from "./ResourceIcon";
 
 // ---------------------------------------------------------------------------
@@ -269,6 +269,7 @@ const NodeRow = styled.div<{ $onHoverChange?: boolean }>`
   .ant-tree-node-content-wrapper:not(.ant-tree-node-selected) &:hover {
     background: rgba(139, 92, 246, 0.08);
     transform: translateX(2px);
+    --node-label-color: var(--color-text-heading);
 
     [data-theme="light"] & {
       background: rgba(139, 92, 246, 0.06);
@@ -296,7 +297,7 @@ const NodeRow = styled.div<{ $onHoverChange?: boolean }>`
 const NodeLabel = styled.span`
   font-weight: 500;
   font-size: 13px;
-  color: var(--color-text-base);
+  color: var(--node-label-color, var(--color-text-base));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -304,10 +305,6 @@ const NodeLabel = styled.span`
   min-width: 0;
   letter-spacing: 0.01em;
   transition: color 0.15s ease;
-
-  ${NodeRow}:hover & {
-    color: var(--color-text-heading);
-  }
 `;
 
 const MoreButton = styled(Button)`
@@ -400,8 +397,9 @@ function buildBindTitle(
   onDelete: (port: number, parentPath: string) => void,
   confirmDelete: ConfirmDeleteFn,
   onAddListener: (port: number) => void,
+  basePath: string,
 ): ReactNode {
-  const bindPath = `/traffic/bind/${bind.bind.port}`;
+  const bindPath = `${basePath}/bind/${bind.bind.port}`;
 
   const menuItems: MenuProps["items"] = [
     {
@@ -433,7 +431,7 @@ function buildBindTitle(
         confirmDelete(
           `Delete Port ${bind.bind.port}?`,
           "This will remove the bind and all its listeners.",
-          () => onDelete(bind.bind.port, "/traffic"),
+          () => onDelete(bind.bind.port, basePath),
         );
       },
     },
@@ -481,10 +479,11 @@ function buildListenerTitle(
   listenerIndex: number,
   confirmDelete: ConfirmDeleteFn,
   onAddRoute: (port: number, li: number, isTcp: boolean) => void,
+  basePath: string,
 ): ReactNode {
   const protocol = ln.listener.protocol ?? "HTTP";
-  const listenerPath = `/traffic/bind/${bindPort}/listener/${listenerIndex}`;
-  const bindPath = `/traffic/bind/${bindPort}`;
+  const listenerPath = `${basePath}/bind/${bindPort}/listener/${listenerIndex}`;
+  const bindPath = `${basePath}/bind/${bindPort}`;
   const isTcp = protocol === "TCP" || protocol === "TLS";
 
   const menuItems: MenuProps["items"] = [
@@ -570,10 +569,11 @@ function buildPolicyTitle(
   listenerIndex: number,
   routeIndex: number,
   confirmDelete: ConfirmDeleteFn,
+  basePath: string,
 ): ReactNode {
   const routeSeg = pn.isTcpRoute ? "tcproute" : "route";
-  const policyPath = `/traffic/bind/${bindPort}/listener/${listenerIndex}/${routeSeg}/${routeIndex}/policy/${pn.policyType}`;
-  const routePath = `/traffic/bind/${bindPort}/listener/${listenerIndex}/${routeSeg}/${routeIndex}`;
+  const policyPath = `${basePath}/bind/${bindPort}/listener/${listenerIndex}/${routeSeg}/${routeIndex}/policy/${pn.policyType}`;
+  const routePath = `${basePath}/bind/${bindPort}/listener/${listenerIndex}/${routeSeg}/${routeIndex}`;
 
   // Format policy type for display (camelCase to Title Case)
   const displayName = pn.policyType
@@ -687,11 +687,12 @@ function buildBackendTitle(
   listenerIndex: number,
   routeIndex: number,
   confirmDelete: ConfirmDeleteFn,
+  basePath: string,
 ): ReactNode {
   const { label } = describeBackend(bn.backend);
   const routeSeg = bn.isTcpRoute ? "tcproute" : "route";
-  const backendPath = `/traffic/bind/${bindPort}/listener/${listenerIndex}/${routeSeg}/${routeIndex}/backend/${bn.backendIndex}`;
-  const routePath = `/traffic/bind/${bindPort}/listener/${listenerIndex}/${routeSeg}/${routeIndex}`;
+  const backendPath = `${basePath}/bind/${bindPort}/listener/${listenerIndex}/${routeSeg}/${routeIndex}/backend/${bn.backendIndex}`;
+  const routePath = `${basePath}/bind/${bindPort}/listener/${listenerIndex}/${routeSeg}/${routeIndex}`;
 
   const menuItems: MenuProps["items"] = [
     {
@@ -763,9 +764,10 @@ function buildModelTitle(
   navigate: (path: string) => void,
   onDelete: (modelIndex: number) => void,
   confirmDelete: ConfirmDeleteFn,
+  basePath: string,
 ): ReactNode {
   const modelName = mn.model.name || `Model ${mn.modelIndex + 1}`;
-  const modelPath = `/traffic/llm/model/${mn.modelIndex}`;
+  const modelPath = `${basePath}/llm/model/${mn.modelIndex}`;
 
   const menuItems: MenuProps["items"] = [
     {
@@ -850,10 +852,11 @@ function buildRouteTitle(
     isTcp: boolean,
     policyType: string,
   ) => void,
+  basePath: string,
 ): ReactNode {
   const routeSeg = rn.isTcp ? "tcproute" : "route";
-  const routePath = `/traffic/bind/${bindPort}/listener/${listenerIndex}/${routeSeg}/${rn.categoryIndex}`;
-  const listenerPath = `/traffic/bind/${bindPort}/listener/${listenerIndex}`;
+  const routePath = `${basePath}/bind/${bindPort}/listener/${listenerIndex}/${routeSeg}/${rn.categoryIndex}`;
+  const listenerPath = `${basePath}/bind/${bindPort}/listener/${listenerIndex}`;
 
   // Check which policy types already exist
   const existingPolicyTypes = new Set(rn.policies.map((p) => p.policyType));
@@ -1149,6 +1152,7 @@ function buildLLMItemTitle(
 
 function buildTreeData(
   hierarchy: TrafficHierarchy,
+  basePath: string,
   navigate: (path: string) => void,
   onDeleteBind: (port: number, parentPath: string) => void,
   onDeleteListener: (port: number, li: number, parentPath: string) => void,
@@ -1213,7 +1217,7 @@ function buildTreeData(
       })
       .map((model) => ({
         key: `model-${model.modelIndex}`,
-        title: buildModelTitle(model, navigate, onDeleteModel, confirmDelete),
+        title: buildModelTitle(model, navigate, onDeleteModel, confirmDelete, basePath),
         selectable: true,
       }));
 
@@ -1227,7 +1231,7 @@ function buildTreeData(
         onAddModel,
         confirmDelete,
         navigate,
-        "/traffic/llm",
+        `${basePath}/llm`,
       ),
       selectable: true,
       children: modelChildren.length > 0 ? modelChildren : undefined,
@@ -1245,7 +1249,7 @@ function buildTreeData(
         onDeleteMCP,
         confirmDelete,
         navigate,
-        "/traffic/mcp",
+        `${basePath}/mcp`,
       ),
       selectable: true,
     });
@@ -1265,7 +1269,7 @@ function buildTreeData(
         onDeleteFrontendPolicies,
         confirmDelete,
         navigate,
-        "/traffic/frontendPolicies",
+        `${basePath}/frontendPolicies`,
       ),
       selectable: true,
     });
@@ -1283,6 +1287,7 @@ function buildTreeData(
         onDeleteBind,
         confirmDelete,
         onAddListener,
+        basePath,
       ),
       selectable: true,
       children: bind.listeners
@@ -1302,6 +1307,7 @@ function buildTreeData(
             li,
             confirmDelete,
             onAddRoute,
+            basePath,
           ),
           selectable: true,
           children: listener.routes
@@ -1332,6 +1338,7 @@ function buildTreeData(
                     li,
                     route.categoryIndex,
                     confirmDelete,
+                    basePath,
                   ),
                   selectable: true,
                 });
@@ -1353,6 +1360,7 @@ function buildTreeData(
                     li,
                     route.categoryIndex,
                     confirmDelete,
+                    basePath,
                   ),
                   selectable: true,
                 });
@@ -1369,6 +1377,7 @@ function buildTreeData(
                   confirmDelete,
                   onAddRouteBackend,
                   onAddRoutePolicy,
+                  basePath,
                 ),
                 selectable: true,
                 children,
@@ -1391,6 +1400,15 @@ interface HierarchyTreeProps {
 export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const basePath = useMemo(() => {
+    const knownSegments = ["bind", "llm", "mcp", "frontendPolicies", "raw-config"];
+    const pathname = location.pathname;
+    for (const seg of knownSegments) {
+      const idx = pathname.indexOf(`/${seg}`);
+      if (idx !== -1) return pathname.substring(0, idx);
+    }
+    return pathname.replace(/\/$/, "") || "/";
+  }, [location.pathname]);
   const { modal } = App.useApp();
   const { mutate } = useConfig();
 
@@ -1509,7 +1527,7 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
         const bind = freshConfig?.binds?.find((b: any) => b.port === port);
         const listenerIndex = bind ? bind.listeners.length - 1 : 0;
         navigate(
-          `/traffic/bind/${port}/listener/${listenerIndex}?edit=true&creating=true`,
+          `${basePath}/bind/${port}/listener/${listenerIndex}?edit=true&creating=true`,
         );
       } catch (e: unknown) {
         toast.error(
@@ -1517,7 +1535,7 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
         );
       }
     },
-    [mutate, navigate],
+    [basePath, mutate, navigate],
   );
 
   // Handler for adding a new route to a listener
@@ -1582,7 +1600,7 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
 
         // Navigate immediately with the creating flag to trigger polling
         navigate(
-          `/traffic/bind/${port}/listener/${li}/${routeSeg}/${routeIndex}?edit=true&creating=true`,
+          `${basePath}/bind/${port}/listener/${li}/${routeSeg}/${routeIndex}?edit=true&creating=true`,
         );
 
         // Trigger a background refresh (don't await)
@@ -1591,7 +1609,7 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
         toast.error(e instanceof Error ? e.message : "Failed to create route");
       }
     },
-    [hierarchy.binds, mutate, navigate],
+    [basePath, hierarchy.binds, mutate, navigate],
   );
 
   // Handler for adding a new backend to a route
@@ -1667,7 +1685,7 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
         const backendIndex = (freshRoute?.backends?.length ?? 1) - 1;
         const routeSeg = isTcp ? "tcproute" : "route";
         navigate(
-          `/traffic/bind/${port}/listener/${li}/${routeSeg}/${ri}/backend/${backendIndex}?edit=true&creating=true`,
+          `${basePath}/bind/${port}/listener/${li}/${routeSeg}/${ri}/backend/${backendIndex}?edit=true&creating=true`,
         );
       } catch (e: unknown) {
         toast.error(
@@ -1675,7 +1693,7 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
         );
       }
     },
-    [hierarchy.binds, mutate, navigate],
+    [basePath, hierarchy.binds, mutate, navigate],
   );
 
   // Handler for adding a specific policy type to a route
@@ -1744,13 +1762,13 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
         // Navigate to the policy edit page
         const routeSeg = isTcp ? "tcproute" : "route";
         navigate(
-          `/traffic/bind/${port}/listener/${li}/${routeSeg}/${ri}/policy/${policyType}?edit=true&creating=true`,
+          `${basePath}/bind/${port}/listener/${li}/${routeSeg}/${ri}/policy/${policyType}?edit=true&creating=true`,
         );
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Failed to create policy");
       }
     },
-    [hierarchy.binds, mutate, navigate],
+    [basePath, hierarchy.binds, mutate, navigate],
   );
 
   // Handler for deleting a specific policy type from a route
@@ -1788,7 +1806,7 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
             : {};
 
         // Remove the specific policy type
-        const { [policyType]: removed, ...remainingPolicies } =
+        const { [policyType]: _removed, ...remainingPolicies } =
           currentPolicies as Record<string, unknown>;
 
         // Update the route with remaining policies (or null if none left)
@@ -1825,16 +1843,16 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
 
   // Handlers for editing top-level items
   const handleEditLLM = useCallback(() => {
-    navigate("/traffic/llm?edit=true");
-  }, [navigate]);
+    navigate(`${basePath}/llm?edit=true`);
+  }, [basePath, navigate]);
 
   const handleEditMCP = useCallback(() => {
-    navigate("/traffic/mcp?edit=true");
-  }, [navigate]);
+    navigate(`${basePath}/mcp?edit=true`);
+  }, [basePath, navigate]);
 
   const handleEditFrontendPolicies = useCallback(() => {
-    navigate("/traffic/frontendPolicies?edit=true");
-  }, [navigate]);
+    navigate(`${basePath}/frontendPolicies?edit=true`);
+  }, [basePath, navigate]);
 
   // Handlers for deleting top-level items
   const handleDeleteLLM = useCallback(async () => {
@@ -1864,11 +1882,11 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
       // Find the index of the newly created model from fresh data
       const llmConfig = freshConfig?.llm as any;
       const newIndex = llmConfig?.models ? llmConfig.models.length - 1 : 0;
-      navigate(`/traffic/llm/model/${newIndex}?edit=true&creating=true`);
+      navigate(`${basePath}/llm/model/${newIndex}?edit=true&creating=true`);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to create model");
     }
-  }, [hierarchy.llm?.models.length, mutate, navigate]);
+  }, [basePath, hierarchy.llm?.models.length, mutate, navigate]);
 
   const handleDeleteModel = useCallback(
     async (modelIndex: number) => {
@@ -1876,12 +1894,12 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
         await api.removeLLMModelByIndex(modelIndex);
         toast.success("Model deleted successfully");
         await mutate();
-        navigate("/traffic/llm");
+        navigate(`${basePath}/llm`);
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Failed to delete model");
       }
     },
-    [mutate, navigate],
+    [basePath, mutate, navigate],
   );
 
   const handleDeleteMCP = useCallback(async () => {
@@ -1925,6 +1943,7 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
   const treeData = useMemo(() => {
     return buildTreeData(
       hierarchy,
+      basePath,
       navigate,
       handleDeleteBind,
       handleDeleteListener,
@@ -1947,6 +1966,7 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
     );
   }, [
     hierarchy,
+    basePath,
     navigate,
     handleDeleteBind,
     handleDeleteListener,
@@ -1999,11 +2019,11 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
       await api.createBind(newBind);
       toast.success("Bind created successfully");
       mutate();
-      navigate(`/traffic/bind/${newPort}?edit=true`);
+      navigate(`${basePath}/bind/${newPort}?edit=true`);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to create bind");
     }
-  }, [hierarchy.binds, mutate, navigate]);
+  }, [basePath, hierarchy.binds, mutate, navigate]);
 
   // Handlers for creating top-level items
   const handleAddLLM = useCallback(async () => {
@@ -2014,13 +2034,13 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
       await api.createOrUpdateLLM(newLLM);
       toast.success("LLM configuration created successfully");
       await mutate();
-      navigate("/traffic/llm?edit=true&creating=true");
+      navigate(`${basePath}/llm?edit=true&creating=true`);
     } catch (e: unknown) {
       toast.error(
         e instanceof Error ? e.message : "Failed to create LLM config",
       );
     }
-  }, [mutate, navigate]);
+  }, [basePath, mutate, navigate]);
 
   const handleAddMCP = useCallback(async () => {
     try {
@@ -2030,13 +2050,13 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
       await api.createOrUpdateMCP(newMCP);
       toast.success("MCP configuration created successfully");
       await mutate();
-      navigate("/traffic/mcp?edit=true&creating=true");
+      navigate(`${basePath}/mcp?edit=true&creating=true`);
     } catch (e: unknown) {
       toast.error(
         e instanceof Error ? e.message : "Failed to create MCP config",
       );
     }
-  }, [mutate, navigate]);
+  }, [basePath, mutate, navigate]);
 
   const handleAddFrontendPolicies = useCallback(async () => {
     try {
@@ -2044,13 +2064,13 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
       await api.createOrUpdateFrontendPolicies(newFrontendPolicies);
       toast.success("Frontend policies created successfully");
       await mutate();
-      navigate("/traffic/frontendPolicies?edit=true&creating=true");
+      navigate(`${basePath}/frontendPolicies?edit=true&creating=true`);
     } catch (e: unknown) {
       toast.error(
         e instanceof Error ? e.message : "Failed to create frontend policies",
       );
     }
-  }, [mutate, navigate]);
+  }, [basePath, mutate, navigate]);
 
   // Dropdown menu items for adding top-level resources
   const addMenuItems: MenuProps["items"] = [
@@ -2117,7 +2137,7 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
         title={
           <CardHeader>
             <CardTitleRow>
-              <CardTitle onClick={() => navigate("/traffic")}>
+              <CardTitle onClick={() => navigate(basePath)}>
                 Traffic Hierarchy
               </CardTitle>
               <Space size="small">

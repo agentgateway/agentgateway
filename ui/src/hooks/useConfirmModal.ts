@@ -47,7 +47,7 @@ export const useConfirmModal = (): UseConfirmModalReturn => {
     try {
       await currentOptions.onConfirm();
       close();
-    } catch (error) {
+    } catch {
       // Error handling is done in the onConfirm function
       setIsLoading(false);
     }

@@ -289,11 +289,12 @@ export const PlaygroundPage = () => {
 
     setRoutes(extractedRoutes);
 
-    // Auto-select first route if available
+    // Auto-select first route if available (intentionally excludes selectedRoute/updateRequestFromRoute to avoid re-triggering)
     if (extractedRoutes.length > 0 && !selectedRoute) {
       setSelectedRoute(extractedRoutes[0]);
       updateRequestFromRoute(extractedRoutes[0]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config]);
 
   // Determine backend type of selected route

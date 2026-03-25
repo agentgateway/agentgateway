@@ -273,6 +273,7 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
     if (currentKey && !openKeys.includes(currentKey)) {
       setOpenKeys((prev) => [...prev, currentKey]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
   const menuItems: MenuItem[] = [

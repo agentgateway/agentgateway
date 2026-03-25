@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useConfig } from "../../../api";
-import type { UrlParams } from "../TrafficPage";
+import type { UrlParams } from "../types";
 import type { useTrafficHierarchy } from "./useTrafficHierarchy";
 
 /**

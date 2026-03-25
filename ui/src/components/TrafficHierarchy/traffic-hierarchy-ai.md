@@ -2,15 +2,19 @@
 
 ## Overview
 
-The Traffic page (`ui/src/pages/Traffic/`) visualizes the bind → listener → route → backend hierarchy using manually authored TypeScript/JSON schemas. This gives full control over form UI and validation at the cost of manual maintenance when types change.
+`TrafficHierarchy` is a reusable shared component (`ui/src/components/TrafficHierarchy/`) that visualizes and edits the bind → listener → route → backend hierarchy using manually authored TypeScript/JSON schemas. It is not tied to any specific route — all internal navigation is computed from `useLocation()` at runtime, so it can be embedded on any page.
 
 Key files:
-- [TrafficPage.tsx](TrafficPage.tsx) — metrics + tree layout
-- [HierarchyTree.tsx](components/HierarchyTree.tsx) — tree component
-- [useTrafficHierarchy.ts](hooks/useTrafficHierarchy.ts) — data transform + validation hook
+- [HierarchyTree.tsx](HierarchyTree.tsx) — collapsible tree component
+- [NodeDetailView.tsx](NodeDetailView.tsx) — detail panel for a selected node
+- [hooks/useTrafficHierarchy.ts](hooks/useTrafficHierarchy.ts) — data transform + validation hook
 - [forms/](forms/) — schema definitions
 - [ui/src/config.d.ts](../../config.d.ts) — source of truth for types
 - [ui/src/api/crud.ts](../../api/crud.ts) — API CRUD operations
+
+Current consumers:
+- `ui/src/pages/Traffic/TrafficPage.tsx` — traffic routing page at `/traffic`
+- `ui/src/pages/RawConfigPage/` — standalone raw config editor (route-agnostic)
 
 ---
 
@@ -20,7 +24,7 @@ Each file in `forms/` exports four things. Use this as a template:
 
 ```typescript
 import type { RJSFSchema, UiSchema } from "@rjsf/utils";
-import type { LocalListener } from "../../../config";
+import type { LocalListener } from "../../config";
 
 export const schema: RJSFSchema = {
   type: "object",
@@ -152,8 +156,8 @@ The page is currently read-only. To add create/edit/delete:
 1. **Form modal** — use RJSF with the existing schemas:
    ```typescript
    import Form from "@rjsf/antd";
-   import { validator } from "../../utils/validator";
-   import { forms } from "./forms";
+   import validator from "@rjsf/validator-ajv8";
+   import { forms } from "../../components/TrafficHierarchy/forms";
 
    <Form
      schema={forms.listener.schema}
@@ -191,6 +195,7 @@ The page is currently read-only. To add create/edit/delete:
 3. Add a node interface in `useTrafficHierarchy.ts` and wire it into the transform.
 4. Add validation rules in the hook.
 5. Add a renderer in `HierarchyTree.tsx`.
+6. Export from `index.ts` if the new type needs to be accessible to page consumers.
 
 ---
 

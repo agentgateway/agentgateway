@@ -203,7 +203,7 @@ export function MonacoEditorWithSettings({
     try {
       await navigator.clipboard.writeText(value);
       toast.success("Copied to clipboard");
-    } catch (error) {
+    } catch {
       toast.error("Failed to copy to clipboard");
     }
   }, [value]);
@@ -229,7 +229,7 @@ export function MonacoEditorWithSettings({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast.success("Downloaded successfully");
-    } catch (error) {
+    } catch {
       toast.error("Failed to download file");
     }
   }, [value, language, downloadFileName]);

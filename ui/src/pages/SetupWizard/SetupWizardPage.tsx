@@ -120,7 +120,7 @@ export const SetupWizardPage = () => {
         }
       }
       nextStep();
-    } catch (error) {
+    } catch {
       toast.error("Please fill in all required fields");
     }
   };

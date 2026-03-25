@@ -147,27 +147,6 @@ export const MCPMetricsPage = () => (
 // MCP Playground
 // ---------------------------------------------------------------------------
 
-const RequestContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-`;
-
-const ResultCard = styled(Card)`
-  .ant-card-body {
-    padding: 0;
-  }
-`;
-
-const ResultHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--color-border-secondary);
-  background: var(--color-bg-container);
-`;
-
 const SectionCard = styled(Card)`
   .ant-card-head {
     background: var(--color-bg-container);

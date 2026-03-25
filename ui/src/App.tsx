@@ -25,12 +25,10 @@ import { MCPPoliciesPage } from "./pages/MCP/MCPPoliciesPage";
 import { MCPServersPage } from "./pages/MCP/MCPServersPage";
 import { PlaygroundPage } from "./pages/Playground/PlaygroundPage";
 import { PoliciesPage } from "./pages/Policies/PoliciesPage";
+import { RawConfigPage as TrafficRawConfigPage } from "./pages/RawConfigPage/RawConfigPage";
 import { RoutesPage } from "./pages/Routes/RoutesPage";
 import { SetupWizardPage } from "./pages/SetupWizard/SetupWizardPage";
-import {
-  TrafficPage,
-  RawConfigPage as TrafficRawConfigPage,
-} from "./pages/Traffic";
+import { TrafficPage } from "./pages/Traffic/TrafficPage";
 
 function App() {
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";

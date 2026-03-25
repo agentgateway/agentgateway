@@ -4,9 +4,12 @@ import { Button, Spin } from "antd";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
-import { HierarchyTree } from "./components/HierarchyTree";
-import { NodeDetailView } from "./components/NodeDetailView";
-import { useTrafficHierarchy } from "./hooks/useTrafficHierarchy";
+import {
+  HierarchyTree,
+  NodeDetailView,
+  useTrafficHierarchy,
+} from "../../components/TrafficHierarchy";
+import type { UrlParams } from "../../components/TrafficHierarchy";
 
 // ---------------------------------------------------------------------------
 // Styled components
@@ -98,17 +101,6 @@ const Description = styled.p`
 // ---------------------------------------------------------------------------
 // URL parsing — extract hierarchy position from the current pathname
 // ---------------------------------------------------------------------------
-
-export interface UrlParams {
-  port?: number;
-  li?: number;
-  isTcpRoute?: boolean;
-  ri?: number;
-  bi?: number;
-  policyType?: string;
-  topLevelType?: "llm" | "mcp" | "frontendPolicies";
-  modelIndex?: number;
-}
 
 function parseTrafficPath(pathname: string): UrlParams | null {
   // Check for model routes first (must be before general LLM route)

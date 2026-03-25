@@ -69,8 +69,8 @@ export function RawConfigEditor({ onClose }: RawConfigEditorProps) {
         const config = await fetchConfig();
         const configStr = JSON.stringify(config, null, 2);
         setConfigValue(configStr);
-      } catch (error) {
-        console.error("Failed to load config:", error);
+      } catch (_e) {
+        console.error("Failed to load config:", _e);
         toast.error("Failed to load configuration");
         setConfigValue("{}");
       } finally {
@@ -103,8 +103,8 @@ export function RawConfigEditor({ onClose }: RawConfigEditorProps) {
           ],
           enableSchemaRequest: true,
         });
-      } catch (error) {
-        console.error("Failed to load config schema:", error);
+      } catch (_e) {
+        console.error("Failed to load config schema:", _e);
         toast.error("Failed to load configuration schema");
       }
 
@@ -133,7 +133,7 @@ export function RawConfigEditor({ onClose }: RawConfigEditorProps) {
       let configObject: LocalConfig;
       try {
         configObject = JSON.parse(value);
-      } catch (error) {
+      } catch {
         toast.error("Invalid JSON format");
         setIsSubmitting(false);
         return;

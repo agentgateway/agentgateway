@@ -1,6 +1,6 @@
 import styled from "@emotion/styled";
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { RawConfigEditor } from "./RawConfigEditor";
 
 const Container = styled.div`
@@ -32,6 +32,12 @@ const Description = styled.p`
 
 export function RawConfigPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const basePath = useMemo(
+    () => location.pathname.replace(/\/raw-config.*$/, "") || "/",
+    [location.pathname],
+  );
 
   useEffect(() => {
     document.title = "Config Editor - agentgateway";
@@ -50,7 +56,7 @@ export function RawConfigPage() {
           </Description>
         </div>
       </PageHeader>
-      <RawConfigEditor onClose={() => navigate("/traffic")} />
+      <RawConfigEditor onClose={() => navigate(basePath)} />
     </Container>
   );
 }
