@@ -179,6 +179,7 @@ func handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 	if err := r.ParseForm(); err != nil {
 		sendJSONResponse(w, r, map[string]string{"error": "invalid_request"}, http.StatusBadRequest)
 		return

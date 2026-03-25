@@ -549,13 +549,6 @@ func TestBuildAIBackend(t *testing.T) {
 	}
 }
 
-// Helper function to create a string pointer
-//
-//go:fix inline
-func stringPtr(s string) *string {
-	return new(s)
-}
-
 // Helper function to create a mock SecretIndex for testing
 func createMockSecret(namespace, name string, data map[string]string) *corev1.Secret {
 	// Create mock secret data
