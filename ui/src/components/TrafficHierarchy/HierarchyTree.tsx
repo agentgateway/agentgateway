@@ -53,6 +53,7 @@ import { ResourceIcon } from "./ResourceIcon";
 // ---------------------------------------------------------------------------
 
 export type NodeType = "bind" | "listener" | "route" | "backend";
+export type HierarchySection = "llm" | "mcp" | "binds" | "frontendPolicies";
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -231,6 +232,7 @@ const CardTitle = styled.h3`
   );
   -webkit-background-clip: text;
   background-clip: text;
+  user-select: none;
 
   &:hover {
     color: var(--color-primary);
@@ -305,6 +307,7 @@ const NodeLabel = styled.span`
   min-width: 0;
   letter-spacing: 0.01em;
   transition: color 0.15s ease;
+  user-select: none;
 `;
 
 const MoreButton = styled(Button)`
@@ -328,22 +331,21 @@ const MoreButton = styled(Button)`
 // URL helpers
 // ---------------------------------------------------------------------------
 
-function urlToSelectedKey(pathname: string): string | null {
+function urlToSelectedKey(pathname: string, basePath: string): string | null {
+  // Strip basePath prefix to get the hierarchy-relative path
+  const rel = basePath ? pathname.slice(basePath.length) : pathname;
+
   // Check for model routes first (must be before general LLM route)
-  const modelMatch = pathname.match(/\/traffic\/llm\/model\/(\d+)/);
-  if (modelMatch) {
-    return `model-${modelMatch[1]}`;
-  }
+  const modelMatch = rel.match(/^\/llm\/model\/(\d+)/);
+  if (modelMatch) return `model-${modelMatch[1]}`;
 
   // Check for top-level config routes
-  const topLevelMatch = pathname.match(/\/traffic\/(llm|mcp|frontendPolicies)/);
-  if (topLevelMatch) {
-    return topLevelMatch[1];
-  }
+  const topLevelMatch = rel.match(/^\/(llm|mcp|frontendPolicies)/);
+  if (topLevelMatch) return topLevelMatch[1];
 
   // Check for bind routes
-  const m = pathname.match(
-    /\/traffic\/bind\/(\d+)(?:\/listener\/(\d+)(?:\/(tcp)?route\/(\d+)(?:\/backend\/(\d+)|\/policy\/([^/?]+))?)?)?/,
+  const m = rel.match(
+    /^\/bind\/(\d+)(?:\/listener\/(\d+)(?:\/(tcp)?route\/(\d+)(?:\/backend\/(\d+)|\/policy\/([^/?]+))?)?)?/,
   );
   if (!m) return null;
   const [, port, li, tcp, ri, bi, policyType] = m;
@@ -1153,6 +1155,7 @@ function buildLLMItemTitle(
 function buildTreeData(
   hierarchy: TrafficHierarchy,
   basePath: string,
+  filter: HierarchySection[] | undefined,
   navigate: (path: string) => void,
   onDeleteBind: (port: number, parentPath: string) => void,
   onDeleteListener: (port: number, li: number, parentPath: string) => void,
@@ -1204,10 +1207,15 @@ function buildTreeData(
   onEditFrontendPolicies: () => void,
   onDeleteFrontendPolicies: () => void,
 ): DataNode[] {
+  const showLLM = !filter || filter.includes("llm");
+  const showMCP = !filter || filter.includes("mcp");
+  const showFrontendPolicies = !filter || filter.includes("frontendPolicies");
+  const showBinds = !filter || filter.includes("binds");
+
   const nodes: DataNode[] = [];
 
   // Add top-level config items
-  if (hierarchy.llm) {
+  if (hierarchy.llm && showLLM) {
     const modelChildren: DataNode[] = hierarchy.llm.models
       .slice()
       .sort((a, b) => {
@@ -1238,7 +1246,7 @@ function buildTreeData(
     });
   }
 
-  if (hierarchy.mcp) {
+  if (hierarchy.mcp && showMCP) {
     nodes.push({
       key: "mcp",
       title: buildTopLevelItemTitle(
@@ -1255,7 +1263,7 @@ function buildTreeData(
     });
   }
 
-  if (hierarchy.frontendPolicies) {
+  if (hierarchy.frontendPolicies && showFrontendPolicies) {
     nodes.push({
       key: "frontendPolicies",
       title: buildTopLevelItemTitle(
@@ -1276,7 +1284,7 @@ function buildTreeData(
   }
 
   // Add binds (sorted by port)
-  const bindNodes = hierarchy.binds
+  const bindNodes = (showBinds ? hierarchy.binds
     .slice()
     .sort((a, b) => a.bind.port - b.bind.port)
     .map((bind) => ({
@@ -1384,7 +1392,7 @@ function buildTreeData(
               };
             }),
         })),
-    }));
+    })) : []);
 
   return [...nodes, ...bindNodes];
 }
@@ -1395,9 +1403,11 @@ function buildTreeData(
 
 interface HierarchyTreeProps {
   hierarchy: TrafficHierarchy;
+  filter?: HierarchySection[];
+  title?: string;
 }
 
-export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
+export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const basePath = useMemo(() => {
@@ -1405,7 +1415,7 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
     const pathname = location.pathname;
     for (const seg of knownSegments) {
       const idx = pathname.indexOf(`/${seg}`);
-      if (idx !== -1) return pathname.substring(0, idx);
+      if (idx !== -1) return idx === 0 ? `/${seg}` : pathname.substring(0, idx);
     }
     return pathname.replace(/\/$/, "") || "/";
   }, [location.pathname]);
@@ -1944,6 +1954,7 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
     return buildTreeData(
       hierarchy,
       basePath,
+      filter,
       navigate,
       handleDeleteBind,
       handleDeleteListener,
@@ -1967,6 +1978,7 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
   }, [
     hierarchy,
     basePath,
+    filter,
     navigate,
     handleDeleteBind,
     handleDeleteListener,
@@ -1994,9 +2006,9 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
   );
 
   const selectedKeys = useMemo(() => {
-    const key = urlToSelectedKey(location.pathname);
+    const key = urlToSelectedKey(location.pathname, basePath);
     return key ? [key] : [];
-  }, [location.pathname]);
+  }, [location.pathname, basePath]);
 
   const handleExpandAll = useCallback(() => {
     setExpandedKeys(getAllKeys(treeData));
@@ -2009,8 +2021,11 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
   // Handler for adding a new bind
   const handleAddBind = useCallback(async () => {
     try {
-      const newPort =
-        Math.max(...hierarchy.binds.map((b) => b.bind.port), 8079) + 1;
+      const existingPorts = new Set(hierarchy.binds.map((b) => b.bind.port));
+      let newPort = 8080;
+      while (existingPorts.has(newPort)) {
+        newPort++;
+      }
       const newBind = {
         port: newPort,
         tunnelProtocol: "direct" as const,
@@ -2072,55 +2087,50 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
     }
   }, [basePath, mutate, navigate]);
 
-  // Dropdown menu items for adding top-level resources
+  // Dropdown menu items for adding top-level resources — filtered by section
+  const showBinds = !filter || filter.includes("binds");
+  const showLLMSection = !filter || filter.includes("llm");
+  const showMCPSection = !filter || filter.includes("mcp");
+  const showFrontendPoliciesSection = !filter || filter.includes("frontendPolicies");
   const addMenuItems: MenuProps["items"] = [
-    {
-      key: "bind",
-      label: "Bind",
-      icon: <Network size={14} />,
-      onClick: handleAddBind,
-    },
-    {
-      type: "divider",
-    },
-    {
-      key: "llm",
-      label: "LLM Config",
-      icon: <Bot size={14} />,
-      onClick: handleAddLLM,
-    },
-    {
-      key: "mcp",
-      label: "MCP Config",
-      icon: <Headphones size={14} />,
-      onClick: handleAddMCP,
-    },
-    {
-      key: "frontendPolicies",
-      label: "Frontend Policies",
-      icon: <Settings size={14} />,
-      onClick: handleAddFrontendPolicies,
-    },
+    ...(showBinds ? [{ key: "bind", label: "Bind", icon: <Network size={14} />, onClick: handleAddBind } as const] : []),
+    ...(showBinds && (showLLMSection || showMCPSection || showFrontendPoliciesSection) ? [{ type: "divider" as const }] : []),
+    ...(showLLMSection ? [{ key: "llm", label: "LLM Config", icon: <Bot size={14} />, onClick: handleAddLLM, disabled: !!hierarchy.llm } as const] : []),
+    ...(showMCPSection ? [{ key: "mcp", label: "MCP Config", icon: <Headphones size={14} />, onClick: handleAddMCP, disabled: !!hierarchy.mcp } as const] : []),
+    ...(showFrontendPoliciesSection ? [{ key: "frontendPolicies", label: "Frontend Policies", icon: <Settings size={14} />, onClick: handleAddFrontendPolicies } as const] : []),
   ];
 
-  if (hierarchy.binds.length === 0) {
+  // Determine if filtered tree has any content
+  const hasFilteredContent =
+    (showBinds && hierarchy.binds.length > 0) ||
+    (showLLMSection && hierarchy.llm !== null) ||
+    (showMCPSection && hierarchy.mcp !== null) ||
+    (showFrontendPoliciesSection && hierarchy.frontendPolicies !== null);
+
+  if (!hasFilteredContent) {
+    // Determine appropriate empty state
+    const emptyDescription = filter?.length === 1
+      ? filter[0] === "llm" ? "No LLM configuration"
+        : filter[0] === "mcp" ? "No MCP configuration"
+        : filter[0] === "frontendPolicies" ? "No frontend policies configured"
+        : "No binds configured"
+      : "No resources configured";
+    const emptyAction = filter?.length === 1
+      ? filter[0] === "llm" ? <Button type="primary" icon={<PlusOutlined />} onClick={handleAddLLM}>Add LLM Config</Button>
+        : filter[0] === "mcp" ? <Button type="primary" icon={<PlusOutlined />} onClick={handleAddMCP}>Add MCP Config</Button>
+        : filter[0] === "frontendPolicies" ? <Button type="primary" icon={<PlusOutlined />} onClick={handleAddFrontendPolicies}>Add Frontend Policies</Button>
+        : <Button type="primary" icon={<PlusOutlined />} onClick={handleAddBind}>Add First Bind</Button>
+      : <Button type="primary" icon={<PlusOutlined />} onClick={handleAddBind}>Add First Bind</Button>;
     return (
       <TreeCard>
-        <Empty
-          description="No binds configured"
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-        >
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleAddBind}
-          >
-            Add First Bind
-          </Button>
+        <Empty description={emptyDescription} image={Empty.PRESENTED_IMAGE_SIMPLE}>
+          {emptyAction}
         </Empty>
       </TreeCard>
     );
   }
+
+  const cardTitle = title ?? "Traffic Hierarchy";
 
   return (
     <>
@@ -2138,7 +2148,7 @@ export function HierarchyTree({ hierarchy }: HierarchyTreeProps) {
           <CardHeader>
             <CardTitleRow>
               <CardTitle onClick={() => navigate(basePath)}>
-                Traffic Hierarchy
+                {cardTitle}
               </CardTitle>
               <Space size="small">
                 <Dropdown menu={{ items: addMenuItems }} trigger={["click"]}>

@@ -1,4 +1,5 @@
 export { HierarchyTree } from "./HierarchyTree";
+export type { HierarchySection } from "./HierarchyTree";
 export { NodeDetailView } from "./NodeDetailView";
 export { ResourceIcon } from "./ResourceIcon";
 export * from "./StyledButton";

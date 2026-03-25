@@ -11,18 +11,14 @@ import { FormPage } from "./pages/FormPage";
 import { ListenersPage } from "./pages/Listeners/ListenersPage";
 import { LLMLogsPage } from "./pages/LLM/LLMLogsPage";
 import { LLMMetricsPage } from "./pages/LLM/LLMMetricsPage";
-import { LLMModelsPage } from "./pages/LLM/LLMModelsPage";
-import { LLMOverviewPage } from "./pages/LLM/LLMOverviewPage";
+import { LLMPage } from "./pages/LLM/LLMPage";
 import { LLMPlaygroundPage } from "./pages/LLM/LLMPlaygroundPage";
-import { LLMPoliciesPage } from "./pages/LLM/LLMPoliciesPage";
-import { MCPOverviewPage } from "./pages/MCP/MCPOverviewPage";
+import { MCPPage } from "./pages/MCP/MCPPage";
 import {
   MCPLogsPage,
   MCPMetricsPage,
   MCPPlaygroundPage,
 } from "./pages/MCP/MCPPages";
-import { MCPPoliciesPage } from "./pages/MCP/MCPPoliciesPage";
-import { MCPServersPage } from "./pages/MCP/MCPServersPage";
 import { PlaygroundPage } from "./pages/Playground/PlaygroundPage";
 import { PoliciesPage } from "./pages/Policies/PoliciesPage";
 import { RawConfigPage as TrafficRawConfigPage } from "./pages/RawConfigPage/RawConfigPage";
@@ -78,9 +74,12 @@ function App() {
                   <Route path="/form" element={<FormPage />} />
 
                   {/* LLM Section */}
-                  <Route path="/llm" element={<LLMOverviewPage />} />
-                  <Route path="/llm/models" element={<LLMModelsPage />} />
-                  <Route path="/llm/policies" element={<LLMPoliciesPage />} />
+                  <Route path="/llm" element={<LLMPage />} />
+                  <Route path="/llm/llm" element={<LLMPage />} />
+                  <Route path="/llm/llm/model/:modelIndex" element={<LLMPage />} />
+                  <Route path="/llm/models" element={<LLMPage />} />
+                  <Route path="/llm/policies" element={<LLMPage />} />
+                  <Route path="/llm/raw-config" element={<TrafficRawConfigPage />} />
                   <Route path="/llm/logs" element={<LLMLogsPage />} />
                   <Route path="/llm/metrics" element={<LLMMetricsPage />} />
                   <Route
@@ -89,9 +88,11 @@ function App() {
                   />
 
                   {/* MCP Section */}
-                  <Route path="/mcp" element={<MCPOverviewPage />} />
-                  <Route path="/mcp/servers" element={<MCPServersPage />} />
-                  <Route path="/mcp/policies" element={<MCPPoliciesPage />} />
+                  <Route path="/mcp" element={<MCPPage />} />
+                  <Route path="/mcp/mcp" element={<MCPPage />} />
+                  <Route path="/mcp/servers" element={<MCPPage />} />
+                  <Route path="/mcp/policies" element={<MCPPage />} />
+                  <Route path="/mcp/raw-config" element={<TrafficRawConfigPage />} />
                   <Route path="/mcp/logs" element={<MCPLogsPage />} />
                   <Route path="/mcp/metrics" element={<MCPMetricsPage />} />
                   <Route

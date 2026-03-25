@@ -1,7 +1,10 @@
 binds:
 - port: 3002
   listeners:
-  - routes:
+  - protocol: HTTP
+    name: asdf
+    hostname: '*'
+    routes:
     - backends:
       - mcp:
           targets:
@@ -23,3 +26,16 @@ binds:
           - mcp-protocol-version
           - content-type
           - cache-control
+- port: 8080
+  tunnelProtocol: direct
+  listeners: []
+- port: 8081
+  tunnelProtocol: direct
+  listeners: []
+llm:
+  models:
+  - name: model-1
+    provider: openAI
+mcp:
+  targets: []
+frontendPolicies: {}

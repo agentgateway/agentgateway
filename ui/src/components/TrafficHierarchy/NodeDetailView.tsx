@@ -28,8 +28,8 @@ import type {
   PolicyNode,
   RouteNode,
   useTrafficHierarchy,
-} from "../hooks/useTrafficHierarchy";
-import type { UrlParams } from "../types";
+} from "./hooks/useTrafficHierarchy";
+import type { UrlParams } from "./types";
 
 // ---------------------------------------------------------------------------
 // Form templates configuration
@@ -316,6 +316,7 @@ function findSelectedNode(
 function generateBreadcrumbItems(
   selected: ReturnType<typeof findSelectedNode>,
   navigate: (path: string) => void,
+  basePath: string,
 ) {
   if (!selected) return [];
 
@@ -437,7 +438,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     const pathname = location.pathname;
     for (const seg of knownSegments) {
       const idx = pathname.indexOf(`/${seg}`);
-      if (idx !== -1) return pathname.substring(0, idx);
+      if (idx !== -1) return idx === 0 ? `/${seg}` : pathname.substring(0, idx);
     }
     return pathname.replace(/\/$/, "") || "/";
   }, [location.pathname]);
@@ -483,7 +484,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         );
       }
     },
-    [mutate, navigate],
+    [basePath, mutate, navigate],
   );
 
   const handleAddRoute = useCallback(
@@ -531,7 +532,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         toast.error(e instanceof Error ? e.message : "Failed to create route");
       }
     },
-    [hierarchy.binds, mutate, navigate],
+    [basePath, hierarchy.binds, mutate, navigate],
   );
 
   const handleAddBackend = useCallback(
@@ -594,7 +595,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         );
       }
     },
-    [hierarchy.binds, mutate, navigate],
+    [basePath, hierarchy.binds, mutate, navigate],
   );
 
   const handleAddPolicy = useCallback(
@@ -649,7 +650,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         toast.error(e instanceof Error ? e.message : "Failed to create policy");
       }
     },
-    [hierarchy.binds, mutate, navigate],
+    [basePath, hierarchy.binds, mutate, navigate],
   );
 
   const selected = useMemo(() => {
@@ -993,7 +994,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
   // Render based on node type
   if (selected.type === "bind") {
     const { node } = selected;
-    const breadcrumbItems = generateBreadcrumbItems(selected, navigate);
+    const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
     return (
       <Container>
         <Header>
@@ -1084,7 +1085,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     const { node } = selected;
     const protocol = node.listener.protocol ?? "HTTP";
     const isTcp = protocol === "TCP" || protocol === "TLS";
-    const breadcrumbItems = generateBreadcrumbItems(selected, navigate);
+    const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
     return (
       <Container>
         <Header>
@@ -1233,7 +1234,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       },
     ];
 
-    const breadcrumbItems = generateBreadcrumbItems(selected, navigate);
+    const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
     return (
       <Container>
         <Header>
@@ -1341,7 +1342,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       else if ("ai" in b) backendType = "AI Backend";
     }
 
-    const breadcrumbItems = generateBreadcrumbItems(selected, navigate);
+    const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
     return (
       <Container>
         <Header>
@@ -1431,7 +1432,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       .replace(/^./, (str) => str.toUpperCase())
       .trim();
 
-    const breadcrumbItems = generateBreadcrumbItems(selected, navigate);
+    const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
     return (
       <Container>
         <Header>
@@ -1534,7 +1535,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
   if (selected.type === "model") {
     const { node } = selected;
     const modelName = node.model.name || `Model ${node.modelIndex + 1}`;
-    const breadcrumbItems = generateBreadcrumbItems(selected, navigate);
+    const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
 
     return (
       <Container>
@@ -1654,7 +1655,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       }
     };
 
-    const breadcrumbItems = generateBreadcrumbItems(selected, navigate);
+    const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
     return (
       <Container>
         <Header>
