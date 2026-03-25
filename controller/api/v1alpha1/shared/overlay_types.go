@@ -29,34 +29,36 @@ type ObjectMetadata struct {
 // Overlays are applied **after** all typed configuration fields have been processed.
 // The full merge order is:
 //
-//  1. GatewayClass typed configuration fields (e.g., replicas, image settings from parametersRef)
-//  2. Gateway typed configuration fields (from infrastructure.parametersRef)
-//  3. GatewayClass overlays are applied
-//  4. Gateway overlays are applied
+//  1. `GatewayClass` typed configuration fields, for example replicas or image settings from `parametersRef`
+//  2. `Gateway` typed configuration fields from `infrastructure.parametersRef`
+//  3. `GatewayClass` overlays are applied
+//  4. `Gateway` overlays are applied
 //
-// This ordering means Gateway-level configuration overrides GatewayClass-level configuration
+// This ordering means `Gateway`-level configuration overrides
+// `GatewayClass`-level configuration
 // at each stage. For example, if both levels set the same label, the Gateway value wins.
 type KubernetesResourceOverlay struct {
-	// metadata defines a subset of object metadata to be customized.
-	// Labels and annotations are merged with existing values. If both GatewayClass
-	// and Gateway parameters define the same label or annotation key, the Gateway
-	// value takes precedence (applied second).
+	// `metadata` defines a subset of object metadata to be customized.
+	// `labels` and `annotations` are merged with existing values. If both
+	// `GatewayClass` and `Gateway` parameters define the same label or
+	// annotation key, the `Gateway` value takes precedence (applied second).
 	// +optional
 	Metadata *ObjectMetadata `json:"metadata,omitempty"`
 
-	// Spec provides an opaque mechanism to configure the resource Spec.
-	// This field accepts a complete or partial Kubernetes resource spec (e.g., PodSpec, ServiceSpec)
-	// and will be merged with the generated configuration using **Strategic Merge Patch** semantics.
+	// `spec` provides an opaque mechanism to configure the resource spec.
+	// This field accepts a complete or partial Kubernetes resource spec, such
+	// as `PodSpec` or `ServiceSpec`, and will be merged with the generated
+	// configuration using **Strategic Merge Patch** semantics.
 	//
 	// # Application Order
 	//
 	// Overlays are applied after all typed configuration fields from both levels.
 	// The full merge order is:
 	//
-	//  1. GatewayClass typed configuration fields
-	//  2. Gateway typed configuration fields
-	//  3. GatewayClass overlays
-	//  4. Gateway overlays (can override all previous values)
+	//  1. `GatewayClass` typed configuration fields
+	//  2. `Gateway` typed configuration fields
+	//  3. `GatewayClass` overlays
+	//  4. `Gateway` overlays (can override all previous values)
 	//
 	// # Strategic Merge Patch & Deletion Guide
 	//
@@ -67,7 +69,8 @@ type KubernetesResourceOverlay struct {
 	// Simple fields (strings, integers, booleans) in your config will overwrite the generated defaults.
 	//
 	// **2. Merging Lists (Append/Merge):**
-	// Lists with "merge keys" (like `containers` which merges on `name`, or `tolerations` which merges on `key`)
+	// Lists with "merge keys", like `containers` which merges on `name`, or
+	// `tolerations` which merges on `key`,
 	// will append your items to the generated list, or update existing items if keys match.
 	//
 	// **3. Deleting Fields or List Items ($patch: delete):**
@@ -75,6 +78,7 @@ type KubernetesResourceOverlay struct {
 	// `$patch: delete` directive. This works for both map fields and list items,
 	// and is the recommended approach because it works with both client-side
 	// and server-side apply.
+	//
 	//
 	//	spec:
 	//	  template:
@@ -86,11 +90,12 @@ type KubernetesResourceOverlay struct {
 	//	      nodeSelector:
 	//	        $patch: delete
 	//	      containers:
-	//	        # Be sure to use the correct proxy name here or you will add a container instead of modifying a container:
-	//	        - name: proxy-name
-	//	          # Delete container-level securityContext
-	//	          securityContext:
-	//	            $patch: delete
+	//	      # Be sure to use the correct proxy name here or you will add a
+	//	      # container instead of modifying a container.
+	//	      - name: proxy-name
+	//	        # Delete container-level securityContext
+	//	        securityContext:
+	//	          $patch: delete
 	//
 	// **4. Null Values (server-side apply only):**
 	// Setting a field to `null` can also remove it, but this ONLY works with
@@ -98,6 +103,7 @@ type KubernetesResourceOverlay struct {
 	// `kubectl apply`, null values are stripped by kubectl before reaching
 	// the API server, so the deletion won't occur. Prefer `$patch: delete`
 	// for consistent behavior across both apply modes.
+	//
 	//
 	//	spec:
 	//	  template:
@@ -107,6 +113,7 @@ type KubernetesResourceOverlay struct {
 	// **5. Replacing Maps Entirely ($patch: replace):**
 	// To replace an entire map with your values (instead of merging), use `$patch: replace`.
 	// This removes all existing keys and replaces them with only your specified keys.
+	//
 	//
 	//	spec:
 	//	  template:
@@ -118,18 +125,19 @@ type KubernetesResourceOverlay struct {
 	// **6. Replacing Lists Entirely ($patch: replace):**
 	// If you want to strictly define a list and ignore all generated defaults, use `$patch: replace`.
 	//
+	//
 	//	service:
 	//	  spec:
 	//	    ports:
-	//	      - $patch: replace
-	//	      - name: http
-	//	        port: 80
-	//	        targetPort: 8080
-	//	        protocol: TCP
-	//	      - name: https
-	//	        port: 443
-	//	        targetPort: 8443
-	//	        protocol: TCP
+	//	    - $patch: replace
+	//	    - name: http
+	//	      port: 80
+	//	      targetPort: 8080
+	//	      protocol: TCP
+	//	    - name: https
+	//	      port: 443
+	//	      targetPort: 8443
+	//	      protocol: TCP
 	//
 	// +optional
 	// +kubebuilder:validation:Type=object
