@@ -896,6 +896,17 @@ impl TryFrom<&proto::agent::McpTarget> for McpTarget {
 						},
 					})
 				},
+				Protocol::Openapi => {
+					let schema_str = s.openapi_schema.as_deref().ok_or_else(|| {
+						ProtoError::Generic("OpenAPI target requires openapi_schema".to_string())
+					})?;
+					let schema: openapiv3::OpenAPI = serde_json::from_str(schema_str)
+						.map_err(|e| ProtoError::Generic(format!("invalid OpenAPI schema: {e}")))?;
+					McpTargetSpec::OpenAPI(OpenAPITarget {
+						backend,
+						schema: Arc::new(schema),
+					})
+				},
 			},
 		})
 	}
@@ -2497,5 +2508,53 @@ mod tests {
 		};
 		assert_eq!(vertex.region.as_deref(), Some("us-central1"));
 		Ok(())
+	}
+
+	#[test]
+	fn test_mcp_target_openapi_conversion() -> Result<(), ProtoError> {
+		let openapi_schema =
+			r#"{"openapi":"3.0.0","info":{"title":"Petstore","version":"1.0.0"},"paths":{}}"#;
+		let proto_target = proto::agent::McpTarget {
+			name: "petstore".to_string(),
+			backend: Some(proto::agent::BackendReference {
+				kind: Some(proto::agent::backend_reference::Kind::Backend(
+					"test-ns/petstore-backend".to_string(),
+				)),
+				port: 0,
+			}),
+			path: String::new(),
+			protocol: Protocol::Openapi as i32,
+			openapi_schema: Some(openapi_schema.to_string()),
+		};
+
+		let target = McpTarget::try_from(&proto_target)?;
+		assert_eq!(target.name.as_str(), "petstore");
+		let McpTargetSpec::OpenAPI(openapi_target) = &target.spec else {
+			panic!("Expected McpTargetSpec::OpenAPI, got {:?}", target.spec);
+		};
+		assert_eq!(openapi_target.schema.info.title, "Petstore");
+		assert_eq!(openapi_target.schema.info.version, "1.0.0");
+		Ok(())
+	}
+
+	#[test]
+	fn test_mcp_target_openapi_missing_schema_error() {
+		let proto_target = proto::agent::McpTarget {
+			name: "petstore".to_string(),
+			backend: Some(proto::agent::BackendReference {
+				kind: Some(proto::agent::backend_reference::Kind::Backend(
+					"test-ns/petstore-backend".to_string(),
+				)),
+				port: 0,
+			}),
+			path: String::new(),
+			protocol: Protocol::Openapi as i32,
+			openapi_schema: None,
+		};
+
+		let result = McpTarget::try_from(&proto_target);
+		assert!(result.is_err());
+		let err = result.unwrap_err();
+		assert!(err.to_string().contains("openapi_schema"));
 	}
 }

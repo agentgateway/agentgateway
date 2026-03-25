@@ -1230,11 +1230,14 @@ message MCPTarget {
     UNDEFINED = 0;
     SSE = 1;
     STREAMABLE_HTTP = 2;
+    OPENAPI = 3;
   }
   string name = 1;
   BackendReference backend = 2;
   string path = 3;
   Protocol protocol = 4;
+  // OpenAPI schema as JSON string. Only used when protocol is OPENAPI.
+  optional string openapi_schema = 5;
 }
 
 message BackendReference {

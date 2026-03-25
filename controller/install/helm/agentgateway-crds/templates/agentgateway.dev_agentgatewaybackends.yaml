@@ -6639,6 +6639,992 @@ spec:
                           minLength: 1
                           pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                           type: string
+                        openAPI:
+                          description: openAPI configures an OpenAPI-based MCP target
+                            that auto-generates tools from an OpenAPI specification.
+                          properties:
+                            host:
+                              description: Host is the hostname or IP address of the
+                                OpenAPI backend.
+                              maxLength: 256
+                              minLength: 1
+                              type: string
+                            policies:
+                              description: |-
+                                policies controls policies for communicating with this backend. Policies may also be set in AgentgatewayPolicy, or
+                                in the top level AgentgatewayBackend. Policies are merged on a field-level basis, with order: AgentgatewayPolicy <
+                                AgentgatewayBackend < AgentgatewayBackend MCP (this field).
+                              properties:
+                                auth:
+                                  description: auth defines settings for managing
+                                    authentication to the backend
+                                  properties:
+                                    aws:
+                                      description: |-
+                                        Auth specifies an explicit AWS authentication method for the backend.
+                                        When omitted, we will try to use the default AWS SDK authentication methods.
+                                      properties:
+                                        secretRef:
+                                          description: |-
+                                            SecretRef references a Kubernetes Secret containing the AWS credentials.
+                                            The Secret must have keys "accessKey", "secretKey", and optionally "sessionToken".
+                                          properties:
+                                            name:
+                                              default: ""
+                                              description: |-
+                                                Name of the referent.
+                                                This field is effectively required, but due to backwards compatibility is
+                                                allowed to be empty. Instances of this type with an empty value here are
+                                                almost certainly wrong.
+                                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                              type: string
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                      required:
+                                      - secretRef
+                                      type: object
+                                    azure:
+                                      description: Azure specifies an Azure authentication
+                                        method for the backend.
+                                      properties:
+                                        managedIdentity:
+                                          description: Details for managed identity
+                                            authentication
+                                          properties:
+                                            clientId:
+                                              type: string
+                                            objectId:
+                                              type: string
+                                            resourceId:
+                                              type: string
+                                          required:
+                                          - clientId
+                                          - objectId
+                                          - resourceId
+                                          type: object
+                                        secretRef:
+                                          description: |-
+                                            SecretRef references a Kubernetes Secret containing the Azure credentials.
+                                            The Secret must have keys "clientId", "tenantId", and "clientSecret".
+                                          properties:
+                                            name:
+                                              default: ""
+                                              description: |-
+                                                Name of the referent.
+                                                This field is effectively required, but due to backwards compatibility is
+                                                allowed to be empty. Instances of this type with an empty value here are
+                                                almost certainly wrong.
+                                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                              type: string
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                      type: object
+                                    gcp:
+                                      description: |-
+                                        Auth specifies to use a Google  authentication method for the backend.
+                                        When omitted, we will try to use the default AWS SDK authentication methods.
+                                      properties:
+                                        audience:
+                                          description: |-
+                                            audience allows explicitly configuring the `aud` of the ID Token. Ony valid with `IdToken` type.
+                                            If not set, the aud is automatically derived from the backend hostname.
+                                          maxLength: 256
+                                          minLength: 1
+                                          type: string
+                                        type:
+                                          description: |-
+                                            The type of token to generate. To authenticate to GCP services, generally an AccessToken is used. To authenticate
+                                            to CloudRun, an IdToken is used.
+                                          enum:
+                                          - AccessToken
+                                          - IdToken
+                                          type: string
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: audience is only valid with IdToken
+                                        rule: 'has(self.audience) ? self.type == ''IdToken''
+                                          : true'
+                                    key:
+                                      description: |-
+                                        key provides an inline key to use as the value of the Authorization header.
+                                        This option is the least secure; usage of a Secret is preferred.
+                                      maxLength: 2048
+                                      type: string
+                                    passthrough:
+                                      description: |-
+                                        passthrough passes through an existing token that has been sent by the client and validated. Other policies, like
+                                        JWT and API Key authentication, will strip the original client credentials. Passthrough backend authentication
+                                        causes the original token to be added back into the request. If there are no client authentication policies on the
+                                        request, the original token would be unchanged, so this would have no effect.
+                                      type: object
+                                    secretRef:
+                                      description: |-
+                                        secretRef references a Kubernetes secret storing the key to use the authorization value. This must be stored in the
+                                        'Authorization' key.
+                                      properties:
+                                        name:
+                                          default: ""
+                                          description: |-
+                                            Name of the referent.
+                                            This field is effectively required, but due to backwards compatibility is
+                                            allowed to be empty. Instances of this type with an empty value here are
+                                            almost certainly wrong.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                          type: string
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                  type: object
+                                  x-kubernetes-validations:
+                                  - message: exactly one of the fields in [key secretRef
+                                      passthrough aws azure gcp] must be set
+                                    rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp)].filter(x,x==true).size()
+                                      == 1'
+                                health:
+                                  description: health defines settings for passive
+                                    and active health checking.
+                                  properties:
+                                    eviction:
+                                      description: Eviction defines settings for evicting
+                                        unhealthy backends.
+                                      properties:
+                                        consecutiveFailures:
+                                          description: |-
+                                            ConsecutiveFailures is the number of consecutive unhealthy responses required before the backend is evicted.
+                                            For example, a value of 5 means the backend must receive 5 unhealthy responses in a row before being evicted.
+                                            When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+                                            When neither is set, a single unhealthy response can trigger eviction.
+                                          format: int32
+                                          minimum: 0
+                                          type: integer
+                                        duration:
+                                          default: 3s
+                                          description: |-
+                                            Duration specifies the base time a backend should be evicted after being marked unhealthy.
+                                            Subsequent evictions use multiplicative backoff (duration * times_evicted).
+                                            If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
+                                            rather than failing entirely.
+                                            If unset, defaults to 3s.
+                                          type: string
+                                          x-kubernetes-validations:
+                                          - message: invalid duration value
+                                            rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                          - message: evictionDuration must be at least
+                                              1 second
+                                            rule: duration(self) >= duration('1s')
+                                        healthThreshold:
+                                          description: |-
+                                            HealthThreshold is the EWMA (exponentially-weighted moving average) health score threshold, expressed as 0–100.
+                                            When set, a backend is only evicted if its computed health drops below this value after an unhealthy response.
+                                            For example, 50 means the backend is evicted when its EWMA health falls below 50% following failures.
+                                            Unlike consecutiveFailures (which counts consecutive failures), this uses a sliding-window average
+                                            so a single success in a stream of failures can delay eviction.
+                                            When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
+                                            When neither is set, a single unhealthy response triggers eviction.
+                                          format: int32
+                                          maximum: 100
+                                          minimum: 0
+                                          type: integer
+                                        restoreHealth:
+                                          description: |-
+                                            RestoreHealth is the health score (0–100) assigned to a backend when it returns from eviction.
+                                            For gradual recovery, set below 100; for full recovery immediately, set 100.
+                                            If unset, the backend resumes with the health it had when evicted.
+                                          format: int32
+                                          maximum: 100
+                                          minimum: 0
+                                          type: integer
+                                      type: object
+                                    unhealthyCondition:
+                                      description: |-
+                                        UnhealthyCondition is a CEL expression that determines whether a response indicates an unhealthy backend.
+                                        When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
+
+                                        For example, to evict on 5xx responses: `response.code >= 500`.
+
+                                        When unset, any 5xx response, or a connection failure, is treated as unhealthy.
+                                        This default lowers the backend's health score but does not trigger eviction on its own.
+                                      maxLength: 16384
+                                      minLength: 1
+                                      type: string
+                                  type: object
+                                http:
+                                  description: http defines settings for managing
+                                    HTTP requests to the backend.
+                                  properties:
+                                    requestTimeout:
+                                      description: requestTimeout specifies the deadline
+                                        for receiving a response from the backend.
+                                      type: string
+                                      x-kubernetes-validations:
+                                      - message: invalid duration value
+                                        rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                      - message: requestTimeout must be at least 1ms
+                                        rule: duration(self) >= duration('1ms')
+                                    version:
+                                      description: |-
+                                        version specifies the HTTP protocol version to use when connecting to the backend.
+                                        If not specified, the version is automatically determined:
+                                        * Service types can specify it with 'appProtocol' on the Service port.
+                                        * If traffic is identified as gRPC, HTTP2 is used.
+                                        * If the incoming traffic was plaintext HTTP, the original protocol will be used.
+                                        * If the incoming traffic was HTTPS, HTTP1 will be used. This is because most clients will
+                                          transparently upgrade HTTPS traffic to HTTP2, even if the backend doesn't support it
+                                      enum:
+                                      - HTTP1
+                                      - HTTP2
+                                      type: string
+                                  type: object
+                                mcp:
+                                  description: mcp specifies settings for MCP workloads.
+                                    This is only applicable when connecting to a Backend
+                                    of type 'mcp'.
+                                  properties:
+                                    authentication:
+                                      description: authentication defines MCPBackend
+                                        specific authentication rules.
+                                      properties:
+                                        audiences:
+                                          description: |-
+                                            audiences specify the list of allowed audiences that are allowed access. This corresponds to the 'aud' claim (https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3).
+                                            If unset, any audience is allowed.
+                                          items:
+                                            type: string
+                                          maxItems: 64
+                                          minItems: 1
+                                          type: array
+                                        issuer:
+                                          description: Issuer identifies the IdP that
+                                            issued the JWT. This corresponds to the
+                                            'iss' claim (https://tools.ietf.org/html/rfc7519#section-4.1.1).
+                                          maxLength: 256
+                                          minLength: 1
+                                          type: string
+                                        jwks:
+                                          description: jwks defines the remote JSON
+                                            Web Key used to validate the signature
+                                            of the JWT.
+                                          properties:
+                                            backendRef:
+                                              description: |-
+                                                backendRef references the remote JWKS server to reach.
+                                                Supported types are Service and (static) Backend. An AgentgatewayPolicy containing backend tls config
+                                                can then be attached to the service/backend in order to set tls options for a connection to the remote jwks source.
+                                              properties:
+                                                group:
+                                                  default: ""
+                                                  description: |-
+                                                    Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                    When unspecified or empty string, core API group is inferred.
+                                                  maxLength: 253
+                                                  pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                  type: string
+                                                kind:
+                                                  default: Service
+                                                  description: |-
+                                                    Kind is the Kubernetes resource kind of the referent. For example
+                                                    "Service".
+
+                                                    Defaults to "Service" when not specified.
+
+                                                    ExternalName services can refer to CNAME DNS records that may live
+                                                    outside of the cluster and as such are difficult to reason about in
+                                                    terms of conformance. They also may not be safe to forward to (see
+                                                    CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                    support ExternalName Services.
+
+                                                    Support: Core (Services with a type other than ExternalName)
+
+                                                    Support: Implementation-specific (Services with type ExternalName)
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                  type: string
+                                                name:
+                                                  description: Name is the name of
+                                                    the referent.
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                                namespace:
+                                                  description: |-
+                                                    Namespace is the namespace of the backend. When unspecified, the local
+                                                    namespace is inferred.
+
+                                                    Note that when a namespace different than the local namespace is specified,
+                                                    a ReferenceGrant object is required in the referent namespace to allow that
+                                                    namespace's owner to accept the reference. See the ReferenceGrant
+                                                    documentation for details.
+
+                                                    Support: Core
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                  type: string
+                                                port:
+                                                  description: |-
+                                                    Port specifies the destination port number to use for this resource.
+                                                    Port is required when the referent is a Kubernetes Service. In this
+                                                    case, the port number is the service port number, not the target port.
+                                                    For other resources, destination port might be derived from the referent
+                                                    resource or this field.
+                                                  format: int32
+                                                  maximum: 65535
+                                                  minimum: 1
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: Must have port for Service
+                                                  reference
+                                                rule: '(size(self.group) == 0 && self.kind
+                                                  == ''Service'') ? has(self.port)
+                                                  : true'
+                                            cacheDuration:
+                                              default: 5m
+                                              type: string
+                                              x-kubernetes-validations:
+                                              - message: invalid duration value
+                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                              - message: cacheDuration must be at
+                                                  least 5m.
+                                                rule: duration(self) >= duration('5m')
+                                            jwksPath:
+                                              description: Path to IdP jwks endpoint,
+                                                relative to the root, commonly ".well-known/jwks.json".
+                                              maxLength: 2000
+                                              minLength: 1
+                                              type: string
+                                          required:
+                                          - backendRef
+                                          - jwksPath
+                                          type: object
+                                        mode:
+                                          default: Strict
+                                          description: validation mode for JWT authentication.
+                                          enum:
+                                          - Strict
+                                          - Optional
+                                          - Permissive
+                                          type: string
+                                        provider:
+                                          description: McpIDP specifies the identity
+                                            provider to use for authentication
+                                          enum:
+                                          - Auth0
+                                          - Keycloak
+                                          type: string
+                                        resourceMetadata:
+                                          additionalProperties:
+                                            x-kubernetes-preserve-unknown-fields: true
+                                          description: ResourceMetadata defines the
+                                            metadata to use for MCP resources.
+                                          type: object
+                                      required:
+                                      - jwks
+                                      type: object
+                                    authorization:
+                                      description: |-
+                                        authorization defines MCPBackend level authorization. Unlike authorization at the HTTP level, which will reject
+                                        unauthorized requests with a 403 error, this policy works at the MCPBackend level.
+
+                                        List operations, such as list_tools, will have each item evaluated. Items that do not meet the rule will be filtered.
+
+                                        Get or call operations, such as call_tool, will evaluate the specific item and reject requests that do not meet the rule.
+                                      properties:
+                                        action:
+                                          default: Allow
+                                          description: |-
+                                            Action defines whether the rule allows or denies the request if matched.
+                                            If unspecified, the default is "Allow".
+                                          enum:
+                                          - Allow
+                                          - Deny
+                                          type: string
+                                        policy:
+                                          description: |-
+                                            Policy specifies the Authorization rule to evaluate.
+                                            A policy matches when **any** of the conditions evaluates to true.
+                                          properties:
+                                            matchExpressions:
+                                              description: |-
+                                                MatchExpressions defines a set of conditions that must be satisfied for the rule to match.
+                                                These expression should be in the form of a Common Expression Language (CEL) expression.
+                                              items:
+                                                description: CELExpression represents
+                                                  a Common Expression Language (CEL)
+                                                  expression.
+                                                maxLength: 16384
+                                                minLength: 1
+                                                type: string
+                                              maxItems: 256
+                                              minItems: 1
+                                              type: array
+                                          required:
+                                          - matchExpressions
+                                          type: object
+                                      required:
+                                      - policy
+                                      type: object
+                                  type: object
+                                  x-kubernetes-validations:
+                                  - message: at least one of the fields in [authentication
+                                      authorization] must be set
+                                    rule: '[has(self.authentication),has(self.authorization)].filter(x,x==true).size()
+                                      >= 1'
+                                tcp:
+                                  description: tcp defines settings for managing TCP
+                                    connections to the backend.
+                                  properties:
+                                    connectTimeout:
+                                      description: connectTimeout defines the deadline
+                                        for establishing a connection to the destination.
+                                      type: string
+                                      x-kubernetes-validations:
+                                      - message: invalid duration value
+                                        rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                      - message: connectTimeout must be at least 100ms
+                                        rule: duration(self) >= duration('100ms')
+                                    keepalive:
+                                      description: keepAlive defines settings for
+                                        enabling TCP keepalives on the connection.
+                                      properties:
+                                        interval:
+                                          description: |-
+                                            interval specifies the number of seconds between keep-alive probes.
+                                            If unset, this defaults to 180s.
+                                          type: string
+                                          x-kubernetes-validations:
+                                          - message: invalid duration value
+                                            rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                          - message: interval must be at least 1 second
+                                            rule: duration(self) >= duration('1s')
+                                        retries:
+                                          description: |-
+                                            retries specifies the maximum number of keep-alive probes to send before dropping the connection.
+                                            If unset, this defaults to 9.
+                                          format: int32
+                                          maximum: 64
+                                          minimum: 1
+                                          type: integer
+                                        time:
+                                          description: |-
+                                            time specifies the number of seconds a connection needs to be idle before keep-alive probes start being sent.
+                                            If unset, this defaults to 180s.
+                                          type: string
+                                          x-kubernetes-validations:
+                                          - message: invalid duration value
+                                            rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                          - message: time must be at least 1 second
+                                            rule: duration(self) >= duration('1s')
+                                      type: object
+                                  type: object
+                                tls:
+                                  description: |-
+                                    tls defines settings for managing TLS connections to the backend.
+
+                                    If this field is set, TLS will be initiated to the backend; the system trusted CA certificates will be used to
+                                    validate the server, and the SNI will automatically be set based on the destination.
+                                  properties:
+                                    alpnProtocols:
+                                      description: |-
+                                        alpnProtocols sets the Application Level Protocol Negotiation (ALPN) value to use in the TLS handshake.
+
+                                        If not present, defaults to ["h2", "http/1.1"].
+                                      items:
+                                        maxLength: 64
+                                        minLength: 1
+                                        type: string
+                                      maxItems: 16
+                                      minItems: 1
+                                      type: array
+                                    caCertificateRefs:
+                                      description: |-
+                                        caCertificateRefs defines the CA certificate ConfigMap to use to verify the server certificate.
+                                        If unset, the system's trusted certificates are used.
+                                      items:
+                                        description: |-
+                                          LocalObjectReference contains enough information to let you locate the
+                                          referenced object inside the same namespace.
+                                        properties:
+                                          name:
+                                            default: ""
+                                            description: |-
+                                              Name of the referent.
+                                              This field is effectively required, but due to backwards compatibility is
+                                              allowed to be empty. Instances of this type with an empty value here are
+                                              almost certainly wrong.
+                                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                            type: string
+                                        type: object
+                                        x-kubernetes-map-type: atomic
+                                      maxItems: 1
+                                      type: array
+                                      x-kubernetes-list-type: atomic
+                                    insecureSkipVerify:
+                                      description: |-
+                                        insecureSkipVerify originates TLS but skips verification of the backend's certificate.
+                                        WARNING: This is an insecure option that should only be used if the risks are understood.
+
+                                        There are two modes:
+                                        * All disables all TLS verification
+                                        * Hostname verifies the CA certificate is trusted, but ignores any mismatch of hostname/SANs. Note that this method
+                                         is still insecure; prefer setting verifySubjectAltNames to customize the valid hostnames if possible.
+                                      enum:
+                                      - All
+                                      - Hostname
+                                      type: string
+                                    mtlsCertificateRef:
+                                      description: |-
+                                        mtlsCertificateRef enables mutual TLS to the backend, using the specified key (tls.key) and cert (tls.crt) from the
+                                        refenced Secret.
+
+                                        An optional 'ca.cert' field, if present, will be used to verify the server certificate if present. If
+                                        caCertificateRefs is also specified, the caCertificateRefs field takes priority.
+
+                                        If unspecified, no client certificate will be used.
+                                      items:
+                                        description: |-
+                                          LocalObjectReference contains enough information to let you locate the
+                                          referenced object inside the same namespace.
+                                        properties:
+                                          name:
+                                            default: ""
+                                            description: |-
+                                              Name of the referent.
+                                              This field is effectively required, but due to backwards compatibility is
+                                              allowed to be empty. Instances of this type with an empty value here are
+                                              almost certainly wrong.
+                                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                            type: string
+                                        type: object
+                                        x-kubernetes-map-type: atomic
+                                      maxItems: 1
+                                      type: array
+                                      x-kubernetes-list-type: atomic
+                                    sni:
+                                      description: |-
+                                        sni specifies the Server Name Indicator (SNI) to be used in the TLS handshake. If unset, the SNI is automatically
+                                        set based on the destination hostname.
+                                      maxLength: 253
+                                      minLength: 1
+                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                      type: string
+                                    verifySubjectAltNames:
+                                      description: |-
+                                        verifySubjectAltNames specifies the Subject Alternative Names (SAN) to verify in the server certificate.
+                                        If not present, the destination hostname is automatically used.
+                                      items:
+                                        maxLength: 256
+                                        minLength: 1
+                                        type: string
+                                      maxItems: 16
+                                      minItems: 1
+                                      type: array
+                                  type: object
+                                  x-kubernetes-validations:
+                                  - message: insecureSkipVerify All and caCertificateRefs
+                                      may not be set together
+                                    rule: 'has(self.insecureSkipVerify) && self.insecureSkipVerify
+                                      == ''All'' ? !has(self.caCertificateRefs) :
+                                      true'
+                                  - message: insecureSkipVerify and verifySubjectAltNames
+                                      may not be set together
+                                    rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
+                                      : true'
+                                  - message: at most one of the fields in [verifySubjectAltNames
+                                      insecureSkipVerify] may be set
+                                    rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
+                                      <= 1'
+                                transformation:
+                                  description: transformation is used to mutate and
+                                    transform requests and responses sent to and from
+                                    the backend.
+                                  properties:
+                                    request:
+                                      description: request is used to modify the request
+                                        path.
+                                      properties:
+                                        add:
+                                          description: |-
+                                            add is a list of headers to add to the request and what that value should be set to. If there is already a header
+                                            with these values then append the value as an extra entry.
+                                          items:
+                                            properties:
+                                              name:
+                                                description: the name of the header
+                                                  to add.
+                                                maxLength: 256
+                                                minLength: 1
+                                                pattern: ^:?[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                type: string
+                                                x-kubernetes-validations:
+                                                - message: pseudo-headers must be
+                                                    one of :authority, :method, :path,
+                                                    :scheme, or :status
+                                                  rule: '!self.startsWith('':'') ||
+                                                    self in ['':authority'', '':method'',
+                                                    '':path'', '':scheme'', '':status'']'
+                                              value:
+                                                description: value is the CEL expression
+                                                  to apply to generate the output
+                                                  value for the header.
+                                                maxLength: 16384
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - name
+                                            - value
+                                            type: object
+                                          maxItems: 16
+                                          minItems: 1
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
+                                        body:
+                                          description: body controls manipulation
+                                            of the HTTP body.
+                                          maxLength: 16384
+                                          minLength: 1
+                                          type: string
+                                        metadata:
+                                          additionalProperties:
+                                            description: CELExpression represents
+                                              a Common Expression Language (CEL) expression.
+                                            maxLength: 16384
+                                            minLength: 1
+                                            type: string
+                                          description: |-
+                                            metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
+                                            metadata is evaluated before header or body transformations.
+                                          maxProperties: 16
+                                          minProperties: 1
+                                          type: object
+                                        remove:
+                                          description: Remove is a list of header
+                                            names to remove from the request/response.
+                                          items:
+                                            description: An HTTP Header Name.
+                                            maxLength: 256
+                                            minLength: 1
+                                            pattern: ^:?[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                            type: string
+                                            x-kubernetes-validations:
+                                            - message: pseudo-headers must be one
+                                                of :authority, :method, :path, :scheme,
+                                                or :status
+                                              rule: '!self.startsWith('':'') || self
+                                                in ['':authority'', '':method'', '':path'',
+                                                '':scheme'', '':status'']'
+                                          maxItems: 16
+                                          minItems: 1
+                                          type: array
+                                          x-kubernetes-list-type: set
+                                        set:
+                                          description: set is a list of headers and
+                                            the value they should be set to.
+                                          items:
+                                            properties:
+                                              name:
+                                                description: the name of the header
+                                                  to add.
+                                                maxLength: 256
+                                                minLength: 1
+                                                pattern: ^:?[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                type: string
+                                                x-kubernetes-validations:
+                                                - message: pseudo-headers must be
+                                                    one of :authority, :method, :path,
+                                                    :scheme, or :status
+                                                  rule: '!self.startsWith('':'') ||
+                                                    self in ['':authority'', '':method'',
+                                                    '':path'', '':scheme'', '':status'']'
+                                              value:
+                                                description: value is the CEL expression
+                                                  to apply to generate the output
+                                                  value for the header.
+                                                maxLength: 16384
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - name
+                                            - value
+                                            type: object
+                                          maxItems: 16
+                                          minItems: 1
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: at least one of the fields in [add
+                                          body metadata remove set] must be set
+                                        rule: '[has(self.add),has(self.body),has(self.metadata),has(self.remove),has(self.set)].filter(x,x==true).size()
+                                          >= 1'
+                                    response:
+                                      description: response is used to modify the
+                                        response path.
+                                      properties:
+                                        add:
+                                          description: |-
+                                            add is a list of headers to add to the request and what that value should be set to. If there is already a header
+                                            with these values then append the value as an extra entry.
+                                          items:
+                                            properties:
+                                              name:
+                                                description: the name of the header
+                                                  to add.
+                                                maxLength: 256
+                                                minLength: 1
+                                                pattern: ^:?[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                type: string
+                                                x-kubernetes-validations:
+                                                - message: pseudo-headers must be
+                                                    one of :authority, :method, :path,
+                                                    :scheme, or :status
+                                                  rule: '!self.startsWith('':'') ||
+                                                    self in ['':authority'', '':method'',
+                                                    '':path'', '':scheme'', '':status'']'
+                                              value:
+                                                description: value is the CEL expression
+                                                  to apply to generate the output
+                                                  value for the header.
+                                                maxLength: 16384
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - name
+                                            - value
+                                            type: object
+                                          maxItems: 16
+                                          minItems: 1
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
+                                        body:
+                                          description: body controls manipulation
+                                            of the HTTP body.
+                                          maxLength: 16384
+                                          minLength: 1
+                                          type: string
+                                        metadata:
+                                          additionalProperties:
+                                            description: CELExpression represents
+                                              a Common Expression Language (CEL) expression.
+                                            maxLength: 16384
+                                            minLength: 1
+                                            type: string
+                                          description: |-
+                                            metadata stores CEL-evaluated values under the `metadata` CEL variable for subsequent policy evaluations.
+                                            metadata is evaluated before header or body transformations.
+                                          maxProperties: 16
+                                          minProperties: 1
+                                          type: object
+                                        remove:
+                                          description: Remove is a list of header
+                                            names to remove from the request/response.
+                                          items:
+                                            description: An HTTP Header Name.
+                                            maxLength: 256
+                                            minLength: 1
+                                            pattern: ^:?[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                            type: string
+                                            x-kubernetes-validations:
+                                            - message: pseudo-headers must be one
+                                                of :authority, :method, :path, :scheme,
+                                                or :status
+                                              rule: '!self.startsWith('':'') || self
+                                                in ['':authority'', '':method'', '':path'',
+                                                '':scheme'', '':status'']'
+                                          maxItems: 16
+                                          minItems: 1
+                                          type: array
+                                          x-kubernetes-list-type: set
+                                        set:
+                                          description: set is a list of headers and
+                                            the value they should be set to.
+                                          items:
+                                            properties:
+                                              name:
+                                                description: the name of the header
+                                                  to add.
+                                                maxLength: 256
+                                                minLength: 1
+                                                pattern: ^:?[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                type: string
+                                                x-kubernetes-validations:
+                                                - message: pseudo-headers must be
+                                                    one of :authority, :method, :path,
+                                                    :scheme, or :status
+                                                  rule: '!self.startsWith('':'') ||
+                                                    self in ['':authority'', '':method'',
+                                                    '':path'', '':scheme'', '':status'']'
+                                              value:
+                                                description: value is the CEL expression
+                                                  to apply to generate the output
+                                                  value for the header.
+                                                maxLength: 16384
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - name
+                                            - value
+                                            type: object
+                                          maxItems: 16
+                                          minItems: 1
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: at least one of the fields in [add
+                                          body metadata remove set] must be set
+                                        rule: '[has(self.add),has(self.body),has(self.metadata),has(self.remove),has(self.set)].filter(x,x==true).size()
+                                          >= 1'
+                                  type: object
+                                  x-kubernetes-validations:
+                                  - message: at least one of the fields in [request
+                                      response] must be set
+                                    rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
+                                      >= 1'
+                                tunnel:
+                                  description: tunnel defines settings for managing
+                                    tunnel connections (like HTTPS_PROXY) to the backend.
+                                  properties:
+                                    backendRef:
+                                      description: |-
+                                        backendRef references the proxy server to reach.
+                                        Supported types: Service and Backend.
+                                      properties:
+                                        group:
+                                          default: ""
+                                          description: |-
+                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                            When unspecified or empty string, core API group is inferred.
+                                          maxLength: 253
+                                          pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                          type: string
+                                        kind:
+                                          default: Service
+                                          description: |-
+                                            Kind is the Kubernetes resource kind of the referent. For example
+                                            "Service".
+
+                                            Defaults to "Service" when not specified.
+
+                                            ExternalName services can refer to CNAME DNS records that may live
+                                            outside of the cluster and as such are difficult to reason about in
+                                            terms of conformance. They also may not be safe to forward to (see
+                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                            support ExternalName Services.
+
+                                            Support: Core (Services with a type other than ExternalName)
+
+                                            Support: Implementation-specific (Services with type ExternalName)
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                          type: string
+                                        name:
+                                          description: Name is the name of the referent.
+                                          maxLength: 253
+                                          minLength: 1
+                                          type: string
+                                        namespace:
+                                          description: |-
+                                            Namespace is the namespace of the backend. When unspecified, the local
+                                            namespace is inferred.
+
+                                            Note that when a namespace different than the local namespace is specified,
+                                            a ReferenceGrant object is required in the referent namespace to allow that
+                                            namespace's owner to accept the reference. See the ReferenceGrant
+                                            documentation for details.
+
+                                            Support: Core
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                          type: string
+                                        port:
+                                          description: |-
+                                            Port specifies the destination port number to use for this resource.
+                                            Port is required when the referent is a Kubernetes Service. In this
+                                            case, the port number is the service port number, not the target port.
+                                            For other resources, destination port might be derived from the referent
+                                            resource or this field.
+                                          format: int32
+                                          maximum: 65535
+                                          minimum: 1
+                                          type: integer
+                                      required:
+                                      - name
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: Must have port for Service reference
+                                        rule: '(size(self.group) == 0 && self.kind
+                                          == ''Service'') ? has(self.port) : true'
+                                  required:
+                                  - backendRef
+                                  type: object
+                              type: object
+                              x-kubernetes-validations:
+                              - message: at least one of the fields in [auth health
+                                  http mcp tcp tls transformation tunnel] must be
+                                  set
+                                rule: '[has(self.auth),has(self.health),has(self.http),has(self.mcp),has(self.tcp),has(self.tls),has(self.transformation),has(self.tunnel)].filter(x,x==true).size()
+                                  >= 1'
+                            port:
+                              description: Port is the port number of the OpenAPI
+                                backend.
+                              format: int32
+                              maximum: 65535
+                              minimum: 1
+                              type: integer
+                            schema:
+                              description: Schema specifies how to obtain the OpenAPI
+                                specification.
+                              properties:
+                                configMapRef:
+                                  description: |-
+                                    configMapRef references a ConfigMap containing the OpenAPI specification.
+                                    The ConfigMap must have a key named "openapi.json" or "openapi.yaml".
+                                  properties:
+                                    name:
+                                      default: ""
+                                      description: |-
+                                        Name of the referent.
+                                        This field is effectively required, but due to backwards compatibility is
+                                        allowed to be empty. Instances of this type with an empty value here are
+                                        almost certainly wrong.
+                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                      type: string
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                                inline:
+                                  description: inline specifies the OpenAPI specification
+                                    directly as a string.
+                                  type: string
+                                url:
+                                  description: url specifies a URL to fetch the OpenAPI
+                                    specification from.
+                                  maxLength: 1024
+                                  minLength: 1
+                                  type: string
+                              type: object
+                              x-kubernetes-validations:
+                              - message: exactly one of the fields in [url configMapRef
+                                  inline] must be set
+                                rule: '[has(self.url),has(self.configMapRef),has(self.inline)].filter(x,x==true).size()
+                                  == 1'
+                          required:
+                          - host
+                          - port
+                          - schema
+                          type: object
                         selector:
                           description: |-
                             selector is a label selector is the selector to use to select Services.
@@ -7713,9 +8699,9 @@ spec:
                       - name
                       type: object
                       x-kubernetes-validations:
-                      - message: exactly one of the fields in [selector static] must
-                          be set
-                        rule: '[has(self.selector),has(self.static)].filter(x,x==true).size()
+                      - message: exactly one of the fields in [selector static openAPI]
+                          must be set
+                        rule: '[has(self.selector),has(self.static),has(self.openAPI)].filter(x,x==true).size()
                           == 1'
                     maxItems: 32
                     minItems: 1

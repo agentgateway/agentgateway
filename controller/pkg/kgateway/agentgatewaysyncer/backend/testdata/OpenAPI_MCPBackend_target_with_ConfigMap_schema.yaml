@@ -1,0 +1,18 @@
+- key: test-ns/openapi-configmap-backend/petstore
+  name:
+    name: openapi-configmap-backend
+    namespace: test-ns
+  static:
+    host: petstore.example.com
+    port: 443
+- key: test-ns/openapi-configmap-backend
+  mcp:
+    targets:
+    - backend:
+        backend: test-ns/openapi-configmap-backend/petstore
+      name: petstore
+      openapiSchema: '{"openapi":"3.0.0","info":{"title":"Petstore","version":"1.0.0"},"paths":{}}'
+      protocol: OPENAPI
+  name:
+    name: openapi-configmap-backend
+    namespace: test-ns

@@ -3,6 +3,8 @@ package agentgatewaybackend
 import (
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 
 	"istio.io/istio/pilot/pkg/model/kstatus"
 	"istio.io/istio/pkg/config"
@@ -256,6 +258,44 @@ func translateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 				mcpTarget.Protocol = api.MCPTarget_STREAMABLE_HTTP
 			}
 
+			mcpTargets = append(mcpTargets, mcpTarget)
+		} else if o := target.OpenAPI; o != nil {
+			staticBackendRef := utils.InternalMCPStaticBackendName(be.Namespace, be.Name, string(target.Name))
+			pol, err := translateMCPBackendPolicies(ctx, be.Namespace, o.Policies)
+			if err != nil {
+				logger.Error("failed to translate OpenAPI MCP backend policies", "err", err)
+				errs = append(errs, err)
+			}
+			staticBackend := &api.Backend{
+				Key:  staticBackendRef,
+				Name: plugins.ResourceName(be),
+				Kind: &api.Backend_Static{
+					Static: &api.StaticBackend{
+						Host: string(o.Host),
+						Port: o.Port,
+					},
+				},
+				InlinePolicies: pol,
+			}
+			backends = append(backends, staticBackend)
+
+			schema, err := loadOpenAPISchema(ctx, be.Namespace, &o.Schema)
+			if err != nil {
+				logger.Error("failed to load OpenAPI schema", "err", err)
+				errs = append(errs, err)
+				continue
+			}
+
+			mcpTarget := &api.MCPTarget{
+				Name: string(target.Name),
+				Backend: &api.BackendReference{
+					Kind: &api.BackendReference_Backend{
+						Backend: staticBackendRef,
+					},
+				},
+				Protocol:      api.MCPTarget_OPENAPI,
+				OpenapiSchema: &schema,
+			}
 			mcpTargets = append(mcpTargets, mcpTarget)
 		} else if s := target.Selector; s != nil {
 			// Krt only allows 1 filter per type, so we build a composite filter here
@@ -577,4 +617,46 @@ func toMCPProtocol(appProtocol string) api.MCPTarget_Protocol {
 		// should never happen since this function is only invoked for valid MCPBackend protocols
 		return api.MCPTarget_UNDEFINED
 	}
+}
+
+func loadOpenAPISchema(ctx plugins.PolicyCtx, namespace string, schema *agentgateway.OpenAPISchema) (string, error) {
+	if schema == nil {
+		return "", errors.New("OpenAPI schema is required")
+	}
+
+	if schema.Inline != nil {
+		return *schema.Inline, nil
+	}
+
+	if schema.URL != nil {
+		resp, err := http.Get(string(*schema.URL))
+		if err != nil {
+			return "", fmt.Errorf("failed to fetch OpenAPI schema from URL: %w", err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", fmt.Errorf("failed to read OpenAPI schema response: %w", err)
+		}
+		return string(body), nil
+	}
+
+	if schema.ConfigMapRef != nil {
+		nn := types.NamespacedName{Namespace: namespace, Name: schema.ConfigMapRef.Name}
+		cm := krt.FetchOne(ctx.Krt, ctx.Collections.ConfigMaps, krt.FilterObjectName(nn))
+		if cm == nil {
+			return "", fmt.Errorf("ConfigMap %s/%s not found", namespace, schema.ConfigMapRef.Name)
+		}
+
+		if data, ok := (*cm).Data["openapi.json"]; ok {
+			return data, nil
+		}
+		if data, ok := (*cm).Data["openapi.yaml"]; ok {
+			return data, nil
+		}
+		return "", fmt.Errorf("ConfigMap %s/%s must have key 'openapi.json' or 'openapi.yaml'", namespace, schema.ConfigMapRef.Name)
+	}
+
+	return "", errors.New("one of inline, url, or configMapRef must be specified")
 }

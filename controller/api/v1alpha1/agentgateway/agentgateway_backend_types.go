@@ -1,6 +1,7 @@
 package agentgateway
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -357,7 +358,7 @@ const (
 type FailureMode string
 
 // McpTargetSelector defines the MCPBackend target to use for this backend.
-// +kubebuilder:validation:ExactlyOneOf=selector;static
+// +kubebuilder:validation:ExactlyOneOf=selector;static;openAPI
 type McpTargetSelector struct {
 	// Name of the MCPBackend target.
 	// +required
@@ -372,6 +373,10 @@ type McpTargetSelector struct {
 	// 'selector' instead.
 	// +optional
 	Static *McpTarget `json:"static,omitempty"`
+
+	// openAPI configures an OpenAPI-based MCP target that auto-generates tools from an OpenAPI specification.
+	// +optional
+	OpenAPI *OpenAPITarget `json:"openAPI,omitempty"`
 }
 
 const (
@@ -436,3 +441,43 @@ const (
 	// MCPProtocolSSE specifies Server-Sent Events (SSE) must be used as the protocol
 	MCPProtocolSSE MCPProtocol = "SSE"
 )
+
+// OpenAPITarget configures an OpenAPI-based MCP target that auto-generates tools from an OpenAPI specification.
+type OpenAPITarget struct {
+	// Host is the hostname or IP address of the OpenAPI backend.
+	// +required
+	Host ShortString `json:"host"`
+
+	// Port is the port number of the OpenAPI backend.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +required
+	Port int32 `json:"port"`
+
+	// Schema specifies how to obtain the OpenAPI specification.
+	// +required
+	Schema OpenAPISchema `json:"schema"`
+
+	// policies controls policies for communicating with this backend. Policies may also be set in AgentgatewayPolicy, or
+	// in the top level AgentgatewayBackend. Policies are merged on a field-level basis, with order: AgentgatewayPolicy <
+	// AgentgatewayBackend < AgentgatewayBackend MCP (this field).
+	// +optional
+	Policies *BackendWithMCP `json:"policies,omitempty"`
+}
+
+// OpenAPISchema defines how to obtain the OpenAPI specification.
+// +kubebuilder:validation:ExactlyOneOf=url;configMapRef;inline
+type OpenAPISchema struct {
+	// url specifies a URL to fetch the OpenAPI specification from.
+	// +optional
+	URL *LongString `json:"url,omitempty"`
+
+	// configMapRef references a ConfigMap containing the OpenAPI specification.
+	// The ConfigMap must have a key named "openapi.json" or "openapi.yaml".
+	// +optional
+	ConfigMapRef *corev1.LocalObjectReference `json:"configMapRef,omitempty"`
+
+	// inline specifies the OpenAPI specification directly as a string.
+	// +optional
+	Inline *string `json:"inline,omitempty"`
+}

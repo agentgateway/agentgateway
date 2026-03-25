@@ -161,6 +161,59 @@ func TestBuildMCP(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name: "OpenAPI MCPBackend target with inline schema",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openapi-mcp-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "petstore",
+								OpenAPI: &agentgateway.OpenAPITarget{
+									Host: "petstore.example.com",
+									Port: 443,
+									Schema: agentgateway.OpenAPISchema{
+										Inline: stringPtr(`{"openapi":"3.0.0","info":{"title":"Petstore","version":"1.0.0"},"paths":{}}`),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "OpenAPI MCPBackend target with ConfigMap schema",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openapi-configmap-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "petstore",
+								OpenAPI: &agentgateway.OpenAPITarget{
+									Host: "petstore.example.com",
+									Port: 443,
+									Schema: agentgateway.OpenAPISchema{
+										ConfigMapRef: &corev1.LocalObjectReference{
+											Name: "petstore-openapi",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			inputs: []any{createMockOpenAPIConfigMap("test-ns", "petstore-openapi")},
+		},
 	}
 
 	for _, tt := range tests {
@@ -869,6 +922,19 @@ func createMockNamespaceCollectionWithLabels() []any {
 		},
 	}
 	return namespaces
+}
+
+// createMockOpenAPIConfigMap creates a mock ConfigMap with an OpenAPI schema
+func createMockOpenAPIConfigMap(namespace, name string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Data: map[string]string{
+			"openapi.json": `{"openapi":"3.0.0","info":{"title":"Petstore","version":"1.0.0"},"paths":{}}`,
+		},
+	}
 }
 
 // jsonMarshalProto wraps a proto.Message so it can be marshaled with the standard encoding/json library
