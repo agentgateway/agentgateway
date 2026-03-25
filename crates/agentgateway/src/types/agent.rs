@@ -508,6 +508,9 @@ pub type ListenerKey = Strng;
 pub struct Route {
 	// Internal name
 	pub key: RouteKey,
+	/// Service this route targets (set when parentRef is a Service).
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub service_key: Option<crate::types::discovery::NamespacedHostname>,
 	#[serde(flatten)]
 	// User facing name of the route
 	pub name: RouteName,
@@ -739,6 +742,9 @@ impl BackendTargetRef<'_> {
 pub struct TCPRoute {
 	// Internal name
 	pub key: RouteKey,
+	/// Service this route targets (set when parentRef is a Service).
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub service_key: Option<crate::types::discovery::NamespacedHostname>,
 	// User facing name of the route
 	#[serde(flatten)]
 	pub name: RouteName,
@@ -2332,6 +2338,7 @@ mod tests {
 	fn route(key: &'static str, hostnames: Vec<&'static str>, matches: Vec<RouteMatch>) -> Route {
 		Route {
 			key: strng::new(key),
+			service_key: None,
 			name: RouteName::default(),
 			hostnames: hostnames.into_iter().map(strng::new).collect(),
 			matches,
@@ -2343,6 +2350,7 @@ mod tests {
 	fn tcp_route(key: &'static str, hostnames: Vec<&'static str>) -> TCPRoute {
 		TCPRoute {
 			key: strng::new(key),
+			service_key: None,
 			name: RouteName::default(),
 			hostnames: hostnames.into_iter().map(strng::new).collect(),
 			backends: vec![],

@@ -165,6 +165,7 @@ pub fn basic_route(target: SocketAddr) -> Route {
 pub fn basic_named_route(target: Strng) -> Route {
 	Route {
 		key: "route".into(),
+		service_key: None,
 		name: RouteName {
 			name: "route".into(),
 			namespace: Default::default(),
@@ -190,6 +191,7 @@ pub fn basic_named_route(target: Strng) -> Route {
 pub fn basic_named_tcp_route(target: Strng) -> TCPRoute {
 	TCPRoute {
 		key: "route".into(),
+		service_key: None,
 		name: RouteName {
 			name: "route".into(),
 			namespace: Default::default(),
