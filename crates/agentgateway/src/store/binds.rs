@@ -57,6 +57,8 @@ pub struct Store {
 	staged_tcp_routes: HashMap<ListenerKey, HashMap<RouteKey, TCPRoute>>,
 
 	tx: tokio::sync::broadcast::Sender<Event<Arc<Bind>>>,
+
+	channel_access_logger: Option<Arc<crate::telemetry::log::ChannelAccessLogger>>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -383,7 +385,12 @@ impl Store {
 			staged_listeners: Default::default(),
 			staged_tcp_routes: Default::default(),
 			tx,
+			channel_access_logger: None,
 		}
+	}
+
+	pub fn set_channel_access_logger(&mut self, logger: Arc<crate::telemetry::log::ChannelAccessLogger>) {
+		self.channel_access_logger = Some(logger);
 	}
 	pub fn subscribe(
 		&self,
@@ -737,6 +744,7 @@ impl Store {
 
 		let mut pol = FrontendPolices::default();
 		rules.for_each(|r| pol.set_if_empty(r));
+		pol.channel_access_log_tx = self.channel_access_logger.clone();
 		pol
 	}
 
@@ -752,6 +760,7 @@ impl Store {
 			.filter_map(|p| p.policy.as_frontend());
 		let mut pol = FrontendPolices::default();
 		rules.for_each(|r| pol.set_if_empty(r));
+		pol.channel_access_log_tx = self.channel_access_logger.clone();
 		pol
 	}
 
