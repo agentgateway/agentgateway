@@ -927,13 +927,17 @@ fn test_get_messages() {
 /// response, the error body must be translated and forwarded instead of being
 /// silently consumed by the streaming decoder.
 ///
-/// This test demonstrates the bug and the fix by feeding a Bedrock 400 JSON
-/// error body through both code paths:
-///   1. process_streaming (the old, buggy path) — produces empty body
-///   2. buffered process_error (the fixed path)  — produces proper translated body
+/// This test proves the bug exists and the fix works by exercising both paths:
+///   1. process_streaming with a 400 JSON body → empty output (the bug)
+///   2. process_error with the same body → correct translated output (the fix)
 ///
-/// The condition change in process_response (`resp.status().is_success()`)
-/// ensures path (2) is taken for non-success responses.
+/// The one-line condition change in process_response gates between these paths.
+///
+/// NOTE: We cannot call process_response directly in a unit test because it
+/// requires PolicyClient, which wraps ProxyInputs (full proxy runtime with
+/// Config, Stores, client::Client, Metrics, mcp::App — none of which have
+/// test constructors). An integration test via tests/common/gateway.rs with
+/// a mock backend returning 400 would cover the routing end-to-end.
 #[tokio::test]
 async fn streaming_error_response_body_is_not_swallowed() {
 	let bedrock = AIProvider::Bedrock(bedrock::Provider {
