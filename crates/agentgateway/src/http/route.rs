@@ -164,10 +164,9 @@ pub fn select_best_route(
 			return None;
 		}
 
-		// GAMMA: check service-keyed routes first.
 		// When routes are attached to a Service via parentRef, they take priority
-		// and bypass hostname matching. If service routes exist but none match,
-		// the request is rejected (no default fallback).
+		// over listener-attached routes. If service routes exist but none match,
+		// the request is rejected (per GAMMA spec).
 		let svc_nh = svc.namespaced_hostname();
 		let (has_svc_routes, svc_route_match) = {
 			let binds = stores.read_binds();

@@ -220,14 +220,17 @@ fn select_best_route(
 	if matches!(listener.protocol, ListenerProtocol::HBONE) {
 		let svc = resolve_waypoint_service(stores, network, dst, self_addr)?;
 
-		// GAMMA: check service-keyed TCP routes first
+		// When routes are attached to a Service via parentRef, they take priority
+		// over listener-attached routes. If service routes exist but none match,
+		// the request is rejected (per GAMMA spec).
 		let svc_nh = svc.namespaced_hostname();
 		{
 			let binds = stores.read_binds();
 			if let Some(svc_tcp_routes) = binds.get_service_tcp_routes(&svc_nh) {
-				// Service TCP routes exist — use the first match (pre-sorted by precedence)
-				if let Some(r) = svc_tcp_routes.get_hostname(&agent::HostnameMatchRef::None) {
-					return Some(Arc::new(r.clone()));
+				for hnm in agent::HostnameMatch::all_matches(&svc.hostname) {
+					if let Some(r) = svc_tcp_routes.get_hostname(&hnm) {
+						return Some(Arc::new(r.clone()));
+					}
 				}
 				// GAMMA: service routes exist but none matched -> reject
 				return None;
