@@ -211,20 +211,28 @@ impl Relay {
 				}
 				// If we got here in FailOpen mode, it means the only target failed.
 				// Return a default info response to keep the client session alive.
-				return Ok(Self::get_info(pv, multiplexing).into());
+				return Ok(Self::get_info(pv, multiplexing, Vec::new()).into());
 			}
 
-			// Multiplexing is more complex. We need to find the lowest protocol version that all servers support.
-			let lowest_version = s
-				.into_iter()
-				.flat_map(|(_, v)| match v {
-					ServerResult::InitializeResult(r) => Some(r.protocol_version),
-					_ => None,
-				})
-				.min_by_key(|i| i.to_string())
-				.unwrap_or(pv);
-			// For now, we just send our own info. In the future, we should merge the results from each upstream.
-			Ok(Self::get_info(lowest_version, multiplexing).into())
+			// Multiplexing is more complex. We need to find the lowest protocol version
+			// that all servers support and merge instructions from all upstreams.
+			let mut lowest_version = pv;
+			let mut upstream_instructions: Vec<(String, String)> = Vec::new();
+
+			for (server_name, v) in s {
+				if let ServerResult::InitializeResult(r) = v {
+					if r.protocol_version.to_string() < lowest_version.to_string() {
+						lowest_version = r.protocol_version;
+					}
+					if let Some(instructions) = r.instructions
+						&& !instructions.is_empty()
+					{
+						upstream_instructions.push((server_name.to_string(), instructions));
+					}
+				}
+			}
+
+			Ok(Self::get_info(lowest_version, multiplexing, upstream_instructions).into())
 		})
 	}
 
@@ -477,7 +485,11 @@ impl Relay {
 
 		Ok(accepted_response())
 	}
-	fn get_info(pv: ProtocolVersion, multiplexing: bool) -> ServerInfo {
+	fn get_info(
+		pv: ProtocolVersion,
+		multiplexing: bool,
+		upstream_instructions: Vec<(String, String)>,
+	) -> ServerInfo {
 		let capabilities = if multiplexing {
 			ServerCapabilities {
 				completions: None,
@@ -502,9 +514,16 @@ impl Relay {
 				resources: Some(ResourcesCapability::default()),
 			}
 		};
-		let instructions = Some(
-            "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.".to_string(),
-        );
+		let gateway_preamble = "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.";
+		let instructions = if upstream_instructions.is_empty() {
+			Some(gateway_preamble.to_string())
+		} else {
+			let mut merged = String::from(gateway_preamble);
+			for (server_name, instruction) in &upstream_instructions {
+				merged.push_str(&format!("\n\n[{server_name}]\n{instruction}"));
+			}
+			Some(merged)
+		};
 		ServerInfo {
 			protocol_version: pv,
 			capabilities,

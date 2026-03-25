@@ -1481,6 +1481,197 @@ fn test_set_sessions_rejects_mismatched_target_set() {
 	);
 }
 
+#[test]
+fn test_merge_initialize_merges_upstream_instructions_when_multiplexing() {
+	use rmcp::model::{
+		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30101))),
+				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30102))),
+			],
+			stateful: true,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	let merge_fn = relay.merge_initialize(ProtocolVersion::V_2025_06_18, true);
+
+	let results: Vec<(Strng, ServerResult)> = vec![
+		(
+			"alpha".into(),
+			ServerResult::InitializeResult(InitializeResult {
+				protocol_version: ProtocolVersion::V_2025_06_18,
+				capabilities: ServerCapabilities::default(),
+				server_info: Implementation {
+					name: "alpha-server".to_string(),
+					version: "1.0".to_string(),
+					..Default::default()
+				},
+				instructions: Some("Alpha server: handles data processing.".to_string()),
+			}),
+		),
+		(
+			"beta".into(),
+			ServerResult::InitializeResult(InitializeResult {
+				protocol_version: ProtocolVersion::V_2025_06_18,
+				capabilities: ServerCapabilities::default(),
+				server_info: Implementation {
+					name: "beta-server".to_string(),
+					version: "1.0".to_string(),
+					..Default::default()
+				},
+				instructions: Some("Beta server: handles notifications.".to_string()),
+			}),
+		),
+	];
+
+	let result = merge_fn(results).unwrap();
+	let info = match result {
+		ServerResult::InitializeResult(ir) => ir,
+		other => panic!("expected InitializeResult, got: {:?}", other),
+	};
+
+	let instructions = info.instructions.expect("instructions should be present");
+	assert!(
+		instructions.contains("Alpha server: handles data processing."),
+		"merged instructions should contain alpha's instructions, got: {instructions}"
+	);
+	assert!(
+		instructions.contains("Beta server: handles notifications."),
+		"merged instructions should contain beta's instructions, got: {instructions}"
+	);
+	assert!(
+		instructions.contains("[alpha]"),
+		"merged instructions should label alpha's section, got: {instructions}"
+	);
+	assert!(
+		instructions.contains("[beta]"),
+		"merged instructions should label beta's section, got: {instructions}"
+	);
+	assert!(
+		instructions.contains("gateway"),
+		"merged instructions should contain gateway preamble, got: {instructions}"
+	);
+}
+
+#[test]
+fn test_merge_initialize_no_instructions_when_multiplexing() {
+	use rmcp::model::{
+		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_streamable_target(
+				"alpha",
+				SocketAddr::from(([127, 0, 0, 1], 30103)),
+			)],
+			stateful: true,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	let merge_fn = relay.merge_initialize(ProtocolVersion::V_2025_06_18, true);
+
+	let results: Vec<(Strng, ServerResult)> = vec![(
+		"alpha".into(),
+		ServerResult::InitializeResult(InitializeResult {
+			protocol_version: ProtocolVersion::V_2025_06_18,
+			capabilities: ServerCapabilities::default(),
+			server_info: Implementation {
+				name: "alpha-server".to_string(),
+				version: "1.0".to_string(),
+				..Default::default()
+			},
+			instructions: None,
+		}),
+	)];
+
+	let result = merge_fn(results).unwrap();
+	let info = match result {
+		ServerResult::InitializeResult(ir) => ir,
+		other => panic!("expected InitializeResult, got: {:?}", other),
+	};
+
+	let instructions = info.instructions.expect("instructions should be present");
+	// When no upstream provides instructions, only the gateway preamble should be present
+	assert!(
+		instructions.contains("gateway"),
+		"should contain gateway preamble, got: {instructions}"
+	);
+	assert!(
+		!instructions.contains("[alpha]"),
+		"should not contain server sections when no instructions provided, got: {instructions}"
+	);
+}
+
+#[test]
+fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
+	use rmcp::model::{
+		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_streamable_target(
+				"solo",
+				SocketAddr::from(([127, 0, 0, 1], 30104)),
+			)],
+			stateful: true,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	let merge_fn = relay.merge_initialize(ProtocolVersion::V_2025_06_18, false);
+
+	let results: Vec<(Strng, ServerResult)> = vec![(
+		"solo".into(),
+		ServerResult::InitializeResult(InitializeResult {
+			protocol_version: ProtocolVersion::V_2025_06_18,
+			capabilities: ServerCapabilities::default(),
+			server_info: Implementation {
+				name: "solo-server".to_string(),
+				version: "1.0".to_string(),
+				..Default::default()
+			},
+			instructions: Some("Solo server instructions.".to_string()),
+		}),
+	)];
+
+	let result = merge_fn(results).unwrap();
+	let info = match result {
+		ServerResult::InitializeResult(ir) => ir,
+		other => panic!("expected InitializeResult, got: {:?}", other),
+	};
+
+	// Non-multiplexing should forward the upstream's instructions directly
+	assert_eq!(
+		info.instructions.as_deref(),
+		Some("Solo server instructions."),
+		"non-multiplexing should forward upstream instructions unchanged"
+	);
+	assert_eq!(info.server_info.name, "solo-server");
+}
+
 #[tokio::test]
 async fn test_runtime_fanout_fail_open() {
 	use crate::mcp::mergestream::{MergeStream, Messages};
