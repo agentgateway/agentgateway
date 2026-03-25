@@ -13,7 +13,6 @@ import (
 	istioxds "istio.io/istio/pilot/pkg/xds"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/test"
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/workloadapi"

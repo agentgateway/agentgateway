@@ -3,7 +3,6 @@ package agentgatewaysyncer
 import (
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/ptr"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
