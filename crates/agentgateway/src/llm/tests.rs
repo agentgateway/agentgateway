@@ -923,23 +923,17 @@ fn test_get_messages() {
 	);
 }
 
-/// Regression test for #1340: when a streaming request receives a non-success
-/// response, the error body must be translated and forwarded instead of being
-/// silently consumed by the streaming decoder.
+/// Verifies that `process_response` routes a non-success response through
+/// the buffered error path even when the request has `streaming: true`.
 ///
-/// This test proves the bug exists and the fix works by exercising both paths:
-///   1. process_streaming with a 400 JSON body → empty output (the bug)
-///   2. process_error with the same body → correct translated output (the fix)
-///
-/// The one-line condition change in process_response gates between these paths.
-///
-/// NOTE: We cannot call process_response directly in a unit test because it
-/// requires PolicyClient, which wraps ProxyInputs (full proxy runtime with
-/// Config, Stores, client::Client, Metrics, mcp::App — none of which have
-/// test constructors). An integration test via tests/common/gateway.rs with
-/// a mock backend returning 400 would cover the routing end-to-end.
+/// Constructs a Bedrock 400 JSON error response and passes it through
+/// `process_response` with a streaming `LLMRequest`. Asserts the returned
+/// body is non-empty, valid JSON, and preserves the original error message.
 #[tokio::test]
-async fn streaming_error_response_body_is_not_swallowed() {
+async fn process_response_routes_streaming_error_to_buffered_path() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
 	let bedrock = AIProvider::Bedrock(bedrock::Provider {
 		model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
 		region: strng::new("us-west-2"),
@@ -947,10 +941,9 @@ async fn streaming_error_response_body_is_not_swallowed() {
 		guardrail_version: None,
 	});
 
-	// A real Bedrock ValidationException error body (plain JSON, not event-stream).
 	let error_json = r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#;
 
-	let streaming_req = LLMRequest {
+	let req = LLMRequest {
 		input_tokens: None,
 		input_format: InputFormat::Completions,
 		request_model: "input-model".into(),
@@ -960,8 +953,6 @@ async fn streaming_error_response_body_is_not_swallowed() {
 		prompt: None,
 	};
 
-	// ---- Path 1: process_streaming (buggy path) ----
-	// The AWS EventStream decoder consumes the JSON bytes and produces nothing.
 	let body = Body::from(error_json.as_bytes().to_vec());
 	let mut resp = Response::new(body);
 	*resp.status_mut() = ::http::StatusCode::BAD_REQUEST;
@@ -969,52 +960,34 @@ async fn streaming_error_response_body_is_not_swallowed() {
 		::http::header::CONTENT_TYPE,
 		"application/json".parse().unwrap(),
 	);
-	resp.headers_mut().insert(
-		::http::header::CONTENT_LENGTH,
-		error_json.len().to_string().parse().unwrap(),
-	);
 
-	let log = AsyncLog::default();
-	let streaming_resp = bedrock
-		.process_streaming(
-			streaming_req.clone(),
+	let client = PolicyClient {
+		inputs: setup_proxy_test("{}").unwrap().pi,
+	};
+
+	let result = bedrock
+		.process_response(
+			client,
+			req,
 			LLMResponsePolicies::default(),
-			log,
+			AsyncLog::default(),
 			false,
 			resp,
 		)
 		.await
-		.expect("process_streaming should not fail");
+		.expect("process_response should succeed for error responses");
 
-	let streaming_body = streaming_resp
-		.collect()
-		.await
-		.unwrap()
-		.to_bytes();
+	assert_eq!(result.status(), ::http::StatusCode::BAD_REQUEST);
 
-	// The streaming decoder silently swallows the JSON error — body is empty.
+	let result_body = result.collect().await.unwrap().to_bytes();
 	assert!(
-		streaming_body.is_empty(),
-		"process_streaming should produce empty body for JSON error input (bug demonstration), got {} bytes",
-		streaming_body.len(),
+		!result_body.is_empty(),
+		"error response body must not be empty",
 	);
 
-	// ---- Path 2: buffered process_error (fixed path) ----
-	// This is the path taken after the fix when resp.status().is_success() is false.
-	let error_bytes = Bytes::from(error_json);
-	let translated = bedrock
-		.process_error(&streaming_req, ::http::StatusCode::BAD_REQUEST, &error_bytes)
-		.expect("process_error should succeed");
+	let parsed: Value =
+		serde_json::from_slice(&result_body).expect("translated error should be valid JSON");
 
-	assert!(
-		!translated.is_empty(),
-		"process_error should produce non-empty translated body",
-	);
-
-	let parsed: Value = serde_json::from_slice(&translated)
-		.expect("translated error should be valid JSON");
-
-	// Verify the original Bedrock error message is preserved in the translation.
 	let message = parsed
 		.pointer("/error/message")
 		.and_then(|v| v.as_str())
