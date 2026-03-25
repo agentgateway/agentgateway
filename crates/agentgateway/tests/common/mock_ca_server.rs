@@ -7,16 +7,9 @@ use rcgen::{CertificateSigningRequestParams, Issuer, KeyPair};
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
-pub mod istio {
-	pub mod ca {
-		tonic::include_proto!("istio.v1.auth");
-	}
-}
-
-use istio::ca::istio_certificate_service_server::{
-	IstioCertificateService, IstioCertificateServiceServer,
-};
-use istio::ca::{IstioCertificateRequest, IstioCertificateResponse};
+use protos::istio::v1::auth::IstioCertificateRequest;
+use protos::istio::v1::auth::IstioCertificateResponse;
+use protos::istio::v1::auth::istio_certificate_service_server::*;
 
 #[derive(Debug)]
 pub struct MockCaService {

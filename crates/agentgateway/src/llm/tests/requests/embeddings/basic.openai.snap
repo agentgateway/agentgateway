@@ -1,0 +1,13 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/embeddings/basic.json
+info:
+  model: text-embedding-3-small
+  input: hello world
+  dimensions: 1024
+---
+{
+  "model": "text-embedding-3-small",
+  "input": "hello world",
+  "dimensions": 1024
+}

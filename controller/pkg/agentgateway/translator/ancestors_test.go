@@ -421,8 +421,7 @@ func renderAncestorYAML(t *testing.T, parent, target *ancestorRef, routeKind str
 }
 
 func TestAncestors(t *testing.T) {
-	validator := apitests.NewAgentgatewayValidator(t)
-	validator.SkipMissing = true
+	validator := apitests.NewAgentgatewayValidatorSkipMissing(t)
 	parents := []ancestorRef{{
 		Kind: ancestorListenerSetKind,
 		Name: "listenerset",

@@ -130,12 +130,8 @@ impl App {
 			return Ok(resp);
 		}
 
-		let mut req = req.take_and_snapshot(Some(&mut log))?;
-		// This is an unfortunate clone. The request snapshot is intended to be done at the end of the request,
-		// so it strips all of the extensions. However, in MCP land its much trickier for us to do this so
-		// we snapshot early... but then we lose the extensions. So we do a clone here.
-		let snapshot = log.request_snapshot.clone();
-		req.extensions_mut().insert(Arc::new(snapshot));
+		// MCP requires CEL execution after the snapshot so we do not clear extensions
+		let req = req.take_and_snapshot_without_clearing_extensions(Some(&mut log))?;
 		if req.uri().path() == "/sse" {
 			// Legacy handling
 			// Assume this is streamable HTTP otherwise

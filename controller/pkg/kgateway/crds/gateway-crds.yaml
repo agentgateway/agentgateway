@@ -1,30 +1,9 @@
-# Copyright 2026 The Kubernetes Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-#
-# Gateway API Experimental channel install
-#
----
-#
-# config/crd/experimental/gateway.networking.k8s.io_backendtlspolicies.yaml
-#
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/3328
-    gateway.networking.k8s.io/bundle-version: v1.5.0-rc.1
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/4530
+    gateway.networking.k8s.io/bundle-version: v1.5.1
     gateway.networking.k8s.io/channel: experimental
   labels:
     gateway.networking.k8s.io/policy: Direct
@@ -409,7 +388,7 @@ spec:
 
                       Implementations MAY define their own sets of CA certificates. Such definitions
                       MUST use an implementation-specific, prefixed name, such as
-                      `mycompany.com/my-custom-ca-certifcates`.
+                      `mycompany.com/my-custom-ca-certificates`.
 
                       Support: Implementation-specific
                     maxLength: 253
@@ -1103,7 +1082,7 @@ spec:
 
                       Implementations MAY define their own sets of CA certificates. Such definitions
                       MUST use an implementation-specific, prefixed name, such as
-                      `mycompany.com/my-custom-ca-certifcates`.
+                      `mycompany.com/my-custom-ca-certificates`.
 
                       Support: Implementation-specific
                     maxLength: 253
@@ -1438,15 +1417,12 @@ status:
   conditions: null
   storedVersions: null
 ---
-#
-# config/crd/experimental/gateway.networking.k8s.io_gatewayclasses.yaml
-#
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/3328
-    gateway.networking.k8s.io/bundle-version: v1.5.0-rc.1
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/4530
+    gateway.networking.k8s.io/bundle-version: v1.5.1
     gateway.networking.k8s.io/channel: experimental
   name: gatewayclasses.gateway.networking.k8s.io
 spec:
@@ -1957,15 +1933,12 @@ status:
   conditions: null
   storedVersions: null
 ---
-#
-# config/crd/experimental/gateway.networking.k8s.io_gateways.yaml
-#
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/3328
-    gateway.networking.k8s.io/bundle-version: v1.5.0-rc.1
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/4530
+    gateway.networking.k8s.io/bundle-version: v1.5.1
     gateway.networking.k8s.io/channel: experimental
   name: gateways.gateway.networking.k8s.io
 spec:
@@ -5290,15 +5263,12 @@ status:
   conditions: null
   storedVersions: null
 ---
-#
-# config/crd/experimental/gateway.networking.k8s.io_grpcroutes.yaml
-#
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/3328
-    gateway.networking.k8s.io/bundle-version: v1.5.0-rc.1
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/4530
+    gateway.networking.k8s.io/bundle-version: v1.5.1
     gateway.networking.k8s.io/channel: experimental
   name: grpcroutes.gateway.networking.k8s.io
 spec:
@@ -7573,15 +7543,12 @@ status:
   conditions: null
   storedVersions: null
 ---
-#
-# config/crd/experimental/gateway.networking.k8s.io_httproutes.yaml
-#
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/3328
-    gateway.networking.k8s.io/bundle-version: v1.5.0-rc.1
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/4530
+    gateway.networking.k8s.io/bundle-version: v1.5.1
     gateway.networking.k8s.io/channel: experimental
   name: httproutes.gateway.networking.k8s.io
 spec:
@@ -8255,12 +8222,12 @@ spec:
                                         description: |-
                                           The CORSOrigin MUST NOT be a relative URI, and it MUST follow the URI syntax and
                                           encoding rules specified in RFC3986.  The CORSOrigin MUST include both a
-                                          scheme (e.g., "http" or "spiffe") and a scheme-specific-part, or it should be a single '*' character.
+                                          scheme ("http" or "https") and a scheme-specific-part, or it should be a single '*' character.
                                           URIs that include an authority MUST include a fully qualified domain name or
                                           IP address as the host.
                                         maxLength: 253
                                         minLength: 1
-                                        pattern: (^\*$)|(^([a-zA-Z][a-zA-Z0-9+\-.]+):\/\/([^:/?#]+)(:([0-9]{1,5}))?$)
+                                        pattern: (^\*$)|(^(http(s)?):\/\/(((\*\.)?([a-zA-Z0-9\-]+\.)*[a-zA-Z0-9-]+|\*)(:([0-9]{1,5}))?)$)
                                         type: string
                                       maxItems: 64
                                       type: array
@@ -9414,6 +9381,8 @@ spec:
                                 or httpRouteFilterRequestRewrite, but not both
                               rule: '!(self.exists(f, f.type == ''RequestRedirect'')
                                 && self.exists(f, f.type == ''URLRewrite''))'
+                            - message: CORS filter cannot be repeated
+                              rule: self.filter(f, f.type == 'CORS').size() <= 1
                             - message: RequestHeaderModifier filter cannot be repeated
                               rule: self.filter(f, f.type == 'RequestHeaderModifier').size()
                                 <= 1
@@ -9783,12 +9752,12 @@ spec:
                                   description: |-
                                     The CORSOrigin MUST NOT be a relative URI, and it MUST follow the URI syntax and
                                     encoding rules specified in RFC3986.  The CORSOrigin MUST include both a
-                                    scheme (e.g., "http" or "spiffe") and a scheme-specific-part, or it should be a single '*' character.
+                                    scheme ("http" or "https") and a scheme-specific-part, or it should be a single '*' character.
                                     URIs that include an authority MUST include a fully qualified domain name or
                                     IP address as the host.
                                   maxLength: 253
                                   minLength: 1
-                                  pattern: (^\*$)|(^([a-zA-Z][a-zA-Z0-9+\-.]+):\/\/([^:/?#]+)(:([0-9]{1,5}))?$)
+                                  pattern: (^\*$)|(^(http(s)?):\/\/(((\*\.)?([a-zA-Z0-9\-]+\.)*[a-zA-Z0-9-]+|\*)(:([0-9]{1,5}))?)$)
                                   type: string
                                 maxItems: 64
                                 type: array
@@ -10933,6 +10902,8 @@ spec:
                           or httpRouteFilterRequestRewrite, but not both
                         rule: '!(self.exists(f, f.type == ''RequestRedirect'') &&
                           self.exists(f, f.type == ''URLRewrite''))'
+                      - message: CORS filter cannot be repeated
+                        rule: self.filter(f, f.type == 'CORS').size() <= 1
                       - message: RequestHeaderModifier filter cannot be repeated
                         rule: self.filter(f, f.type == 'RequestHeaderModifier').size()
                           <= 1
@@ -12516,12 +12487,12 @@ spec:
                                         description: |-
                                           The CORSOrigin MUST NOT be a relative URI, and it MUST follow the URI syntax and
                                           encoding rules specified in RFC3986.  The CORSOrigin MUST include both a
-                                          scheme (e.g., "http" or "spiffe") and a scheme-specific-part, or it should be a single '*' character.
+                                          scheme ("http" or "https") and a scheme-specific-part, or it should be a single '*' character.
                                           URIs that include an authority MUST include a fully qualified domain name or
                                           IP address as the host.
                                         maxLength: 253
                                         minLength: 1
-                                        pattern: (^\*$)|(^([a-zA-Z][a-zA-Z0-9+\-.]+):\/\/([^:/?#]+)(:([0-9]{1,5}))?$)
+                                        pattern: (^\*$)|(^(http(s)?):\/\/(((\*\.)?([a-zA-Z0-9\-]+\.)*[a-zA-Z0-9-]+|\*)(:([0-9]{1,5}))?)$)
                                         type: string
                                       maxItems: 64
                                       type: array
@@ -13675,6 +13646,8 @@ spec:
                                 or httpRouteFilterRequestRewrite, but not both
                               rule: '!(self.exists(f, f.type == ''RequestRedirect'')
                                 && self.exists(f, f.type == ''URLRewrite''))'
+                            - message: CORS filter cannot be repeated
+                              rule: self.filter(f, f.type == 'CORS').size() <= 1
                             - message: RequestHeaderModifier filter cannot be repeated
                               rule: self.filter(f, f.type == 'RequestHeaderModifier').size()
                                 <= 1
@@ -14044,12 +14017,12 @@ spec:
                                   description: |-
                                     The CORSOrigin MUST NOT be a relative URI, and it MUST follow the URI syntax and
                                     encoding rules specified in RFC3986.  The CORSOrigin MUST include both a
-                                    scheme (e.g., "http" or "spiffe") and a scheme-specific-part, or it should be a single '*' character.
+                                    scheme ("http" or "https") and a scheme-specific-part, or it should be a single '*' character.
                                     URIs that include an authority MUST include a fully qualified domain name or
                                     IP address as the host.
                                   maxLength: 253
                                   minLength: 1
-                                  pattern: (^\*$)|(^([a-zA-Z][a-zA-Z0-9+\-.]+):\/\/([^:/?#]+)(:([0-9]{1,5}))?$)
+                                  pattern: (^\*$)|(^(http(s)?):\/\/(((\*\.)?([a-zA-Z0-9\-]+\.)*[a-zA-Z0-9-]+|\*)(:([0-9]{1,5}))?)$)
                                   type: string
                                 maxItems: 64
                                 type: array
@@ -15194,6 +15167,8 @@ spec:
                           or httpRouteFilterRequestRewrite, but not both
                         rule: '!(self.exists(f, f.type == ''RequestRedirect'') &&
                           self.exists(f, f.type == ''URLRewrite''))'
+                      - message: CORS filter cannot be repeated
+                        rule: self.filter(f, f.type == 'CORS').size() <= 1
                       - message: RequestHeaderModifier filter cannot be repeated
                         rule: self.filter(f, f.type == 'RequestHeaderModifier').size()
                           <= 1
@@ -16124,15 +16099,12 @@ status:
   conditions: null
   storedVersions: null
 ---
-#
-# config/crd/experimental/gateway.networking.k8s.io_listenersets.yaml
-#
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/3328
-    gateway.networking.k8s.io/bundle-version: v1.5.0-rc.1
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/4530
+    gateway.networking.k8s.io/bundle-version: v1.5.1
     gateway.networking.k8s.io/channel: experimental
   name: listenersets.gateway.networking.k8s.io
 spec:
@@ -16908,15 +16880,12 @@ status:
   conditions: null
   storedVersions: null
 ---
-#
-# config/crd/experimental/gateway.networking.k8s.io_referencegrants.yaml
-#
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/3328
-    gateway.networking.k8s.io/bundle-version: v1.5.0-rc.1
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/4530
+    gateway.networking.k8s.io/bundle-version: v1.5.1
     gateway.networking.k8s.io/channel: experimental
   name: referencegrants.gateway.networking.k8s.io
 spec:
@@ -17265,15 +17234,12 @@ status:
   conditions: null
   storedVersions: null
 ---
-#
-# config/crd/experimental/gateway.networking.k8s.io_tcproutes.yaml
-#
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/3328
-    gateway.networking.k8s.io/bundle-version: v1.5.0-rc.1
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/4530
+    gateway.networking.k8s.io/bundle-version: v1.5.1
     gateway.networking.k8s.io/channel: experimental
   name: tcproutes.gateway.networking.k8s.io
 spec:
@@ -18025,15 +17991,12 @@ status:
   conditions: null
   storedVersions: null
 ---
-#
-# config/crd/experimental/gateway.networking.k8s.io_tlsroutes.yaml
-#
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/3328
-    gateway.networking.k8s.io/bundle-version: v1.5.0-rc.1
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/4530
+    gateway.networking.k8s.io/bundle-version: v1.5.1
     gateway.networking.k8s.io/channel: experimental
   name: tlsroutes.gateway.networking.k8s.io
 spec:
@@ -18374,10 +18337,9 @@ spec:
                         a Service with no endpoints), the rule performs no forwarding; if no
                         filters are specified that would result in a response being sent, the
                         underlying implementation must actively reject request attempts to this
-                        backend, by rejecting the connection or returning a 500 status code.
-                        Request rejections must respect weight; if an invalid backend is
-                        requested to have 80% of requests, then 80% of requests must be rejected
-                        instead.
+                        backend, by rejecting the connection. Request rejections must respect
+                        weight; if an invalid backend is requested to have 80% of requests, then
+                        80% of requests must be rejected instead.
 
                         Support: Core for Kubernetes Service
 
@@ -19164,10 +19126,9 @@ spec:
                         a Service with no endpoints), the rule performs no forwarding; if no
                         filters are specified that would result in a response being sent, the
                         underlying implementation must actively reject request attempts to this
-                        backend, by rejecting the connection or returning a 500 status code.
-                        Request rejections must respect weight; if an invalid backend is
-                        requested to have 80% of requests, then 80% of requests must be rejected
-                        instead.
+                        backend, by rejecting the connection. Request rejections must respect
+                        weight; if an invalid backend is requested to have 80% of requests, then
+                        80% of requests must be rejected instead.
 
                         Support: Core for Kubernetes Service
 
@@ -19946,10 +19907,9 @@ spec:
                         a Service with no endpoints), the rule performs no forwarding; if no
                         filters are specified that would result in a response being sent, the
                         underlying implementation must actively reject request attempts to this
-                        backend, by rejecting the connection or returning a 500 status code.
-                        Request rejections must respect weight; if an invalid backend is
-                        requested to have 80% of requests, then 80% of requests must be rejected
-                        instead.
+                        backend, by rejecting the connection. Request rejections must respect
+                        weight; if an invalid backend is requested to have 80% of requests, then
+                        80% of requests must be rejected instead.
 
                         Support: Core for Kubernetes Service
 
@@ -20402,15 +20362,12 @@ status:
   conditions: null
   storedVersions: null
 ---
-#
-# config/crd/experimental/gateway.networking.k8s.io_udproutes.yaml
-#
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/3328
-    gateway.networking.k8s.io/bundle-version: v1.5.0-rc.1
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/4530
+    gateway.networking.k8s.io/bundle-version: v1.5.1
     gateway.networking.k8s.io/channel: experimental
   name: udproutes.gateway.networking.k8s.io
 spec:
@@ -21162,65 +21119,12 @@ status:
   conditions: null
   storedVersions: null
 ---
-#
-# config/crd/experimental/gateway.networking.k8s.io_vap_safeupgrades.yaml
-#
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicy
-metadata:
-  annotations:
-    gateway.networking.k8s.io/bundle-version: v1.5.0-dev
-    gateway.networking.k8s.io/channel: standard
-  name: "safe-upgrades.gateway.networking.k8s.io"
-spec:
-  failurePolicy: Fail
-  matchConstraints:
-    resourceRules:
-    - apiGroups:   ["apiextensions.k8s.io"]
-      apiVersions: ["v1"]
-      operations:  ["CREATE", "UPDATE"]
-      resources:   ["*"]
-  validations:
-    - expression: "object.spec.group != 'gateway.networking.k8s.io' || (
-        has(object.metadata.annotations) && object.metadata.annotations.exists(k, k == 'gateway.networking.k8s.io/channel') &&
-        object.metadata.annotations['gateway.networking.k8s.io/channel'] == 'standard' )"
-      message: "Installing experimental CRDs on top of standard channel CRDs is prohibited by default. Uninstall ValidatingAdmissionPolicy safe-upgrades.gateway.networking.k8s.io to install experimental CRDs on top of standard channel CRDs."
-      reason: Invalid
-    - expression: "object.spec.group != 'gateway.networking.k8s.io' ||
-        (has(object.metadata.annotations) && object.metadata.annotations.exists(k, k == 'gateway.networking.k8s.io/bundle-version') &&
-        !matches(object.metadata.annotations['gateway.networking.k8s.io/bundle-version'], 'v1.[0-4].\\\\d+') &&
-        !matches(object.metadata.annotations['gateway.networking.k8s.io/bundle-version'], 'v0'))" #TODO Kubernetes 1.37: Migrate to kubernetes semver library
-      message: "Installing CRDs with version before v1.5.0 is prohibited by default. Uninstall ValidatingAdmissionPolicy safe-upgrades.gateway.networking.k8s.io to install older versions."
-      reason: Invalid
-
----
-
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicyBinding
-metadata:
-  annotations:
-    gateway.networking.k8s.io/bundle-version: v1.5.0-dev
-    gateway.networking.k8s.io/channel: standard
-  name: safe-upgrades.gateway.networking.k8s.io
-spec:
-  policyName: safe-upgrades.gateway.networking.k8s.io
-  validationActions: [Deny]
-  matchResources:
-    resourceRules:
-    - apiGroups:   ["apiextensions.k8s.io"]
-      apiVersions: ["v1"]
-      resources:   ["customresourcedefinitions"]
-      operations:  ["CREATE", "UPDATE"]
----
-#
-# config/crd/experimental/gateway.networking.x-k8s.io_xbackendtrafficpolicies.yaml
-#
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/3328
-    gateway.networking.k8s.io/bundle-version: v1.5.0-rc.1
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/4530
+    gateway.networking.k8s.io/bundle-version: v1.5.1
     gateway.networking.k8s.io/channel: experimental
   labels:
     gateway.networking.k8s.io/policy: Direct
@@ -21824,15 +21728,12 @@ status:
   conditions: null
   storedVersions: null
 ---
-#
-# config/crd/experimental/gateway.networking.x-k8s.io_xmeshes.yaml
-#
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/3328
-    gateway.networking.k8s.io/bundle-version: v1.5.0-rc.1
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/gateway-api/pull/4530
+    gateway.networking.k8s.io/bundle-version: v1.5.1
     gateway.networking.k8s.io/channel: experimental
   name: xmeshes.gateway.networking.x-k8s.io
 spec:
@@ -22075,3 +21976,68 @@ status:
     plural: ""
   conditions: null
   storedVersions: null
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  annotations:
+    gateway.networking.k8s.io/bundle-version: v1.5.0-dev
+    gateway.networking.k8s.io/channel: standard
+  name: safe-upgrades.gateway.networking.k8s.io
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - apiextensions.k8s.io
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - '*'
+  validations:
+  - expression: object.spec.group != 'gateway.networking.k8s.io' || oldObject == null
+      || ( has(object.metadata.annotations) && object.metadata.annotations.exists(k,
+      k == 'gateway.networking.k8s.io/channel') && object.metadata.annotations['gateway.networking.k8s.io/channel']
+      == 'standard' ) || ( oldObject != null && has(oldObject.metadata.annotations)
+      && oldObject.metadata.annotations.exists(k, k == 'gateway.networking.k8s.io/channel')
+      && oldObject.metadata.annotations['gateway.networking.k8s.io/channel'] == 'experimental'
+      )
+    message: Installing experimental CRDs on top of standard channel CRDs is prohibited
+      by default. Uninstall ValidatingAdmissionPolicy safe-upgrades.gateway.networking.k8s.io
+      to install experimental CRDs on top of standard channel CRDs.
+    reason: Invalid
+  - expression: object.spec.group != 'gateway.networking.k8s.io' || (has(object.metadata.annotations)
+      && object.metadata.annotations.exists(k, k == 'gateway.networking.k8s.io/bundle-version')
+      && !matches(object.metadata.annotations['gateway.networking.k8s.io/bundle-version'],
+      'v1.[0-4].\\d+') && !matches(object.metadata.annotations['gateway.networking.k8s.io/bundle-version'],
+      'v0'))
+    message: Installing CRDs with version before v1.5.0 is prohibited by default.
+      Uninstall ValidatingAdmissionPolicy safe-upgrades.gateway.networking.k8s.io
+      to install older versions.
+    reason: Invalid
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  annotations:
+    gateway.networking.k8s.io/bundle-version: v1.5.0-dev
+    gateway.networking.k8s.io/channel: standard
+  name: safe-upgrades.gateway.networking.k8s.io
+spec:
+  matchResources:
+    resourceRules:
+    - apiGroups:
+      - apiextensions.k8s.io
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - customresourcedefinitions
+  policyName: safe-upgrades.gateway.networking.k8s.io
+  validationActions:
+  - Deny

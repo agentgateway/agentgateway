@@ -541,10 +541,16 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
                         };
 						crate::http::auth::AzureAuth::ExplicitConfig {
 							credential_source: src,
+							cached_cred: Default::default(),
 						}
 					},
 					Some(proto::agent::azure::Kind::DeveloperImplicit(_)) => {
-						crate::http::auth::AzureAuth::DeveloperImplicit {}
+						crate::http::auth::AzureAuth::DeveloperImplicit {
+							cached_cred: Default::default(),
+						}
+					},
+					Some(proto::agent::azure::Kind::Implicit(_)) => crate::http::auth::AzureAuth::Implicit {
+						cached_cred: Default::default(),
 					},
 					None => return Err(ProtoError::MissingRequiredField),
 				};
@@ -610,10 +616,8 @@ impl Bind {
 	}
 }
 
-impl TryFrom<&proto::agent::Listener> for (Listener, BindKey) {
-	type Error = ProtoError;
-
-	fn try_from(s: &proto::agent::Listener) -> Result<Self, Self::Error> {
+impl Listener {
+	pub fn try_from_xds(s: &proto::agent::Listener) -> Result<(Self, BindKey), ProtoError> {
 		let proto = proto::agent::Protocol::try_from(s.protocol)?;
 		let protocol = ListenerProtocol::try_from((proto, s.tls.as_ref()))
 			.map_err(|e| ProtoError::Generic(format!("{e}")))?;
@@ -633,10 +637,8 @@ impl TryFrom<&proto::agent::Listener> for (Listener, BindKey) {
 	}
 }
 
-impl TryFrom<&proto::agent::TcpRoute> for (TCPRoute, ListenerKey) {
-	type Error = ProtoError;
-
-	fn try_from(s: &proto::agent::TcpRoute) -> Result<Self, Self::Error> {
+impl TCPRoute {
+	pub fn try_from_xds(s: &proto::agent::TcpRoute) -> Result<(Self, ListenerKey), ProtoError> {
 		let r = TCPRoute {
 			key: strng::new(&s.key),
 			name: s
@@ -661,10 +663,8 @@ impl TryFrom<&proto::agent::TcpRoute> for (TCPRoute, ListenerKey) {
 	}
 }
 
-impl TryFrom<&proto::agent::Route> for (Route, ListenerKey) {
-	type Error = ProtoError;
-
-	fn try_from(s: &proto::agent::Route) -> Result<Self, Self::Error> {
+impl Route {
+	pub fn try_from_xds(s: &proto::agent::Route) -> Result<(Self, ListenerKey), ProtoError> {
 		let name: RouteName = s
 			.name
 			.as_ref()
@@ -765,7 +765,7 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 							Some(proto::agent::ai_backend::provider::Provider::Vertex(vertex)) => {
 								AIProvider::Vertex(llm::vertex::Provider {
 									model: vertex.model.as_deref().map(strng::new),
-									region: Some(strng::new(&vertex.region)),
+									region: (!vertex.region.is_empty()).then(|| strng::new(&vertex.region)),
 									project_id: strng::new(&vertex.project_id),
 								})
 							},
@@ -787,6 +787,7 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 									model: azureopenai.model.as_deref().map(strng::new),
 									host: strng::new(&azureopenai.host),
 									api_version: azureopenai.api_version.as_deref().map(strng::new),
+									cached_cred: Default::default(),
 								})
 							},
 							None => {
@@ -915,7 +916,7 @@ impl TryFrom<&proto::agent::RouteMatch> for RouteMatch {
 			}) => PathMatch::Exact(strng::new(prefix)),
 			Some(proto::agent::PathMatch {
 				kind: Some(Kind::Regex(r)),
-			}) => PathMatch::Regex(regex::Regex::new(r)?, r.len()),
+			}) => PathMatch::Regex(regex::Regex::new(r)?),
 			Some(proto::agent::PathMatch { kind: None }) => {
 				return Err(ProtoError::Generic("invalid path match".to_string()));
 			},
@@ -2411,6 +2412,90 @@ mod tests {
 		let path = config.get_path();
 		assert!(path.starts_with("/runtimes/"));
 		assert!(path.contains("qualifier=v1"));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_vertex_provider_empty_region_is_none() -> Result<(), ProtoError> {
+		use proto::agent::ai_backend::Vertex;
+		use proto::agent::ai_backend::provider::Provider;
+
+		let proto_backend = proto::agent::Backend {
+			key: "test-ns/vertex-backend".to_string(),
+			name: Some(proto::agent::ResourceName {
+				name: "vertex-backend".to_string(),
+				namespace: "test-ns".to_string(),
+			}),
+			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
+				provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
+					providers: vec![proto::agent::ai_backend::Provider {
+						name: "vertex".to_string(),
+						host_override: None,
+						path_override: None,
+						provider: Some(Provider::Vertex(Vertex {
+							model: None,
+							region: "".to_string(),
+							project_id: "my-project".to_string(),
+						})),
+						inline_policies: vec![],
+					}],
+				}],
+			})),
+			inline_policies: vec![],
+		};
+
+		let bw = BackendWithPolicies::try_from(&proto_backend)?;
+		let Backend::AI(_, ai_backend) = &bw.backend else {
+			panic!("Expected Backend::AI, got {:?}", bw.backend);
+		};
+		let providers = ai_backend.providers.iter();
+		let (provider, _) = providers.iter().next().unwrap();
+		let AIProvider::Vertex(vertex) = &provider.provider else {
+			panic!("Expected AIProvider::Vertex");
+		};
+		assert!(vertex.region.is_none(), "empty region should map to None");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_vertex_provider_with_region() -> Result<(), ProtoError> {
+		use proto::agent::ai_backend::Vertex;
+		use proto::agent::ai_backend::provider::Provider;
+
+		let proto_backend = proto::agent::Backend {
+			key: "test-ns/vertex-backend".to_string(),
+			name: Some(proto::agent::ResourceName {
+				name: "vertex-backend".to_string(),
+				namespace: "test-ns".to_string(),
+			}),
+			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
+				provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
+					providers: vec![proto::agent::ai_backend::Provider {
+						name: "vertex".to_string(),
+						host_override: None,
+						path_override: None,
+						provider: Some(Provider::Vertex(Vertex {
+							model: None,
+							region: "us-central1".to_string(),
+							project_id: "my-project".to_string(),
+						})),
+						inline_policies: vec![],
+					}],
+				}],
+			})),
+			inline_policies: vec![],
+		};
+
+		let bw = BackendWithPolicies::try_from(&proto_backend)?;
+		let Backend::AI(_, ai_backend) = &bw.backend else {
+			panic!("Expected Backend::AI, got {:?}", bw.backend);
+		};
+		let providers = ai_backend.providers.iter();
+		let (provider, _) = providers.iter().next().unwrap();
+		let AIProvider::Vertex(vertex) = &provider.provider else {
+			panic!("Expected AIProvider::Vertex");
+		};
+		assert_eq!(vertex.region.as_deref(), Some("us-central1"));
 		Ok(())
 	}
 }

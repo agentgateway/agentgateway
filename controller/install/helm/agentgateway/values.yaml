@@ -112,6 +112,16 @@ controller:
     # -- Traffic distribution.
     trafficDistribution: ""
   # -- Add extra environment variables to the controller container.
+  # Supports either a direct scalar value:
+  # extraEnv:
+  #   LOG_FORMAT: json
+  # Or Kubernetes valueFrom sources:
+  # extraEnv:
+  #   API_TOKEN:
+  #     valueFrom:
+  #       secretKeyRef:
+  #         name: agentgateway-secrets
+  #         key: apiToken
   extraEnv: {}
   # -- Configure TLS settings for the xDS gRPC servers.
   xds:

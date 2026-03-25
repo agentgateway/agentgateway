@@ -1,4 +1,4 @@
 version: v1beta1
 build:
   roots:
-  - crates/agentgateway/proto
+  - crates/protos/proto

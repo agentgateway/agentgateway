@@ -549,7 +549,7 @@ impl<'a> Value<'a> {
 	) -> ResolveResult<'a> {
 		Self::resolve(expr, ctx, resolver).map(|v| v.always_materialize_owned())
 	}
-	#[inline(always)]
+
 	pub fn resolve<'vars: 'a, 'rf>(
 		expr: &'vars Expression,
 		ctx: &'vars Context,
@@ -665,10 +665,12 @@ impl<'a> Value<'a> {
 							let left = resolve_materialized(&call.args[0])?;
 							let right = resolve(&call.args[1])?;
 							if let Value::Dynamic(d) = &right
-								&& let Value::String(k) = left
+								&& let Value::String(k) = &left
+								&& d.field(k.as_ref()).is_some()
 							{
-								// TODO: in the future, if required, we could allow lookup of int for a list
-								return Value::Bool(d.field(k.as_ref()).is_some()).into();
+								// Optimistically attempt to lookup without materializing.
+								// This will fail for lists, string vs string, etc and fallback to slow path.
+								return Value::Bool(true).into();
 							}
 							match (left, right.always_materialize_owned()) {
 								(Value::String(l), Value::String(r)) => {
@@ -1009,7 +1011,7 @@ impl<'a> Value<'a> {
 				let comp_resolver = SingleVarResolver::new(resolver, &comprehension.accu_var, accu);
 				Value::resolve(&comprehension.result, ctx, &comp_resolver)
 			},
-			Expr::Struct(_) => todo!("Support structs!"),
+			Expr::Struct(_) => Err(ExecutionError::UnsupportedStruct),
 			Expr::Unspecified => panic!("Can't evaluate Unspecified Expr"),
 		}
 	}

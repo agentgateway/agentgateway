@@ -19,7 +19,7 @@ use crate::*;
 // Generated from proto/citadel.proto
 pub mod istio {
 	pub mod ca {
-		tonic::include_proto!("istio.v1.auth");
+		pub use protos::istio::v1::auth::*;
 	}
 }
 

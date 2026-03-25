@@ -275,8 +275,10 @@ type VertexAIConfig struct {
 	ProjectId TinyString `json:"projectId"`
 
 	// The location of the Google Cloud Project that you use for the Vertex AI.
-	// +required
-	Region TinyString `json:"region"`
+	// Defaults to global if not specified.
+	// +optional
+	// +kubebuilder:default=global
+	Region TinyString `json:"region,omitempty"`
 }
 
 // AnthropicConfig settings for the [Anthropic](https://platform.claude.com/docs/en/release-notes/overview) LLM provider.

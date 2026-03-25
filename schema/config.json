@@ -67,6 +67,17 @@
             "null"
           ]
         },
+        "dns": {
+          "description": "DNS resolver settings.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawDnsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "localXdsPath": {
           "description": "Local XDS path. If not specified, the current configuration file will be used.",
           "type": [
@@ -242,6 +253,60 @@
         }
       },
       "additionalProperties": false
+    },
+    "RawDnsConfig": {
+      "type": "object",
+      "properties": {
+        "lookupFamily": {
+          "description": "Controls which IP address families the DNS resolver will query for\nupstream connections.\nAccepted values: All, Auto, V4Preferred, V4Only, V6Only.\nDefaults to Auto (IPv4-only when enableIpv6 is false, both when true).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DnsLookupFamily"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "edns0": {
+          "description": "Whether to enable EDNS0 (Extension Mechanisms for DNS) in the resolver.\nWhen `None`, the system-provided resolver setting is preserved.\nCan also be set via the `DNS_EDNS0` environment variable.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DnsLookupFamily": {
+      "description": "Controls which IP address families the DNS resolver will query for\nupstream (backend) connections.\n\n Maps to hickory_resolver's `LookupIpStrategy` under the hood.\n\nCan be set via the `DNS_LOOKUP_FAMILY` environment variable or the\n`dns.lookupFamily` field in the config file.\n\nSee: <https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto#enum-config-cluster-v3-cluster-dnslookupfamily>",
+      "oneOf": [
+        {
+          "description": "Query for both A and AAAA records in parallel and use all results.",
+          "type": "string",
+          "const": "All"
+        },
+        {
+          "description": "Automatically choose based on the `enable_ipv6` setting. When IPv6 is\nenabled this behaves like `V4Preferred`; otherwise `V4Only`.",
+          "type": "string",
+          "const": "Auto"
+        },
+        {
+          "description": "Query for both A and AAAA, but prefer IPv4 addresses when both are\navailable.",
+          "type": "string",
+          "const": "V4Preferred"
+        },
+        {
+          "description": "Only query for A (IPv4) records.",
+          "type": "string",
+          "const": "V4Only"
+        },
+        {
+          "description": "Only query for AAAA (IPv6) records.",
+          "type": "string",
+          "const": "V6Only"
+        }
+      ]
     },
     "RawSession": {
       "type": "object",
@@ -884,19 +949,7 @@
           "type": "object",
           "properties": {
             "regex": {
-              "type": "array",
-              "prefixItems": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer",
-                  "format": "uint",
-                  "minimum": 0
-                }
-              ],
-              "minItems": 2,
-              "maxItems": 2
+              "type": "string"
             }
           },
           "required": [
@@ -2584,6 +2637,20 @@
           },
           "required": [
             "developerImplicit"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Automatically detect authentication method based on environment.\nUses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.",
+          "type": "object",
+          "properties": {
+            "implicit": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "implicit"
           ],
           "additionalProperties": false
         }

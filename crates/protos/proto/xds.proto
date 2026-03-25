@@ -7,24 +7,9 @@ package envoy.service.discovery.v3;
 import "google/protobuf/any.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/struct.proto";
+import "shared_envoy.proto";
 
 option go_package="github.com/envoyproxy/go-control-plane";
-
-message Status {
-    // The status code, which should be an enum value of [google.rpc.Code][google.rpc.Code].
-    int32 code = 1;
-
-    // A developer-facing error message, which should be in English. Any
-    // user-facing error message should be localized and sent in the
-    // [google.rpc.Status.details][google.rpc.Status.details] field, or localized by the client.
-    string message = 2;
-
-    // A list of messages that carry the error details.  There is a common set of
-    // message types for APIs to use.
-    // google.protobuf.Any
-    repeated google.protobuf.Any details = 3;
-}
-
 
 message Node {
     // An opaque node identifier for the Envoy node. This also provides the local
@@ -99,7 +84,7 @@ message DiscoveryRequest {
     // internal exception related to the failure. It is only intended for consumption during manual
     // debugging, the string provided is not guaranteed to be stable across Envoy versions.
     // google.rpc.Status
-    Status error_detail = 6;
+    envoy.service.common.v3.Status error_detail = 6;
 }
 
 message DiscoveryResponse {
@@ -197,7 +182,7 @@ message DeltaDiscoveryRequest {
   // This is populated when the previous :ref:`DiscoveryResponse <envoy_v3_api_msg_service.discovery.v3.DiscoveryResponse>`
   // failed to update configuration. The ``message`` field in ``error_details``
   // provides the Envoy internal exception related to the failure.
-  Status error_detail = 7;
+  envoy.service.common.v3.Status error_detail = 7;
 }
 
 message DeltaDiscoveryResponse {

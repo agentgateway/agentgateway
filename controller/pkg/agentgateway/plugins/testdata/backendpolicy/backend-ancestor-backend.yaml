@@ -51,9 +51,9 @@ status:
   status:
     ancestors:
     - ancestorRef:
-        group: agentgateway.dev
-        kind: AgentgatewayBackend
-        name: be
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
         namespace: default
       conditions:
       - lastTransitionTime: fake

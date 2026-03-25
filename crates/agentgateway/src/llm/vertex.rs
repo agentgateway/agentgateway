@@ -114,12 +114,9 @@ impl Provider {
 
 	pub fn get_host(&self, _request_model: Option<&str>) -> Strng {
 		match &self.region {
-			None => {
-				strng::literal!("aiplatform.googleapis.com")
-			},
-			Some(region) => {
-				strng::format!("{region}-aiplatform.googleapis.com")
-			},
+			None => strng::literal!("aiplatform.googleapis.com"),
+			Some(region) if region == "global" => strng::literal!("aiplatform.googleapis.com"),
+			Some(region) => strng::format!("{region}-aiplatform.googleapis.com"),
 		}
 	}
 
@@ -198,5 +195,18 @@ mod tests {
 		};
 		let actual = p.anthropic_model(req).map(|m| m.to_string());
 		assert_eq!(actual.as_deref(), expected);
+	}
+
+	#[rstest::rstest]
+	#[case::no_region(None, "aiplatform.googleapis.com")]
+	#[case::global_region(Some("global"), "aiplatform.googleapis.com")]
+	#[case::regional(Some("us-central1"), "us-central1-aiplatform.googleapis.com")]
+	fn test_get_host(#[case] region: Option<&str>, #[case] expected: &str) {
+		let p = Provider {
+			project_id: strng::new("test-project"),
+			model: None,
+			region: region.map(strng::new),
+		};
+		assert_eq!(p.get_host(None).as_str(), expected);
 	}
 }

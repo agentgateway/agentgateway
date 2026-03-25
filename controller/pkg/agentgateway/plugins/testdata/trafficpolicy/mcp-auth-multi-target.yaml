@@ -267,60 +267,9 @@ status:
   status:
     ancestors:
     - ancestorRef:
-        group: agentgateway.dev
-        kind: AgentgatewayBackend
-        name: dummy-oauth
-        namespace: default
-      conditions:
-      - lastTransitionTime: fake
-        message: Policy accepted
-        reason: Valid
-        status: "True"
-        type: Accepted
-      - lastTransitionTime: fake
-        message: Attached to all targets
-        reason: Attached
-        status: "True"
-        type: Attached
-      controllerName: agentgateway.dev/agentgateway
-    - ancestorRef:
-        group: agentgateway.dev
-        kind: AgentgatewayBackend
-        name: test1
-        namespace: default
-      conditions:
-      - lastTransitionTime: fake
-        message: Policy accepted
-        reason: Valid
-        status: "True"
-        type: Accepted
-      - lastTransitionTime: fake
-        message: Attached to all targets
-        reason: Attached
-        status: "True"
-        type: Attached
-      controllerName: agentgateway.dev/agentgateway
-    - ancestorRef:
-        group: agentgateway.dev
-        kind: AgentgatewayBackend
-        name: test2
-        namespace: default
-      conditions:
-      - lastTransitionTime: fake
-        message: Policy accepted
-        reason: Valid
-        status: "True"
-        type: Accepted
-      - lastTransitionTime: fake
-        message: Attached to all targets
-        reason: Attached
-        status: "True"
-        type: Attached
-      controllerName: agentgateway.dev/agentgateway
-    - ancestorRef:
-        group: agentgateway.dev
-        kind: AgentgatewayBackend
-        name: test3
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
         namespace: default
       conditions:
       - lastTransitionTime: fake

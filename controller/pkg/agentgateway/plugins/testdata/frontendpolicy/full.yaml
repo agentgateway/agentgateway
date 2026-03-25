@@ -143,6 +143,33 @@ output:
         gateway:
           name: test
           namespace: default
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      frontend:
+        tracing:
+          attributes:
+          - name: http.useragent
+            value: request.headers["user-agent"]
+          clientSampling: "true"
+          protocol: GRPC
+          randomSampling: "true"
+          remove:
+          - response.code
+          resources:
+          - name: service.name
+            value: agent-gateway
+      key: frontend/default/agw:frontend-tracing:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
 status:
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy

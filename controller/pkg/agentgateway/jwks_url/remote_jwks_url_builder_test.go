@@ -164,8 +164,7 @@ func TestRemoteJwksUrlBuilder(t *testing.T) {
 }
 
 func setup(t *testing.T, paths []string) plugins.PolicyCtx {
-	val := apitests.NewAgentgatewayValidator(t)
-	val.SkipMissing = true
+	val := apitests.NewAgentgatewayValidatorSkipMissing(t)
 	mockObjs := []any{}
 	for _, f := range paths {
 		data := file.AsStringOrFail(t, f)

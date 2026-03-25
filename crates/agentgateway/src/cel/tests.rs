@@ -69,6 +69,14 @@ fn expression() {
 	assert_eq!(Value::Bool(true), eval_request(expr, req).unwrap());
 }
 
+#[test]
+fn list_in() {
+	let expr = "'san' in source.subjectAltNames";
+	assert_eq!(json!(true), eval(expr).unwrap());
+	let expr = "'not-san' in source.subjectAltNames";
+	assert_eq!(json!(false), eval(expr).unwrap());
+}
+
 fn request_with_header_modes() -> crate::http::Request {
 	let mut req = ::http::Request::builder()
 		.method(Method::GET)
@@ -186,6 +194,47 @@ mod headers {
 				.unwrap()
 			);
 	}
+
+	#[test]
+	fn cookie() {
+		let req = || {
+			::http::Request::builder()
+				.method(http::Method::GET)
+				.uri("http://example.com")
+				.header("cookie", "session=abc; theme=light")
+				.header("cookie", "session=def")
+				.body(crate::http::Body::empty())
+				.unwrap()
+		};
+		assert_eq!(
+			"abc",
+			eval_request(r#"request.headers.cookie("session")"#, req())
+				.unwrap()
+				.as_str()
+				.unwrap()
+				.as_ref()
+		);
+		assert_eq!(
+			"light",
+			eval_request(r#"request.headers.cookie("theme")"#, req())
+				.unwrap()
+				.as_str()
+				.unwrap()
+				.as_ref()
+		);
+	}
+
+	#[test]
+	fn cookie_missing() {
+		let req = ::http::Request::builder()
+			.method(http::Method::GET)
+			.uri("http://example.com")
+			.header("cookie", "session=abc")
+			.body(crate::http::Body::empty())
+			.unwrap();
+		let err = eval_request(r#"request.headers.cookie("theme")"#, req).unwrap_err();
+		assert!(err.to_string().contains("No such key: theme"));
+	}
 }
 
 mod query_accessors {
@@ -292,6 +341,12 @@ fn map() {
 }
 
 #[test]
+fn test_struct() {
+	let expr = r#"foo{}"#;
+	eval(expr).expect_err("expected an error");
+}
+
+#[test]
 fn map_filter_dynamic_bool() {
 	let expr = r#"[1, 2].map(x, llm.streaming, x + 1)"#;
 	assert_eq!(json!([]), eval(expr).unwrap());
@@ -312,4 +367,27 @@ fn dynamic_index_key() {
 #[test]
 fn has_on_dynamic_map() {
 	assert_eq!(json!(true), eval(r#"has(request.headers.foo)"#).unwrap());
+}
+
+#[test]
+fn unset_values() {
+	let req = || {
+		::http::Request::builder()
+			.method(Method::GET)
+			.uri("http://example.com")
+			.header("x-example", "value")
+			.body(Body::empty())
+			.unwrap()
+	};
+	assert_eq!(Value::Null, eval_request("jwt", req()).unwrap());
+	assert_eq!(
+		Value::Bool(true),
+		eval_request("jwt == null", req()).unwrap()
+	);
+	// This is just invalid syntax
+	assert!(eval_request("has(jwt)", req()).is_err());
+	assert_eq!(
+		Value::Bool(false),
+		eval_request("has(jwt.sub)", req()).unwrap()
+	);
 }

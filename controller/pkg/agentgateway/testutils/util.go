@@ -31,6 +31,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/status"
+	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/controller"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
@@ -102,8 +103,7 @@ var timestampRegex = regexp.MustCompile(`lastTransitionTime:.*`)
 //
 // The output is generally created by running the test with `REFRESH_GOLDEN=true`.
 func RunForDirectory[Status any, Output any](t *testing.T, base string, run func(t *testing.T, ctx plugins.PolicyCtx) (Status, []Output)) {
-	val := apitests.NewAgentgatewayValidator(t)
-	val.SkipMissing = true
+	val := apitests.NewAgentgatewayValidatorSkipMissing(t)
 	defaults, defaultsErr := file.AsString(filepath.Join(base, "_defaults.yaml"))
 	for _, f := range file.ReadDirOrFail(t, base) {
 		name := filepath.Base(f)
@@ -190,7 +190,7 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 // agwPluginFactory is a factory function that returns the agent gateway plugins
 // It is based on agwPluginFactory(cfg)(ctx, cfg.AgwCollections) in start.go
 func agwPluginFactory(agwCollections *plugins.AgwCollections) plugins.AgwPlugin {
-	agwPlugins := plugins.Plugins(agwCollections)
+	agwPlugins := controller.Plugins(agwCollections)
 	mergedPlugins := plugins.MergePlugins(agwPlugins...)
 	return mergedPlugins
 }

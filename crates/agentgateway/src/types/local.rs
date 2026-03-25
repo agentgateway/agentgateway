@@ -37,6 +37,7 @@ use ::http::Uri;
 use agent_core::prelude::Strng;
 use anyhow::{Error, anyhow, bail};
 use bytes::Bytes;
+use frozen_collections::Len;
 use itertools::Itertools;
 use macro_rules_attribute::apply;
 use secrecy::SecretString;
@@ -1641,6 +1642,7 @@ json(request.body).model
 					model,
 					host: p.azure_host.context("azure requires azure_host")?,
 					api_version: p.azure_api_version,
+					cached_cred: Default::default(),
 				})
 			},
 		};
@@ -1780,6 +1782,10 @@ json(request.body).model
 					(
 						strng::new("/v1/responses"),
 						crate::llm::RouteType::Responses,
+					),
+					(
+						strng::new("/v1/responses/compact"),
+						crate::llm::RouteType::Detect,
 					),
 					(
 						strng::new("/v1/embeddings"),

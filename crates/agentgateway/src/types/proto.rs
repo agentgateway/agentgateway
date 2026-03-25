@@ -7,27 +7,13 @@ use thiserror::Error;
 #[warn(clippy::derive_partial_eq_without_eq)]
 
 pub mod istio {
-	pub mod workload {
-		tonic::include_proto!("istio.workload");
-	}
+	pub use protos::istio::workload;
 }
 pub mod workload {
-	pub use super::istio::workload::*;
-}
-
-#[allow(warnings)]
-#[warn(clippy::derive_partial_eq_without_eq)]
-// Tonic is auto-generating weird imports for Istio, so build the module structure it expects but
-// make our own module that de-nests it
-pub mod agentgateway1 {
-	pub mod agentgateway2 {
-		pub mod agentgateway3 {
-			tonic::include_proto!("agentgateway.dev.resource");
-		}
-	}
+	pub use protos::workload::*;
 }
 pub mod agent {
-	pub use super::agentgateway1::agentgateway2::agentgateway3::*;
+	pub use protos::agent::*;
 }
 
 #[allow(clippy::enum_variant_names)]

@@ -33,7 +33,7 @@ env:
   REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/agentgateway
   CONTROLLER_REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/controller
   # Note: /charts is added to this
-  CHART_REGISTRY_IMAGE_BASE: ghcr.io/${{ github.repository }}
+  CHART_REGISTRY_IMAGE_BASE: ghcr.io/${{ github.repository_owner }}
 
 jobs:
   setup:

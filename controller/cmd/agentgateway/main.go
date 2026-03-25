@@ -20,7 +20,7 @@ func main() {
 				fmt.Println(version.String())
 				return nil
 			}
-			s, err := setup.New()
+			s, err := setup.New(setup.Options{})
 			if err != nil {
 				return fmt.Errorf("error setting up agentgateway: %w", err)
 			}

@@ -118,7 +118,7 @@ pub fn select_best_route(
 		let best_match = candidates.find(|(_, m)| {
 			let path_matches = match &m.path {
 				PathMatch::Exact(p) => request.uri().path() == p.as_str(),
-				PathMatch::Regex(r, _) => {
+				PathMatch::Regex(r) => {
 					// Regex has no defined ordering. We will order by the length of the regex expression.
 					let path = request.uri().path();
 					r.find(path)

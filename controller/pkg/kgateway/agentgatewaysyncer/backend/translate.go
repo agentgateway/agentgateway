@@ -6,11 +6,13 @@ import (
 
 	"istio.io/istio/pilot/pkg/model/kstatus"
 	"istio.io/istio/pkg/config"
+	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -27,6 +29,35 @@ import (
 )
 
 var logger = logging.New("agentgateway/backend")
+
+// NewBackendPlugin creates a new plugin for AgentgatewayBackends
+func NewBackendPlugin(agw *plugins.AgwCollections) plugins.AgwPlugin {
+	return plugins.AgwPlugin{
+		ContributesBackends: map[schema.GroupKind]plugins.BackendPlugin{
+			wellknown.AgentgatewayBackendGVK.GroupKind(): {
+				BuildReferences: func() krt.Collection[*plugins.PolicyAttachment] {
+					return krt.NewManyCollection(agw.Backends, func(ctx krt.HandlerContext, backend *agentgateway.AgentgatewayBackend) []*plugins.PolicyAttachment {
+						return BuildAgwBackendReferences(backend)
+					}, agw.KrtOpts.ToOptions("BackendPolicyAttachments")...)
+				},
+				Build: func(input plugins.PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[agwir.AgwResource]) {
+					status, col := krt.NewStatusManyCollection(agw.Backends, func(ctx krt.HandlerContext, backend *agentgateway.AgentgatewayBackend) (
+						*agentgateway.AgentgatewayBackendStatus,
+						[]agwir.AgwResource,
+					) {
+						pc := plugins.PolicyCtx{
+							Krt:         ctx,
+							Collections: agw,
+							References:  input.References,
+						}
+						return TranslateAgwBackend(pc, backend, input.References)
+					}, agw.KrtOpts.ToOptions("Backends")...)
+					return plugins.ConvertStatusCollection(status), col
+				},
+			},
+		},
+	}
+}
 
 func BuildAgwBackendReferences(
 	backend *agentgateway.AgentgatewayBackend,
@@ -325,7 +356,7 @@ func translateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 		sessionRouting = api.MCPBackend_STATELESS
 	}
 	failureMode := api.MCPBackend_FAIL_CLOSED
-	if mcp.FailureMode == "failOpen" {
+	if mcp.FailureMode == agentgateway.FailOpen {
 		failureMode = api.MCPBackend_FAIL_OPEN
 	}
 	mcpBackend := &api.Backend{

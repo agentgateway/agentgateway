@@ -297,5 +297,5 @@ fn req(claims: serde_json::Value) -> Option<RequestSnapshot> {
 		jwt: Default::default(),
 	});
 
-	Some(cel::snapshot_request(&mut req))
+	Some(cel::snapshot_request(&mut req, true))
 }

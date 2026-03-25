@@ -1,0 +1,23 @@
+[package]
+name = "protos"
+version = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+publish = { workspace = true }
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+prost.workspace = true
+prost-types.workspace = true
+prost-wkt-types.workspace = true
+tonic.workspace = true
+tonic-prost.workspace = true
+
+[build-dependencies]
+anyhow.workspace = true
+prost-build.workspace = true
+prost-wkt-build.workspace = true
+protox.workspace = true
+tonic-prost-build.workspace = true

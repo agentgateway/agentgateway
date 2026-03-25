@@ -2,16 +2,15 @@ use std::error::Error as StdErr;
 use std::fmt;
 use std::fmt::Formatter;
 
+use self::service::discovery::v3::DeltaDiscoveryRequest;
 pub use client::*;
 pub use metrics::*;
-use tokio::sync::mpsc;
 pub use types::*;
-
-use self::service::discovery::v3::DeltaDiscoveryRequest;
 
 mod client;
 pub mod metrics;
 mod types;
+use tokio::sync::mpsc;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -24,8 +23,6 @@ pub enum Error {
 	/// Attempted to send on a MPSC channel which has been canceled
 	#[error(transparent)]
 	RequestFailure(#[from] Box<mpsc::error::SendError<DeltaDiscoveryRequest>>),
-	#[error("failed to send on demand resource")]
-	OnDemandSend(),
 }
 
 struct DisplayStatus<'a>(&'a tonic::Status);

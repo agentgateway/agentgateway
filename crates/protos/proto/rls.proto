@@ -6,6 +6,7 @@ import "google/protobuf/wrappers.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
+import "shared_envoy.proto";
 
 option go_package = "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3;ratelimitv3";
 
@@ -176,10 +177,10 @@ message RateLimitResponse {
   repeated DescriptorStatus statuses = 2;
 
   // A list of headers to add to the response
-  repeated HeaderValue response_headers_to_add = 3;
+  repeated envoy.service.common.v3.HeaderValue response_headers_to_add = 3;
 
   // A list of headers to add to the request when forwarded
-  repeated HeaderValue request_headers_to_add = 4;
+  repeated envoy.service.common.v3.HeaderValue request_headers_to_add = 4;
 
   // A response body to send to the downstream client when the response code is not OK.
   bytes raw_body = 5;
@@ -207,20 +208,6 @@ message RateLimitResponse {
   Quota quota = 7;
 }
 
-// Header name/value pair.
-message HeaderValue {
-  // Header name.
-  string key = 1;
-
-  string value = 2;
-  // Header value.
-  //
-  // The same :ref:`format specifier <config_access_log_format>` as used for
-  // :ref:`HTTP access logging <config_access_log>` applies here, however
-  // unknown header values are replaced with the empty string instead of ``-``.
-  //  string value = 2;
-  bytes raw_value = 3;
-}
 message RateLimitDescriptor {
   message Entry {
     // Descriptor key.

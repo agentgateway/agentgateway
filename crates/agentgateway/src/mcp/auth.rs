@@ -189,11 +189,12 @@ pub(super) async fn authorization_server_metadata(
 	auth: &McpAuthentication,
 	client: PolicyClient,
 ) -> Result<Response, ProxyError> {
-	// Construct the metadata URL per RFC 8414 Section 3:
-	// For path-based issuers, the well-known suffix is inserted between the origin and path.
-	// e.g. issuer "https://idp.example.com/app/myapp/" becomes
-	//      "https://idp.example.com/.well-known/oauth-authorization-server/app/myapp/"
-	let metadata_uri = rfc8414_metadata_url(&auth.issuer);
+	// RFC 8414 URL for standard AS metadata. Keycloak does not implement RFC 8414; it only
+	// exposes OpenID Provider Metadata at {issuer}/.well-known/openid-configuration (OIDC Discovery).
+	let metadata_uri = match &auth.provider {
+		Some(McpIDP::Keycloak { .. }) => openid_configuration_metadata_url(&auth.issuer),
+		_ => rfc8414_metadata_url(&auth.issuer),
+	};
 	let ureq = ::http::Request::builder()
 		.uri(metadata_uri)
 		.body(Body::empty())?;
@@ -297,6 +298,14 @@ pub(super) async fn client_registration(
 /// For root issuers (no path), this produces the same result as before:
 ///   issuer: https://idp.example.com
 ///   result: https://idp.example.com/.well-known/oauth-authorization-server
+/// OpenID Connect Discovery 1.0 metadata document URL.
+fn openid_configuration_metadata_url(issuer: &str) -> String {
+	format!(
+		"{}/.well-known/openid-configuration",
+		issuer.trim_end_matches('/')
+	)
+}
+
 fn rfc8414_metadata_url(issuer: &str) -> String {
 	match url::Url::parse(issuer) {
 		Ok(parsed) => {
@@ -319,6 +328,22 @@ fn rfc8414_metadata_url(issuer: &str) -> String {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn test_openid_configuration_metadata_url_keycloak_realm() {
+		assert_eq!(
+			openid_configuration_metadata_url("http://keycloak:8080/realms/test"),
+			"http://keycloak:8080/realms/test/.well-known/openid-configuration"
+		);
+	}
+
+	#[test]
+	fn test_openid_configuration_metadata_url_trailing_slash() {
+		assert_eq!(
+			openid_configuration_metadata_url("http://keycloak:8080/realms/mcp/"),
+			"http://keycloak:8080/realms/mcp/.well-known/openid-configuration"
+		);
+	}
 
 	#[test]
 	fn test_rfc8414_metadata_url_path_based() {

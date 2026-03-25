@@ -109,7 +109,7 @@ export function PolicyConfig() {
             const routePath = route.matches?.[0]?.path
               ? route.matches[0].path.exact ||
                 route.matches[0].path.pathPrefix ||
-                route.matches[0].path.regex?.[0] ||
+                route.matches[0].path.regex ||
                 "/*"
               : "/*";
 

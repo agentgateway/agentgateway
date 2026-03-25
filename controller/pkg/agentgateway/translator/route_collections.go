@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"iter"
-	"strings"
 
 	networkingclient "istio.io/client-go/pkg/apis/networking/v1"
 	"istio.io/istio/pkg/config"
@@ -45,7 +44,7 @@ func AgwRouteCollection(
 	inputs RouteContextInputs,
 	krtopts krtutil.KrtOptions,
 ) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], krt.Collection[*utils.AncestorBackend]) {
-	httpRouteStatus, httpRoutes := createRouteCollection(httpRouteCol, inputs, krtopts, "HTTPRoutes",
+	httpRouteStatus, httpRoutes := createRouteCollectionGeneric(httpRouteCol, inputs, krtopts, "HTTPRoutes",
 		func(ctx RouteContext, obj *gwv1.HTTPRoute) (RouteContext, iter.Seq2[AgwRoute, *reporter.RouteCondition]) {
 			route := obj.Spec
 			return ctx, func(yield func(AgwRoute, *reporter.RouteCondition) bool) {
@@ -61,7 +60,7 @@ func AgwRouteCollection(
 		})
 	status.RegisterStatus(queue, httpRouteStatus, GetStatus)
 
-	grpcRouteStatus, grpcRoutes := createRouteCollection(grpcRouteCol, inputs, krtopts, "GRPCRoutes",
+	grpcRouteStatus, grpcRoutes := createRouteCollectionGeneric(grpcRouteCol, inputs, krtopts, "GRPCRoutes",
 		func(ctx RouteContext, obj *gwv1.GRPCRoute) (RouteContext, iter.Seq2[AgwRoute, *reporter.RouteCondition]) {
 			route := obj.Spec
 			return ctx, func(yield func(AgwRoute, *reporter.RouteCondition) bool) {
@@ -78,7 +77,7 @@ func AgwRouteCollection(
 		})
 	status.RegisterStatus(queue, grpcRouteStatus, GetStatus)
 
-	tcpRouteStatus, tcpRoutes := createTCPRouteCollection(tcpRouteCol, inputs, krtopts, "TCPRoutes",
+	tcpRouteStatus, tcpRoutes := createRouteCollectionGeneric(tcpRouteCol, inputs, krtopts, "TCPRoutes",
 		func(ctx RouteContext, obj *gwv1a2.TCPRoute) (RouteContext, iter.Seq2[AgwTCPRoute, *reporter.RouteCondition]) {
 			route := obj.Spec
 			return ctx, func(yield func(AgwTCPRoute, *reporter.RouteCondition) bool) {
@@ -95,7 +94,7 @@ func AgwRouteCollection(
 		})
 	status.RegisterStatus(queue, tcpRouteStatus, GetStatus)
 
-	tlsRouteStatus, tlsRoutes := createTCPRouteCollection(tlsRouteCol, inputs, krtopts, "TLSRoutes",
+	tlsRouteStatus, tlsRoutes := createRouteCollectionGeneric(tlsRouteCol, inputs, krtopts, "TLSRoutes",
 		func(ctx RouteContext, obj *gwv1.TLSRoute) (RouteContext, iter.Seq2[AgwTCPRoute, *reporter.RouteCondition]) {
 			route := obj.Spec
 			return ctx, func(yield func(AgwTCPRoute, *reporter.RouteCondition) bool) {
@@ -161,7 +160,6 @@ func ProcessParentReferences[T any](
 	gwResult ConversionResult[T],
 	routeNN types.NamespacedName, // <-- route namespace/name so we can detect cross-NS parents
 	routeReporter reporter.RouteReporter,
-	resourceMapper func(T, RouteParentReference) *api.Resource,
 ) []agwir.AgwResource {
 	resources := make([]agwir.AgwResource, 0, len(parentRefs))
 
@@ -294,6 +292,30 @@ func ProcessParentReferences[T any](
 	return resources
 }
 
+func resourceMapper(t any, parent RouteParentReference) *api.Resource {
+	switch tt := t.(type) {
+	case AgwTCPRoute:
+		// safety: a shallow clone is ok because we only modify a top level field (Key)
+		inner := protomarshal.ShallowClone(tt.TCPRoute)
+		inner.ListenerKey = parent.ListenerKey
+		if sec := string(parent.ParentSection); sec != "" {
+			inner.Key += "." + sec
+		}
+		return ToAgwResource(AgwTCPRoute{TCPRoute: inner})
+	case AgwRoute:
+		// safety: a shallow clone is ok because we only modify a top level field (Key)
+		inner := protomarshal.ShallowClone(tt.Route)
+		inner.ListenerKey = parent.ListenerKey
+		if sec := string(parent.ParentSection); sec != "" {
+			inner.Key += "." + sec
+		}
+		return ToAgwResource(AgwRoute{Route: inner})
+	default:
+		log.Fatalf("unknown route kind %T", t)
+		return nil
+	}
+}
+
 // reasonResolvedRefs picks a ResolvedRefs reason from a conversion failure condition.
 // Falls back to "ResolvedRefs" (when ok) or "Invalid" (when not ok and no specific reason).
 func reasonResolvedRefs(cond *reporter.RouteCondition, ok bool) gwv1.RouteConditionReason {
@@ -348,7 +370,6 @@ func createRouteCollectionGeneric[T controllers.Object, R comparable, ST any](
 	krtopts krtutil.KrtOptions,
 	collectionName string,
 	translator func(ctx RouteContext, obj T) (RouteContext, iter.Seq2[R, *reporter.RouteCondition]),
-	resourceTransformer func(route R, parent RouteParentReference) *api.Resource,
 	buildStatus func(status gwv1.RouteStatus) ST,
 ) (
 	krt.StatusCollection[T, ST],
@@ -381,78 +402,10 @@ func createRouteCollectionGeneric[T controllers.Object, R comparable, ST any](
 			gwResult,
 			routeNN,
 			routeReporter,
-			resourceTransformer,
 		)
 		status := rm.BuildRouteStatusWithParentRefDefaulting(context.Background(), obj, inputs.ControllerName, true)
 		return ptr.Of(buildStatus(*status)), resources
 	}, krtopts.ToOptions(collectionName)...)
-}
-
-// Simplified HTTP route collection function
-func createRouteCollection[T controllers.Object, ST any](
-	routeCol krt.Collection[T],
-	inputs RouteContextInputs,
-	krtopts krtutil.KrtOptions,
-	collectionName string,
-	translator func(ctx RouteContext, obj T) (RouteContext, iter.Seq2[AgwRoute, *reporter.RouteCondition]),
-	buildStatus func(status gwv1.RouteStatus) ST,
-) (
-	krt.StatusCollection[T, ST],
-	krt.Collection[agwir.AgwResource],
-) {
-	return createRouteCollectionGeneric(
-		routeCol,
-		inputs,
-		krtopts,
-		collectionName,
-		translator,
-		func(e AgwRoute, parent RouteParentReference) *api.Resource {
-			// safety: a shallow clone is ok because we only modify a top level field (Key)
-			inner := protomarshal.ShallowClone(e.Route)
-			_, name, _ := strings.Cut(parent.InternalName, "/")
-			inner.ListenerKey = name
-			if sec := string(parent.ParentSection); sec != "" {
-				inner.Key = inner.GetKey() + "." + sec
-			} else {
-				inner.Key = inner.GetKey()
-			}
-			return ToAgwResource(AgwRoute{Route: inner})
-		},
-		buildStatus,
-	)
-}
-
-// Simplified TCP route collection function (plugins parameter removed)
-func createTCPRouteCollection[T controllers.Object, ST any](
-	routeCol krt.Collection[T],
-	inputs RouteContextInputs,
-	krtopts krtutil.KrtOptions,
-	collectionName string,
-	translator func(ctx RouteContext, obj T) (RouteContext, iter.Seq2[AgwTCPRoute, *reporter.RouteCondition]),
-	buildStatus func(status gwv1.RouteStatus) ST,
-) (
-	krt.StatusCollection[T, ST],
-	krt.Collection[agwir.AgwResource],
-) {
-	return createRouteCollectionGeneric(
-		routeCol,
-		inputs,
-		krtopts,
-		collectionName,
-		translator,
-		func(e AgwTCPRoute, parent RouteParentReference) *api.Resource {
-			inner := protomarshal.Clone(e.TCPRoute)
-			_, name, _ := strings.Cut(parent.InternalName, "/")
-			inner.ListenerKey = name
-			if sec := string(parent.ParentSection); sec != "" {
-				inner.Key = inner.GetKey() + "." + sec
-			} else {
-				inner.Key = inner.GetKey()
-			}
-			return ToAgwResource(AgwTCPRoute{TCPRoute: inner})
-		},
-		buildStatus,
-	)
 }
 
 // ListenersPerGateway returns the set of listener sectionNames referenced for each parent Gateway,
@@ -546,6 +499,7 @@ type RouteContextInputs struct {
 	Namespaces     krt.Collection[*corev1.Namespace]
 	ServiceEntries krt.Collection[*networkingclient.ServiceEntry]
 	Backends       krt.Collection[*agentgateway.AgentgatewayBackend]
+	References     plugins.ReferenceTypes
 	ControllerName string
 }
 

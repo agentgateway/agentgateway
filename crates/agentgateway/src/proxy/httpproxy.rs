@@ -7,6 +7,7 @@ use std::sync::Arc;
 use ::http::uri::PathAndQuery;
 use ::http::{HeaderMap, header};
 use anyhow::anyhow;
+use frozen_collections::Len;
 use headers::HeaderMapExt;
 use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
@@ -361,7 +362,7 @@ where
 		req: &mut Request,
 	) -> Result<T, SnapshottedProxyResponse> {
 		self.map_err(|e| {
-			log.request_snapshot = log.cel.cel_context.maybe_snapshot_request(req);
+			log.request_snapshot = log.cel.cel_context.maybe_snapshot_request(req, true);
 			SnapshottedProxyResponse(e.into())
 		})
 	}
@@ -372,7 +373,7 @@ where
 	) -> Result<T, SnapshottedProxyResponse> {
 		self.map_err(|e| {
 			if let Some(req) = req.as_mut() {
-				log.request_snapshot = log.cel.cel_context.maybe_snapshot_request(req);
+				log.request_snapshot = log.cel.cel_context.maybe_snapshot_request(req, true);
 			}
 			SnapshottedProxyResponse(e.into())
 		})
@@ -614,7 +615,7 @@ impl HTTPProxy {
 					strng::format!("{}/*", p)
 				}
 			},
-			PathMatch::Regex(r, _) => r.as_str().into(),
+			PathMatch::Regex(r) => r.as_str().into(),
 		});
 		req.extensions_mut().insert(path_match);
 
@@ -655,7 +656,6 @@ impl HTTPProxy {
 		)
 		.await
 		.snapshot_on_err(log, &mut req)?;
-
 		let selected_backend = select_backend(selected_route.as_ref(), &req)
 			.ok_or(ProxyError::NoValidBackends)
 			.snapshot_on_err(log, &mut req)?;
@@ -1130,7 +1130,7 @@ pub async fn build_transport(
 	// Check if we need double hbone
 	if let (
 		Some((gw_addr, gw_identity)),
-		Some((InboundProtocol::HBONE, waypoint_identity)),
+		Some((InboundProtocol::HBONE, waypoint_identities)),
 		Some(ca),
 	) = (
 		&backend_call.network_gateway,
@@ -1157,7 +1157,7 @@ pub async fn build_transport(
 			return Ok(Transport::DoubleHbone {
 				gateway_address: gateway_socket_addr,
 				gateway_identity: gw_identity.clone(),
-				waypoint_identity: waypoint_identity.clone(),
+				waypoint_identities: waypoint_identities.clone(),
 				inner: app_transport,
 			});
 		} else {
@@ -1169,12 +1169,12 @@ pub async fn build_transport(
 	Ok(match (&backend_call.transport_override, &inputs.ca) {
 		// Use legacy mTLS if they did not define a TLS policy. We could do double TLS but Istio doesn't,
 		// so maintain bug-for-bug parity
-		(Some((InboundProtocol::LegacyIstioMtls, ident)), Some(ca))
+		(Some((InboundProtocol::LegacyIstioMtls, idents)), Some(ca))
 			if matches!(app_transport, ApplicationTransport::Plaintext) =>
 		{
 			if let Ok(id) = ca.get_identity().await {
 				Some(
-					id.legacy_mtls(vec![ident.clone()])
+					id.legacy_mtls(idents.clone())
 						.map_err(|e| ProxyError::Processing(anyhow!("{e}")))?,
 				)
 				.into()
@@ -1183,9 +1183,9 @@ pub async fn build_transport(
 				app_transport.into()
 			}
 		},
-		(Some((InboundProtocol::HBONE, ident)), Some(ca)) => {
+		(Some((InboundProtocol::HBONE, idents)), Some(ca)) => {
 			if ca.get_identity().await.is_ok() {
-				Transport::Hbone(app_transport, ident.clone())
+				Transport::Hbone(app_transport, idents.clone())
 			} else {
 				warn!("wanted TLS but CA is not available");
 				app_transport.into()
@@ -1220,13 +1220,27 @@ impl<'a> MustSnapshot<'a> {
 	pub fn new(req: &'a mut Option<Request>) -> Self {
 		Self(req)
 	}
-	pub fn take_and_snapshot(
+	pub fn take_and_snapshot_clearing_extensions(
+		self,
+		log: Option<&mut &mut RequestLog>,
+	) -> Result<Request, ProxyError> {
+		self.take_and_snapshot(log, true)
+	}
+	pub fn take_and_snapshot_without_clearing_extensions(
+		self,
+		log: Option<&mut &mut RequestLog>,
+	) -> Result<Request, ProxyError> {
+		self.take_and_snapshot(log, false)
+	}
+	fn take_and_snapshot(
 		self,
 		mut log: Option<&mut &mut RequestLog>,
+		clear: bool,
 	) -> Result<Request, ProxyError> {
 		if let Some(mut req) = self.0.take() {
 			if let Some(l) = log.take() {
-				l.request_snapshot = l.cel.cel_context.maybe_snapshot_request(&mut req);
+				// Do not clear extensions
+				l.request_snapshot = l.cel.cel_context.maybe_snapshot_request(&mut req, clear);
 			};
 			Ok(req)
 		} else {
@@ -1459,7 +1473,8 @@ async fn make_backend_call(
 
 	let (mut req, llm_response_policies, llm_request) =
 		if let Some(llm) = &backend_call.backend_policies.llm_provider {
-			let mut req = req.take_and_snapshot(log.as_mut())?;
+			// LLM requires CEL execution after the snapshot so we do not clear extensions
+			let mut req = req.take_and_snapshot_without_clearing_extensions(log.as_mut())?;
 			let route_type = llm_request_policies
 				.llm
 				.as_ref()
@@ -1607,7 +1622,8 @@ async fn make_backend_call(
 			}
 		} else {
 			(
-				req.take_and_snapshot(log.as_mut())?,
+				// Clearing extensions is fine; the HTTP codepath doesn't require usage after this point.
+				req.take_and_snapshot_clearing_extensions(log.as_mut())?,
 				LLMResponsePolicies::default(),
 				None,
 			)
@@ -1792,10 +1808,23 @@ pub fn build_service_call(
 	Ok(BackendCall {
 		target,
 		http_version_override,
-		transport_override: Some((wl.protocol, wl.identity())),
+		transport_override: Some((wl.protocol, workload_and_service_sans(&wl, svc))),
 		network_gateway,
 		backend_policies,
 	})
+}
+
+/// Combines workload identity with service SANs.
+fn workload_and_service_sans(wl: &Workload, svc: &Service) -> Vec<Identity> {
+	let wl_id = wl.identity();
+	let mut ids = Vec::with_capacity(1 + svc.subject_alt_names.len());
+	ids.push(wl_id.clone());
+	for id in &svc.subject_alt_names {
+		if *id != wl_id {
+			ids.push(id.clone());
+		}
+	}
+	ids
 }
 
 fn should_retry(res: &Result<Response, SnapshottedProxyResponse>, pol: &retry::Policy) -> bool {
@@ -1941,7 +1970,7 @@ fn normalize_uri(connection: &Extension, req: &mut Request) -> anyhow::Result<()
 pub struct BackendCall {
 	pub target: Target,
 	pub http_version_override: Option<::http::Version>,
-	pub transport_override: Option<(InboundProtocol, Identity)>,
+	pub transport_override: Option<(InboundProtocol, Vec<Identity>)>,
 	pub network_gateway: Option<(GatewayAddress, Identity)>, /* For double hbone: (gateway_address, gateway_identity) */
 	pub backend_policies: BackendPolicies,
 }

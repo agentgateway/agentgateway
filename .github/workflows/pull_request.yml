@@ -124,6 +124,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
+    - name: Check Runner Info
+      run: |
+        cat /sys/fs/cgroup/cpu.stat || true
+        cat /proc/pressure/cpu || true
+        lscpu || true
+        openssl speed -seconds 1  -bytes 256 sha256 || rtue
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:

@@ -7,16 +7,38 @@ import (
 	"testing"
 
 	"istio.io/istio/pkg/config/crd"
+	"istio.io/istio/pkg/lazy"
 	"istio.io/istio/pkg/test/util/assert"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 )
 
+var validator = lazy.New(func() (*crd.Validator, error) {
+	return newAgentgatewayValidator(false)
+})
+var validatorSkipMissing = lazy.New(func() (*crd.Validator, error) {
+	return newAgentgatewayValidator(true)
+})
+
 func NewAgentgatewayValidator(t *testing.T) *crd.Validator {
+	v, err := validator.Get()
+	assert.NoError(t, err)
+	return v
+}
+
+func NewAgentgatewayValidatorSkipMissing(t *testing.T) *crd.Validator {
+	v, err := validatorSkipMissing.Get()
+	assert.NoError(t, err)
+	return v
+}
+
+func newAgentgatewayValidator(skipMissing bool) (*crd.Validator, error) {
 	root := fsutils.GetModuleRoot()
 	dirs := []string{}
 	agentgatewayDir, err := os.ReadDir(filepath.Join(root, "controller/install/helm/agentgateway-crds/templates/"))
-	assert.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
 	for _, d := range agentgatewayDir {
 		if strings.HasSuffix(d.Name(), ".yaml") {
 			dirs = append(dirs, filepath.Join(root, "controller/install/helm/agentgateway-crds/templates", d.Name()))
@@ -26,7 +48,8 @@ func NewAgentgatewayValidator(t *testing.T) *crd.Validator {
 		dirs...,
 	)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
-	return v
+	v.SkipMissing = skipMissing
+	return v, nil
 }

@@ -20,7 +20,7 @@ use bytes::Bytes;
 use cel::Value;
 use cel::common::ast::OptimizedExpr;
 use cel::context::VariableResolver;
-use cel::objects::{BytesValue, ListValue};
+use cel::objects::{BytesValue, ListValue, StringValue};
 use cel::types::dynamic::{DynamicType, DynamicValue};
 use cel::{ExecutionError, FunctionContext};
 use chrono::{DateTime, FixedOffset};
@@ -31,52 +31,40 @@ pub use schemars::JsonSchema;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::json;
+use tracing::event;
 
 #[derive(Debug, Default, cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
 pub struct Executor<'a> {
-	#[dynamic(skip_serializing_if = "Option::is_none")]
 	pub request: Option<RequestRef<'a>>,
 
-	#[dynamic(skip_serializing_if = "Option::is_none")]
 	pub response: Option<ResponseRef<'a>>,
 
 	pub env: EnvContext,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub source: ExtensionOrDirect<'a, SourceContext>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub jwt: ExtensionOrDirect<'a, jwt::Claims>,
 
-	#[dynamic(rename = "apiKey", skip_serializing_if = "is_extension_or_direct_none")]
+	#[dynamic(rename = "apiKey")]
 	pub api_key: ExtensionOrDirect<'a, apikey::Claims>,
 
-	#[dynamic(
-		rename = "basicAuth",
-		skip_serializing_if = "is_extension_or_direct_none"
-	)]
+	#[dynamic(rename = "basicAuth")]
 	pub basic_auth: ExtensionOrDirect<'a, basicauth::Claims>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub llm: ExtensionOrDirect<'a, LLMContext>,
 
-	#[dynamic(rename = "llmRequest", skip_serializing_if = "Option::is_none")]
+	#[dynamic(rename = "llmRequest")]
 	pub llm_request: Option<&'a serde_json::Value>,
 
-	#[dynamic(skip_serializing_if = "Option::is_none")]
 	pub mcp: Option<&'a ResourceType>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub backend: ExtensionOrDirect<'a, BackendContext>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub extauthz: ExtensionOrDirect<'a, ExtAuthzDynamicMetadata>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub extproc: ExtensionOrDirect<'a, ExtProcDynamicMetadata>,
 
-	#[dynamic(skip_serializing_if = "is_extension_or_direct_none")]
 	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
 }
 
@@ -287,6 +275,12 @@ impl<'a> Executor<'a> {
 		this.mcp = Some(mcp);
 		this
 	}
+	pub fn new_mcp_request<B>(req: &'a ::http::Request<B>, mcp: &'a ResourceType) -> Self {
+		let mut this = Self::new_empty();
+		this.set_request(req);
+		this.mcp = Some(mcp);
+		this
+	}
 	pub fn new_llm(req: Option<&'a RequestSnapshot>, llm_body: &'a serde_json::Value) -> Self {
 		let mut this = Self::new_empty();
 		if let Some(req) = req {
@@ -363,7 +357,12 @@ impl<'a> Executor<'a> {
 		) {
 			Ok(v) => Ok(v),
 			Err(e) => {
-				tracing::trace!("failed to evaluate expression: {}", e);
+				event!(
+					target: "cel",
+					tracing::Level::TRACE,
+					"failed to evaluate expression: {}",
+					e,
+				);
 				Err(e.into())
 			},
 		}
@@ -395,9 +394,16 @@ impl<'a> Executor<'a> {
 	}
 }
 
+fn ext<T: Clone + Send + Sync + 'static>(req: &mut crate::http::Request, clear: bool) -> Option<T> {
+	if clear {
+		req.extensions_mut().remove()
+	} else {
+		req.extensions_mut().get().cloned()
+	}
+}
 /// snapshot_request takes a request and returns a snapshot of its attributes.
-/// EXTENSIONS ARE CLEARED. Do not use this if you still need the extensions later.
-pub fn snapshot_request(req: &mut crate::http::Request) -> RequestSnapshot {
+/// Conditionally, EXTENSIONS ARE CLEARED. Do not use this if you still need the extensions later.
+pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestSnapshot {
 	RequestSnapshot {
 		method: req.method().clone(),
 		path: req.uri().clone(),
@@ -405,19 +411,18 @@ pub fn snapshot_request(req: &mut crate::http::Request) -> RequestSnapshot {
 		scheme: req.uri().scheme().cloned(),
 		version: req.version(),
 		headers: req.headers().clone(),
-		body: req.extensions_mut().remove::<BufferedBody>(),
-		// This one we do not remove, as it's used downstream of the snapshot for auth in MCP case
-		// TODO: structure this better
-		jwt: req.extensions_mut().get::<jwt::Claims>().cloned(),
-		api_key: req.extensions_mut().remove::<apikey::Claims>(),
-		basic_auth: req.extensions_mut().remove::<basicauth::Claims>(),
-		backend: req.extensions_mut().remove::<BackendContext>(),
-		source: req.extensions_mut().remove::<SourceContext>(),
-		extauthz: req.extensions_mut().remove::<ExtAuthzDynamicMetadata>(),
-		extproc: req.extensions_mut().remove::<ExtProcDynamicMetadata>(),
-		metadata: req.extensions_mut().remove::<TransformationMetadata>(),
-		llm: req.extensions_mut().remove::<LLMContext>(),
-		start_time: req.extensions_mut().remove::<RequestTime>(),
+		body: ext::<BufferedBody>(req, clear),
+
+		jwt: ext::<jwt::Claims>(req, clear),
+		api_key: ext::<apikey::Claims>(req, clear),
+		basic_auth: ext::<basicauth::Claims>(req, clear),
+		backend: ext::<BackendContext>(req, clear),
+		source: ext::<SourceContext>(req, clear),
+		extauthz: ext::<ExtAuthzDynamicMetadata>(req, clear),
+		extproc: ext::<ExtProcDynamicMetadata>(req, clear),
+		metadata: ext::<TransformationMetadata>(req, clear),
+		llm: ext::<LLMContext>(req, clear),
+		start_time: ext::<RequestTime>(req, clear),
 	}
 }
 
@@ -937,6 +942,31 @@ impl<'a> Headers<'a> {
 		self
 	}
 
+	fn cookie_headers(&self) -> impl Iterator<Item = Result<&str, ExecutionError>> + '_ {
+		self
+			.as_ref()
+			.get_all(http::header::COOKIE)
+			.iter()
+			.map(|value| {
+				value
+					.to_str()
+					.map_err(|err| ExecutionError::function_error("cookie", err))
+			})
+	}
+
+	fn cookie_value(&self, name: &str) -> Result<Value<'static>, ExecutionError> {
+		for header in self.cookie_headers() {
+			let header = header?;
+			for cookie in cookie::Cookie::split_parse(header) {
+				let cookie = cookie.map_err(|err| ExecutionError::function_error("cookie", err))?;
+				if cookie.name() == name {
+					return Ok(Value::from(cookie.value().to_string()));
+				}
+			}
+		}
+		Err(ExecutionError::no_such_key(name))
+	}
+
 	fn raw_values(&self, name: &str) -> Option<Vec<Cow<'_, str>>> {
 		let values = self
 			.as_ref()
@@ -1058,6 +1088,19 @@ impl DynamicType for Headers<'_> {
 	where
 		Self: 'a,
 	{
+		if name == "cookie" {
+			if ftx.args.len() != 1 {
+				return Some(Err(ExecutionError::invalid_argument_count(
+					1,
+					ftx.args.len(),
+				)));
+			}
+			let name = match ftx.arg::<StringValue>(0) {
+				Ok(name) => name,
+				Err(err) => return Some(Err(err)),
+			};
+			return Some(self.cookie_value(name.as_ref()));
+		}
 		if !ftx.args.is_empty() {
 			return Some(Err(ExecutionError::invalid_argument_count(
 				0,
@@ -1357,7 +1400,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			port: 12345,
 			tls: Some(TlsInfo {
 				identity: None,
-				subject_alt_names: vec![],
+				subject_alt_names: vec!["san".into()],
 				issuer: Default::default(),
 				subject: Default::default(),
 				subject_cn: Some("cn".into()),

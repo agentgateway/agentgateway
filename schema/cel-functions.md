@@ -49,6 +49,7 @@ Available methods:
 | `join()`     | Joins all header entries with `,`. Example: `["a,b", "c"] -> "a,b,c"`.                                                                                                                          |
 | `raw()`      | Returns the raw header entries as a list. Example: `["a,b", "c"] -> ["a,b", "c"]`.                                                                                                              |
 | `split()`    | Returns all header entries split on `,` as a list. Example: `["a,b", "c"] -> ["a", "b", "c"]`.                                                                                                  |
+| `cookie(name)` | Parses the request `Cookie` header and returns the first cookie value for the given name. If the cookie is missing, evaluation fails with `NoSuchKey`.                                         |
 
 Examples:
 
@@ -56,6 +57,7 @@ Examples:
 * `request.headers.join()["x-forwarded-for"]`
 * `request.headers.raw()["set-cookie"]`
 * `request.headers.redacted().split()["authorization"]`
+* `request.headers.cookie("session")`
 
 `redacted()` can be combined with any of the other methods. `join()`, `raw()`, and `split()` are mutually exclusive; if multiple are chained, the last one wins.
 

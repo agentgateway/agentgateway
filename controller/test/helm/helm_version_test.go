@@ -134,12 +134,14 @@ func extractImageLines(output string) string {
 
 // TestHelmChartTemplate tests helm template output for both kgateway and agentgateway charts
 // with different values configurations.
+// NOTE: The test cases contain YAML blocks that are indented with 2 spaces, do not use tabs.
 func TestHelmChartTemplate(t *testing.T) {
 	charts := []string{"agentgateway"}
 
 	valuesCases := []struct {
-		name       string
-		valuesYAML string
+		name          string
+		valuesYAML    string
+		expectedError string
 	}{
 		{
 			name:       "default",
@@ -241,6 +243,45 @@ func TestHelmChartTemplate(t *testing.T) {
     another-label: "true"
 `,
 		},
+		{
+			name: "extra-env",
+			valuesYAML: `controller:
+  extraEnv:
+    LOG_FORMAT: json
+    ENABLE_AUDIT: "true"
+    API_TOKEN:
+      valueFrom:
+        secretKeyRef:
+          name: agentgateway-secrets
+          key: apiToken
+    API_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: agentgateway-secrets
+          key: apiKey
+`,
+		},
+		{
+			name: "extra-env-invalid-value-and-valuefrom",
+			valuesYAML: `controller:
+  extraEnv:
+    BAD_ENV:
+      value: "x"
+      valueFrom:
+        secretKeyRef:
+          name: bad-secret
+          key: token
+`,
+			expectedError: "controller.extraEnv.BAD_ENV cannot set both value and valueFrom",
+		},
+		{
+			name: "extra-env-invalid-neither-value-nor-valuefrom",
+			valuesYAML: `controller:
+  extraEnv:
+    BAD_ENV: {}
+`,
+			expectedError: "controller.extraEnv.BAD_ENV must set either value or valueFrom",
+		},
 	}
 
 	for _, chart := range charts {
@@ -279,6 +320,12 @@ func TestHelmChartTemplate(t *testing.T) {
 				helmCmd.Stderr = &stderr
 
 				err = helmCmd.Run()
+				if vc.expectedError != "" {
+					require.Error(t, err, "helm template should fail")
+					require.Contains(t, stderr.String(), vc.expectedError)
+					return
+				}
+
 				require.NoError(t, err, "helm template failed: %s", stderr.String())
 
 				got := output.Bytes()

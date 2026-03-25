@@ -50,7 +50,7 @@ async fn test_transformation_body() {
 		.status(200)
 		.body(crate::http::Body::empty())
 		.unwrap();
-	let snap = cel::snapshot_request(&mut req);
+	let snap = cel::snapshot_request(&mut req, true);
 	xfm.apply_response(&mut resp, Some(&snap));
 	let b = http::read_body_with_limit(resp.into_body(), 1000)
 		.await

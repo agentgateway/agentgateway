@@ -70,7 +70,7 @@ var (
 	}
 	TLSRouteGVK = schema.GroupVersionKind{
 		Group:   GatewayGroup,
-		Version: gwv1a2.GroupVersion.Version,
+		Version: gwv1.GroupVersion.Version,
 		Kind:    TLSRouteKind,
 	}
 	TLSRouteGVR = schema.GroupVersionResource{

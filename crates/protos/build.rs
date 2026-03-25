@@ -1,21 +1,20 @@
-// This build script is used to generate the rust source files that
-// we need for XDS GRPC communication.
 fn main() -> Result<(), anyhow::Error> {
+	let cwd = std::env::current_dir()?;
 	let proto_files = [
-		"proto/ext_proc.proto",
-		"proto/ext_authz.proto",
-		"proto/rls.proto",
-		"proto/resource.proto",
-		"proto/workload.proto",
+		"proto/shared_envoy.proto",
+		"proto/xds.proto",
 		"proto/citadel.proto",
+		"proto/ext_authz.proto",
+		"proto/ext_proc.proto",
+		"proto/rls.proto",
+		"proto/workload.proto",
+		"proto/resource.proto",
 	]
 	.iter()
-	.map(|name| std::env::current_dir().unwrap().join(name))
+	.map(|name| cwd.join(name))
 	.collect::<Vec<_>>();
-	let include_dirs = ["proto/"]
-		.iter()
-		.map(|i| std::env::current_dir().unwrap().join(i))
-		.collect::<Vec<_>>();
+	let include_dirs = [cwd.join("proto")];
+
 	let config = {
 		let mut c = prost_build::Config::new();
 		c.disable_comments(Some("."));
@@ -29,15 +28,15 @@ fn main() -> Result<(), anyhow::Error> {
 		c.extern_path(".google.protobuf.Struct", "::prost_wkt_types::Struct");
 		c
 	};
+
 	let fds = protox::compile(&proto_files, &include_dirs)?;
 	tonic_prost_build::configure()
 		.build_server(true)
 		.compile_fds_with_config(fds, config)?;
 
-	// This tells cargo to re-run this build script only when the proto files
-	// we're interested in change or the any of the proto directories were updated.
-	for path in [proto_files, include_dirs].concat() {
+	for path in [proto_files, include_dirs.to_vec()].concat() {
 		println!("cargo:rerun-if-changed={}", path.to_str().unwrap());
 	}
+
 	Ok(())
 }

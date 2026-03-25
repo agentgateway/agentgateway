@@ -1,0 +1,109 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: listenerset-gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  allowedListeners:
+    namespaces:
+      from: All
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 8081
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: listenerset
+  namespace: default
+spec:
+  parentRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: listenerset-gw
+  listeners:
+  - name: http-9090
+    protocol: HTTP
+    port: 9090
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: listenerset-route
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: ListenerSet
+    name: listenerset
+  rules:
+  - backendRefs:
+    - name: reviews
+      port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: listenerset-route-policy
+  namespace: default
+spec:
+  targetRefs:
+  - kind: HTTPRoute
+    name: listenerset-route
+    group: gateway.networking.k8s.io
+  traffic:
+    timeouts:
+      request: 5s
+
+---
+# Output
+output:
+- gateway:
+    Name: listenerset-gw
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/listenerset-route-policy:timeout:default/listenerset-route
+      name:
+        kind: AgentgatewayPolicy
+        name: listenerset-route-policy
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: listenerset-route
+          namespace: default
+      traffic:
+        timeout:
+          request: 5s
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: listenerset-route-policy
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: listenerset-gw
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

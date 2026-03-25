@@ -221,7 +221,7 @@ function mapToMatches(matchesData: any): Match[] {
       } else if (matchData.path.prefix) {
         match.path.pathPrefix = matchData.path.prefix;
       } else if (matchData.path.regex) {
-        match.path.regex = [matchData.path.regex, 0];
+        match.path.regex = matchData.path.regex;
       }
     }
 

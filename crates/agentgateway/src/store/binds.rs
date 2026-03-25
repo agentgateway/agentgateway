@@ -1106,17 +1106,17 @@ impl Store {
 		Ok(())
 	}
 	fn insert_xds_listener(&mut self, raw: XdsListener) -> anyhow::Result<()> {
-		let (lis, bind_name): (Listener, BindKey) = (&raw).try_into()?;
+		let (lis, bind_name) = Listener::try_from_xds(&raw)?;
 		self.insert_listener(lis, bind_name);
 		Ok(())
 	}
 	fn insert_xds_route(&mut self, raw: XdsRoute) -> anyhow::Result<()> {
-		let (route, listener_name): (Route, ListenerKey) = (&raw).try_into()?;
+		let (route, listener_name) = Route::try_from_xds(&raw)?;
 		self.insert_route(route, listener_name);
 		Ok(())
 	}
 	fn insert_xds_tcp_route(&mut self, raw: XdsTcpRoute) -> anyhow::Result<()> {
-		let (route, listener_name): (TCPRoute, ListenerKey) = (&raw).try_into()?;
+		let (route, listener_name) = TCPRoute::try_from_xds(&raw)?;
 		self.insert_tcp_route(route, listener_name);
 		Ok(())
 	}
@@ -1271,6 +1271,7 @@ mod tests {
 	use std::time::Duration;
 
 	use frozen_collections::FzHashSet;
+	use frozen_collections::SetQuery;
 
 	use super::*;
 	use crate::telemetry::log::OrderedStringMap;

@@ -14,7 +14,7 @@ use crate::types::discovery::Identity;
 pub async fn handshake(
 	mut hbone_pool: agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>,
 	ep: SocketAddr,
-	identity: Identity,
+	identities: Vec<Identity>,
 ) -> Result<Socket, Error> {
 	let uri = Uri::builder()
 		.scheme(Scheme::HTTPS)
@@ -31,7 +31,7 @@ pub async fn handshake(
 		.expect("builder with known status code should not fail");
 
 	let pool_key = Box::new(WorkloadKey {
-		dst_id: vec![identity],
+		dst_id: identities,
 		dst: SocketAddr::from((ep.ip(), 15008)),
 	});
 
@@ -56,7 +56,7 @@ pub async fn handshake_double(
 	ep: SocketAddr,
 	gateway_address: SocketAddr,
 	gateway_identity: Identity,
-	waypoint_identity: Identity,
+	waypoint_identities: Vec<Identity>,
 ) -> Result<Socket, Error> {
 	tracing::debug!(
 		"will use DOUBLE HBONE: gateway {} -> workload {}",
@@ -109,14 +109,14 @@ pub async fn handshake_double(
 	// Otherwise, we would only ever reach one workload in the remote cluster.
 	// We also need to abort tasks the right way to get graceful terminations.
 	let wl_key = WorkloadKey {
-		dst_id: vec![waypoint_identity.clone()],
+		dst_id: waypoint_identities.clone(),
 		dst: ep,
 	};
 
 	// Use the pool's certificate fetcher to get TLS config for the waypoint
 	let tls_config = pool
 		.fetch_certificate(WorkloadKey {
-			dst_id: vec![waypoint_identity.clone()],
+			dst_id: waypoint_identities,
 			dst: ep,
 		})
 		.await

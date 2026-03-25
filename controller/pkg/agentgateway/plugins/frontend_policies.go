@@ -24,7 +24,6 @@ const (
 func translateFrontendPolicyToAgw(
 	policyCtx PolicyCtx,
 	policy *agentgateway.AgentgatewayPolicy,
-	policyTarget *api.PolicyTarget,
 ) ([]*api.Policy, error) {
 	frontend := policy.Spec.Frontend
 	if frontend == nil {
@@ -34,54 +33,49 @@ func translateFrontendPolicyToAgw(
 	var errs []error
 
 	policyName := getFrontendPolicyName(policy.Namespace, policy.Name)
+	appendPolicy := func(kind string) func(*api.Policy, error) {
+		return func(p *api.Policy, err error) {
+			if err != nil {
+				name := fmt.Sprintf("%s %s", kind, policyName)
+				logger.Error("error processing policy", "policy", name, "error", err)
+				errs = append(errs, err)
+			}
+			if p != nil {
+				agwPolicies = append(agwPolicies, p)
+			}
+		}
+	}
 
 	if s := frontend.HTTP; s != nil {
-		pol := translateFrontendHTTP(policy, policyName, policyTarget)
-		agwPolicies = append(agwPolicies, pol)
+		appendPolicy("http")(translateFrontendHTTP(policy, policyName), nil)
 	}
 
 	if s := frontend.TLS; s != nil {
-		pol := translateFrontendTLS(policy, policyName, policyTarget)
-		agwPolicies = append(agwPolicies, pol)
+		appendPolicy("tls")(translateFrontendTLS(policy, policyName), nil)
 	}
 
 	if s := frontend.TCP; s != nil {
-		pol := translateFrontendTCP(policy, policyName, policyTarget)
-		agwPolicies = append(agwPolicies, pol)
+		appendPolicy("tcp")(translateFrontendTCP(policy, policyName), nil)
 	}
 
 	if s := frontend.AccessLog; s != nil {
-		pol, err := translateFrontendAccessLog(policyCtx, policy, policyName, policyTarget)
-		if err != nil {
-			logger.Error("error processing access log", "err", err)
-			errs = append(errs, err)
-		}
-		agwPolicies = append(agwPolicies, pol)
+		appendPolicy("accessLog")(translateFrontendAccessLog(policyCtx, policy, policyName))
 	}
 
 	if s := frontend.Tracing; s != nil {
-		pol, err := translateFrontendTracing(policyCtx, policy, policyName, policyTarget)
-		if err != nil {
-			logger.Error("error processing tracing", "err", err)
-			errs = append(errs, err)
-		}
-		if pol != nil {
-			agwPolicies = append(agwPolicies, pol)
-		}
+		appendPolicy("tracing")(translateFrontendTracing(policyCtx, policy, policyName))
 	}
 
 	return agwPolicies, errors.Join(errs...)
 }
 
-func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) (*api.Policy, error) {
+func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	tracing := policy.Spec.Frontend.Tracing
-	if tracing == nil {
-		return nil, nil
-	}
 
+	var backendErr error
 	provider, err := buildBackendRef(ctx, tracing.BackendRef, policy.Namespace)
 	if err != nil {
-		return nil, fmt.Errorf("failed to translate tracing backend ref: %v", err)
+		backendErr = fmt.Errorf("failed to translate tracing backend ref: %v", err)
 	}
 
 	var addAttributes []*api.FrontendPolicySpec_TracingAttribute
@@ -131,13 +125,12 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 		protocol = api.FrontendPolicySpec_Tracing_HTTP
 	default:
 		// default to HTTP
-		protocol = api.FrontendPolicySpec_Tracing_HTTP
+		protocol = api.FrontendPolicySpec_Tracing_GRPC
 	}
 
 	tracingPolicy := &api.Policy{
-		Key:    name + frontendTracingPolicySuffix + attachmentName(target),
-		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  name + frontendTracingPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Frontend{
 			Frontend: &api.FrontendPolicySpec{
 				Kind: &api.FrontendPolicySpec_Tracing_{Tracing: &api.FrontendPolicySpec_Tracing{
@@ -156,15 +149,15 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 
 	logger.Debug("generated tracing policy",
 		"policy", policy.Name,
-		"agentgateway_policy", tracingPolicy.Name,
-		"target", target)
+		"agentgateway_policy", tracingPolicy.Name)
 
-	return tracingPolicy, nil
+	return tracingPolicy, backendErr
 }
 
-func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) (*api.Policy, error) {
+func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	logging := policy.Spec.Frontend.AccessLog
 	spec := &api.FrontendPolicySpec_Logging{}
+	var backendErr error
 	if f := logging.Filter; f != nil {
 		spec.Filter = (*string)(f)
 	}
@@ -183,7 +176,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 	if otlp := logging.Otlp; otlp != nil {
 		provider, err := buildBackendRef(ctx, otlp.BackendRef, policy.Namespace)
 		if err != nil {
-			return nil, fmt.Errorf("failed to translate access log OTLP backend ref: %v", err)
+			backendErr = fmt.Errorf("failed to translate access log OTLP backend ref: %v", err)
 		}
 
 		var protocol api.FrontendPolicySpec_Logging_OtlpAccessLog_Protocol
@@ -209,9 +202,8 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 	}
 
 	loggingPolicy := &api.Policy{
-		Key:    name + frontendLoggingPolicySuffix + attachmentName(target),
-		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  name + frontendLoggingPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Frontend{
 			Frontend: &api.FrontendPolicySpec{
 				Kind: &api.FrontendPolicySpec_Logging_{
@@ -223,13 +215,12 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 
 	logger.Debug("generated logging policy",
 		"policy", policy.Name,
-		"agentgateway_policy", loggingPolicy.Name,
-		"target", target)
+		"agentgateway_policy", loggingPolicy.Name)
 
-	return loggingPolicy, nil
+	return loggingPolicy, backendErr
 }
 
-func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) *api.Policy {
+func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
 	tcp := policy.Spec.Frontend.TCP
 	spec := &api.FrontendPolicySpec_TCP{}
 	if ka := tcp.KeepAlive; ka != nil {
@@ -246,9 +237,8 @@ func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string, 
 	}
 
 	tcpPolicy := &api.Policy{
-		Key:    name + frontendTcpPolicySuffix + attachmentName(target),
-		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  name + frontendTcpPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Frontend{
 			Frontend: &api.FrontendPolicySpec{
 				Kind: &api.FrontendPolicySpec_Tcp{
@@ -260,8 +250,7 @@ func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string, 
 
 	logger.Debug("generated tcp policy",
 		"policy", policy.Name,
-		"agentgateway_policy", tcpPolicy.Name,
-		"target", target)
+		"agentgateway_policy", tcpPolicy.Name)
 
 	return tcpPolicy
 }
@@ -270,7 +259,7 @@ func castUint32[T ~int32](ka *T) *uint32 {
 	return ptr.Of((uint32)(*ka))
 }
 
-func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) *api.Policy {
+func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
 	tls := policy.Spec.Frontend.TLS
 	spec := &api.FrontendPolicySpec_TLS{}
 	if ka := tls.HandshakeTimeout; ka != nil {
@@ -336,9 +325,8 @@ func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string, 
 	}
 
 	tlsPolicy := &api.Policy{
-		Key:    name + frontendTlsPolicySuffix + attachmentName(target),
-		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  name + frontendTlsPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Frontend{
 			Frontend: &api.FrontendPolicySpec{
 				Kind: &api.FrontendPolicySpec_Tls{
@@ -350,13 +338,12 @@ func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string, 
 
 	logger.Debug("generated tls policy",
 		"policy", policy.Name,
-		"agentgateway_policy", tlsPolicy.Name,
-		"target", target)
+		"agentgateway_policy", tlsPolicy.Name)
 
 	return tlsPolicy
 }
 
-func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string, target *api.PolicyTarget) *api.Policy {
+func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
 	http := policy.Spec.Frontend.HTTP
 	spec := &api.FrontendPolicySpec_HTTP{}
 	if v := http.MaxBufferSize; v != nil {
@@ -385,9 +372,8 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string,
 	}
 
 	httpPolicy := &api.Policy{
-		Key:    name + frontendHttpPolicySuffix + attachmentName(target),
-		Name:   TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  name + frontendHttpPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Frontend{
 			Frontend: &api.FrontendPolicySpec{
 				Kind: &api.FrontendPolicySpec_Http{
@@ -399,8 +385,7 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string,
 
 	logger.Debug("generated http policy",
 		"policy", policy.Name,
-		"agentgateway_policy", httpPolicy.Name,
-		"target", target)
+		"agentgateway_policy", httpPolicy.Name)
 
 	return httpPolicy
 }

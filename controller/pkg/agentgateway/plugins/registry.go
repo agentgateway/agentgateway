@@ -9,15 +9,18 @@ import (
 type AgwPlugin struct {
 	AddResourceExtension *AddResourcesPlugin
 	ContributesPolicies  map[schema.GroupKind]PolicyPlugin
+	ContributesBackends  map[schema.GroupKind]BackendPlugin
 }
 
 func MergePlugins(plug ...AgwPlugin) AgwPlugin {
 	ret := AgwPlugin{
 		ContributesPolicies: make(map[schema.GroupKind]PolicyPlugin),
+		ContributesBackends: make(map[schema.GroupKind]BackendPlugin),
 	}
 	for _, p := range plug {
 		// Merge contributed policies
 		maps.Copy(ret.ContributesPolicies, p.ContributesPolicies)
+		maps.Copy(ret.ContributesBackends, p.ContributesBackends)
 		if p.AddResourceExtension != nil {
 			if ret.AddResourceExtension == nil {
 				ret.AddResourceExtension = &AddResourcesPlugin{}
@@ -34,14 +37,4 @@ func MergePlugins(plug ...AgwPlugin) AgwPlugin {
 		}
 	}
 	return ret
-}
-
-// Plugins registers all built-in policy plugins
-func Plugins(agw *AgwCollections) []AgwPlugin {
-	return []AgwPlugin{
-		NewAgentPlugin(agw),
-		NewInferencePlugin(agw),
-		NewA2APlugin(agw),
-		NewBackendTLSPlugin(agw),
-	}
 }

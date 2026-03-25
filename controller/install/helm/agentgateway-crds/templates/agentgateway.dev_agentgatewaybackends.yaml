@@ -6365,14 +6365,15 @@ spec:
                                     minLength: 1
                                     type: string
                                   region:
-                                    description: The location of the Google Cloud
-                                      Project that you use for the Vertex AI.
+                                    default: global
+                                    description: |-
+                                      The location of the Google Cloud Project that you use for the Vertex AI.
+                                      Defaults to global if not specified.
                                     maxLength: 64
                                     minLength: 1
                                     type: string
                                 required:
                                 - projectId
-                                - region
                                 type: object
                             required:
                             - name
@@ -6548,14 +6549,15 @@ spec:
                             minLength: 1
                             type: string
                           region:
-                            description: The location of the Google Cloud Project
-                              that you use for the Vertex AI.
+                            default: global
+                            description: |-
+                              The location of the Google Cloud Project that you use for the Vertex AI.
+                              Defaults to global if not specified.
                             maxLength: 64
                             minLength: 1
                             type: string
                         required:
                         - projectId
-                        - region
                         type: object
                     type: object
                     x-kubernetes-validations:

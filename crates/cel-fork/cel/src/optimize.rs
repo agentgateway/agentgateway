@@ -94,9 +94,7 @@ impl Optimize {
 				});
 				with_id(self.optimizer.optimize(&expr).unwrap_or(expr))
 			},
-			Expr::Struct(_) => {
-				todo!()
-			},
+			Expr::Struct(e) => with_id(Expr::Struct(e)),
 			Expr::List(v) => {
 				let nl: Vec<IdedExpr> = v.elements.into_iter().map(|a| self.optimize(a)).collect();
 				let expr = if nl.iter().all(|nl| is_lit(&nl.expr)) {

@@ -26,14 +26,12 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	agwir "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
-	agentgatewaybackend "github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/backend"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/krtxds"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/nack"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/status"
@@ -79,8 +77,8 @@ type Syncer struct {
 	gatewayCollectionOptions []translator.GatewayCollectionConfigOption
 
 	customResourceCollections   func(cfg CustomResourceCollectionsConfig)
-	workloadAddressProviderFunc func(model.WorkloadInfo) *workloadapi.Address
-	serviceAddressProviderFunc  func(model.ServiceInfo) *workloadapi.Address
+	buildAddressCollectionsFunc AgentgatewayAddressBuilderFunc
+	buildReferenceTypesFunc     func(agw *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes
 }
 
 func NewAgwSyncer(
@@ -106,8 +104,8 @@ func NewAgwSyncer(
 			translator.WithGatewayTransformationFunc(cfg.GatewayTransformationFunc),
 		},
 		customResourceCollections:   cfg.CustomResourceCollections,
-		workloadAddressProviderFunc: cfg.WorkloadAddressProviderFunc,
-		serviceAddressProviderFunc:  cfg.ServiceAddressProviderFunc,
+		buildAddressCollectionsFunc: cfg.BuildAddressCollectionsFunc,
+		buildReferenceTypesFunc:     cfg.BuildReferenceTypesFunc,
 	}
 	logger.Debug("init agentgateway Syncer", "controllername", controllerName)
 
@@ -161,11 +159,7 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	gatewayInitialStatus, gateways := s.buildGatewayCollection(gatewayClasses, listenerSets, refGrants, krtopts)
 
 	// Build Agw resources for gateway
-	agwResources, routeAttachments, ancestorCollection, policyStatuses, backendStatuses := s.buildAgwResources(gateways, refGrants, krtopts)
-	status.RegisterStatus(s.statusCollections, backendStatuses, translator.GetStatus)
-	for _, col := range policyStatuses {
-		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
-	}
+	agwResources, routeAttachments, ancestorCollection := s.buildAgwResources(gateways, refGrants, krtopts)
 
 	gatewayFinalStatus := s.buildFinalGatewayStatus(gatewayInitialStatus, routeAttachments, krtopts)
 	status.RegisterStatus(s.statusCollections, gatewayFinalStatus, translator.GetStatus)
@@ -174,13 +168,17 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	status.RegisterStatus(s.statusCollections, listenerSetFinalStatus, translator.GetStatus)
 
 	// Build address collections
-	addresses := s.buildAddressCollections(krtopts)
+	addressBuilder := s.buildAddressCollectionsFunc
+	if addressBuilder == nil {
+		addressBuilder = defaultBuildAddressCollections
+	}
+	addresses, hasSynced := addressBuilder(s.agwCollections, krtopts)
 
 	// Build XDS collection
 	s.buildXDSCollection(agwResources, addresses, krtopts)
 
 	// Set up sync dependencies
-	s.setupSyncDependencies(agwResources, addresses)
+	s.setupSyncDependencies(agwResources, addresses, hasSynced)
 
 	s.Outputs.Resources = agwResources
 	s.Outputs.Addresses = addresses
@@ -392,7 +390,7 @@ func (s *Syncer) buildListenerSetCollection(
 		}, krtopts.ToOptions("ListenerSets")...)
 }
 
-func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayListener], refGrants translator.ReferenceGrants, krtopts krtutil.KrtOptions) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], plugins.ReferenceIndex, PolicyStatusCollections, krt.StatusCollection[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus]) {
+func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayListener], refGrants translator.ReferenceGrants, krtopts krtutil.KrtOptions) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], plugins.ReferenceIndex) {
 	// filter gateway collections to only include gateways which use a built-in gateway class
 	// (resources for additional gateway classes should be created by the downstream providing them)
 	filteredGateways := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
@@ -447,6 +445,11 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	// Build routes
 	routeParents := translator.BuildRouteParents(filteredGateways)
 
+	referenceTypes := plugins.DefaultReferenceTypes(s.agwCollections)
+	if s.buildReferenceTypesFunc != nil {
+		referenceTypes = s.buildReferenceTypesFunc(s.agwCollections, referenceTypes)
+	}
+
 	routeInputs := translator.RouteContextInputs{
 		Grants:         refGrants,
 		RouteParents:   routeParents,
@@ -456,6 +459,7 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 		ServiceEntries: s.agwCollections.ServiceEntries,
 		InferencePools: s.agwCollections.InferencePools,
 		Backends:       s.agwCollections.Backends,
+		References:     referenceTypes,
 	}
 
 	agwRoutes, routeAttachments, ancestorBackends := translator.AgwRouteCollection(s.statusCollections, s.agwCollections.HTTPRoutes, s.agwCollections.GRPCRoutes, s.agwCollections.TCPRoutes, s.agwCollections.TLSRoutes, routeInputs, krtopts)
@@ -470,9 +474,16 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 		return []utils.TypedNamespacedName{o.Backend}
 	})
 	ancestorCollection := ancestorsIndex.AsCollection(append(krtopts.ToOptions("AncestorBackend"), utils.TypedNamespacedNameIndexCollectionFunc)...)
-	referenceIndex := plugins.BuildReferenceIndex(ancestorCollection, routeAttachmentsIndex)
+
+	// First, make the policies with access to the route-level attachment references.
+	referenceIndex := plugins.BuildReferenceIndex(ancestorCollection, routeAttachmentsIndex, referenceTypes)
 	agwPolicies, policyReferences, policyStatuses := AgwPolicyCollection(s.agwPlugins, referenceIndex, krtopts)
-	backendPolicyReferences := s.newAgwBackendPolicyReferences(s.agwCollections.Backends, krtopts)
+	for _, col := range policyStatuses {
+		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
+	}
+
+	// Next, build backend references.
+	backendPolicyReferences := AgwBackendReferencesCollection(s.agwPlugins, krtopts)
 	joinedPolicyReferences := krt.JoinCollection([]krt.Collection[*plugins.PolicyAttachment]{policyReferences, backendPolicyReferences}, krtopts.ToOptions("JoinPolicyAttachment")...)
 	policyReferencesIndex := krt.NewIndex(joinedPolicyReferences, "policyReferences", func(o *plugins.PolicyAttachment) []utils.TypedNamespacedName {
 		return []utils.TypedNamespacedName{o.Backend}
@@ -480,13 +491,15 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	policyReferencesIndexCollection := policyReferencesIndex.AsCollection(append(krtopts.ToOptions("PolicyReferencesIndex"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 	referenceIndex = referenceIndex.WithPolicyAttachments(policyReferencesIndexCollection)
 
-	// Create an agentgateway backend collection from the kgateway backend resources
-	agwBackendStatus, agwBackends := s.newAgwBackendCollection(s.agwCollections.Backends, referenceIndex, krtopts)
-
+	// Finally, build the backend collection with backend+route references
+	agwBackends, agwBackendStatus := AgwBackendCollection(s.agwPlugins, referenceIndex, krtopts)
+	for _, col := range agwBackendStatus {
+		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
+	}
 	// Join all Agw resources
 	allAgwResources := krt.JoinCollection([]krt.Collection[agwir.AgwResource]{binds, listeners, agwRoutes, agwPolicies, agwBackends}, krtopts.ToOptions("Resources")...)
 
-	return allAgwResources, routeAttachments, referenceIndex, policyStatuses, agwBackendStatus
+	return allAgwResources, routeAttachments, referenceIndex
 }
 
 // buildListenerFromGateway creates a listener resource from a gateway
@@ -511,38 +524,6 @@ func (s *Syncer) buildListenerFromGateway(obj *translator.GatewayListener) *agwi
 		Namespace: obj.ParentGateway.Namespace,
 		Name:      obj.ParentGateway.Name,
 	}, translator.AgwListener{l}))
-}
-
-// newAgwBackendPolicyReferences creates the ADP backend collection for agent gateway resources
-func (s *Syncer) newAgwBackendPolicyReferences(
-	finalBackends krt.Collection[*agentgateway.AgentgatewayBackend],
-	krtopts krtutil.KrtOptions,
-) krt.Collection[*plugins.PolicyAttachment] {
-	policyReferences := krt.NewManyCollection(finalBackends, func(ctx krt.HandlerContext, backend *agentgateway.AgentgatewayBackend) []*plugins.PolicyAttachment {
-		return agentgatewaybackend.BuildAgwBackendReferences(backend)
-	}, krtopts.ToOptions("BackendPolicyAttachments")...)
-	return policyReferences
-}
-
-// newAgwBackendCollection creates the ADP backend collection for agent gateway resources
-func (s *Syncer) newAgwBackendCollection(
-	finalBackends krt.Collection[*agentgateway.AgentgatewayBackend],
-	references plugins.ReferenceIndex,
-	krtopts krtutil.KrtOptions,
-) (
-	krt.StatusCollection[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus],
-	krt.Collection[agwir.AgwResource],
-) {
-	return krt.NewStatusManyCollection(finalBackends, func(ctx krt.HandlerContext, backend *agentgateway.AgentgatewayBackend) (
-		*agentgateway.AgentgatewayBackendStatus,
-		[]agwir.AgwResource,
-	) {
-		pc := plugins.PolicyCtx{
-			Krt:         ctx,
-			Collections: s.agwCollections,
-		}
-		return agentgatewaybackend.TranslateAgwBackend(pc, backend, references)
-	}, krtopts.ToOptions("Backends")...)
 }
 
 // getProtocolAndTLSConfig extracts protocol and TLS configuration from a gateway
@@ -605,8 +586,9 @@ func (s *Syncer) getBindProtocol(obj *translator.GatewayListener) api.Bind_Proto
 	}
 }
 
-func (s *Syncer) buildAddressCollections(krtopts krtutil.KrtOptions) krt.Collection[Address] {
-	cols := s.agwCollections
+// defaultBuildAddressCollections is the default implementation for building address collections
+// using the istio ambient builder. It can be passed via WithBuildAddressCollections to the syncer.
+func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtutil.KrtOptions) (krt.Collection[Address], func() bool) {
 	opts := krtopts.ToIstio()
 	clusterId := cluster.ID(cols.ClusterID)
 	Networks := ambient.BuildNetworkCollections(cols.Namespaces, cols.Gateways, ambient.Options{
@@ -650,15 +632,14 @@ func (s *Syncer) buildAddressCollections(krtopts krtutil.KrtOptions) krt.Collect
 		true,
 	)
 	// Istio doesn't include InferencePools, but we need them; add our own after the Istio build
-	inferencePoolsInfo := krt.NewCollection(cols.InferencePools, inferencePoolBuilder(),
+	inferencePoolsInfo := krt.NewCollection(cols.InferencePools, InferencePoolBuilder(),
 		krtopts.ToOptions("InferencePools")...)
 	services = krt.JoinCollection([]krt.Collection[model.ServiceInfo]{services, inferencePoolsInfo}, krt.WithJoinUnchecked())
 
-	// TODO: add InferencePools
 	nodeLocality := ambient.NodesCollection(cols.Nodes, opts.WithName("NodeLocality")...)
 	workloads := builder.WorkloadsCollection(
 		cols.Pods,
-		nodeLocality, // NodeLocality,
+		nodeLocality,
 		meshConfig,
 		// Authz/Authn are not use for agentgateway, ignore
 		krt.NewStaticCollection[model.WorkloadAuthorization](nil, nil),
@@ -672,32 +653,15 @@ func (s *Syncer) buildAddressCollections(krtopts krtutil.KrtOptions) krt.Collect
 		opts,
 	)
 
-	// Build address collections
 	workloadAddresses := krt.MapCollection(workloads, func(t model.WorkloadInfo) Address {
-		// If AsAddress is not populated and we have a provider function, use it to populate AsAddress
-		// This is called after WorkloadInfo objects are created from Kubernetes resources by Istio's
-		// ambient workload builder, but before they are wrapped in Address structs for XDS.
-		if t.AsAddress.Address == nil && s.workloadAddressProviderFunc != nil {
-			if addr := s.workloadAddressProviderFunc(t); addr != nil {
-				setWorkloadAddress(&t, addr)
-			}
-		}
 		return Address{Workload: &t}
 	})
 	svcAddresses := krt.MapCollection(services, func(t model.ServiceInfo) Address {
-		// If AsAddress is not populated and we have a provider function, use it to populate AsAddress
-		// This is called after ServiceInfo objects are created from Kubernetes resources by Istio's
-		// ambient service builder, but before they are wrapped in Address structs for XDS.
-		if t.AsAddress.Address == nil && s.serviceAddressProviderFunc != nil {
-			if addr := s.serviceAddressProviderFunc(t); addr != nil {
-				setServiceAddress(&t, addr)
-			}
-		}
 		return Address{Service: &t}
 	})
 
 	adpAddresses := krt.JoinCollection([]krt.Collection[Address]{svcAddresses, workloadAddresses}, krtopts.ToOptions("Addresses")...)
-	return adpAddresses
+	return adpAddresses, func() bool { return true }
 }
 
 func (s *Syncer) buildXDSCollection(
@@ -716,11 +680,16 @@ func (s *Syncer) buildXDSCollection(
 func (s *Syncer) setupSyncDependencies(
 	agwResources krt.Collection[agwir.AgwResource],
 	addresses krt.Collection[Address],
+	additionalSync func() bool,
 ) {
+	if additionalSync == nil {
+		additionalSync = func() bool { return true }
+	}
 	s.waitForSync = []cache.InformerSynced{
 		agwResources.HasSynced,
 		addresses.HasSynced,
 		s.NackPublisher.HasSynced,
+		additionalSync,
 	}
 }
 

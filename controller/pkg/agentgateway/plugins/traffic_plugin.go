@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -26,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	"sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -37,7 +35,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
-	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
 
 const (
@@ -75,9 +72,9 @@ func init() {
 	}
 }
 
-// convertStatusCollection converts the specific TrafficPolicy status collection
+// ConvertStatusCollection converts the specific TrafficPolicy status collection
 // to the generic controllers.Object status collection expected by the interface
-func convertStatusCollection[T controllers.Object, S any](col krt.Collection[krt.ObjectWithStatus[T, S]]) krt.StatusCollection[controllers.Object, any] {
+func ConvertStatusCollection[T controllers.Object, S any](col krt.Collection[krt.ObjectWithStatus[T, S]]) krt.StatusCollection[controllers.Object, any] {
 	return krt.MapCollection(col, func(item krt.ObjectWithStatus[T, S]) krt.ObjectWithStatus[controllers.Object, any] {
 		return krt.ObjectWithStatus[controllers.Object, any]{
 			Obj:    controllers.Object(item.Obj),
@@ -101,7 +98,7 @@ func NewAgentPlugin(agw *AgwCollections) AgwPlugin {
 					) {
 						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References)
 					}, agw.KrtOpts.ToOptions("AgentgatewayPolicy")...)
-					return convertStatusCollection(policyStatusCol), policyCol
+					return ConvertStatusCollection(policyStatusCol), policyCol
 				},
 				BuildReferences: func(input PolicyPluginInput) krt.Collection[*PolicyAttachment] {
 					return backendReferences
@@ -114,6 +111,7 @@ func NewAgentPlugin(agw *AgwCollections) AgwPlugin {
 type PolicyCtx struct {
 	Krt         krt.HandlerContext
 	Collections *AgwCollections
+	References  ReferenceIndex
 }
 
 type ResolvedTarget struct {
@@ -127,160 +125,68 @@ type ResolvedTarget struct {
 func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy, agw *AgwCollections, references ReferenceIndex) (*gwv1.PolicyStatus, []AgwPolicy) {
 	var agwPolicies []AgwPolicy
 
-	pctx := PolicyCtx{Krt: ctx, Collections: agw}
-	var policyTargets []ResolvedTarget
+	pctx := PolicyCtx{Krt: ctx, Collections: agw, References: references}
+	var ancestors []gwv1.PolicyAncestorStatus
+	var attachmentErrors []string
 	// TODO: add selectors
+	baseTranslatedPolicies, baseErr := translatePolicyToAgw(pctx, policy)
+	baseConds := setPolicyConditions(baseErr, len(baseTranslatedPolicies) > 0)
 	for _, target := range policy.Spec.TargetRefs {
-		var policyTarget *api.PolicyTarget
 		gk := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
+
+		policyTarget, targetExists := references.PolicyTarget(ctx, policy.Namespace, target.Name, gk, target.SectionName)
+		if policyTarget == nil {
+			// This should be impossible, verified by CEL validation
+			logger.Warn("unsupported target kind", "kind", target.Kind, "policy", policy.Name)
+			continue
+		}
 
 		gatewayTargets := references.LookupGatewaysForTarget(ctx, utils.TypedNamespacedName{
 			NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: string(target.Name)},
 			Kind:           gk.Kind,
 		}).UnsortedList()
 
-		switch gk {
-		case wellknown.GatewayGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.GatewayTarget(policy.Namespace, string(target.Name), target.SectionName),
-			}
-		case wellknown.HTTPRouteGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.RouteTarget(policy.Namespace, string(target.Name), wellknown.HTTPRouteGVK.Kind, target.SectionName),
-			}
-		case wellknown.GRPCRouteGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.RouteTarget(policy.Namespace, string(target.Name), wellknown.GRPCRouteGVK.Kind, target.SectionName),
-			}
-		case wellknown.AgentgatewayBackendGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.BackendTarget(policy.Namespace, string(target.Name), target.SectionName),
-			}
-		case wellknown.ServiceGVK.GroupKind():
-			policyTarget = &api.PolicyTarget{
-				Kind: utils.ServiceTarget(policy.Namespace, string(target.Name), target.SectionName),
-			}
-			// TODO: add support for inferencepool https://github.com/kgateway-dev/kgateway/issues/13295
-			// TODO: add support for ListenerSet https://github.com/kgateway-dev/kgateway/issues/13296
-			// If we add ListenerSet, we MUST update ReferenceIndex
-
-		default:
-			// TODO(npolshak): support attaching policies to k8s services, serviceentries, and other backends
-			logger.Warn("unsupported target kind", "kind", target.Kind, "policy", policy.Name)
-			continue
-		}
-
-		ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(ctx, policy.Namespace, gk, target.Name, agw)
-
-		policyTargets = append(policyTargets, ResolvedTarget{
-			AgentgatewayTarget: policyTarget,
-			GatewayTargets:     gatewayTargets,
-			AncestorRefs:       ancestorRefs,
-			AttachmentError:    attachmentErr,
-		})
-	}
-
-	var ancestors []gwv1.PolicyAncestorStatus
-	for _, policyTarget := range policyTargets {
-		translatedPolicies, err := translatePolicyToAgw(pctx, policy, policyTarget.AgentgatewayTarget)
+		translatedPolicies := clonePoliciesForTarget(baseTranslatedPolicies, policyTarget)
 		for _, translatedPolicy := range translatedPolicies {
-			for _, gatewayTarget := range policyTarget.GatewayTargets {
+			for _, gatewayTarget := range gatewayTargets {
 				agwPolicies = append(agwPolicies, AgwPolicy{
 					Gateway: ptr.Of(gatewayTarget),
 					Policy:  translatedPolicy,
 				})
 			}
 		}
-		var conds []metav1.Condition
-		if err != nil {
-			// If we produced some policies alongside errors, treat as partial validity
-			if len(translatedPolicies) > 0 {
-				meta.SetStatusCondition(&conds, metav1.Condition{
-					Type:    string(shared.PolicyConditionAccepted),
-					Status:  metav1.ConditionTrue,
-					Reason:  string(shared.PolicyReasonPartiallyValid),
-					Message: err.Error(),
-				})
-			} else {
-				// No policies produced and error present -> invalid
-				meta.SetStatusCondition(&conds, metav1.Condition{
-					Type:    string(shared.PolicyConditionAccepted),
-					Status:  metav1.ConditionTrue,
-					Reason:  string(shared.PolicyReasonInvalid),
-					Message: err.Error(),
-				})
-				meta.SetStatusCondition(&conds, metav1.Condition{
-					Type:    string(shared.PolicyConditionAttached),
-					Status:  metav1.ConditionFalse,
-					Reason:  string(shared.PolicyReasonPending),
-					Message: "Policy is not attached due to invalid status",
-				})
-			}
-		} else {
-			// Check for partial validity
-			// Build success conditions per ancestor
-			meta.SetStatusCondition(&conds, metav1.Condition{
-				Type:    string(shared.PolicyConditionAccepted),
-				Status:  metav1.ConditionTrue,
-				Reason:  string(shared.PolicyReasonValid),
-				Message: reporter.PolicyAcceptedMsg,
-			})
-			meta.SetStatusCondition(&conds, metav1.Condition{
-				Type:    string(shared.PolicyConditionAttached),
-				Status:  metav1.ConditionTrue,
-				Reason:  string(shared.PolicyReasonAttached),
-				Message: reporter.PolicyAttachedMsg,
-			})
+
+		ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(ctx, policy.Namespace, gk, target.Name, targetExists, references)
+		if attachmentErr != "" {
+			attachmentErrors = append(attachmentErrors, attachmentErr)
 		}
 
-		// If we cannot resolve this policy target to a Gateway (e.g., missing HTTPRoute),
-		// report the policy as not attached instead of falling back to a higher-cardinality ancestor.
-		if policyTarget.AttachmentError != "" {
-			meta.SetStatusCondition(&conds, metav1.Condition{
-				Type:    string(shared.PolicyConditionAccepted),
-				Status:  metav1.ConditionTrue,
-				Reason:  string(shared.PolicyReasonValid),
-				Message: reporter.PolicyAcceptedMsg,
-			})
-			meta.SetStatusCondition(&conds, metav1.Condition{
-				Type:    string(shared.PolicyConditionAttached),
-				Status:  metav1.ConditionFalse,
-				Reason:  string(shared.PolicyReasonPending),
-				Message: policyTarget.AttachmentError,
-			})
-		}
-		// TODO: validate the target exists with dataplane https://github.com/kgateway-dev/kgateway/issues/12275
-		// Ensure LastTransitionTime is set for all conditions
-		for i := range conds {
-			if conds[i].LastTransitionTime.IsZero() {
-				conds[i].LastTransitionTime = metav1.Now()
+		for _, ar := range ancestorRefs {
+			// A policy should report at most one status per Gateway parent, even if multiple
+			// targetRefs resolve to the same Gateway.
+			if slices.IndexFunc(ancestors, func(existing gwv1.PolicyAncestorStatus) bool {
+				return existing.ControllerName == gwv1.GatewayController(agw.ControllerName) && parentRefEqual(existing.AncestorRef, ar)
+			}) != -1 {
+				continue
 			}
+			ancestors = append(ancestors, gwv1.PolicyAncestorStatus{
+				AncestorRef:    ar,
+				ControllerName: gwv1.GatewayController(agw.ControllerName),
+				Conditions:     baseConds,
+			})
 		}
+	}
 
-		// Policy status SHOULD be reported per Gateway
-		// If we couldn't resolve a Gateway ancestor, report status against a summary ref.
-		appendAncestor := func(ar gwv1.ParentReference) {
-			// Only append valid ancestors: require non-empty controllerName and parentRef name
-			if agw.ControllerName != "" && string(ar.Name) != "" {
-				ancestors = append(ancestors, gwv1.PolicyAncestorStatus{
-					AncestorRef:    ar,
-					ControllerName: v1alpha2.GatewayController(agw.ControllerName),
-					Conditions:     conds,
-				})
-			}
-		}
-		if len(policyTarget.AncestorRefs) > 0 {
-			for _, ar := range policyTarget.AncestorRefs {
-				appendAncestor(ar)
-			}
-		} else if policyTarget.AttachmentError != "" {
-			// no ancestor refs resolved due to attachment error, report status against a summary ref
-			logger.Warn("failed to resolve ancestor refs", "error", policyTarget.AttachmentError)
-			appendAncestor(gwv1.ParentReference{
+	if len(attachmentErrors) > 0 {
+		logger.Warn("failed to resolve one or more ancestor refs", "errors", attachmentErrors)
+		ancestors = append(ancestors, gwv1.PolicyAncestorStatus{
+			AncestorRef: gwv1.ParentReference{
 				Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayPolicyGVK.Group)),
 				Name:  "StatusSummary",
-			})
-		}
+			},
+			ControllerName: gwv1.GatewayController(agw.ControllerName),
+			Conditions:     setAttachmentErrorConditions(baseConds, attachmentErrors),
+		})
 	}
 
 	// Build final status from accumulated ancestors
@@ -316,114 +222,126 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 	return &status, agwPolicies
 }
 
+func setPolicyConditions(err error, hasTranslatedPolicies bool) []metav1.Condition {
+	var conds []metav1.Condition
+	if err != nil {
+		// If we produced some policies alongside errors, treat as partial validity
+		if hasTranslatedPolicies {
+			meta.SetStatusCondition(&conds, metav1.Condition{
+				Type:    string(shared.PolicyConditionAccepted),
+				Status:  metav1.ConditionTrue,
+				Reason:  string(shared.PolicyReasonPartiallyValid),
+				Message: err.Error(),
+			})
+		} else {
+			// No policies produced and error present -> invalid
+			meta.SetStatusCondition(&conds, metav1.Condition{
+				Type:    string(shared.PolicyConditionAccepted),
+				Status:  metav1.ConditionTrue,
+				Reason:  string(shared.PolicyReasonInvalid),
+				Message: err.Error(),
+			})
+			meta.SetStatusCondition(&conds, metav1.Condition{
+				Type:    string(shared.PolicyConditionAttached),
+				Status:  metav1.ConditionFalse,
+				Reason:  string(shared.PolicyReasonPending),
+				Message: "Policy is not attached due to invalid status",
+			})
+		}
+	} else {
+		// Check for partial validity
+		// Build success conditions per ancestor
+		meta.SetStatusCondition(&conds, metav1.Condition{
+			Type:    string(shared.PolicyConditionAccepted),
+			Status:  metav1.ConditionTrue,
+			Reason:  string(shared.PolicyReasonValid),
+			Message: reporter.PolicyAcceptedMsg,
+		})
+		meta.SetStatusCondition(&conds, metav1.Condition{
+			Type:    string(shared.PolicyConditionAttached),
+			Status:  metav1.ConditionTrue,
+			Reason:  string(shared.PolicyReasonAttached),
+			Message: reporter.PolicyAttachedMsg,
+		})
+	}
+	// TODO: validate the target exists with dataplane https://github.com/kgateway-dev/kgateway/issues/12275
+	// Ensure LastTransitionTime is set for all conditions
+	for i := range conds {
+		if conds[i].LastTransitionTime.IsZero() {
+			conds[i].LastTransitionTime = metav1.Now()
+		}
+	}
+	return conds
+}
+
+func setAttachmentErrorConditions(baseConds []metav1.Condition, attachmentErrors []string) []metav1.Condition {
+	conds := append([]metav1.Condition(nil), baseConds...)
+	meta.SetStatusCondition(&conds, metav1.Condition{
+		Type:    string(shared.PolicyConditionAttached),
+		Status:  metav1.ConditionFalse,
+		Reason:  string(shared.PolicyReasonPending),
+		Message: strings.Join(attachmentErrors, "\n"),
+	})
+	return conds
+}
+
 func resolvePolicyAncestorRefs(
 	ctx krt.HandlerContext,
 	policyNamespace string,
 	targetGK schema.GroupKind,
 	targetName gwv1.ObjectName,
-	agw *AgwCollections,
+	targetExists bool,
+	references ReferenceIndex,
 ) ([]gwv1.ParentReference, string) {
-	// Default: fall back to the original targetRef (for non-route targets)
-	fallback := []gwv1.ParentReference{{
-		Name:      targetName,
-		Namespace: ptr.Of(gwv1.Namespace(policyNamespace)),
-		Group:     ptr.Of(gwv1.Group(targetGK.Group)),
-		Kind:      ptr.Of(gwv1.Kind(targetGK.Kind)),
-	}}
-
-	// If the policy is attached directly to a Gateway, that Gateway is the ancestor.
-	if targetGK == wellknown.GatewayGVK.GroupKind() {
-		key := policyNamespace + "/" + string(targetName)
-		gw := ptr.Flatten(krt.FetchOne(ctx, agw.Gateways, krt.FilterKey(key)))
-		if gw == nil {
-			return nil, fmt.Sprintf("Policy is not attached: Gateway %s/%s not found", policyNamespace, targetName)
-		}
-		// TODO: Validate the listener exists to avoid reporting attached for a non-existent sectionName
-		// Requires listeners attachment to be supported: https://github.com/agentgateway/agentgateway/issues/825
-		return fallback, ""
+	if !targetExists {
+		return nil, fmt.Sprintf("Policy is not attached: %s %s/%s not found", targetGK.Kind, policyNamespace, targetName)
 	}
 
-	// If attached to an AgentgatewayBackend, the backend itself is the ancestor.
-	if targetGK == wellknown.AgentgatewayBackendGVK.GroupKind() {
-		key := policyNamespace + "/" + string(targetName)
-		be := ptr.Flatten(krt.FetchOne(ctx, agw.Backends, krt.FilterKey(key)))
-		if be == nil {
-			return nil, fmt.Sprintf("Policy is not attached: AgentgatewayBackend %s/%s not found", policyNamespace, targetName)
-		}
-		return []gwv1.ParentReference{{
-			Name:      targetName,
-			Namespace: ptr.Of(gwv1.Namespace(policyNamespace)),
-			Group:     ptr.Of(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-			Kind:      ptr.Of(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
-		}}, ""
+	object := utils.TypedNamespacedName{
+		NamespacedName: types.NamespacedName{Namespace: policyNamespace, Name: string(targetName)},
+		Kind:           targetGK.Kind,
+	}
+	gatewayTargets := references.LookupGatewaysForTarget(ctx, object).UnsortedList()
+	if len(gatewayTargets) == 0 {
+		return nil, fmt.Sprintf("Policy is not attached: %s %s/%s is not attached to any Gateway", targetGK.Kind, policyNamespace, targetName)
 	}
 
-	// If attached to an HTTPRoute, prefer the Gateway(s) the route attaches to.
-	// This follows Gateway API guidance to use Gateway as the PolicyAncestorStatus when possible.
-	if targetGK == wellknown.HTTPRouteGVK.GroupKind() {
-		key := policyNamespace + "/" + string(targetName)
-		route := ptr.Flatten(krt.FetchOne(ctx, agw.HTTPRoutes, krt.FilterKey(key)))
-		if route == nil {
-			return nil, fmt.Sprintf("Policy is not attached: HTTPRoute %s/%s not found", policyNamespace, targetName)
-		}
-
-		seen := make(map[types.NamespacedName]struct{})
-		var refs []gwv1.ParentReference
-		for _, pr := range route.Spec.ParentRefs {
-			kind := ptr.OrDefault(pr.Kind, gwv1.Kind(wellknown.GatewayKind))
-			group := ptr.OrDefault(pr.Group, gwv1.Group(wellknown.GatewayGVK.Group))
-			if string(kind) != wellknown.GatewayKind || string(group) != wellknown.GatewayGVK.Group {
-				continue
-			}
-			ns := string(ptr.OrDefault(pr.Namespace, gwv1.Namespace(route.Namespace)))
-			nn := types.NamespacedName{Namespace: ns, Name: string(pr.Name)}
-			if _, ok := seen[nn]; ok {
-				continue
-			}
-			seen[nn] = struct{}{}
-			refs = append(refs, gwv1.ParentReference{
-				Name:      pr.Name,
-				Namespace: ptr.Of(gwv1.Namespace(ns)),
-				Group:     ptr.Of(gwv1.Group(wellknown.GatewayGVK.Group)),
-				Kind:      ptr.Of(gwv1.Kind(wellknown.GatewayKind)),
-				// NOTE: Intentionally omit SectionName; we report per Gateway, not per listener.
-			})
-		}
-
-		if len(refs) == 0 {
-			return nil, fmt.Sprintf("Policy is not attached: HTTPRoute %s/%s has no Gateway parentRefs", policyNamespace, targetName)
-		}
-		slices.SortStableFunc(refs, func(a, b gwv1.ParentReference) int {
-			return strings.Compare(reports.ParentString(a), reports.ParentString(b))
+	refs := make([]gwv1.ParentReference, 0, len(gatewayTargets))
+	for _, gatewayTarget := range gatewayTargets {
+		refs = append(refs, gwv1.ParentReference{
+			Name:      gwv1.ObjectName(gatewayTarget.Name),
+			Namespace: ptr.Of(gwv1.Namespace(gatewayTarget.Namespace)),
+			Group:     ptr.Of(gwv1.Group(wellknown.GatewayGVK.Group)),
+			Kind:      ptr.Of(gwv1.Kind(wellknown.GatewayGVK.Kind)),
 		})
-		return refs, ""
 	}
-
-	return fallback, ""
+	slices.SortStableFunc(refs, func(a, b gwv1.ParentReference) int {
+		return strings.Compare(reports.ParentString(a), reports.ParentString(b))
+	})
+	return refs, ""
 }
 
 // translateTrafficPolicyToAgw converts a TrafficPolicy to agentgateway Policy resources
 func translatePolicyToAgw(
 	ctx PolicyCtx,
 	policy *agentgateway.AgentgatewayPolicy,
-	policyTarget *api.PolicyTarget,
 ) ([]*api.Policy, error) {
 	agwPolicies := make([]*api.Policy, 0)
 	var errs []error
 
-	frontend, err := translateFrontendPolicyToAgw(ctx, policy, policyTarget)
+	frontend, err := translateFrontendPolicyToAgw(ctx, policy)
 	agwPolicies = append(agwPolicies, frontend...)
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	traffic, err := translateTrafficPolicyToAgw(ctx, policy, policyTarget)
+	traffic, err := translateTrafficPolicyToAgw(ctx, policy)
 	agwPolicies = append(agwPolicies, traffic...)
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	backend, err := translateBackendPolicyToAgw(ctx, policy, policyTarget)
+	backend, err := translateBackendPolicyToAgw(ctx, policy)
 	agwPolicies = append(agwPolicies, backend...)
 	if err != nil {
 		errs = append(errs, err)
@@ -432,10 +350,23 @@ func translatePolicyToAgw(
 	return agwPolicies, errors.Join(errs...)
 }
 
+func clonePoliciesForTarget(base []*api.Policy, policyTarget *api.PolicyTarget) []*api.Policy {
+	if len(base) == 0 {
+		return nil
+	}
+	out := make([]*api.Policy, 0, len(base))
+	for _, p := range base {
+		clone := protomarshal.ShallowClone(p)
+		clone.Key += attachmentName(policyTarget)
+		clone.Target = policyTarget
+		out = append(out, clone)
+	}
+	return out
+}
+
 func translateTrafficPolicyToAgw(
 	ctx PolicyCtx,
 	policy *agentgateway.AgentgatewayPolicy,
-	policyTarget *api.PolicyTarget,
 ) ([]*api.Policy, error) {
 	traffic := policy.Spec.Traffic
 	if traffic == nil {
@@ -449,143 +380,101 @@ func translateTrafficPolicyToAgw(
 	basePolicyName := getTrafficPolicyName(policy.Namespace, policy.Name)
 	policyName := config.NamespacedName(policy)
 
+	appendPolicy := func(kind string) func(*api.Policy, error) {
+		return func(p *api.Policy, err error) {
+			if err != nil {
+				name := fmt.Sprintf("%s %s", kind, policyName)
+				logger.Error("error processing policy", "policy", name, "error", err)
+				errs = append(errs, err)
+			}
+			if p != nil {
+				agwPolicies = append(agwPolicies, p)
+			}
+		}
+	}
+
+	appendPolicies := func(kind string) func([]*api.Policy, error) {
+		return func(policies []*api.Policy, err error) {
+			if err != nil {
+				name := fmt.Sprintf("%s %s", kind, policyName)
+				logger.Error("error processing policy", "policy", name, "error", err)
+				errs = append(errs, err)
+			}
+			agwPolicies = append(agwPolicies, policies...)
+		}
+	}
+
 	// Convert ExtAuth policy if present
 	if traffic.ExtAuth != nil {
-		extAuthPolicy, err := processExtAuthPolicy(ctx, traffic.ExtAuth, traffic.Phase, basePolicyName, policyName, policyTarget)
-		if err != nil {
-			logger.Error("error processing ExtAuth policy", "error", err)
-			errs = append(errs, err)
-		}
-		if extAuthPolicy != nil {
-			agwPolicies = append(agwPolicies, extAuthPolicy)
-		}
+		appendPolicy("extAuth")(processExtAuthPolicy(ctx, traffic.ExtAuth, traffic.Phase, basePolicyName, policyName))
 	}
 
 	// Convert ExtProc policy if present
 	if traffic.ExtProc != nil {
-		extProcPolicy, err := processExtProcPolicy(ctx, traffic.ExtProc, traffic.Phase, basePolicyName, policyName, policyTarget)
-		if err != nil {
-			logger.Error("error processing ExtProc policy", "error", err)
-			errs = append(errs, err)
-		}
-		if extProcPolicy != nil {
-			agwPolicies = append(agwPolicies, extProcPolicy)
-		}
+		appendPolicy("extProc")(processExtProcPolicy(ctx, traffic.ExtProc, traffic.Phase, basePolicyName, policyName))
 	}
 
 	// Convert Authorization policy if present
 	if traffic.Authorization != nil {
-		if rbacPolicy := processAuthorizationPolicy(traffic.Authorization, basePolicyName, policyName, policyTarget); rbacPolicy != nil {
-			agwPolicies = append(agwPolicies, rbacPolicy)
-		}
+		appendPolicy("authorization")(processAuthorizationPolicy(traffic.Authorization, basePolicyName, policyName), nil)
 	}
 
 	// Process RateLimit policies if present
 	if traffic.RateLimit != nil {
-		rateLimitPolicies, err := processRateLimitPolicy(ctx, traffic.RateLimit, basePolicyName, policyName, policyTarget)
-		if err != nil {
-			logger.Error("error processing rate limit policy", "error", err)
-			errs = append(errs, err)
-		}
-		agwPolicies = append(agwPolicies, rateLimitPolicies...)
+		appendPolicies("rateLimit")(processRateLimitPolicy(ctx, traffic.RateLimit, basePolicyName, policyName))
 	}
 
 	// Process transformation policies if present
 	if traffic.Transformation != nil {
-		transformationPolicy, err := processTransformationPolicy(traffic.Transformation, traffic.Phase, basePolicyName, policyName, policyTarget)
-		if err != nil {
-			logger.Error("error processing transformation policy", "error", err)
-			errs = append(errs, err)
-		}
-		if transformationPolicy != nil {
-			agwPolicies = append(agwPolicies, transformationPolicy)
-		}
+		appendPolicy("transformation")(processTransformationPolicy(traffic.Transformation, traffic.Phase, basePolicyName, policyName))
 	}
 
 	// Process CSRF policies if present
 	if traffic.Csrf != nil {
-		if csrfPolicy := processCSRFPolicy(traffic.Csrf, basePolicyName, policyName, policyTarget); csrfPolicy != nil {
-			agwPolicies = append(agwPolicies, csrfPolicy)
-		}
+		appendPolicy("csrf")(processCSRFPolicy(traffic.Csrf, basePolicyName, policyName), nil)
 	}
 
 	if traffic.Cors != nil {
-		if corsPolicy := processCorsPolicy(traffic.Cors, basePolicyName, policyName, policyTarget); corsPolicy != nil {
-			agwPolicies = append(agwPolicies, corsPolicy)
-		}
+		appendPolicy("cors")(processCorsPolicy(traffic.Cors, basePolicyName, policyName), nil)
 	}
 
 	if traffic.HeaderModifiers != nil {
-		headerModifiersPolicies := processHeaderModifierPolicy(traffic.HeaderModifiers, basePolicyName, policyName, policyTarget)
-		agwPolicies = append(agwPolicies, headerModifiersPolicies...)
+		appendPolicies("headerModifiers")(processHeaderModifierPolicy(traffic.HeaderModifiers, basePolicyName, policyName), nil)
 	}
 
 	if traffic.HostnameRewrite != nil {
-		if hostnameRewritePolicy := processHostnameRewritePolicy(traffic.HostnameRewrite, basePolicyName, policyName, policyTarget); hostnameRewritePolicy != nil {
-			agwPolicies = append(agwPolicies, hostnameRewritePolicy)
-		}
+		appendPolicy("hostnameRewrite")(processHostnameRewritePolicy(traffic.HostnameRewrite, basePolicyName, policyName), nil)
 	}
 
 	if traffic.Timeouts != nil {
-		if timeoutPolicy := processTimeoutPolicy(traffic.Timeouts, basePolicyName, policyName, policyTarget); timeoutPolicy != nil {
-			agwPolicies = append(agwPolicies, timeoutPolicy)
-		}
+		appendPolicy("timeouts")(processTimeoutPolicy(traffic.Timeouts, basePolicyName, policyName), nil)
 	}
 
 	if traffic.Retry != nil {
-		retryPolicy, err := processRetriesPolicy(traffic.Retry, basePolicyName, policyName, policyTarget)
-		if err != nil {
-			logger.Error("error processing retries policy", "error", err)
-			errs = append(errs, err)
-		}
-		if retryPolicy != nil {
-			agwPolicies = append(agwPolicies, retryPolicy)
-		}
+		appendPolicy("retry")(processRetriesPolicy(traffic.Retry, basePolicyName, policyName))
 	}
 
 	if traffic.DirectResponse != nil {
-		if directRespPolicy := processDirectResponse(traffic.DirectResponse, basePolicyName, policyName, policyTarget); directRespPolicy != nil {
-			agwPolicies = append(agwPolicies, directRespPolicy)
-		}
+		appendPolicy("directResponse")(processDirectResponse(traffic.DirectResponse, basePolicyName, policyName), nil)
 	}
 
 	if traffic.JWTAuthentication != nil {
-		jwtAuthenticationPolicy, err := processJWTAuthenticationPolicy(ctx, traffic.JWTAuthentication, traffic.Phase, basePolicyName, policyName, policyTarget)
-		if err != nil {
-			logger.Error("error processing jwtAuthentication policy", "error", err)
-			errs = append(errs, err)
-		}
-		if jwtAuthenticationPolicy != nil {
-			agwPolicies = append(agwPolicies, jwtAuthenticationPolicy)
-		}
+		appendPolicy("jwtAuthentication")(processJWTAuthenticationPolicy(ctx, traffic.JWTAuthentication, traffic.Phase, basePolicyName, policyName))
 	}
 
 	if traffic.APIKeyAuthentication != nil {
-		apiKeyAuthenticationPolicy, err := processAPIKeyAuthenticationPolicy(ctx, traffic.APIKeyAuthentication, traffic.Phase, basePolicyName, policyName, policyTarget)
-		if err != nil {
-			logger.Error("error processing apiKeyAuthentication policy", "error", err)
-			errs = append(errs, err)
-		}
-		if apiKeyAuthenticationPolicy != nil {
-			agwPolicies = append(agwPolicies, apiKeyAuthenticationPolicy)
-		}
+		appendPolicy("apiKeyAuthentication")(processAPIKeyAuthenticationPolicy(ctx, traffic.APIKeyAuthentication, traffic.Phase, basePolicyName, policyName))
 	}
 
 	if traffic.BasicAuthentication != nil {
-		basicAuthenticationPolicy, err := processBasicAuthenticationPolicy(ctx, traffic.BasicAuthentication, traffic.Phase, basePolicyName, policyName, policyTarget)
-		if err != nil {
-			logger.Error("error processing basicAuthentication policy", "error", err)
-			errs = append(errs, err)
-		}
-		if basicAuthenticationPolicy != nil {
-			agwPolicies = append(agwPolicies, basicAuthenticationPolicy)
-		}
+		appendPolicy("basicAuthentication")(processBasicAuthenticationPolicy(ctx, traffic.BasicAuthentication, traffic.Phase, basePolicyName, policyName))
 	}
 	return agwPolicies, errors.Join(errs...)
 }
 
-func processRetriesPolicy(retry *agentgateway.Retry, basePolicyName string, policy types.NamespacedName, target *api.PolicyTarget) (*api.Policy, error) {
+func processRetriesPolicy(retry *agentgateway.Retry, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
 	translatedRetry := &api.Retry{}
+	var errs []error
 
 	if retry.Codes != nil {
 		for _, c := range retry.Codes {
@@ -594,25 +483,28 @@ func processRetriesPolicy(retry *agentgateway.Retry, basePolicyName string, poli
 	}
 
 	if retry.Backoff != nil {
+		// This SHOULD be impossible due to CEL validation
+		// In the unlikely event its not, we use no backoff
 		d, err := time.ParseDuration(string(*retry.Backoff))
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse retries backoff: %w", err)
+			errs = append(errs, fmt.Errorf("failed to parse retries backoff: %w", err))
+		} else {
+			translatedRetry.Backoff = durationpb.New(d)
 		}
-		translatedRetry.Backoff = durationpb.New(d)
 	}
 
 	if a := retry.Attempts; a != nil {
-		if *a < 0 || *a > math.MaxInt32 {
-			return nil, fmt.Errorf("failed to parse retry attempts should be positive int32 (%d)", *a)
+		if *a < 0 {
+			errs = append(errs, fmt.Errorf("failed to parse retry attempts should be positive int32 (%d)", *a))
+		} else {
+			// Agentgateway stores this as a u8 so has a max of 255
+			translatedRetry.Attempts = int32(min(*retry.Attempts, 255)) //nolint:gosec // G115: max 255 so cannot fail
 		}
-		// Agentgateway stores this as a u8 so has a max of 255
-		translatedRetry.Attempts = int32(min(*retry.Attempts, 255)) //nolint:gosec // G115: attempts asserted above
 	}
 
 	retryPolicy := &api.Policy{
-		Key:    basePolicyName + retryPolicySuffix + attachmentName(target),
-		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  basePolicyName + retryPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_Retry{Retry: translatedRetry},
@@ -622,13 +514,12 @@ func processRetriesPolicy(retry *agentgateway.Retry, basePolicyName string, poli
 
 	logger.Debug("generated Retry policy",
 		"policy", basePolicyName,
-		"agentgateway_policy", retryPolicy.Name,
-		"target", target)
+		"agentgateway_policy", retryPolicy.Name)
 
-	return retryPolicy, nil
+	return retryPolicy, errors.Join(errs...)
 }
 
-func processDirectResponse(directResponse *agentgateway.DirectResponse, basePolicyName string, policy types.NamespacedName, target *api.PolicyTarget) *api.Policy {
+func processDirectResponse(directResponse *agentgateway.DirectResponse, basePolicyName string, policy types.NamespacedName) *api.Policy {
 	tp := &api.TrafficPolicySpec{
 		Kind: &api.TrafficPolicySpec_DirectResponse{
 			DirectResponse: &api.DirectResponse{
@@ -643,9 +534,8 @@ func processDirectResponse(directResponse *agentgateway.DirectResponse, basePoli
 	}
 
 	directRespPolicy := &api.Policy{
-		Key:    basePolicyName + directResponseSuffix + attachmentName(target),
-		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  basePolicyName + directResponseSuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: tp,
 		},
@@ -653,13 +543,12 @@ func processDirectResponse(directResponse *agentgateway.DirectResponse, basePoli
 
 	logger.Debug("generated DirectResponse policy",
 		"policy", basePolicyName,
-		"agentgateway_policy", directRespPolicy.Name,
-		"target", target)
+		"agentgateway_policy", directRespPolicy.Name)
 
 	return directRespPolicy
 }
 
-func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthentication, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName, target *api.PolicyTarget) (*api.Policy, error) {
+func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthentication, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
 	p := &api.TrafficPolicySpec_JWT{}
 
 	switch jwt.Mode {
@@ -699,9 +588,8 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 	}
 
 	jwtPolicy := &api.Policy{
-		Key:    basePolicyName + jwtPolicySuffix + attachmentName(target),
-		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  basePolicyName + jwtPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Phase: phase(policyPhase),
@@ -712,13 +600,18 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 
 	logger.Debug("generated jwt policy",
 		"policy", basePolicyName,
-		"agentgateway_policy", jwtPolicy.Name,
-		"target", target)
+		"agentgateway_policy", jwtPolicy.Name)
 
 	return jwtPolicy, errors.Join(errs...)
 }
 
-func processBasicAuthenticationPolicy(ctx PolicyCtx, ba *agentgateway.BasicAuthentication, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName, target *api.PolicyTarget) (*api.Policy, error) {
+func processBasicAuthenticationPolicy(
+	ctx PolicyCtx,
+	ba *agentgateway.BasicAuthentication,
+	policyPhase *agentgateway.PolicyPhase,
+	basePolicyName string,
+	policy types.NamespacedName,
+) (*api.Policy, error) {
 	p := &api.TrafficPolicySpec_BasicAuthentication{}
 	p.Realm = ba.Realm
 
@@ -729,24 +622,26 @@ func processBasicAuthenticationPolicy(ctx PolicyCtx, ba *agentgateway.BasicAuthe
 		p.Mode = api.TrafficPolicySpec_BasicAuthentication_STRICT
 	}
 
+	var err error
+
 	if s := ba.SecretRef; s != nil {
 		scrt := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Secrets, krt.FilterKey(policy.Namespace+"/"+s.Name)))
 		if scrt == nil {
-			return nil, fmt.Errorf("basic authentication secret %v not found", s.Name)
+			err = fmt.Errorf("basic authentication secret %v not found", s.Name)
+		} else {
+			d, ok := scrt.Data[".htaccess"]
+			if !ok {
+				err = fmt.Errorf("basic authentication secret %v found, but doesn't contain '.htaccess' key", s.Name)
+			}
+			p.HtpasswdContent = string(d)
 		}
-		d, ok := scrt.Data[".htaccess"]
-		if !ok {
-			return nil, fmt.Errorf("basic authentication secret %v found, but doesn't contain '.htaccess' key", s.Name)
-		}
-		p.HtpasswdContent = string(d)
 	}
 	if len(ba.Users) > 0 {
 		p.HtpasswdContent = strings.Join(ba.Users, "\n")
 	}
 	basicAuthPolicy := &api.Policy{
-		Key:    basePolicyName + basicAuthPolicySuffix + attachmentName(target),
-		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  basePolicyName + basicAuthPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Phase: phase(policyPhase),
@@ -757,10 +652,9 @@ func processBasicAuthenticationPolicy(ctx PolicyCtx, ba *agentgateway.BasicAuthe
 
 	logger.Debug("generated basic auth policy",
 		"policy", basePolicyName,
-		"agentgateway_policy", basicAuthPolicy.Name,
-		"target", target)
+		"agentgateway_policy", basicAuthPolicy.Name)
 
-	return basicAuthPolicy, nil
+	return basicAuthPolicy, err
 }
 
 type APIKeyEntry struct {
@@ -774,7 +668,6 @@ func processAPIKeyAuthenticationPolicy(
 	policyPhase *agentgateway.PolicyPhase,
 	basePolicyName string,
 	policy types.NamespacedName,
-	target *api.PolicyTarget,
 ) (*api.Policy, error) {
 	p := &api.TrafficPolicySpec_APIKey{}
 
@@ -786,27 +679,33 @@ func processAPIKeyAuthenticationPolicy(
 	}
 
 	var secrets []*corev1.Secret
+	var errs []error
 	if s := ak.SecretRef; s != nil {
 		scrt := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Secrets, krt.FilterKey(policy.Namespace+"/"+s.Name)))
 		if scrt == nil {
-			return nil, fmt.Errorf("API Key secret %v not found", s.Name)
+			errs = append(errs, fmt.Errorf("API Key secret %v not found", s.Name))
+		} else {
+			secrets = []*corev1.Secret{scrt}
 		}
-		secrets = []*corev1.Secret{scrt}
 	}
 	if s := ak.SecretSelector; s != nil {
 		secrets = krt.Fetch(ctx.Krt, ctx.Collections.Secrets, krt.FilterLabel(s.MatchLabels), krt.FilterIndex(ctx.Collections.SecretsByNamespace, policy.Namespace))
 	}
-	var errs []error
 	for _, s := range secrets {
 		for k, v := range s.Data {
+			trimmed := bytes.TrimSpace(v)
+			if len(trimmed) == 0 {
+				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: empty value", s.Name, k))
+				continue
+			}
 			var ke APIKeyEntry
-			if bytes.TrimSpace(v)[0] != '{' {
+			if trimmed[0] != '{' {
 				// A raw key entry without metadata
 				ke = APIKeyEntry{
 					Key:      string(v),
 					Metadata: nil,
 				}
-			} else if err := json.Unmarshal(v, &ke); err != nil {
+			} else if err := json.Unmarshal(trimmed, &ke); err != nil {
 				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.Name, k, err))
 				continue
 			}
@@ -827,9 +726,8 @@ func processAPIKeyAuthenticationPolicy(
 		return a.Key
 	})
 	apiKeyPolicy := &api.Policy{
-		Key:    basePolicyName + apiKeyPolicySuffix + attachmentName(target),
-		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  basePolicyName + apiKeyPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Phase: phase(policyPhase),
@@ -840,17 +738,15 @@ func processAPIKeyAuthenticationPolicy(
 
 	logger.Debug("generated api key auth policy",
 		"policy", basePolicyName,
-		"agentgateway_policy", apiKeyPolicy.Name,
-		"target", target)
+		"agentgateway_policy", apiKeyPolicy.Name)
 
 	return apiKeyPolicy, errors.Join(errs...)
 }
 
-func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string, policy types.NamespacedName, target *api.PolicyTarget) *api.Policy {
+func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string, policy types.NamespacedName) *api.Policy {
 	timeoutPolicy := &api.Policy{
-		Key:    basePolicyName + timeoutPolicySuffix + attachmentName(target),
-		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  basePolicyName + timeoutPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_Timeout{Timeout: &api.Timeout{
@@ -862,13 +758,12 @@ func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string,
 
 	logger.Debug("generated Timeout policy",
 		"policy", basePolicyName,
-		"agentgateway_policy", timeoutPolicy.Name,
-		"target", target)
+		"agentgateway_policy", timeoutPolicy.Name)
 
 	return timeoutPolicy
 }
 
-func processHostnameRewritePolicy(hnrw *agentgateway.HostnameRewrite, basePolicyName string, policy types.NamespacedName, target *api.PolicyTarget) *api.Policy {
+func processHostnameRewritePolicy(hnrw *agentgateway.HostnameRewrite, basePolicyName string, policy types.NamespacedName) *api.Policy {
 	r := &api.TrafficPolicySpec_HostRewrite{}
 	switch hnrw.Mode {
 	case agentgateway.HostnameRewriteModeAuto:
@@ -878,9 +773,8 @@ func processHostnameRewritePolicy(hnrw *agentgateway.HostnameRewrite, basePolicy
 	}
 
 	p := &api.Policy{
-		Key:    basePolicyName + hostnameRewritePolicySuffix + attachmentName(target),
-		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  basePolicyName + hostnameRewritePolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_HostRewrite_{HostRewrite: r},
@@ -890,21 +784,19 @@ func processHostnameRewritePolicy(hnrw *agentgateway.HostnameRewrite, basePolicy
 
 	logger.Debug("generated HostnameRewrite policy",
 		"policy", basePolicyName,
-		"agentgateway_policy", p.Name,
-		"target", target)
+		"agentgateway_policy", p.Name)
 
 	return p
 }
 
-func processHeaderModifierPolicy(headerModifier *shared.HeaderModifiers, basePolicyName string, policy types.NamespacedName, target *api.PolicyTarget) []*api.Policy {
+func processHeaderModifierPolicy(headerModifier *shared.HeaderModifiers, basePolicyName string, policy types.NamespacedName) []*api.Policy {
 	var policies []*api.Policy
 
 	var headerModifierPolicyRequest, headerModifierPolicyResponse *api.Policy
 	if headerModifier.Request != nil {
 		headerModifierPolicyRequest = &api.Policy{
-			Key:    basePolicyName + headerModifierPolicySuffix + attachmentName(target),
-			Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-			Target: target,
+			Key:  basePolicyName + headerModifierPolicySuffix,
+			Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 			Kind: &api.Policy_Traffic{
 				Traffic: &api.TrafficPolicySpec{
 					Kind: &api.TrafficPolicySpec_RequestHeaderModifier{RequestHeaderModifier: &api.HeaderModifier{
@@ -917,16 +809,14 @@ func processHeaderModifierPolicy(headerModifier *shared.HeaderModifiers, basePol
 		}
 		logger.Debug("generated HeaderModifier policy",
 			"policy", basePolicyName,
-			"agentgateway_policy", headerModifierPolicyRequest.Name,
-			"target", target)
+			"agentgateway_policy", headerModifierPolicyRequest.Name)
 		policies = append(policies, headerModifierPolicyRequest)
 	}
 
 	if headerModifier.Response != nil {
 		headerModifierPolicyResponse = &api.Policy{
-			Key:    basePolicyName + respHeaderModifierPolicySuffix + attachmentName(target),
-			Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-			Target: target,
+			Key:  basePolicyName + respHeaderModifierPolicySuffix,
+			Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 			Kind: &api.Policy_Traffic{
 				Traffic: &api.TrafficPolicySpec{
 					Kind: &api.TrafficPolicySpec_ResponseHeaderModifier{ResponseHeaderModifier: &api.HeaderModifier{
@@ -939,19 +829,17 @@ func processHeaderModifierPolicy(headerModifier *shared.HeaderModifiers, basePol
 		}
 		logger.Debug("generated HeaderModifier policy",
 			"policy", basePolicyName,
-			"agentgateway_policy", headerModifierPolicyResponse.Name,
-			"target", target)
+			"agentgateway_policy", headerModifierPolicyResponse.Name)
 		policies = append(policies, headerModifierPolicyResponse)
 	}
 
 	return policies
 }
 
-func processCorsPolicy(cors *agentgateway.CORS, basePolicyName string, policy types.NamespacedName, target *api.PolicyTarget) *api.Policy {
+func processCorsPolicy(cors *agentgateway.CORS, basePolicyName string, policy types.NamespacedName) *api.Policy {
 	corsPolicy := &api.Policy{
-		Key:    basePolicyName + corsPolicySuffix + attachmentName(target),
-		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: target,
+		Key:  basePolicyName + corsPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_Cors{Cors: &api.CORS{
@@ -970,8 +858,7 @@ func processCorsPolicy(cors *agentgateway.CORS, basePolicyName string, policy ty
 
 	logger.Debug("generated Cors policy",
 		"policy", basePolicyName,
-		"agentgateway_policy", corsPolicy.Name,
-		"target", target)
+		"agentgateway_policy", corsPolicy.Name)
 
 	return corsPolicy
 }
@@ -983,12 +870,11 @@ func processExtAuthPolicy(
 	policyPhase *agentgateway.PolicyPhase,
 	basePolicyName string,
 	policy types.NamespacedName,
-	policyTarget *api.PolicyTarget,
 ) (*api.Policy, error) {
-	var backendErr error
+	var errs []error
 	be, err := buildBackendRef(ctx, extAuth.BackendRef, policy.Namespace)
 	if err != nil {
-		backendErr = fmt.Errorf("failed to build extAuth: %v", err)
+		errs = append(errs, fmt.Errorf("failed to build extAuth: %v", err))
 	}
 
 	spec := &api.TrafficPolicySpec_ExternalAuth{
@@ -1028,9 +914,8 @@ func processExtAuthPolicy(
 	}
 
 	extauthPolicy := &api.Policy{
-		Key:    basePolicyName + extauthPolicySuffix + attachmentName(policyTarget),
-		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: policyTarget,
+		Key:  basePolicyName + extauthPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Phase: phase(policyPhase),
@@ -1043,10 +928,9 @@ func processExtAuthPolicy(
 
 	logger.Debug("generated ExtAuth policy",
 		"policy", basePolicyName,
-		"agentgateway_policy", extauthPolicy.Name,
-		"target", policyTarget)
+		"agentgateway_policy", extauthPolicy.Name)
 
-	return extauthPolicy, backendErr
+	return extauthPolicy, errors.Join(errs...)
 }
 
 // processExtProcPolicy processes ExtProc configuration and creates corresponding agentgateway policies
@@ -1056,11 +940,11 @@ func processExtProcPolicy(
 	policyPhase *agentgateway.PolicyPhase,
 	basePolicyName string,
 	policy types.NamespacedName,
-	policyTarget *api.PolicyTarget,
 ) (*api.Policy, error) {
+	var backendErr error
 	be, err := buildBackendRef(ctx, extProc.BackendRef, policy.Namespace)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build extProc: %v", err)
+		backendErr = fmt.Errorf("failed to build extProc: %v", err)
 	}
 
 	spec := &api.TrafficPolicySpec_ExtProc{
@@ -1070,9 +954,8 @@ func processExtProcPolicy(
 	}
 
 	extprocPolicy := &api.Policy{
-		Key:    basePolicyName + extprocPolicySuffix + attachmentName(policyTarget),
-		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: policyTarget,
+		Key:  basePolicyName + extprocPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Phase: phase(policyPhase),
@@ -1085,10 +968,9 @@ func processExtProcPolicy(
 
 	logger.Info("generated ExtProc policy",
 		"policy", basePolicyName,
-		"agentgateway_policy", extprocPolicy.Name,
-		"target", policyTarget)
+		"agentgateway_policy", extprocPolicy.Name)
 
-	return extprocPolicy, nil
+	return extprocPolicy, backendErr
 }
 
 func phase(policyPhase *agentgateway.PolicyPhase) api.TrafficPolicySpec_PolicyPhase {
@@ -1133,7 +1015,6 @@ func processAuthorizationPolicy(
 	auth *shared.Authorization,
 	basePolicyName string,
 	policy types.NamespacedName,
-	policyTarget *api.PolicyTarget,
 ) *api.Policy {
 	var allowPolicies, denyPolicies []string
 	if auth.Action == shared.AuthorizationPolicyActionDeny {
@@ -1143,9 +1024,8 @@ func processAuthorizationPolicy(
 	}
 
 	pol := &api.Policy{
-		Key:    basePolicyName + rbacPolicySuffix + attachmentName(policyTarget),
-		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: policyTarget,
+		Key:  basePolicyName + rbacPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_Authorization{
@@ -1160,8 +1040,7 @@ func processAuthorizationPolicy(
 
 	logger.Debug("generated Authorization policy",
 		"policy", basePolicyName,
-		"agentgateway_policy", pol.Name,
-		"target", policyTarget)
+		"agentgateway_policy", pol.Name)
 
 	return pol
 }
@@ -1179,13 +1058,13 @@ func getTrafficPolicyName(trafficPolicyNs, trafficPolicyName string) string {
 }
 
 // processRateLimitPolicy processes RateLimit configuration and creates corresponding agentgateway policies
-func processRateLimitPolicy(ctx PolicyCtx, rl *agentgateway.RateLimits, basePolicyName string, policy types.NamespacedName, policyTarget *api.PolicyTarget) ([]*api.Policy, error) {
+func processRateLimitPolicy(ctx PolicyCtx, rl *agentgateway.RateLimits, basePolicyName string, policy types.NamespacedName) ([]*api.Policy, error) {
 	var agwPolicies []*api.Policy
 	var errs []error
 
 	// Process local rate limiting if present
 	if rl.Local != nil {
-		localPolicy := processLocalRateLimitPolicy(rl.Local, basePolicyName, policy, policyTarget)
+		localPolicy := processLocalRateLimitPolicy(rl.Local, basePolicyName, policy)
 		if localPolicy != nil {
 			agwPolicies = append(agwPolicies, localPolicy)
 		}
@@ -1193,11 +1072,12 @@ func processRateLimitPolicy(ctx PolicyCtx, rl *agentgateway.RateLimits, basePoli
 
 	// Process global rate limiting if present
 	if rl.Global != nil {
-		globalPolicy, err := processGlobalRateLimitPolicy(ctx, *rl.Global, basePolicyName, policy, policyTarget)
-		if globalPolicy != nil && err == nil {
-			agwPolicies = append(agwPolicies, globalPolicy)
-		} else {
+		globalPolicy, err := processGlobalRateLimitPolicy(ctx, *rl.Global, basePolicyName, policy)
+		if err != nil {
 			errs = append(errs, err)
+		}
+		if globalPolicy != nil {
+			agwPolicies = append(agwPolicies, globalPolicy)
 		}
 	}
 
@@ -1205,7 +1085,7 @@ func processRateLimitPolicy(ctx PolicyCtx, rl *agentgateway.RateLimits, basePoli
 }
 
 // processLocalRateLimitPolicy processes local rate limiting configuration
-func processLocalRateLimitPolicy(limits []agentgateway.LocalRateLimit, basePolicyName string, policy types.NamespacedName, policyTarget *api.PolicyTarget) *api.Policy {
+func processLocalRateLimitPolicy(limits []agentgateway.LocalRateLimit, basePolicyName string, policy types.NamespacedName) *api.Policy {
 	// TODO: support multiple
 	limit := limits[0]
 
@@ -1232,9 +1112,8 @@ func processLocalRateLimitPolicy(limits []agentgateway.LocalRateLimit, basePolic
 	}
 
 	localRateLimitPolicy := &api.Policy{
-		Key:    basePolicyName + localRateLimitPolicySuffix + attachmentName(policyTarget),
-		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: policyTarget,
+		Key:  basePolicyName + localRateLimitPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_LocalRateLimit_{
@@ -1252,11 +1131,11 @@ func processGlobalRateLimitPolicy(
 	grl agentgateway.GlobalRateLimit,
 	basePolicyName string,
 	policy types.NamespacedName,
-	policyTarget *api.PolicyTarget,
 ) (*api.Policy, error) {
+	var backendErr error
 	be, err := buildBackendRef(ctx, grl.BackendRef, policy.Namespace)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build global rate limit: %v", err)
+		backendErr = fmt.Errorf("failed to build global rate limit: %v", err)
 	}
 	// Translate descriptors
 	descriptors := make([]*api.TrafficPolicySpec_RemoteRateLimit_Descriptor, 0, len(grl.Descriptors))
@@ -1268,9 +1147,8 @@ func processGlobalRateLimitPolicy(
 
 	// Build the RemoteRateLimit policy that agentgateway expects
 	p := &api.Policy{
-		Key:    basePolicyName + globalRateLimitPolicySuffix + attachmentName(policyTarget),
-		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: policyTarget,
+		Key:  basePolicyName + globalRateLimitPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_RemoteRateLimit_{
@@ -1284,7 +1162,7 @@ func processGlobalRateLimitPolicy(
 		},
 	}
 
-	return p, nil
+	return p, backendErr
 }
 
 func processRateLimitDescriptor(descriptor agentgateway.RateLimitDescriptor) *api.TrafficPolicySpec_RemoteRateLimit_Descriptor {
@@ -1315,70 +1193,7 @@ func buildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS s
 		Group: string(group),
 		Kind:  string(kind),
 	}
-	namespace := string(ptr.OrDefault(ref.Namespace, gwv1.Namespace(defaultNS)))
-	switch gk {
-	case wellknown.InferencePoolGVK.GroupKind():
-		if strings.Contains(string(ref.Name), ".") {
-			return nil, errors.New("service name invalid; the name of the InferencePool, not the hostname")
-		}
-		hostname := kubeutils.GetInferenceServiceHostname(string(ref.Name), namespace)
-		key := namespace + "/" + string(ref.Name)
-		svc := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.InferencePools, krt.FilterKey(key)))
-		logger.Debug("found pull pool for service", "svc", svc, "key", key)
-		if svc == nil {
-			return nil, fmt.Errorf("unable to find the InferencePool %v", key)
-		} else {
-			return &api.BackendReference{
-				Kind: &api.BackendReference_Service_{
-					Service: &api.BackendReference_Service{
-						Hostname:  hostname,
-						Namespace: namespace,
-					},
-				},
-				// InferencePool only supports single port
-				Port: uint32(svc.Spec.TargetPorts[0].Number), //nolint:gosec // G115: InferencePool TargetPort is int32 with validation 1-65535, always safe
-			}, nil
-		}
-	case wellknown.ServiceGVK.GroupKind():
-		port := ref.Port
-		if strings.Contains(string(ref.Name), ".") {
-			return nil, errors.New("service name invalid; the name of the Service, not the hostname")
-		}
-		hostname := kubeutils.GetServiceHostname(string(ref.Name), namespace)
-		key := namespace + "/" + string(ref.Name)
-		svc := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Services, krt.FilterKey(key)))
-		if svc == nil {
-			return nil, fmt.Errorf("unable to find the Service %v", key)
-		}
-		// TODO: All kubernetes service types currently require a Port, so we do this for everything; consider making this per-type if we have future types
-		// that do not require port.
-		if port == nil {
-			// "Port is required when the referent is a Kubernetes Service."
-			return nil, errors.New("port is required for Service targets")
-		}
-		return &api.BackendReference{
-			Kind: &api.BackendReference_Service_{
-				Service: &api.BackendReference_Service{
-					Hostname:  hostname,
-					Namespace: namespace,
-				},
-			},
-			Port: uint32(*port), //nolint:gosec // G115: Gateway API PortNumber is int32 with validation 1-65535, always safe
-		}, nil
-	case wellknown.AgentgatewayBackendGVK.GroupKind():
-		key := namespace + "/" + string(ref.Name)
-		be := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Backends, krt.FilterKey(key)))
-		if be == nil {
-			return nil, fmt.Errorf("unable to find the Backend %v", key)
-		}
-		return &api.BackendReference{
-			Kind: &api.BackendReference_Backend{
-				Backend: key,
-			},
-		}, nil
-	default:
-		return nil, fmt.Errorf("unsupported backend %v", gk)
-	}
+	return ctx.References.PolicyBackend(ctx.Krt, defaultNS, gk, ref.Name, ref.Namespace, ref.Port)
 }
 
 func toJSONValue(j apiextensionsv1.JSON) (string, error) {
@@ -1399,11 +1214,10 @@ func toJSONValue(j apiextensionsv1.JSON) (string, error) {
 	return string(marshaled), nil
 }
 
-func processCSRFPolicy(csrf *agentgateway.CSRF, basePolicyName string, policy types.NamespacedName, policyTarget *api.PolicyTarget) *api.Policy {
+func processCSRFPolicy(csrf *agentgateway.CSRF, basePolicyName string, policy types.NamespacedName) *api.Policy {
 	csrfPolicy := &api.Policy{
-		Key:    basePolicyName + csrfPolicySuffix + attachmentName(policyTarget),
-		Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Target: policyTarget,
+		Key:  basePolicyName + csrfPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_Csrf{
@@ -1424,7 +1238,6 @@ func processTransformationPolicy(
 	policyPhase *agentgateway.PolicyPhase,
 	basePolicyName string,
 	policy types.NamespacedName,
-	policyTarget *api.PolicyTarget,
 ) (*api.Policy, error) {
 	var errs []error
 	convertedReq, err := convertTransformSpec(transformation.Request)
@@ -1438,9 +1251,8 @@ func processTransformationPolicy(
 
 	if convertedResp != nil || convertedReq != nil {
 		transformationPolicy := &api.Policy{
-			Key:    basePolicyName + transformationPolicySuffix + attachmentName(policyTarget),
-			Name:   TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-			Target: policyTarget,
+			Key:  basePolicyName + transformationPolicySuffix,
+			Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 			Kind: &api.Policy_Traffic{
 				Traffic: &api.TrafficPolicySpec{
 					Phase: phase(policyPhase),
@@ -1456,8 +1268,7 @@ func processTransformationPolicy(
 
 		logger.Debug("generated transformation policy",
 			"policy", basePolicyName,
-			"agentgateway_policy", transformationPolicy.Name,
-			"target", policyTarget)
+			"agentgateway_policy", transformationPolicy.Name)
 		return transformationPolicy, errors.Join(errs...)
 	}
 	return nil, errors.Join(errs...)
@@ -1473,32 +1284,30 @@ func convertTransformSpec(spec *agentgateway.Transform) (*api.TrafficPolicySpec_
 
 	for _, header := range spec.Set {
 		headerValue := header.Value
-		if isCEL(headerValue) {
-			if transform == nil {
-				transform = &api.TrafficPolicySpec_TransformationPolicy_Transform{}
-			}
-			transform.Set = append(transform.Set, &api.TrafficPolicySpec_HeaderTransformation{
-				Name:       string(header.Name),
-				Expression: string(header.Value),
-			})
-		} else {
+		if !isCEL(headerValue) {
 			errs = append(errs, fmt.Errorf("header value is not a valid CEL expression: %s", headerValue))
 		}
+		if transform == nil {
+			transform = &api.TrafficPolicySpec_TransformationPolicy_Transform{}
+		}
+		transform.Set = append(transform.Set, &api.TrafficPolicySpec_HeaderTransformation{
+			Name:       string(header.Name),
+			Expression: string(header.Value),
+		})
 	}
 
 	for _, header := range spec.Add {
 		headerValue := header.Value
-		if isCEL(headerValue) {
-			if transform == nil {
-				transform = &api.TrafficPolicySpec_TransformationPolicy_Transform{}
-			}
-			transform.Add = append(transform.Add, &api.TrafficPolicySpec_HeaderTransformation{
-				Name:       string(header.Name),
-				Expression: string(header.Value),
-			})
-		} else {
+		if !isCEL(headerValue) {
 			errs = append(errs, fmt.Errorf("invalid header value: %s", headerValue))
 		}
+		if transform == nil {
+			transform = &api.TrafficPolicySpec_TransformationPolicy_Transform{}
+		}
+		transform.Add = append(transform.Add, &api.TrafficPolicySpec_HeaderTransformation{
+			Name:       string(header.Name),
+			Expression: string(header.Value),
+		})
 	}
 
 	if spec.Remove != nil {
@@ -1511,15 +1320,14 @@ func convertTransformSpec(spec *agentgateway.Transform) (*api.TrafficPolicySpec_
 	if spec.Body != nil {
 		// Handle body transformation if present
 		bodyValue := *spec.Body
-		if isCEL(bodyValue) {
-			if transform == nil {
-				transform = &api.TrafficPolicySpec_TransformationPolicy_Transform{}
-			}
-			transform.Body = &api.TrafficPolicySpec_BodyTransformation{
-				Expression: string(bodyValue),
-			}
-		} else {
+		if !isCEL(bodyValue) {
 			errs = append(errs, fmt.Errorf("body value is not a valid CEL expression: %s", bodyValue))
+		}
+		if transform == nil {
+			transform = &api.TrafficPolicySpec_TransformationPolicy_Transform{}
+		}
+		transform.Body = &api.TrafficPolicySpec_BodyTransformation{
+			Expression: string(bodyValue),
 		}
 	}
 
@@ -1529,11 +1337,10 @@ func convertTransformSpec(spec *agentgateway.Transform) (*api.TrafficPolicySpec_
 		}
 		transform.Metadata = make(map[string]string, len(spec.Metadata))
 		for key, value := range spec.Metadata {
-			if isCEL(value) {
-				transform.Metadata[key] = string(value)
-			} else {
+			if !isCEL(value) {
 				errs = append(errs, fmt.Errorf("metadata value is not a valid CEL expression: %s", value))
 			}
+			transform.Metadata[key] = string(value)
 		}
 	}
 
