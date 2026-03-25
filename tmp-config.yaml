@@ -46,9 +46,8 @@ mcp:
   port: 23
   targets:
   - name: target-123
-    sse:
-      host: localhost
-      port: 8080
-      path: /sse
+    stdio:
+      cmd: echo
+      args: []
   statefulMode: stateless
 frontendPolicies: {}

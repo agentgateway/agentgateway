@@ -220,9 +220,22 @@ export function transformForForm(data: unknown): unknown {
 export function transformBeforeSubmit(data: unknown): unknown {
   if (typeof data !== "object" || data === null) return data;
   
-  const { connectionType, ...rest } = data as Record<string, any>;
+  const { connectionType, sse, mcp, stdio, openapi, ...rest } = data as Record<string, any>;
   
-  // Remove connectionType - it's a UI helper field only
-  // The actual connection config (sse/mcp/stdio/openapi) is already in the object
-  return rest;
+  // Remove connectionType (UI helper field) and all variant fields
+  // Then add back only the variant field that matches the selected connectionType
+  const result: Record<string, any> = { ...rest };
+  
+  // Keep only the connection variant that matches the selected type
+  if (connectionType === "sse" && sse) {
+    result.sse = sse;
+  } else if (connectionType === "mcp" && mcp) {
+    result.mcp = mcp;
+  } else if (connectionType === "stdio" && stdio) {
+    result.stdio = stdio;
+  } else if (connectionType === "openapi" && openapi) {
+    result.openapi = openapi;
+  }
+  
+  return result;
 }
