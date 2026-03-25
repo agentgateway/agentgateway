@@ -55,7 +55,7 @@ def rendered_description:
 
 def simple_type:
   if type == "boolean" then
-    ""
+    "any"
   elif .type? then
     (.type | arrayify | map(select(. != "null"))) as $types |
     if ($types | length) == 1 and $types[0] == "array" then
@@ -88,7 +88,7 @@ def simple_type:
       "array"
     end
   else
-    ""
+    "any"
   end;
 
 def schema_paths(prefix):
