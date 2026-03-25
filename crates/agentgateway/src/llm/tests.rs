@@ -922,3 +922,72 @@ fn test_get_messages() {
 		"get-messages-messages",
 	);
 }
+
+/// Regression test for #1340: when a streaming request receives a non-success
+/// response, the error body must be translated and forwarded instead of being
+/// silently consumed by the streaming decoder.
+///
+/// This test calls `process_error` directly for each Bedrock input format to
+/// verify the error translation produces a non-empty, valid JSON body.  The
+/// condition change in `process_response` (`resp.status().is_success()`) ensures
+/// this path is actually reached for streaming requests.
+#[test]
+fn bedrock_error_body_is_translated_for_all_input_formats() {
+	let bedrock = AIProvider::Bedrock(bedrock::Provider {
+		model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
+		region: strng::new("us-west-2"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	});
+
+	// Simulated Bedrock ValidationException error body.
+	let bedrock_error = Bytes::from(
+		r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#,
+	);
+
+	let formats = [
+		InputFormat::Completions,
+		InputFormat::Messages,
+		InputFormat::Responses,
+		InputFormat::Embeddings,
+	];
+
+	for format in formats {
+		let req = LLMRequest {
+			input_tokens: None,
+			input_format: format,
+			request_model: "input-model".into(),
+			provider: Default::default(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+		};
+
+		let result = bedrock.process_error(&req, ::http::StatusCode::BAD_REQUEST, &bedrock_error);
+		let body = result.unwrap_or_else(|e| {
+			panic!("process_error failed for {format:?}: {e}");
+		});
+
+		assert!(
+			!body.is_empty(),
+			"process_error returned empty body for {format:?}",
+		);
+
+		let parsed: Value = serde_json::from_slice(&body).unwrap_or_else(|e| {
+			panic!(
+				"process_error returned invalid JSON for {format:?}: {e}\nbody: {}",
+				String::from_utf8_lossy(&body)
+			);
+		});
+
+		// Verify the translated error contains the original message.
+		let message = parsed
+			.pointer("/error/message")
+			.and_then(|v| v.as_str())
+			.unwrap_or_default();
+		assert!(
+			message.contains("toolResult"),
+			"translated error for {format:?} should preserve the original message, got: {message}",
+		);
+	}
+}
