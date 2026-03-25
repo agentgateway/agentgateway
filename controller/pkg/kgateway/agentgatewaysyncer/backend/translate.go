@@ -1,10 +1,13 @@
 package agentgatewaybackend
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"time"
 
 	"istio.io/istio/pilot/pkg/model/kstatus"
 	"istio.io/istio/pkg/config"
@@ -637,11 +640,33 @@ func loadOpenAPISchema(ctx plugins.PolicyCtx, namespace string, schema *agentgat
 	}
 
 	if schema.URL != nil {
-		resp, err := http.Get(string(*schema.URL))
+		client := &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				DialContext: (&net.Dialer{
+					Timeout: 5 * time.Second,
+				}).DialContext,
+				DisableKeepAlives: true,
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, string(*schema.URL), nil)
+		if err != nil {
+			return "", fmt.Errorf("failed to create OpenAPI schema request: %w", err)
+		}
+
+		resp, err := client.Do(req)
 		if err != nil {
 			return "", fmt.Errorf("failed to fetch OpenAPI schema from URL: %w", err)
 		}
 		defer resp.Body.Close()
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return "", fmt.Errorf("failed to fetch OpenAPI schema from URL: status %d", resp.StatusCode)
+		}
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
