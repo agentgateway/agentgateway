@@ -549,6 +549,13 @@ func reportNotAllowedListenerSet(status *gwv1.ListenerSetStatus, obj *gwv1.Liste
 	status.Conditions = SetConditions(obj.Generation, status.Conditions, gatewayConditions)
 }
 
+// ParentResolver allows expanding a parent reference into the information needed
+// to link a route to the gateway(s) it applies to.
+type ParentResolver interface {
+	// Fetch returns the parents for a given parent key.
+	ParentsFor(ctx krt.HandlerContext, pk utils.TypedNamespacedName) []*ParentInfo
+}
+
 // RouteParents holds information about things Routes can reference as parents.
 type RouteParents struct {
 	Gateways     krt.Collection[*GatewayListener]
@@ -556,7 +563,7 @@ type RouteParents struct {
 }
 
 // Fetch returns the parents for a given parent key.
-func (p RouteParents) Fetch(ctx krt.HandlerContext, pk utils.TypedNamespacedName) []*ParentInfo {
+func (p RouteParents) ParentsFor(ctx krt.HandlerContext, pk utils.TypedNamespacedName) []*ParentInfo {
 	return slices.Map(krt.Fetch(ctx, p.Gateways, krt.FilterIndex(p.GatewayIndex, pk)), func(gw *GatewayListener) *ParentInfo {
 		return &gw.ParentInfo
 	})

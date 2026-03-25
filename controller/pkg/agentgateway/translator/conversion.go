@@ -840,7 +840,7 @@ func ReferenceAllowed(
 	return nil
 }
 
-func extractParentReferenceInfo(ctx RouteContext, parents RouteParents, obj controllers.Object) []RouteParentReference {
+func extractParentReferenceInfo(ctx RouteContext, parents ParentResolver, obj controllers.Object) []RouteParentReference {
 	routeRefs, hostnames, kind := GetCommonRouteInfo(obj)
 	localNamespace := obj.GetNamespace()
 	var parentRefs []RouteParentReference
@@ -855,7 +855,7 @@ func extractParentReferenceInfo(ctx RouteContext, parents RouteParents, obj cont
 			Port:                ptr.OrEmpty(ref.Port),
 		}
 		gk := ir
-		currentParents := parents.Fetch(ctx.Krt, gk)
+		currentParents := parents.ParentsFor(ctx.Krt, gk)
 		appendParent := func(pr *ParentInfo, pk ParentReference) {
 			bannedHostnames := sets.New[string]()
 			for _, gw := range currentParents {

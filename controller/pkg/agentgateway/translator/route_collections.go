@@ -493,7 +493,7 @@ type RouteContext struct {
 // RouteContextInputs defines the collections needed to translate a route.
 type RouteContextInputs struct {
 	Grants         ReferenceGrants
-	RouteParents   RouteParents
+	RouteParents   ParentResolver
 	Services       krt.Collection[*corev1.Service]
 	InferencePools krt.Collection[*inf.InferencePool]
 	Namespaces     krt.Collection[*corev1.Namespace]
