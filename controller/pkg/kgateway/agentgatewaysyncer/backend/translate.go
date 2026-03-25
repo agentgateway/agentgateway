@@ -105,6 +105,14 @@ func BuildAgwBackendReferences(
 					AI:            nil,
 				}, app)
 			}
+			if r.OpenAPI != nil && r.OpenAPI.Policies != nil {
+				p := r.OpenAPI.Policies
+				plugins.BackendReferencesFromBackendPolicy(&agentgateway.BackendFull{
+					BackendSimple: p.BackendSimple,
+					MCP:           p.MCP,
+					AI:            nil,
+				}, app)
+			}
 		}
 	}
 	return attachments

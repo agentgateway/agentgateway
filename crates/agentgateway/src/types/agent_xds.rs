@@ -900,7 +900,7 @@ impl TryFrom<&proto::agent::McpTarget> for McpTarget {
 					let schema_str = s.openapi_schema.as_deref().ok_or_else(|| {
 						ProtoError::Generic("OpenAPI target requires openapi_schema".to_string())
 					})?;
-					let schema: openapiv3::OpenAPI = serde_json::from_str(schema_str)
+					let schema: openapiv3::OpenAPI = serde_yaml::from_str(schema_str)
 						.map_err(|e| ProtoError::Generic(format!("invalid OpenAPI schema: {e}")))?;
 					McpTargetSpec::OpenAPI(OpenAPITarget {
 						backend,

@@ -11,6 +11,7 @@ import (
 	"istio.io/istio/pkg/util/protomarshal"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	"sigs.k8s.io/yaml"
 
 	"github.com/agentgateway/agentgateway/api"
@@ -232,6 +233,112 @@ func TestBuildMCP(t *testing.T) {
 			}))
 			assert.NoError(t, err)
 			testutils.CompareGolden(t, b, fmt.Sprintf("testdata/%v.yaml", tt.name))
+		})
+	}
+}
+
+func TestBuildAgwBackendReferences(t *testing.T) {
+	tests := []struct {
+		name     string
+		backend  *agentgateway.AgentgatewayBackend
+		expected int
+	}{
+		{
+			name: "Static MCP target with policies extracts backend refs",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "static-target",
+								Static: &agentgateway.McpTarget{
+									Host: "example.com",
+									Port: 8080,
+									Policies: &agentgateway.BackendWithMCP{
+										BackendSimple: agentgateway.BackendSimple{
+											Tunnel: &agentgateway.BackendTunnel{
+												BackendRef: gwv1.BackendObjectReference{
+													Name: "tunnel-backend",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: 1,
+		},
+		{
+			name: "OpenAPI target with policies extracts backend refs",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "openapi-target",
+								OpenAPI: &agentgateway.OpenAPITarget{
+									Host: "petstore.example.com",
+									Port: 443,
+									Schema: agentgateway.OpenAPISchema{
+										Inline: stringPtr(`{}`),
+									},
+									Policies: &agentgateway.BackendWithMCP{
+										BackendSimple: agentgateway.BackendSimple{
+											Tunnel: &agentgateway.BackendTunnel{
+												BackendRef: gwv1.BackendObjectReference{
+													Name: "tunnel-backend",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: 1,
+		},
+		{
+			name: "No policies returns empty",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "static-target",
+								Static: &agentgateway.McpTarget{
+									Host: "example.com",
+									Port: 8080,
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			refs := agentgatewaybackend.BuildAgwBackendReferences(tt.backend)
+			assert.Equal(t, tt.expected, len(refs))
 		})
 	}
 }
