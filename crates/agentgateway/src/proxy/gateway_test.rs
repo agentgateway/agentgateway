@@ -433,6 +433,48 @@ async fn llm_openai_tokenize() {
 }
 
 #[tokio::test]
+async fn llm_openai_messages_translation_with_host_override() {
+	let mock = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let (_mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider { model: None }),
+		false,
+		"{}",
+	);
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"/v1/chat/completions": "completions",
+					"/v1/messages": "messages"
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/messages?trace=repro",
+		include_bytes!("../llm/tests/requests/messages/basic.json"),
+	)
+	.await;
+
+	assert_eq!(res.status(), 200);
+	let requests = _mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	let upstream = &requests[0];
+	assert_eq!(upstream.url.path(), "/v1/chat/completions");
+	assert_eq!(upstream.url.query(), Some("trace=repro"));
+}
+
+#[tokio::test]
 async fn llm_log_body() {
 	let mock = body_mock(include_bytes!(
 		"../llm/tests/response/completions/basic.json"

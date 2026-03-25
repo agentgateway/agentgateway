@@ -88,12 +88,6 @@ pub struct NamedAIProvider {
 	pub inline_policies: Vec<BackendPolicy>,
 }
 
-impl NamedAIProvider {
-	pub fn use_default_policies(&self) -> bool {
-		self.host_override.is_none()
-	}
-}
-
 #[apply(schema!)]
 #[derive(Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RouteType {
@@ -327,10 +321,14 @@ impl AIProvider {
 		req: &mut Request,
 		route_type: RouteType,
 		llm_request: Option<&LLMRequest>,
-		apply_host_path_defaults: bool,
+		apply_default_path: bool,
+		apply_default_authority: bool,
 	) -> anyhow::Result<()> {
-		if apply_host_path_defaults {
-			self.set_host_path_defaults(req, route_type, llm_request)?;
+		if apply_default_path {
+			self.set_path_default(req, route_type, llm_request)?;
+		}
+		if apply_default_authority {
+			self.set_authority_default(req, llm_request)?;
 		}
 		self.set_required_fields(req)?;
 		Ok(())
@@ -349,7 +347,7 @@ impl AIProvider {
 		Ok(())
 	}
 
-	pub fn set_host_path_defaults(
+	pub fn set_path_default(
 		&self,
 		req: &mut Request,
 		route_type: RouteType,
@@ -362,7 +360,6 @@ impl AIProvider {
 					if override_path {
 						Self::set_path_and_query(uri, openai::path(route_type))?;
 					}
-					uri.authority = Some(Authority::from_static(openai::DEFAULT_HOST_STR));
 					Ok(())
 				})?;
 				Ok(())
@@ -372,7 +369,6 @@ impl AIProvider {
 					if override_path {
 						Self::set_path_and_query(uri, anthropic::path(route_type))?;
 					}
-					uri.authority = Some(Authority::from_static(anthropic::DEFAULT_HOST_STR));
 					Ok(())
 				})?;
 				Ok(())
@@ -382,7 +378,6 @@ impl AIProvider {
 					if override_path {
 						Self::set_path_and_query(uri, gemini::path(route_type))?;
 					}
-					uri.authority = Some(Authority::from_static(gemini::DEFAULT_HOST_STR));
 					Ok(())
 				})?;
 				Ok(())
@@ -396,36 +391,85 @@ impl AIProvider {
 							let path = provider.get_path_for_model(route_type, request_model, streaming);
 							uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
 						}
-						uri.authority = Some(Authority::from_str(&provider.get_host(request_model))?);
 						Ok(())
 					})?;
 					Ok(())
 				})
 			},
-			AIProvider::Bedrock(provider) => {
-				http::modify_req(req, |req| {
-					http::modify_uri(req, |uri| {
-						if override_path && let Some(l) = llm_request {
-							let path =
-								provider.get_path_for_route(route_type, l.streaming, l.request_model.as_str());
-							uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
-						}
-						uri.authority = Some(Authority::from_str(&provider.get_host())?);
-						Ok(())
-					})?;
-					// Store the region in request extensions so AWS signing can use it
-					req.extensions.insert(bedrock::AwsRegion {
-						region: provider.region.as_str().to_string(),
-					});
+			AIProvider::Bedrock(provider) => http::modify_req(req, |req| {
+				http::modify_uri(req, |uri| {
+					if override_path && let Some(l) = llm_request {
+						let path =
+							provider.get_path_for_route(route_type, l.streaming, l.request_model.as_str());
+						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+					}
 					Ok(())
-				})
-			},
+				})?;
+				Ok(())
+			}),
 			AIProvider::AzureOpenAI(provider) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if override_path && let Some(l) = llm_request {
 						let path = provider.get_path_for_model(route_type, l.request_model.as_str());
 						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
 					}
+					Ok(())
+				})?;
+				Ok(())
+			}),
+		}
+	}
+
+	pub fn set_authority_default(
+		&self,
+		req: &mut Request,
+		llm_request: Option<&LLMRequest>,
+	) -> anyhow::Result<()> {
+		match self {
+			AIProvider::OpenAI(_) => http::modify_req(req, |req| {
+				http::modify_uri(req, |uri| {
+					uri.authority = Some(Authority::from_static(openai::DEFAULT_HOST_STR));
+					Ok(())
+				})?;
+				Ok(())
+			}),
+			AIProvider::Anthropic(_) => http::modify_req(req, |req| {
+				http::modify_uri(req, |uri| {
+					uri.authority = Some(Authority::from_static(anthropic::DEFAULT_HOST_STR));
+					Ok(())
+				})?;
+				Ok(())
+			}),
+			AIProvider::Gemini(_) => http::modify_req(req, |req| {
+				http::modify_uri(req, |uri| {
+					uri.authority = Some(Authority::from_static(gemini::DEFAULT_HOST_STR));
+					Ok(())
+				})?;
+				Ok(())
+			}),
+			AIProvider::Vertex(provider) => {
+				let request_model = llm_request.map(|l| l.request_model.as_str());
+				http::modify_req(req, |req| {
+					http::modify_uri(req, |uri| {
+						uri.authority = Some(Authority::from_str(&provider.get_host(request_model))?);
+						Ok(())
+					})?;
+					Ok(())
+				})
+			},
+			AIProvider::Bedrock(provider) => http::modify_req(req, |req| {
+				http::modify_uri(req, |uri| {
+					uri.authority = Some(Authority::from_str(&provider.get_host())?);
+					Ok(())
+				})?;
+				// Store the region in request extensions so AWS signing can use it.
+				req.extensions.insert(bedrock::AwsRegion {
+					region: provider.region.as_str().to_string(),
+				});
+				Ok(())
+			}),
+			AIProvider::AzureOpenAI(provider) => http::modify_req(req, |req| {
+				http::modify_uri(req, |uri| {
 					uri.authority = Some(Authority::from_str(&provider.get_host())?);
 					Ok(())
 				})?;

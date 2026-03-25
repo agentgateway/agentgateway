@@ -1552,7 +1552,8 @@ async fn make_backend_call(
 							&mut req,
 							route_type,
 							Some(&llm_request),
-							llm.use_default_policies(),
+							llm.path_override.is_none(),
+							llm.host_override.is_none(),
 						)
 						.map_err(ProxyError::Processing)?;
 
@@ -1590,7 +1591,13 @@ async fn make_backend_call(
 					// For realtime we do the same and handle everything in the Websocket handler
 					llm
 						.provider
-						.setup_request(&mut req, route_type, None, true)
+						.setup_request(
+							&mut req,
+							route_type,
+							None,
+							llm.path_override.is_none(),
+							llm.host_override.is_none(),
+						)
 						.map_err(ProxyError::Processing)?;
 					if route_type == RouteType::Realtime {
 						let request_model = http::as_url(req.uri())
