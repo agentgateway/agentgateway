@@ -1321,15 +1321,19 @@ impl ListenerSet {
 		host: &str,
 		filter: impl Fn(&ListenerProtocol) -> bool,
 	) -> Option<Arc<Listener>> {
-		let candidates = self.inner.values().filter(|l| filter(&l.protocol));
-		// Clone into a vec so we can iterate multiple times
-		let candidates: Vec<_> = candidates.cloned().collect();
-		if let Some(best) = candidates.iter().find(|l| l.hostname == host) {
+		if let Some(best) = self
+			.inner
+			.values()
+			.filter(|l| filter(&l.protocol))
+			.find(|l| l.hostname == host)
+		{
 			trace!("found best match for {host} (exact)");
 			return Some(best.clone());
 		}
-		if let Some(best) = candidates
-			.iter()
+		if let Some(best) = self
+			.inner
+			.values()
+			.filter(|l| filter(&l.protocol))
 			.sorted_by_key(|l| -(l.hostname.len() as i64))
 			.find(|l| l.hostname.starts_with("*") && host.ends_with(&l.hostname.as_str()[1..]))
 		{
@@ -1337,7 +1341,12 @@ impl ListenerSet {
 			return Some(best.clone());
 		}
 		trace!("trying to find best match for {host} (empty hostname)");
-		candidates.iter().find(|l| l.hostname.is_empty()).cloned()
+		self
+			.inner
+			.values()
+			.filter(|l| filter(&l.protocol))
+			.find(|l| l.hostname.is_empty())
+			.cloned()
 	}
 
 	pub fn insert(&mut self, v: Listener) {
