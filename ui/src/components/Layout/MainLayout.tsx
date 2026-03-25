@@ -208,6 +208,10 @@ const StyledMenu = styled(Menu)`
     transition: background-color 100ms ease, padding 100ms ease;
     user-select: none;
     border-radius: 20px !important;
+    /* height: unset !important;
+    min-height: 80px !important;
+    max-height: 80px !important; */
+    height: 42px !important;
 
     &:not(.ant-menu-item-selected) {
       &:hover {
