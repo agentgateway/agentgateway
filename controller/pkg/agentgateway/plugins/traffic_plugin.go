@@ -588,6 +588,19 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 		}
 	}
 
+	if jwt.MCP != nil {
+		if len(jwt.Providers) != 1 {
+			errs = append(errs, fmt.Errorf("jwtAuthentication.mcp requires exactly one provider, found %d", len(jwt.Providers)))
+		} else {
+			mcp, err := translateJWTMCPConfig(jwt.MCP)
+			if err != nil {
+				errs = append(errs, err)
+			} else {
+				p.Mcp = mcp
+			}
+		}
+	}
+
 	jwtPolicy := &api.Policy{
 		Key:  basePolicyName + jwtPolicySuffix,
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),

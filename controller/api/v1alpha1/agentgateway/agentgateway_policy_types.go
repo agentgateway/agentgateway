@@ -666,15 +666,23 @@ const (
 	JWTAuthenticationModePermissive JWTAuthenticationMode = "Permissive"
 )
 
+// +kubebuilder:validation:XValidation:rule="!has(self.mcp) || size(self.providers) == 1",message="jwtAuthentication.mcp requires exactly one provider"
 type JWTAuthentication struct {
 	// `mode` is the validation mode for JWT authentication.
 	// +kubebuilder:default=Strict
 	// +optional
 	Mode JWTAuthenticationMode `json:"mode,omitempty"`
+
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +required
 	Providers []JWTProvider `json:"providers"`
+
+	// `mcp` optionally enables MCP OAuth metadata endpoint handling
+	// and MCP-specific authentication behavior on top of standard JWT validation.
+	// When set, the gateway will serve the MCP OAuth metadata discovery endpoints.
+	// +optional
+	MCP *JWTMCPConfig `json:"mcp,omitempty"`
 }
 
 type JWTProvider struct {
@@ -694,6 +702,19 @@ type JWTProvider struct {
 	// JWT.
 	// +required
 	JWKS JWKS `json:"jwks"`
+}
+
+// JWTMCPConfig holds MCP-specific extensions for JWT authentication.
+type JWTMCPConfig struct {
+	// `resourceMetadata` defines the metadata to use for MCP resources,
+	// served at the MCP OAuth metadata endpoints.
+	// +optional
+	ResourceMetadata map[string]apiextensionsv1.JSON `json:"resourceMetadata,omitempty"`
+
+	// `provider` specifies the identity provider to use for MCP authentication flows.
+	// +kubebuilder:validation:Enum=Auth0;Keycloak
+	// +optional
+	Provider *McpIDP `json:"provider,omitempty"`
 }
 
 // +kubebuilder:validation:ExactlyOneOf=remote;inline

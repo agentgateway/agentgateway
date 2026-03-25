@@ -7612,6 +7612,27 @@ spec:
                     description: '`jwtAuthentication` authenticates users based on
                       JWT tokens.'
                     properties:
+                      mcp:
+                        description: |-
+                          `mcp` optionally enables MCP OAuth metadata endpoint handling
+                          and MCP-specific authentication behavior on top of standard JWT validation.
+                          When set, the gateway will serve the MCP OAuth metadata discovery endpoints.
+                        properties:
+                          provider:
+                            description: '`provider` specifies the identity provider
+                              to use for MCP authentication flows.'
+                            enum:
+                            - Auth0
+                            - Keycloak
+                            type: string
+                          resourceMetadata:
+                            additionalProperties:
+                              x-kubernetes-preserve-unknown-fields: true
+                            description: |-
+                              `resourceMetadata` defines the metadata to use for MCP resources,
+                              served at the MCP OAuth metadata endpoints.
+                            type: object
+                        type: object
                       mode:
                         default: Strict
                         description: '`mode` is the validation mode for JWT authentication.'
@@ -7768,6 +7789,9 @@ spec:
                     required:
                     - providers
                     type: object
+                    x-kubernetes-validations:
+                    - message: jwtAuthentication.mcp requires exactly one provider
+                      rule: '!has(self.mcp) || size(self.providers) == 1'
                   phase:
                     description: |-
                       The phase to apply the traffic policy to. If the phase is `PreRouting`,
