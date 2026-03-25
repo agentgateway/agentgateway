@@ -1,6 +1,6 @@
 module github.com/agentgateway/agentgateway/tools
 
-go 1.25.7
+go 1.26.1
 
 tool (
 	github.com/bufbuild/buf/cmd/buf
