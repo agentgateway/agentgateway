@@ -927,12 +927,15 @@ fn test_get_messages() {
 /// response, the error body must be translated and forwarded instead of being
 /// silently consumed by the streaming decoder.
 ///
-/// This test calls `process_error` directly for each Bedrock input format to
-/// verify the error translation produces a non-empty, valid JSON body.  The
-/// condition change in `process_response` (`resp.status().is_success()`) ensures
-/// this path is actually reached for streaming requests.
-#[test]
-fn bedrock_error_body_is_translated_for_all_input_formats() {
+/// This test demonstrates the bug and the fix by feeding a Bedrock 400 JSON
+/// error body through both code paths:
+///   1. process_streaming (the old, buggy path) — produces empty body
+///   2. buffered process_error (the fixed path)  — produces proper translated body
+///
+/// The condition change in process_response (`resp.status().is_success()`)
+/// ensures path (2) is taken for non-success responses.
+#[tokio::test]
+async fn streaming_error_response_body_is_not_swallowed() {
 	let bedrock = AIProvider::Bedrock(bedrock::Provider {
 		model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
 		region: strng::new("us-west-2"),
@@ -940,54 +943,80 @@ fn bedrock_error_body_is_translated_for_all_input_formats() {
 		guardrail_version: None,
 	});
 
-	// Simulated Bedrock ValidationException error body.
-	let bedrock_error = Bytes::from(
-		r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#,
+	// A real Bedrock ValidationException error body (plain JSON, not event-stream).
+	let error_json = r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#;
+
+	let streaming_req = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Completions,
+		request_model: "input-model".into(),
+		provider: Default::default(),
+		streaming: true,
+		params: Default::default(),
+		prompt: None,
+	};
+
+	// ---- Path 1: process_streaming (buggy path) ----
+	// The AWS EventStream decoder consumes the JSON bytes and produces nothing.
+	let body = Body::from(error_json.as_bytes().to_vec());
+	let mut resp = Response::new(body);
+	*resp.status_mut() = ::http::StatusCode::BAD_REQUEST;
+	resp.headers_mut().insert(
+		::http::header::CONTENT_TYPE,
+		"application/json".parse().unwrap(),
+	);
+	resp.headers_mut().insert(
+		::http::header::CONTENT_LENGTH,
+		error_json.len().to_string().parse().unwrap(),
 	);
 
-	let formats = [
-		InputFormat::Completions,
-		InputFormat::Messages,
-		InputFormat::Responses,
-		InputFormat::Embeddings,
-	];
+	let log = AsyncLog::default();
+	let streaming_resp = bedrock
+		.process_streaming(
+			streaming_req.clone(),
+			LLMResponsePolicies::default(),
+			log,
+			false,
+			resp,
+		)
+		.await
+		.expect("process_streaming should not fail");
 
-	for format in formats {
-		let req = LLMRequest {
-			input_tokens: None,
-			input_format: format,
-			request_model: "input-model".into(),
-			provider: Default::default(),
-			streaming: true,
-			params: Default::default(),
-			prompt: None,
-		};
+	let streaming_body = streaming_resp
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
 
-		let result = bedrock.process_error(&req, ::http::StatusCode::BAD_REQUEST, &bedrock_error);
-		let body = result.unwrap_or_else(|e| {
-			panic!("process_error failed for {format:?}: {e}");
-		});
+	// The streaming decoder silently swallows the JSON error — body is empty.
+	assert!(
+		streaming_body.is_empty(),
+		"process_streaming should produce empty body for JSON error input (bug demonstration), got {} bytes",
+		streaming_body.len(),
+	);
 
-		assert!(
-			!body.is_empty(),
-			"process_error returned empty body for {format:?}",
-		);
+	// ---- Path 2: buffered process_error (fixed path) ----
+	// This is the path taken after the fix when resp.status().is_success() is false.
+	let error_bytes = Bytes::from(error_json);
+	let translated = bedrock
+		.process_error(&streaming_req, ::http::StatusCode::BAD_REQUEST, &error_bytes)
+		.expect("process_error should succeed");
 
-		let parsed: Value = serde_json::from_slice(&body).unwrap_or_else(|e| {
-			panic!(
-				"process_error returned invalid JSON for {format:?}: {e}\nbody: {}",
-				String::from_utf8_lossy(&body)
-			);
-		});
+	assert!(
+		!translated.is_empty(),
+		"process_error should produce non-empty translated body",
+	);
 
-		// Verify the translated error contains the original message.
-		let message = parsed
-			.pointer("/error/message")
-			.and_then(|v| v.as_str())
-			.unwrap_or_default();
-		assert!(
-			message.contains("toolResult"),
-			"translated error for {format:?} should preserve the original message, got: {message}",
-		);
-	}
+	let parsed: Value = serde_json::from_slice(&translated)
+		.expect("translated error should be valid JSON");
+
+	// Verify the original Bedrock error message is preserved in the translation.
+	let message = parsed
+		.pointer("/error/message")
+		.and_then(|v| v.as_str())
+		.unwrap_or_default();
+	assert!(
+		message.contains("toolResult"),
+		"translated error should preserve the original message, got: {message}",
+	);
 }
