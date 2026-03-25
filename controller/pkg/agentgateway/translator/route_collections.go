@@ -14,6 +14,7 @@ import (
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/util/protomarshal"
 	"istio.io/istio/pkg/util/sets"
+	"istio.io/istio/pkg/workloadapi"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -293,12 +294,20 @@ func ProcessParentReferences[T any](
 }
 
 func resourceMapper(t any, parent RouteParentReference) *api.Resource {
+	var serviceKey *workloadapi.NamespacedHostname
+	if parent.ServiceKey != nil {
+		serviceKey = &workloadapi.NamespacedHostname{
+			Namespace: parent.ServiceKey.Namespace,
+			Hostname:  parent.ServiceKey.Name,
+		}
+	}
+
 	switch tt := t.(type) {
 	case AgwTCPRoute:
 		// safety: a shallow clone is ok because we only modify a top level field (Key)
 		inner := protomarshal.ShallowClone(tt.TCPRoute)
 		inner.ListenerKey = parent.ListenerKey
-		inner.ServiceKey = parent.ServiceKey
+		inner.ServiceKey = serviceKey
 		inner.Key += routeKeySuffix(parent)
 		if inner.ServiceKey != nil {
 			// if linked by Service, no need for hostname matching
@@ -310,7 +319,7 @@ func resourceMapper(t any, parent RouteParentReference) *api.Resource {
 		// safety: a shallow clone is ok because we only modify a top level field (Key)
 		inner := protomarshal.ShallowClone(tt.Route)
 		inner.ListenerKey = parent.ListenerKey
-		inner.ServiceKey = parent.ServiceKey
+		inner.ServiceKey = serviceKey
 		inner.Key += routeKeySuffix(parent)
 		if inner.ServiceKey != nil {
 			// if linked by Service, no need for hostname matching
@@ -326,7 +335,7 @@ func resourceMapper(t any, parent RouteParentReference) *api.Resource {
 
 func routeKeySuffix(parent RouteParentReference) string {
 	if parent.ServiceKey != nil {
-		return ".svc." + parent.ServiceKey.Namespace + "." + parent.ServiceKey.Hostname
+		return ".svc." + parent.ServiceKey.Namespace + "." + parent.ServiceKey.Name
 	}
 	if sec := string(parent.ParentSection); sec != "" {
 		return "." + sec

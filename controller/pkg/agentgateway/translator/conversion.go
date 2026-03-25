@@ -22,7 +22,6 @@ import (
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/util/sets"
-	"istio.io/istio/pkg/workloadapi"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	klabels "k8s.io/apimachinery/pkg/labels"
@@ -926,7 +925,7 @@ type ParentInfo struct {
 	// ListenerKey is the internal key of the listener resource created for this parent.
 	ListenerKey string
 	// ServiceKey (optionally) links a parent reference to an individual Service.
-	ServiceKey *workloadapi.NamespacedHostname
+	ServiceKey *types.NamespacedName
 	// AllowedKinds indicates which kinds can be admitted by this Parent
 	AllowedKinds []gwv1.RouteGroupKind
 	// Hostnames is the hostnames that must be match to reference to the Parent. For gateway this is listener hostname
@@ -948,7 +947,7 @@ type RouteParentReference struct {
 	// ListenerKey is the internal key of the listener resource created for this parent.
 	ListenerKey string
 	// ServiceKey (optionally) links a parent reference to an individual Service.
-	ServiceKey *workloadapi.NamespacedHostname
+	ServiceKey *types.NamespacedName
 	// InternalKind is the Kind of the Parent
 	InternalKind string
 	// DeniedReason, if present, indicates why the reference was not valid

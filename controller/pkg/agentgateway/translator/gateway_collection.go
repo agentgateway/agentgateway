@@ -199,6 +199,7 @@ func (g ParentInfo) Equals(other ParentInfo) bool {
 	return g.ParentGateway == other.ParentGateway &&
 		g.ParentGatewayClassName == other.ParentGatewayClassName &&
 		g.ListenerKey == other.ListenerKey &&
+		ptr.Equal(g.ServiceKey, other.ServiceKey) &&
 		g.OriginalHostname == other.OriginalHostname &&
 		g.SectionName == other.SectionName &&
 		g.Port == other.Port &&
