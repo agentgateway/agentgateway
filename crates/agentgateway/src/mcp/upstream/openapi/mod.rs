@@ -52,7 +52,7 @@ pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> 
 		0 => Ok("".to_string()),
 		1 => {
 			let raw = &server.servers[0].url;
-			
+
 			let extract_path = |after_scheme: &str| -> String {
 				if let Some(path_idx) = after_scheme.find('/') {
 					let path = &after_scheme[path_idx..];
@@ -71,8 +71,8 @@ pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> 
 
 			if let Some(idx) = raw.find("://") {
 				Ok(extract_path(&raw[idx + 3..]))
-			} else if raw.starts_with("//") {
-				Ok(extract_path(&raw[2..]))
+			} else if let Some(stripped) = raw.strip_prefix("//") {
+				Ok(extract_path(stripped))
 			} else {
 				// Not an absolute URL -- treat as a relative path prefix (existing behavior)
 				if let Ok(parsed) = url::Url::parse(raw) {
