@@ -3,7 +3,6 @@ import type { MenuProps } from "antd";
 import { Layout as AntLayout, Button, Menu } from "antd";
 import {
   BarChart3,
-  Boxes,
   Brain,
   FileText,
   FlaskConical,
@@ -11,13 +10,10 @@ import {
   Moon,
   Network,
   Route,
-  Server,
-  Shield,
   Sparkles,
   Sun,
-  Workflow,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "../../contexts";
 import { AgentgatewayLogo } from "../AgentgatewayLogo";
@@ -91,6 +87,11 @@ const StyledSider = styled(Sider)`
     height: 100%;
     position: relative;
     z-index: 1;
+
+    // Removes a faint border from the logo container.
+    > div {
+      border: none !important
+    }
   }
 `;
 
@@ -204,44 +205,66 @@ const StyledMenu = styled(Menu)`
   /* Menu item hover and selected states */
   .ant-menu-item,
   .ant-menu-submenu-title {
-    transition: background-color 0.15s ease;
-    border-radius: 6px;
+    transition: background-color 100ms ease, padding 100ms ease;
     user-select: none;
+    border-radius: 20px !important;
 
-    &:hover {
+    &:not(.ant-menu-item-selected) {
+      &:hover {
+        background-color: color-mix(
+          in srgb,
+          var(--color-sidebar-active) 25%,
+          var(--color-bg-container)
+        ) !important;
+        &:active {
+          background-color: color-mix(
+            in srgb,
+            var(--color-sidebar-active) 50%,
+            var(--color-bg-container)
+          ) !important;
+        }
+      }
+    }
+
+    .ant-menu-item-icon,
+    .anticon {
+      color: inherit !important;
+    }
+
+    /* Selected state — pill style */
+    &.ant-menu-item-selected {
+      background-color: color-mix(
+        in srgb,
+        var(--color-sidebar-active) 80%,
+        var(--color-bg-container)
+      ) !important;
+      box-shadow: none !important;
+      color: color-mix(in srgb, var(--color-sidebar) 0%, var(--color-text-base)) !important;
+    }
+
+    /* Submenu selected state */
+    &.ant-menu-submenu-selected > .ant-menu-submenu-title {
       background-color: color-mix(
         in srgb,
         var(--color-sidebar) 10%,
         var(--color-bg-container)
       ) !important;
     }
-
-    &:active {
-      background-color: color-mix(
-        in srgb,
-        var(--color-sidebar) 18%,
-        var(--color-bg-container)
-      ) !important;
-    }
   }
 
-  /* Selected state */
-  .ant-menu-item-selected {
-    background-color: color-mix(
-      in srgb,
-      var(--color-sidebar) 14%,
-      var(--color-bg-container)
-    ) !important;
+  .ant-menu-item-group-title {
+    padding: 12px 0px 12px 20px;
+    user-select: none;
+    opacity: .8;
+    font-weight: 700;
+    font-size: 90%;
+    text-transform: uppercase;
   }
 
-  /* Submenu selected state */
-  .ant-menu-submenu-selected > .ant-menu-submenu-title {
-    background-color: color-mix(
-      in srgb,
-      var(--color-sidebar) 10%,
-      var(--color-bg-container)
-    ) !important;
+  li:has(.ant-menu-item){
+    padding: 0px 4px 0px 0px !important;
   }
+
 `;
 
 type MenuItem = Required<MenuProps>["items"][number];
@@ -253,29 +276,6 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
 
-  // Find which parent menu should be open based on current path
-  const getInitialOpenKey = () => {
-    const path = location.pathname;
-    if (path.startsWith("/llm")) return "llm";
-    if (path.startsWith("/mcp")) return "mcp";
-    if (path.startsWith("/traffic")) return "traffic";
-    return null;
-  };
-
-  const [openKeys, setOpenKeys] = useState<string[]>(() => {
-    const initialKey = getInitialOpenKey();
-    return initialKey ? [initialKey] : [];
-  });
-
-  // Ensure current section is open when location changes, but don't close others
-  useEffect(() => {
-    const currentKey = getInitialOpenKey();
-    if (currentKey && !openKeys.includes(currentKey)) {
-      setOpenKeys((prev) => [...prev, currentKey]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname]);
-
   const menuItems: MenuItem[] = [
     {
       key: "/dashboard",
@@ -283,25 +283,14 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
       label: "Dashboard",
     },
     {
-      key: "llm",
+      key: "llm-group",
       label: "LLM",
-      icon: <Brain size={18} />,
-      onClick: () => navigate("/llm"),
+      type: "group",
       children: [
         {
           key: "/llm",
           icon: <Brain size={18} />,
-          label: "LLM (Overview)",
-        },
-        {
-          key: "/llm/models",
-          icon: <Boxes size={18} />,
-          label: "Models",
-        },
-        {
-          key: "/llm/policies",
-          icon: <Shield size={18} />,
-          label: "Policies",
+          label: "Configuration",
         },
         {
           key: "/llm/logs",
@@ -321,25 +310,14 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
       ],
     },
     {
-      key: "mcp",
+      key: "mcp-group",
       label: "MCP",
-      icon: <Network size={18} />,
-      onClick: () => navigate("/mcp"),
+      type: "group",
       children: [
         {
           key: "/mcp",
           icon: <Network size={18} />,
-          label: "MCP (Overview)",
-        },
-        {
-          key: "/mcp/servers",
-          icon: <Server size={18} />,
-          label: "Servers",
-        },
-        {
-          key: "/mcp/policies",
-          icon: <Shield size={18} />,
-          label: "Policies",
+          label: "Configuration",
         },
         {
           key: "/mcp/logs",
@@ -359,10 +337,9 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
       ],
     },
     {
-      key: "traffic",
+      key: "traffic-group",
       label: "Traffic",
-      icon: <Workflow size={18} />,
-      onClick: () => navigate("/traffic"),
+      type: "group",
       children: [
         {
           key: "/traffic",
@@ -373,32 +350,30 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
           key: "/traffic/logs",
           icon: <FileText size={18} />,
           label: "Logs",
-          disabled: true,
         },
         {
           key: "/traffic/metrics",
           icon: <BarChart3 size={18} />,
           label: "Metrics",
-          disabled: true,
         },
       ],
     },
     {
-      key: "/cel-playground",
-      icon: <Sparkles size={18} />,
-      label: "CEL Playground",
+      key: "tools-group",
+      label: "Tools",
+      type: "group",
+      children: [
+        {
+          key: "/cel-playground",
+          icon: <Sparkles size={18} />,
+          label: "CEL Playground",
+        },
+      ],
     },
   ];
 
   const handleMenuClick: MenuProps["onClick"] = ({ key }) => {
-    // Only navigate for leaf items (not parent items with onClick)
-    if (key && !["llm", "mcp", "traffic"].includes(key)) {
-      navigate(key);
-    }
-  };
-
-  const handleOpenChange = (keys: string[]) => {
-    setOpenKeys(keys);
+    navigate(key);
   };
 
   const selectedKeys = useMemo(() => {
@@ -407,14 +382,10 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
       "/traffic/logs",
       "/traffic/metrics",
       "/llm",
-      "/llm/models",
-      "/llm/policies",
       "/llm/logs",
       "/llm/metrics",
       "/llm/playground",
       "/mcp",
-      "/mcp/servers",
-      "/mcp/policies",
       "/mcp/logs",
       "/mcp/metrics",
       "/mcp/playground",
@@ -449,8 +420,6 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
         <StyledMenu
           mode="inline"
           selectedKeys={selectedKeys}
-          openKeys={openKeys}
-          onOpenChange={handleOpenChange}
           items={menuItems}
           onClick={handleMenuClick}
         />

@@ -1,6 +1,7 @@
 import { CodeOutlined } from "@ant-design/icons";
 import styled from "@emotion/styled";
 import { Button, Spin } from "antd";
+import { Server, Shield } from "lucide-react";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
@@ -77,6 +78,28 @@ const PlaceholderContent = styled.div`
     font-size: 14px;
     line-height: 1.6;
   }
+
+  .hint {
+    font-size: 13px;
+    color: var(--color-text-tertiary);
+    margin-top: var(--spacing-lg);
+  }
+`;
+
+const PlaceholderIcons = styled.div`
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-xl);
+  margin-top: var(--spacing-lg);
+`;
+
+const IconItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
 `;
 
 const PageHeader = styled.div`
@@ -198,10 +221,22 @@ export function MCPPage() {
           ) : (
             <PlaceholderContainer>
               <PlaceholderContent>
-                <h3>Select an Item</h3>
+                <h3>MCP Configuration</h3>
                 <p>
-                  Choose the MCP configuration from the tree on the left to
-                  view and edit its settings.
+                  Select an item from the tree, or add MCP configuration to
+                  get started.
+                </p>
+                <PlaceholderIcons>
+                  <IconItem>
+                    <Server size={20} /> Servers
+                  </IconItem>
+                  <IconItem>
+                    <Shield size={20} /> Policies
+                  </IconItem>
+                </PlaceholderIcons>
+                <p className="hint">
+                  Servers and policies added to your agentgateway configuration
+                  will appear here.
                 </p>
               </PlaceholderContent>
             </PlaceholderContainer>

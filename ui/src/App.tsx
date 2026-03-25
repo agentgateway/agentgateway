@@ -25,6 +25,10 @@ import { RawConfigPage as TrafficRawConfigPage } from "./pages/RawConfigPage/Raw
 import { RoutesPage } from "./pages/Routes/RoutesPage";
 import { SetupWizardPage } from "./pages/SetupWizard/SetupWizardPage";
 import { TrafficPage } from "./pages/Traffic/TrafficPage";
+import {
+  TrafficLogsPage,
+  TrafficMetricsPage,
+} from "./pages/Traffic/TrafficPages";
 
 function App() {
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
@@ -36,7 +40,7 @@ function App() {
         components: {
           Menu: {
             itemHoverColor: "var(--color-text-base)",
-            itemSelectedColor: "var(--color-primary)",
+            itemSelectedColor: "var(--color-text-base)",
             itemBg: "transparent",
             itemHoverBg:
               "color-mix(in srgb, var(--color-sidebar) 10%, var(--color-bg-container))",
@@ -77,8 +81,6 @@ function App() {
                   <Route path="/llm" element={<LLMPage />} />
                   <Route path="/llm/llm" element={<LLMPage />} />
                   <Route path="/llm/llm/model/:modelIndex" element={<LLMPage />} />
-                  <Route path="/llm/models" element={<LLMPage />} />
-                  <Route path="/llm/policies" element={<LLMPage />} />
                   <Route path="/llm/raw-config" element={<TrafficRawConfigPage />} />
                   <Route path="/llm/logs" element={<LLMLogsPage />} />
                   <Route path="/llm/metrics" element={<LLMMetricsPage />} />
@@ -90,8 +92,6 @@ function App() {
                   {/* MCP Section */}
                   <Route path="/mcp" element={<MCPPage />} />
                   <Route path="/mcp/mcp" element={<MCPPage />} />
-                  <Route path="/mcp/servers" element={<MCPPage />} />
-                  <Route path="/mcp/policies" element={<MCPPage />} />
                   <Route path="/mcp/raw-config" element={<TrafficRawConfigPage />} />
                   <Route path="/mcp/logs" element={<MCPLogsPage />} />
                   <Route path="/mcp/metrics" element={<MCPMetricsPage />} />
@@ -102,6 +102,11 @@ function App() {
 
                   {/* Traffic Section */}
                   <Route path="/traffic" element={<TrafficPage />} />
+                  <Route path="/traffic/logs" element={<TrafficLogsPage />} />
+                  <Route
+                    path="/traffic/metrics"
+                    element={<TrafficMetricsPage />}
+                  />
                   <Route
                     path="/traffic/raw-config"
                     element={<TrafficRawConfigPage />}
