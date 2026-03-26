@@ -434,6 +434,28 @@ spec:
         - field: a
           value: b
 ---
+_err: 'traffic.jwtAuthentication may not be used with backend.mcp.authentication in the same policy'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-and-mcp-authentication
+spec:
+  traffic:
+    jwtAuthentication:
+      providers:
+        - issuer: https://example.com
+          jwks:
+            inline: '{"keys":[]}'
+  backend:
+    mcp:
+      authentication:
+        issuer: https://example.com
+        jwks:
+          backendRef:
+            kind: Service
+            name: jwks
+          jwksPath: /.well-known/jwks.json
+---
 _err: "targetRefs may only"
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

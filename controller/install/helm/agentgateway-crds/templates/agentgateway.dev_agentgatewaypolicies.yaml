@@ -8391,6 +8391,10 @@ spec:
               rule: '!has(self.backend) || !has(self.backend.ai) || ((!has(self.targetRefs)
                 || !self.targetRefs.exists(t, t.kind == ''Service'')) && (!has(self.targetSelectors)
                 || !self.targetSelectors.exists(t, t.kind == ''Service'')))'
+            - message: traffic.jwtAuthentication may not be used with backend.mcp.authentication
+                in the same policy
+              rule: '!(has(self.traffic) && has(self.traffic.jwtAuthentication) &&
+                has(self.backend) && has(self.backend.mcp) && has(self.backend.mcp.authentication))'
             - message: the 'frontend' field can only target a Gateway
               rule: 'has(self.frontend) && has(self.targetRefs) ? self.targetRefs.all(t,
                 t.kind == ''Gateway'' && !has(t.sectionName)) : true'
