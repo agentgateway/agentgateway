@@ -1,9 +1,8 @@
 binds:
-- port: 65535
+- port: 6553
   tunnelProtocol: direct
   listeners:
   - protocol: HTTP
-    name: listener
     hostname: '*'
     routes:
     - hostnames: []
@@ -18,5 +17,3 @@ binds:
           port: 8080
         weight: 1
       name: route
-mcp: null
-llm: null

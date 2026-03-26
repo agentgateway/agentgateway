@@ -52,7 +52,7 @@ export function ConfigEditorPage() {
         <div>
           <PageTitle>Configuration Editor</PageTitle>
           <Description>
-            Edit the complete configuration with JSON schema validation
+            Edit the complete configuration in JSON or YAML format with schema validation
           </Description>
         </div>
       </PageHeader>
