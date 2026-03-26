@@ -239,6 +239,14 @@ export const uiSchema: UiSchema = {
   policy: {
     "ui:title": "",
     "ui:help": "Configure the policy settings (CORS, headers, rate limiting, etc.)",
+    requestHeaderModifier: {
+      add: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value" },
+      set: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value" },
+    },
+    responseHeaderModifier: {
+      add: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value" },
+      set: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value" },
+    },
   },
 };
 

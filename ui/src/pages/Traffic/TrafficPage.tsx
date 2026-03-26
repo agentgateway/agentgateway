@@ -6,9 +6,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
 import type { UrlParams } from "../../components/TrafficHierarchy";
 import {
-    HierarchyTree,
-    NodeDetailView,
-    useTrafficHierarchy,
+  HierarchyTree,
+  NodeDetailView,
+  useTrafficHierarchy,
 } from "../../components/TrafficHierarchy";
 
 // ---------------------------------------------------------------------------
@@ -237,10 +237,9 @@ export function TrafficPage() {
       <MetricsHeader>
         <PageHeader>
           <div>
-            <PageTitle>Traffic Configuration (Manual Schemas)</PageTitle>
+            <PageTitle>Traffic Configuration</PageTitle>
             <Description>
-              Manage your gateway routing with manually configured TypeScript
-              schemas
+              View and edit the full agentgateway configuration file.
             </Description>
           </div>
           <Button
@@ -250,13 +249,6 @@ export function TrafficPage() {
             Config Editor
           </Button>
         </PageHeader>
-        <StyledAlert
-          message="Manual TypeScript Schemas"
-          description="This page uses manually configured TypeScript form schemas (not auto-generated JSON). Forms are defined in traffic/forms/ and use config.d.ts types directly for compile-time safety."
-          type="info"
-          showIcon
-          closable
-        />
       </MetricsHeader>
       <SplitBody>
         <Sidebar>

@@ -205,22 +205,23 @@ const StyledMenu = styled(Menu)`
   /* Menu item hover and selected states */
   .ant-menu-item,
   .ant-menu-submenu-title {
-    transition: background-color 100ms ease, padding 100ms ease;
+    transition: background-color 250ms ease !important;
     user-select: none;
     border-radius: 20px !important;
     height: 42px !important;
+    background-color: transparent !important;
 
     &:not(.ant-menu-item-selected) {
       &:hover {
         background-color: color-mix(
           in srgb,
-          var(--color-sidebar-active) 25%,
+          var(--color-sidebar-active) 30%,
           var(--color-bg-container)
         ) !important;
         &:active {
           background-color: color-mix(
             in srgb,
-            var(--color-sidebar-active) 50%,
+            var(--color-sidebar-active) 20%,
             var(--color-bg-container)
           ) !important;
         }
@@ -241,6 +242,10 @@ const StyledMenu = styled(Menu)`
       ) !important;
       box-shadow: none !important;
       color: color-mix(in srgb, var(--color-sidebar) 0%, var(--color-text-base)) !important;
+
+      [data-theme="light"] & {
+        color: var(--color-text-inverse) !important;
+      }
     }
 
     /* Submenu selected state */

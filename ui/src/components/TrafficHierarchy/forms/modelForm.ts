@@ -82,31 +82,101 @@ export const schema: RJSFSchema = {
     },
     requestHeaders: {
       type: "object",
+      title: "Request Headers",
       description: "Modify headers sent to the provider",
-      additionalProperties: true,
       properties: {
         add: {
           type: "object",
           title: "Add Headers",
           description: "Headers to add to requests",
-          additionalProperties: {
-            type: "string",
-          },
+          additionalProperties: { type: "string" },
         },
         set: {
           type: "object",
           title: "Set Headers",
           description: "Headers to set/override in requests",
-          additionalProperties: {
-            type: "string",
-          },
+          additionalProperties: { type: "string" },
         },
         remove: {
           type: "array",
           title: "Remove Headers",
           description: "Header names to remove from requests",
-          items: {
-            type: "string",
+          items: { type: "string" },
+        },
+      },
+    },
+    responseHeaders: {
+      type: "object",
+      title: "Response Headers",
+      description: "Modify headers in responses from the provider",
+      properties: {
+        add: {
+          type: "object",
+          title: "Add Headers",
+          description: "Headers to add to responses",
+          additionalProperties: { type: "string" },
+        },
+        set: {
+          type: "object",
+          title: "Set Headers",
+          description: "Headers to set/override in responses",
+          additionalProperties: { type: "string" },
+        },
+        remove: {
+          type: "array",
+          title: "Remove Headers",
+          description: "Header names to remove from responses",
+          items: { type: "string" },
+        },
+      },
+    },
+    backendTLS: {
+      type: "object",
+      title: "Backend TLS",
+      description: "TLS configuration when connecting to the LLM provider",
+      properties: {
+        cert: { type: "string", title: "Certificate" },
+        key: { type: "string", title: "Key" },
+        root: { type: "string", title: "Root CA" },
+        hostname: { type: "string", title: "Hostname", description: "SNI hostname override" },
+        insecure: { type: "boolean", title: "Insecure", description: "Skip TLS verification" },
+        insecureHost: { type: "boolean", title: "Insecure Host", description: "Skip hostname verification" },
+        alpn: { type: "array", title: "ALPN Protocols", items: { type: "string" } },
+        subjectAltNames: { type: "array", title: "Subject Alt Names", items: { type: "string" } },
+      },
+    },
+    health: {
+      type: "object",
+      title: "Health Policy",
+      description: "Outlier detection for this model backend",
+      properties: {
+        unhealthyExpression: {
+          type: "string",
+          title: "Unhealthy Expression",
+          description: "CEL expression; true means unhealthy (e.g., response.code >= 500)",
+        },
+        eviction: {
+          type: "object",
+          title: "Eviction",
+          properties: {
+            duration: { type: "string", title: "Duration", description: "How long to evict (e.g., 30s)" },
+            restoreHealth: { type: "number", title: "Restore Health", description: "Number of successes to restore" },
+            consecutiveFailures: { type: "number", title: "Consecutive Failures", description: "Failures before eviction" },
+            healthThreshold: { type: "number", title: "Health Threshold" },
+          },
+        },
+      },
+    },
+    backendTunnel: {
+      type: "object",
+      title: "Backend Tunnel",
+      description: "Tunnel configuration when connecting to the LLM provider",
+      properties: {
+        proxy: {
+          type: "object",
+          description: "Proxy address",
+          properties: {
+            host: { type: "string", title: "Host", description: "Proxy hostname or IP" },
           },
         },
       },
@@ -221,12 +291,55 @@ export const uiSchema: UiSchema = {
     "ui:help": "Example: {\"top_p\": 1.0} - forces this value even if user provides different",
   },
   transformation: {
-    "ui:title": "",
-    "ui:help": "Example: {\"model\": \"request.model + '-latest'\"}",
+    "ui:field": "keyValueMap",
+    "ui:keyPlaceholder": "field",
+    "ui:valuePlaceholder": "CEL expression",
   },
   requestHeaders: {
-    "ui:title": "",
     "ui:help": "Modify headers sent to the LLM provider",
+    add: {
+      "ui:field": "keyValueMap",
+      "ui:keyPlaceholder": "header-name",
+      "ui:valuePlaceholder": "header-value",
+    },
+    set: {
+      "ui:field": "keyValueMap",
+      "ui:keyPlaceholder": "header-name",
+      "ui:valuePlaceholder": "header-value",
+    },
+    remove: { "ui:help": "Header names to remove from requests" },
+  },
+  responseHeaders: {
+    "ui:help": "Modify headers in responses from the LLM provider",
+    add: {
+      "ui:field": "keyValueMap",
+      "ui:keyPlaceholder": "header-name",
+      "ui:valuePlaceholder": "header-value",
+    },
+    set: {
+      "ui:field": "keyValueMap",
+      "ui:keyPlaceholder": "header-name",
+      "ui:valuePlaceholder": "header-value",
+    },
+    remove: { "ui:help": "Header names to remove from responses" },
+  },
+  backendTLS: {
+    cert: { "ui:widget": "textarea", "ui:options": { rows: 3 } },
+    key: { "ui:widget": "textarea", "ui:options": { rows: 3 } },
+    root: { "ui:widget": "textarea", "ui:options": { rows: 3 } },
+  },
+  health: {
+    unhealthyExpression: {
+      "ui:placeholder": "response.code >= 500",
+    },
+    eviction: {
+      duration: { "ui:placeholder": "30s" },
+    },
+  },
+  backendTunnel: {
+    proxy: {
+      host: { "ui:placeholder": "proxy.example.com" },
+    },
   },
   guardrails: {
     "ui:title": "",

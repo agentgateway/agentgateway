@@ -176,6 +176,7 @@ export const uiSchema: UiSchema = {
   },
   stdio: {
     cmd: { "ui:placeholder": "/usr/local/bin/my-mcp-server" },
+    env: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "ENV_VAR", "ui:valuePlaceholder": "value" },
   },
   openapi: {
     host: { "ui:placeholder": "api.example.com" },

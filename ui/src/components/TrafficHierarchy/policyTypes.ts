@@ -88,57 +88,48 @@ export function getDefaultPolicyValue(policyType: string): Record<string, unknow
       return { rules: [] };
     
     // Authentication policies have complex required fields - return minimal structure
+    // JWT Auth: LocalJwtConfig (single-provider shorthand)
+    // jwks is FileInlineOrRemote = { file: string } | string | { url: string }
     case "jwtAuth":
       return {
         issuer: "",
         audiences: [],
-        jwks: { inline: "" },
+        jwks: '{"keys":[]}',
       };
-    
+
     case "basicAuth":
       return {
         htpasswd: "",
       };
-    
+
     case "apiKey":
       return {
         keys: [],
       };
-    
+
     case "mcpAuthentication":
       return {
         issuer: "",
         audiences: [],
         resourceMetadata: {},
-        jwks: { inline: "" },
+        jwks: '{"keys":[]}',
       };
-    
-    // External auth requires URL
+
+    // ExtAuthz = { policies?, protocol?, failureMode?, ... } & ExtAuthz1
+    // ExtAuthz1 = "invalid" | { service: { name, port } } | { host: string } | { backend: string }
     case "extAuthz":
       return {
-        http: {
-          service: {
-            name: {
-              namespace: "default",
-              hostname: "",
-            },
-            port: 80,
-          },
-        },
+        host: "",
       };
-    
+
+    // ExtProc = { policies?, failureMode?, ... } & ExtProc1
+    // ExtProc1 = "invalid" | { service: { name, port } } | { host: string } | { backend: string }
     case "extProc":
       return {
-        service: {
-          name: {
-            namespace: "default",
-            hostname: "",
-          },
-          port: 80,
-        },
+        host: "",
       };
-    
-    // Rate limiting requires configuration
+
+    // Rate limiting
     case "localRateLimit":
       return {
         spec: {
@@ -146,41 +137,34 @@ export function getDefaultPolicyValue(policyType: string): Record<string, unknow
           tokensPerFill: 100,
         },
       };
-    
+
     case "remoteRateLimit":
       return {
-        service: {
-          name: {
-            namespace: "default",
-            hostname: "",
-          },
-          port: 80,
-        },
+        host: "",
         spec: {
           fillInterval: "1s",
           tokensPerFill: 100,
         },
       };
-    
+
     // Backend TLS
     case "backendTLS":
       return {
         hostname: "",
       };
-    
-    // Backend tunnel requires proxy
+
+    // Backend tunnel
     case "backendTunnel":
       return {
         proxy: {
           host: "",
         },
       };
-    
-    // Backend auth
+
+    // BackendAuth = { passthrough: {} } | { key: ... } | { gcp: ... } | { aws: ... } | { azure: ... }
     case "backendAuth":
       return {
-        username: "",
-        password: "",
+        passthrough: {},
       };
     
     // Most other policies can start empty or with minimal structure

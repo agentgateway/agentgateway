@@ -14,6 +14,7 @@ import {
   ArrayFieldTemplate,
   CollapsibleObjectFieldTemplate,
   FieldTemplate,
+  KeyValueMapField,
   WrapIfAdditionalTemplate,
 } from "../FormTemplates";
 import { ProtocolTag } from "../ProtocolTag";
@@ -37,6 +38,18 @@ import { getPolicyLabel } from "./policyTypes";
 import type { UrlParams } from "./types";
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Extract a human-readable message from any thrown value (Error, ApiError, etc.) */
+function getErrorMessage(e: unknown, fallback: string): string {
+  if (e && typeof e === "object" && "message" in e && typeof (e as any).message === "string") {
+    return (e as any).message;
+  }
+  return fallback;
+}
+
+// ---------------------------------------------------------------------------
 // Form templates configuration
 // ---------------------------------------------------------------------------
 
@@ -47,18 +60,35 @@ const formTemplates = {
   WrapIfAdditionalTemplate,
 };
 
+const formFields = {
+  keyValueMap: KeyValueMapField,
+};
+
 // ---------------------------------------------------------------------------
 // Styled components
 // ---------------------------------------------------------------------------
 
 const Container = styled.div`
-  padding: var(--spacing-xl);
   min-height: 100%;
 `;
 
 const Header = styled.div`
-  margin-bottom: var(--spacing-xl);
-  padding-bottom: var(--spacing-lg);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--color-bg-layout);
+  padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-lg);
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.7);
+
+  [data-theme="light"] & {
+    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.05);
+  }
+`;
+
+const Body = styled.div`
+  padding: var(--spacing-xl);
 `;
 
 const BreadcrumbWrapper = styled.div`
@@ -566,7 +596,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         );
       } catch (e: unknown) {
         toast.error(
-          e instanceof Error ? e.message : "Failed to create listener",
+          getErrorMessage(e, "Failed to create listener"),
         );
       }
     },
@@ -615,7 +645,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           `${basePath}/bind/${port}/listener/${li}/${routeSeg}/${routeIndex}?edit=true&creating=true`,
         );
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Failed to create route");
+        toast.error(getErrorMessage(e, "Failed to create route"));
       }
     },
     [basePath, hierarchy.binds, mutate, navigate],
@@ -677,7 +707,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         );
       } catch (e: unknown) {
         toast.error(
-          e instanceof Error ? e.message : "Failed to create backend",
+          getErrorMessage(e, "Failed to create backend"),
         );
       }
     },
@@ -733,7 +763,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           `${basePath}/bind/${port}/listener/${li}/${routeSeg}/${ri}/policy/${policyType}?edit=true&creating=true`,
         );
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Failed to create policy");
+        toast.error(getErrorMessage(e, "Failed to create policy"));
       }
     },
     [basePath, hierarchy.binds, mutate, navigate],
@@ -902,6 +932,19 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         return;
       }
 
+      // Handle MCP target policy updates
+      if (selected.type === "mcpTargetPolicy") {
+        await api.updateMCPTargetPolicy(
+          selected.target.targetIndex,
+          selected.node.policyType,
+          fd,
+        );
+        toast.success(`${getPolicyLabel(selected.node.policyType)} policy updated`);
+        await mutate();
+        navigate(`${basePath}/mcp/target/${selected.target.targetIndex}/policy/${selected.node.policyType}`);
+        return;
+      }
+
       const { port, li, ri, bi, isTcpRoute } = urlParams;
 
       // Guard: these types require a port
@@ -911,7 +954,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
 
       // Apply form-specific transformation if available
       // Skip for types that don't have a corresponding form entry
-      const form = (selected.type !== "llmPolicy" && selected.type !== "mcpPolicy" && selected.type !== "mcpTargetPolicy")
+      const form = (selected.type !== "llmPolicy" && selected.type !== "mcpPolicy")
         ? (forms[selected.type] as any)
         : undefined;
       let dataToSave = fd;
@@ -992,26 +1035,15 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       } else if (selected.type === "mcpPolicy") {
         // Update the specific policy in the MCP config
         if (!hierarchy.mcp) throw new Error("MCP config not found");
-        const currentConfig = { ...hierarchy.mcp.config };
         const currentPolicies = hierarchy.mcp.policies.reduce((acc, p) => {
           acc[p.policyType] = p.policy;
           return acc;
         }, {} as Record<string, unknown>);
         await api.createOrUpdateMCP({
-          ...currentConfig,
+          ...hierarchy.mcp.config,
+          targets: hierarchy.mcp.targets.map((t) => t.target),
           policies: { ...currentPolicies, [selected.node.policyType]: dataToSave },
         } as any);
-      } else if (selected.type === "mcpTargetPolicy") {
-        // Update the specific policy in the MCP target
-        await api.updateMCPTargetPolicy(
-          selected.target.targetIndex,
-          selected.node.policyType,
-          dataToSave,
-        );
-        toast.success(`${getPolicyLabel(selected.node.policyType)} policy updated`);
-        await mutate();
-        navigate(`${basePath}/mcp/target/${selected.target.targetIndex}/policy/${selected.node.policyType}`);
-        return;
       }
 
       toast.success(
@@ -1143,12 +1175,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         navigate(`${basePath}/llm`);
       } else if (selected.type === "mcpPolicy") {
         if (!hierarchy.mcp) throw new Error("MCP config not found");
-        const currentConfig = { ...hierarchy.mcp.config };
         const remainingPolicies = hierarchy.mcp.policies
           .filter((p) => p.policyType !== selected.node.policyType)
           .reduce((acc, p) => { acc[p.policyType] = p.policy; return acc; }, {} as Record<string, unknown>);
         await api.createOrUpdateMCP({
-          ...currentConfig,
+          ...hierarchy.mcp.config,
+          targets: hierarchy.mcp.targets.map((t) => t.target),
           policies: Object.keys(remainingPolicies).length > 0 ? remainingPolicies : null,
         } as any);
         navigate(`${basePath}/mcp`);
@@ -1260,7 +1292,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           <Description>Port binding configuration</Description>
         </Header>
 
-        <SectionTitle>Bind Details</SectionTitle>
+        <Body>
+          <SectionTitle>Bind Details</SectionTitle>
         <FormWrapper>
           <Form
             id="bind-form"
@@ -1274,10 +1307,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             onSubmit={handleSubmit}
             onError={handleError}
             templates={formTemplates}
+            fields={formFields}
           >
             <></>
           </Form>
         </FormWrapper>
+        </Body>
       </Container>
     );
   }
@@ -1361,7 +1396,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           </Description>
         </Header>
 
-        <SectionTitle>Listener Details</SectionTitle>
+        <Body>
+          <SectionTitle>Listener Details</SectionTitle>
         <FormWrapper>
           <Form
             id="listener-form"
@@ -1375,10 +1411,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             onSubmit={handleSubmit}
             onError={handleError}
             templates={formTemplates}
+            fields={formFields}
           >
             <></>
           </Form>
         </FormWrapper>
+        </Body>
       </Container>
     );
   }
@@ -1458,7 +1496,11 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
                 >
                   Add Backend
                 </Button>
-                <Dropdown menu={{ items: policyMenuItems }} trigger={["click"]}>
+                <Dropdown
+                  menu={{ items: policyMenuItems }}
+                  trigger={["click"]}
+                  overlayStyle={{ maxHeight: "50vh", overflow: "auto" }}
+                >
                   <Button icon={<PlusOutlined />}>Add Policy</Button>
                 </Dropdown>
                 <Button
@@ -1507,7 +1549,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           </Description>
         </Header>
 
-        <SectionTitle>Route Details</SectionTitle>
+        <Body>
+          <SectionTitle>Route Details</SectionTitle>
         <FormWrapper>
           <Form
             id="route-form"
@@ -1521,10 +1564,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             onSubmit={handleSubmit}
             onError={handleError}
             templates={formTemplates}
+            fields={formFields}
           >
             <></>
           </Form>
         </FormWrapper>
+        </Body>
       </Container>
     );
   }
@@ -1604,7 +1649,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           </Description>
         </Header>
 
-        <SectionTitle>Backend Details</SectionTitle>
+        <Body>
+          <SectionTitle>Backend Details</SectionTitle>
         <FormWrapper>
           <Form
             id="backend-form"
@@ -1618,10 +1664,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             onSubmit={handleSubmit}
             onError={handleError}
             templates={formTemplates}
+            fields={formFields}
           >
             <></>
           </Form>
         </FormWrapper>
+        </Body>
       </Container>
     );
   }
@@ -1694,7 +1742,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           </Description>
         </Header>
 
-        <SectionTitle>Policy Details</SectionTitle>
+        <Body>
+          <SectionTitle>Policy Details</SectionTitle>
         <FormWrapper>
           <Form
             id="policy-form"
@@ -1724,10 +1773,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             onSubmit={handleSubmit}
             onError={handleError}
             templates={formTemplates}
+            fields={formFields}
           >
             <></>
           </Form>
         </FormWrapper>
+        </Body>
       </Container>
     );
   }
@@ -1737,7 +1788,16 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     const displayName = getPolicyLabel(selected.node.policyType);
     const scope = selected.type === "llmPolicy" ? "LLM" : "MCP";
     const formId = `${selected.type}-form`;
-    const formSchema = selected.type === "llmPolicy" ? forms.llmPolicy : forms.mcpPolicy;
+    
+    // Select appropriate form based on policy type
+    const policyType = selected.node.policyType;
+    const formSchema =
+      policyType === "authorization" || policyType === "mcpAuthorization"
+        ? forms.authorizationPolicy
+        : policyType === "transformations"
+          ? forms.transformationsPolicy
+          : (selected.type === "llmPolicy" ? forms.llmPolicy : forms.mcpPolicy);
+    
     const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
 
     return (
@@ -1799,7 +1859,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           </Description>
         </Header>
 
-        <SectionTitle>Policy Details</SectionTitle>
+        <Body>
+          <SectionTitle>Policy Details</SectionTitle>
         <FormWrapper>
           <Form
             id={formId}
@@ -1813,10 +1874,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             onSubmit={handleSubmit}
             onError={handleError}
             templates={formTemplates}
+            fields={formFields}
           >
             <></>
           </Form>
         </FormWrapper>
+        </Body>
       </Container>
     );
   }
@@ -1825,7 +1888,16 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
   if (selected.type === "mcpTargetPolicy") {
     const displayName = getPolicyLabel(selected.node.policyType);
     const formId = `mcpTargetPolicy-form`;
-    const formSchema = forms.llmPolicy; // Use generic policy form (llmPolicy is the generic one)
+    
+    // Select appropriate form based on policy type
+    const policyType = selected.node.policyType;
+    const formSchema =
+      policyType === "authorization" || policyType === "mcpAuthorization"
+        ? forms.authorizationPolicy
+        : policyType === "transformations"
+          ? forms.transformationsPolicy
+          : forms.llmPolicy; // Use generic policy form as fallback
+    
     const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
     const targetName = selected.target.target.name ?? `Target ${selected.target.targetIndex}`;
 
@@ -1888,22 +1960,27 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           </Description>
         </Header>
 
-        <SectionTitle>Policy Details</SectionTitle>
+        <Body>
+          <SectionTitle>Policy Details</SectionTitle>
         <FormWrapper>
           <Form
             id={formId}
+            key={isEditing ? "editing" : "viewing"}
             schema={formSchema.schema}
             uiSchema={formSchema.uiSchema}
             formData={formData}
-            onChange={(e) => setFormData(e.formData)}
+            validator={validator}
+            disabled={!isEditing || saving}
+            onChange={({ formData: fd }) => setFormData(fd)}
             onSubmit={handleSubmit}
             onError={handleError}
-            validator={validator}
             templates={formTemplates}
+            fields={formFields}
           >
             <></>
           </Form>
         </FormWrapper>
+        </Body>
       </Container>
     );
   }
@@ -1971,7 +2048,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           <Description>Model configuration for LLM provider</Description>
         </Header>
 
-        <SectionTitle>Model Details</SectionTitle>
+        <Body>
+          <SectionTitle>Model Details</SectionTitle>
         <FormWrapper>
           <Form
             id="model-form"
@@ -1985,10 +2063,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             onSubmit={handleSubmit}
             onError={handleError}
             templates={formTemplates}
+            fields={formFields}
           >
             <></>
           </Form>
         </FormWrapper>
+        </Body>
       </Container>
     );
   }
@@ -2056,7 +2136,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           <Description>MCP server target configuration</Description>
         </Header>
 
-        <SectionTitle>Target Details</SectionTitle>
+        <Body>
+          <SectionTitle>Target Details</SectionTitle>
         <FormWrapper>
           <Form
             id="mcp-target-form"
@@ -2070,10 +2151,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             onSubmit={handleSubmit}
             onError={handleError}
             templates={formTemplates}
+            fields={formFields}
           >
             <></>
           </Form>
         </FormWrapper>
+        </Body>
       </Container>
     );
   }
@@ -2181,9 +2264,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
                         );
                       } catch (e: unknown) {
                         toast.error(
-                          e instanceof Error
-                            ? e.message
-                            : "Failed to create model",
+                          getErrorMessage(e, "Failed to create model"),
                         );
                       }
                     }}
@@ -2229,7 +2310,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           </Description>
         </Header>
 
-        <SectionTitle>{typeLabels[selected.type]} Details</SectionTitle>
+        <Body>
+          <SectionTitle>{typeLabels[selected.type]} Details</SectionTitle>
         <FormWrapper>
           <Form
             id="top-level-form"
@@ -2245,10 +2327,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             }}
             onError={handleError}
             templates={formTemplates}
+            fields={formFields}
           >
             <></>
           </Form>
         </FormWrapper>
+        </Body>
       </Container>
     );
   }

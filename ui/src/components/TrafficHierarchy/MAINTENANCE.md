@@ -36,6 +36,7 @@ Currently all policies use a generic JSON editor. To add a proper form:
 
 ## Common gotchas
 
-- **`additionalProperties`**: Root forms use `additionalProperties: true` because the API returns fields not in the form schema (e.g., `listeners` on bind, `models` on LLM). Setting it to `false` causes "must NOT have additional properties" validation errors.
+- **Child collections are NOT in form schemas**: Forms only contain fields the user edits directly. Child collections (e.g., `listeners` on bind, `routes`/`tcpRoutes` on listener, `models`/`policies` on LLM, `targets`/`policies` on MCP) are managed via the hierarchy tree context menus. The form schema must **not** include these fields, and `NodeDetailView` strips them from `formData` before rendering and merges them back before saving. Do **not** re-add these fields to form schemas.
+- **`useTrafficHierarchy` strips children from `.config`**: The hook destructures child arrays out of the raw config (e.g., `const { targets, policies, ...config } = mcpConfig`). When reconstructing the full config for API calls, you must add children back: `{ ...hierarchy.mcp.config, targets: hierarchy.mcp.targets.map(t => t.target), policies: ... }`.
 - **MCP `mcp` field type**: Changed from `unknown | null` to `MCPNode | null` in the hierarchy. Any code reading `hierarchy.mcp` now gets the typed `MCPNode` with `.config` and `.policies`.
 - **URL patterns**: Policy URLs are `{basePath}/llm/policy/{policyType}` and `{basePath}/mcp/policy/{policyType}`. The `urlToSelectedKey` function in HierarchyTree must match these before the generic `/llm` or `/mcp` patterns.

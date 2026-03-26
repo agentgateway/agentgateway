@@ -3,32 +3,32 @@ import { Global, css } from "@emotion/react";
 import styled from "@emotion/styled";
 import type { MenuProps } from "antd";
 import {
-    App,
-    Badge,
-    Button,
-    Card,
-    Dropdown,
-    Empty,
-    Space,
-    Tooltip,
-    Tree,
+  App,
+  Badge,
+  Button,
+  Card,
+  Dropdown,
+  Empty,
+  Space,
+  Tooltip,
+  Tree,
 } from "antd";
 import type { DataNode } from "antd/es/tree";
 import {
-    Bot,
-    ChevronsDownUp,
-    ChevronsUpDown,
-    Headphones,
-    MoreVertical,
-    Network,
-    Pencil,
-    Route,
-    Server,
-    Settings,
-    TriangleAlert,
+  Bot,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Headphones,
+  MoreVertical,
+  Network,
+  Pencil,
+  Route,
+  Server,
+  Settings,
+  TriangleAlert,
 } from "lucide-react";
 import type { Key, ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useConfig } from "../../api";
@@ -37,20 +37,32 @@ import type { LocalRouteBackend } from "../../config";
 import { getResourceColor } from "../../utils/colorPalette";
 import { ProtocolTag } from "../ProtocolTag";
 import type {
-    BackendNode,
-    BindNode,
-    LLMPolicyNode,
-    ListenerNode,
-    MCPPolicyNode,
-    MCPTargetNode,
-    ModelNode,
-    PolicyNode,
-    RouteNode,
-    TrafficHierarchy,
-    ValidationError,
+  BackendNode,
+  BindNode,
+  LLMPolicyNode,
+  ListenerNode,
+  MCPPolicyNode,
+  MCPTargetNode,
+  ModelNode,
+  PolicyNode,
+  RouteNode,
+  TrafficHierarchy,
+  ValidationError,
 } from "./hooks/useTrafficHierarchy";
 import { getDefaultPolicyValue, getPolicyLabel, getPolicyTypesForScope } from "./policyTypes";
 import { ResourceIcon } from "./ResourceIcon";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Extract a human-readable message from any thrown value (Error, ApiError, etc.) */
+function getErrorMessage(e: unknown, fallback: string): string {
+  if (e && typeof e === "object" && "message" in e && typeof (e as any).message === "string") {
+    return (e as any).message;
+  }
+  return fallback;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1833,7 +1845,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
         mutate();
         navigate(parentPath);
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Failed to delete bind");
+        toast.error(getErrorMessage(e, "Failed to delete bind"));
       }
     },
     [mutate, navigate],
@@ -1848,7 +1860,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
         navigate(parentPath);
       } catch (e: unknown) {
         toast.error(
-          e instanceof Error ? e.message : "Failed to delete listener",
+          getErrorMessage(e, "Failed to delete listener"),
         );
       }
     },
@@ -1873,7 +1885,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
         mutate();
         navigate(parentPath);
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Failed to delete route");
+        toast.error(getErrorMessage(e, "Failed to delete route"));
       }
     },
     [mutate, navigate],
@@ -1899,7 +1911,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
         navigate(parentPath);
       } catch (e: unknown) {
         toast.error(
-          e instanceof Error ? e.message : "Failed to delete backend",
+          getErrorMessage(e, "Failed to delete backend"),
         );
       }
     },
@@ -1918,6 +1930,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
         };
         await api.createListener(port, newListener);
         toast.success("Listener created successfully");
+        ensureExpanded(`bind-${port}`);
 
         // Wait for config to refresh and get the updated data
         const freshConfig = await mutate();
@@ -1930,7 +1943,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
         );
       } catch (e: unknown) {
         toast.error(
-          e instanceof Error ? e.message : "Failed to create listener",
+          getErrorMessage(e, "Failed to create listener"),
         );
       }
     },
@@ -1993,6 +2006,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
             ? "TCP route created successfully"
             : "Route created successfully",
         );
+        ensureExpanded(`bind-${port}`, `listener-${port}-${li}`);
 
         // Navigate to the newly created route
         const routeSeg = isTcp ? "tcproute" : "route";
@@ -2005,7 +2019,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
         // Trigger a background refresh (don't await)
         mutate();
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Failed to create route");
+        toast.error(getErrorMessage(e, "Failed to create route"));
       }
     },
     [basePath, hierarchy.binds, mutate, navigate],
@@ -2071,6 +2085,12 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
         }
 
         toast.success("Backend created successfully");
+        const routeSeg = isTcp ? "tcproute" : "route";
+        ensureExpanded(
+          `bind-${port}`,
+          `listener-${port}-${li}`,
+          `route-${port}-${li}-${isTcp ? "tcp" : "http"}-${ri}`,
+        );
 
         // Wait for config to refresh and get the updated data
         const freshConfig = await mutate();
@@ -2082,13 +2102,12 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
           ? freshListener?.tcpRoutes?.[ri]
           : freshListener?.routes?.[ri];
         const backendIndex = (freshRoute?.backends?.length ?? 1) - 1;
-        const routeSeg = isTcp ? "tcproute" : "route";
         navigate(
           `${basePath}/bind/${port}/listener/${li}/${routeSeg}/${ri}/backend/${backendIndex}?edit=true&creating=true`,
         );
       } catch (e: unknown) {
         toast.error(
-          e instanceof Error ? e.message : "Failed to create backend",
+          getErrorMessage(e, "Failed to create backend"),
         );
       }
     },
@@ -2154,6 +2173,11 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
           .trim();
 
         toast.success(`${displayName} policy created successfully`);
+        ensureExpanded(
+          `bind-${port}`,
+          `listener-${port}-${li}`,
+          `route-${port}-${li}-${isTcp ? "tcp" : "http"}-${ri}`,
+        );
 
         // Wait for config to refresh
         await mutate();
@@ -2164,7 +2188,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
           `${basePath}/bind/${port}/listener/${li}/${routeSeg}/${ri}/policy/${policyType}?edit=true&creating=true`,
         );
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Failed to create policy");
+        toast.error(getErrorMessage(e, "Failed to create policy"));
       }
     },
     [basePath, hierarchy.binds, mutate, navigate],
@@ -2234,7 +2258,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
         mutate();
         navigate(parentPath);
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Failed to delete policy");
+        toast.error(getErrorMessage(e, "Failed to delete policy"));
       }
     },
     [hierarchy.binds, mutate, navigate],
@@ -2261,7 +2285,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       mutate();
     } catch (e: unknown) {
       toast.error(
-        e instanceof Error ? e.message : "Failed to delete LLM config",
+        getErrorMessage(e, "Failed to delete LLM config"),
       );
     }
   }, [mutate]);
@@ -2274,6 +2298,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       };
       await api.createLLMModel(newModel);
       toast.success("Model created successfully");
+      ensureExpanded("llm");
 
       // Wait for config to refresh and get the updated data
       const freshConfig = await mutate();
@@ -2283,7 +2308,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       const newIndex = llmConfig?.models ? llmConfig.models.length - 1 : 0;
       navigate(`${basePath}/llm/model/${newIndex}?edit=true&creating=true`);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to create model");
+      toast.error(getErrorMessage(e, "Failed to create model"));
     }
   }, [basePath, hierarchy.llm?.models.length, mutate, navigate]);
 
@@ -2295,7 +2320,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
         await mutate();
         navigate(`${basePath}/llm`);
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Failed to delete model");
+        toast.error(getErrorMessage(e, "Failed to delete model"));
       }
     },
     [basePath, mutate, navigate],
@@ -2308,7 +2333,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       mutate();
     } catch (e: unknown) {
       toast.error(
-        e instanceof Error ? e.message : "Failed to delete MCP config",
+        getErrorMessage(e, "Failed to delete MCP config"),
       );
     }
   }, [mutate]);
@@ -2325,6 +2350,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       };
       await api.createMCPTarget(newTarget);
       toast.success("Target created successfully");
+      ensureExpanded("mcp");
 
       // Wait for config to refresh and get the updated data
       const freshConfig = await mutate();
@@ -2334,7 +2360,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       const newIndex = mcpConfig?.targets ? mcpConfig.targets.length - 1 : 0;
       navigate(`${basePath}/mcp/target/${newIndex}?edit=true&creating=true`);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to create target");
+      toast.error(getErrorMessage(e, "Failed to create target"));
     }
   }, [basePath, hierarchy.mcp?.targets.length, mutate, navigate]);
 
@@ -2346,7 +2372,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
         await mutate();
         navigate(`${basePath}/mcp`);
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Failed to delete target");
+        toast.error(getErrorMessage(e, "Failed to delete target"));
       }
     },
     [basePath, mutate, navigate],
@@ -2357,10 +2383,11 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       try {
         await api.updateMCPTargetPolicy(targetIndex, policyType, getDefaultPolicyValue(policyType));
         toast.success(`${getPolicyLabel(policyType)} policy added`);
+        ensureExpanded("mcp", `mcp-target-${targetIndex}`);
         await mutate();
         navigate(`${basePath}/mcp/target/${targetIndex}/policy/${policyType}?edit=true&creating=true`);
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Failed to add policy");
+        toast.error(getErrorMessage(e, "Failed to add policy"));
       }
     },
     [basePath, mutate, navigate],
@@ -2374,7 +2401,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
         await mutate();
         navigate(`${basePath}/mcp/target/${targetIndex}`);
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Failed to delete policy");
+        toast.error(getErrorMessage(e, "Failed to delete policy"));
       }
     },
     [basePath, mutate, navigate],
@@ -2387,7 +2414,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       mutate();
     } catch (e: unknown) {
       toast.error(
-        e instanceof Error ? e.message : "Failed to delete frontend policies",
+        getErrorMessage(e, "Failed to delete frontend policies"),
       );
     }
   }, [mutate]);
@@ -2395,29 +2422,36 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
   const handleAddLLMPolicy = useCallback(async (policyType: string) => {
     try {
       if (!hierarchy.llm) return;
-      const currentConfig = { ...hierarchy.llm.config, models: hierarchy.llm.models.map((m) => m.model) };
-      const currentPolicies = (currentConfig as any).policies ?? {};
+      const currentPolicies = hierarchy.llm.policies.reduce((acc, p) => {
+        acc[p.policyType] = p.policy;
+        return acc;
+      }, {} as Record<string, unknown>);
       const updatedConfig = {
-        ...currentConfig,
+        ...hierarchy.llm.config,
+        models: hierarchy.llm.models.map((m) => m.model),
         policies: { ...currentPolicies, [policyType]: getDefaultPolicyValue(policyType) },
       };
       await api.createOrUpdateLLM(updatedConfig as any);
       toast.success(`${getPolicyLabel(policyType)} policy added`);
+      ensureExpanded("llm");
       await mutate();
       navigate(`${basePath}/llm/policy/${policyType}?edit=true&creating=true`);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to add policy");
+      toast.error(getErrorMessage(e, "Failed to add policy"));
     }
   }, [basePath, hierarchy.llm, mutate, navigate]);
 
   const handleDeleteLLMPolicy = useCallback(async (policyType: string, parentPath: string) => {
     try {
       if (!hierarchy.llm) return;
-      const currentConfig = { ...hierarchy.llm.config, models: hierarchy.llm.models.map((m) => m.model) };
-      const currentPolicies = { ...((currentConfig as any).policies ?? {}) };
+      const currentPolicies = hierarchy.llm.policies.reduce((acc, p) => {
+        acc[p.policyType] = p.policy;
+        return acc;
+      }, {} as Record<string, unknown>);
       delete currentPolicies[policyType];
       const updatedConfig = {
-        ...currentConfig,
+        ...hierarchy.llm.config,
+        models: hierarchy.llm.models.map((m) => m.model),
         policies: Object.keys(currentPolicies).length > 0 ? currentPolicies : null,
       };
       await api.createOrUpdateLLM(updatedConfig as any);
@@ -2425,36 +2459,43 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       mutate();
       navigate(parentPath);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to delete policy");
+      toast.error(getErrorMessage(e, "Failed to delete policy"));
     }
   }, [hierarchy.llm, mutate, navigate]);
 
   const handleAddMCPPolicy = useCallback(async (policyType: string) => {
     try {
       if (!hierarchy.mcp) return;
-      const currentConfig = { ...hierarchy.mcp.config };
-      const currentPolicies = (currentConfig as any).policies ?? {};
+      const currentPolicies = hierarchy.mcp.policies.reduce((acc, p) => {
+        acc[p.policyType] = p.policy;
+        return acc;
+      }, {} as Record<string, unknown>);
       const updatedConfig = {
-        ...currentConfig,
+        ...hierarchy.mcp.config,
+        targets: hierarchy.mcp.targets.map((t) => t.target),
         policies: { ...currentPolicies, [policyType]: getDefaultPolicyValue(policyType) },
       };
       await api.createOrUpdateMCP(updatedConfig as any);
       toast.success(`${getPolicyLabel(policyType)} policy added`);
+      ensureExpanded("mcp");
       await mutate();
       navigate(`${basePath}/mcp/policy/${policyType}?edit=true&creating=true`);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to add policy");
+      toast.error(getErrorMessage(e, "Failed to add policy"));
     }
   }, [basePath, hierarchy.mcp, mutate, navigate]);
 
   const handleDeleteMCPPolicy = useCallback(async (policyType: string, parentPath: string) => {
     try {
       if (!hierarchy.mcp) return;
-      const currentConfig = { ...hierarchy.mcp.config };
-      const currentPolicies = { ...((currentConfig as any).policies ?? {}) };
+      const currentPolicies = hierarchy.mcp.policies.reduce((acc, p) => {
+        acc[p.policyType] = p.policy;
+        return acc;
+      }, {} as Record<string, unknown>);
       delete currentPolicies[policyType];
       const updatedConfig = {
-        ...currentConfig,
+        ...hierarchy.mcp.config,
+        targets: hierarchy.mcp.targets.map((t) => t.target),
         policies: Object.keys(currentPolicies).length > 0 ? currentPolicies : null,
       };
       await api.createOrUpdateMCP(updatedConfig as any);
@@ -2462,7 +2503,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       mutate();
       navigate(parentPath);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to delete policy");
+      toast.error(getErrorMessage(e, "Failed to delete policy"));
     }
   }, [hierarchy.mcp, mutate, navigate]);
 
@@ -2551,10 +2592,49 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
     getAllKeys(treeData),
   );
 
+  /** Ensure one or more tree keys are expanded (used after adding child items) */
+  const ensureExpanded = useCallback((...keys: Key[]) => {
+    setExpandedKeys((prev) => {
+      const set = new Set(prev);
+      let changed = false;
+      for (const k of keys) {
+        if (!set.has(k)) { set.add(k); changed = true; }
+      }
+      return changed ? Array.from(set) : prev;
+    });
+  }, []);
+
   const selectedKeys = useMemo(() => {
     const key = urlToSelectedKey(location.pathname, basePath);
     return key ? [key] : [];
   }, [location.pathname, basePath]);
+
+  // Auto-expand ancestors of the selected node so it's always visible
+  useEffect(() => {
+    if (selectedKeys.length === 0) return;
+    const key = selectedKeys[0] as string;
+    const ancestors: Key[] = [];
+    let m;
+    if ((m = key.match(/^(?:backend|policy)-(\d+)-(\d+)-(\d+)/))) {
+      // Need to find whether it's tcp or http to build the route key — check both
+      ancestors.push(`bind-${m[1]}`, `listener-${m[1]}-${m[2]}`);
+      // Expand both possible route keys (only the existing one will matter)
+      ancestors.push(`route-${m[1]}-${m[2]}-http-${m[3]}`, `route-${m[1]}-${m[2]}-tcp-${m[3]}`);
+    } else if ((m = key.match(/^route-(\d+)-(\d+)/))) {
+      ancestors.push(`bind-${m[1]}`, `listener-${m[1]}-${m[2]}`);
+    } else if ((m = key.match(/^listener-(\d+)/))) {
+      ancestors.push(`bind-${m[1]}`);
+    } else if (key.startsWith("model-") || key.startsWith("llm-policy-")) {
+      ancestors.push("llm");
+    } else if ((m = key.match(/^mcp-target-(\d+)-policy-/))) {
+      ancestors.push("mcp", `mcp-target-${m[1]}`);
+    } else if (key.startsWith("mcp-target-") || key.startsWith("mcp-policy-")) {
+      ancestors.push("mcp");
+    }
+    if (ancestors.length > 0) {
+      ensureExpanded(...ancestors);
+    }
+  }, [selectedKeys, ensureExpanded]);
 
   const handleExpandAll = useCallback(() => {
     setExpandedKeys(getAllKeys(treeData));
@@ -2582,7 +2662,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       mutate();
       navigate(`${basePath}/bind/${newPort}?edit=true`);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to create bind");
+      toast.error(getErrorMessage(e, "Failed to create bind"));
     }
   }, [basePath, hierarchy.binds, mutate, navigate]);
 
@@ -2598,7 +2678,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       navigate(`${basePath}/llm?edit=true&creating=true`);
     } catch (e: unknown) {
       toast.error(
-        e instanceof Error ? e.message : "Failed to create LLM config",
+        getErrorMessage(e, "Failed to create LLM config"),
       );
     }
   }, [basePath, mutate, navigate]);
@@ -2614,7 +2694,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       navigate(`${basePath}/mcp?edit=true&creating=true`);
     } catch (e: unknown) {
       toast.error(
-        e instanceof Error ? e.message : "Failed to create MCP config",
+        getErrorMessage(e, "Failed to create MCP config"),
       );
     }
   }, [basePath, mutate, navigate]);
@@ -2628,7 +2708,7 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       navigate(`${basePath}/frontendPolicies?edit=true&creating=true`);
     } catch (e: unknown) {
       toast.error(
-        e instanceof Error ? e.message : "Failed to create frontend policies",
+        getErrorMessage(e, "Failed to create frontend policies"),
       );
     }
   }, [basePath, mutate, navigate]);
@@ -2654,29 +2734,20 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
     (showFrontendPoliciesSection && hierarchy.frontendPolicies !== null);
 
   if (!hasFilteredContent) {
-    // Determine appropriate empty state
-    const emptyDescription = filter?.length === 1
-      ? filter[0] === "llm" ? "No LLM configuration"
-        : filter[0] === "mcp" ? "No MCP configuration"
-        : filter[0] === "frontendPolicies" ? "No frontend policies configured"
-        : "No binds configured"
-      : "No resources configured";
-    const emptyAction = filter?.length === 1
-      ? filter[0] === "llm" ? <Button type="primary" icon={<PlusOutlined />} onClick={handleAddLLM}>Add LLM Config</Button>
-        : filter[0] === "mcp" ? <Button type="primary" icon={<PlusOutlined />} onClick={handleAddMCP}>Add MCP Config</Button>
-        : filter[0] === "frontendPolicies" ? <Button type="primary" icon={<PlusOutlined />} onClick={handleAddFrontendPolicies}>Add Frontend Policies</Button>
-        : <Button type="primary" icon={<PlusOutlined />} onClick={handleAddBind}>Add First Bind</Button>
-      : <Button type="primary" icon={<PlusOutlined />} onClick={handleAddBind}>Add First Bind</Button>;
     return (
       <TreeCard>
-        <Empty description={emptyDescription} image={Empty.PRESENTED_IMAGE_SIMPLE}>
-          {emptyAction}
+        <Empty description="No resources configured" image={Empty.PRESENTED_IMAGE_SIMPLE}>
+          <Dropdown menu={{ items: addMenuItems }} trigger={["click"]}>
+            <Button type="primary" icon={<PlusOutlined />}>
+              Add <DownOutlined />
+            </Button>
+          </Dropdown>
         </Empty>
       </TreeCard>
     );
   }
 
-  const cardTitle = title ?? "Traffic Hierarchy";
+  const cardTitle = title ?? "Traffic Configuration";
 
   return (
     <>
@@ -2686,6 +2757,10 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
             .ant-dropdown-menu {
               min-width: 160px;
             }
+          }
+          .ant-dropdown-menu-sub {
+            max-height: 50vh;
+            overflow-y: auto;
           }
         `}
       />

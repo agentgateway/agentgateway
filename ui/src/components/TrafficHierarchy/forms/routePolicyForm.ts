@@ -91,6 +91,14 @@ export const schema: RJSFSchema = {
  */
 export const uiSchema: UiSchema = {
   "ui:title": "",
+  requestHeaderModifier: {
+    add: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value" },
+    set: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value" },
+  },
+  responseHeaderModifier: {
+    add: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value" },
+    set: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value" },
+  },
   cors: {
     "ui:title": "",
     allowOrigins: {

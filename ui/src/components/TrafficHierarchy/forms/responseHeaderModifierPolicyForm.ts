@@ -32,12 +32,14 @@ export const schema: RJSFSchema = {
 export const uiSchema: UiSchema = {
   "ui:title": "",
   add: {
-    "ui:title": "",
-    "ui:help": "Add headers only if they don't already exist",
+    "ui:field": "keyValueMap",
+    "ui:keyPlaceholder": "header-name",
+    "ui:valuePlaceholder": "header-value",
   },
   set: {
-    "ui:title": "",
-    "ui:help": "Set headers, overwriting any existing values",
+    "ui:field": "keyValueMap",
+    "ui:keyPlaceholder": "header-name",
+    "ui:valuePlaceholder": "header-value",
   },
   remove: {
     "ui:help": "Remove these headers from the response",

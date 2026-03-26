@@ -6,22 +6,24 @@
  * but are handcrafted TypeScript schemas that use the types from config.d.ts.
  */
 
+import * as authorizationPolicyForm from "./authorizationPolicyForm";
 import * as backendForm from "./backendForm";
 import * as bindForm from "./bindForm";
 import * as corsPolicyForm from "./corsPolicyForm";
 import * as frontendPoliciesForm from "./frontendPoliciesForm";
+import * as genericPolicyForm from "./genericPolicyForm";
 import * as listenerForm from "./listenerForm";
 import * as llmForm from "./llmForm";
 import * as mcpForm from "./mcpForm";
+import * as mcpTargetForm from "./mcpTargetForm";
 import * as modelForm from "./modelForm";
 import * as policyForm from "./policyForm";
 import * as requestHeaderModifierPolicyForm from "./requestHeaderModifierPolicyForm";
 import * as responseHeaderModifierPolicyForm from "./responseHeaderModifierPolicyForm";
 import * as routeForm from "./routeForm";
 import * as routePolicyForm from "./routePolicyForm";
-import * as genericPolicyForm from "./genericPolicyForm";
-import * as mcpTargetForm from "./mcpTargetForm";
 import * as topLevelBackendForm from "./topLevelBackendForm";
+import * as transformationsPolicyForm from "./transformationsPolicyForm";
 
 export const forms = {
   bind: bindForm,
@@ -41,6 +43,8 @@ export const forms = {
   llmPolicy: genericPolicyForm,
   mcpPolicy: genericPolicyForm,
   mcpTarget: mcpTargetForm,
+  authorizationPolicy: authorizationPolicyForm,
+  transformationsPolicy: transformationsPolicyForm,
 };
 
 export type ResourceType = keyof typeof forms;
@@ -87,4 +91,6 @@ export const resourceLabels: Record<
   llmPolicy: { singular: "LLM Policy", plural: "LLM Policies" },
   mcpPolicy: { singular: "MCP Policy", plural: "MCP Policies" },
   mcpTarget: { singular: "MCP Target", plural: "MCP Targets" },
+  authorizationPolicy: { singular: "Authorization Policy", plural: "Authorization Policies" },
+  transformationsPolicy: { singular: "Transformations Policy", plural: "Transformations Policies" },
 };

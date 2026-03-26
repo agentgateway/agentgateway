@@ -1,57 +1,32 @@
 binds:
-- port: 30303
+- port: 8080
   tunnelProtocol: direct
   listeners:
   - protocol: HTTP
-    name: asdf
+    name: listener
     hostname: '*'
     routes:
-    - backends:
-      - mcp:
-          targets:
-          - name: time
-            stdio:
-              cmd: uvx
-              args:
-              - mcp-server-time
-          - name: everything
-            stdio:
-              cmd: npx
-              args:
-              - '@modelcontextprotocol/server-everything'
-          statefulMode: stateless
-        weight: 3
+    - hostnames: []
+      matches:
+      - path:
+          pathPrefix: /
+      backends:
+      - ai:
+          name: smallthinker-backend
+          provider:
+            openAI:
+              model: smallthinker
+          hostOverride: localhost:11434
+      name: route
       policies:
-        requestHeaderModifier: {}
-        responseHeaderModifier: {}
-        transformations: {}
-- port: 8080
-  tunnelProtocol: direct
-  listeners: []
-- port: 8083
-  tunnelProtocol: direct
-  listeners: []
-llm:
-  port: 1223
-  models:
-  - name: model-1234
-    provider: openAI
-    requestHeaders:
-      remove: []
-    guardrails:
-      request: []
-      response: []
-    matches: []
-mcp:
-  port: 23
-  targets:
-  - name: target-1232
-    stdio:
-      cmd: echo
-      args: []
-    policies:
-      mcpAuthorization:
-        rules: []
-      transformations: {}
-  statefulMode: stateless
-frontendPolicies: {}
+        cors:
+          allowCredentials: false
+          allowHeaders:
+          - '*'
+          allowMethods:
+          - GET
+          - POST
+          - OPTIONS
+          allowOrigins:
+          - '*'
+          exposeHeaders: []

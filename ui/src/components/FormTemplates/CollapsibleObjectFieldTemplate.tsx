@@ -90,6 +90,7 @@ export function CollapsibleObjectFieldTemplate(
             ))}
           </div>
         )}
+
       </div>
     </HideLabelContext.Provider>
   );

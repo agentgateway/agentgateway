@@ -10,6 +10,7 @@ import {
   ArrayFieldTemplate,
   CollapsibleObjectFieldTemplate,
   FieldTemplate,
+  KeyValueMapField,
   WrapIfAdditionalTemplate,
 } from "../FormTemplates";
 
@@ -118,6 +119,7 @@ export function TopLevelEditForm({
         ArrayFieldTemplate,
         WrapIfAdditionalTemplate,
       }}
+      fields={{ keyValueMap: KeyValueMapField }}
     >
       <Space style={{ marginTop: 24 }}>
         <Button type="primary" htmlType="submit" loading={isSaving}>
