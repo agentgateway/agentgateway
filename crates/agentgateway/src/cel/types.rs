@@ -10,7 +10,7 @@ use crate::http::ext_proc::ExtProcDynamicMetadata;
 use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{apikey, basicauth, jwt};
 use crate::llm::{LLMInfo, LLMRequest};
-use crate::mcp::{ResourceId, ResourceType};
+use crate::mcp::{MCPInfo, MCPTool};
 use crate::serdes::schema;
 use crate::transport::tls::TlsInfo;
 use crate::{apply, llm};
@@ -57,7 +57,7 @@ pub struct Executor<'a> {
 	#[dynamic(rename = "llmRequest")]
 	pub llm_request: Option<&'a serde_json::Value>,
 
-	pub mcp: Option<&'a ResourceType>,
+	pub mcp: Option<&'a MCPInfo>,
 
 	pub backend: ExtensionOrDirect<'a, BackendContext>,
 
@@ -267,7 +267,7 @@ impl<'a> Executor<'a> {
 	pub fn new_empty() -> Self {
 		Default::default()
 	}
-	pub fn new_mcp(req: Option<&'a RequestSnapshot>, mcp: &'a ResourceType) -> Self {
+	pub fn new_mcp(req: Option<&'a RequestSnapshot>, mcp: &'a MCPInfo) -> Self {
 		let mut this = Self::new_empty();
 		if let Some(req) = req {
 			this.set_request_snapshot(req);
@@ -275,7 +275,7 @@ impl<'a> Executor<'a> {
 		this.mcp = Some(mcp);
 		this
 	}
-	pub fn new_mcp_request<B>(req: &'a ::http::Request<B>, mcp: &'a ResourceType) -> Self {
+	pub fn new_mcp_request<B>(req: &'a ::http::Request<B>, mcp: &'a MCPInfo) -> Self {
 		let mut this = Self::new_empty();
 		this.set_request(req);
 		this.mcp = Some(mcp);
@@ -293,7 +293,7 @@ impl<'a> Executor<'a> {
 		req: Option<&'a RequestSnapshot>,
 		resp: Option<&'a ResponseSnapshot>,
 		llm: Option<&'a LLMContext>,
-		mcp: Option<&'a ResourceType>,
+		mcp: Option<&'a MCPInfo>,
 		end_time: Option<&'a RequestTime>,
 	) -> Self {
 		let mut this = Self::new_empty();
@@ -1242,7 +1242,7 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub llm: Option<LLMContext>,
 
-	/// `llm_request` contains the raw LLM request before processing. This is only present *during* LLM policies;
+	/// `llmRequest` contains the raw LLM request before processing. This is only present *during* LLM policies;
 	/// policies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests.
 	#[serde(rename = "llmRequest", skip_serializing_if = "Option::is_none")]
 	pub llm_request: Option<serde_json::Value>,
@@ -1252,9 +1252,10 @@ pub struct ExecutorSerde {
 	pub source: Option<SourceContext>,
 
 	/// `mcp` contains attributes about the MCP request.
-	// This is only included for schema generation; see build_with_mcp.
+	/// Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.
+	/// Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub mcp: Option<ResourceType>,
+	pub mcp: Option<MCPInfo>,
 
 	/// `backend` contains information about the backend being used.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1451,10 +1452,29 @@ pub fn full_example_executor() -> ExecutorSerde {
 				dimensions: None,
 			},
 		}),
-		mcp: Some(ResourceType::Tool(ResourceId::new(
-			"my-mcp-server".to_string(),
-			"get_weather".to_string(),
-		))),
+		mcp: Some(MCPInfo {
+			method_name: Some("tools/call".to_string()),
+			session_id: Some("session-123".to_string()),
+			tool: Some(MCPTool {
+				target: "my-mcp-server".to_string(),
+				name: "get_weather".to_string(),
+				arguments: Some(serde_json::Map::from_iter([(
+					"userId".to_string(),
+					json!("123"),
+				)])),
+				result: Some(json!({
+					"content": [],
+					"structuredContent": {
+						"status": "ok",
+						"forecast": "sunny",
+					},
+					"isError": false,
+				})),
+				error: None,
+			}),
+			prompt: None,
+			resource: None,
+		}),
 		backend: Some(BackendContext {
 			name: "my-backend".into(),
 			backend_type: BackendType::Service,

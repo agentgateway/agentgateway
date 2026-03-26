@@ -637,10 +637,22 @@ impl Listener {
 	}
 }
 
+/// Convert a proto NamespacedHostname to the Rust type.
+fn service_key_from_proto(
+	sk: Option<&proto::workload::NamespacedHostname>,
+) -> Option<NamespacedHostname> {
+	sk.filter(|sk| !sk.namespace.is_empty() || !sk.hostname.is_empty())
+		.map(|sk| NamespacedHostname {
+			namespace: Strng::from(&sk.namespace),
+			hostname: Strng::from(&sk.hostname),
+		})
+}
+
 impl TCPRoute {
 	pub fn try_from_xds(s: &proto::agent::TcpRoute) -> Result<(Self, ListenerKey), ProtoError> {
 		let r = TCPRoute {
 			key: strng::new(&s.key),
+			service_key: service_key_from_proto(s.service_key.as_ref()),
 			name: s
 				.name
 				.as_ref()
@@ -672,6 +684,7 @@ impl Route {
 			.into();
 		let r = Route {
 			key: strng::new(&s.key),
+			service_key: service_key_from_proto(s.service_key.as_ref()),
 			name,
 			hostnames: s.hostnames.iter().map(strng::new).collect(),
 			matches: s

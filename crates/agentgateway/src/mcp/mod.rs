@@ -21,6 +21,7 @@ use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
 use rmcp::model::RequestId;
 pub use router::App;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
@@ -136,12 +137,155 @@ impl Display for MCPOperation {
 	}
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug, PartialEq, ::cel::DynamicType)]
+#[serde(rename_all = "camelCase")]
+#[dynamic(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct MCPTool {
+	/// The target handling the tool call after multiplexing resolution.
+	pub target: String,
+	/// The resolved tool name sent to the upstream target.
+	pub name: String,
+	/// The JSON arguments passed to the tool call.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub arguments: Option<serde_json::Map<String, serde_json::Value>>,
+	/// The terminal tool result payload, if available.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub result: Option<serde_json::Value>,
+	/// The terminal JSON-RPC error payload, if available.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub error: Option<serde_json::Value>,
+}
+
+#[derive(Default, Serialize, Deserialize, Clone, Debug, PartialEq, ::cel::DynamicType)]
+#[serde(rename_all = "camelCase")]
+#[dynamic(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct MCPInfo {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub method_name: Option<String>,
-	/// Tool name, etc
-	pub resource_name: Option<String>,
-	pub target_name: Option<String>,
-	pub resource: Option<MCPOperation>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub session_id: Option<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub tool: Option<MCPTool>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub prompt: Option<ResourceId>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub resource: Option<ResourceId>,
+}
+
+impl MCPInfo {
+	pub fn is_empty(&self) -> bool {
+		self.method_name.is_none()
+			&& self.session_id.is_none()
+			&& self.tool.is_none()
+			&& self.prompt.is_none()
+			&& self.resource.is_none()
+	}
+
+	pub fn resource_type(&self) -> Option<MCPOperation> {
+		if self.tool.is_some() {
+			Some(MCPOperation::Tool)
+		} else if self.prompt.is_some() {
+			Some(MCPOperation::Prompt)
+		} else if self.resource.is_some() {
+			Some(MCPOperation::Resource)
+		} else {
+			None
+		}
+	}
+
+	pub fn target_name(&self) -> Option<&str> {
+		self
+			.tool
+			.as_ref()
+			.map(|tool| tool.target.as_str())
+			.or_else(|| self.prompt.as_ref().map(ResourceId::target))
+			.or_else(|| self.resource.as_ref().map(ResourceId::target))
+	}
+
+	pub fn resource_name(&self) -> Option<&str> {
+		self
+			.tool
+			.as_ref()
+			.map(|tool| tool.name.as_str())
+			.or_else(|| self.prompt.as_ref().map(ResourceId::name))
+			.or_else(|| self.resource.as_ref().map(ResourceId::name))
+	}
+
+	pub fn set_tool(&mut self, target: String, name: String) {
+		self.prompt = None;
+		self.resource = None;
+		match self.tool.as_mut() {
+			Some(tool) => {
+				tool.target = target;
+				tool.name = name;
+			},
+			None => {
+				self.tool = Some(MCPTool {
+					target,
+					name,
+					..Default::default()
+				});
+			},
+		}
+	}
+
+	pub fn set_prompt(&mut self, target: String, name: String) {
+		self.tool = None;
+		self.resource = None;
+		self.prompt = Some(ResourceId::new(target, name));
+	}
+
+	pub fn set_resource(&mut self, target: String, name: String) {
+		self.tool = None;
+		self.prompt = None;
+		self.resource = Some(ResourceId::new(target, name));
+	}
+
+	pub fn capture_call_arguments(
+		&mut self,
+		arguments: Option<serde_json::Map<String, serde_json::Value>>,
+	) {
+		let Some(tool) = self.tool.as_mut() else {
+			return;
+		};
+
+		tool.arguments = arguments;
+	}
+
+	pub fn capture_call_result<T: serde::Serialize>(&mut self, result: &T) {
+		if let Some(tool) = self.tool.as_mut() {
+			tool.result = serde_json::to_value(result).ok();
+		}
+	}
+
+	pub fn capture_call_error<T: serde::Serialize>(&mut self, error: &T) {
+		if let Some(tool) = self.tool.as_mut() {
+			tool.error = serde_json::to_value(error).ok();
+		}
+	}
+}
+
+impl From<&ResourceType> for MCPInfo {
+	fn from(value: &ResourceType) -> Self {
+		match value {
+			ResourceType::Tool(tool) => Self {
+				tool: Some(MCPTool {
+					target: tool.target().to_string(),
+					name: tool.name().to_string(),
+					..Default::default()
+				}),
+				..Default::default()
+			},
+			ResourceType::Prompt(prompt) => Self {
+				prompt: Some(prompt.clone()),
+				..Default::default()
+			},
+			ResourceType::Resource(resource) => Self {
+				resource: Some(resource.clone()),
+				..Default::default()
+			},
+		}
+	}
 }

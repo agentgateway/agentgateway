@@ -12,6 +12,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 )
 
 type PolicyPluginInput struct {
@@ -54,24 +55,10 @@ func (p AgwPolicy) ResourceName() string {
 }
 
 type AddResourcesPlugin struct {
-	Binds     krt.Collection[ir.AgwResource]
-	Listeners krt.Collection[ir.AgwResource]
-	Routes    krt.Collection[ir.AgwResource]
-}
-
-// AddBinds extracts all bind resources from the collection
-func (p *AddResourcesPlugin) AddBinds() krt.Collection[ir.AgwResource] {
-	return p.Binds
-}
-
-// AddListeners extracts all routes resources from the collection
-func (p *AddResourcesPlugin) AddListeners() krt.Collection[ir.AgwResource] {
-	return p.Listeners
-}
-
-// AddRoutes extracts all routes resources from the collection
-func (p *AddResourcesPlugin) AddRoutes() krt.Collection[ir.AgwResource] {
-	return p.Routes
+	Binds            krt.Collection[ir.AgwResource]
+	Listeners        krt.Collection[ir.AgwResource]
+	Routes           krt.Collection[ir.AgwResource]
+	AncestorBackends krt.Collection[*utils.AncestorBackend]
 }
 
 func ResourceName[T config.Namer](o T) *api.ResourceName {

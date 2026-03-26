@@ -840,7 +840,7 @@ func ReferenceAllowed(
 	return nil
 }
 
-func extractParentReferenceInfo(ctx RouteContext, parents RouteParents, obj controllers.Object) []RouteParentReference {
+func extractParentReferenceInfo(ctx RouteContext, parents ParentResolver, obj controllers.Object) []RouteParentReference {
 	routeRefs, hostnames, kind := GetCommonRouteInfo(obj)
 	localNamespace := obj.GetNamespace()
 	var parentRefs []RouteParentReference
@@ -855,7 +855,7 @@ func extractParentReferenceInfo(ctx RouteContext, parents RouteParents, obj cont
 			Port:                ptr.OrEmpty(ref.Port),
 		}
 		gk := ir
-		currentParents := parents.Fetch(ctx.Krt, gk)
+		currentParents := parents.ParentsFor(ctx.Krt, gk)
 		appendParent := func(pr *ParentInfo, pk ParentReference) {
 			bannedHostnames := sets.New[string]()
 			for _, gw := range currentParents {
@@ -875,6 +875,7 @@ func extractParentReferenceInfo(ctx RouteContext, parents RouteParents, obj cont
 			rpi := RouteParentReference{
 				ParentGateway:     pr.ParentGateway,
 				ListenerKey:       pr.ListenerKey,
+				ServiceKey:        pr.ServiceKey,
 				InternalKind:      ir.Kind,
 				Hostname:          pr.OriginalHostname,
 				DeniedReason:      deniedReason,
@@ -923,6 +924,8 @@ type ParentInfo struct {
 	ParentGatewayClassName string
 	// ListenerKey is the internal key of the listener resource created for this parent.
 	ListenerKey string
+	// ServiceKey (optionally) links a parent reference to an individual Service.
+	ServiceKey *types.NamespacedName
 	// AllowedKinds indicates which kinds can be admitted by this Parent
 	AllowedKinds []gwv1.RouteGroupKind
 	// Hostnames is the hostnames that must be match to reference to the Parent. For gateway this is listener hostname
@@ -943,6 +946,8 @@ type ParentInfo struct {
 type RouteParentReference struct {
 	// ListenerKey is the internal key of the listener resource created for this parent.
 	ListenerKey string
+	// ServiceKey (optionally) links a parent reference to an individual Service.
+	ServiceKey *types.NamespacedName
 	// InternalKind is the Kind of the Parent
 	InternalKind string
 	// DeniedReason, if present, indicates why the reference was not valid

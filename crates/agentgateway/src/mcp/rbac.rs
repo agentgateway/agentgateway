@@ -36,7 +36,8 @@ impl McpAuthorizationSet {
 	}
 	pub fn validate(&self, res: &ResourceType, cel: &CelExecWrapper) -> bool {
 		tracing::debug!("Checking RBAC for resource: {:?}", res);
-		let exec = crate::cel::Executor::new_mcp_request(&cel.0, res);
+		let mcp = crate::mcp::MCPInfo::from(res);
+		let exec = crate::cel::Executor::new_mcp_request(&cel.0, &mcp);
 		self.0.validate(&exec)
 	}
 
@@ -95,5 +96,13 @@ pub struct ResourceId {
 impl ResourceId {
 	pub fn new(target: String, id: String) -> Self {
 		Self { target, id }
+	}
+
+	pub fn target(&self) -> &str {
+		&self.target
+	}
+
+	pub fn name(&self) -> &str {
+		&self.id
 	}
 }

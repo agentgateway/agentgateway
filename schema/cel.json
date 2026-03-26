@@ -384,7 +384,7 @@
       ]
     },
     "llmRequest": {
-      "description": "`llm_request` contains the raw LLM request before processing. This is only present *during* LLM policies;\npolicies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests."
+      "description": "`llmRequest` contains the raw LLM request before processing. This is only present *during* LLM policies;\npolicies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests."
     },
     "source": {
       "description": "`source` contains attributes about the source of the request.",
@@ -465,91 +465,95 @@
       "additionalProperties": false
     },
     "mcp": {
-      "description": "`mcp` contains attributes about the MCP request.",
-      "anyOf": [
-        {
-          "oneOf": [
-            {
-              "description": "The tool being accessed",
-              "type": "object",
-              "properties": {
-                "tool": {
-                  "type": "object",
-                  "properties": {
-                    "target": {
-                      "description": "The target of the resource",
-                      "type": "string",
-                      "default": ""
-                    },
-                    "name": {
-                      "description": "The name of the resource",
-                      "type": "string",
-                      "default": ""
-                    }
-                  }
-                }
-              },
-              "required": [
-                "tool"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "description": "The prompt being accessed",
-              "type": "object",
-              "properties": {
-                "prompt": {
-                  "type": "object",
-                  "properties": {
-                    "target": {
-                      "description": "The target of the resource",
-                      "type": "string",
-                      "default": ""
-                    },
-                    "name": {
-                      "description": "The name of the resource",
-                      "type": "string",
-                      "default": ""
-                    }
-                  }
-                }
-              },
-              "required": [
-                "prompt"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "description": "The resource being accessed",
-              "type": "object",
-              "properties": {
-                "resource": {
-                  "type": "object",
-                  "properties": {
-                    "target": {
-                      "description": "The target of the resource",
-                      "type": "string",
-                      "default": ""
-                    },
-                    "name": {
-                      "description": "The name of the resource",
-                      "type": "string",
-                      "default": ""
-                    }
-                  }
-                }
-              },
-              "required": [
-                "resource"
-              ],
-              "additionalProperties": false
-            }
+      "description": "`mcp` contains attributes about the MCP request.\nRequest-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.\nPost-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "methodName": {
+          "type": [
+            "string",
+            "null"
           ]
         },
-        {
-          "type": "null"
+        "sessionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tool": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "target": {
+              "description": "The target handling the tool call after multiplexing resolution.",
+              "type": "string"
+            },
+            "name": {
+              "description": "The resolved tool name sent to the upstream target.",
+              "type": "string"
+            },
+            "arguments": {
+              "description": "The JSON arguments passed to the tool call.",
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": true
+            },
+            "result": {
+              "description": "The terminal tool result payload, if available."
+            },
+            "error": {
+              "description": "The terminal JSON-RPC error payload, if available."
+            }
+          },
+          "required": [
+            "target",
+            "name"
+          ]
+        },
+        "prompt": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "target": {
+              "description": "The target of the resource",
+              "type": "string",
+              "default": ""
+            },
+            "name": {
+              "description": "The name of the resource",
+              "type": "string",
+              "default": ""
+            }
+          }
+        },
+        "resource": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "target": {
+              "description": "The target of the resource",
+              "type": "string",
+              "default": ""
+            },
+            "name": {
+              "description": "The name of the resource",
+              "type": "string",
+              "default": ""
+            }
+          }
         }
-      ]
+      }
     },
     "backend": {
       "description": "`backend` contains information about the backend being used.",

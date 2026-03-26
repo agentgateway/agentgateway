@@ -1576,6 +1576,7 @@ json(request.body).model
 
 	let model_list_route = Route {
 		key: strng::new("llm:admin:model-list"),
+		service_key: None,
 		name: RouteName {
 			name: strng::new("admin:model-list"),
 			namespace: strng::new("internal"),
@@ -1753,6 +1754,7 @@ json(request.body).model
 
 		let model_route = Route {
 			key: route_key.clone(),
+			service_key: None,
 			name: RouteName {
 				name: strng::format!("model:{}", model_config.name),
 				namespace: strng::new("internal"),
@@ -1901,6 +1903,7 @@ async fn convert_mcp_config(
 	let mut routes = RouteSet::default();
 	let route = Route {
 		key: strng::new("mcp:default"),
+		service_key: None,
 		name: RouteName {
 			name: strng::new("default"),
 			namespace: strng::new("internal"),
@@ -2152,6 +2155,7 @@ pub async fn convert_route(
 	}
 	let route = Route {
 		key,
+		service_key: None,
 		name: RouteName {
 			name: route_name,
 			namespace,
@@ -2417,6 +2421,7 @@ async fn convert_tcp_route(
 	}
 	let route = TCPRoute {
 		key,
+		service_key: None,
 		name: RouteName {
 			name: route_name,
 			namespace,

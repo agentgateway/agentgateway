@@ -2,7 +2,7 @@ use super::*;
 use crate::cel::RequestSnapshot;
 use crate::http::authorization::PolicySet;
 use crate::http::{Body, jwt};
-use crate::mcp::{ResourceId, ResourceType};
+use crate::mcp::{MCPInfo, ResourceId, ResourceType};
 use ::http::Method;
 #[cfg(test)]
 use assert_matches::assert_matches;
@@ -29,6 +29,13 @@ fn create_deny_policy_set(policies: Vec<&str>) -> PolicySet {
 	policy_set
 }
 
+fn tool_context(target: &str, name: &str) -> MCPInfo {
+	MCPInfo::from(&ResourceType::Tool(ResourceId::new(
+		target.to_string(),
+		name.to_string(),
+	)))
+}
+
 #[test]
 fn test_rbac_reject_exact_match() {
 	let policies = vec![r#"mcp.tool.name == "increment" && jwt.user == "admin""#];
@@ -38,10 +45,7 @@ fn test_rbac_reject_exact_match() {
 	rs.register(&mut ctx);
 
 	let req = req(json!({"sub": "1234567890"}));
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"server".to_string(),
-		"increment".to_string(),
-	));
+	let mcp = tool_context("server", "increment");
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec), false);
@@ -56,10 +60,7 @@ fn test_rbac_check_exact_match() {
 	rs.register(&mut ctx);
 
 	let req = req(json!({"sub": "1234567890"}));
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"server".to_string(),
-		"increment".to_string(),
-	));
+	let mcp = tool_context("server", "increment");
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec), true);
@@ -74,18 +75,12 @@ fn test_rbac_target() {
 	rs.register(&mut ctx);
 
 	let req = req(json!({"sub": "1234567890"}));
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"server".to_string(),
-		"increment".to_string(),
-	));
+	let mcp = tool_context("server", "increment");
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec), true);
 
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"not-server".to_string(),
-		"increment".to_string(),
-	));
+	let mcp = tool_context("not-server", "increment");
 	let exec_different_target = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec_different_target), false);
@@ -100,10 +95,7 @@ fn test_rbac_check_contains_match() {
 	rs.register(&mut ctx);
 
 	let req = req(json!({"groups": "admin"}));
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"server".to_string(),
-		"increment".to_string(),
-	));
+	let mcp = tool_context("server", "increment");
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec), true);
@@ -118,10 +110,7 @@ fn test_rbac_check_nested_key_match() {
 	rs.register(&mut ctx);
 
 	let req = req(json!({"user": {"role": "admin"}}));
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"server".to_string(),
-		"increment".to_string(),
-	));
+	let mcp = tool_context("server", "increment");
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec), true);
@@ -136,10 +125,7 @@ fn test_rbac_check_array_contains_match() {
 	rs.register(&mut ctx);
 
 	let req = req(json!({"roles": ["user", "admin", "developer"]}));
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"server".to_string(),
-		"increment".to_string(),
-	));
+	let mcp = tool_context("server", "increment");
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec), true);
@@ -155,10 +141,7 @@ fn test_deny_only_non_matching_allows() {
 	rs.register(&mut ctx);
 
 	let req = req(json!({"sub": "1234567890"}));
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"server".to_string(),
-		"decrement".to_string(),
-	));
+	let mcp = tool_context("server", "decrement");
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	// "decrement" does not match the deny rule, so it should be allowed
@@ -175,10 +158,7 @@ fn test_deny_only_matching_denies() {
 	rs.register(&mut ctx);
 
 	let req = req(json!({"sub": "1234567890"}));
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"server".to_string(),
-		"increment".to_string(),
-	));
+	let mcp = tool_context("server", "increment");
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec), false);
@@ -201,23 +181,17 @@ fn test_stacked_deny_policies() {
 	let req = req(json!({"sub": "1234567890"}));
 
 	// "increment" is denied by first policy
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"server".to_string(),
-		"increment".to_string(),
-	));
+	let mcp = tool_context("server", "increment");
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 	assert_matches!(rs.validate(&exec), false);
 
 	// "decrement" is denied by second policy
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"server".to_string(),
-		"decrement".to_string(),
-	));
+	let mcp = tool_context("server", "decrement");
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 	assert_matches!(rs.validate(&exec), false);
 
 	// "echo" is not denied by either policy, so it should be allowed
-	let mcp = ResourceType::Tool(ResourceId::new("server".to_string(), "echo".to_string()));
+	let mcp = tool_context("server", "echo");
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 	assert_matches!(rs.validate(&exec), true);
 }
@@ -241,28 +215,32 @@ fn test_mixed_allow_deny_default_deny() {
 	let req = req(json!({"sub": "1234567890"}));
 
 	// "allowed_tool" matches allow rule → allowed
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"server".to_string(),
-		"allowed_tool".to_string(),
-	));
+	let mcp = tool_context("server", "allowed_tool");
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 	assert_matches!(rs.validate(&exec), true);
 
 	// "denied_tool" matches deny rule → denied (deny takes precedence)
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"server".to_string(),
-		"denied_tool".to_string(),
-	));
+	let mcp = tool_context("server", "denied_tool");
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 	assert_matches!(rs.validate(&exec), false);
 
 	// "other_tool" matches neither → denied (allowlist semantics when allow rules exist)
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"server".to_string(),
-		"other_tool".to_string(),
-	));
+	let mcp = tool_context("server", "other_tool");
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 	assert_matches!(rs.validate(&exec), false);
+}
+
+#[test]
+fn test_rbac_mcp_context_is_identity_only() {
+	let req = req(json!({"sub": "1234567890"}));
+	let mcp = tool_context("server", "increment");
+	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
+	let expr = cel::Expression::new_strict(
+		r#"mcp.tool.name == "increment" && !has(mcp.tool.arguments) && !has(mcp.tool.result) && !has(mcp.tool.error)"#,
+	)
+	.unwrap();
+
+	assert!(exec.eval_bool(&expr));
 }
 
 #[divan::bench]
@@ -273,10 +251,7 @@ fn bench(b: Bencher) {
 	let rs = RuleSets::from(vec![rbac.clone()]);
 	rs.register(&mut ctx);
 	let req = req(json!({"role": "admin"}));
-	let mcp = ResourceType::Tool(ResourceId::new(
-		"server".to_string(),
-		"increment".to_string(),
-	));
+	let mcp = tool_context("server", "increment");
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 	b.bench(|| {
 		rs.validate(&exec);

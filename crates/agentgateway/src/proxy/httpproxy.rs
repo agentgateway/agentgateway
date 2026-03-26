@@ -532,7 +532,7 @@ impl HTTPProxy {
 
 		// Now check if we actually have a listener - fail after tracing is set up
 		let selected_listener = selected_listener
-			.or_else(|| bind.listeners.best_match(&host))
+			.or_else(|| bind.listeners.best_match_http(&host))
 			.ok_or(ProxyError::ListenerNotFound);
 		let selected_listener = match selected_listener {
 			Ok(l) => {

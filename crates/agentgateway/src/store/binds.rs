@@ -20,8 +20,10 @@ use crate::store::Event;
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendPolicy, BackendTargetRef, BackendWithPolicies, Bind,
 	BindKey, FrontendPolicy, Listener, ListenerKey, ListenerName, McpAuthentication, PolicyKey,
-	PolicyTarget, Route, RouteKey, RouteName, TCPRoute, TargetedPolicy, TracingPolicy, TrafficPolicy,
+	PolicyTarget, Route, RouteKey, RouteName, RouteSet, TCPRoute, TCPRouteSet, TargetedPolicy,
+	TracingPolicy, TrafficPolicy,
 };
+use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
 	Backend as XdsBackend, Bind as XdsBind, Listener as XdsListener, Policy as XdsPolicy,
@@ -55,6 +57,10 @@ pub struct Store {
 	staged_listeners: HashMap<BindKey, HashMap<ListenerKey, Listener>>,
 	staged_routes: HashMap<ListenerKey, HashMap<RouteKey, Route>>,
 	staged_tcp_routes: HashMap<ListenerKey, HashMap<RouteKey, TCPRoute>>,
+
+	// Service-keyed routes (GAMMA spec: routes with parentRef targeting a Service)
+	service_routes: HashMap<NamespacedHostname, RouteSet>,
+	service_tcp_routes: HashMap<NamespacedHostname, TCPRouteSet>,
 
 	tx: tokio::sync::broadcast::Sender<Event<Arc<Bind>>>,
 }
@@ -380,6 +386,8 @@ impl Store {
 			staged_routes: Default::default(),
 			staged_listeners: Default::default(),
 			staged_tcp_routes: Default::default(),
+			service_routes: Default::default(),
+			service_tcp_routes: Default::default(),
 			tx,
 		}
 	}
@@ -846,6 +854,9 @@ impl Store {
         fields(route),
     )]
 	pub fn remove_route(&mut self, route: RouteKey) {
+		if self.remove_service_route(&route) {
+			return;
+		}
 		let Some((_, bind, listener)) = self.binds.iter().find_map(|(k, v)| {
 			let l = v.listeners.iter().find(|l| l.routes.contains(&route));
 			l.map(|l| (k.clone(), v.clone(), l.clone()))
@@ -866,6 +877,9 @@ impl Store {
         fields(tcp_route),
     )]
 	pub fn remove_tcp_route(&mut self, tcp_route: RouteKey) {
+		if self.remove_service_tcp_route(&tcp_route) {
+			return;
+		}
 		let Some((_, bind, listener)) = self.binds.iter().find_map(|(k, v)| {
 			let l = v
 				.listeners
@@ -1035,6 +1049,56 @@ impl Store {
 		self.insert_bind(bind);
 	}
 
+	pub fn insert_service_route(&mut self, r: Route, service_key: NamespacedHostname) {
+		debug!(service=%service_key, route=%r.key, "insert service route");
+		self
+			.service_routes
+			.entry(service_key)
+			.or_default()
+			.insert(r);
+	}
+
+	pub fn insert_service_tcp_route(&mut self, r: TCPRoute, service_key: NamespacedHostname) {
+		debug!(service=%service_key, route=%r.key, "insert service tcp route");
+		self
+			.service_tcp_routes
+			.entry(service_key)
+			.or_default()
+			.insert(r);
+	}
+
+	fn remove_service_route(&mut self, route_key: &RouteKey) -> bool {
+		let mut found = false;
+		self.service_routes.retain(|_, route_set| {
+			if route_set.contains(route_key) {
+				route_set.remove(route_key);
+				found = true;
+			}
+			!route_set.is_empty()
+		});
+		found
+	}
+
+	fn remove_service_tcp_route(&mut self, route_key: &RouteKey) -> bool {
+		let mut found = false;
+		self.service_tcp_routes.retain(|_, route_set| {
+			if route_set.contains(route_key) {
+				route_set.remove(route_key);
+				found = true;
+			}
+			!route_set.is_empty()
+		});
+		found
+	}
+
+	pub fn get_service_routes(&self, key: &NamespacedHostname) -> Option<&RouteSet> {
+		self.service_routes.get(key)
+	}
+
+	pub fn get_service_tcp_routes(&self, key: &NamespacedHostname) -> Option<&TCPRouteSet> {
+		self.service_tcp_routes.get(key)
+	}
+
 	fn remove_resource(&mut self, res: &Strng) {
 		trace!("removing res {res}...");
 		let Some(old) = self.resources.remove(res) else {
@@ -1112,12 +1176,20 @@ impl Store {
 	}
 	fn insert_xds_route(&mut self, raw: XdsRoute) -> anyhow::Result<()> {
 		let (route, listener_name) = Route::try_from_xds(&raw)?;
-		self.insert_route(route, listener_name);
+		if let Some(sk) = route.service_key.clone() {
+			self.insert_service_route(route, sk);
+		} else {
+			self.insert_route(route, listener_name);
+		}
 		Ok(())
 	}
 	fn insert_xds_tcp_route(&mut self, raw: XdsTcpRoute) -> anyhow::Result<()> {
 		let (route, listener_name) = TCPRoute::try_from_xds(&raw)?;
-		self.insert_tcp_route(route, listener_name);
+		if let Some(sk) = route.service_key.clone() {
+			self.insert_service_tcp_route(route, sk);
+		} else {
+			self.insert_tcp_route(route, listener_name);
+		}
 		Ok(())
 	}
 	fn insert_xds_backend(&mut self, raw: XdsBackend) -> anyhow::Result<()> {

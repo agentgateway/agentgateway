@@ -88,6 +88,8 @@ message Route {
   string key = 1;
   // Key for the listener this is a part of.
   string listener_key = 2;
+  // Service this route targets (set when parentRef is a Service).
+  istio.workload.NamespacedHostname service_key = 9;
   // User facing name for this resource
   RouteName name = 3;
 
@@ -102,6 +104,8 @@ message TCPRoute {
   string key = 1;
   // Key for the listener this is a part of.
   string listener_key = 2;
+  // Service this route targets (set when parentRef is a Service).
+  istio.workload.NamespacedHostname service_key = 9;
   // User facing name for this resource
   RouteName name = 3;
 

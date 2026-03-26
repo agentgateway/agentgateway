@@ -816,7 +816,10 @@ impl AIProvider {
 		include_completion_in_log: bool,
 		resp: Response,
 	) -> Result<Response, AIError> {
-		if req.streaming {
+		// Non-success responses are plain JSON, not event-stream data.
+		// Only enter the streaming path for successful responses; errors
+		// fall through to the buffered path where process_error translates them.
+		if req.streaming && resp.status().is_success() {
 			return self
 				.process_streaming(req, rate_limit, log, include_completion_in_log, resp)
 				.await;
