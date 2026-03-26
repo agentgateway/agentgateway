@@ -132,7 +132,7 @@ pub(super) async fn handle_callback(
 	let clear_transaction = policy
 		.session
 		.clear_cookie(&policy.session.transaction_cookie_name, context.is_https);
-	let location = validated_original_uri(&transaction.original_uri);
+	let location = validated_local_redirect_target(&transaction.original_uri);
 	let response = build_redirect_response(&location, &[session_cookie, clear_transaction])?;
 	Ok(crate::http::PolicyResponse::default().with_response(response))
 }
@@ -149,7 +149,12 @@ fn with_query(uri: &http::Uri, params: &[(&str, String)]) -> String {
 	url.to_string()
 }
 
-pub(super) fn validated_original_uri(original_uri: &str) -> String {
+/// Validate the post-login local redirect target before reflecting it into the browser redirect.
+///
+/// This keeps the return target local to this gateway and rejects ambiguous encodings that could
+/// otherwise turn a relative path into a scheme-relative, backslash-based, or parser-divergent
+/// redirect target.
+pub(super) fn validated_local_redirect_target(original_uri: &str) -> String {
 	const LIMIT: usize = 2048;
 	if original_uri.len() > LIMIT {
 		return "/".into();

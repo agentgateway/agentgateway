@@ -3,7 +3,6 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ::http::{HeaderValue, StatusCode, header};
-use agent_core::prelude::Strng;
 use secrecy::ExposeSecret;
 use secrecy::SecretString;
 use serde_json::{Map, Value};
@@ -12,7 +11,6 @@ use crate::http::jwt;
 use crate::http::{Body, PolicyResponse, Request, Response, Uri};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
-use crate::types::agent::{HostnameMatch, Listener, ListenerOidc, ListenerProtocol};
 
 mod callback;
 pub mod config;
@@ -23,7 +21,7 @@ pub mod session;
 #[cfg(test)]
 mod tests;
 
-pub use config::{LocalOidcConfig, LocalOidcListenerConfig, LocalOidcProvider, OidcProviderRef};
+pub use config::LocalOidcConfig;
 pub use redirect::RedirectUri;
 pub use session::{
 	BrowserSession, CookieSecureMode, RESERVED_COOKIE_PREFIX, SameSiteMode, SessionConfig,
@@ -67,20 +65,12 @@ pub struct OidcPolicy {
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NamedOidcProvider {
-	pub name: Strng,
-	pub policy: OidcPolicy,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Provider {
 	pub issuer: String,
 	#[serde(serialize_with = "crate::serdes::ser_display")]
 	pub authorization_endpoint: Uri,
 	#[serde(serialize_with = "crate::serdes::ser_display")]
 	pub token_endpoint: Uri,
-	pub token_endpoint_auth_methods_supported: Vec<TokenEndpointAuth>,
 	pub id_token_validator: jwt::Jwt,
 }
 
@@ -119,6 +109,8 @@ pub enum Error {
 	MissingSession,
 	#[error("invalid session")]
 	InvalidSession,
+	#[error("authentication required")]
+	AuthenticationRequired,
 	#[error("encoded browser session exceeds cookie size budget")]
 	SessionCookieTooLarge,
 	#[error("missing transaction")]
@@ -150,6 +142,7 @@ pub enum Error {
 impl Error {
 	pub fn status_code(&self) -> StatusCode {
 		match self {
+			Self::AuthenticationRequired => StatusCode::UNAUTHORIZED,
 			Self::MissingSession
 			| Self::InvalidSession
 			| Self::MissingTransaction
@@ -175,15 +168,31 @@ struct CallbackQuery {
 	error: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UnauthenticatedAction {
+	StartLoginRedirect,
+	RejectUnauthorized,
+}
+
 impl OidcPolicy {
+	pub(crate) fn assign_policy_id(&mut self, policy_id: PolicyId) {
+		let (cookie_name, transaction_cookie_name) = session::derive_cookie_names(&policy_id);
+		self.policy_id = policy_id;
+		self.session.cookie_name = cookie_name;
+		self.session.transaction_cookie_name = transaction_cookie_name;
+	}
+
 	pub async fn apply(
 		&self,
-		log: Option<&mut RequestLog>,
+		mut log: Option<&mut RequestLog>,
 		req: &mut Request,
-		_client: PolicyClient,
+		client: PolicyClient,
 	) -> Result<PolicyResponse, Error> {
-		if is_cors_preflight(req) {
-			return Ok(PolicyResponse::default());
+		if let Some(response) = self
+			.maybe_handle_callback(log.as_deref_mut(), req, client.clone())
+			.await?
+		{
+			return Ok(response);
 		}
 
 		if let Some(cookie) = crate::http::request_cookies::read_cookie(req, &self.session.cookie_name)
@@ -196,7 +205,7 @@ impl OidcPolicy {
 				.validate_claims(browser_session.raw_id_token.expose_secret())
 		{
 			if let Some(Value::String(sub)) = claims.inner.get("sub")
-				&& let Some(log) = log
+				&& let Some(log) = log.as_deref_mut()
 			{
 				log.jwt_sub = Some(sub.clone());
 			}
@@ -204,93 +213,26 @@ impl OidcPolicy {
 			return Ok(PolicyResponse::default());
 		}
 
-		if self.should_redirect(req) {
-			callback::start_login(self, log, req)
-		} else {
-			Ok(PolicyResponse::default().with_response(unauthorized_response()))
+		match unauthenticated_action(req) {
+			UnauthenticatedAction::StartLoginRedirect => callback::start_login(self, log, req),
+			UnauthenticatedAction::RejectUnauthorized => Err(Error::AuthenticationRequired),
 		}
 	}
 
-	fn should_redirect(&self, req: &Request) -> bool {
-		// Only redirect real browser document navigations into the login flow. API/XHR/fetch-style
-		// requests should get a 401 so callers do not see an unexpected HTML redirect.
-		if req.method() != ::http::Method::GET {
-			return false;
-		}
-		if req
-			.headers()
-			.get("x-requested-with")
-			.and_then(|v| v.to_str().ok())
-			.is_some_and(|v| v.eq_ignore_ascii_case("xmlhttprequest"))
-		{
-			return false;
-		}
-		if req
-			.headers()
-			.get("sec-fetch-mode")
-			.and_then(|v| v.to_str().ok())
-			.is_some_and(|v| !v.eq_ignore_ascii_case("navigate"))
-		{
-			return false;
-		}
-
-		let accept = req
-			.headers()
-			.get(header::ACCEPT)
-			.and_then(|v| v.to_str().ok())
-			.unwrap_or_default();
-		let html = accept.find("text/html").unwrap_or(usize::MAX);
-		let json = accept.find("application/json").unwrap_or(usize::MAX);
-		let sse = accept.find("text/event-stream").unwrap_or(usize::MAX);
-		html != usize::MAX && html < json && html < sse
-	}
-}
-
-fn is_cors_preflight(req: &Request) -> bool {
-	req.method() == ::http::Method::OPTIONS
-		&& req
-			.headers()
-			.contains_key(header::ACCESS_CONTROL_REQUEST_METHOD)
-}
-
-impl Listener {
-	pub(crate) async fn maybe_handle_oidc_callback(
-		&self,
-		log: Option<&mut RequestLog>,
-		req: &mut Request,
-		client: PolicyClient,
-	) -> Result<PolicyResponse, Error> {
-		let Some(oidc) = &self.oidc else {
-			return Ok(PolicyResponse::default());
-		};
-		oidc.maybe_handle_callback(log, req, client).await
-	}
-
-	pub(crate) fn validate_oidc(&self, listener_port: u16) -> anyhow::Result<()> {
-		let Some(oidc) = &self.oidc else {
-			return Ok(());
-		};
-		oidc.validate_for_listener(self, listener_port)
-	}
-}
-
-impl ListenerOidc {
 	async fn maybe_handle_callback(
 		&self,
 		log: Option<&mut RequestLog>,
 		req: &mut Request,
 		client: PolicyClient,
-	) -> Result<PolicyResponse, Error> {
-		if req.method() != ::http::Method::GET {
-			return Ok(PolicyResponse::default());
+	) -> Result<Option<PolicyResponse>, Error> {
+		if req.method() != ::http::Method::GET
+			|| req.uri().path() != self.redirect_uri.callback_path.path()
+		{
+			return Ok(None);
 		}
 
 		let Some(query) = CallbackQuery::parse(req) else {
-			return Ok(PolicyResponse::default());
-		};
-
-		let Some(policy) = self.find_callback_policy(req)? else {
-			return Ok(PolicyResponse::default());
+			return Ok(None);
 		};
 
 		if let Some(error) = query.error {
@@ -298,10 +240,10 @@ impl ListenerOidc {
 		}
 		let code = query.code.ok_or(Error::InvalidCallback)?;
 		let transaction_cookie =
-			crate::http::request_cookies::read_cookie(req, &policy.session.transaction_cookie_name)
+			crate::http::request_cookies::read_cookie(req, &self.session.transaction_cookie_name)
 				.ok_or(Error::MissingTransaction)?;
-		callback::handle_callback(
-			policy,
+		let response = callback::handle_callback(
+			self,
 			log,
 			callback::CallbackRequestContext {
 				is_https: req.uri().scheme_str() == Some("https"),
@@ -311,128 +253,8 @@ impl ListenerOidc {
 			},
 			client,
 		)
-		.await
-	}
-
-	fn find_callback_policy<'a>(&'a self, req: &Request) -> Result<Option<&'a OidcPolicy>, Error> {
-		let host = req
-			.uri()
-			.host()
-			.ok_or(Error::InvalidCallback)?
-			.to_ascii_lowercase();
-		let scheme = req.uri().scheme_str().ok_or(Error::InvalidCallback)?;
-		let port = req
-			.uri()
-			.port_u16()
-			.or_else(|| default_port_for_scheme(scheme))
-			.ok_or(Error::InvalidCallback)?;
-
-		let Some(matches) = self.callback_matches(&host, port, req.uri().path()) else {
-			return Ok(None);
-		};
-		match matches {
-			[idx] => Ok(self.providers().get(*idx).map(|provider| &provider.policy)),
-			_ => Err(Error::Config(
-				"multiple oidc providers matched the same callback request".into(),
-			)),
-		}
-	}
-
-	fn validate_for_listener(&self, listener: &Listener, listener_port: u16) -> anyhow::Result<()> {
-		let host_match = if listener.hostname.is_empty() {
-			HostnameMatch::None
-		} else {
-			HostnameMatch::from(listener.hostname.clone())
-		};
-
-		let mut callback_owners = HashSet::with_capacity(self.providers().len());
-		let mut host_cookie_names: std::collections::HashMap<&str, HashSet<&str>> =
-			std::collections::HashMap::with_capacity(self.providers().len());
-
-		for provider in self.providers() {
-			let policy = &provider.policy;
-			match &listener.protocol {
-				ListenerProtocol::HTTP => {
-					anyhow::ensure!(
-						!policy.redirect_uri.https,
-						"oidc redirectURI '{}' must use http on HTTP listener '{}'",
-						policy.redirect_uri.redirect_uri,
-						listener.name.listener_name
-					);
-				},
-				ListenerProtocol::HTTPS(_) => {
-					anyhow::ensure!(
-						policy.redirect_uri.https,
-						"oidc redirectURI '{}' must use https on HTTPS listener '{}'",
-						policy.redirect_uri.redirect_uri,
-						listener.name.listener_name
-					);
-				},
-				_ => {
-					anyhow::bail!(
-						"oidc requires an HTTP or HTTPS listener, got incompatible listener '{}'",
-						listener.name.listener_name
-					);
-				},
-			}
-			anyhow::ensure!(
-				policy.redirect_uri.port == listener_port,
-				"oidc redirectURI '{}' must use listener port '{}' for listener '{}'",
-				policy.redirect_uri.redirect_uri,
-				listener_port,
-				listener.name.listener_name
-			);
-			anyhow::ensure!(
-				host_match.matches_host(&policy.redirect_uri.host),
-				"oidc redirectURI host '{}' is not covered by listener hostname '{}' on listener '{}'",
-				policy.redirect_uri.host,
-				if listener.hostname.is_empty() {
-					"*"
-				} else {
-					listener.hostname.as_str()
-				},
-				listener.name.listener_name
-			);
-
-			let callback_key = (
-				policy.redirect_uri.host.as_str(),
-				policy.redirect_uri.port,
-				policy.redirect_uri.callback_path.path(),
-			);
-			anyhow::ensure!(
-				callback_owners.insert(callback_key),
-				"duplicate oidc callback ownership for '{}:{}{}' on listener '{}'",
-				policy.redirect_uri.host,
-				policy.redirect_uri.port,
-				policy.redirect_uri.callback_path,
-				listener.name.listener_name
-			);
-
-			let reserved_cookie_names = host_cookie_names
-				.entry(policy.redirect_uri.host.as_str())
-				.or_default();
-			for cookie_name in [
-				policy.session.cookie_name.as_str(),
-				policy.session.transaction_cookie_name.as_str(),
-			] {
-				anyhow::ensure!(
-					reserved_cookie_names.insert(cookie_name),
-					"duplicate oidc cookie name '{}' for redirect host '{}' on listener '{}'",
-					cookie_name,
-					policy.redirect_uri.host,
-					listener.name.listener_name
-				);
-			}
-		}
-		Ok(())
-	}
-}
-
-fn default_port_for_scheme(scheme: &str) -> Option<u16> {
-	match scheme {
-		"http" => Some(80),
-		"https" => Some(443),
-		_ => None,
+		.await?;
+		Ok(Some(response))
 	}
 }
 
@@ -462,12 +284,30 @@ impl CallbackQuery {
 	}
 }
 
-fn unauthorized_response() -> Response {
-	::http::Response::builder()
-		.status(StatusCode::UNAUTHORIZED)
-		.header(header::CONTENT_TYPE, "text/plain")
-		.body(Body::from("unauthorized"))
-		.expect("static unauthorized response")
+fn unauthenticated_action(req: &Request) -> UnauthenticatedAction {
+	// Keep the default narrow: only GET requests that explicitly prefer an HTML document enter the
+	// interactive browser login flow. Everything else gets a normal 401.
+	if req.method() != ::http::Method::GET {
+		return UnauthenticatedAction::RejectUnauthorized;
+	}
+
+	if accepts_html_document(req) {
+		UnauthenticatedAction::StartLoginRedirect
+	} else {
+		UnauthenticatedAction::RejectUnauthorized
+	}
+}
+
+fn accepts_html_document(req: &Request) -> bool {
+	let accept = req
+		.headers()
+		.get(header::ACCEPT)
+		.and_then(|v| v.to_str().ok())
+		.unwrap_or_default();
+	let html = accept.find("text/html").unwrap_or(usize::MAX);
+	let json = accept.find("application/json").unwrap_or(usize::MAX);
+	let sse = accept.find("text/event-stream").unwrap_or(usize::MAX);
+	html != usize::MAX && html < json && html < sse
 }
 
 pub(crate) fn build_redirect_response(

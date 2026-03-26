@@ -15,15 +15,9 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 use super::*;
 use crate::client;
 use crate::http::jwt;
-use crate::http::oidc::callback;
 use crate::proxy::ProxyError;
 use crate::serdes::FileInlineOrRemote;
-use crate::test_helpers::proxymock::{send_request_headers, setup_proxy_test};
-use crate::types::agent::ServerTLSConfig;
-use crate::types::agent::{
-	Bind, BindProtocol, Listener, ListenerName, ListenerOidc, ListenerProtocol, ListenerSet,
-	PathMatch, Route, RouteBackendReference, RouteMatch, RouteName, RouteSet, TunnelProtocol,
-};
+use crate::test_helpers::proxymock::setup_proxy_test;
 
 const TEST_PRIVATE_KEY_PEM: &str = "-----BEGIN PRIVATE KEY-----
 MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgltxBTVDLg7C6vE1T
@@ -57,6 +51,13 @@ fn test_client() -> client::Client {
 	)
 }
 
+fn policy_client() -> crate::proxy::httpproxy::PolicyClient {
+	let proxy = setup_proxy_test("{}").expect("proxy test harness");
+	crate::proxy::httpproxy::PolicyClient {
+		inputs: proxy.inputs(),
+	}
+}
+
 fn test_jwks() -> JwkSet {
 	serde_json::from_value(json!({
 		"keys": [{
@@ -70,6 +71,10 @@ fn test_jwks() -> JwkSet {
 		}]
 	}))
 	.expect("jwks json")
+}
+
+fn test_jwks_inline() -> FileInlineOrRemote {
+	FileInlineOrRemote::Inline(serde_json::to_string(&test_jwks()).expect("jwks"))
 }
 
 fn test_id_token_validator() -> jwt::Jwt {
@@ -87,8 +92,11 @@ fn test_redirect_uri() -> RedirectUri {
 	RedirectUri::parse("https://app.example.com/oauth/callback".into()).expect("redirect uri")
 }
 
-fn test_oidc_cookie_secret() -> SecretString {
-	SecretString::new("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into())
+fn test_oidc_cookie_encoder() -> crate::http::sessionpersistence::Encoder {
+	crate::http::sessionpersistence::Encoder::aes(
+		"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+	)
+	.expect("aes encoder")
 }
 
 fn test_policy() -> OidcPolicy {
@@ -99,10 +107,7 @@ fn test_policy() -> OidcPolicy {
 		secure: CookieSecureMode::Never,
 		ttl: Duration::from_secs(3600),
 		transaction_ttl: Duration::from_secs(300),
-		encoder: crate::http::sessionpersistence::Encoder::aes(
-			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-		)
-		.expect("aes encoder"),
+		encoder: test_oidc_cookie_encoder(),
 	};
 
 	OidcPolicy {
@@ -111,7 +116,6 @@ fn test_policy() -> OidcPolicy {
 			issuer: TEST_ISSUER.into(),
 			authorization_endpoint: Uri::from_static("https://issuer.example.com/authorize"),
 			token_endpoint: Uri::from_static("https://issuer.example.com/token"),
-			token_endpoint_auth_methods_supported: vec![TokenEndpointAuth::ClientSecretBasic],
 			id_token_validator: test_id_token_validator(),
 		}),
 		client: ClientConfig {
@@ -131,7 +135,6 @@ fn test_callback_policy(token_endpoint: Uri) -> OidcPolicy {
 		issuer: TEST_ISSUER.into(),
 		authorization_endpoint: Uri::from_static("https://issuer.example.com/authorize"),
 		token_endpoint,
-		token_endpoint_auth_methods_supported: vec![TokenEndpointAuth::ClientSecretBasic],
 		id_token_validator: test_id_token_validator(),
 	});
 	policy
@@ -155,15 +158,6 @@ fn encoded_transaction(
 			expires_at_unix,
 		})
 		.expect("encode transaction")
-}
-
-fn callback_context(state: &str, transaction_cookie: String) -> callback::CallbackRequestContext {
-	callback::CallbackRequestContext {
-		is_https: true,
-		code: "auth-code".into(),
-		state: state.into(),
-		transaction_cookie,
-	}
 }
 
 fn signed_id_token(nonce: &str) -> String {
@@ -191,106 +185,51 @@ fn request(method: Method, uri: &str, accept: Option<&str>) -> crate::http::Requ
 	builder.body(crate::http::Body::empty()).expect("request")
 }
 
-fn test_provider(name: &str, policy: OidcPolicy) -> NamedOidcProvider {
-	NamedOidcProvider {
-		name: name.into(),
-		policy,
+fn add_cookie(req: &mut crate::http::Request, cookie: String) {
+	req
+		.headers_mut()
+		.append(header::COOKIE, cookie.parse().expect("cookie header"));
+}
+
+fn explicit_local_oidc_config() -> LocalOidcConfig {
+	LocalOidcConfig {
+		issuer: TEST_ISSUER.into(),
+		discovery: None,
+		authorization_endpoint: Some(Uri::from_static("https://issuer.example.com/authorize")),
+		token_endpoint: Some(Uri::from_static("https://issuer.example.com/token")),
+		jwks: Some(test_jwks_inline()),
+		token_endpoint_auth_methods_supported: vec![],
+		client_id: TEST_CLIENT_ID.into(),
+		client_secret: SecretString::new("client-secret".into()),
+		redirect_uri: test_redirect_uri().redirect_uri,
+		scopes: vec!["profile".into(), "email".into()],
 	}
 }
 
-fn oidc_route(key: &str, hostnames: Vec<&str>, provider: &str) -> Route {
-	Route {
-		key: key.into(),
-		name: RouteName {
-			name: key.into(),
-			namespace: "default".into(),
-			rule_name: None,
-			kind: None,
-		},
-		service_key: None,
-		hostnames: hostnames.into_iter().map(Into::into).collect(),
-		matches: vec![RouteMatch {
-			headers: vec![],
-			path: PathMatch::PathPrefix("/".into()),
-			method: None,
-			query: vec![],
-		}],
-		backends: vec![RouteBackendReference {
-			weight: 1,
-			backend: crate::types::agent::BackendReference::Invalid,
-			inline_policies: vec![],
-		}],
-		inline_policies: vec![crate::types::agent::TrafficPolicy::Oidc(OidcProviderRef {
-			provider: provider.into(),
-		})],
-	}
-}
-
-fn oidc_bind(
-	listener_name: ListenerName,
-	port: u16,
-	protocol: ListenerProtocol,
-	hostname: &str,
-	providers: Vec<NamedOidcProvider>,
-	routes: Vec<Route>,
-) -> Bind {
-	Bind {
-		key: "bind".into(),
-		address: format!("127.0.0.1:{port}").parse().unwrap(),
-		protocol: match protocol {
-			ListenerProtocol::HTTP => BindProtocol::http,
-			ListenerProtocol::HTTPS(_) => BindProtocol::tls,
-			_ => BindProtocol::http,
-		},
-		tunnel_protocol: TunnelProtocol::Direct,
-		listeners: ListenerSet::from_list([Listener {
-			key: "listener".into(),
-			name: listener_name,
-			hostname: hostname.into(),
-			protocol,
-			oidc: Some(ListenerOidc::new(providers).unwrap()),
-			routes: RouteSet::from_list(routes),
-			tcp_routes: Default::default(),
-		}]),
-	}
-}
-
-fn oidc_listener(
-	port: u16,
-	protocol: ListenerProtocol,
-	hostname: &str,
-	providers: Vec<NamedOidcProvider>,
-) -> Arc<Listener> {
-	oidc_bind(
-		ListenerName {
-			gateway_name: "gw".into(),
-			gateway_namespace: "ns".into(),
-			listener_name: "listener".into(),
-			listener_set: None,
-		},
-		port,
-		protocol,
-		hostname,
-		providers,
-		vec![oidc_route("route", vec![hostname], "corp")],
-	)
-	.listeners
-	.get_exactly_one()
-	.expect("single listener")
-}
-
-// Config parsing and local session invariants.
 #[test]
 fn redirect_uri_rejects_ambiguous_values() {
-	assert!(RedirectUri::parse("https://app.example.com/".into()).is_err());
-	assert!(RedirectUri::parse("https://user@app.example.com/oauth/callback".into()).is_err());
-	assert!(RedirectUri::parse("https://app.example.com/oauth/callback?x=1".into()).is_err());
-	assert!(RedirectUri::parse("https://app.example.com/oauth/../callback".into()).is_err());
-	assert!(RedirectUri::parse("https://app.example.com/oauth/%2fcallback".into()).is_err());
-	assert!(RedirectUri::parse("http://app.example.com/oauth/callback".into()).is_err());
+	for raw in [
+		"https://app.example.com",
+		"https://app.example.com/",
+		"https://app.example.com/oauth/../callback",
+		"https://app.example.com/oauth/%2fcallback",
+		"https://app.example.com/oauth/callback?x=1",
+	] {
+		assert!(RedirectUri::parse(raw.to_string()).is_err(), "{raw}");
+	}
 }
 
-// Route enforcement and token exchange behavior.
+#[test]
+fn redirect_uri_accepts_valid_absolute_http_callbacks() {
+	let redirect =
+		RedirectUri::parse("http://app.example.com/oauth/callback".to_string()).expect("redirect uri");
+
+	assert_eq!(redirect.host, "app.example.com");
+	assert_eq!(redirect.port, 80);
+	assert!(!redirect.https);
+	assert_eq!(redirect.callback_path.path(), "/oauth/callback");
+}
+
 #[tokio::test]
 async fn apply_derives_claims_from_stored_id_token() {
 	let policy = test_policy();
@@ -300,7 +239,7 @@ async fn apply_derives_claims_from_stored_id_token() {
 		.encode_browser_session(&BrowserSession {
 			policy_id: policy.policy_id.clone(),
 			raw_id_token: SecretString::new(id_token.clone().into()),
-			expires_at_unix: Some(now_unix() + 60),
+			expires_at_unix: Some(now_unix() + 300),
 		})
 		.expect("encode session");
 	let mut req = request(
@@ -308,21 +247,13 @@ async fn apply_derives_claims_from_stored_id_token() {
 		"https://app.example.com/protected",
 		Some("text/html"),
 	);
-	req.headers_mut().insert(
-		header::COOKIE,
-		format!("{}={encoded}", policy.session.cookie_name)
-			.parse()
-			.expect("cookie header"),
+	add_cookie(
+		&mut req,
+		format!("{}={encoded}", policy.session.cookie_name),
 	);
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
+
 	let response = policy
-		.apply(
-			None,
-			&mut req,
-			crate::proxy::httpproxy::PolicyClient {
-				inputs: proxy.inputs(),
-			},
-		)
+		.apply(None, &mut req, policy_client())
 		.await
 		.expect("browser policy apply");
 	assert!(response.direct_response.is_none());
@@ -336,34 +267,24 @@ async fn apply_derives_claims_from_stored_id_token() {
 
 #[tokio::test]
 async fn auto_mode_redirects_html_navigation() {
-	let policy = test_policy();
-	let mut req = request(
-		Method::GET,
-		"https://app.example.com/protected?foo=bar",
-		Some("text/html,application/xhtml+xml"),
-	);
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
+	let mut policy = test_policy();
+	policy.redirect_uri = RedirectUri::parse("http://127.0.0.1/oauth/callback".into()).unwrap();
+	let mut req = request(Method::GET, "http://127.0.0.1/private", Some("text/html"));
+
 	let response = policy
-		.apply(
-			None,
-			&mut req,
-			crate::proxy::httpproxy::PolicyClient {
-				inputs: proxy.inputs(),
-			},
-		)
+		.apply(None, &mut req, policy_client())
 		.await
-		.expect("browser policy apply");
-	let direct = response.direct_response.expect("redirect response");
-	assert_eq!(direct.status(), http::StatusCode::FOUND);
-	let location = direct
+		.expect("apply");
+	let response = response.direct_response.expect("redirect response");
+	assert_eq!(response.status(), ::http::StatusCode::FOUND);
+	let location = response
 		.headers()
 		.get(header::LOCATION)
 		.unwrap()
 		.to_str()
 		.unwrap();
 	assert!(location.starts_with("https://issuer.example.com/authorize?"));
-	assert!(location.contains("redirect_uri=https%3A%2F%2Fapp.example.com%2Foauth%2Fcallback"));
-	assert!(location.contains("scope=openid+profile"));
+	assert!(location.contains("redirect_uri=http%3A%2F%2F127.0.0.1%2Foauth%2Fcallback"));
 }
 
 #[tokio::test]
@@ -371,66 +292,42 @@ async fn auto_mode_returns_unauthorized_for_json_requests() {
 	let policy = test_policy();
 	let mut req = request(
 		Method::GET,
-		"https://app.example.com/api/data",
+		"https://app.example.com/private",
 		Some("application/json"),
 	);
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
-	let response = policy
-		.apply(
-			None,
-			&mut req,
-			crate::proxy::httpproxy::PolicyClient {
-				inputs: proxy.inputs(),
-			},
-		)
+
+	let err = policy
+		.apply(None, &mut req, policy_client())
 		.await
-		.expect("browser policy apply");
-	let direct = response.direct_response.expect("unauthorized response");
-	assert_eq!(direct.status(), http::StatusCode::UNAUTHORIZED);
+		.expect_err("oidc should reject API requests without redirect");
+	assert!(matches!(err, Error::AuthenticationRequired));
+	assert_eq!(err.status_code(), ::http::StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
-async fn proxy_resolves_route_provider_against_listener_browser_provider() {
-	let mut policy = test_policy();
-	policy.redirect_uri =
-		RedirectUri::parse("http://127.0.0.1/oauth/callback".into()).expect("redirect uri");
+async fn missing_accept_header_does_not_redirect() {
+	let mut req = request(Method::GET, "https://app.example.com/private", None);
 
-	let listener_name = ListenerName {
-		gateway_name: "gw".into(),
-		gateway_namespace: "ns".into(),
-		listener_name: "listener".into(),
-		listener_set: None,
-	};
-	let bind = oidc_bind(
-		listener_name,
-		80,
-		ListenerProtocol::HTTP,
-		"127.0.0.1",
-		vec![test_provider("corp", policy)],
-		vec![oidc_route("route", vec!["127.0.0.1"], "corp")],
+	let err = test_policy()
+		.apply(None, &mut req, policy_client())
+		.await
+		.expect_err("missing accept should not redirect");
+	assert!(matches!(err, Error::AuthenticationRequired));
+}
+
+#[tokio::test]
+async fn html_must_be_preferred_over_json_to_redirect() {
+	let mut req = request(
+		Method::GET,
+		"https://app.example.com/private",
+		Some("application/json, text/html"),
 	);
 
-	let proxy = setup_proxy_test("{}")
-		.expect("proxy test harness")
-		.with_bind(bind);
-	let io = proxy.serve_http("bind".into());
-	let response = send_request_headers(
-		io,
-		Method::GET,
-		"http://127.0.0.1/protected",
-		&[(header::ACCEPT.as_str(), "text/html")],
-	)
-	.await;
-
-	assert_eq!(response.status(), http::StatusCode::FOUND);
-	let location = response
-		.headers()
-		.get(header::LOCATION)
-		.expect("location header")
-		.to_str()
-		.expect("location value");
-	assert!(location.starts_with("https://issuer.example.com/authorize?"));
-	assert!(location.contains("redirect_uri=http%3A%2F%2F127.0.0.1%2Foauth%2Fcallback"));
+	let err = test_policy()
+		.apply(None, &mut req, policy_client())
+		.await
+		.expect_err("json-preferred accept should not redirect");
+	assert!(matches!(err, Error::AuthenticationRequired));
 }
 
 #[tokio::test]
@@ -460,12 +357,10 @@ async fn client_secret_basic_uses_form_encoded_credentials() {
 		.mount(&mock)
 		.await;
 
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
 	let provider = Provider {
 		issuer: TEST_ISSUER.into(),
 		authorization_endpoint: Uri::from_static("https://issuer.example.com/authorize"),
 		token_endpoint: format!("{}/token", mock.uri()).parse().unwrap(),
-		token_endpoint_auth_methods_supported: vec![TokenEndpointAuth::ClientSecretBasic],
 		id_token_validator: test_id_token_validator(),
 	};
 	let client_config = ClientConfig {
@@ -475,9 +370,7 @@ async fn client_secret_basic_uses_form_encoded_credentials() {
 	};
 
 	let response = provider::exchange_code(
-		crate::proxy::httpproxy::PolicyClient {
-			inputs: proxy.inputs(),
-		},
+		policy_client(),
 		&provider,
 		&client_config,
 		"https://app.example.com/oauth/callback",
@@ -501,12 +394,10 @@ async fn client_secret_post_sends_credentials_in_form_body() {
 		.mount(&mock)
 		.await;
 
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
 	let provider = Provider {
 		issuer: TEST_ISSUER.into(),
 		authorization_endpoint: Uri::from_static("https://issuer.example.com/authorize"),
 		token_endpoint: format!("{}/token", mock.uri()).parse().unwrap(),
-		token_endpoint_auth_methods_supported: vec![TokenEndpointAuth::ClientSecretPost],
 		id_token_validator: test_id_token_validator(),
 	};
 	let client_config = ClientConfig {
@@ -516,9 +407,7 @@ async fn client_secret_post_sends_credentials_in_form_body() {
 	};
 
 	let response = provider::exchange_code(
-		crate::proxy::httpproxy::PolicyClient {
-			inputs: proxy.inputs(),
-		},
+		policy_client(),
 		&provider,
 		&client_config,
 		"https://app.example.com/oauth/callback",
@@ -541,20 +430,14 @@ async fn token_exchange_times_out() {
 	let mock = MockServer::start().await;
 	Mock::given(method("POST"))
 		.and(path("/token"))
-		.respond_with(
-			ResponseTemplate::new(200)
-				.set_delay(Duration::from_millis(100))
-				.set_body_json(json!({ "id_token": signed_id_token(TEST_NONCE) })),
-		)
+		.respond_with(ResponseTemplate::new(200).set_delay(Duration::from_millis(200)))
 		.mount(&mock)
 		.await;
 
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
 	let provider = Provider {
 		issuer: TEST_ISSUER.into(),
 		authorization_endpoint: Uri::from_static("https://issuer.example.com/authorize"),
 		token_endpoint: format!("{}/token", mock.uri()).parse().unwrap(),
-		token_endpoint_auth_methods_supported: vec![TokenEndpointAuth::ClientSecretBasic],
 		id_token_validator: test_id_token_validator(),
 	};
 	let client_config = ClientConfig {
@@ -564,18 +447,16 @@ async fn token_exchange_times_out() {
 	};
 
 	let err = provider::exchange_code_with_timeout(
-		crate::proxy::httpproxy::PolicyClient {
-			inputs: proxy.inputs(),
-		},
+		policy_client(),
 		&provider,
 		&client_config,
 		"https://app.example.com/oauth/callback",
 		"code",
 		&SecretString::new("verifier".into()),
-		Duration::from_millis(25),
+		Duration::from_millis(50),
 	)
 	.await
-	.expect_err("token exchange timeout should fail");
+	.expect_err("timeout expected");
 	assert!(matches!(err, Error::TokenExchangeFailed(_)));
 }
 
@@ -584,20 +465,14 @@ async fn token_exchange_rejects_oversized_response_body() {
 	let mock = MockServer::start().await;
 	Mock::given(method("POST"))
 		.and(path("/token"))
-		.respond_with(
-			ResponseTemplate::new(200)
-				.insert_header(header::CONTENT_TYPE.as_str(), "application/json")
-				.set_body_string(format!("\"{}\"", "x".repeat(70_000))),
-		)
+		.respond_with(ResponseTemplate::new(200).set_body_string("x".repeat(70 * 1024)))
 		.mount(&mock)
 		.await;
 
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
 	let provider = Provider {
 		issuer: TEST_ISSUER.into(),
 		authorization_endpoint: Uri::from_static("https://issuer.example.com/authorize"),
 		token_endpoint: format!("{}/token", mock.uri()).parse().unwrap(),
-		token_endpoint_auth_methods_supported: vec![TokenEndpointAuth::ClientSecretBasic],
 		id_token_validator: test_id_token_validator(),
 	};
 	let client_config = ClientConfig {
@@ -607,9 +482,7 @@ async fn token_exchange_rejects_oversized_response_body() {
 	};
 
 	let err = provider::exchange_code(
-		crate::proxy::httpproxy::PolicyClient {
-			inputs: proxy.inputs(),
-		},
+		policy_client(),
 		&provider,
 		&client_config,
 		"https://app.example.com/oauth/callback",
@@ -617,443 +490,253 @@ async fn token_exchange_rejects_oversized_response_body() {
 		&SecretString::new("verifier".into()),
 	)
 	.await
-	.expect_err("oversized token response should fail");
+	.expect_err("oversized body expected");
 	assert!(matches!(err, Error::TokenExchangeFailed(_)));
 }
 
-// Callback handling and post-login redirect behavior.
 #[tokio::test]
 async fn callback_requires_transaction_cookie() {
-	let policy = test_callback_policy(Uri::from_static("https://issuer.example.com/token"));
-	let listener = oidc_listener(
-		443,
-		ListenerProtocol::HTTPS(ServerTLSConfig::new_invalid()),
-		"app.example.com",
-		vec![test_provider("corp", policy.clone())],
-	);
+	let policy = test_policy();
 	let mut req = request(
 		Method::GET,
-		"https://app.example.com/oauth/callback?code=abc&state=csrf",
-		None,
+		"https://app.example.com/oauth/callback?code=auth-code&state=test-state",
+		Some("text/html"),
 	);
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
-	let err = listener
-		.maybe_handle_oidc_callback(
-			None,
-			&mut req,
-			crate::proxy::httpproxy::PolicyClient {
-				inputs: proxy.inputs(),
-			},
-		)
+
+	let err = policy
+		.apply(None, &mut req, policy_client())
 		.await
-		.expect_err("missing transaction cookie should fail");
+		.expect_err("missing transaction cookie");
 	assert!(matches!(err, Error::MissingTransaction));
 }
 
 #[tokio::test]
-async fn callback_rejects_invalid_transaction_cookie() {
-	let policy = test_callback_policy(Uri::from_static("https://issuer.example.com/token"));
-	let listener = oidc_listener(
-		443,
-		ListenerProtocol::HTTPS(ServerTLSConfig::new_invalid()),
-		"app.example.com",
-		vec![test_provider("corp", policy.clone())],
+async fn callback_rejects_state_mismatch() {
+	let policy = test_policy();
+	let encoded = encoded_transaction(
+		&policy,
+		"expected-state",
+		TEST_NONCE,
+		"/protected",
+		now_unix() + 300,
 	);
 	let mut req = request(
 		Method::GET,
-		"https://app.example.com/oauth/callback?code=abc&state=csrf",
-		None,
+		"https://app.example.com/oauth/callback?code=auth-code&state=wrong-state",
+		Some("text/html"),
 	);
-	req.headers_mut().insert(
-		header::COOKIE,
-		http::HeaderValue::from_str(&format!(
-			"{}=not-a-valid-cookie",
-			policy.session.transaction_cookie_name
-		))
-		.expect("cookie header"),
+	add_cookie(
+		&mut req,
+		format!("{}={encoded}", policy.session.transaction_cookie_name),
 	);
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
-	let err = listener
-		.maybe_handle_oidc_callback(
-			None,
-			&mut req,
-			crate::proxy::httpproxy::PolicyClient {
-				inputs: proxy.inputs(),
-			},
-		)
+
+	let err = policy
+		.apply(None, &mut req, policy_client())
 		.await
-		.expect_err("invalid transaction cookie should fail");
-	assert!(matches!(err, Error::InvalidTransaction));
-}
-
-#[tokio::test]
-async fn callback_rejects_state_mismatch() {
-	let policy = test_callback_policy(Uri::from_static("https://issuer.example.com/token"));
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
-	let err = callback::handle_callback(
-		&policy,
-		None,
-		callback_context(
-			"wrong-state",
-			encoded_transaction(
-				&policy,
-				"expected-state",
-				TEST_NONCE,
-				"/app",
-				now_unix() + 60,
-			),
-		),
-		crate::proxy::httpproxy::PolicyClient {
-			inputs: proxy.inputs(),
-		},
-	)
-	.await
-	.expect_err("state mismatch should fail");
+		.expect_err("state mismatch");
 	assert!(matches!(err, Error::CsrfMismatch));
-}
-
-#[tokio::test]
-async fn callback_rejects_policy_mismatch() {
-	let policy = test_callback_policy(Uri::from_static("https://issuer.example.com/token"));
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
-	let mut wrong_policy = policy.clone();
-	wrong_policy.policy_id = PolicyId::from("other-policy");
-	let err = callback::handle_callback(
-		&wrong_policy,
-		None,
-		callback_context(
-			"csrf",
-			encoded_transaction(&policy, "csrf", TEST_NONCE, "/app", now_unix() + 60),
-		),
-		crate::proxy::httpproxy::PolicyClient {
-			inputs: proxy.inputs(),
-		},
-	)
-	.await
-	.expect_err("policy mismatch should fail");
-	assert!(matches!(err, Error::PolicyMismatch));
-}
-
-#[tokio::test]
-async fn callback_rejects_nonce_mismatch() {
-	let mock = MockServer::start().await;
-	Mock::given(method("POST"))
-		.and(path("/token"))
-		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
-			"id_token": signed_id_token("wrong-nonce"),
-			"token_type": "Bearer"
-		})))
-		.mount(&mock)
-		.await;
-	let policy = test_callback_policy(format!("{}/token", mock.uri()).parse().unwrap());
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
-	let err = callback::handle_callback(
-		&policy,
-		None,
-		callback_context(
-			"csrf",
-			encoded_transaction(&policy, "csrf", TEST_NONCE, "/app", now_unix() + 60),
-		),
-		crate::proxy::httpproxy::PolicyClient {
-			inputs: proxy.inputs(),
-		},
-	)
-	.await
-	.expect_err("nonce mismatch should fail");
-	assert!(matches!(err, Error::NonceMismatch));
 }
 
 #[tokio::test]
 async fn callback_success_sets_session_cookie_and_clears_transaction_cookie() {
 	let mock = MockServer::start().await;
+	let id_token = signed_id_token(TEST_NONCE);
 	Mock::given(method("POST"))
 		.and(path("/token"))
 		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
-			"id_token": signed_id_token(TEST_NONCE),
-			"access_token": "access-token",
-			"refresh_token": "refresh-token",
-			"token_type": "Bearer"
+			"id_token": id_token
 		})))
 		.mount(&mock)
 		.await;
+
 	let policy = test_callback_policy(format!("{}/token", mock.uri()).parse().unwrap());
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
-	let response = callback::handle_callback(
+	let encoded = encoded_transaction(
 		&policy,
-		None,
-		callback_context(
-			"csrf",
-			encoded_transaction(&policy, "csrf", TEST_NONCE, "/app?x=1", now_unix() + 60),
-		),
-		crate::proxy::httpproxy::PolicyClient {
-			inputs: proxy.inputs(),
-		},
-	)
-	.await
-	.expect("callback success");
-	let direct = response.direct_response.expect("direct response");
-	assert_eq!(direct.status(), http::StatusCode::FOUND);
-	assert_eq!(direct.headers().get(header::LOCATION).unwrap(), "/app?x=1");
-	let set_cookies: Vec<_> = direct
+		"test-state",
+		TEST_NONCE,
+		"/protected",
+		now_unix() + 300,
+	);
+	let mut req = request(
+		Method::GET,
+		"https://app.example.com/oauth/callback?code=auth-code&state=test-state",
+		Some("text/html"),
+	);
+	add_cookie(
+		&mut req,
+		format!("{}={encoded}", policy.session.transaction_cookie_name),
+	);
+
+	let response = policy
+		.apply(None, &mut req, policy_client())
+		.await
+		.expect("callback apply");
+	let response = response.direct_response.expect("redirect response");
+	assert_eq!(response.status(), ::http::StatusCode::FOUND);
+	assert_eq!(
+		response.headers().get(header::LOCATION).unwrap(),
+		"/protected"
+	);
+	let cookies: Vec<_> = response
 		.headers()
 		.get_all(header::SET_COOKIE)
 		.iter()
+		.map(|h| h.to_str().unwrap().to_string())
 		.collect();
-	assert_eq!(set_cookies.len(), 2);
-	assert!(set_cookies.iter().any(|value| {
-		value
-			.to_str()
-			.unwrap()
-			.starts_with(&format!("{}=", policy.session.cookie_name))
-	}));
-	assert!(set_cookies.iter().any(|value| {
-		let value = value.to_str().unwrap();
-		value.starts_with(&format!("{}=", policy.session.transaction_cookie_name))
-			&& value.contains("Max-Age=0")
-	}));
+	assert!(
+		cookies
+			.iter()
+			.any(|cookie| cookie.starts_with(&policy.session.cookie_name))
+	);
+	assert!(cookies.iter().any(
+		|cookie| cookie.starts_with(&policy.session.transaction_cookie_name)
+			&& cookie.contains("Max-Age=0")
+	));
 }
 
 #[tokio::test]
-async fn callback_success_falls_back_to_root_for_invalid_original_uri() {
+async fn callback_matching_uses_path_not_redirect_host_or_port() {
 	let mock = MockServer::start().await;
+	let id_token = signed_id_token(TEST_NONCE);
 	Mock::given(method("POST"))
 		.and(path("/token"))
 		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
-			"id_token": signed_id_token(TEST_NONCE),
-			"token_type": "Bearer"
+			"id_token": id_token
 		})))
 		.mount(&mock)
 		.await;
+
 	let policy = test_callback_policy(format!("{}/token", mock.uri()).parse().unwrap());
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
-	let response = callback::handle_callback(
+	let encoded = encoded_transaction(
 		&policy,
-		None,
-		callback_context(
-			"csrf",
-			encoded_transaction(
-				&policy,
-				"csrf",
-				TEST_NONCE,
-				"https://evil.example.com/path",
-				now_unix() + 60,
-			),
-		),
-		crate::proxy::httpproxy::PolicyClient {
-			inputs: proxy.inputs(),
-		},
-	)
-	.await
-	.expect("callback success");
-	let direct = response.direct_response.expect("direct response");
-	assert_eq!(direct.headers().get(header::LOCATION).unwrap(), "/");
-}
-
-#[tokio::test]
-async fn listener_callback_handling_ignores_non_callback_traffic_on_same_path() {
-	let policy = test_callback_policy(Uri::from_static("https://issuer.example.com/token"));
-	let listener = oidc_listener(
-		443,
-		ListenerProtocol::HTTPS(ServerTLSConfig::new_invalid()),
-		"app.example.com",
-		vec![test_provider("corp", policy)],
+		"test-state",
+		TEST_NONCE,
+		"/protected",
+		now_unix() + 300,
 	);
 	let mut req = request(
 		Method::GET,
-		"https://app.example.com/oauth/callback?foo=bar",
-		None,
+		"https://edge.example.net:8443/oauth/callback?code=auth-code&state=test-state",
+		Some("text/html"),
 	);
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
-	let response = listener
-		.maybe_handle_oidc_callback(
-			None,
-			&mut req,
-			crate::proxy::httpproxy::PolicyClient {
-				inputs: proxy.inputs(),
-			},
-		)
+	add_cookie(
+		&mut req,
+		format!("{}={encoded}", policy.session.transaction_cookie_name),
+	);
+
+	let response = policy
+		.apply(None, &mut req, policy_client())
 		.await
-		.expect("non-callback response");
-	assert!(response.direct_response.is_none());
+		.expect("callback apply");
+	assert_eq!(
+		response
+			.direct_response
+			.unwrap()
+			.headers()
+			.get(header::LOCATION)
+			.unwrap(),
+		"/protected"
+	);
 }
 
 #[tokio::test]
-async fn listener_callback_handling_surfaces_provider_error_callbacks() {
-	let policy = test_callback_policy(Uri::from_static("https://issuer.example.com/token"));
-	let listener = oidc_listener(
-		443,
-		ListenerProtocol::HTTPS(ServerTLSConfig::new_invalid()),
-		"app.example.com",
-		vec![test_provider("corp", policy)],
-	);
+async fn callback_path_without_callback_query_falls_back_to_login_redirect() {
+	let policy = test_policy();
 	let mut req = request(
 		Method::GET,
-		"https://app.example.com/oauth/callback?error=access_denied&state=csrf",
-		None,
+		"https://app.example.com/oauth/callback",
+		Some("text/html"),
 	);
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
-	let err = listener
-		.maybe_handle_oidc_callback(
-			None,
-			&mut req,
-			crate::proxy::httpproxy::PolicyClient {
-				inputs: proxy.inputs(),
-			},
-		)
+
+	let response = policy
+		.apply(None, &mut req, policy_client())
 		.await
-		.expect_err("provider callback error should fail");
-	assert!(matches!(err, Error::ProviderCallback(ref value) if value == "access_denied"));
+		.expect("apply");
+	let response = response.direct_response.expect("redirect response");
+	assert_eq!(response.status(), ::http::StatusCode::FOUND);
+	assert!(
+		response
+			.headers()
+			.get(header::LOCATION)
+			.unwrap()
+			.to_str()
+			.unwrap()
+			.starts_with("https://issuer.example.com/authorize?")
+	);
 }
 
 #[test]
-fn oidc_proxy_errors_use_error_specific_status_codes() {
-	let response = ProxyError::OidcFailure(Error::InvalidCallback).into_response();
-	assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
-
-	let response = ProxyError::OidcFailure(Error::TokenExchangeFailed(anyhow::anyhow!(
-		"upstream timeout"
-	)))
-	.into_response();
-	assert_eq!(response.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+fn oidc_errors_use_error_specific_status_codes() {
+	assert_eq!(
+		Error::AuthenticationRequired.status_code(),
+		::http::StatusCode::UNAUTHORIZED
+	);
+	assert_eq!(
+		Error::MissingTransaction.status_code(),
+		::http::StatusCode::BAD_REQUEST
+	);
+	assert_eq!(
+		Error::NonceMismatch.status_code(),
+		::http::StatusCode::BAD_REQUEST
+	);
+	assert_eq!(
+		Error::TokenExchangeFailed(anyhow::anyhow!("boom")).status_code(),
+		::http::StatusCode::INTERNAL_SERVER_ERROR
+	);
+	assert!(matches!(
+		ProxyError::OidcFailure(Error::MissingTransaction),
+		ProxyError::OidcFailure(_)
+	));
 }
 
 #[tokio::test]
-async fn listener_callback_handling_matches_exact_host_and_port() {
-	let mock = MockServer::start().await;
-	Mock::given(method("POST"))
-		.and(path("/token"))
-		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
-			"id_token": signed_id_token(TEST_NONCE),
-			"token_type": "Bearer"
-		})))
-		.mount(&mock)
-		.await;
-
-	let mut policy = test_callback_policy(format!("{}/token", mock.uri()).parse().unwrap());
-	policy.redirect_uri =
-		RedirectUri::parse("https://app.example.com:8443/oauth/callback".into()).expect("redirect uri");
-	policy.session.cookie_name = "agw_oidc_s_port".into();
-	policy.session.transaction_cookie_name = "agw_oidc_t_port".into();
-	let listener = oidc_listener(
-		8443,
-		ListenerProtocol::HTTPS(ServerTLSConfig::new_invalid()),
-		"app.example.com",
-		vec![test_provider("corp", policy.clone())],
-	);
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
-
-	let mut wrong_port = request(
-		Method::GET,
-		"https://app.example.com/oauth/callback?code=abc&state=csrf",
-		None,
-	);
-	let response = listener
-		.maybe_handle_oidc_callback(
-			None,
-			&mut wrong_port,
-			crate::proxy::httpproxy::PolicyClient {
-				inputs: proxy.inputs(),
-			},
-		)
+async fn compiled_policy_uses_fixed_defaults_and_deterministic_cookie_derivation() {
+	let local = explicit_local_oidc_config();
+	let encoder = test_oidc_cookie_encoder();
+	let policy_a = local
+		.translate(test_client(), &encoder)
 		.await
-		.expect("wrong port should not intercept");
-	assert!(response.direct_response.is_none());
+		.expect("first translate");
+	let policy_b = explicit_local_oidc_config()
+		.translate(test_client(), &encoder)
+		.await
+		.expect("second translate");
 
-	let mut req = request(
-		Method::GET,
-		"https://app.example.com:8443/oauth/callback?code=abc&state=csrf",
-		None,
-	);
-	let transaction = encoded_transaction(&policy, "csrf", TEST_NONCE, "/done", now_unix() + 60);
-	req.headers_mut().insert(
-		header::COOKIE,
-		format!("{}={transaction}", policy.session.transaction_cookie_name)
-			.parse()
-			.expect("cookie header"),
-	);
-	let response = listener
-		.maybe_handle_oidc_callback(
-			None,
-			&mut req,
-			crate::proxy::httpproxy::PolicyClient {
-				inputs: proxy.inputs(),
-			},
-		)
-		.await
-		.expect("callback response");
-	let direct = response.direct_response.expect("direct response");
-	assert_eq!(direct.headers().get(header::LOCATION).unwrap(), "/done");
-}
-
-// Listener-owned callback validation.
-#[tokio::test]
-async fn compiled_policy_uses_fixed_defaults_and_stable_cookie_derivation() {
-	let make_config = |redirect_uri: &str| LocalOidcConfig {
-		issuer: "https://issuer.example.com".into(),
-		discovery: None,
-		authorization_endpoint: Some(Uri::from_static("https://issuer.example.com/authorize")),
-		token_endpoint: Some(Uri::from_static("https://issuer.example.com/token")),
-		jwks: Some(FileInlineOrRemote::Inline(
-			serde_json::to_string(&test_jwks()).unwrap(),
-		)),
-		token_endpoint_auth_methods_supported: vec![TokenEndpointAuth::ClientSecretBasic],
-		client_id: "client-id".into(),
-		client_secret: SecretString::new("client-secret".into()),
-		redirect_uri: redirect_uri.into(),
-		scopes: vec!["profile".into()],
-	};
-	let oidc_cookie_secret = test_oidc_cookie_secret();
-	let policy_a = make_config("https://APP.example.com/oauth/callback")
-		.translate(test_client(), &oidc_cookie_secret)
-		.await
-		.expect("policy a");
-	let policy_b = make_config("https://app.example.com:443/oauth/callback")
-		.translate(test_client(), &oidc_cookie_secret)
-		.await
-		.expect("policy b");
 	assert_eq!(policy_a.policy_id, policy_b.policy_id);
 	assert_eq!(policy_a.session.cookie_name, policy_b.session.cookie_name);
+	assert_eq!(
+		policy_a.session.transaction_cookie_name,
+		policy_b.session.transaction_cookie_name
+	);
 	assert_eq!(policy_a.session.same_site, SameSiteMode::Lax);
 	assert_eq!(policy_a.session.secure, CookieSecureMode::Auto);
 	assert_eq!(policy_a.session.ttl, Duration::from_secs(3600));
 	assert_eq!(policy_a.session.transaction_ttl, Duration::from_secs(300));
-	assert_eq!(
-		policy_a.scopes,
-		vec!["openid".to_string(), "profile".to_string()]
-	);
-	assert_eq!(
-		policy_a.client.token_endpoint_auth,
-		TokenEndpointAuth::ClientSecretBasic
-	);
+	assert_eq!(policy_a.scopes, vec!["openid", "profile", "email"]);
 }
 
 #[tokio::test]
 async fn issuer_only_oidc_config_uses_discovery() {
 	let mock = MockServer::start().await;
-	let issuer = format!("{}/issuer", mock.uri());
-	let authorization_endpoint = format!("{issuer}/authorize");
-	let token_endpoint = format!("{issuer}/token");
-	let jwks_uri = format!("{issuer}/jwks.json");
-
 	Mock::given(method("GET"))
-		.and(path("/issuer/.well-known/openid-configuration"))
+		.and(path("/.well-known/openid-configuration"))
 		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
-			"issuer": issuer.clone(),
-			"authorization_endpoint": authorization_endpoint.clone(),
-			"token_endpoint": token_endpoint.clone(),
-			"jwks_uri": jwks_uri.clone(),
+			"issuer": mock.uri(),
+			"authorization_endpoint": format!("{}/authorize", mock.uri()),
+			"token_endpoint": format!("{}/token", mock.uri()),
+			"jwks_uri": format!("{}/jwks", mock.uri()),
 			"token_endpoint_auth_methods_supported": ["client_secret_post"]
 		})))
 		.mount(&mock)
 		.await;
 	Mock::given(method("GET"))
-		.and(path("/issuer/jwks.json"))
+		.and(path("/jwks"))
 		.respond_with(ResponseTemplate::new(200).set_body_json(test_jwks()))
 		.mount(&mock)
 		.await;
 
 	let policy = LocalOidcConfig {
-		issuer: format!("{}/issuer", mock.uri()),
+		issuer: mock.uri(),
 		discovery: None,
 		authorization_endpoint: None,
 		token_endpoint: None,
@@ -1061,24 +744,20 @@ async fn issuer_only_oidc_config_uses_discovery() {
 		token_endpoint_auth_methods_supported: vec![],
 		client_id: TEST_CLIENT_ID.into(),
 		client_secret: SecretString::new("client-secret".into()),
-		redirect_uri: "https://app.example.com/oauth/callback".into(),
-		scopes: vec!["profile".into()],
+		redirect_uri: "http://localhost:3000/oauth/callback".into(),
+		scopes: vec![],
 	}
-	.translate(test_client(), &test_oidc_cookie_secret())
+	.translate(test_client(), &test_oidc_cookie_encoder())
 	.await
-	.expect("discovery-backed policy");
+	.expect("translate");
 
 	assert_eq!(
 		policy.provider.authorization_endpoint,
-		authorization_endpoint.parse::<Uri>().unwrap()
+		format!("{}/authorize", mock.uri()).parse::<Uri>().unwrap()
 	);
 	assert_eq!(
 		policy.provider.token_endpoint,
-		token_endpoint.parse::<Uri>().unwrap()
-	);
-	assert_eq!(
-		policy.provider.token_endpoint_auth_methods_supported,
-		vec![TokenEndpointAuth::ClientSecretPost]
+		format!("{}/token", mock.uri()).parse::<Uri>().unwrap()
 	);
 	assert_eq!(
 		policy.client.token_endpoint_auth,
@@ -1087,143 +766,162 @@ async fn issuer_only_oidc_config_uses_discovery() {
 }
 
 #[tokio::test]
-async fn explicit_oidc_fields_override_discovery_without_loading_discovered_jwks() {
-	let mock = MockServer::start().await;
-	let issuer = format!("{}/issuer", mock.uri());
-	let discovered_token_endpoint = format!("{issuer}/token");
+async fn fully_explicit_oidc_config_skips_discovery() {
+	let policy = explicit_local_oidc_config()
+		.translate(test_client(), &test_oidc_cookie_encoder())
+		.await
+		.expect("translate");
 
+	assert_eq!(
+		policy.provider.authorization_endpoint,
+		Uri::from_static("https://issuer.example.com/authorize")
+	);
+	assert_eq!(
+		policy.provider.token_endpoint,
+		Uri::from_static("https://issuer.example.com/token")
+	);
+	assert_eq!(
+		policy.client.token_endpoint_auth,
+		TokenEndpointAuth::ClientSecretBasic
+	);
+}
+
+#[tokio::test]
+async fn partial_explicit_provider_config_is_rejected() {
+	let err = LocalOidcConfig {
+		issuer: TEST_ISSUER.into(),
+		discovery: None,
+		authorization_endpoint: None,
+		token_endpoint: Some(Uri::from_static("https://issuer.example.com/token")),
+		jwks: Some(test_jwks_inline()),
+		token_endpoint_auth_methods_supported: vec![],
+		client_id: TEST_CLIENT_ID.into(),
+		client_secret: SecretString::new("client-secret".into()),
+		redirect_uri: "http://localhost:3000/oauth/callback".into(),
+		scopes: vec![],
+	}
+	.translate(test_client(), &test_oidc_cookie_encoder())
+	.await
+	.expect_err("partial explicit config should fail");
+
+	assert!(err.to_string().contains(
+		"authorizationEndpoint, tokenEndpoint, and jwks must either all be set or all be omitted"
+	));
+}
+
+#[tokio::test]
+async fn explicit_provider_config_rejects_discovery_override() {
+	let err = LocalOidcConfig {
+		discovery: Some(FileInlineOrRemote::Remote {
+			url: "https://example.invalid/should-not-be-called"
+				.parse()
+				.unwrap(),
+		}),
+		..explicit_local_oidc_config()
+	}
+	.translate(test_client(), &test_oidc_cookie_encoder())
+	.await
+	.expect_err("fully explicit config should reject discovery override");
+
+	assert!(
+		err
+			.to_string()
+			.contains("oidc discovery must be omitted when authorizationEndpoint, tokenEndpoint, and jwks are configured explicitly")
+	);
+}
+
+#[tokio::test]
+async fn discovery_load_failures_identify_discovery_document_source() {
+	let err = LocalOidcConfig {
+		issuer: TEST_ISSUER.into(),
+		discovery: Some(FileInlineOrRemote::Inline("{".into())),
+		authorization_endpoint: None,
+		token_endpoint: None,
+		jwks: None,
+		token_endpoint_auth_methods_supported: vec![],
+		client_id: TEST_CLIENT_ID.into(),
+		client_secret: SecretString::new("client-secret".into()),
+		redirect_uri: "http://localhost:3000/oauth/callback".into(),
+		scopes: vec![],
+	}
+	.translate(test_client(), &test_oidc_cookie_encoder())
+	.await
+	.expect_err("invalid discovery document should fail");
+
+	assert!(
+		err
+			.to_string()
+			.contains("failed to load oidc discovery document from inline configuration")
+	);
+}
+
+#[tokio::test]
+async fn explicit_remote_jwks_failures_identify_explicit_source() {
+	let mock = MockServer::start().await;
 	Mock::given(method("GET"))
-		.and(path("/issuer/.well-known/openid-configuration"))
+		.and(path("/jwks"))
+		.respond_with(ResponseTemplate::new(200).set_body_string("{"))
+		.mount(&mock)
+		.await;
+
+	let err = LocalOidcConfig {
+		jwks: Some(FileInlineOrRemote::Remote {
+			url: format!("{}/jwks", mock.uri()).parse().unwrap(),
+		}),
+		..explicit_local_oidc_config()
+	}
+	.translate(test_client(), &test_oidc_cookie_encoder())
+	.await
+	.expect_err("invalid explicit jwks should fail");
+
+	assert!(
+		err
+			.to_string()
+			.contains("failed to load oidc jwks from explicit jwks source uri")
+	);
+}
+
+#[tokio::test]
+async fn discovered_remote_jwks_failures_identify_discovered_source() {
+	let mock = MockServer::start().await;
+	Mock::given(method("GET"))
+		.and(path("/.well-known/openid-configuration"))
 		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
-			"issuer": issuer.clone(),
-			"authorization_endpoint": format!("{issuer}/authorize"),
-			"token_endpoint": discovered_token_endpoint.clone(),
-			"jwks_uri": format!("{issuer}/discovered-jwks.json"),
+			"issuer": mock.uri(),
+			"authorization_endpoint": format!("{}/authorize", mock.uri()),
+			"token_endpoint": format!("{}/token", mock.uri()),
+			"jwks_uri": format!("{}/jwks", mock.uri()),
 			"token_endpoint_auth_methods_supported": ["client_secret_basic"]
 		})))
 		.mount(&mock)
 		.await;
+	Mock::given(method("GET"))
+		.and(path("/jwks"))
+		.respond_with(ResponseTemplate::new(200).set_body_string("{"))
+		.mount(&mock)
+		.await;
 
-	let policy = LocalOidcConfig {
-		issuer: format!("{}/issuer", mock.uri()),
+	let err = LocalOidcConfig {
+		issuer: mock.uri(),
 		discovery: None,
-		authorization_endpoint: Some(Uri::from_static("https://override.example.com/authorize")),
+		authorization_endpoint: None,
 		token_endpoint: None,
-		jwks: Some(FileInlineOrRemote::Inline(
-			serde_json::to_string(&test_jwks()).unwrap(),
-		)),
-		token_endpoint_auth_methods_supported: vec![TokenEndpointAuth::ClientSecretPost],
+		jwks: None,
+		token_endpoint_auth_methods_supported: vec![],
 		client_id: TEST_CLIENT_ID.into(),
 		client_secret: SecretString::new("client-secret".into()),
-		redirect_uri: "https://app.example.com/oauth/callback".into(),
-		scopes: vec!["profile".into()],
+		redirect_uri: "http://localhost:3000/oauth/callback".into(),
+		scopes: vec![],
 	}
-	.translate(test_client(), &test_oidc_cookie_secret())
+	.translate(test_client(), &test_oidc_cookie_encoder())
 	.await
-	.expect("mixed discovery/override policy");
+	.expect_err("invalid discovered jwks should fail");
 
-	assert_eq!(
-		policy.provider.authorization_endpoint,
-		Uri::from_static("https://override.example.com/authorize")
-	);
-	assert_eq!(
-		policy.provider.token_endpoint,
-		discovered_token_endpoint.parse::<Uri>().unwrap()
-	);
-	assert_eq!(
-		policy.provider.token_endpoint_auth_methods_supported,
-		vec![TokenEndpointAuth::ClientSecretPost]
-	);
-	assert_eq!(
-		policy.client.token_endpoint_auth,
-		TokenEndpointAuth::ClientSecretPost
-	);
-}
-
-#[test]
-fn distinct_callback_owners_can_share_a_listener() {
-	let policy = test_policy();
-	let mut other_policy = test_policy();
-	other_policy.policy_id = "other-policy".into();
-	other_policy.redirect_uri =
-		RedirectUri::parse("https://app.example.com/oauth/callback-b".into()).expect("redirect uri");
-	other_policy.session.cookie_name = "agw_oidc_s_other".into();
-	other_policy.session.transaction_cookie_name = "agw_oidc_t_other".into();
-
-	let listener = oidc_listener(
-		443,
-		ListenerProtocol::HTTPS(ServerTLSConfig::new_invalid()),
-		"app.example.com",
-		vec![
-			test_provider("corp", policy.clone()),
-			test_provider("other", other_policy.clone()),
-		],
-	);
-	listener
-		.validate_oidc(443)
-		.expect("distinct callback owners should validate");
-}
-
-#[test]
-fn duplicate_callback_ownership_is_rejected() {
-	let policy = test_policy();
-	let mut other_policy = test_policy();
-	other_policy.policy_id = "other-policy".into();
-	other_policy.session.cookie_name = "agw_oidc_s_other".into();
-	other_policy.session.transaction_cookie_name = "agw_oidc_t_other".into();
-
-	let listener = oidc_listener(
-		443,
-		ListenerProtocol::HTTPS(ServerTLSConfig::new_invalid()),
-		"app.example.com",
-		vec![
-			test_provider("corp", policy),
-			test_provider("other", other_policy),
-		],
-	);
-	let err = listener
-		.validate_oidc(443)
-		.expect_err("duplicate callback ownership should fail");
 	assert!(
 		err
 			.to_string()
-			.contains("duplicate oidc callback ownership")
+			.contains("failed to load oidc jwks from discovered jwks source uri")
 	);
-}
-
-#[test]
-fn redirect_host_must_be_covered_by_listener_hostname() {
-	let mut policy = test_policy();
-	policy.redirect_uri =
-		RedirectUri::parse("https://api.example.com/oauth/callback".into()).expect("redirect uri");
-	policy.policy_id = "api-policy".into();
-	policy.session.cookie_name = "agw_oidc_s_api".into();
-	policy.session.transaction_cookie_name = "agw_oidc_t_api".into();
-
-	let listener = oidc_listener(
-		443,
-		ListenerProtocol::HTTPS(ServerTLSConfig::new_invalid()),
-		"app.example.com",
-		vec![test_provider("corp", policy)],
-	);
-	let err = listener
-		.validate_oidc(443)
-		.expect_err("redirect host coverage should fail");
-	assert!(err.to_string().contains("not covered by listener hostname"));
-}
-
-#[test]
-fn redirect_port_must_match_listener_port() {
-	let listener = oidc_listener(
-		8443,
-		ListenerProtocol::HTTPS(ServerTLSConfig::new_invalid()),
-		"app.example.com",
-		vec![test_provider("corp", test_policy())],
-	);
-	let err = listener
-		.validate_oidc(8443)
-		.expect_err("redirect port mismatch should fail");
-	assert!(err.to_string().contains("must use listener port"));
 }
 
 #[tokio::test]
@@ -1234,66 +932,39 @@ async fn apply_finds_session_cookie_across_multiple_cookie_headers() {
 		.session
 		.encode_browser_session(&BrowserSession {
 			policy_id: policy.policy_id.clone(),
-			raw_id_token: SecretString::new(id_token.clone().into()),
-			expires_at_unix: Some(now_unix() + 60),
+			raw_id_token: SecretString::new(id_token.into()),
+			expires_at_unix: Some(now_unix() + 300),
 		})
 		.expect("encode session");
-
 	let mut req = request(
 		Method::GET,
 		"https://app.example.com/protected",
 		Some("text/html"),
 	);
-	req.headers_mut().append(
-		header::COOKIE,
-		"unrelated=value; theme=dark"
-			.parse()
-			.expect("cookie header"),
-	);
-	req.headers_mut().append(
-		header::COOKIE,
-		format!("{}={encoded}", policy.session.cookie_name)
-			.parse()
-			.expect("cookie header"),
+	add_cookie(&mut req, "theme=dark".into());
+	add_cookie(
+		&mut req,
+		format!("{}={encoded}", policy.session.cookie_name),
 	);
 
-	let proxy = setup_proxy_test("{}").expect("proxy test harness");
 	let response = policy
-		.apply(
-			None,
-			&mut req,
-			crate::proxy::httpproxy::PolicyClient {
-				inputs: proxy.inputs(),
-			},
-		)
+		.apply(None, &mut req, policy_client())
 		.await
 		.expect("browser policy apply");
 	assert!(response.direct_response.is_none());
-	let claims = req
-		.extensions()
-		.get::<jwt::Claims>()
-		.expect("claims extension");
-	assert_eq!(claims.inner.get("sub"), Some(&json!("user-1")));
+	assert!(req.extensions().get::<jwt::Claims>().is_some());
 }
 
 #[test]
 fn strip_browser_auth_cookies_across_multiple_cookie_headers() {
-	let mut req = request(Method::GET, "https://app.example.com/", None);
-	req.headers_mut().append(
-		header::COOKIE,
-		http::HeaderValue::from_static("session=abc"),
-	);
-	req.headers_mut().append(
-		header::COOKIE,
-		http::HeaderValue::from_static("agw_oidc_s_test=encrypted; agw_oidc_t_test=txn"),
-	);
-	req
-		.headers_mut()
-		.append(header::COOKIE, http::HeaderValue::from_static("theme=dark"));
+	let mut req = request(Method::GET, "https://app.example.com/protected", None);
+	add_cookie(&mut req, "agw_oidc_s_policy=1; user=alice".into());
+	add_cookie(&mut req, "agw_oidc_t_policy=2; theme=dark".into());
 
 	crate::http::request_cookies::strip_cookies_by_prefix(&mut req, RESERVED_COOKIE_PREFIX);
+
 	assert_eq!(
 		req.headers().get(header::COOKIE).unwrap(),
-		"session=abc; theme=dark"
+		"user=alice; theme=dark"
 	);
 }

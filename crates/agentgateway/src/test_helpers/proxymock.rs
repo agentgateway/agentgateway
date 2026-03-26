@@ -238,7 +238,6 @@ pub fn simple_bind(route: Route) -> Bind {
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTP,
-			oidc: None,
 			tcp_routes: Default::default(),
 			routes: RouteSet::from_list(vec![route]),
 		}]),
@@ -257,7 +256,6 @@ pub fn simple_tcp_bind(route: TCPRoute) -> Bind {
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::TCP,
-			oidc: None,
 			tcp_routes: TCPRouteSet::from_list(vec![route]),
 			routes: Default::default(),
 		}]),
@@ -543,10 +541,15 @@ impl TestBind {
 	pub async fn attach_route(&mut self, p: serde_json::Value) {
 		let pol: local::LocalRoute = serde_json::from_value(p).unwrap();
 		self.routes += 1;
-		let (route, backends) =
-			local::convert_route(self.pi.upstream.clone(), pol, self.routes, LISTENER_KEY)
-				.await
-				.unwrap();
+		let (route, backends) = local::convert_route(
+			self.pi.upstream.clone(),
+			&self.pi.cfg,
+			pol,
+			self.routes,
+			LISTENER_KEY,
+		)
+		.await
+		.unwrap();
 		for b in backends {
 			self
 				.pi
@@ -564,9 +567,13 @@ impl TestBind {
 	}
 	pub async fn attach_route_policy(&mut self, p: serde_json::Value) {
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
-		let pols = local::split_policies(self.pi.upstream.clone(), pol)
-			.await
-			.unwrap();
+		let pols = local::split_policies(
+			self.pi.upstream.clone(),
+			pol,
+			self.pi.cfg.oidc_cookie_encoder.as_ref(),
+		)
+		.await
+		.unwrap();
 		for v in pols.route_policies.into_iter() {
 			self.policies += 1;
 			self.with_policy(TargetedPolicy {
@@ -604,9 +611,13 @@ impl TestBind {
 	}
 	pub async fn attached_backend_policy(&mut self, addr: &SocketAddr, p: serde_json::Value) {
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
-		let pols = local::split_policies(self.pi.upstream.clone(), pol)
-			.await
-			.unwrap();
+		let pols = local::split_policies(
+			self.pi.upstream.clone(),
+			pol,
+			self.pi.cfg.oidc_cookie_encoder.as_ref(),
+		)
+		.await
+		.unwrap();
 		for v in pols.backend_policies.into_iter() {
 			self.policies += 1;
 			self.with_policy(TargetedPolicy {

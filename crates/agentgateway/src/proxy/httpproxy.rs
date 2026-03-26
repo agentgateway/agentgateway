@@ -67,8 +67,6 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 
 async fn apply_request_policies(
 	policies: &store::RoutePolicies,
-	oidc_policy: Option<&crate::http::oidc::OidcPolicy>,
-	has_oidc: bool,
 	client: PolicyClient,
 	log: &mut RequestLog,
 	req: &mut Request,
@@ -84,16 +82,13 @@ async fn apply_request_policies(
 			.apply(response_policies.headers())?;
 	}
 
-	// Route phase: enforce the selected route's browser session requirement. By this point listener
-	// callback handling has already intercepted provider redirects, so this path only validates or
-	// starts login for application requests.
-	if let Some(o) = oidc_policy {
+	if let Some(o) = &policies.oidc {
 		o.apply(Some(log), req, client.clone())
 			.await
 			.map_err(|e| ProxyResponse::from(ProxyError::OidcFailure(e)))?
 			.apply(response_policies.headers())?;
 	}
-	if has_oidc {
+	if policies.oidc.is_some() {
 		crate::http::request_cookies::strip_cookies_by_prefix(
 			req,
 			crate::http::oidc::RESERVED_COOKIE_PREFIX,
@@ -582,15 +577,6 @@ impl HTTPProxy {
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
 		let mut response_headers = HeaderMap::new();
-		// Listener phase: intercept OIDC callback URLs before route matching. Provider redirects
-		// land on listener-owned callback paths that do not correspond to application routes.
-		selected_listener
-			.maybe_handle_oidc_callback(Some(log), &mut req, self.policy_client())
-			.await
-			.map_err(|e| ProxyResponse::from(ProxyError::OidcFailure(e)))
-			.snapshot_on_err(log, &mut req)?
-			.apply(&mut response_headers)
-			.snapshot_on_err(log, &mut req)?;
 		let mut maybe_gateway_ext_proc = gateway_policies
 			.ext_proc
 			.take()
@@ -660,29 +646,9 @@ impl HTTPProxy {
 		response_policies.gateway_transformation = gateway_policies.transformation.clone();
 		response_policies.ext_proc = maybe_ext_proc;
 		response_policies.gateway_ext_proc = maybe_gateway_ext_proc;
-		let oidc_policy = route_policies
-			.oidc
-			.as_ref()
-			.map(|requirement| {
-				selected_listener
-					.oidc_provider(requirement.provider.as_str())
-					.ok_or_else(|| {
-						ProxyError::OidcFailure(crate::http::oidc::Error::Config(format!(
-							"route '{}' references missing oidc provider '{}' on listener '{}'",
-							selected_route.name.as_route_name(),
-							requirement.provider,
-							selected_listener.name.listener_name
-						)))
-					})
-			})
-			.transpose()
-			.snapshot_on_err(log, &mut req)?;
-		let has_oidc = selected_listener.oidc.is_some() || route_policies.oidc.is_some();
 
 		apply_request_policies(
 			&route_policies,
-			oidc_policy,
-			has_oidc,
 			self.policy_client(),
 			log,
 			&mut req,

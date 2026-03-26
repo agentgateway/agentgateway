@@ -1,6 +1,6 @@
 use std::cmp;
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
@@ -59,8 +59,6 @@ pub struct Listener {
 	/// Can be a wildcard
 	pub hostname: Strng,
 	pub protocol: ListenerProtocol,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub oidc: Option<ListenerOidc>,
 	pub routes: RouteSet,
 	pub tcp_routes: TCPRouteSet,
 }
@@ -70,79 +68,6 @@ impl Listener {
 		self.hostname == hostname
 			|| self.hostname.is_empty()
 			|| (self.hostname.starts_with("*") && hostname.ends_with(&self.hostname[1..]))
-	}
-
-	pub fn oidc_provider(&self, name: &str) -> Option<&crate::http::oidc::OidcPolicy> {
-		self.oidc.as_ref().and_then(|oidc| oidc.provider(name))
-	}
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ListenerOidc {
-	providers: Vec<crate::http::oidc::NamedOidcProvider>,
-	#[serde(skip)]
-	provider_index: HashMap<String, usize>,
-	#[serde(skip)]
-	callback_index: HashMap<String, HashMap<u16, HashMap<String, Vec<usize>>>>,
-}
-
-impl Default for ListenerOidc {
-	fn default() -> Self {
-		Self::new(Vec::new()).expect("empty oidc provider list must be valid")
-	}
-}
-
-impl ListenerOidc {
-	pub fn new(providers: Vec<crate::http::oidc::NamedOidcProvider>) -> anyhow::Result<Self> {
-		let mut provider_index = HashMap::with_capacity(providers.len());
-		let mut callback_index: HashMap<String, HashMap<u16, HashMap<String, Vec<usize>>>> =
-			HashMap::with_capacity(providers.len());
-
-		for (idx, provider) in providers.iter().enumerate() {
-			anyhow::ensure!(
-				provider_index
-					.insert(provider.name.to_string(), idx)
-					.is_none(),
-				"duplicate oidc provider '{}'",
-				provider.name
-			);
-			callback_index
-				.entry(provider.policy.redirect_uri.host.clone())
-				.or_default()
-				.entry(provider.policy.redirect_uri.port)
-				.or_default()
-				.entry(provider.policy.redirect_uri.callback_path.path().to_owned())
-				.or_default()
-				.push(idx);
-		}
-
-		Ok(Self {
-			providers,
-			provider_index,
-			callback_index,
-		})
-	}
-
-	pub fn providers(&self) -> &[crate::http::oidc::NamedOidcProvider] {
-		&self.providers
-	}
-
-	pub fn provider(&self, name: &str) -> Option<&crate::http::oidc::OidcPolicy> {
-		self
-			.provider_index
-			.get(name)
-			.and_then(|idx| self.providers.get(*idx))
-			.map(|provider| &provider.policy)
-	}
-
-	pub(crate) fn callback_matches(&self, host: &str, port: u16, path: &str) -> Option<&[usize]> {
-		self
-			.callback_index
-			.get(host)?
-			.get(&port)?
-			.get(path)
-			.map(Vec::as_slice)
 	}
 }
 
@@ -1683,6 +1608,10 @@ impl RouteSet {
 		self.all.contains_key(key)
 	}
 
+	pub fn get(&self, key: &RouteKey) -> Option<Arc<Route>> {
+		self.all.get(key).cloned()
+	}
+
 	pub fn remove(&mut self, key: &RouteKey) {
 		let Some(old_route) = self.all.remove(key) else {
 			return;
@@ -2141,7 +2070,7 @@ pub enum TrafficPolicy {
 	ExtAuthz(ext_authz::ExtAuthz),
 	ExtProc(ext_proc::ExtProc),
 	JwtAuth(crate::http::jwt::Jwt),
-	Oidc(crate::http::oidc::OidcProviderRef),
+	Oidc(crate::http::oidc::OidcPolicy),
 	BasicAuth(crate::http::basicauth::BasicAuthentication),
 	APIKey(crate::http::apikey::APIKeyAuthentication),
 	Transformation(crate::http::transformation_cel::Transformation),

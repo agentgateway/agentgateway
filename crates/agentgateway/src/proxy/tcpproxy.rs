@@ -418,7 +418,6 @@ mod tests {
 			},
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HBONE,
-			oidc: None,
 			tcp_routes: Default::default(),
 			routes: Default::default(),
 		})
@@ -632,7 +631,6 @@ mod tests {
 			},
 			hostname: Default::default(),
 			protocol: ListenerProtocol::TLS(None), // Not HBONE
-			oidc: None,
 			tcp_routes: Default::default(),
 			routes: Default::default(),
 		});

@@ -16,11 +16,6 @@ use crate::serdes::FileInlineOrRemote;
 use super::config::ResolvedProvider;
 use super::{Error, Provider, TokenEndpointAuth};
 
-pub(crate) struct ResolvedTokenEndpointAuth {
-	pub supported: Vec<TokenEndpointAuth>,
-	pub selected: TokenEndpointAuth,
-}
-
 #[derive(Debug, Deserialize)]
 struct OidcDiscoveryDocument {
 	issuer: String,
@@ -40,7 +35,6 @@ pub(crate) struct TokenResponse {
 pub(super) struct DiscoveredProviderMetadata {
 	pub authorization_endpoint: Uri,
 	pub token_endpoint: Uri,
-	pub token_endpoint_auth_methods_supported: Vec<TokenEndpointAuth>,
 	pub token_endpoint_auth: TokenEndpointAuth,
 	pub jwks: FileInlineOrRemote,
 }
@@ -53,12 +47,21 @@ pub(super) async fn discover_provider_metadata(
 	issuer: &str,
 	discovery: Option<FileInlineOrRemote>,
 ) -> Result<DiscoveredProviderMetadata, Error> {
-	let discovery = discovery.unwrap_or_else(|| FileInlineOrRemote::Remote {
-		url: default_discovery_url(issuer),
-	});
+	let discovery = match discovery {
+		Some(discovery) => discovery,
+		None => FileInlineOrRemote::Remote {
+			url: default_discovery_url(issuer)?,
+		},
+	};
 	let document = discovery
 		.load::<OidcDiscoveryDocument>(client.clone())
-		.await?;
+		.await
+		.map_err(|e| {
+			Error::Config(format!(
+				"failed to load oidc discovery document from {}: {e}",
+				describe_file_inline_or_remote(&discovery)
+			))
+		})?;
 	if document.issuer != issuer {
 		return Err(Error::Config(format!(
 			"oidc discovery issuer mismatch: expected {issuer}, got {}",
@@ -66,7 +69,8 @@ pub(super) async fn discover_provider_metadata(
 		)));
 	}
 
-	let methods = parse_token_endpoint_auth_methods(document.token_endpoint_auth_methods_supported)?;
+	let token_endpoint_auth =
+		parse_token_endpoint_auth_methods(document.token_endpoint_auth_methods_supported)?;
 	let jwks = FileInlineOrRemote::Remote {
 		url: document
 			.jwks_uri
@@ -82,8 +86,7 @@ pub(super) async fn discover_provider_metadata(
 			.token_endpoint
 			.parse()
 			.map_err(|e| Error::Config(format!("invalid token endpoint uri: {e}")))?,
-		token_endpoint_auth_methods_supported: methods.supported,
-		token_endpoint_auth: methods.selected,
+		token_endpoint_auth,
 		jwks,
 	})
 }
@@ -97,15 +100,15 @@ pub(super) async fn build_explicit_provider(
 	effective_audiences: Vec<String>,
 	token_endpoint_auth_methods_supported: Vec<TokenEndpointAuth>,
 ) -> Result<ResolvedProvider, Error> {
-	let jwks = load_jwks(client, jwks, "failed to load provider jwks").await?;
-	let methods = normalize_token_endpoint_auth_methods(token_endpoint_auth_methods_supported)?;
+	let jwks = load_jwks(client, jwks, JwksLoadSource::Explicit).await?;
+	let token_endpoint_auth =
+		normalize_token_endpoint_auth_methods(token_endpoint_auth_methods_supported)?;
 
 	Ok(ResolvedProvider {
 		issuer,
 		authorization_endpoint,
 		token_endpoint,
-		token_endpoint_auth_methods_supported: methods.supported,
-		token_endpoint_auth: methods.selected,
+		token_endpoint_auth,
 		id_token_audiences: effective_audiences,
 		jwt_validation_options: jwt::JWTValidationOptions::default(),
 		id_token_jwks: jwks,
@@ -202,24 +205,31 @@ pub(crate) async fn exchange_code_with_timeout(
 		.map_err(Error::Http)
 }
 
-fn default_discovery_url(issuer: &str) -> Uri {
+pub(super) fn default_discovery_url(issuer: &str) -> Result<Uri, Error> {
 	format!(
 		"{}/.well-known/openid-configuration",
 		issuer.trim_end_matches('/')
 	)
 	.parse()
-	.expect("normalized discovery uri must parse")
+	.map_err(|e| {
+		Error::Config(format!(
+			"invalid discovery uri derived from issuer '{issuer}': {e}"
+		))
+	})
 }
 
 pub(super) async fn load_jwks(
 	client: Client,
 	jwks: FileInlineOrRemote,
-	context: &str,
+	source: JwksLoadSource,
 ) -> Result<JwkSet, Error> {
-	let jwks = jwks
-		.load::<JwkSet>(client)
-		.await
-		.map_err(|e| Error::Config(format!("{context}: {e}")))?;
+	let jwks = jwks.load::<JwkSet>(client).await.map_err(|e| {
+		Error::Config(format!(
+			"failed to load oidc jwks from {} {}: {e}",
+			source.describe(),
+			describe_file_inline_or_remote(&jwks)
+		))
+	})?;
 	Ok(jwks)
 }
 
@@ -251,7 +261,7 @@ fn format_token_endpoint_error_body(body: &[u8]) -> String {
 
 pub(crate) fn parse_token_endpoint_auth_methods(
 	methods: Option<Vec<String>>,
-) -> Result<ResolvedTokenEndpointAuth, Error> {
+) -> Result<TokenEndpointAuth, Error> {
 	let methods = methods.unwrap_or_else(|| vec!["client_secret_basic".into()]);
 	let mut parsed = Vec::with_capacity(methods.len());
 	for method in methods {
@@ -266,22 +276,41 @@ pub(crate) fn parse_token_endpoint_auth_methods(
 
 pub(super) fn normalize_token_endpoint_auth_methods(
 	mut methods: Vec<TokenEndpointAuth>,
-) -> Result<ResolvedTokenEndpointAuth, Error> {
+) -> Result<TokenEndpointAuth, Error> {
 	methods.sort();
 	methods.dedup();
-	let selected = if methods.contains(&TokenEndpointAuth::ClientSecretBasic) {
-		TokenEndpointAuth::ClientSecretBasic
+	if methods.contains(&TokenEndpointAuth::ClientSecretBasic) {
+		Ok(TokenEndpointAuth::ClientSecretBasic)
 	} else if methods.contains(&TokenEndpointAuth::ClientSecretPost) {
-		TokenEndpointAuth::ClientSecretPost
+		Ok(TokenEndpointAuth::ClientSecretPost)
 	} else {
-		return Err(Error::Config(
+		Err(Error::Config(
 			"token endpoint auth methods must include clientSecretBasic or clientSecretPost".into(),
-		));
-	};
-	Ok(ResolvedTokenEndpointAuth {
-		supported: methods,
-		selected,
-	})
+		))
+	}
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) enum JwksLoadSource {
+	Discovered,
+	Explicit,
+}
+
+impl JwksLoadSource {
+	fn describe(self) -> &'static str {
+		match self {
+			Self::Discovered => "discovered jwks source",
+			Self::Explicit => "explicit jwks source",
+		}
+	}
+}
+
+fn describe_file_inline_or_remote(source: &FileInlineOrRemote) -> String {
+	match source {
+		FileInlineOrRemote::File { file } => format!("file '{}'", file.display()),
+		FileInlineOrRemote::Inline(_) => "inline configuration".into(),
+		FileInlineOrRemote::Remote { url } => format!("uri '{url}'"),
+	}
 }
 
 #[cfg(test)]

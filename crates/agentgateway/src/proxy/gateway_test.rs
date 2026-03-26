@@ -636,7 +636,6 @@ async fn tls_termination() {
 				.try_into()
 				.unwrap(),
 			),
-			oidc: None,
 			tcp_routes: Default::default(),
 			routes: RouteSet::from_list(vec![route]),
 		}]),
@@ -1424,7 +1423,6 @@ fn setup_dfp_https() -> (TestBind, Client<MemoryConnector, Body>) {
 				.try_into()
 				.unwrap(),
 			),
-			oidc: None,
 			tcp_routes: Default::default(),
 			routes: RouteSet::from_list(vec![route]),
 		}]),
@@ -1569,7 +1567,6 @@ async fn auto_protocol_plaintext_http() {
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTP,
-			oidc: None,
 			tcp_routes: Default::default(),
 			routes: RouteSet::from_list(vec![route]),
 		}]),
@@ -1616,7 +1613,6 @@ async fn auto_protocol_tls_detection() {
 				.try_into()
 				.unwrap(),
 			),
-			oidc: None,
 			tcp_routes: Default::default(),
 			routes: RouteSet::from_list(vec![route]),
 		}]),
@@ -1661,7 +1657,6 @@ async fn auto_protocol_tls_wrong_sni() {
 				.try_into()
 				.unwrap(),
 			),
-			oidc: None,
 			tcp_routes: Default::default(),
 			routes: RouteSet::from_list(vec![route]),
 		}]),
@@ -1703,7 +1698,6 @@ async fn auto_protocol_plaintext_rejected_for_https_only() {
 				.try_into()
 				.unwrap(),
 			),
-			oidc: None,
 			tcp_routes: Default::default(),
 			routes: RouteSet::from_list(vec![route]),
 		}]),
@@ -1738,7 +1732,6 @@ async fn auto_protocol_tls_rejected_for_http_only() {
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTP,
-			oidc: None,
 			tcp_routes: Default::default(),
 			routes: RouteSet::from_list(vec![route]),
 		}]),
@@ -1776,7 +1769,6 @@ async fn auto_protocol_mixed_listeners() {
 				name: Default::default(),
 				hostname: strng::new("http.local"),
 				protocol: ListenerProtocol::HTTP,
-				oidc: None,
 				tcp_routes: Default::default(),
 				routes: RouteSet::from_list(vec![route]),
 			},
@@ -1796,7 +1788,6 @@ async fn auto_protocol_mixed_listeners() {
 					.try_into()
 					.unwrap(),
 				),
-				oidc: None,
 				tcp_routes: Default::default(),
 				routes: RouteSet::from_list(vec![route2]),
 			},
@@ -1855,7 +1846,6 @@ async fn auto_protocol_peek_timeout() {
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTP,
-			oidc: None,
 			tcp_routes: Default::default(),
 			routes: RouteSet::from_list(vec![route]),
 		}]),

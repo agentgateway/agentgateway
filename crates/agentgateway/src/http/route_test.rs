@@ -54,7 +54,6 @@ fn setup_listener(routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Arc<Listener
 		name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HTTP,
-		oidc: None,
 		tcp_routes: Default::default(),
 		routes: RouteSet::from_list(
 			routes
@@ -848,7 +847,6 @@ fn hbone_listener() -> Arc<Listener> {
 		name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HBONE,
-		oidc: None,
 		tcp_routes: Default::default(),
 		routes: RouteSet::from_list(vec![]),
 	})
@@ -1534,7 +1532,6 @@ fn bench(b: Bencher, (host, route): (u64, u64)) {
 		name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HTTP,
-		oidc: None,
 		tcp_routes: Default::default(),
 		routes: RouteSet::from_list(
 			routes
