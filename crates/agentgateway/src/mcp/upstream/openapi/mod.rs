@@ -49,8 +49,44 @@ pub enum ParseError {
 
 pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> {
 	match server.servers.len() {
-		0 => Ok("".to_string()), // Return empty string instead of "/" to avoid double slash
-		1 => Ok(server.servers[0].url.clone()),
+		0 => Ok("".to_string()),
+		1 => {
+			let raw = &server.servers[0].url;
+
+			let extract_path = |after_scheme: &str| -> String {
+				if let Some(path_idx) = after_scheme.find('/') {
+					let path = &after_scheme[path_idx..];
+					let path = path.split('?').next().unwrap_or(path);
+					let path = path.split('#').next().unwrap_or(path);
+					let path = path.trim_end_matches('/');
+					if path.is_empty() || path == "/" {
+						"".to_string()
+					} else {
+						path.to_string()
+					}
+				} else {
+					"".to_string()
+				}
+			};
+
+			if let Some(idx) = raw.find("://") {
+				Ok(extract_path(&raw[idx + 3..]))
+			} else if let Some(stripped) = raw.strip_prefix("//") {
+				Ok(extract_path(stripped))
+			} else {
+				// Not an absolute URL -- treat as a relative path prefix (existing behavior)
+				if let Ok(parsed) = url::Url::parse(raw) {
+					let path = parsed.path().trim_end_matches('/').to_string();
+					if path.is_empty() || path == "/" {
+						Ok("".to_string())
+					} else {
+						Ok(path)
+					}
+				} else {
+					Ok(raw.clone())
+				}
+			}
+		},
 		_ => Err(ParseError::UnsupportedReference(format!(
 			"multiple servers are not supported: {:?}",
 			server.servers

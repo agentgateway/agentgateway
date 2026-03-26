@@ -9,15 +9,12 @@ import (
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
-	apiannotations "github.com/agentgateway/agentgateway/controller/api/annotations"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	agwir "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
@@ -25,7 +22,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
-	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
 
 var logger = logging.New("agentgateway/backend")
@@ -114,7 +110,7 @@ func BuildAgwBackend(
 	backend *agentgateway.AgentgatewayBackend,
 ) ([]*api.Backend, error) {
 	errs := []error{}
-	pols, err := translateBackendPolicies(ctx, backend.Namespace, backend.Spec.Policies)
+	pols, err := TranslateBackendPolicies(ctx, backend.Namespace, backend.Spec.Policies)
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -143,7 +139,7 @@ func BuildAgwBackend(
 		}}, errors.Join(errs...)
 	}
 	if b := backend.Spec.MCP; b != nil {
-		be, err := translateMCPBackends(ctx, backend, pols)
+		be, err := TranslateMCPBackends(ctx, backend, pols)
 		return be, errors.Join(append(errs, err)...)
 	}
 	if b := backend.Spec.AI; b != nil {
@@ -213,7 +209,7 @@ func TranslateAgwBackend(
 	}, results
 }
 
-func translateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBackend, inlinePolicies []*api.BackendPolicySpec) ([]*api.Backend, error) {
+func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBackend, inlinePolicies []*api.BackendPolicySpec) ([]*api.Backend, error) {
 	mcp := be.Spec.MCP
 	var mcpTargets []*api.MCPTarget
 	var backends []*api.Backend
@@ -221,7 +217,7 @@ func translateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 	for _, target := range mcp.Targets {
 		if s := target.Static; s != nil {
 			staticBackendRef := utils.InternalMCPStaticBackendName(be.Namespace, be.Name, string(target.Name))
-			pol, err := translateMCPBackendPolicies(ctx, be.Namespace, s.Policies)
+			pol, err := TranslateMCPBackendPolicies(ctx, be.Namespace, s.Policies)
 			if err != nil {
 				logger.Error("failed to translate static MCP backend policies", "err", err)
 				errs = append(errs, err)
@@ -258,96 +254,11 @@ func translateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 
 			mcpTargets = append(mcpTargets, mcpTarget)
 		} else if s := target.Selector; s != nil {
-			// Krt only allows 1 filter per type, so we build a composite filter here
-			generic := func(svc any) bool {
-				return true
+			targets, err := TranslateMCPSelectorTargets(ctx, be.Namespace, target.Selector)
+			if err != nil {
+				return nil, err
 			}
-			var nsFilter krt.FetchOption
-			addFilter := func(nf func(svc any) bool) {
-				og := generic
-				generic = func(svc any) bool {
-					return nf(svc) && og(svc)
-				}
-			}
-
-			// Apply service filter
-			if s.Service != nil {
-				serviceSelector, err := metav1.LabelSelectorAsSelector(target.Selector.Service)
-				if err != nil {
-					return nil, fmt.Errorf("invalid service selector: %w", err)
-				}
-				if !serviceSelector.Empty() {
-					addFilter(func(obj any) bool {
-						service := obj.(*corev1.Service)
-						return serviceSelector.Matches(labels.Set(service.Labels))
-					})
-				}
-			}
-
-			// Apply namespace selector
-			if target.Selector.Namespace != nil {
-				namespaceSelector, err := metav1.LabelSelectorAsSelector(target.Selector.Namespace)
-				if err != nil {
-					return nil, fmt.Errorf("invalid namespace selector: %w", err)
-				}
-				if !namespaceSelector.Empty() {
-					// Get all namespaces and find those matching the selector
-					allNamespaces := krt.Fetch(ctx.Krt, ctx.Collections.Namespaces)
-					matchingNamespaces := make(map[string]bool)
-					for _, ns := range allNamespaces {
-						if namespaceSelector.Matches(labels.Set(ns.Labels)) {
-							matchingNamespaces[ns.Name] = true
-						}
-					}
-					// Filter services to only those in matching namespaces
-					addFilter(func(obj any) bool {
-						service := obj.(*corev1.Service)
-						return matchingNamespaces[service.Namespace]
-					})
-				}
-			} else {
-				// If no namespace selector, limit to same namespace as backend
-				nsFilter = krt.FilterIndex(ctx.Collections.ServicesByNamespace, be.Namespace)
-			}
-
-			opts := []krt.FetchOption{krt.FilterGeneric(generic)}
-			if nsFilter != nil {
-				opts = append(opts, nsFilter)
-			}
-			matchingServices := krt.Fetch(ctx.Krt, ctx.Collections.Services, opts...)
-			for _, service := range matchingServices {
-				for _, port := range service.Spec.Ports {
-					appProtocol := ptr.OrEmpty(port.AppProtocol)
-					if appProtocol != mcpProtocol && appProtocol != mcpProtocolSSE &&
-						appProtocol != mcpProtocolLegacy && appProtocol != mcpProtocolSSELegacy {
-						// not a valid MCPBackend protocol
-						continue
-					}
-					targetName := service.Name + fmt.Sprintf("-%d", port.Port)
-					if port.Name != "" {
-						targetName = service.Name + "-" + port.Name
-					}
-
-					svcHostname := kubeutils.ServiceFQDN(service.ObjectMeta)
-
-					mcpTarget := &api.MCPTarget{
-						Name: targetName,
-						Backend: &api.BackendReference{
-							Kind: &api.BackendReference_Service_{
-								Service: &api.BackendReference_Service{
-									Hostname:  svcHostname,
-									Namespace: service.Namespace,
-								},
-							},
-							Port: uint32(port.Port), //nolint:gosec // G115: Kubernetes service ports are always positive
-						},
-						Protocol: toMCPProtocol(appProtocol),
-						Path:     service.Annotations[apiannotations.MCPServiceHTTPPath],
-					}
-
-					mcpTargets = append(mcpTargets, mcpTarget)
-				}
-			}
+			mcpTargets = append(mcpTargets, targets...)
 		}
 	}
 	// defaults to stateful session routing
@@ -426,7 +337,7 @@ func translateAIBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBac
 	return backend, errors.Join(errs...)
 }
 
-func translateBackendPolicies(
+func TranslateBackendPolicies(
 	ctx plugins.PolicyCtx,
 	namespace string,
 	policies *agentgateway.BackendFull,
@@ -437,14 +348,14 @@ func translateBackendPolicies(
 	return plugins.TranslateInlineBackendPolicy(ctx, namespace, policies)
 }
 
-func translateMCPBackendPolicies(
+func TranslateMCPBackendPolicies(
 	ctx plugins.PolicyCtx,
 	namespace string, policies *agentgateway.BackendWithMCP,
 ) ([]*api.BackendPolicySpec, error) {
 	if policies == nil {
 		return nil, nil
 	}
-	return translateBackendPolicies(ctx, namespace, &agentgateway.BackendFull{
+	return TranslateBackendPolicies(ctx, namespace, &agentgateway.BackendFull{
 		BackendSimple: policies.BackendSimple,
 		MCP:           policies.MCP,
 	})
@@ -457,7 +368,7 @@ func translateAIBackendPolicies(
 	if policies == nil {
 		return nil, nil
 	}
-	return translateBackendPolicies(ctx, namespace, &agentgateway.BackendFull{
+	return TranslateBackendPolicies(ctx, namespace, &agentgateway.BackendFull{
 		BackendSimple: policies.BackendSimple,
 		AI:            policies.AI,
 	})

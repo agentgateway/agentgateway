@@ -14,6 +14,7 @@ import (
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/util/protomarshal"
 	"istio.io/istio/pkg/util/sets"
+	"istio.io/istio/pkg/workloadapi"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -293,27 +294,53 @@ func ProcessParentReferences[T any](
 }
 
 func resourceMapper(t any, parent RouteParentReference) *api.Resource {
+	var serviceKey *workloadapi.NamespacedHostname
+	if parent.ServiceKey != nil {
+		serviceKey = &workloadapi.NamespacedHostname{
+			Namespace: parent.ServiceKey.Namespace,
+			Hostname:  parent.ServiceKey.Name,
+		}
+	}
+
 	switch tt := t.(type) {
 	case AgwTCPRoute:
 		// safety: a shallow clone is ok because we only modify a top level field (Key)
 		inner := protomarshal.ShallowClone(tt.TCPRoute)
 		inner.ListenerKey = parent.ListenerKey
-		if sec := string(parent.ParentSection); sec != "" {
-			inner.Key += "." + sec
+		inner.ServiceKey = serviceKey
+		inner.Key += routeKeySuffix(parent)
+		if inner.ServiceKey != nil {
+			// if linked by Service, no need for hostname matching
+			inner.Hostnames = nil
 		}
+
 		return ToAgwResource(AgwTCPRoute{TCPRoute: inner})
 	case AgwRoute:
 		// safety: a shallow clone is ok because we only modify a top level field (Key)
 		inner := protomarshal.ShallowClone(tt.Route)
 		inner.ListenerKey = parent.ListenerKey
-		if sec := string(parent.ParentSection); sec != "" {
-			inner.Key += "." + sec
+		inner.ServiceKey = serviceKey
+		inner.Key += routeKeySuffix(parent)
+		if inner.ServiceKey != nil {
+			// if linked by Service, no need for hostname matching
+			inner.Hostnames = nil
 		}
+
 		return ToAgwResource(AgwRoute{Route: inner})
 	default:
 		log.Fatalf("unknown route kind %T", t)
 		return nil
 	}
+}
+
+func routeKeySuffix(parent RouteParentReference) string {
+	if parent.ServiceKey != nil {
+		return ".svc." + parent.ServiceKey.Namespace + "." + parent.ServiceKey.Name
+	}
+	if sec := string(parent.ParentSection); sec != "" {
+		return "." + sec
+	}
+	return ""
 }
 
 // reasonResolvedRefs picks a ResolvedRefs reason from a conversion failure condition.
@@ -493,7 +520,7 @@ type RouteContext struct {
 // RouteContextInputs defines the collections needed to translate a route.
 type RouteContextInputs struct {
 	Grants         ReferenceGrants
-	RouteParents   RouteParents
+	RouteParents   ParentResolver
 	Services       krt.Collection[*corev1.Service]
 	InferencePools krt.Collection[*inf.InferencePool]
 	Namespaces     krt.Collection[*corev1.Namespace]

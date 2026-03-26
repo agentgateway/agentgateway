@@ -463,8 +463,13 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	}
 
 	agwRoutes, routeAttachments, ancestorBackends := translator.AgwRouteCollection(s.statusCollections, s.agwCollections.HTTPRoutes, s.agwCollections.GRPCRoutes, s.agwCollections.TCPRoutes, s.agwCollections.TLSRoutes, routeInputs, krtopts)
-	if s.agwPlugins.AddResourceExtension != nil && s.agwPlugins.AddResourceExtension.Routes != nil {
-		agwRoutes = krt.JoinCollection([]krt.Collection[agwir.AgwResource]{agwRoutes, s.agwPlugins.AddResourceExtension.Routes})
+	if s.agwPlugins.AddResourceExtension != nil {
+		if s.agwPlugins.AddResourceExtension.Routes != nil {
+			agwRoutes = krt.JoinCollection([]krt.Collection[agwir.AgwResource]{agwRoutes, s.agwPlugins.AddResourceExtension.Routes})
+		}
+		if s.agwPlugins.AddResourceExtension.AncestorBackends != nil {
+			ancestorBackends = krt.JoinCollection([]krt.Collection[*utils.AncestorBackend]{ancestorBackends, s.agwPlugins.AddResourceExtension.AncestorBackends})
+		}
 	}
 	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "from", func(o *plugins.RouteAttachment) []utils.TypedNamespacedName {
 		return []utils.TypedNamespacedName{o.From}

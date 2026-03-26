@@ -22,7 +22,7 @@ use crate::mcp::handler::{Relay, RelayInputs};
 use crate::mcp::mergestream::Messages;
 use crate::mcp::streamablehttp::{ServerSseMessage, StreamableHttpPostResponse};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, MCPOperation, rbac};
+use crate::mcp::{ClientError, rbac};
 use crate::proxy::ProxyError;
 use crate::{mcp, *};
 
@@ -236,9 +236,6 @@ impl Session {
 						res
 					},
 					ClientRequest::ListToolsRequest(_) => {
-						log.non_atomic_mutate(|l| {
-							l.resource = Some(MCPOperation::Tool);
-						});
 						self
 							.relay
 							.send_fanout(r, ctx, self.relay.merge_tools(cel))
@@ -251,9 +248,6 @@ impl Session {
 							.await
 					},
 					ClientRequest::ListPromptsRequest(_) => {
-						log.non_atomic_mutate(|l| {
-							l.resource = Some(MCPOperation::Prompt);
-						});
 						self
 							.relay
 							.send_fanout(r, ctx, self.relay.merge_prompts(cel))
@@ -261,9 +255,6 @@ impl Session {
 					},
 					ClientRequest::ListResourcesRequest(_) => {
 						if !self.relay.is_multiplexing() {
-							log.non_atomic_mutate(|l| {
-								l.resource = Some(MCPOperation::Resource);
-							});
 							self
 								.relay
 								.send_fanout(r, ctx, self.relay.merge_resources(cel))
@@ -278,9 +269,6 @@ impl Session {
 					},
 					ClientRequest::ListResourceTemplatesRequest(_) => {
 						if !self.relay.is_multiplexing() {
-							log.non_atomic_mutate(|l| {
-								l.resource = Some(MCPOperation::ResourceTemplates);
-							});
 							self
 								.relay
 								.send_fanout(r, ctx, self.relay.merge_resource_templates(cel))
@@ -297,10 +285,10 @@ impl Session {
 						let name = ctr.params.name.clone();
 						let (service_name, tool) = self.relay.parse_resource_name(&name)?;
 						span.rename_span(format!("{method} {service_name}"));
+						let call_arguments = ctr.params.arguments.clone();
 						log.non_atomic_mutate(|l| {
-							l.resource_name = Some(tool.to_string());
-							l.target_name = Some(service_name.to_string());
-							l.resource = Some(MCPOperation::Tool);
+							l.set_tool(service_name.to_string(), tool.to_string());
+							l.capture_call_arguments(call_arguments);
 						});
 						if !self.relay.policies.validate(
 							&rbac::ResourceType::Tool(rbac::ResourceId::new(
@@ -317,16 +305,17 @@ impl Session {
 
 						let tn = tool.to_string();
 						ctr.params.name = tn.into();
-						self.relay.send_single(r, ctx, service_name).await
+						self
+							.relay
+							.send_single(r, ctx, service_name, Some(log.clone()))
+							.await
 					},
 					ClientRequest::GetPromptRequest(gpr) => {
 						let name = gpr.params.name.clone();
 						let (service_name, prompt) = self.relay.parse_resource_name(&name)?;
 						span.rename_span(format!("{method} {service_name}"));
 						log.non_atomic_mutate(|l| {
-							l.target_name = Some(service_name.to_string());
-							l.resource_name = Some(prompt.to_string());
-							l.resource = Some(MCPOperation::Prompt);
+							l.set_prompt(service_name.to_string(), prompt.to_string());
 						});
 						if !self.relay.policies.validate(
 							&rbac::ResourceType::Prompt(rbac::ResourceId::new(
@@ -341,16 +330,14 @@ impl Session {
 							});
 						}
 						gpr.params.name = prompt.to_string();
-						self.relay.send_single(r, ctx, service_name).await
+						self.relay.send_single(r, ctx, service_name, None).await
 					},
 					ClientRequest::ReadResourceRequest(rrr) => {
 						if let Some(service_name) = self.relay.default_target_name() {
 							let uri = rrr.params.uri.clone();
 							span.rename_span(format!("{method} {service_name}"));
 							log.non_atomic_mutate(|l| {
-								l.target_name = Some(service_name.to_string());
-								l.resource_name = Some(uri.to_string());
-								l.resource = Some(MCPOperation::Resource);
+								l.set_resource(service_name.to_string(), uri.to_string());
 							});
 							if !self.relay.policies.validate(
 								&rbac::ResourceType::Resource(rbac::ResourceId::new(
@@ -364,7 +351,10 @@ impl Session {
 									resource_name: uri.to_string(),
 								});
 							}
-							self.relay.send_single_without_multiplexing(r, ctx).await
+							self
+								.relay
+								.send_single_without_multiplexing(r, ctx, None)
+								.await
 						} else {
 							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
 							// Find a mapping of URL
@@ -387,7 +377,10 @@ impl Session {
 					ClientRequest::CompleteRequest(_) => {
 						// For now, we don't have a sane mapping of incoming requests to a specific
 						// downstream service when multiplexing. Only forward when we have only one backend.
-						self.relay.send_single_without_multiplexing(r, ctx).await
+						self
+							.relay
+							.send_single_without_multiplexing(r, ctx, None)
+							.await
 					},
 				}
 			},

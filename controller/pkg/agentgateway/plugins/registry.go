@@ -34,6 +34,9 @@ func MergePlugins(plug ...AgwPlugin) AgwPlugin {
 			if p.AddResourceExtension.Routes != nil {
 				ret.AddResourceExtension.Routes = p.AddResourceExtension.Routes
 			}
+			if p.AddResourceExtension.AncestorBackends != nil {
+				ret.AddResourceExtension.AncestorBackends = p.AddResourceExtension.AncestorBackends
+			}
 		}
 	}
 	return ret

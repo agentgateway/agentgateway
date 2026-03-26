@@ -12,13 +12,15 @@ import (
 // Prompt enrichment allows you to add additional context to the prompt before sending it to the model.
 // Unlike RAG or other dynamic context methods, prompt enrichment is static and is applied to every request.
 //
-// **Note**: Some providers, including Anthropic, do not support SYSTEM role messages, and instead have a dedicated
-// system field in the input JSON. In this case, use the [`defaults` setting](#fielddefault) to set the system field.
+// **Note**: Some providers, including Anthropic, do not support `SYSTEM`
+// role messages, and instead have a dedicated `system` field in the input
+// JSON. In this case, use the [`defaults` setting](#fielddefault) to set the
+// `system` field.
 //
-// The following example prepends a system prompt of `Answer all questions in French.`
-// and appends `Describe the painting as if you were a famous art critic from the 17th century.`
-// to each request that is sent to the `openai` HTTPRoute.
-// ```yaml
+// The following example prepends a system prompt of
+// `Answer all questions in French.` and appends
+// `Describe the painting as if you were a famous art critic from the 17th century.`
+// to each request that is sent to the `openai` `HTTPRoute`.
 //
 //	name: openai-opt
 //	namespace: agentgateway-system
@@ -37,8 +39,6 @@ import (
 //	      append:
 //	      - role: USER
 //	        content: "Describe the painting as if you were a famous art critic from the 17th century."
-//
-// ```
 type AIPromptEnrichment struct {
 	// A list of messages to be prepended to the prompt sent by the client.
 	// +optional
@@ -61,7 +61,7 @@ type Message struct {
 	Content string `json:"content"`
 }
 
-// BuiltIn regex patterns for specific types of strings in prompts.
+// Built-in regex patterns for specific types of strings in prompts.
 // For example, if you specify `CreditCard`, any credit card numbers
 // in the request or response are matched.
 // +kubebuilder:validation:Enum=Ssn;CreditCard;PhoneNumber;Email;CaSin
@@ -85,7 +85,8 @@ const (
 )
 
 // Action to take if a regex pattern is matched in a request or response.
-// This setting applies only to request matches. PromptguardResponse matches are always masked by default.
+// This setting applies only to request matches. `PromptguardResponse`
+// matches are always masked by default.
 // +kubebuilder:validation:Enum=Mask;Reject
 type Action string
 
@@ -110,7 +111,8 @@ type Regex struct {
 	Builtins []BuiltIn `json:"builtins,omitempty"`
 
 	// The action to take if a regex pattern is matched in a request or response.
-	// This setting applies only to request matches. PromptguardResponse matches are always masked by default.
+	// This setting applies only to request matches. `PromptguardResponse`
+	// matches are always masked by default.
 	// Defaults to `Mask`.
 	// +kubebuilder:default=Mask
 	// +optional
@@ -139,7 +141,7 @@ type Webhook struct {
 // +kubebuilder:validation:AtLeastOneFieldSet
 type CustomResponse struct {
 	// A custom response message to return to the client. If not specified, defaults to
-	// "The request was rejected due to inappropriate content".
+	// `The request was rejected due to inappropriate content`.
 	// +kubebuilder:default="The request was rejected due to inappropriate content"
 	// +optional
 	Message string `json:"message,omitempty"`
@@ -153,7 +155,8 @@ type CustomResponse struct {
 }
 
 type OpenAIModeration struct {
-	// model specifies the moderation model to use. For example, `omni-moderation`.
+	// `model` specifies the moderation model to use. For example,
+	// `omni-moderation`.
 	// +optional
 	Model *string `json:"model,omitempty"`
 	// policies controls policies for communicating with OpenAI.
@@ -171,7 +174,8 @@ type BedrockGuardrails struct {
 	// +required
 	GuardrailVersion ShortString `json:"version"`
 
-	// Region is the AWS region where the guardrail is deployed (e.g., "us-west-2").
+	// Region is the AWS region where the guardrail is deployed (for example,
+	// `us-west-2`).
 	// +required
 	Region ShortString `json:"region"`
 
@@ -190,8 +194,8 @@ type GoogleModelArmor struct {
 	// +required
 	ProjectID ShortString `json:"projectId"`
 
-	// Location is the Google Cloud location (e.g., "us-central1").
-	// Defaults to "us-central1" if not specified.
+	// Location is the Google Cloud location (for example, `us-central1`).
+	// Defaults to `us-central1` if not specified.
 	// +kubebuilder:default="us-central1"
 	// +optional
 	Location *ShortString `json:"location,omitempty"`
@@ -206,7 +210,7 @@ type GoogleModelArmor struct {
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;openAIModeration;bedrockGuardrails;googleModelArmor
 type PromptguardRequest struct {
 	// A custom response message to return to the client. If not specified, defaults to
-	// "The request was rejected due to inappropriate content".
+	// `The request was rejected due to inappropriate content`.
 	// +optional
 	CustomResponse *CustomResponse `json:"response,omitempty"`
 
@@ -218,16 +222,18 @@ type PromptguardRequest struct {
 	// +optional
 	Webhook *Webhook `json:"webhook,omitempty"`
 
-	// openAIModeration passes prompt data through the OpenAI Moderations endpoint.
+	// `openAIModeration` passes prompt data through the OpenAI Moderations
+	// endpoint.
 	// See https://developers.openai.com/api/reference/resources/moderations for more information.
 	// +optional
 	OpenAIModeration *OpenAIModeration `json:"openAIModeration,omitempty"`
 
-	// bedrockGuardrails configures AWS Bedrock Guardrails for prompt guarding.
+	// `bedrockGuardrails` configures AWS Bedrock Guardrails for prompt
+	// guarding.
 	// +optional
 	BedrockGuardrails *BedrockGuardrails `json:"bedrockGuardrails,omitempty"`
 
-	// googleModelArmor configures Google Model Armor for prompt guarding.
+	// `googleModelArmor` configures Google Model Armor for prompt guarding.
 	// +optional
 	GoogleModelArmor *GoogleModelArmor `json:"googleModelArmor,omitempty"`
 }
@@ -236,7 +242,7 @@ type PromptguardRequest struct {
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;bedrockGuardrails;googleModelArmor
 type PromptguardResponse struct {
 	// A custom response message to return to the client. If not specified, defaults to
-	// "The response was rejected due to inappropriate content".
+	// `The response was rejected due to inappropriate content`.
 	// +optional
 	CustomResponse *CustomResponse `json:"response,omitempty"`
 
@@ -248,11 +254,12 @@ type PromptguardResponse struct {
 	// +optional
 	Webhook *Webhook `json:"webhook,omitempty"`
 
-	// bedrockGuardrails configures AWS Bedrock Guardrails for prompt guarding.
+	// `bedrockGuardrails` configures AWS Bedrock Guardrails for prompt
+	// guarding.
 	// +optional
 	BedrockGuardrails *BedrockGuardrails `json:"bedrockGuardrails,omitempty"`
 
-	// googleModelArmor configures Google Model Armor for prompt guarding.
+	// `googleModelArmor` configures Google Model Armor for prompt guarding.
 	// +optional
 	GoogleModelArmor *GoogleModelArmor `json:"googleModelArmor,omitempty"`
 }
@@ -263,24 +270,22 @@ type PromptguardResponse struct {
 //
 // This example rejects any request prompts that contain
 // the string "credit card", and masks any credit card numbers in the response.
-// ```yaml
-// promptGuard:
 //
-//	request:
-//	- response:
-//	    message: "Rejected due to inappropriate content"
-//	  regex:
-//	    action: REJECT
-//	    matches:
-//	    - pattern: "credit card"
-//	      name: "CC"
-//	response:
-//	- regex:
-//	    builtins:
-//	    - CREDIT_CARD
-//	    action: MASK
+//	promptGuard:
+//		request:
+//		- response:
+//		    message: "Rejected due to inappropriate content"
+//		  regex:
+//		    action: REJECT
+//		    matches:
+//		    - pattern: "credit card"
+//		      name: "CC"
+//		response:
+//		- regex:
+//		    builtins:
+//		    - CREDIT_CARD
+//		    action: MASK
 //
-// ```
 // +kubebuilder:validation:AtLeastOneFieldSet
 type AIPromptGuard struct {
 	// Prompt guards to apply to requests sent by the client.
@@ -303,35 +308,29 @@ type AIPromptGuard struct {
 // Defaults set here do _not_ override those user-provided values unless you explicitly set `override` to `true`.
 //
 // Example: Setting a default system field for Anthropic, which does not support system role messages:
-// ```yaml
-// defaults:
-//   - field: "system"
-//     value: "answer all questions in French"
 //
-// ```
+//	defaults:
+//	  - field: "system"
+//	    value: "answer all questions in French"
 //
 // Example: Setting a default temperature and overriding `max_tokens`:
-// ```yaml
-// defaults:
-//   - field: "temperature"
-//     value: "0.5"
-//   - field: "max_tokens"
-//     value: "100"
-//     override: true
 //
-// ```
+//	defaults:
+//	  - field: "temperature"
+//	    value: "0.5"
+//	  - field: "max_tokens"
+//	    value: "100"
+//	    override: true
 //
 // Example: Setting custom lists fields:
-// ```yaml
-// defaults:
-//   - field: "custom_integer_list"
-//     value: [1,2,3]
 //
-// overrides:
-//   - field: "custom_string_list"
-//     value: ["one","two","three"]
+//	defaults:
+//	  - field: "custom_integer_list"
+//	    value: [1,2,3]
 //
-// ```
+//	overrides:
+//	  - field: "custom_string_list"
+//	    value: ["one","two","three"]
 //
 // Note: The `field` values correspond to keys in the JSON request body, not fields in this CRD.
 type FieldDefault struct {
@@ -369,10 +368,9 @@ type FieldTransformation struct {
 // Example:
 //
 //	promptCaching:
-//	  cacheSystem: true       # Cache system prompts
-//	  cacheMessages: true     # Cache conversation history
-//	  cacheTools: false       # Don't cache tool definitions
-//	  minTokens: 1024         # Only cache if ≥1024 tokens
+//	  cacheSystem: true
+//	  cacheMessages: true
+//	  cacheTools: false
 //
 // Cost savings example:
 // - Without caching: 10,000 tokens × $3/MTok = $0.03
