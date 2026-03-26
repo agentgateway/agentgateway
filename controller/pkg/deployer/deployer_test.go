@@ -12,7 +12,6 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -263,7 +262,7 @@ func TestPruneRemovedResources(t *testing.T) {
 					Kind: "Deployment",
 					Name: deployName,
 				},
-				MinReplicas: ptr.To(int32(1)),
+				MinReplicas: new(int32(1)),
 				MaxReplicas: 10,
 			},
 		}

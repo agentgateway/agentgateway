@@ -10,7 +10,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"istio.io/istio/pkg/ptr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -264,9 +263,9 @@ func DefaultDeployerInputs(dt DeployerTester, commonCols *collections.CommonColl
 		AgentgatewayClassName:      dt.AgwClassName,
 		AgentgatewayControllerName: dt.AgwControllerName,
 		ImageDefaults: &agentgateway.Image{
-			Registry:   ptr.Of("cr.agentgateway.dev"),
-			Repository: ptr.Of("agentgateway"),
-			Tag:        ptr.Of("99.99.99"),
+			Registry:   new("cr.agentgateway.dev"),
+			Repository: new("agentgateway"),
+			Tag:        new("99.99.99"),
 			Digest:     nil,
 			PullPolicy: nil,
 		},

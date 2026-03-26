@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/suite"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -153,13 +152,13 @@ func (s *tsuite) assertPolicyStatus(inCondition metav1.Condition) {
 			{
 				Group:     (*gwv1.Group)(&svcGroup),
 				Kind:      (*gwv1.Kind)(&svcKind),
-				Namespace: ptr.To(gwv1.Namespace(nginxMeta.Namespace)),
+				Namespace: new(gwv1.Namespace(nginxMeta.Namespace)),
 				Name:      gwv1.ObjectName(nginxMeta.Name),
 			},
 			{
 				Group:     (*gwv1.Group)(&svcGroup),
 				Kind:      (*gwv1.Kind)(&svcKind),
-				Namespace: ptr.To(gwv1.Namespace(nginx2Meta.Namespace)),
+				Namespace: new(gwv1.Namespace(nginx2Meta.Namespace)),
 				Name:      gwv1.ObjectName(nginx2Meta.Name),
 			},
 		}

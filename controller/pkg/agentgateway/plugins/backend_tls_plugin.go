@@ -93,9 +93,9 @@ func translatePoliciesForBackendTLS(
 	sans := slices.MapFilter(btls.Spec.Validation.SubjectAltNames, func(e gwv1.SubjectAltName) *string {
 		switch e.Type {
 		case gwv1.HostnameSubjectAltNameType:
-			return ptr.Of(string(e.Hostname))
+			return new(string(e.Hostname))
 		case gwv1.URISubjectAltNameType:
-			return ptr.Of(string(e.URI))
+			return new(string(e.URI))
 		}
 		return nil
 	})
@@ -184,7 +184,7 @@ func translatePoliciesForBackendTLS(
 			Cert: nil,
 			Key:  nil,
 			// Validation.Hostname is a required value and validated with CEL
-			Hostname:              ptr.Of(string(btls.Spec.Validation.Hostname)),
+			Hostname:              new(string(btls.Spec.Validation.Hostname)),
 			VerifySubjectAltNames: sans,
 		}
 		if mtlsClientRef != nil {
@@ -238,8 +238,8 @@ func translatePoliciesForBackendTLS(
 	ancestorStatus := make([]gwv1.PolicyAncestorStatus, 0, len(btls.Spec.TargetRefs))
 	for g := range uniqueGateways {
 		pr := gwv1.ParentReference{
-			Group: ptr.Of(gwv1.Group(gvk.KubernetesGateway.Group)),
-			Kind:  ptr.Of(gwv1.Kind(gvk.KubernetesGateway.Kind)),
+			Group: new(gwv1.Group(gvk.KubernetesGateway.Group)),
+			Kind:  new(gwv1.Kind(gvk.KubernetesGateway.Kind)),
 			Name:  gwv1.ObjectName(g.Name),
 		}
 		ancestorStatus = append(ancestorStatus, setAncestorStatus(pr, status, btls.Generation, conds, gwv1.GatewayController(controllerName)))

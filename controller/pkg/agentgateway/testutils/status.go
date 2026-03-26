@@ -8,7 +8,6 @@ import (
 
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pkg/config/schema/gvk"
-	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -51,7 +50,7 @@ func (t *TestStatusQueue) dump() []crd.IstioKind {
 				Namespace: k.Namespace,
 			},
 			Spec:   nil,
-			Status: ptr.Of(json.RawMessage(statusj)),
+			Status: new(json.RawMessage(statusj)),
 		}
 		objs = append(objs, obj)
 	}

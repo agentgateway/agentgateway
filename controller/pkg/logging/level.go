@@ -133,7 +133,7 @@ func HTTPLevelHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		Reset(level)
-		w.Write(fmt.Appendf(nil, "all logger levels updated to level: %s\n", lvl)) // nolint: errcheck
+		w.Write(fmt.Appendf(nil, "all logger levels updated to level: %s\n", lvl)) //nolint:errcheck,gosec // G705: lvl validated by ParseLevel
 		return
 	}
 

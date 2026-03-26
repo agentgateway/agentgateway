@@ -1,6 +1,6 @@
 module github.com/agentgateway/agentgateway
 
-go 1.25.1
+go 1.26.1
 
 replace github.com/agentgateway/agentgateway/api => ./api
 

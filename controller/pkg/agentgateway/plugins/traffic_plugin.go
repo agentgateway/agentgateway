@@ -150,7 +150,7 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 		for _, translatedPolicy := range translatedPolicies {
 			for _, gatewayTarget := range gatewayTargets {
 				agwPolicies = append(agwPolicies, AgwPolicy{
-					Gateway: ptr.Of(gatewayTarget),
+					Gateway: new(gatewayTarget),
 					Policy:  translatedPolicy,
 				})
 			}
@@ -181,7 +181,7 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 		logger.Warn("failed to resolve one or more ancestor refs", "errors", attachmentErrors)
 		ancestors = append(ancestors, gwv1.PolicyAncestorStatus{
 			AncestorRef: gwv1.ParentReference{
-				Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayPolicyGVK.Group)),
+				Group: new(gwv1.Group(wellknown.AgentgatewayPolicyGVK.Group)),
 				Name:  "StatusSummary",
 			},
 			ControllerName: gwv1.GatewayController(agw.ControllerName),
@@ -310,9 +310,9 @@ func resolvePolicyAncestorRefs(
 	for _, gatewayTarget := range gatewayTargets {
 		refs = append(refs, gwv1.ParentReference{
 			Name:      gwv1.ObjectName(gatewayTarget.Name),
-			Namespace: ptr.Of(gwv1.Namespace(gatewayTarget.Namespace)),
-			Group:     ptr.Of(gwv1.Group(wellknown.GatewayGVK.Group)),
-			Kind:      ptr.Of(gwv1.Kind(wellknown.GatewayGVK.Kind)),
+			Namespace: new(gwv1.Namespace(gatewayTarget.Namespace)),
+			Group:     new(gwv1.Group(wellknown.GatewayGVK.Group)),
+			Kind:      new(gwv1.Kind(wellknown.GatewayGVK.Kind)),
 		})
 	}
 	slices.SortStableFunc(refs, func(a, b gwv1.ParentReference) int {
@@ -1007,7 +1007,7 @@ func castPtr[T ~string](item *T) *string {
 	if item == nil {
 		return nil
 	}
-	return ptr.Of(string(*item))
+	return new(string(*item))
 }
 
 // processAuthorizationPolicy processes Authorization configuration and creates corresponding Agw policies

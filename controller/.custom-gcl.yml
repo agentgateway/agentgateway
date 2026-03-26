@@ -1,4 +1,4 @@
-version: v2.8.0
+version: v2.11.3
 name: golangci-lint-custom
 destination: _output
 plugins:
