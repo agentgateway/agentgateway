@@ -3,8 +3,14 @@ package shared
 // Authorization defines the configuration for role-based access control.
 type Authorization struct {
 	// `policy` specifies the authorization rule to evaluate.
-	// A policy matches when **any** of the conditions evaluates to true.
-	// +required
+	//
+	// * For `Allow` rules: any policy allows the request.
+	// * For `Require` rules: all policies must match for the request to be allowed.
+	// * For `Deny` rules: any matching policy denies the request. Note: a CEL expression that fails to evaluate is not
+	// considered to match, making this a risky policy; prefer to use `Require`.
+	//
+	// The presence of at least one `Allow` rule triggers a deny-by-default policy, requiring at least 1 match to allow.
+	// With no rules, all requires are allowed.
 	Policy AuthorizationPolicy `json:"policy"`
 
 	// `action` defines whether the rule allows, denies, or requires the request if
