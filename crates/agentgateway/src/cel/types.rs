@@ -322,6 +322,11 @@ impl<'a> Executor<'a> {
 		}
 		this
 	}
+	pub fn new_source(source_context: &'a SourceContext) -> Self {
+		let mut this = Self::new_empty();
+		this.source = ExtensionOrDirect::Direct(Some(source_context));
+		this
+	}
 	pub fn new_request(req: &'a crate::http::Request) -> Self {
 		let mut this = Self::new_empty();
 		this.set_request(req);

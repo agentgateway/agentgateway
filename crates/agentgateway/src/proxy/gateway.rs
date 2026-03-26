@@ -426,6 +426,19 @@ impl Gateway {
 
 			"opened",
 		);
+		if let Some(network_authorization) = policies.network_authorization.as_ref() {
+			let src = crate::cel::SourceContext {
+				address: peer_addr.ip(),
+				port: peer_addr.port(),
+				tls: raw_stream
+					.ext::<crate::transport::stream::TLSConnectionInfo>()
+					.and_then(|tls| tls.src_identity.clone()),
+			};
+			if let Err(e) = network_authorization.apply(&src) {
+				warn!(src.addr = %peer_addr, "network authorization denied: {e}");
+				return;
+			}
+		}
 		match bind_protocol {
 			BindProtocol::http => {
 				let err = Self::proxy(

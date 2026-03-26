@@ -26,6 +26,32 @@ impl HTTPAuthorizationSet {
 	}
 }
 
+#[derive(Clone, Debug)]
+pub struct NetworkAuthorizationSet(RuleSets);
+
+impl NetworkAuthorizationSet {
+	pub fn new(rs: RuleSets) -> Self {
+		Self(rs)
+	}
+
+	pub fn apply(&self, source: &crate::cel::SourceContext) -> anyhow::Result<()> {
+		let exec = Executor::new_source(source);
+		let allowed = self.0.validate(&exec);
+		if !allowed {
+			anyhow::bail!("network authorization denied");
+		}
+		Ok(())
+	}
+
+	pub fn register(&self, cel: &mut ContextBuilder) {
+		self.0.register(cel);
+	}
+
+	pub fn merge_rule_set(&mut self, rule_set: RuleSet) {
+		self.0.0.push(rule_set);
+	}
+}
+
 #[apply(schema!)]
 pub struct RuleSet {
 	#[serde(serialize_with = "se_policies", deserialize_with = "de_policies")]
