@@ -699,6 +699,16 @@
             "$ref": "#/$defs/LocalTCPRoute"
           }
         },
+        "oidc": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcListenerConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "policies": {
           "anyOf": [
             {
@@ -1214,6 +1224,18 @@
               "type": "null"
             }
           ]
+        },
+        "oidc": {
+          "description": "Authenticate incoming browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OidcProviderRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "basicAuth": {
           "description": "Authenticate incoming requests using Basic Authentication with htpasswd.",
@@ -3362,6 +3384,18 @@
         "jwks"
       ]
     },
+    "OidcProviderRef": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "provider"
+      ]
+    },
     "LocalBasicAuth": {
       "type": "object",
       "properties": {
@@ -5040,6 +5074,110 @@
         }
       },
       "additionalProperties": false
+    },
+    "LocalOidcListenerConfig": {
+      "type": "object",
+      "properties": {
+        "providers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalOidcProvider"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalOidcProvider": {
+      "description": "Browser-based OIDC authentication policy.\n\nRequires `OIDC_COOKIE_SECRET` to be present in the environment when the\nconfig is translated into the runtime policy, because session cookie\nencoders are derived during policy compilation rather than lazily at\nrequest time.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "issuer": {
+          "description": "Issuer used for discovery and ID token validation.",
+          "type": "string"
+        },
+        "discovery": {
+          "description": "Optional discovery document override. If omitted, discovery uses\n`${issuer}/.well-known/openid-configuration`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileInlineOrRemote"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorizationEndpoint": {
+          "description": "Authorization endpoint used to start the browser login flow.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tokenEndpoint": {
+          "description": "Token endpoint used to exchange the authorization code.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "jwks": {
+          "description": "JWKS source used to validate returned ID tokens.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileInlineOrRemote"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokenEndpointAuthMethodsSupported": {
+          "description": "Supported client authentication methods for the token endpoint.\n\nWhen omitted and discovery is used, the discovery document decides.\nWhen omitted and the provider is fully explicit, this defaults to\n`[\"clientSecretBasic\"]`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TokenEndpointAuth"
+          },
+          "default": []
+        },
+        "clientId": {
+          "description": "OAuth2 client identifier used for authorization and token exchange.",
+          "type": "string"
+        },
+        "clientSecret": {
+          "description": "OAuth2 client secret used for token exchange.",
+          "type": "string"
+        },
+        "redirectURI": {
+          "description": "Absolute callback URI handled by the gateway.",
+          "type": "string"
+        },
+        "scopes": {
+          "description": "Additional OAuth2 scopes to request. `openid` is always included.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "issuer",
+        "clientId",
+        "clientSecret",
+        "redirectURI"
+      ]
+    },
+    "TokenEndpointAuth": {
+      "type": "string",
+      "enum": [
+        "clientSecretBasic",
+        "clientSecretPost"
+      ]
     },
     "LocalGatewayPolicy": {
       "type": "object",

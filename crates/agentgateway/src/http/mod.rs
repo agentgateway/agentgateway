@@ -19,9 +19,11 @@ pub mod csrf;
 pub mod envoy_proto_common;
 pub mod ext_authz;
 pub mod ext_proc;
+pub mod oidc;
 pub mod outlierdetection;
 mod peekbody;
 pub mod remoteratelimit;
+pub(crate) mod request_cookies;
 pub mod sessionpersistence;
 #[cfg(any(test, feature = "internal_benches"))]
 pub mod tests_common;

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
@@ -22,13 +22,13 @@ use crate::store::LocalWorkload;
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendPolicy, BackendReference,
 	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch, Listener,
-	ListenerKey, ListenerName, ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication,
-	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
-	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch,
-	RouteName, RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
-	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig, TrafficPolicy,
-	TunnelProtocol, TypedResourceName,
+	ListenerKey, ListenerName, ListenerOidc, ListenerProtocol, ListenerSet, ListenerTarget,
+	LocalMcpAuthentication, McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec,
+	OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route,
+	RouteBackendReference, RouteMatch, RouteName, RouteSet, ServerTLSConfig, SimpleBackend,
+	SimpleBackendReference, SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec,
+	TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig,
+	TrafficPolicy, TunnelProtocol, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
@@ -423,6 +423,8 @@ struct LocalListener {
 	tls: Option<LocalTLSServerConfig>,
 	routes: Option<Vec<LocalRoute>>,
 	tcp_routes: Option<Vec<LocalTCPRoute>>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	oidc: Option<crate::http::oidc::LocalOidcListenerConfig>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	policies: Option<LocalGatewayPolicy>,
 }
@@ -1311,6 +1313,9 @@ pub struct FilterOrPolicy {
 	/// Authenticate incoming JWT requests.
 	#[serde(default)]
 	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
+	/// Authenticate incoming browser requests with OIDC authorization code flow.
+	#[serde(default)]
+	oidc: Option<crate::http::oidc::OidcProviderRef>,
 	/// Authenticate incoming requests using Basic Authentication with htpasswd.
 	#[serde(default)]
 	basic_auth: Option<crate::http::basicauth::LocalBasicAuth>,
@@ -1377,8 +1382,15 @@ async fn convert(
 		let bind_name = strng::format!("bind/{}", b.port);
 		let mut ls = ListenerSet::default();
 		for (idx, l) in b.listeners.into_iter().enumerate() {
-			let (l, pol, backends) =
-				convert_listener(client.clone(), idx, l, bind_name.clone(), gateway.clone()).await?;
+			let (l, pol, backends) = convert_listener(
+				client.clone(),
+				idx,
+				l,
+				bind_name.clone(),
+				b.port,
+				gateway.clone(),
+			)
+			.await?;
 			all_policies.extend_from_slice(&pol);
 			all_backends.extend_from_slice(&backends);
 			ls.insert(l)
@@ -1403,6 +1415,11 @@ async fn convert(
 		let res = split_policies(client.clone(), p.policy).await?;
 		if (res.route_policies.len() + res.backend_policies.len()) != 1 {
 			anyhow::bail!("'policies' must contain exactly 1 policy")
+		}
+		if let Some(TrafficPolicy::Oidc(_)) = res.route_policies.first()
+			&& p.phase == PolicyPhase::Gateway
+		{
+			anyhow::bail!("oidc policies must run at route phase");
 		}
 		let tp = res
 			.route_policies
@@ -1453,13 +1470,15 @@ async fn convert(
 	// Add frontend policies targeted to this listener
 	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
 
-	Ok(NormalizedLocalConfig {
+	let normalized = NormalizedLocalConfig {
 		binds: all_binds,
 		policies: all_policies,
 		backends: all_backends.into_iter().collect(),
 		workloads,
 		services,
-	})
+	};
+	validate_oidc_normalized_config(config, &normalized)?;
+	Ok(normalized)
 }
 
 static STARTUP_TIMESTAMP: OnceLock<u64> = OnceLock::new();
@@ -1828,6 +1847,7 @@ json(request.body).model
 		name: listener_name.clone(),
 		hostname: strng::new("*"),
 		protocol: ListenerProtocol::HTTP,
+		oidc: None,
 		routes,
 		tcp_routes: Default::default(),
 	};
@@ -1945,6 +1965,7 @@ async fn convert_mcp_config(
 		name: listener_name,
 		hostname: strng::new("*"),
 		protocol: ListenerProtocol::HTTP,
+		oidc: None,
 		routes,
 		tcp_routes: Default::default(),
 	};
@@ -2000,10 +2021,12 @@ async fn convert_listener(
 	idx: usize,
 	l: LocalListener,
 	bind_key: Strng,
+	listener_port: u16,
 	gateway: ListenerTarget,
 ) -> anyhow::Result<(Listener, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
 	let LocalListener {
 		name,
+		oidc,
 		policies,
 		hostname,
 		protocol,
@@ -2053,11 +2076,23 @@ async fn convert_listener(
 		.unwrap_or_else(|| strng::format!("listener{}", idx));
 	let gateway_name = gateway.gateway_name.clone();
 	let gateway_namespace = gateway.gateway_namespace.clone();
-	let key: ListenerKey =
-		strng::format!("{gateway_namespace}/{gateway_name}/{bind_key}/{listener_name}");
+	let name = ListenerName {
+		gateway_name,
+		gateway_namespace,
+		listener_name,
+		listener_set: None,
+	};
+	let hostname = hostname.unwrap_or_default();
+	let key: ListenerKey = strng::format!(
+		"{}/{}/{bind_key}/{}",
+		name.gateway_namespace,
+		name.gateway_name,
+		name.listener_name
+	);
 
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
+	let oidc = translate_listener_oidc(client.clone(), oidc).await?;
 
 	let mut rs = RouteSet::default();
 	for (idx, l) in routes.into_iter().flatten().enumerate() {
@@ -2073,13 +2108,6 @@ async fn convert_listener(
 		all_backends.extend_from_slice(&backends);
 		trs.insert(route)
 	}
-
-	let name = ListenerName {
-		gateway_name,
-		gateway_namespace,
-		listener_name,
-		listener_set: None,
-	};
 
 	if let Some(pol) = policies {
 		let pols = split_policies(client.clone(), pol.into()).await?;
@@ -2097,11 +2125,13 @@ async fn convert_listener(
 	let l = Listener {
 		key,
 		name,
-		hostname: hostname.unwrap_or_default(),
+		hostname,
 		protocol,
+		oidc,
 		routes: rs,
 		tcp_routes: trs,
 	};
+	l.validate_oidc(listener_port)?;
 	Ok((l, all_policies, all_backends))
 }
 
@@ -2186,6 +2216,99 @@ pub async fn convert_route(
 pub struct ResolvedPolicies {
 	pub backend_policies: Vec<BackendPolicy>,
 	pub route_policies: Vec<TrafficPolicy>,
+}
+
+async fn translate_listener_oidc(
+	client: Client,
+	oidc: Option<crate::http::oidc::LocalOidcListenerConfig>,
+) -> anyhow::Result<Option<ListenerOidc>> {
+	let Some(oidc) = oidc else {
+		return Ok(None);
+	};
+	if oidc.providers.is_empty() {
+		return Ok(None);
+	}
+
+	let oidc_cookie_secret = crate::http::oidc::config::load_oidc_cookie_secret()?;
+	let mut providers = Vec::with_capacity(oidc.providers.len());
+	let mut names = HashSet::with_capacity(oidc.providers.len());
+	for provider in oidc.providers {
+		anyhow::ensure!(
+			names.insert(provider.name.clone()),
+			"duplicate oidc provider '{}' on listener",
+			provider.name
+		);
+		providers.push(
+			provider
+				.translate(client.clone(), &oidc_cookie_secret)
+				.await?,
+		);
+	}
+
+	Ok(Some(ListenerOidc::new(providers)?))
+}
+
+fn validate_oidc_normalized_config(
+	config: &crate::Config,
+	normalized: &NormalizedLocalConfig,
+) -> anyhow::Result<()> {
+	let store = build_oidc_validation_store(config, normalized);
+	for bind in normalized.binds.iter() {
+		for listener in bind.listeners.iter() {
+			for route in listener.routes.iter() {
+				let path = crate::store::RoutePath {
+					listener: &listener.name,
+					route: &route.name,
+				};
+				let policies = store.route_policies(&path, &route.inline_policies);
+				let authn_count = [
+					policies.oidc.is_some(),
+					policies.jwt.is_some(),
+					policies.basic_auth.is_some(),
+					policies.api_key.is_some(),
+				]
+				.into_iter()
+				.filter(|present| *present)
+				.count();
+				if authn_count > 1 {
+					anyhow::bail!(
+						"route '{}' resolves to multiple authentication mechanisms; oidc conflicts with jwt_auth, basic_auth, and api_key",
+						route.name.as_route_name()
+					);
+				}
+				if let Some(requirement) = &policies.oidc {
+					anyhow::ensure!(
+						listener
+							.oidc_provider(requirement.provider.as_str())
+							.is_some(),
+						"route '{}' references missing oidc provider '{}' on listener '{}'",
+						route.name.as_route_name(),
+						requirement.provider,
+						listener.name.listener_name
+					);
+				}
+			}
+		}
+	}
+
+	Ok(())
+}
+
+fn build_oidc_validation_store(
+	config: &crate::Config,
+	normalized: &NormalizedLocalConfig,
+) -> crate::store::BindStore {
+	let mut store = crate::store::BindStore::with_ipv6_enabled(config.ipv6_enabled);
+	for bind in normalized.binds.iter().cloned() {
+		store.insert_bind(bind);
+	}
+	for backend in normalized.backends.iter().cloned() {
+		store.insert_backend(backend.backend.name(), backend);
+	}
+	for policy in normalized.policies.iter().cloned() {
+		store.insert_policy(policy);
+	}
+	store
 }
 
 async fn split_frontend_policies(
@@ -2276,6 +2399,7 @@ pub async fn split_policies(
 		local_rate_limit,
 		remote_rate_limit,
 		jwt_auth,
+		oidc,
 		basic_auth,
 		api_key,
 		transformations,
@@ -2339,6 +2463,9 @@ pub async fn split_policies(
 	}
 	if let Some(p) = jwt_auth {
 		route_policies.push(TrafficPolicy::JwtAuth(p.try_into(client.clone()).await?));
+	}
+	if let Some(p) = oidc {
+		route_policies.push(TrafficPolicy::Oidc(p));
 	}
 	if let Some(p) = basic_auth {
 		route_policies.push(TrafficPolicy::BasicAuth(p.try_into()?));

@@ -84,6 +84,53 @@ async fn test_health_config() {
 	test_config_parsing("health").await;
 }
 
+#[tokio::test]
+async fn test_oidc_missing_provider_is_rejected() {
+	let yaml = r#"
+binds:
+- port: 3000
+  listeners:
+  - name: default
+    protocol: HTTP
+    routes:
+    - name: application
+      policies:
+        oidc:
+          provider: missing
+      backends:
+      - host: localhost:18080
+"#;
+
+	let client = client::Client::new(
+		&client::Config {
+			resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+			resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+		},
+		None,
+		BackendConfig::default(),
+		None,
+	);
+	let config = crate::config::parse_config("{}".to_string(), None).unwrap();
+
+	let err = NormalizedLocalConfig::from(
+		&config,
+		client,
+		ListenerTarget {
+			gateway_name: "name".into(),
+			gateway_namespace: "ns".into(),
+			listener_name: None,
+		},
+		yaml,
+	)
+	.await
+	.expect_err("missing listener provider should fail validation");
+	assert!(
+		err
+			.to_string()
+			.contains("references missing oidc provider 'missing'")
+	);
+}
+
 #[test]
 fn test_llm_model_name_header_match_valid_patterns() {
 	match super::llm_model_name_header_match("*").unwrap() {

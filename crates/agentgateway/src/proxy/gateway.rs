@@ -1115,6 +1115,7 @@ impl Gateway {
 				},
 				hostname: Default::default(),
 				protocol: ListenerProtocol::HBONE,
+				oidc: None,
 				tcp_routes: Default::default(),
 				routes: Default::default(),
 			});

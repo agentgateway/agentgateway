@@ -912,6 +912,8 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks.url`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`binds[].listeners[].routes[].policies.oidc`|object|Authenticate incoming browser requests with OIDC authorization code flow.|
+|`binds[].listeners[].routes[].policies.oidc.provider`|string||
 |`binds[].listeners[].routes[].policies.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|object|.htpasswd file contents/reference|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.file`|string||
@@ -3416,6 +3418,23 @@
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].oidc`|object||
+|`binds[].listeners[].oidc.providers`|[]object||
+|`binds[].listeners[].oidc.providers[].name`|string||
+|`binds[].listeners[].oidc.providers[].issuer`|string|Issuer used for discovery and ID token validation.|
+|`binds[].listeners[].oidc.providers[].discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
+|`binds[].listeners[].oidc.providers[].discovery.file`|string||
+|`binds[].listeners[].oidc.providers[].discovery.url`|string||
+|`binds[].listeners[].oidc.providers[].authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
+|`binds[].listeners[].oidc.providers[].tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
+|`binds[].listeners[].oidc.providers[].jwks`|object|JWKS source used to validate returned ID tokens.|
+|`binds[].listeners[].oidc.providers[].jwks.file`|string||
+|`binds[].listeners[].oidc.providers[].jwks.url`|string||
+|`binds[].listeners[].oidc.providers[].tokenEndpointAuthMethodsSupported`|[]string|Supported client authentication methods for the token endpoint.<br><br>When omitted and discovery is used, the discovery document decides.<br>When omitted and the provider is fully explicit, this defaults to<br>`["clientSecretBasic"]`.|
+|`binds[].listeners[].oidc.providers[].clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
+|`binds[].listeners[].oidc.providers[].clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`binds[].listeners[].oidc.providers[].redirectURI`|string|Absolute callback URI handled by the gateway.|
+|`binds[].listeners[].oidc.providers[].scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`binds[].listeners[].policies`|object||
 |`binds[].listeners[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`binds[].listeners[].policies.jwtAuth.mode`|string||
@@ -4772,6 +4791,8 @@
 |`policies[].policy.jwtAuth.jwks.url`|string||
 |`policies[].policy.jwtAuth.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`policies[].policy.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`policies[].policy.oidc`|object|Authenticate incoming browser requests with OIDC authorization code flow.|
+|`policies[].policy.oidc.provider`|string||
 |`policies[].policy.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`policies[].policy.basicAuth.htpasswd`|object|.htpasswd file contents/reference|
 |`policies[].policy.basicAuth.htpasswd.file`|string||
@@ -7533,6 +7554,8 @@
 |`mcp.policies.jwtAuth.jwks.url`|string||
 |`mcp.policies.jwtAuth.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`mcp.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`mcp.policies.oidc`|object|Authenticate incoming browser requests with OIDC authorization code flow.|
+|`mcp.policies.oidc.provider`|string||
 |`mcp.policies.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`mcp.policies.basicAuth.htpasswd`|object|.htpasswd file contents/reference|
 |`mcp.policies.basicAuth.htpasswd.file`|string||

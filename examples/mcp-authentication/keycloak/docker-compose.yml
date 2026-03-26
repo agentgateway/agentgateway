@@ -13,6 +13,7 @@ services:
     command: ["start-dev", "--import-realm", "--http-port", "7080", "--https-port", "7443"]
     volumes:
     - ./mcp-realm.json:/opt/keycloak/data/import/mcp-realm.json
+    - ../../oidc/agentgateway-realm.json:/opt/keycloak/data/import/agentgateway-realm.json
     ports:
     - "7080:7080"
     - "7443:7443"

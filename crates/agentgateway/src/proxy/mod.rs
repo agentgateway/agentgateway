@@ -49,6 +49,7 @@ impl ProxyResponse {
 			| ProxyError::BackendUnsupportedMirror
 			| ProxyError::FilterError(_) => ProxyResponseReason::Internal,
 			ProxyError::JwtAuthenticationFailure(_) => ProxyResponseReason::JwtAuth,
+			ProxyError::OidcFailure(_) => ProxyResponseReason::Oidc,
 			ProxyError::McpJwtAuthenticationFailure(_, _) => ProxyResponseReason::JwtAuth,
 			ProxyError::BasicAuthenticationFailure(_) => ProxyResponseReason::BasicAuth,
 			ProxyError::APIKeyAuthenticationFailure(_) => ProxyResponseReason::APIKeyAuth,
@@ -92,6 +93,8 @@ pub enum ProxyResponseReason {
 	Internal,
 	/// JWT authentication failed
 	JwtAuth,
+	/// OIDC processing failed
+	Oidc,
 	/// Basic authentication failed
 	BasicAuth,
 	/// API Key authentication failed
@@ -140,6 +143,8 @@ pub enum ProxyError {
 	BackendUnsupportedMirror,
 	#[error("authentication failure: {0}")]
 	JwtAuthenticationFailure(http::jwt::TokenError),
+	#[error("oidc failure: {0}")]
+	OidcFailure(http::oidc::Error),
 	#[error("mcp authentication failure: {0}")]
 	McpJwtAuthenticationFailure(Box<ProxyError>, String),
 	#[error("basic authentication failure: {0}")]
@@ -228,6 +233,7 @@ impl ProxyError {
 			ProxyError::InvalidRequest => StatusCode::BAD_REQUEST,
 
 			ProxyError::JwtAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
+			ProxyError::OidcFailure(ref error) => error.status_code(),
 			ProxyError::BasicAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::APIKeyAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::McpJwtAuthenticationFailure(_, _) => StatusCode::UNAUTHORIZED,

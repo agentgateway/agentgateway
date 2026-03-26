@@ -1,0 +1,278 @@
+use std::fmt::Write as _;
+use std::time::Duration;
+
+use crate::http::sessionpersistence;
+use base64::Engine;
+use rand::RngExt;
+use secrecy::ExposeSecret;
+use secrecy::SecretString;
+use serde::{Serialize, Serializer};
+
+use super::{Error, PolicyId, now_unix};
+
+pub const RESERVED_COOKIE_PREFIX: &str = "agw_oidc_";
+// Use a conservative budget below the common ~4 KiB browser per-cookie limit so
+// attributes and user-agent differences do not turn borderline values into
+// silently dropped session cookies.
+const MAX_BROWSER_COOKIE_VALUE_SIZE: usize = 3800;
+const ORIGINAL_URI_LIMIT: usize = 2048;
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionState {
+	pub policy_id: PolicyId,
+	pub csrf_state: String,
+	pub nonce: String,
+	#[serde(serialize_with = "crate::serdes::ser_redact")]
+	pub pkce_verifier: SecretString,
+	pub original_uri: String,
+	pub expires_at_unix: u64,
+}
+
+impl Serialize for TransactionState {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		// Cookie payloads must serialize the raw secret values so the encrypted blob can be
+		// round-tripped. The field-level redact serializers are for external config/debug output.
+		#[derive(Serialize)]
+		#[serde(rename_all = "camelCase")]
+		struct SerializableTransactionState<'a> {
+			policy_id: &'a PolicyId,
+			csrf_state: &'a str,
+			nonce: &'a str,
+			pkce_verifier: &'a str,
+			original_uri: &'a str,
+			expires_at_unix: u64,
+		}
+
+		SerializableTransactionState {
+			policy_id: &self.policy_id,
+			csrf_state: &self.csrf_state,
+			nonce: &self.nonce,
+			pkce_verifier: self.pkce_verifier.expose_secret(),
+			original_uri: &self.original_uri,
+			expires_at_unix: self.expires_at_unix,
+		}
+		.serialize(serializer)
+	}
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserSession {
+	pub policy_id: PolicyId,
+	#[serde(serialize_with = "crate::serdes::ser_redact")]
+	pub raw_id_token: SecretString,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub expires_at_unix: Option<u64>,
+}
+
+impl Serialize for BrowserSession {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		// Cookie payloads must serialize the raw secret values so the encrypted blob can be
+		// round-tripped. The field-level redact serializers are for external config/debug output.
+		#[derive(Serialize)]
+		#[serde(rename_all = "camelCase")]
+		struct SerializableBrowserSession<'a> {
+			policy_id: &'a PolicyId,
+			raw_id_token: &'a str,
+			expires_at_unix: Option<u64>,
+		}
+
+		SerializableBrowserSession {
+			policy_id: &self.policy_id,
+			raw_id_token: self.raw_id_token.expose_secret(),
+			expires_at_unix: self.expires_at_unix,
+		}
+		.serialize(serializer)
+	}
+}
+
+impl BrowserSession {
+	pub fn is_expired(&self) -> bool {
+		self
+			.expires_at_unix
+			.is_some_and(|expires_at| expires_at <= now_unix())
+	}
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionConfig {
+	pub cookie_name: String,
+	pub transaction_cookie_name: String,
+	pub same_site: SameSiteMode,
+	pub secure: CookieSecureMode,
+	#[serde(with = "crate::serdes::serde_dur")]
+	pub ttl: Duration,
+	#[serde(with = "crate::serdes::serde_dur")]
+	pub transaction_ttl: Duration,
+	pub encoder: sessionpersistence::Encoder,
+}
+
+impl SessionConfig {
+	pub fn decode_transaction(&self, cookie: &str) -> Result<TransactionState, Error> {
+		let decoded = self
+			.encoder
+			.decrypt(cookie)
+			.map_err(|_| Error::InvalidTransaction)?;
+		let state: TransactionState =
+			serde_json::from_slice(&decoded).map_err(|_| Error::InvalidTransaction)?;
+		if state.expires_at_unix <= now_unix() {
+			return Err(Error::InvalidTransaction);
+		}
+		Ok(state)
+	}
+
+	pub fn encode_transaction(&self, state: &TransactionState) -> Result<String, Error> {
+		let json = serde_json::to_string(state).map_err(anyhow::Error::from)?;
+		self
+			.encoder
+			.encrypt(&json)
+			.map_err(|_| Error::InvalidTransaction)
+	}
+
+	pub fn decode_browser_session(&self, cookie: &str) -> Result<BrowserSession, Error> {
+		let decoded = self
+			.encoder
+			.decrypt(cookie)
+			.map_err(|_| Error::InvalidSession)?;
+		let session: BrowserSession =
+			serde_json::from_slice(&decoded).map_err(|_| Error::InvalidSession)?;
+		if session.is_expired() {
+			return Err(Error::InvalidSession);
+		}
+		Ok(session)
+	}
+
+	pub fn encode_browser_session(&self, session: &BrowserSession) -> Result<String, Error> {
+		let json = serde_json::to_string(session).map_err(anyhow::Error::from)?;
+		let encoded = self
+			.encoder
+			.encrypt(&json)
+			.map_err(|_| Error::InvalidSession)?;
+		if encoded.len() > MAX_BROWSER_COOKIE_VALUE_SIZE {
+			return Err(Error::SessionCookieTooLarge);
+		}
+		Ok(encoded)
+	}
+
+	pub fn set_cookie(&self, name: &str, value: &str, is_https: bool, ttl: Duration) -> String {
+		cookie_header(
+			name,
+			value,
+			self.same_site,
+			self.secure,
+			is_https,
+			Some(ttl),
+			false,
+		)
+	}
+
+	pub fn clear_cookie(&self, name: &str, is_https: bool) -> String {
+		cookie_header(
+			name,
+			"",
+			self.same_site,
+			self.secure,
+			is_https,
+			Some(Duration::ZERO),
+			true,
+		)
+	}
+}
+
+#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SameSiteMode {
+	#[default]
+	Lax,
+	Strict,
+	None,
+}
+
+#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum CookieSecureMode {
+	#[default]
+	Auto,
+	Always,
+	Never,
+}
+
+pub fn derive_cookie_names(policy_id: &PolicyId) -> (String, String) {
+	let digest = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, policy_id.as_str().as_bytes());
+	let mut hex = String::with_capacity(32);
+	for byte in digest.as_ref().iter().take(8) {
+		let _ = write!(&mut hex, "{byte:02x}");
+	}
+	(
+		format!("{RESERVED_COOKIE_PREFIX}s_{hex}"),
+		format!("{RESERVED_COOKIE_PREFIX}t_{hex}"),
+	)
+}
+
+pub fn generate_nonce() -> String {
+	random_token(16)
+}
+
+pub fn generate_state() -> String {
+	random_token(16)
+}
+
+pub fn generate_pkce_verifier() -> String {
+	random_token(32)
+}
+
+pub fn normalize_original_uri(path_and_query: Option<&http::uri::PathAndQuery>) -> String {
+	let original = path_and_query
+		.map(http::uri::PathAndQuery::as_str)
+		.unwrap_or("/");
+	if original.len() > ORIGINAL_URI_LIMIT {
+		"/".into()
+	} else {
+		original.to_string()
+	}
+}
+
+fn random_token(bytes: usize) -> String {
+	let mut random = vec![0; bytes];
+	rand::rng().fill(random.as_mut_slice());
+	base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(random)
+}
+
+fn cookie_header(
+	name: &str,
+	value: &str,
+	same_site: SameSiteMode,
+	secure_mode: CookieSecureMode,
+	is_https: bool,
+	max_age: Option<Duration>,
+	expire_now: bool,
+) -> String {
+	let mut cookie = format!("{name}={value}; Path=/; HttpOnly");
+	if let Some(max_age) = max_age {
+		let secs = max_age.as_secs();
+		let secs = if expire_now { 0 } else { secs };
+		let _ = write!(cookie, "; Max-Age={secs}");
+	}
+	match same_site {
+		SameSiteMode::Lax => cookie.push_str("; SameSite=Lax"),
+		SameSiteMode::Strict => cookie.push_str("; SameSite=Strict"),
+		SameSiteMode::None => cookie.push_str("; SameSite=None"),
+	}
+	let secure = match secure_mode {
+		CookieSecureMode::Always => true,
+		CookieSecureMode::Never => false,
+		CookieSecureMode::Auto => is_https,
+	};
+	if secure {
+		cookie.push_str("; Secure");
+	}
+	cookie
+}
