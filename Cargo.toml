@@ -235,7 +235,7 @@ async-compression = { version = "0.4", features = [
     "tokio",
 ] }
 core_affinity = "0.8"
-frozen-collections = "0.4"
+frozen-collections = "0.8"
 heck = "0.5"
 macro_rules_attribute = "0.2"
 

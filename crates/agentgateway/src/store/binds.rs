@@ -1343,7 +1343,6 @@ mod tests {
 	use std::time::Duration;
 
 	use frozen_collections::FzHashSet;
-	use frozen_collections::SetQuery;
 
 	use super::*;
 	use crate::telemetry::log::OrderedStringMap;

@@ -22,9 +22,8 @@ use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
 	ClientNotification, ClientRequest, Implementation, JsonRpcNotification, JsonRpcRequest,
-	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, Prompt,
-	PromptsCapability, ProtocolVersion, RequestId, ResourcesCapability, ServerCapabilities,
-	ServerInfo, ServerJsonRpcMessage, ServerResult, Tool, ToolsCapability,
+	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
+	ProtocolVersion, RequestId, ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerResult,
 };
 use tracing::warn;
 
@@ -176,13 +175,13 @@ impl Relay {
 							)
 						})
 						// Rename to handle multiplexing
-						.map(|t| Tool {
-							name: Cow::Owned(resource_name(
+						.map(|mut t| {
+							t.name = Cow::Owned(resource_name(
 								default_target_name.as_ref(),
 								server_name.as_str(),
 								&t.name,
-							)),
-							..t
+							));
+							t
 						})
 						.collect_vec()
 				})
@@ -258,9 +257,9 @@ impl Relay {
 								&cel,
 							)
 						})
-						.map(|p| Prompt {
-							name: resource_name(default_target_name.as_ref(), server_name.as_str(), &p.name),
-							..p
+						.map(|mut p| {
+							p.name = resource_name(default_target_name.as_ref(), server_name.as_str(), &p.name);
+							p
 						})
 						.collect_vec()
 				})
@@ -493,28 +492,14 @@ impl Relay {
 		upstream_instructions: Vec<(String, String)>,
 	) -> ServerInfo {
 		let capabilities = if multiplexing {
-			ServerCapabilities {
-				completions: None,
-				experimental: None,
-				logging: None,
-				tasks: None,
-				extensions: None,
-				tools: Some(ToolsCapability::default()),
-				// These are not supported when multiplexing.
-				prompts: None,
-				resources: None,
-			}
+			// These are not supported when multiplexing.
+			ServerCapabilities::builder().enable_tools().build()
 		} else {
-			ServerCapabilities {
-				completions: None,
-				experimental: None,
-				logging: None,
-				tasks: None,
-				extensions: None,
-				tools: Some(ToolsCapability::default()),
-				prompts: Some(PromptsCapability::default()),
-				resources: Some(ResourcesCapability::default()),
-			}
+			ServerCapabilities::builder()
+				.enable_tools()
+				.enable_prompts()
+				.enable_resources()
+				.build()
 		};
 		let gateway_preamble = "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.";
 		let instructions = if upstream_instructions.is_empty() {
@@ -526,16 +511,13 @@ impl Relay {
 			}
 			Some(merged)
 		};
-		ServerInfo {
-			protocol_version: pv,
-			capabilities,
-			server_info: Implementation {
-				name: "agentgateway".to_string(),
-				version: BuildInfo::new().version.to_string(),
-				..Default::default()
-			},
-			instructions,
-		}
+		ServerInfo::new(capabilities)
+			.with_protocol_version(pv)
+			.with_server_info(Implementation::new(
+				"agentgateway",
+				BuildInfo::new().version.to_string(),
+			))
+			.with_instructions(instructions.unwrap_or_default())
 	}
 }
 
