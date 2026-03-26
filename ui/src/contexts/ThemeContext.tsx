@@ -4,7 +4,6 @@ import React, {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useState,
 } from "react";
 import { darkTheme, lightTheme } from "../styles/antdTheme";
@@ -19,19 +18,19 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+function getInitialTheme(): ThemeMode {
+  const saved = localStorage.getItem("theme");
+  if (saved === "light" || saved === "dark") {
+    document.documentElement.setAttribute("data-theme", saved);
+    return saved;
+  }
+  return "dark";
+}
+
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const [theme, setThemeState] = useState<ThemeMode>("dark");
-
-  // Load theme from localStorage on mount
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") as ThemeMode;
-    if (savedTheme && (savedTheme === "light" || savedTheme === "dark")) {
-      setThemeState(savedTheme);
-      document.documentElement.setAttribute("data-theme", savedTheme);
-    }
-  }, []);
+  const [theme, setThemeState] = useState<ThemeMode>(getInitialTheme);
 
   const setTheme = useCallback((newTheme: ThemeMode) => {
     setThemeState(newTheme);

@@ -1859,19 +1859,19 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
   );
 
   const handleDeleteListener = useCallback(
-    async (port: number, li: number, parentPath: string) => {
+    async (port: number, li: number, _parentPath: string) => {
       try {
         await api.removeListenerByIndex(port, li);
         toast.success("Listener deleted");
         mutate();
-        navigate(parentPath);
+        navigate(basePath);
       } catch (e: unknown) {
         toast.error(
           getErrorMessage(e, "Failed to delete listener"),
         );
       }
     },
-    [mutate, navigate],
+    [basePath, mutate, navigate],
   );
 
   const handleDeleteRoute = useCallback(
@@ -1880,7 +1880,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       li: number,
       ri: number,
       isTcp: boolean,
-      parentPath: string,
+      _parentPath: string,
     ) => {
       try {
         if (isTcp) {
@@ -1890,12 +1890,12 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
         }
         toast.success("Route deleted");
         mutate();
-        navigate(parentPath);
+        navigate(basePath);
       } catch (e: unknown) {
         toast.error(getErrorMessage(e, "Failed to delete route"));
       }
     },
-    [mutate, navigate],
+    [basePath, mutate, navigate],
   );
 
   const handleDeleteBackend = useCallback(
@@ -1905,7 +1905,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       ri: number,
       bi: number,
       isTcp: boolean,
-      parentPath: string,
+      _parentPath: string,
     ) => {
       try {
         if (isTcp) {
@@ -1915,14 +1915,14 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
         }
         toast.success("Backend deleted");
         mutate();
-        navigate(parentPath);
+        navigate(basePath);
       } catch (e: unknown) {
         toast.error(
           getErrorMessage(e, "Failed to delete backend"),
         );
       }
     },
-    [mutate, navigate],
+    [basePath, mutate, navigate],
   );
 
   // Handler for adding a new listener to a bind
@@ -2209,7 +2209,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       ri: number,
       isTcp: boolean,
       policyType: string,
-      parentPath: string,
+      _parentPath: string,
     ) => {
       try {
         // Get the current route
@@ -2263,12 +2263,12 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
 
         toast.success(`${displayName} policy deleted`);
         mutate();
-        navigate(parentPath);
+        navigate(basePath);
       } catch (e: unknown) {
         toast.error(getErrorMessage(e, "Failed to delete policy"));
       }
     },
-    [hierarchy.binds, mutate, navigate],
+    [basePath, hierarchy.binds, mutate, navigate],
   );
 
   // Handlers for editing top-level items
@@ -2290,12 +2290,13 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       await api.deleteLLM();
       toast.success("LLM configuration deleted");
       mutate();
+      navigate(basePath);
     } catch (e: unknown) {
       toast.error(
         getErrorMessage(e, "Failed to delete LLM config"),
       );
     }
-  }, [mutate]);
+  }, [basePath, mutate, navigate]);
 
   const handleAddModel = useCallback(async () => {
     try {
@@ -2325,7 +2326,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
         await api.removeLLMModelByIndex(modelIndex);
         toast.success("Model deleted successfully");
         await mutate();
-        navigate(`${basePath}/llm`);
+        navigate(basePath);
       } catch (e: unknown) {
         toast.error(getErrorMessage(e, "Failed to delete model"));
       }
@@ -2338,12 +2339,13 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       await api.deleteMCP();
       toast.success("MCP configuration deleted");
       mutate();
+      navigate(basePath);
     } catch (e: unknown) {
       toast.error(
         getErrorMessage(e, "Failed to delete MCP config"),
       );
     }
-  }, [mutate]);
+  }, [basePath, mutate, navigate]);
 
   const handleAddMCPTarget = useCallback(async () => {
     try {
@@ -2377,7 +2379,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
         await api.removeMCPTargetByIndex(targetIndex);
         toast.success("Target deleted successfully");
         await mutate();
-        navigate(`${basePath}/mcp`);
+        navigate(basePath);
       } catch (e: unknown) {
         toast.error(getErrorMessage(e, "Failed to delete target"));
       }
@@ -2406,7 +2408,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
         await api.removeMCPTargetPolicy(targetIndex, policyType);
         toast.success(`${getPolicyLabel(policyType)} policy deleted`);
         await mutate();
-        navigate(`${basePath}/mcp/target/${targetIndex}`);
+        navigate(basePath);
       } catch (e: unknown) {
         toast.error(getErrorMessage(e, "Failed to delete policy"));
       }
@@ -2419,12 +2421,13 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       await api.deleteFrontendPolicies();
       toast.success("Frontend policies deleted");
       mutate();
+      navigate(basePath);
     } catch (e: unknown) {
       toast.error(
         getErrorMessage(e, "Failed to delete frontend policies"),
       );
     }
-  }, [mutate]);
+  }, [basePath, mutate, navigate]);
 
   const handleAddLLMPolicy = useCallback(async (policyType: string) => {
     try {
@@ -2448,7 +2451,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
     }
   }, [basePath, hierarchy.llm, mutate, navigate]);
 
-  const handleDeleteLLMPolicy = useCallback(async (policyType: string, parentPath: string) => {
+  const handleDeleteLLMPolicy = useCallback(async (policyType: string, _parentPath: string) => {
     try {
       if (!hierarchy.llm) return;
       const currentPolicies = hierarchy.llm.policies.reduce((acc, p) => {
@@ -2464,11 +2467,11 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       await api.createOrUpdateLLM(updatedConfig as any);
       toast.success(`${getPolicyLabel(policyType)} policy deleted`);
       mutate();
-      navigate(parentPath);
+      navigate(basePath);
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Failed to delete policy"));
     }
-  }, [hierarchy.llm, mutate, navigate]);
+  }, [basePath, hierarchy.llm, mutate, navigate]);
 
   const handleAddMCPPolicy = useCallback(async (policyType: string) => {
     try {
@@ -2492,7 +2495,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
     }
   }, [basePath, hierarchy.mcp, mutate, navigate]);
 
-  const handleDeleteMCPPolicy = useCallback(async (policyType: string, parentPath: string) => {
+  const handleDeleteMCPPolicy = useCallback(async (policyType: string, _parentPath: string) => {
     try {
       if (!hierarchy.mcp) return;
       const currentPolicies = hierarchy.mcp.policies.reduce((acc, p) => {
@@ -2508,11 +2511,11 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       await api.createOrUpdateMCP(updatedConfig as any);
       toast.success(`${getPolicyLabel(policyType)} policy deleted`);
       mutate();
-      navigate(parentPath);
+      navigate(basePath);
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Failed to delete policy"));
     }
-  }, [hierarchy.mcp, mutate, navigate]);
+  }, [basePath, hierarchy.mcp, mutate, navigate]);
 
   // Helper to collect all keys from tree data
   const getAllKeys = useCallback((nodes: DataNode[]): Key[] => {

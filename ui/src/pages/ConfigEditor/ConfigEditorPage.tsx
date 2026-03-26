@@ -1,7 +1,7 @@
 import styled from "@emotion/styled";
 import { useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { RawConfigEditor } from "./RawConfigEditor";
+import { ConfigEditor } from "./ConfigEditor";
 
 const Container = styled.div`
   display: flex;
@@ -30,7 +30,7 @@ const Description = styled.p`
   font-size: 14px;
 `;
 
-export function RawConfigPage() {
+export function ConfigEditorPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -56,7 +56,7 @@ export function RawConfigPage() {
           </Description>
         </div>
       </PageHeader>
-      <RawConfigEditor onClose={() => navigate(basePath)} />
+      <ConfigEditor onClose={() => navigate(basePath)} />
     </Container>
   );
 }

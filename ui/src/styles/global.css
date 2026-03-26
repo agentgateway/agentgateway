@@ -162,7 +162,11 @@ pre code {
   color: var(--color-text-inverse);
 }
 
-/* Focus outline */
+/* Focus outline — keyboard only */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;

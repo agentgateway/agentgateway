@@ -1,4 +1,22 @@
 binds:
-- port: 8080
+- port: 65535
   tunnelProtocol: direct
-  listeners: []
+  listeners:
+  - protocol: HTTP
+    name: listener
+    hostname: '*'
+    routes:
+    - hostnames: []
+      matches:
+      - path:
+          pathPrefix: /
+      backends:
+      - service:
+          name:
+            namespace: default
+            hostname: service
+          port: 8080
+        weight: 1
+      name: route
+mcp: null
+llm: null

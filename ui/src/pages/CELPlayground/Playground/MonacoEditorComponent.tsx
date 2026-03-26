@@ -1,18 +1,9 @@
 import { type OnMount } from "@monaco-editor/react";
 import { configureMonacoYaml } from "monaco-yaml";
 import { useCallback } from "react";
-import { MonacoEditorWithSettings } from "../../components/MonacoEditor";
-import { assetUrl } from "../../utils/assetUrl";
-
-interface MonacoEditorProps {
-  value: string;
-  onChange: (value: string | undefined) => void;
-  language: string;
-  height: string;
-  theme: string;
-  options?: any;
-  onEvaluate?: () => void;
-}
+import { MonacoEditorWithSettings } from "../../../components/MonacoEditor";
+import { assetUrl } from "../../../utils/assetUrl";
+import { type MonacoEditorProps } from "./types";
 
 export const MonacoEditorComponent = ({
   value,

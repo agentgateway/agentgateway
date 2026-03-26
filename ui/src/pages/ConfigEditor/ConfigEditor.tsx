@@ -10,7 +10,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { MonacoEditorWithSettings } from "../../components/MonacoEditor";
 import { assetUrl } from "../../utils/assetUrl";
 
-interface RawConfigEditorProps {
+interface ConfigEditorProps {
   onClose: () => void;
 }
 
@@ -54,7 +54,7 @@ const InfoText = styled.div`
   font-size: 13px;
 `;
 
-export function RawConfigEditor({ onClose }: RawConfigEditorProps) {
+export function ConfigEditor({ onClose }: ConfigEditorProps) {
   const { theme } = useTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -62,7 +62,6 @@ export function RawConfigEditor({ onClose }: RawConfigEditorProps) {
   const [configValue, setConfigValue] = useState<string>("");
   const editorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
 
-  // Load config on mount
   useEffect(() => {
     async function loadConfig() {
       try {
@@ -84,7 +83,6 @@ export function RawConfigEditor({ onClose }: RawConfigEditorProps) {
     async (editor, monaco) => {
       editorRef.current = editor;
 
-      // Load JSON schema for LocalConfig
       try {
         const response = await fetch(assetUrl("/config-schema.json"));
         if (!response.ok) {
@@ -108,12 +106,10 @@ export function RawConfigEditor({ onClose }: RawConfigEditorProps) {
         toast.error("Failed to load configuration schema");
       }
 
-      // Set up change detection
       editor.onDidChangeModelContent(() => {
         setHasChanges(true);
       });
 
-      // Format on mount
       setTimeout(() => {
         editor.getAction("editor.action.formatDocument")?.run();
       }, 300);
@@ -129,7 +125,6 @@ export function RawConfigEditor({ onClose }: RawConfigEditorProps) {
     try {
       const value = editorRef.current.getValue();
 
-      // Parse the JSON config
       let configObject: LocalConfig;
       try {
         configObject = JSON.parse(value);

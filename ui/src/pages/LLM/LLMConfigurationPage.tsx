@@ -12,10 +12,6 @@ import {
   useTrafficHierarchy,
 } from "../../components/TrafficHierarchy";
 
-// ---------------------------------------------------------------------------
-// Styled components (shared with TrafficPage layout)
-// ---------------------------------------------------------------------------
-
 const PageRoot = styled.div`
   display: flex;
   flex-direction: column;
@@ -121,11 +117,6 @@ const Description = styled.p`
   font-size: 14px;
 `;
 
-// ---------------------------------------------------------------------------
-// URL parsing — extract hierarchy position from the current pathname
-// Base path for LLM pages is /llm, so hierarchy URLs are /llm/llm, /llm/llm/model/:idx
-// ---------------------------------------------------------------------------
-
 function parseLLMPath(pathname: string): UrlParams | null {
   const modelMatch = pathname.match(/^\/llm\/llm\/model\/(\d+)/);
   if (modelMatch) {
@@ -141,11 +132,7 @@ function parseLLMPath(pathname: string): UrlParams | null {
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
-
-export function LLMPage() {
+export function LLMConfigurationPage() {
   const hierarchy = useTrafficHierarchy();
   const location = useLocation();
   const navigate = useNavigate();

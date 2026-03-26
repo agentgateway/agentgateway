@@ -4,6 +4,7 @@ import { Layout as AntLayout, Button, Menu } from "antd";
 import {
   BarChart3,
   Brain,
+  ExternalLink,
   FileText,
   FlaskConical,
   Home,
@@ -299,14 +300,14 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
           label: "Configuration",
         },
         {
-          key: "/llm/logs",
-          icon: <FileText size={18} />,
-          label: "Logs",
-        },
-        {
           key: "/llm/metrics",
           icon: <BarChart3 size={18} />,
           label: "Metrics",
+        },
+        {
+          key: "/llm/logs",
+          icon: <FileText size={18} />,
+          label: "Logs",
         },
         {
           key: "/llm/playground",
@@ -326,14 +327,14 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
           label: "Configuration",
         },
         {
-          key: "/mcp/logs",
-          icon: <FileText size={18} />,
-          label: "Logs",
-        },
-        {
           key: "/mcp/metrics",
           icon: <BarChart3 size={18} />,
           label: "Metrics",
+        },
+        {
+          key: "/mcp/logs",
+          icon: <FileText size={18} />,
+          label: "Logs",
         },
         {
           key: "/mcp/playground",
@@ -350,35 +351,37 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
         {
           key: "/traffic",
           icon: <Route size={18} />,
-          label: "Routing",
-        },
-        {
-          key: "/traffic/logs",
-          icon: <FileText size={18} />,
-          label: "Logs",
+          label: "Configuration",
         },
         {
           key: "/traffic/metrics",
           icon: <BarChart3 size={18} />,
           label: "Metrics",
         },
+        {
+          key: "/traffic/logs",
+          icon: <FileText size={18} />,
+          label: "Logs",
+        },
       ],
     },
     {
-      key: "tools-group",
-      label: "Tools",
-      type: "group",
-      children: [
-        {
-          key: "/cel-playground",
-          icon: <Sparkles size={18} />,
-          label: "CEL Playground",
-        },
-      ],
+      key: "/cel-playground",
+      icon: <Sparkles size={18} />,
+      label: "CEL Playground",
+    },
+    {
+      key: "https://agentgateway.dev/docs/",
+      icon: <ExternalLink size={18} />,
+      label: "Documentation",
     },
   ];
 
   const handleMenuClick: MenuProps["onClick"] = ({ key }) => {
+    if (key.startsWith("http")) {
+      window.open(key, "_blank", "noopener,noreferrer");
+      return;
+    }
     navigate(key);
   };
 
@@ -395,6 +398,8 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
       "/mcp/logs",
       "/mcp/metrics",
       "/mcp/playground",
+      "/cel-playground",
+      "/dashboard",
     ];
 
     // Find longest matching prefix

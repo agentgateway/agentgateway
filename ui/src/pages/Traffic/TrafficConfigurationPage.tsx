@@ -1,19 +1,19 @@
 import { CodeOutlined } from "@ant-design/icons";
 import styled from "@emotion/styled";
 import { Button, Spin } from "antd";
-import { Headphones, Server, Shield } from "lucide-react";
+import { Network } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
 import type { AddRootHandlers, UrlParams } from "../../components/TrafficHierarchy";
 import {
-    HierarchyTree,
-    NodeDetailView,
-    useTrafficHierarchy,
+  HierarchyTree,
+  NodeDetailView,
+  useTrafficHierarchy,
 } from "../../components/TrafficHierarchy";
 
 // ---------------------------------------------------------------------------
-// Styled components (shared layout with TrafficPage / LLMPage)
+// Styled components
 // ---------------------------------------------------------------------------
 
 const PageRoot = styled.div`
@@ -78,28 +78,6 @@ const PlaceholderContent = styled.div`
     font-size: 14px;
     line-height: 1.6;
   }
-
-  .hint {
-    font-size: 13px;
-    color: var(--color-text-tertiary);
-    margin-top: var(--spacing-lg);
-  }
-`;
-
-const PlaceholderIcons = styled.div`
-  display: flex;
-  justify-content: center;
-  gap: var(--spacing-xl);
-  margin-top: var(--spacing-lg);
-`;
-
-const IconItem = styled.div`
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  color: var(--color-text-secondary);
-  font-size: 14px;
-  font-weight: 500;
 `;
 
 const PageHeader = styled.div`
@@ -123,45 +101,76 @@ const Description = styled.p`
 
 // ---------------------------------------------------------------------------
 // URL parsing — extract hierarchy position from the current pathname
-// Base path for MCP pages is /mcp, so hierarchy URL is /mcp/mcp
 // ---------------------------------------------------------------------------
 
-function parseMCPPath(pathname: string): UrlParams | null {
-  // Check for target policy first (more specific pattern)
-  const targetPolicyMatch = pathname.match(/^\/mcp\/mcp\/target\/(\d+)\/policy\/(.+)/);
-  if (targetPolicyMatch) {
+function parseTrafficPath(pathname: string): UrlParams | null {
+  // Check for model routes first (must be before general LLM route)
+  const modelMatch = pathname.match(/\/traffic\/llm\/model\/(\d+)/);
+  if (modelMatch) {
     return {
-      topLevelType: "mcp",
-      mcpTargetIndex: parseInt(targetPolicyMatch[1], 10),
-      mcpTargetPolicyType: targetPolicyMatch[2],
+      topLevelType: "llm",
+      modelIndex: parseInt(modelMatch[1], 10),
     };
   }
-  const targetMatch = pathname.match(/^\/mcp\/mcp\/target\/(\d+)/);
-  if (targetMatch) {
-    return { topLevelType: "mcp", mcpTargetIndex: parseInt(targetMatch[1], 10) };
+
+  // Check for MCP target policy routes (must be before target route)
+  const mcpTargetPolicyMatch = pathname.match(/\/traffic\/mcp\/target\/(\d+)\/policy\/(.+)/);
+  if (mcpTargetPolicyMatch) {
+    return {
+      topLevelType: "mcp",
+      mcpTargetIndex: parseInt(mcpTargetPolicyMatch[1], 10),
+      mcpTargetPolicyType: mcpTargetPolicyMatch[2],
+    };
   }
-  const policyMatch = pathname.match(/^\/mcp\/mcp\/policy\/(.+)/);
-  if (policyMatch) {
-    return { topLevelType: "mcp", mcpPolicyType: policyMatch[1] };
+
+  // Check for MCP target routes (must be before general MCP route)
+  const mcpTargetMatch = pathname.match(/\/traffic\/mcp\/target\/(\d+)/);
+  if (mcpTargetMatch) {
+    return {
+      topLevelType: "mcp",
+      mcpTargetIndex: parseInt(mcpTargetMatch[1], 10),
+    };
   }
-  if (pathname.startsWith("/mcp/mcp")) {
-    return { topLevelType: "mcp" };
+
+  // Check for top-level config routes
+  const topLevelMatch = pathname.match(/\/traffic\/(llm|mcp|frontendPolicies)/);
+  if (topLevelMatch) {
+    return {
+      topLevelType: topLevelMatch[1] as "llm" | "mcp" | "frontendPolicies",
+    };
   }
-  return null;
+
+  // Check for bind routes
+  const m = pathname.match(
+    /\/traffic\/bind\/(\d+)(?:\/listener\/(\d+)(?:\/(tcp)?route\/(\d+)(?:\/backend\/(\d+)|\/policy\/([^/?]+))?)?)?/,
+  );
+  if (!m) return null;
+
+  const bi = m[5] !== undefined ? parseInt(m[5], 10) : undefined;
+  const policyType = m[6]; // Policy type like 'cors', 'requestHeaderModifier', etc.
+
+  return {
+    port: parseInt(m[1], 10),
+    li: m[2] !== undefined ? parseInt(m[2], 10) : undefined,
+    isTcpRoute: m[3] === "tcp",
+    ri: m[4] !== undefined ? parseInt(m[4], 10) : undefined,
+    bi,
+    policyType,
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
-export function MCPPage() {
+export function TrafficConfigurationPage() {
   const hierarchy = useTrafficHierarchy();
   const location = useLocation();
   const navigate = useNavigate();
   const [addHandlers, setAddHandlers] = useState<AddRootHandlers | null>(null);
 
   const urlParams = useMemo(
-    () => parseMCPPath(location.pathname),
+    () => parseTrafficPath(location.pathname),
     [location.pathname],
   );
 
@@ -171,8 +180,11 @@ export function MCPPage() {
         <MetricsHeader>
           <PageHeader>
             <div>
-              <PageTitle>MCP Configuration</PageTitle>
-              <Description>Manage MCP servers and policies</Description>
+              <PageTitle>Traffic Configuration</PageTitle>
+              <Description>
+                Manage your gateway routing with manually configured TypeScript
+                schemas
+              </Description>
             </div>
           </PageHeader>
           <StyledAlert
@@ -192,15 +204,18 @@ export function MCPPage() {
         <MetricsHeader>
           <PageHeader>
             <div>
-              <PageTitle>MCP Configuration</PageTitle>
-              <Description>Manage MCP servers and policies</Description>
+              <PageTitle>Traffic Configuration</PageTitle>
+              <Description>
+                Manage your gateway routing with manually configured TypeScript
+                schemas
+              </Description>
             </div>
           </PageHeader>
         </MetricsHeader>
         <div style={{ textAlign: "center", padding: 50, flex: 1 }}>
           <Spin size="large" />
           <div style={{ marginTop: 16, color: "var(--color-text-secondary)" }}>
-            Loading MCP configuration…
+            Loading traffic configuration…
           </div>
         </div>
       </PageRoot>
@@ -214,12 +229,14 @@ export function MCPPage() {
       <MetricsHeader>
         <PageHeader>
           <div>
-            <PageTitle>MCP Configuration</PageTitle>
-            <Description>Manage MCP servers and policies</Description>
+            <PageTitle>Traffic Configuration</PageTitle>
+            <Description>
+              View and edit the full agentgateway configuration file.
+            </Description>
           </div>
           <Button
             icon={<CodeOutlined />}
-            onClick={() => navigate("/mcp/raw-config")}
+            onClick={() => navigate("/traffic/raw-config")}
           >
             Config Editor
           </Button>
@@ -227,12 +244,7 @@ export function MCPPage() {
       </MetricsHeader>
       <SplitBody>
         <Sidebar>
-          <HierarchyTree
-            hierarchy={hierarchy}
-            filter={["mcp"]}
-            title="MCP Configuration"
-            onRegisterAddHandlers={setAddHandlers}
-          />
+          <HierarchyTree hierarchy={hierarchy} onRegisterAddHandlers={setAddHandlers} />
         </Sidebar>
         <DetailPanel>
           {shouldShowDetail ? (
@@ -240,36 +252,26 @@ export function MCPPage() {
           ) : (
             <PlaceholderContainer>
               <PlaceholderContent>
-                <h3>MCP Configuration</h3>
-                {hierarchy.mcp ? (
-                  <>
-                    <p>
-                      Select an item from the tree to view and edit its
-                      configuration.
-                    </p>
-                    <PlaceholderIcons>
-                      <IconItem>
-                        <Server size={20} /> Servers
-                      </IconItem>
-                      <IconItem>
-                        <Shield size={20} /> Policies
-                      </IconItem>
-                    </PlaceholderIcons>
-                  </>
+                <h3>Traffic Configuration</h3>
+                {hierarchy.binds.length > 0 ? (
+                  <p>
+                    Choose a bind, listener, route, backend, or policy from the
+                    hierarchy tree on the left to view and edit its configuration.
+                  </p>
                 ) : (
                   <>
                     <p>
-                      No MCP configuration found. Create one to start
-                      configuring servers and policies.
+                      No binds configured. Create a bind to start defining
+                      listeners, routes, and backends.
                     </p>
                     <div style={{ marginTop: 16 }}>
                       <Button
                         type="primary"
-                        icon={<Headphones size={16} />}
-                        onClick={() => addHandlers?.addMCP()}
+                        icon={<Network size={16} />}
+                        onClick={() => addHandlers?.addBind()}
                         disabled={!addHandlers}
                       >
-                        Add MCP Config
+                        Add Bind
                       </Button>
                     </div>
                   </>

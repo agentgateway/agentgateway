@@ -4,31 +4,21 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { MainLayout } from "./components/Layout/MainLayout";
 import { ConfirmProvider } from "./contexts/ConfirmContext";
 import { EditorSettingsProvider } from "./contexts/EditorSettingsContext";
-import { BackendsPage } from "./pages/Backends/BackendsPage";
-import { CELPlaygroundPage } from "./pages/CELPlayground/CELPlaygroundPage";
+import { CELPlaygroundPage } from "./pages/CELPlayground/Playground/CELPlaygroundPage";
 import { DashboardPage } from "./pages/Dashboard/DashboardPage";
-import { FormPage } from "./pages/FormPage";
-import { ListenersPage } from "./pages/Listeners/ListenersPage";
+import { LLMConfigurationPage } from "./pages/LLM/LLMConfigurationPage";
 import { LLMLogsPage } from "./pages/LLM/LLMLogsPage";
 import { LLMMetricsPage } from "./pages/LLM/LLMMetricsPage";
-import { LLMPage } from "./pages/LLM/LLMPage";
-import { LLMPlaygroundPage } from "./pages/LLM/LLMPlaygroundPage";
-import { MCPPage } from "./pages/MCP/MCPPage";
-import {
-  MCPLogsPage,
-  MCPMetricsPage,
-  MCPPlaygroundPage,
-} from "./pages/MCP/MCPPages";
-import { PlaygroundPage } from "./pages/Playground/PlaygroundPage";
-import { PoliciesPage } from "./pages/Policies/PoliciesPage";
-import { RawConfigPage as TrafficRawConfigPage } from "./pages/RawConfigPage/RawConfigPage";
-import { RoutesPage } from "./pages/Routes/RoutesPage";
+import { LLMPlaygroundPage } from "./pages/LLM/Playground/LLMPlaygroundPage";
+import { MCPConfigurationPage } from "./pages/MCP/MCPConfigurationPage";
+import { MCPLogsPage } from "./pages/MCP/MCPLogsPage";
+import { MCPMetricsPage } from "./pages/MCP/MCPMetricsPage";
+import { MCPPlaygroundPage } from "./pages/MCP/Playground/MCPPlaygroundPage";
+import { ConfigEditorPage } from "./pages/ConfigEditor/ConfigEditorPage";
 import { SetupWizardPage } from "./pages/SetupWizard/SetupWizardPage";
-import { TrafficPage } from "./pages/Traffic/TrafficPage";
-import {
-  TrafficLogsPage,
-  TrafficMetricsPage,
-} from "./pages/Traffic/TrafficPages";
+import { TrafficConfigurationPage } from "./pages/Traffic/TrafficConfigurationPage";
+import { TrafficLogsPage } from "./pages/Traffic/TrafficLogsPage";
+import { TrafficMetricsPage } from "./pages/Traffic/TrafficMetricsPage";
 
 function App() {
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
@@ -66,23 +56,14 @@ function App() {
                     element={<Navigate to="/dashboard" replace />}
                   />
 
-                  {/* OLD Section */}
                   <Route path="/dashboard" element={<DashboardPage />} />
-                  <Route path="/listeners" element={<ListenersPage />} />
-                  <Route path="/routes" element={<RoutesPage />} />
-                  <Route path="/backends" element={<BackendsPage />} />
-                  <Route path="/policies" element={<PoliciesPage />} />
-                  <Route path="/playground" element={<PlaygroundPage />} />
-
-                  {/* Generic Form Page */}
-                  <Route path="/form" element={<FormPage />} />
 
                   {/* LLM Section */}
-                  <Route path="/llm" element={<LLMPage />} />
-                  <Route path="/llm/llm" element={<LLMPage />} />
-                  <Route path="/llm/llm/model/:modelIndex" element={<LLMPage />} />
-                  <Route path="/llm/llm/policy/:policyType" element={<LLMPage />} />
-                  <Route path="/llm/raw-config" element={<TrafficRawConfigPage />} />
+                  <Route path="/llm" element={<LLMConfigurationPage />} />
+                  <Route path="/llm/llm" element={<LLMConfigurationPage />} />
+                  <Route path="/llm/llm/model/:modelIndex" element={<LLMConfigurationPage />} />
+                  <Route path="/llm/llm/policy/:policyType" element={<LLMConfigurationPage />} />
+                  <Route path="/llm/raw-config" element={<ConfigEditorPage />} />
                   <Route path="/llm/logs" element={<LLMLogsPage />} />
                   <Route path="/llm/metrics" element={<LLMMetricsPage />} />
                   <Route
@@ -91,12 +72,12 @@ function App() {
                   />
 
                   {/* MCP Section */}
-                  <Route path="/mcp" element={<MCPPage />} />
-                  <Route path="/mcp/mcp" element={<MCPPage />} />
-                  <Route path="/mcp/mcp/target/:targetIndex" element={<MCPPage />} />
-                  <Route path="/mcp/mcp/target/:targetIndex/policy/:policyType" element={<MCPPage />} />
-                  <Route path="/mcp/mcp/policy/:policyType" element={<MCPPage />} />
-                  <Route path="/mcp/raw-config" element={<TrafficRawConfigPage />} />
+                  <Route path="/mcp" element={<MCPConfigurationPage />} />
+                  <Route path="/mcp/mcp" element={<MCPConfigurationPage />} />
+                  <Route path="/mcp/mcp/target/:targetIndex" element={<MCPConfigurationPage />} />
+                  <Route path="/mcp/mcp/target/:targetIndex/policy/:policyType" element={<MCPConfigurationPage />} />
+                  <Route path="/mcp/mcp/policy/:policyType" element={<MCPConfigurationPage />} />
+                  <Route path="/mcp/raw-config" element={<ConfigEditorPage />} />
                   <Route path="/mcp/logs" element={<MCPLogsPage />} />
                   <Route path="/mcp/metrics" element={<MCPMetricsPage />} />
                   <Route
@@ -105,7 +86,7 @@ function App() {
                   />
 
                   {/* Traffic Section */}
-                  <Route path="/traffic" element={<TrafficPage />} />
+                  <Route path="/traffic" element={<TrafficConfigurationPage />} />
                   <Route path="/traffic/logs" element={<TrafficLogsPage />} />
                   <Route
                     path="/traffic/metrics"
@@ -113,54 +94,54 @@ function App() {
                   />
                   <Route
                     path="/traffic/raw-config"
-                    element={<TrafficRawConfigPage />}
+                    element={<ConfigEditorPage />}
                   />
-                  <Route path="/traffic/llm" element={<TrafficPage />} />
+                  <Route path="/traffic/llm" element={<TrafficConfigurationPage />} />
                   <Route
                     path="/traffic/llm/model/:modelIndex"
-                    element={<TrafficPage />}
+                    element={<TrafficConfigurationPage />}
                   />
-                  <Route path="/traffic/mcp" element={<TrafficPage />} />
+                  <Route path="/traffic/mcp" element={<TrafficConfigurationPage />} />
                   <Route
                     path="/traffic/mcp/target/:targetIndex"
-                    element={<TrafficPage />}
+                    element={<TrafficConfigurationPage />}
                   />
                   <Route
                     path="/traffic/mcp/target/:targetIndex/policy/:policyType"
-                    element={<TrafficPage />}
+                    element={<TrafficConfigurationPage />}
                   />
                   <Route
                     path="/traffic/frontendPolicies"
-                    element={<TrafficPage />}
+                    element={<TrafficConfigurationPage />}
                   />
-                  <Route path="/traffic/bind/:port" element={<TrafficPage />} />
+                  <Route path="/traffic/bind/:port" element={<TrafficConfigurationPage />} />
                   <Route
                     path="/traffic/bind/:port/listener/:li"
-                    element={<TrafficPage />}
+                    element={<TrafficConfigurationPage />}
                   />
                   <Route
                     path="/traffic/bind/:port/listener/:li/route/:ri"
-                    element={<TrafficPage />}
+                    element={<TrafficConfigurationPage />}
                   />
                   <Route
                     path="/traffic/bind/:port/listener/:li/tcproute/:ri"
-                    element={<TrafficPage />}
+                    element={<TrafficConfigurationPage />}
                   />
                   <Route
                     path="/traffic/bind/:port/listener/:li/route/:ri/backend/:bi"
-                    element={<TrafficPage />}
+                    element={<TrafficConfigurationPage />}
                   />
                   <Route
                     path="/traffic/bind/:port/listener/:li/tcproute/:ri/backend/:bi"
-                    element={<TrafficPage />}
+                    element={<TrafficConfigurationPage />}
                   />
                   <Route
                     path="/traffic/bind/:port/listener/:li/route/:ri/policy/:policyType"
-                    element={<TrafficPage />}
+                    element={<TrafficConfigurationPage />}
                   />
                   <Route
                     path="/traffic/bind/:port/listener/:li/tcproute/:ri/policy/:policyType"
-                    element={<TrafficPage />}
+                    element={<TrafficConfigurationPage />}
                   />
 
                   {/* CEL Playground */}

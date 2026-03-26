@@ -969,6 +969,16 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           listeners: selected.node.bind.listeners,
         };
         await api.updateBind(port, bindWithListeners);
+        toast.success("Bind updated successfully");
+        await mutate();
+        // If the port changed, the URL path changed — redirect to the new path
+        const newPort = dataToSave.port as number | undefined;
+        if (newPort !== undefined && newPort !== port) {
+          navigate(`${basePath}/bind/${newPort}`);
+        } else {
+          navigate(`${basePath}/bind/${port}`);
+        }
+        return;
       } else if (selected.type === "listener") {
         // Merge back the routes/tcpRoutes that we filtered out from the form
         const listenerWithRoutes = {
@@ -1082,7 +1092,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         await api.removeLLMModelByIndex(selected.node.modelIndex);
         toast.success("Model deleted successfully");
         await mutate();
-        navigate(`${basePath}/llm`);
+        navigate(basePath);
         return;
       }
 
@@ -1091,7 +1101,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         await api.removeMCPTargetByIndex(selected.node.targetIndex);
         toast.success("Target deleted successfully");
         await mutate();
-        navigate(`${basePath}/mcp`);
+        navigate(basePath);
         return;
       }
 
@@ -1103,7 +1113,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         );
         toast.success(`${getPolicyLabel(selected.node.policyType)} policy deleted`);
         await mutate();
-        navigate(`${basePath}/mcp/target/${selected.target.targetIndex}`);
+        navigate(basePath);
         return;
       }
 
@@ -1116,26 +1126,20 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
 
       if (selected.type === "bind") {
         await api.removeBind(port);
-        navigate(basePath);
       } else if (selected.type === "listener") {
         await api.removeListenerByIndex(port, li!);
-        navigate(`${basePath}/bind/${port}`);
       } else if (selected.type === "route") {
         if (isTcpRoute) {
           await api.removeTCPRouteByIndex(port, li!, ri!);
         } else {
           await api.removeRouteByIndex(port, li!, ri!);
         }
-        navigate(`${basePath}/bind/${port}/listener/${li}`);
       } else if (selected.type === "backend") {
         if (isTcpRoute) {
           await api.removeTCPRouteBackendByIndex(port, li!, ri!, bi!);
         } else {
           await api.removeRouteBackendByIndex(port, li!, ri!, bi!);
         }
-        navigate(
-          `${basePath}/bind/${port}/listener/${li}/${isTcpRoute ? "tcproute" : "route"}/${ri}`,
-        );
       } else if (selected.type === "policy") {
         // For policy, remove the specific policy type from the parent route
         const currentPolicies =
@@ -1159,9 +1163,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         } else {
           await api.updateRouteByIndex(port, li!, ri!, updatedRoute as any);
         }
-        navigate(
-          `${basePath}/bind/${port}/listener/${li}/${isTcpRoute ? "tcproute" : "route"}/${ri}`,
-        );
       } else if (selected.type === "llmPolicy") {
         if (!hierarchy.llm) throw new Error("LLM config not found");
         const currentConfig = { ...hierarchy.llm.config, models: hierarchy.llm.models.map((m) => m.model) };
@@ -1172,7 +1173,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           ...currentConfig,
           policies: Object.keys(remainingPolicies).length > 0 ? remainingPolicies : null,
         } as any);
-        navigate(`${basePath}/llm`);
       } else if (selected.type === "mcpPolicy") {
         if (!hierarchy.mcp) throw new Error("MCP config not found");
         const remainingPolicies = hierarchy.mcp.policies
@@ -1183,8 +1183,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           targets: hierarchy.mcp.targets.map((t) => t.target),
           policies: Object.keys(remainingPolicies).length > 0 ? remainingPolicies : null,
         } as any);
-        navigate(`${basePath}/mcp`);
       }
+      navigate(basePath);
 
       toast.success(
         `${selected.type.charAt(0).toUpperCase() + selected.type.slice(1)} deleted`,
