@@ -177,6 +177,12 @@ const Logo = styled.div`
   }
 `;
 
+const HeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+`;
+
 const ThemeToggleButton = styled(Button)`
   display: flex;
   align-items: center;
@@ -366,14 +372,16 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
       ],
     },
     {
-      key: "/cel-playground",
-      icon: <Sparkles size={18} />,
-      label: "CEL Playground",
-    },
-    {
-      key: "https://agentgateway.dev/docs/",
-      icon: <ExternalLink size={18} />,
-      label: "Documentation",
+      key: "tools",
+      label: "Tools",
+      type: "group",
+      children: [
+        {
+          key: "/cel-playground",
+          icon: <Sparkles size={18} />,
+          label: "CEL Playground",
+        },
+      ]
     },
   ];
 
@@ -438,12 +446,21 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
       <ContentWrapper>
         <StyledHeader>
           <Breadcrumbs />
-          <ThemeToggleButton
-            type="text"
-            icon={theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
-            onClick={toggleTheme}
-            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          />
+          <HeaderActions>
+            <Button
+              type='link'
+              icon={<ExternalLink size={18} />}
+              onClick={() => window.open("https://agentgateway.dev/docs/", "_blank", "noopener,noreferrer")}
+            >
+              Docs
+            </Button>
+            <ThemeToggleButton
+              type="text"
+              icon={theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+              onClick={toggleTheme}
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            />
+          </HeaderActions>
         </StyledHeader>
         <StyledContent>{children}</StyledContent>
       </ContentWrapper>
