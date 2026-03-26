@@ -824,8 +824,10 @@ impl HTTPProxy {
 				});
 		}
 
-		if let Some(ch) = &frontend_policies.channel_access_log_tx {
-			log.channel_logger = Some(ch.clone());
+		if log.otel_logger.is_none() {
+			if let Some(logger) = self.inputs.stores.read_binds().access_logger() {
+				log.otel_logger = Some(logger.clone());
+			}
 		}
 
 		let mut sampler = TraceSampler::default();

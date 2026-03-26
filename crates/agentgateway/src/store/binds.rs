@@ -64,7 +64,10 @@ pub struct Store {
 
 	tx: tokio::sync::broadcast::Sender<Event<Arc<Bind>>>,
 
-	channel_access_logger: Option<Arc<crate::telemetry::log::ChannelAccessLogger>>,
+	/// Access logger set by in-process embedders (e.g. with a custom `LogExporter`).
+	/// When set, this logger is used for requests that don't have a policy-configured
+	/// OTLP access logger. Read directly by the proxy — not propagated via `FrontendPolices`.
+	access_logger: Option<Arc<crate::telemetry::log::OtelAccessLogger>>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -75,8 +78,6 @@ pub struct FrontendPolices {
 	pub access_log: Option<frontend::LoggingPolicy>,
 	pub tracing: Option<Arc<crate::types::agent::TracingPolicy>>,
 	pub access_log_otlp: Option<Arc<crate::types::agent::AccessLogPolicy>>,
-	/// Channel sender for in-process access log consumers (e.g. moat).
-	pub channel_access_log_tx: Option<Arc<crate::telemetry::log::ChannelAccessLogger>>,
 }
 
 impl FrontendPolices {
@@ -393,12 +394,16 @@ impl Store {
 			service_routes: Default::default(),
 			service_tcp_routes: Default::default(),
 			tx,
-			channel_access_logger: None,
+			access_logger: None,
 		}
 	}
 
-	pub fn set_channel_access_logger(&mut self, logger: Arc<crate::telemetry::log::ChannelAccessLogger>) {
-		self.channel_access_logger = Some(logger);
+	pub fn set_access_logger(&mut self, logger: Arc<crate::telemetry::log::OtelAccessLogger>) {
+		self.access_logger = Some(logger);
+	}
+
+	pub fn access_logger(&self) -> Option<&Arc<crate::telemetry::log::OtelAccessLogger>> {
+		self.access_logger.as_ref()
 	}
 	pub fn subscribe(
 		&self,
@@ -752,7 +757,6 @@ impl Store {
 
 		let mut pol = FrontendPolices::default();
 		rules.for_each(|r| pol.set_if_empty(r));
-		pol.channel_access_log_tx = self.channel_access_logger.clone();
 		pol
 	}
 
@@ -768,7 +772,6 @@ impl Store {
 			.filter_map(|p| p.policy.as_frontend());
 		let mut pol = FrontendPolices::default();
 		rules.for_each(|r| pol.set_if_empty(r));
-		pol.channel_access_log_tx = self.channel_access_logger.clone();
 		pol
 	}
 

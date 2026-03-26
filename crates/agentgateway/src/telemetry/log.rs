@@ -609,7 +609,6 @@ impl RequestLog {
 			tracer: None,
 			trace_spans: Arc::new(Mutex::new(Default::default())),
 			otel_logger: None,
-			channel_logger: None,
 			endpoint: None,
 			bind_name: None,
 			listener_name: None,
@@ -679,9 +678,6 @@ pub struct RequestLog {
 
 	// Set only if OTLP logging is configured
 	pub otel_logger: Option<std::sync::Arc<OtelAccessLogger>>,
-
-	// Set only if channel-based access logging is configured (in-process embedder)
-	pub channel_logger: Option<std::sync::Arc<ChannelAccessLogger>>,
 
 	pub endpoint: Option<Target>,
 
@@ -777,8 +773,11 @@ impl Drop for DropOnLog {
 		let end_time = Timestamp::now();
 		let duration = end_time.duration_since(&log.start);
 		let enable_trace = log.tracer.is_some();
-		// We will later check it also matches a filter, but filter is slower
-		let maybe_enable_log = agent_core::telemetry::enabled("request", &Level::INFO);
+		// We will later check it also matches a filter, but filter is slower.
+		// An embedded OTel logger (set by in-process embedders) also enables the log path
+		// since it bypasses the tracing subscriber.
+		let maybe_enable_log = agent_core::telemetry::enabled("request", &Level::INFO)
+			|| log.otel_logger.is_some();
 
 		let llm_response = log.llm_response.take().map(Into::into);
 
@@ -1114,10 +1113,6 @@ impl Drop for DropOnLog {
 			if let Some(otel) = &log.otel_logger {
 				otel.emit("info", "request", &kv);
 			}
-
-			if let Some(ch) = &log.channel_logger {
-				ch.emit("info", "request", &kv);
-			}
 		}
 	}
 }
@@ -1361,6 +1356,20 @@ impl OtelAccessLogger {
 		Ok(Self { provider, logger })
 	}
 
+	/// Create an `OtelAccessLogger` with a custom exporter.
+	///
+	/// Intended for in-process embedders that want to receive access log records
+	/// without going through the OTLP export pipeline.
+	pub fn with_exporter(exporter: impl opentelemetry_sdk::logs::LogExporter + 'static) -> Self {
+		let resource = build_resource(trc::global_resource_defaults());
+		let provider = SdkLoggerProvider::builder()
+			.with_resource(resource)
+			.with_batch_exporter(exporter)
+			.build();
+		let logger = provider.logger("agentgateway.access");
+		Self { provider, logger }
+	}
+
 	pub fn shutdown(&self) {
 		let _ = self.provider.shutdown();
 	}
@@ -1434,55 +1443,6 @@ impl OtelLogSink for OtelAccessLogger {
 
 	fn shutdown(&self) {
 		let _ = self.provider.shutdown();
-	}
-}
-
-fn valuebag_to_json(v: &ValueBag) -> serde_json::Value {
-	if let Some(s) = v.to_str() {
-		serde_json::Value::String(s.to_string())
-	} else if let Some(i) = v.to_i64() {
-		serde_json::Value::Number(i.into())
-	} else if let Some(f) = v.to_f64() {
-		serde_json::json!(f)
-	} else if let Some(b) = v.to_bool() {
-		serde_json::Value::Bool(b)
-	} else {
-		serde_json::Value::String(v.to_string())
-	}
-}
-
-/// Access logger that sends records over a tokio mpsc channel.
-/// Used by in-process embedders (e.g. moat) to receive access logs
-/// without going through the OTel export pipeline.
-#[derive(Debug, Clone)]
-pub struct ChannelAccessLogger {
-	tx: tokio::sync::mpsc::Sender<agent_core::telemetry::AccessLogRecord>,
-}
-
-impl ChannelAccessLogger {
-	pub fn new(tx: tokio::sync::mpsc::Sender<agent_core::telemetry::AccessLogRecord>) -> Self {
-		Self { tx }
-	}
-
-	pub fn emit<'v>(&self, level: &str, target: &str, kv: &[(&str, Option<ValueBag<'v>>)]) {
-		let mut map = serde_json::Map::with_capacity(kv.len() + 2);
-		map.insert(
-			"level".to_string(),
-			serde_json::Value::String(level.to_string()),
-		);
-		map.insert(
-			"target".to_string(),
-			serde_json::Value::String(target.to_string()),
-		);
-
-		for &(k, ref v) in kv {
-			let Some(v) = v else { continue };
-			map.insert(k.to_string(), valuebag_to_json(v));
-		}
-
-		// Use try_send to avoid blocking the proxy hot path.
-		// If the channel is full, the record is dropped.
-		let _ = self.tx.try_send(map);
 	}
 }
 
@@ -1697,28 +1657,4 @@ mod tests {
 		assert!(child.parent_span_is_remote);
 	}
 
-	#[tokio::test]
-	async fn channel_access_logger_sends_records() {
-		let (tx, mut rx) = tokio::sync::mpsc::channel(16);
-		let logger = ChannelAccessLogger::new(tx);
-
-		logger.emit(
-			"info",
-			"request",
-			&[
-				("listener", Some(ValueBag::from("my-listener"))),
-				("http.status", Some(ValueBag::from(200i64))),
-				("duration", Some(ValueBag::from("1.23ms"))),
-				("skipped", None),
-			],
-		);
-
-		let record = rx.try_recv().expect("should receive a record");
-		assert_eq!(record["level"], "info");
-		assert_eq!(record["target"], "request");
-		assert_eq!(record["listener"], "my-listener");
-		assert_eq!(record["http.status"], 200);
-		assert_eq!(record["duration"], "1.23ms");
-		assert!(!record.contains_key("skipped"), "None values should be skipped");
-	}
 }

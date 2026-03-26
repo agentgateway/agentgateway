@@ -46,9 +46,6 @@ pub trait OtelLogSink: Send + Sync {
 	fn shutdown(&self);
 }
 
-/// An access log record represented as a JSON object.
-pub type AccessLogRecord = serde_json::Map<String, serde_json::Value>;
-
 static OTEL_LOG_SINK: OnceLock<Box<dyn OtelLogSink>> = OnceLock::new();
 
 pub fn set_otel_log_sink(sink: Box<dyn OtelLogSink>) {
