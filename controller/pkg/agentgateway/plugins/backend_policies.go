@@ -386,7 +386,7 @@ func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy) (
 	if auth.Action == shared.AuthorizationPolicyActionDeny {
 		denyPolicies = append(denyPolicies, policies...)
 	} else if auth.Action == shared.AuthorizationPolicyActionRequire {
-		requirePolicies = append(requirePolicies, cast(auth.Policy.MatchExpressions)...)
+		requirePolicies = append(requirePolicies, policies...)
 	} else {
 		allowPolicies = append(allowPolicies, policies...)
 	}
