@@ -390,6 +390,10 @@ func translateLLMProvider(llm *agentgateway.LLMProvider, providerName string) (*
 		provider.PathOverride = &llm.Path
 	}
 
+	if llm.PathPrefix != "" {
+		provider.PathPrefix = &llm.PathPrefix
+	}
+
 	// Extract auth token and model based on provider
 	if llm.OpenAI != nil {
 		provider.Provider = &api.AIBackend_Provider_Openai{

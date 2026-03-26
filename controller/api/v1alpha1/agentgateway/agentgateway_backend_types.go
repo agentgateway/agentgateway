@@ -186,6 +186,8 @@ type NamedLLMProvider struct {
 // LLMProvider specifies the target large language model provider that the backend should route requests to.
 // +kubebuilder:validation:ExactlyOneOf=openai;azureopenai;anthropic;gemini;vertexai;bedrock
 // +kubebuilder:validation:XValidation:rule="has(self.host) || has(self.port) ? has(self.host) && has(self.port) : true",message="both host and port must be set together"
+// +kubebuilder:validation:XValidation:rule="!(has(self.path) && has(self.pathPrefix))",message="path and pathPrefix are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="has(self.pathPrefix) ? has(self.host) : true",message="pathPrefix requires host to be set"
 type LLMProvider struct {
 	// OpenAI provider
 	// +optional
@@ -228,6 +230,12 @@ type LLMProvider struct {
 	// If not specified, the default path for the provider is used.
 	// +optional
 	Path LongString `json:"path,omitempty"`
+
+	// PathPrefix overrides the default base path prefix (e.g. "/v1") for upstream requests.
+	// Path translation for cross-format requests still applies using this prefix.
+	// Only supported for OpenAI and Anthropic providers.
+	// +optional
+	PathPrefix LongString `json:"pathPrefix,omitempty"`
 }
 
 // OpenAIConfig settings for the [OpenAI](https://developers.openai.com/api/docs/guides/streaming-responses) LLM provider.
