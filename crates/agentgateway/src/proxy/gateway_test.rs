@@ -1,16 +1,3 @@
-use ::http::{Method, Version};
-use agent_core::strng;
-use assert_matches::assert_matches;
-use http_body_util::BodyExt;
-use hyper_util::client::legacy::Client;
-use rand::RngExt;
-use serde_json::{Value, json};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::oneshot;
-use url::Position;
-use x509_parser::nom::AsBytes;
-
 use crate::http::tests_common::*;
 use crate::http::{Body, Response};
 use crate::llm::{AIProvider, openai};
@@ -23,6 +10,18 @@ use crate::types::agent::{
 };
 use crate::types::backend;
 use crate::*;
+use ::http::{Method, Version};
+use agent_core::strng;
+use assert_matches::assert_matches;
+use http_body_util::BodyExt;
+use hyper_util::client::legacy::Client;
+use rand::RngExt;
+use serde_json::{Value, json};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::oneshot;
+use url::Position;
+use x509_parser::nom::AsBytes;
 
 #[tokio::test]
 async fn basic_handling() {
@@ -58,6 +57,38 @@ async fn basic_http2() {
 		.unwrap();
 	assert_eq!(res.status(), 200);
 	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_2);
+}
+
+#[tokio::test]
+async fn network_authorization_allow() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_frontend_policy(json!({
+			"networkAuthorization": {
+				"rules": ["source.port == 12345"], // NOTE: the tests hardcode a dummy src port that matches
+			},
+		}))
+		.await;
+
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+}
+
+#[tokio::test]
+async fn network_authorization_deny() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_frontend_policy(json!({
+			"networkAuthorization": {
+				"rules": ["source.port == 54321"], // NOTE: the tests hardcode a dummy src port that does not match
+			},
+		}))
+		.await;
+
+	RequestBuilder::new(Method::GET, "http://lo")
+		.send(io)
+		.await
+		.expect_err("should be denied");
 }
 
 #[tokio::test]

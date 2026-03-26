@@ -580,6 +580,26 @@ impl TestBind {
 			});
 		}
 	}
+	pub async fn attach_frontend_policy(&mut self, p: serde_json::Value) {
+		let cfg = serde_json::json!({
+			"frontendPolicies": p,
+		});
+		let normalized = local::NormalizedLocalConfig::from(
+			self.pi.cfg.as_ref(),
+			self.pi.upstream.clone(),
+			self.pi.cfg.gateway(),
+			&serde_json::to_string(&cfg).unwrap(),
+		)
+		.await
+		.unwrap();
+		for v in normalized.policies.into_iter() {
+			self.policies += 1;
+			self.with_policy(TargetedPolicy {
+				key: strng::format!("pol-{}", self.policies),
+				..v
+			});
+		}
+	}
 	pub async fn attached_backend_policy(&mut self, addr: &SocketAddr, p: serde_json::Value) {
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
 		let pols = local::split_policies(self.pi.upstream.clone(), pol)
