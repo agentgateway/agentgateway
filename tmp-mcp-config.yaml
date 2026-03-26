@@ -45,6 +45,21 @@ llm:
   models:
   - name: model-1
     provider: openAI
+  - name: model-2
+    provider: openAI
+    requestHeaders:
+      remove: []
+    responseHeaders:
+      remove: []
+    backendTLS:
+      alpn: []
+      subjectAltNames: []
+    guardrails:
+      request: []
+      response: []
+    matches: []
+  - name: model-3
+    provider: openAI
   policies:
     jwtAuth:
       issuer: ''

@@ -207,7 +207,7 @@ export function MCPConfigurationPage() {
             icon={<CodeOutlined />}
             onClick={() => navigate("/mcp-configuration/editor")}
           >
-            Config Editor
+            Editor
           </Button>
         </PageHeader>
       </MetricsHeader>

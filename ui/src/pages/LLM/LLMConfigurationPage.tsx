@@ -199,7 +199,7 @@ export function LLMConfigurationPage() {
             icon={<CodeOutlined />}
             onClick={() => navigate("/llm-configuration/editor")}
           >
-            Config Editor
+            Editor
           </Button>
         </PageHeader>
       </MetricsHeader>

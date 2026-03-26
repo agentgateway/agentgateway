@@ -254,7 +254,7 @@ export function TrafficConfigurationPage() {
             icon={<CodeOutlined />}
             onClick={() => navigate("/traffic-configuration/editor")}
           >
-            Config Editor
+            Editor
           </Button>
         </PageHeader>
       </MetricsHeader>
