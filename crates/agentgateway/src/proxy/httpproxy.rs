@@ -392,19 +392,12 @@ impl HTTPProxy {
 		let start = agent_core::Timestamp::now();
 
 		// Copy connection level attributes into request level attributes
-		connection.copy::<TCPConnectionInfo>(req.extensions_mut());
-		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
-
 		let tcp = connection
-			.get::<TCPConnectionInfo>()
-			.expect("tcp connection must be set");
-		let tls = connection.get::<TLSConnectionInfo>();
-		let src = cel::SourceContext {
-			address: tcp.peer_addr.ip(),
-			port: tcp.peer_addr.port(),
-			tls: tls.and_then(|t| t.src_identity.clone()),
-		};
-		req.extensions_mut().insert(src);
+			.copy::<TCPConnectionInfo>(req.extensions_mut())
+			.expect("tcp connection must be set")
+			.clone();
+		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
+		connection.copy::<cel::SourceContext>(req.extensions_mut());
 		req
 			.extensions_mut()
 			.insert(RequestTime(start.as_datetime()));

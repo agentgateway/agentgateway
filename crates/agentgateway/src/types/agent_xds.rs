@@ -1807,8 +1807,7 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 					require_exprs.push(Arc::new(expr));
 				}
 
-				let policy_set =
-					authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
+				let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
 				FrontendPolicy::NetworkAuthorization(frontend::NetworkAuthorization(
 					authorization::RuleSet::new(policy_set),
 				))
