@@ -3708,6 +3708,8 @@
 |`frontendPolicies.tcp.keepalives.time`|string||
 |`frontendPolicies.tcp.keepalives.interval`|string||
 |`frontendPolicies.tcp.keepalives.retries`|integer||
+|`frontendPolicies.networkAuthorization`|object|CEL authorization for downstream network connections.|
+|`frontendPolicies.networkAuthorization.rules`|[]string||
 |`frontendPolicies.accessLog`|object|Settings for request access logs.|
 |`frontendPolicies.accessLog.filter`|string||
 |`frontendPolicies.accessLog.add`|object||
