@@ -38,8 +38,17 @@ impl Provider {
 			Value::String(ANTHROPIC_VERSION.to_string()),
 		);
 		body.remove("model");
+		// Remove fields unsupported by Vertex AI's Anthropic endpoint.
+		// Note: metadata, context_management, and thinking ARE supported.
+		body.remove("output_config");
+		body.remove("output_format");
+		// Strip unsupported "scope" from cache_control objects throughout the body.
+		// Vertex AI supports cache_control: {"type": "ephemeral"} but not the
+		// "scope" field added by the prompt-caching-scope beta.
+		let mut body_value = Value::Object(body);
+		strip_cache_control_scope(&mut body_value);
 
-		serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
+		serde_json::to_vec(&body_value).map_err(AIError::RequestMarshal)
 	}
 
 	pub fn prepare_anthropic_count_tokens_body(&self, body: Vec<u8>) -> Result<Vec<u8>, AIError> {
@@ -58,7 +67,12 @@ impl Provider {
 				.unwrap_or_else(|| model.clone());
 			body.insert("model".to_string(), Value::String(normalized));
 		}
-		serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
+		body.remove("output_config");
+		body.remove("output_format");
+		let mut body_value = Value::Object(body);
+		strip_cache_control_scope(&mut body_value);
+
+		serde_json::to_vec(&body_value).map_err(AIError::RequestMarshal)
 	}
 
 	pub fn get_path_for_model(
@@ -208,5 +222,25 @@ mod tests {
 			region: region.map(strng::new),
 		};
 		assert_eq!(p.get_host(None).as_str(), expected);
+	}
+}
+
+/// Recursively strip the "scope" field from any "cache_control" objects in the JSON tree.
+fn strip_cache_control_scope(value: &mut Value) {
+	match value {
+		Value::Object(map) => {
+			if let Some(Value::Object(cc)) = map.get_mut("cache_control") {
+				cc.remove("scope");
+			}
+			for (_, v) in map.iter_mut() {
+				strip_cache_control_scope(v);
+			}
+		},
+		Value::Array(arr) => {
+			for v in arr.iter_mut() {
+				strip_cache_control_scope(v);
+			}
+		},
+		_ => {},
 	}
 }
