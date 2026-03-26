@@ -7,9 +7,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
 import type { AddRootHandlers, UrlParams } from "../../components/TrafficHierarchy";
 import {
-  HierarchyTree,
-  NodeDetailView,
-  useTrafficHierarchy,
+    HierarchyTree,
+    NodeDetailView,
+    useTrafficHierarchy,
 } from "../../components/TrafficHierarchy";
 
 const PageRoot = styled.div`
@@ -118,7 +118,7 @@ const Description = styled.p`
 `;
 
 function parseMCPPath(pathname: string): UrlParams | null {
-  const targetPolicyMatch = pathname.match(/^\/mcp\/mcp\/target\/(\d+)\/policy\/(.+)/);
+  const targetPolicyMatch = pathname.match(/^\/mcp\/target\/(\d+)\/policy\/(.+)/);
   if (targetPolicyMatch) {
     return {
       topLevelType: "mcp",
@@ -126,15 +126,15 @@ function parseMCPPath(pathname: string): UrlParams | null {
       mcpTargetPolicyType: targetPolicyMatch[2],
     };
   }
-  const targetMatch = pathname.match(/^\/mcp\/mcp\/target\/(\d+)/);
+  const targetMatch = pathname.match(/^\/mcp\/target\/(\d+)/);
   if (targetMatch) {
     return { topLevelType: "mcp", mcpTargetIndex: parseInt(targetMatch[1], 10) };
   }
-  const policyMatch = pathname.match(/^\/mcp\/mcp\/policy\/(.+)/);
+  const policyMatch = pathname.match(/^\/mcp\/policy\/(.+)/);
   if (policyMatch) {
     return { topLevelType: "mcp", mcpPolicyType: policyMatch[1] };
   }
-  if (pathname.startsWith("/mcp/mcp")) {
+  if (pathname.startsWith("/mcp")) {
     return { topLevelType: "mcp" };
   }
   return null;

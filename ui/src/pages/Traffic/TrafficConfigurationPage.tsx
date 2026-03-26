@@ -113,6 +113,24 @@ function parseTrafficPath(pathname: string): UrlParams | null {
     };
   }
 
+  // Check for LLM policy routes (must be before general LLM route)
+  const llmPolicyMatch = pathname.match(/\/traffic\/llm\/policy\/(.+)/);
+  if (llmPolicyMatch) {
+    return {
+      topLevelType: "llm",
+      llmPolicyType: llmPolicyMatch[1],
+    };
+  }
+
+  // Check for MCP policy routes (must be before general MCP route)
+  const mcpPolicyMatch = pathname.match(/\/traffic\/mcp\/policy\/(.+)/);
+  if (mcpPolicyMatch) {
+    return {
+      topLevelType: "mcp",
+      mcpPolicyType: mcpPolicyMatch[1],
+    };
+  }
+
   // Check for MCP target policy routes (must be before target route)
   const mcpTargetPolicyMatch = pathname.match(/\/traffic\/mcp\/target\/(\d+)\/policy\/(.+)/);
   if (mcpTargetPolicyMatch) {

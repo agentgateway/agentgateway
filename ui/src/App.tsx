@@ -5,6 +5,7 @@ import { MainLayout } from "./components/Layout/MainLayout";
 import { ConfirmProvider } from "./contexts/ConfirmContext";
 import { EditorSettingsProvider } from "./contexts/EditorSettingsContext";
 import { CELPlaygroundPage } from "./pages/CELPlayground/Playground/CELPlaygroundPage";
+import { ConfigEditorPage } from "./pages/ConfigEditor/ConfigEditorPage";
 import { DashboardPage } from "./pages/Dashboard/DashboardPage";
 import { LLMConfigurationPage } from "./pages/LLM/LLMConfigurationPage";
 import { LLMLogsPage } from "./pages/LLM/LLMLogsPage";
@@ -14,7 +15,6 @@ import { MCPConfigurationPage } from "./pages/MCP/MCPConfigurationPage";
 import { MCPLogsPage } from "./pages/MCP/MCPLogsPage";
 import { MCPMetricsPage } from "./pages/MCP/MCPMetricsPage";
 import { MCPPlaygroundPage } from "./pages/MCP/Playground/MCPPlaygroundPage";
-import { ConfigEditorPage } from "./pages/ConfigEditor/ConfigEditorPage";
 import { SetupWizardPage } from "./pages/SetupWizard/SetupWizardPage";
 import { TrafficConfigurationPage } from "./pages/Traffic/TrafficConfigurationPage";
 import { TrafficLogsPage } from "./pages/Traffic/TrafficLogsPage";
@@ -60,9 +60,8 @@ function App() {
 
                   {/* LLM Section */}
                   <Route path="/llm" element={<LLMConfigurationPage />} />
-                  <Route path="/llm/llm" element={<LLMConfigurationPage />} />
-                  <Route path="/llm/llm/model/:modelIndex" element={<LLMConfigurationPage />} />
-                  <Route path="/llm/llm/policy/:policyType" element={<LLMConfigurationPage />} />
+                  <Route path="/llm/model/:modelIndex" element={<LLMConfigurationPage />} />
+                  <Route path="/llm/policy/:policyType" element={<LLMConfigurationPage />} />
                   <Route path="/llm/raw-config" element={<ConfigEditorPage />} />
                   <Route path="/llm/logs" element={<LLMLogsPage />} />
                   <Route path="/llm/metrics" element={<LLMMetricsPage />} />
@@ -73,10 +72,9 @@ function App() {
 
                   {/* MCP Section */}
                   <Route path="/mcp" element={<MCPConfigurationPage />} />
-                  <Route path="/mcp/mcp" element={<MCPConfigurationPage />} />
-                  <Route path="/mcp/mcp/target/:targetIndex" element={<MCPConfigurationPage />} />
-                  <Route path="/mcp/mcp/target/:targetIndex/policy/:policyType" element={<MCPConfigurationPage />} />
-                  <Route path="/mcp/mcp/policy/:policyType" element={<MCPConfigurationPage />} />
+                  <Route path="/mcp/target/:targetIndex" element={<MCPConfigurationPage />} />
+                  <Route path="/mcp/target/:targetIndex/policy/:policyType" element={<MCPConfigurationPage />} />
+                  <Route path="/mcp/policy/:policyType" element={<MCPConfigurationPage />} />
                   <Route path="/mcp/raw-config" element={<ConfigEditorPage />} />
                   <Route path="/mcp/logs" element={<MCPLogsPage />} />
                   <Route path="/mcp/metrics" element={<MCPMetricsPage />} />
@@ -101,6 +99,10 @@ function App() {
                     path="/traffic/llm/model/:modelIndex"
                     element={<TrafficConfigurationPage />}
                   />
+                  <Route
+                    path="/traffic/llm/policy/:policyType"
+                    element={<TrafficConfigurationPage />}
+                  />
                   <Route path="/traffic/mcp" element={<TrafficConfigurationPage />} />
                   <Route
                     path="/traffic/mcp/target/:targetIndex"
@@ -108,6 +110,10 @@ function App() {
                   />
                   <Route
                     path="/traffic/mcp/target/:targetIndex/policy/:policyType"
+                    element={<TrafficConfigurationPage />}
+                  />
+                  <Route
+                    path="/traffic/mcp/policy/:policyType"
                     element={<TrafficConfigurationPage />}
                   />
                   <Route

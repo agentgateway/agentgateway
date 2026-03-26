@@ -351,24 +351,43 @@ function urlToSelectedKey(pathname: string, basePath: string): string | null {
   // Strip basePath prefix to get the hierarchy-relative path
   const rel = basePath ? pathname.slice(basePath.length) : pathname;
 
+  // Check if basePath already consumed the segment (e.g., basePath="/llm" or basePath="/mcp")
+  const baseIsLLM = basePath.endsWith("/llm");
+  const baseIsMCP = basePath.endsWith("/mcp");
+
+  // Check for MCP target policy routes (must be before target route)
+  const mcpTargetPolicyPattern = baseIsMCP 
+    ? /^\/target\/(\d+)\/policy\/(.+)/ 
+    : /^\/mcp\/target\/(\d+)\/policy\/(.+)/;
+  const mcpTargetPolicyMatch = rel.match(mcpTargetPolicyPattern);
+  if (mcpTargetPolicyMatch) return `mcp-target-${mcpTargetPolicyMatch[1]}-policy-${mcpTargetPolicyMatch[2]}`;
+
   // Check for model routes first (must be before general LLM route)
-  const modelMatch = rel.match(/^\/llm\/model\/(\d+)/);
+  const modelPattern = baseIsLLM ? /^\/model\/(\d+)/ : /^\/llm\/model\/(\d+)/;
+  const modelMatch = rel.match(modelPattern);
   if (modelMatch) return `model-${modelMatch[1]}`;
 
   // Check for MCP target routes (must be before general MCP route)
-  const mcpTargetMatch = rel.match(/^\/mcp\/target\/(\d+)/);
+  const mcpTargetPattern = baseIsMCP ? /^\/target\/(\d+)/ : /^\/mcp\/target\/(\d+)/;
+  const mcpTargetMatch = rel.match(mcpTargetPattern);
   if (mcpTargetMatch) return `mcp-target-${mcpTargetMatch[1]}`;
 
   // Check for LLM/MCP policy routes (must be before general top-level match)
-  const llmPolicyMatch = rel.match(/^\/llm\/policy\/([^/?]+)/);
+  const llmPolicyPattern = baseIsLLM ? /^\/policy\/([^/?]+)/ : /^\/llm\/policy\/([^/?]+)/;
+  const llmPolicyMatch = rel.match(llmPolicyPattern);
   if (llmPolicyMatch) return `llm-policy-${llmPolicyMatch[1]}`;
 
-  const mcpPolicyMatch = rel.match(/^\/mcp\/policy\/([^/?]+)/);
+  const mcpPolicyPattern = baseIsMCP ? /^\/policy\/([^/?]+)/ : /^\/mcp\/policy\/([^/?]+)/;
+  const mcpPolicyMatch = rel.match(mcpPolicyPattern);
   if (mcpPolicyMatch) return `mcp-policy-${mcpPolicyMatch[1]}`;
 
   // Check for top-level config routes
   const topLevelMatch = rel.match(/^\/(llm|mcp|frontendPolicies)/);
   if (topLevelMatch) return topLevelMatch[1];
+
+  // Special case: if rel is empty and basePath is /llm or /mcp, we're at the root
+  if (rel === "" && baseIsLLM) return "llm";
+  if (rel === "" && baseIsMCP) return "mcp";
 
   // Check for bind routes
   const m = rel.match(
@@ -684,8 +703,9 @@ function buildMCPTargetPolicyTitle(
   confirmDelete: ConfirmDeleteFn,
   basePath: string,
 ): ReactNode {
-  const policyPath = `${basePath}/mcp/target/${targetIndex}/policy/${policyType}`;
-  const targetPath = `${basePath}/mcp/target/${targetIndex}`;
+  const mcpBase = basePath.endsWith("/mcp") ? basePath : `${basePath}/mcp`;
+  const policyPath = `${mcpBase}/target/${targetIndex}/policy/${policyType}`;
+  const targetPath = `${mcpBase}/target/${targetIndex}`;
   const displayName = getPolicyLabel(policyType);
 
   const menuItems: MenuProps["items"] = [
@@ -866,7 +886,8 @@ function buildModelTitle(
   basePath: string,
 ): ReactNode {
   const modelName = mn.model.name || `Model ${mn.modelIndex + 1}`;
-  const modelPath = `${basePath}/llm/model/${mn.modelIndex}`;
+  const llmBase = basePath.endsWith("/llm") ? basePath : `${basePath}/llm`;
+  const modelPath = `${llmBase}/model/${mn.modelIndex}`;
 
   const menuItems: MenuProps["items"] = [
     {
@@ -1137,10 +1158,11 @@ function buildTopLevelPolicyTitle(
   onDelete: (policyType: string, parentPath: string) => void,
   confirmDelete: ConfirmDeleteFn,
   basePath: string,
-): ReactNode {
+): ReactNode{
   const label = getPolicyLabel(pn.policyType);
-  const policyPath = `${basePath}/${scope}/policy/${pn.policyType}`;
-  const parentPath = `${basePath}/${scope}`;
+  const scopeBase = basePath.endsWith(`/${scope}`) ? basePath : `${basePath}/${scope}`;
+  const policyPath = `${scopeBase}/policy/${pn.policyType}`;
+  const parentPath = scopeBase;
 
   const menuItems: MenuProps["items"] = [
     {
@@ -1299,7 +1321,8 @@ function buildMCPTargetTitle(
   basePath: string,
 ): ReactNode {
   const targetName = tn.target.name || `Target ${tn.targetIndex + 1}`;
-  const targetPath = `${basePath}/mcp/target/${tn.targetIndex}`;
+  const mcpBase = basePath.endsWith("/mcp") ? basePath : `${basePath}/mcp`;
+  const targetPath = `${mcpBase}/target/${tn.targetIndex}`;
 
   // Build submenu for available policy types
   const availablePolicyTypes = getPolicyTypesForScope("mcpTarget").filter(
@@ -1581,7 +1604,7 @@ function buildTreeData(
         existingLLMPolicies,
         confirmDelete,
         navigate,
-        `${basePath}/llm`,
+        basePath.endsWith("/llm") ? basePath : `${basePath}/llm`,
       ),
       selectable: true,
       children: llmChildren.length > 0 ? llmChildren : undefined,
@@ -1657,7 +1680,7 @@ function buildTreeData(
         existingMCPPolicies,
         confirmDelete,
         navigate,
-        `${basePath}/mcp`,
+        basePath.endsWith("/mcp") ? basePath : `${basePath}/mcp`,
       ),
       selectable: true,
       children: mcpChildren.length > 0 ? mcpChildren : undefined,

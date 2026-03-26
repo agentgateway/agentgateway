@@ -1,8 +1,9 @@
 binds:
-- port: 6553
+- port: 8080
   tunnelProtocol: direct
   listeners:
   - protocol: HTTP
+    name: listener
     hostname: '*'
     routes:
     - hostnames: []
@@ -10,10 +11,32 @@ binds:
       - path:
           pathPrefix: /
       backends:
-      - service:
-          name:
-            namespace: default
-            hostname: service
-          port: 8080
+      - ai:
+          name: smallthinker-backend
+          provider:
+            openAI:
+              model: smallthinker
+          hostOverride: localhost:11434
+      - mcp:
+          targets: []
+          statefulMode: stateless
         weight: 1
       name: route
+      policies:
+        cors:
+          allowCredentials: false
+          allowHeaders:
+          - '*'
+          allowMethods:
+          - GET
+          - POST
+          - OPTIONS
+          allowOrigins:
+          - '*'
+          exposeHeaders: []
+llm:
+  models: []
+mcp:
+  targets: []
+  policies:
+    cors: {}

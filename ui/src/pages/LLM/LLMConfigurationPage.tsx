@@ -7,9 +7,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
 import type { AddRootHandlers, UrlParams } from "../../components/TrafficHierarchy";
 import {
-  HierarchyTree,
-  NodeDetailView,
-  useTrafficHierarchy,
+    HierarchyTree,
+    NodeDetailView,
+    useTrafficHierarchy,
 } from "../../components/TrafficHierarchy";
 
 const PageRoot = styled.div`
@@ -118,15 +118,15 @@ const Description = styled.p`
 `;
 
 function parseLLMPath(pathname: string): UrlParams | null {
-  const modelMatch = pathname.match(/^\/llm\/llm\/model\/(\d+)/);
+  const modelMatch = pathname.match(/^\/llm\/model\/(\d+)/);
   if (modelMatch) {
     return { topLevelType: "llm", modelIndex: parseInt(modelMatch[1], 10) };
   }
-  const policyMatch = pathname.match(/^\/llm\/llm\/policy\/(.+)/);
+  const policyMatch = pathname.match(/^\/llm\/policy\/(.+)/);
   if (policyMatch) {
     return { topLevelType: "llm", llmPolicyType: policyMatch[1] };
   }
-  if (pathname.startsWith("/llm/llm")) {
+  if (pathname.startsWith("/llm")) {
     return { topLevelType: "llm" };
   }
   return null;
