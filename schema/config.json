@@ -1985,6 +1985,17 @@
           "required": [
             "googleModelArmor"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "azureContentSafety": {
+              "$ref": "#/$defs/AzureContentSafety"
+            }
+          },
+          "required": [
+            "azureContentSafety"
+          ]
         }
       ]
     },
@@ -2893,6 +2904,63 @@
         "projectId"
       ]
     },
+    "AzureContentSafety": {
+      "description": "Configuration for Azure Content Safety integration.\n\nUses the Azure AI Content Safety Analyze Text API to detect harmful content\nincluding Hate, SelfHarm, Sexual, and Violence categories.",
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "description": "The Azure Content Safety endpoint URL (e.g., \"https://<resource-name>.cognitiveservices.azure.com\")",
+          "type": "string"
+        },
+        "severityThreshold": {
+          "description": "Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "apiVersion": {
+          "description": "API version to use (default: \"2024-09-01\")",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "blocklistNames": {
+          "description": "Blocklist names to check against",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "haltOnBlocklistHit": {
+          "description": "When true, further analysis stops if a blocklist is hit",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "policies": {
+          "description": "Backend policies for Azure authentication (optional, defaults to implicit Azure auth)",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "endpoint"
+      ]
+    },
     "ResponseGuard": {
       "type": "object",
       "properties": {
@@ -2948,6 +3016,17 @@
           },
           "required": [
             "googleModelArmor"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "azureContentSafety": {
+              "$ref": "#/$defs/AzureContentSafety"
+            }
+          },
+          "required": [
+            "azureContentSafety"
           ]
         }
       ]
