@@ -6968,6 +6968,7 @@ type FrontendPolicySpec_NetworkAuthorization struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Allow         []string               `protobuf:"bytes,1,rep,name=allow,proto3" json:"allow,omitempty"`
 	Deny          []string               `protobuf:"bytes,2,rep,name=deny,proto3" json:"deny,omitempty"`
+	Require       []string               `protobuf:"bytes,3,rep,name=require,proto3" json:"require,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7012,6 +7013,13 @@ func (x *FrontendPolicySpec_NetworkAuthorization) GetAllow() []string {
 func (x *FrontendPolicySpec_NetworkAuthorization) GetDeny() []string {
 	if x != nil {
 		return x.Deny
+	}
+	return nil
+}
+
+func (x *FrontendPolicySpec_NetworkAuthorization) GetRequire() []string {
+	if x != nil {
+		return x.Require
 	}
 	return nil
 }
@@ -11440,7 +11448,7 @@ const file_resource_proto_rawDesc = "" +
 	"\binterval\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\binterval\x12\x1d\n" +
 	"\aretries\x18\x03 \x01(\rH\x00R\aretries\x88\x01\x01B\n" +
 	"\n" +
-	"\b_retries\"\xf4\x18\n" +
+	"\b_retries\"\x8e\x19\n" +
 	"\x12FrontendPolicySpec\x12E\n" +
 	"\x03tcp\x18\x01 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TCPH\x00R\x03tcp\x12E\n" +
 	"\x03tls\x18\x02 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TLSH\x00R\x03tls\x12H\n" +
@@ -11475,10 +11483,11 @@ const file_resource_proto_rawDesc = "" +
 	"\x03TCP\x12J\n" +
 	"\n" +
 	"keepalives\x18\x01 \x01(\v2*.agentgateway.dev.resource.KeepaliveConfigR\n" +
-	"keepalives\x1a@\n" +
+	"keepalives\x1aZ\n" +
 	"\x14NetworkAuthorization\x12\x14\n" +
 	"\x05allow\x18\x01 \x03(\tR\x05allow\x12\x12\n" +
-	"\x04deny\x18\x02 \x03(\tR\x04deny\x1a\x8f\x06\n" +
+	"\x04deny\x18\x02 \x03(\tR\x04deny\x12\x18\n" +
+	"\arequire\x18\x03 \x03(\tR\arequire\x1a\x8f\x06\n" +
 	"\aLogging\x12\x1b\n" +
 	"\x06filter\x18\x01 \x01(\tH\x00R\x06filter\x88\x01\x01\x12T\n" +
 	"\x06fields\x18\x02 \x01(\v2<.agentgateway.dev.resource.FrontendPolicySpec.Logging.FieldsR\x06fields\x12k\n" +

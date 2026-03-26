@@ -499,6 +499,7 @@ message FrontendPolicySpec {
   message NetworkAuthorization {
     repeated string allow = 1;
     repeated string deny = 2;
+    repeated string require = 3;
   }
   // Logging configuration policy
   message Logging {

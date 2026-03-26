@@ -263,9 +263,11 @@ func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string) 
 
 func translateFrontendNetworkAuthorization(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
 	auth := policy.Spec.Frontend.NetworkAuthorization
-	var allowPolicies, denyPolicies []string
+	var allowPolicies, denyPolicies, requirePolicies []string
 	if auth.Action == shared.AuthorizationPolicyActionDeny {
 		denyPolicies = append(denyPolicies, cast(auth.Policy.MatchExpressions)...)
+	} else if auth.Action == shared.AuthorizationPolicyActionRequire {
+		requirePolicies = append(requirePolicies, cast(auth.Policy.MatchExpressions)...)
 	} else {
 		allowPolicies = append(allowPolicies, cast(auth.Policy.MatchExpressions)...)
 	}
@@ -277,8 +279,9 @@ func translateFrontendNetworkAuthorization(policy *agentgateway.AgentgatewayPoli
 			Frontend: &api.FrontendPolicySpec{
 				Kind: &api.FrontendPolicySpec_NetworkAuthorization_{
 					NetworkAuthorization: &api.FrontendPolicySpec_NetworkAuthorization{
-						Allow: allowPolicies,
-						Deny:  denyPolicies,
+						Allow:   allowPolicies,
+						Deny:    denyPolicies,
+						Require: requirePolicies,
 					},
 				},
 			},

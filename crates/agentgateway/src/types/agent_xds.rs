@@ -1801,7 +1801,14 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 					deny_exprs.push(Arc::new(expr));
 				}
 
-				let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs);
+				let mut require_exprs = Vec::new();
+				for require_rule in &rbac.require {
+					let expr = cel::Expression::new_permissive(require_rule);
+					require_exprs.push(Arc::new(expr));
+				}
+
+				let policy_set =
+					authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
 				FrontendPolicy::NetworkAuthorization(frontend::NetworkAuthorization(
 					authorization::RuleSet::new(policy_set),
 				))
