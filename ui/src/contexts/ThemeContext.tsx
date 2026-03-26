@@ -1,10 +1,10 @@
 import { App, ConfigProvider } from "antd";
 import type { ReactNode } from "react";
 import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useState,
+    createContext,
+    useCallback,
+    useContext,
+    useState,
 } from "react";
 import { darkTheme, lightTheme } from "../styles/antdTheme";
 
