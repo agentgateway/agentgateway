@@ -24,7 +24,9 @@ function getInitialTheme(): ThemeMode {
     document.documentElement.setAttribute("data-theme", saved);
     return saved;
   }
-  return "dark";
+  // Default to light mode to match CSS defaults
+  document.documentElement.setAttribute("data-theme", "light");
+  return "light";
 }
 
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({
