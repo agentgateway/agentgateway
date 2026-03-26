@@ -22,6 +22,9 @@ pub mod envoy_proto_common;
 pub mod expiring_cache;
 pub mod ext_authz;
 pub mod ext_proc;
+#[cfg(any(test, feature = "internal_benches"))]
+#[path = "normalize_tests.rs"]
+mod normalize_tests;
 pub(crate) mod oauth;
 pub mod oidc;
 pub mod outlierdetection;
@@ -523,6 +526,153 @@ pub fn modify_req_uri(
 	let uri = Uri::from_parts(parts)?;
 	*req.uri_mut() = uri;
 	Ok(())
+}
+
+pub fn normalize_path_for_proxy(
+	req: &mut Request,
+	normalize: &[crate::types::frontend::PathNormalization],
+) -> anyhow::Result<()> {
+	use crate::types::frontend::PathNormalization;
+
+	if normalize.is_empty() {
+		return Ok(());
+	}
+
+	let apply_merge_slash = normalize.contains(&PathNormalization::MergeSlash);
+	let apply_dot_segment = normalize.contains(&PathNormalization::DotSegment);
+	let Some(orig) = req.uri().path_and_query() else {
+		return Ok(());
+	};
+
+	let Some(path) = normalize_path(orig.path(), apply_merge_slash, apply_dot_segment) else {
+		return Ok(());
+	};
+
+	let normalized = match orig.query() {
+		Some(query) => {
+			let mut normalized = String::with_capacity(path.len() + query.len() + 1);
+			normalized.push_str(&path);
+			normalized.push('?');
+			normalized.push_str(query);
+			normalized
+		},
+		None => path,
+	};
+
+	modify_req_uri(req, |uri| {
+		uri.path_and_query = Some(PathAndQuery::from_str(&normalized)?);
+		Ok(())
+	})?;
+	Ok(())
+}
+
+fn normalize_path(path: &str, apply_merge_slash: bool, apply_dot_segment: bool) -> Option<String> {
+	use std::borrow::Cow;
+
+	let mut path = Cow::Borrowed(path);
+	if apply_merge_slash {
+		if let Some(normalized) = merge_adjacent_slashes(path.as_ref()) {
+			path = Cow::Owned(normalized);
+		}
+	}
+	if apply_dot_segment {
+		if let Some(normalized) = remove_dot_segments(path.as_ref()) {
+			path = Cow::Owned(normalized);
+		}
+	}
+	match path {
+		Cow::Borrowed(_) => None,
+		Cow::Owned(path) => Some(path),
+	}
+}
+
+pub fn path_and_query_string(uri: &Uri) -> String {
+	uri
+		.path_and_query()
+		.map(|pq| pq.to_string())
+		.unwrap_or_else(|| uri.path().to_string())
+}
+
+fn merge_adjacent_slashes(path: &str) -> Option<String> {
+	let first_double_slash = path.as_bytes().windows(2).position(|w| w == b"//")?;
+	let mut out = String::with_capacity(path.len());
+	out.push_str(&path[..first_double_slash + 1]);
+	let mut prev_was_slash = true;
+
+	for ch in path[first_double_slash + 1..].chars() {
+		if ch == '/' {
+			if !prev_was_slash {
+				out.push(ch);
+			}
+			prev_was_slash = true;
+		} else {
+			out.push(ch);
+			prev_was_slash = false;
+		}
+	}
+
+	Some(out)
+}
+
+fn remove_dot_segments(path: &str) -> Option<String> {
+	if !needs_dot_segment_normalization(path) {
+		return None;
+	}
+
+	let mut input = path;
+	let mut output = String::with_capacity(path.len());
+
+	while !input.is_empty() {
+		if let Some(rest) = input.strip_prefix("../") {
+			input = rest;
+		} else if let Some(rest) = input.strip_prefix("./") {
+			input = rest;
+		} else if input.starts_with("/./") {
+			input = &input[2..];
+		} else if input == "/." {
+			input = "/";
+		} else if input.starts_with("/../") {
+			input = &input[3..];
+			pop_last_segment(&mut output);
+		} else if input == "/.." {
+			input = "/";
+			pop_last_segment(&mut output);
+		} else if input == "." || input == ".." {
+			input = "";
+		} else {
+			let segment_end = if input.starts_with('/') {
+				input[1..]
+					.find('/')
+					.map(|idx| idx + 1)
+					.unwrap_or(input.len())
+			} else {
+				input.find('/').unwrap_or(input.len())
+			};
+			output.push_str(&input[..segment_end]);
+			input = &input[segment_end..];
+		}
+	}
+
+	Some(output)
+}
+
+fn pop_last_segment(output: &mut String) {
+	if let Some(last_slash) = output.rfind('/') {
+		output.truncate(last_slash);
+	} else {
+		output.clear();
+	}
+}
+
+fn needs_dot_segment_normalization(path: &str) -> bool {
+	path == "."
+		|| path == ".."
+		|| path == "/."
+		|| path == "/.."
+		|| path.starts_with("./")
+		|| path.starts_with("../")
+		|| path.contains("/./")
+		|| path.contains("/../")
 }
 
 pub fn modify_uri(

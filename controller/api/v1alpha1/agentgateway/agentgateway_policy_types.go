@@ -759,6 +759,14 @@ type FrontendConnect struct {
 	Mode FrontendConnectMode `json:"mode"`
 }
 
+// +kubebuilder:validation:Enum=MergeSlash;DotSegment
+type FrontendHTTPNormalize string
+
+const (
+	FrontendHTTPNormalizeMergeSlash FrontendHTTPNormalize = "MergeSlash"
+	FrontendHTTPNormalizeDotSegment FrontendHTTPNormalize = "DotSegment"
+)
+
 // +kubebuilder:validation:AtLeastOneFieldSet
 type FrontendHTTP struct {
 	// Maximum HTTP body size that will be buffered
@@ -831,6 +839,18 @@ type FrontendHTTP struct {
 	// +kubebuilder:validation:Minimum=1
 	// +optional
 	MaxConcurrentRequests *int32 `json:"maxConcurrentRequests,omitempty"`
+
+	// `normalize` defines path normalization rules applied before route matching
+	// and before forwarding upstream.
+	//
+	// `MergeSlash` collapses repeated `/` characters into a single `/`.
+	// `DotSegment` removes `/./` segments and resolves `/../` segments.
+	//
+	// +listType=set
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=2
+	// +optional
+	Normalize []FrontendHTTPNormalize `json:"normalize,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet

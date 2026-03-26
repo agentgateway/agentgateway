@@ -920,7 +920,8 @@ impl HTTPProxy {
 
 				self
 					.handle_frontend_policies(&frontend_policies, log, &mut req)
-					.await;
+					.await
+					.snapshot_on_err(log, &mut req)?;
 				if let Some(result) = substrate_upgrade {
 					result.snapshot_on_err(log, &mut req)?;
 				}
@@ -946,7 +947,8 @@ impl HTTPProxy {
 					.frontend_policies(self.inputs.cfg.gateway_port_ref(bind.address.port()));
 				self
 					.handle_frontend_policies(&frontend_policies, log, &mut req)
-					.await;
+					.await
+					.snapshot_on_err(log, &mut req)?;
 				return Err(e).snapshot_on_err(log, &mut req);
 			},
 		};
@@ -1426,7 +1428,12 @@ impl HTTPProxy {
 		frontend_policies: &FrontendPolices,
 		log: &mut RequestLog,
 		req: &mut Request,
-	) {
+	) -> Result<(), ProxyError> {
+		if let Some(http_policy) = &frontend_policies.http {
+			http::normalize_path_for_proxy(req, &http_policy.normalize)
+				.map_err(ProxyError::Processing)?;
+		}
+
 		frontend_policies.register_cel_expressions(log.cel.ctx());
 
 		if let Some(lp) = &frontend_policies.access_log {
@@ -1514,6 +1521,7 @@ impl HTTPProxy {
 			log.outgoing_span = Some(ns);
 		}
 		log.insert_span_writer(req.extensions_mut());
+		Ok(())
 	}
 
 	fn detect_misdirected(

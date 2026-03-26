@@ -10831,6 +10831,13 @@
           ],
           "format": "uint32",
           "minimum": 1
+        },
+        "normalize": {
+          "description": "Path normalization rules applied before route matching and before forwarding upstream.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PathNormalization"
+          }
         }
       },
       "additionalProperties": false
@@ -10847,6 +10854,13 @@
           "type": "string",
           "const": "preserve"
         }
+      ]
+    },
+    "PathNormalization": {
+      "type": "string",
+      "enum": [
+        "mergeSlash",
+        "dotSegment"
       ]
     },
     "TLS": {

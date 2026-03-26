@@ -337,6 +337,29 @@ spec:
     http:
       http1IdleTimeout: 10minutes
 ---
+_err: 'normalize[0]'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http-normalize-invalid
+spec:
+  frontend:
+    http:
+      normalize:
+      - DecodeReserved
+---
+_err: 'normalize[1]: Duplicate value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http-normalize-invalid
+spec:
+  frontend:
+    http:
+      normalize:
+      - MergeSlash
+      - MergeSlash
+---
 _err: 'http.http2WindowSize'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

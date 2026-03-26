@@ -3560,6 +3560,15 @@ fn frontend_policy_from_proto(
 			max_concurrent_requests: h
 				.max_concurrent_requests
 				.and_then(std::num::NonZeroU32::new),
+			normalize: h
+				.normalize
+				.iter()
+				.filter_map(|raw| match fps::http::Normalize::try_from(*raw).ok() {
+					Some(fps::http::Normalize::MergeSlash) => Some(frontend::PathNormalization::MergeSlash),
+					Some(fps::http::Normalize::DotSegment) => Some(frontend::PathNormalization::DotSegment),
+					_ => None,
+				})
+				.collect(),
 		}),
 		Some(fps::Kind::Tls(t)) => FrontendPolicy::TLS(frontend::TLS {
 			handshake_timeout: t
