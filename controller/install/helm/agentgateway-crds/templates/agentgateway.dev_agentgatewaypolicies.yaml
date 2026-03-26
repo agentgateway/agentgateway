@@ -5982,6 +5982,47 @@ spec:
                         be set
                       rule: '[has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2WindowSize),has(self.maxBufferSize)].filter(x,x==true).size()
                         >= 1'
+                  networkAuthorization:
+                    description: |-
+                      networkAuthorization defines CEL authorization on downstream network connections.
+
+                      This runs before protocol handling and is intended for L4 access control,
+                      for example using `source.address` with `cidr(...).containsIP(...)`.
+                    properties:
+                      action:
+                        default: Allow
+                        description: |-
+                          `action` defines whether the rule allows or denies the request if
+                          matched. If unspecified, the default is `Allow`.
+                        enum:
+                        - Allow
+                        - Deny
+                        type: string
+                      policy:
+                        description: |-
+                          `policy` specifies the authorization rule to evaluate.
+                          A policy matches when **any** of the conditions evaluates to true.
+                        properties:
+                          matchExpressions:
+                            description: |-
+                              MatchExpressions defines a set of conditions that must be satisfied for the rule to match.
+                              These expressions should be in the form of a Common Expression Language
+                              (`CEL`) expression.
+                            items:
+                              description: CELExpression represents a Common Expression
+                                Language (CEL) expression.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            maxItems: 256
+                            minItems: 1
+                            type: array
+                        required:
+                        - matchExpressions
+                        type: object
+                    required:
+                    - policy
+                    type: object
                   tcp:
                     description: tcp defines settings on managing incoming TCP connections.
                     properties:
@@ -6276,9 +6317,9 @@ spec:
                       rule: '!has(self.path) || self.path.startsWith(''/'')'
                 type: object
                 x-kubernetes-validations:
-                - message: at least one of the fields in [accessLog http tcp tls tracing]
-                    must be set
-                  rule: '[has(self.accessLog),has(self.http),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
+                - message: at least one of the fields in [accessLog http networkAuthorization
+                    tcp tls tracing] must be set
+                  rule: '[has(self.accessLog),has(self.http),has(self.networkAuthorization),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
                     >= 1'
               targetRefs:
                 description: |-

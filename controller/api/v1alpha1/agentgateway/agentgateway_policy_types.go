@@ -353,6 +353,12 @@ type Frontend struct {
 	// tcp defines settings on managing incoming TCP connections.
 	// +optional
 	TCP *FrontendTCP `json:"tcp,omitempty"`
+	// networkAuthorization defines CEL authorization on downstream network connections.
+	//
+	// This runs before protocol handling and is intended for L4 access control,
+	// for example using `source.address` with `cidr(...).containsIP(...)`.
+	// +optional
+	NetworkAuthorization *shared.Authorization `json:"networkAuthorization,omitempty"`
 	// tls defines settings on managing incoming TLS connections.
 	// +optional
 	TLS *FrontendTLS `json:"tls,omitempty"`

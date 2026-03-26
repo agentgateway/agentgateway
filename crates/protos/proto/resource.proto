@@ -495,6 +495,11 @@ message FrontendPolicySpec {
     // TCP keepalive configuration
     KeepaliveConfig keepalives = 1;
   }
+
+  message NetworkAuthorization {
+    repeated string allow = 1;
+    repeated string deny = 2;
+  }
   // Logging configuration policy
   message Logging {
     // CEL expression to filter out logs. If unset, all logs are considered.
@@ -583,6 +588,7 @@ message FrontendPolicySpec {
     HTTP http = 3;
     Logging logging = 4;
     Tracing tracing = 5;
+    NetworkAuthorization network_authorization = 6;
   }
 }
 
