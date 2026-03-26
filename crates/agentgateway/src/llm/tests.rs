@@ -155,6 +155,7 @@ mod requests {
 		("basic", &[ANTHROPIC, BEDROCK]),
 		("full", &[ANTHROPIC, BEDROCK]),
 		("tool-call", &[ANTHROPIC, BEDROCK]),
+		("parallel-tool-call", &[BEDROCK]),
 		("reasoning", &[ANTHROPIC, BEDROCK]),
 		("reasoning_max", &[ANTHROPIC]),
 	];
@@ -167,6 +168,7 @@ mod requests {
 		("basic", &[BEDROCK]),
 		("instructions", &[BEDROCK]),
 		("input-list", &[BEDROCK]),
+		("parallel-tool-call", &[BEDROCK]),
 	];
 	pub const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),

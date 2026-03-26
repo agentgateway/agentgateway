@@ -393,7 +393,10 @@ pub mod from_completions {
 						content: vec![bedrock::ContentBlock::Text(s.clone())],
 					}),
 			})
-			.collect();
+			.fold(Vec::new(), |mut msgs, msg| {
+				helpers::push_or_merge_message(&mut msgs, msg);
+				msgs
+			});
 
 		let inference_config = bedrock::InferenceConfiguration {
 			max_tokens: req.max_tokens(),
@@ -1706,7 +1709,7 @@ pub mod from_responses {
 						EasyInputContent::ContentList(parts) => input_parts_to_blocks(parts),
 					};
 
-					messages.push(bedrock::Message { role, content });
+					helpers::push_or_merge_message(&mut messages, bedrock::Message { role, content });
 				},
 				InputItem::Item(Item::Message(MessageItem::Input(msg))) => {
 					let role = match msg.role {
@@ -1727,7 +1730,7 @@ pub mod from_responses {
 					};
 
 					let content = input_parts_to_blocks(&msg.content);
-					messages.push(bedrock::Message { role, content });
+					helpers::push_or_merge_message(&mut messages, bedrock::Message { role, content });
 				},
 				InputItem::Item(Item::Message(MessageItem::Output(msg))) => {
 					let content = msg
@@ -1741,10 +1744,13 @@ pub mod from_responses {
 						})
 						.collect::<Vec<_>>();
 					if !content.is_empty() {
-						messages.push(bedrock::Message {
-							role: bedrock::Role::Assistant,
-							content,
-						});
+						helpers::push_or_merge_message(
+							&mut messages,
+							bedrock::Message {
+								role: bedrock::Role::Assistant,
+								content,
+							},
+						);
 					}
 				},
 				InputItem::Item(Item::FunctionCall(call)) => {
@@ -1757,14 +1763,17 @@ pub mod from_responses {
 						continue;
 					};
 
-					messages.push(bedrock::Message {
-						role: bedrock::Role::Assistant,
-						content: vec![bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
-							tool_use_id: call.call_id,
-							name: call.name,
-							input,
-						})],
-					});
+					helpers::push_or_merge_message(
+						&mut messages,
+						bedrock::Message {
+							role: bedrock::Role::Assistant,
+							content: vec![bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
+								tool_use_id: call.call_id,
+								name: call.name,
+								input,
+							})],
+						},
+					);
 				},
 				InputItem::Item(Item::FunctionCallOutput(output)) => {
 					let output_text = match output.output {
@@ -1779,28 +1788,34 @@ pub mod from_responses {
 							.join("\n"),
 					};
 
-					messages.push(bedrock::Message {
-						role: bedrock::Role::User,
-						content: vec![bedrock::ContentBlock::ToolResult(
-							bedrock::ToolResultBlock {
-								tool_use_id: output.call_id,
-								content: vec![bedrock::ToolResultContentBlock::Text(output_text)],
-								// Responses tool outputs do not carry explicit success/error metadata.
-								// Leave Bedrock status unset instead of assuming success.
-								status: None,
-							},
-						)],
-					});
+					helpers::push_or_merge_message(
+						&mut messages,
+						bedrock::Message {
+							role: bedrock::Role::User,
+							content: vec![bedrock::ContentBlock::ToolResult(
+								bedrock::ToolResultBlock {
+									tool_use_id: output.call_id,
+									content: vec![bedrock::ToolResultContentBlock::Text(output_text)],
+									// Responses tool outputs do not carry explicit success/error metadata.
+									// Leave Bedrock status unset instead of assuming success.
+									status: None,
+								},
+							)],
+						},
+					);
 				},
 				InputItem::Item(Item::CustomToolCall(call)) => {
-					messages.push(bedrock::Message {
-						role: bedrock::Role::Assistant,
-						content: vec![bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
-							tool_use_id: call.call_id,
-							name: call.name,
-							input: serde_json::json!({ "input": call.input }),
-						})],
-					});
+					helpers::push_or_merge_message(
+						&mut messages,
+						bedrock::Message {
+							role: bedrock::Role::Assistant,
+							content: vec![bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
+								tool_use_id: call.call_id,
+								name: call.name,
+								input: serde_json::json!({ "input": call.input }),
+							})],
+						},
+					);
 				},
 				InputItem::Item(Item::CustomToolCallOutput(CustomToolCallOutput {
 					call_id,
@@ -1819,18 +1834,21 @@ pub mod from_responses {
 							.join("\n"),
 					};
 
-					messages.push(bedrock::Message {
-						role: bedrock::Role::User,
-						content: vec![bedrock::ContentBlock::ToolResult(
-							bedrock::ToolResultBlock {
-								tool_use_id: call_id,
-								content: vec![bedrock::ToolResultContentBlock::Text(output_text)],
-								// Responses tool outputs do not carry explicit success/error metadata.
-								// Leave Bedrock status unset instead of assuming success.
-								status: None,
-							},
-						)],
-					});
+					helpers::push_or_merge_message(
+						&mut messages,
+						bedrock::Message {
+							role: bedrock::Role::User,
+							content: vec![bedrock::ContentBlock::ToolResult(
+								bedrock::ToolResultBlock {
+									tool_use_id: call_id,
+									content: vec![bedrock::ToolResultContentBlock::Text(output_text)],
+									// Responses tool outputs do not carry explicit success/error metadata.
+									// Leave Bedrock status unset instead of assuming success.
+									status: None,
+								},
+							)],
+						},
+					);
 				},
 				_ => {
 					tracing::debug!("Skipping unsupported Responses input item for Bedrock translation");
@@ -2645,6 +2663,20 @@ mod helpers {
 		let timestamp = chrono::Utc::now().timestamp_millis();
 		let random: u32 = rand::random();
 		format!("msg_{:x}{:08x}", timestamp, random)
+	}
+
+	/// Push a message, or merge it into the last message if roles match.
+	/// Bedrock's Converse API requires strict user/assistant alternation;
+	/// this handles the OpenAI convention where each parallel tool result
+	/// is a separate `tool` role message (all mapped to Bedrock `User`).
+	pub fn push_or_merge_message(messages: &mut Vec<bedrock::Message>, msg: bedrock::Message) {
+		if let Some(last) = messages.last_mut()
+			&& last.role == msg.role
+		{
+			last.content.extend(msg.content);
+		} else {
+			messages.push(msg);
+		}
 	}
 }
 
