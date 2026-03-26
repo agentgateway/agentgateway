@@ -36,7 +36,21 @@ binds:
           exposeHeaders: []
 llm:
   models: []
+  policies:
+    jwtAuth:
+      issuer: ''
+      audiences: []
+      jwks: '{"keys":[]}'
+    basicAuth:
+      htpasswd: ''
+    apiKey:
+      keys: []
+    authorization:
+      rules: []
+    transformations: {}
 mcp:
   targets: []
   policies:
     cors: {}
+    apiKey:
+      keys: []

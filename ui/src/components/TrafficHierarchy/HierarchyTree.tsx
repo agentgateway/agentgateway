@@ -2337,7 +2337,8 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       // Find the index of the newly created model from fresh data
       const llmConfig = freshConfig?.llm as any;
       const newIndex = llmConfig?.models ? llmConfig.models.length - 1 : 0;
-      navigate(`${basePath}/llm/model/${newIndex}?edit=true&creating=true`);
+      const llmBase = basePath.endsWith("/llm") ? basePath : `${basePath}/llm`;
+      navigate(`${llmBase}/model/${newIndex}?edit=true&creating=true`);
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Failed to create model"));
     }
@@ -2390,7 +2391,8 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       // Find the index of the newly created target from fresh data
       const mcpConfig = freshConfig?.mcp as any;
       const newIndex = mcpConfig?.targets ? mcpConfig.targets.length - 1 : 0;
-      navigate(`${basePath}/mcp/target/${newIndex}?edit=true&creating=true`);
+      const mcpBase = basePath.endsWith("/mcp") ? basePath : `${basePath}/mcp`;
+      navigate(`${mcpBase}/target/${newIndex}?edit=true&creating=true`);
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Failed to create target"));
     }
@@ -2417,7 +2419,8 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
         toast.success(`${getPolicyLabel(policyType)} policy added`);
         ensureExpanded("mcp", `mcp-target-${targetIndex}`);
         await mutate();
-        navigate(`${basePath}/mcp/target/${targetIndex}/policy/${policyType}?edit=true&creating=true`);
+        const mcpBase = basePath.endsWith("/mcp") ? basePath : `${basePath}/mcp`;
+        navigate(`${mcpBase}/target/${targetIndex}/policy/${policyType}?edit=true&creating=true`);
       } catch (e: unknown) {
         toast.error(getErrorMessage(e, "Failed to add policy"));
       }
@@ -2468,7 +2471,8 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       toast.success(`${getPolicyLabel(policyType)} policy added`);
       ensureExpanded("llm");
       await mutate();
-      navigate(`${basePath}/llm/policy/${policyType}?edit=true&creating=true`);
+      const llmBase = basePath.endsWith("/llm") ? basePath : `${basePath}/llm`;
+      navigate(`${llmBase}/policy/${policyType}?edit=true&creating=true`);
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Failed to add policy"));
     }
@@ -2512,7 +2516,8 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       toast.success(`${getPolicyLabel(policyType)} policy added`);
       ensureExpanded("mcp");
       await mutate();
-      navigate(`${basePath}/mcp/policy/${policyType}?edit=true&creating=true`);
+      const mcpBase = basePath.endsWith("/mcp") ? basePath : `${basePath}/mcp`;
+      navigate(`${mcpBase}/policy/${policyType}?edit=true&creating=true`);
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Failed to add policy"));
     }

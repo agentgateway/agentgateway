@@ -200,8 +200,7 @@ export function TrafficConfigurationPage() {
             <div>
               <PageTitle>Traffic Configuration</PageTitle>
               <Description>
-                Manage your gateway routing with manually configured TypeScript
-                schemas
+                View and edit the full agentgateway configuration.
               </Description>
             </div>
           </PageHeader>
@@ -224,8 +223,7 @@ export function TrafficConfigurationPage() {
             <div>
               <PageTitle>Traffic Configuration</PageTitle>
               <Description>
-                Manage your gateway routing with manually configured TypeScript
-                schemas
+                View and edit the full agentgateway configuration.
               </Description>
             </div>
           </PageHeader>
@@ -249,7 +247,7 @@ export function TrafficConfigurationPage() {
           <div>
             <PageTitle>Traffic Configuration</PageTitle>
             <Description>
-              View and edit the full agentgateway configuration file.
+              View and edit the full agentgateway configuration.
             </Description>
           </div>
           <Button
