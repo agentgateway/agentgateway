@@ -11,6 +11,7 @@ type Authorization struct {
 	//
 	// The presence of at least one `Allow` rule triggers a deny-by-default policy, requiring at least 1 match to allow.
 	// With no rules, all requires are allowed.
+	// +required
 	Policy AuthorizationPolicy `json:"policy"`
 
 	// `action` defines whether the rule allows, denies, or requires the request if
