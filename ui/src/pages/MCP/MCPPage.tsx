@@ -1,11 +1,11 @@
 import { CodeOutlined } from "@ant-design/icons";
 import styled from "@emotion/styled";
 import { Button, Spin } from "antd";
-import { Server, Shield } from "lucide-react";
-import { useMemo } from "react";
+import { Headphones, Server, Shield } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
-import type { UrlParams } from "../../components/TrafficHierarchy";
+import type { AddRootHandlers, UrlParams } from "../../components/TrafficHierarchy";
 import {
     HierarchyTree,
     NodeDetailView,
@@ -158,6 +158,7 @@ export function MCPPage() {
   const hierarchy = useTrafficHierarchy();
   const location = useLocation();
   const navigate = useNavigate();
+  const [addHandlers, setAddHandlers] = useState<AddRootHandlers | null>(null);
 
   const urlParams = useMemo(
     () => parseMCPPath(location.pathname),
@@ -230,6 +231,7 @@ export function MCPPage() {
             hierarchy={hierarchy}
             filter={["mcp"]}
             title="MCP Configuration"
+            onRegisterAddHandlers={setAddHandlers}
           />
         </Sidebar>
         <DetailPanel>
@@ -239,22 +241,39 @@ export function MCPPage() {
             <PlaceholderContainer>
               <PlaceholderContent>
                 <h3>MCP Configuration</h3>
-                <p>
-                  Select an item from the tree, or add MCP configuration to
-                  get started.
-                </p>
-                <PlaceholderIcons>
-                  <IconItem>
-                    <Server size={20} /> Servers
-                  </IconItem>
-                  <IconItem>
-                    <Shield size={20} /> Policies
-                  </IconItem>
-                </PlaceholderIcons>
-                <p className="hint">
-                  Servers and policies added to your agentgateway configuration
-                  will appear here.
-                </p>
+                {hierarchy.mcp ? (
+                  <>
+                    <p>
+                      Select an item from the tree to view and edit its
+                      configuration.
+                    </p>
+                    <PlaceholderIcons>
+                      <IconItem>
+                        <Server size={20} /> Servers
+                      </IconItem>
+                      <IconItem>
+                        <Shield size={20} /> Policies
+                      </IconItem>
+                    </PlaceholderIcons>
+                  </>
+                ) : (
+                  <>
+                    <p>
+                      No MCP configuration found. Create one to start
+                      configuring servers and policies.
+                    </p>
+                    <div style={{ marginTop: 16 }}>
+                      <Button
+                        type="primary"
+                        icon={<Headphones size={16} />}
+                        onClick={() => addHandlers?.addMCP()}
+                        disabled={!addHandlers}
+                      >
+                        Add MCP Config
+                      </Button>
+                    </div>
+                  </>
+                )}
               </PlaceholderContent>
             </PlaceholderContainer>
           )}

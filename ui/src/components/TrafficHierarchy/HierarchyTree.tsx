@@ -28,7 +28,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { Key, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useConfig } from "../../api";
@@ -1802,13 +1802,20 @@ function buildTreeData(
 // Component
 // ---------------------------------------------------------------------------
 
+export interface AddRootHandlers {
+  addBind: () => void;
+  addLLM: () => void;
+  addMCP: () => void;
+}
+
 interface HierarchyTreeProps {
   hierarchy: TrafficHierarchy;
   filter?: HierarchySection[];
   title?: string;
+  onRegisterAddHandlers?: (handlers: AddRootHandlers) => void;
 }
 
-export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) {
+export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers }: HierarchyTreeProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const basePath = useMemo(() => {
@@ -2712,6 +2719,23 @@ export function HierarchyTree({ hierarchy, filter, title }: HierarchyTreeProps) 
       );
     }
   }, [basePath, mutate, navigate]);
+
+  // Register add handlers with parent via stable refs
+  const handleAddBindRef = useRef(handleAddBind);
+  handleAddBindRef.current = handleAddBind;
+  const handleAddLLMRef = useRef(handleAddLLM);
+  handleAddLLMRef.current = handleAddLLM;
+  const handleAddMCPRef = useRef(handleAddMCP);
+  handleAddMCPRef.current = handleAddMCP;
+
+  useEffect(() => {
+    if (!onRegisterAddHandlers) return;
+    onRegisterAddHandlers({
+      addBind: () => handleAddBindRef.current(),
+      addLLM: () => handleAddLLMRef.current(),
+      addMCP: () => handleAddMCPRef.current(),
+    });
+  }, [onRegisterAddHandlers]);
 
   // Dropdown menu items for adding top-level resources — filtered by section
   const showBinds = !filter || filter.includes("binds");

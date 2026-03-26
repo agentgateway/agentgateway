@@ -2,6 +2,7 @@ import styled from "@emotion/styled";
 import { Button, Card, Input, Select, Spin, Tag, Typography } from "antd";
 import { Brain, Send, Trash2 } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { useConfig } from "../../api";
 
 const { TextArea } = Input;
@@ -103,6 +104,63 @@ const InputRow = styled.div`
   display: flex;
   gap: 8px;
   margin-top: auto;
+`;
+
+const MarkdownContent = styled.div`
+  /* Reset margins on first/last child to avoid extra spacing */
+  > *:first-child { margin-top: 0; }
+  > *:last-child { margin-bottom: 0; }
+
+  p { margin: 0 0 8px; }
+  p:last-child { margin-bottom: 0; }
+
+  code {
+    background: rgba(0, 0, 0, 0.12);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 13px;
+    font-family: var(--font-family-code);
+  }
+
+  pre {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    padding: 10px 14px;
+    overflow-x: auto;
+    margin: 6px 0;
+    code {
+      background: none;
+      padding: 0;
+    }
+  }
+
+  ul, ol {
+    margin: 4px 0;
+    padding-left: 20px;
+  }
+
+  li { margin: 2px 0; }
+
+  h1, h2, h3, h4 {
+    margin: 8px 0 4px;
+    font-weight: 600;
+  }
+
+  blockquote {
+    margin: 4px 0;
+    padding-left: 10px;
+    border-left: 3px solid rgba(255, 255, 255, 0.4);
+    opacity: 0.85;
+  }
+
+  table {
+    border-collapse: collapse;
+    margin: 6px 0;
+    th, td {
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      padding: 4px 8px;
+    }
+  }
 `;
 
 const EmptyState = styled.div`
@@ -422,7 +480,13 @@ export const LLMPlaygroundPage = () => {
             )}
             {messages.map((msg, idx) => (
               <MessageBubble key={idx} role={msg.role}>
-                {msg.content}
+                {msg.role === "assistant" ? (
+                  <MarkdownContent>
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </MarkdownContent>
+                ) : (
+                  msg.content
+                )}
               </MessageBubble>
             ))}
             {sending && (

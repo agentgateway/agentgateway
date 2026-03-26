@@ -30,3 +30,14 @@ binds:
           allowOrigins:
           - '*'
           exposeHeaders: []
+llm:
+  models:
+  - name: model-1
+    provider: openAI
+mcp:
+  targets:
+  - name: target-1
+    sse:
+      host: localhost
+      port: 8080
+      path: /sse

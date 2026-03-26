@@ -1,10 +1,11 @@
 import { CodeOutlined } from "@ant-design/icons";
 import styled from "@emotion/styled";
 import { Button, Spin } from "antd";
-import { useMemo } from "react";
+import { Network } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
-import type { UrlParams } from "../../components/TrafficHierarchy";
+import type { AddRootHandlers, UrlParams } from "../../components/TrafficHierarchy";
 import {
   HierarchyTree,
   NodeDetailView,
@@ -166,6 +167,7 @@ export function TrafficPage() {
   const hierarchy = useTrafficHierarchy();
   const location = useLocation();
   const navigate = useNavigate();
+  const [addHandlers, setAddHandlers] = useState<AddRootHandlers | null>(null);
 
   // Parse URL to determine if we're viewing a specific node
   const urlParams = useMemo(
@@ -252,7 +254,7 @@ export function TrafficPage() {
       </MetricsHeader>
       <SplitBody>
         <Sidebar>
-          <HierarchyTree hierarchy={hierarchy} />
+          <HierarchyTree hierarchy={hierarchy} onRegisterAddHandlers={setAddHandlers} />
         </Sidebar>
         <DetailPanel>
           {shouldShowDetail ? (
@@ -260,11 +262,30 @@ export function TrafficPage() {
           ) : (
             <PlaceholderContainer>
               <PlaceholderContent>
-                <h3>Select an Item</h3>
-                <p>
-                  Choose a bind, listener, route, backend, or policy from the
-                  hierarchy tree on the left to view and edit its configuration.
-                </p>
+                <h3>Traffic Configuration</h3>
+                {hierarchy.binds.length > 0 ? (
+                  <p>
+                    Choose a bind, listener, route, backend, or policy from the
+                    hierarchy tree on the left to view and edit its configuration.
+                  </p>
+                ) : (
+                  <>
+                    <p>
+                      No binds configured. Create a bind to start defining
+                      listeners, routes, and backends.
+                    </p>
+                    <div style={{ marginTop: 16 }}>
+                      <Button
+                        type="primary"
+                        icon={<Network size={16} />}
+                        onClick={() => addHandlers?.addBind()}
+                        disabled={!addHandlers}
+                      >
+                        Add Bind
+                      </Button>
+                    </div>
+                  </>
+                )}
               </PlaceholderContent>
             </PlaceholderContainer>
           )}

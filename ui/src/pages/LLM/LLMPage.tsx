@@ -1,16 +1,16 @@
 import { CodeOutlined } from "@ant-design/icons";
 import styled from "@emotion/styled";
 import { Button, Spin } from "antd";
-import { Boxes, Shield } from "lucide-react";
-import { useMemo } from "react";
+import { Bot, Boxes, Shield } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
+import type { AddRootHandlers, UrlParams } from "../../components/TrafficHierarchy";
 import {
   HierarchyTree,
   NodeDetailView,
   useTrafficHierarchy,
 } from "../../components/TrafficHierarchy";
-import type { UrlParams } from "../../components/TrafficHierarchy";
 
 // ---------------------------------------------------------------------------
 // Styled components (shared with TrafficPage layout)
@@ -149,6 +149,7 @@ export function LLMPage() {
   const hierarchy = useTrafficHierarchy();
   const location = useLocation();
   const navigate = useNavigate();
+  const [addHandlers, setAddHandlers] = useState<AddRootHandlers | null>(null);
 
   const urlParams = useMemo(
     () => parseLLMPath(location.pathname),
@@ -221,6 +222,7 @@ export function LLMPage() {
             hierarchy={hierarchy}
             filter={["llm"]}
             title="LLM Configuration"
+            onRegisterAddHandlers={setAddHandlers}
           />
         </Sidebar>
         <DetailPanel>
@@ -230,22 +232,39 @@ export function LLMPage() {
             <PlaceholderContainer>
               <PlaceholderContent>
                 <h3>LLM Configuration</h3>
-                <p>
-                  Select an item from the tree, or add LLM configuration to
-                  get started.
-                </p>
-                <PlaceholderIcons>
-                  <IconItem>
-                    <Boxes size={20} /> Models
-                  </IconItem>
-                  <IconItem>
-                    <Shield size={20} /> Policies
-                  </IconItem>
-                </PlaceholderIcons>
-                <p className="hint">
-                  Models and policies added to your agentgateway configuration
-                  will appear here.
-                </p>
+                {hierarchy.llm ? (
+                  <>
+                    <p>
+                      Select an item from the tree to view and edit its
+                      configuration.
+                    </p>
+                    <PlaceholderIcons>
+                      <IconItem>
+                        <Boxes size={20} /> Models
+                      </IconItem>
+                      <IconItem>
+                        <Shield size={20} /> Policies
+                      </IconItem>
+                    </PlaceholderIcons>
+                  </>
+                ) : (
+                  <>
+                    <p>
+                      No LLM configuration found. Create one to start
+                      configuring models and policies.
+                    </p>
+                    <div style={{ marginTop: 16 }}>
+                      <Button
+                        type="primary"
+                        icon={<Bot size={16} />}
+                        onClick={() => addHandlers?.addLLM()}
+                        disabled={!addHandlers}
+                      >
+                        Add LLM Config
+                      </Button>
+                    </div>
+                  </>
+                )}
               </PlaceholderContent>
             </PlaceholderContainer>
           )}

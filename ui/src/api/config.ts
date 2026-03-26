@@ -11,7 +11,8 @@ import type { LocalConfig } from "./types";
  * Fetches the full configuration from the agentgateway server
  */
 export async function fetchConfig(): Promise<LocalConfig> {
-  return get<LocalConfig>("/config");
+  const data = await get<LocalConfig | null>("/config");
+  return data ?? { binds: [] };
 }
 
 /**

@@ -1,0 +1,4 @@
+binds:
+- port: 8080
+  tunnelProtocol: direct
+  listeners: []
