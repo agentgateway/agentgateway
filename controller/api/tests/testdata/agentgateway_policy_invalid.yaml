@@ -294,6 +294,21 @@ spec:
           - name: X-Test
             value: '"test"'
 ---
+_err: 'jwtAuthentication.mcp requires mode Strict'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-jwt-mcp-nonstrict
+spec:
+  traffic:
+    jwtAuthentication:
+      mode: Optional
+      providers:
+        - issuer: https://example.com
+          jwks:
+            inline: '{"keys":[]}'
+      mcp: {}
+---
 _err: 'pseudo-headers must be one of'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

@@ -667,6 +667,7 @@ const (
 )
 
 // +kubebuilder:validation:XValidation:rule="!has(self.mcp) || size(self.providers) == 1",message="jwtAuthentication.mcp requires exactly one provider"
+// +kubebuilder:validation:XValidation:rule="!has(self.mcp) || !has(self.mode) || self.mode == 'Strict'",message="jwtAuthentication.mcp requires mode Strict"
 type JWTAuthentication struct {
 	// `mode` is the validation mode for JWT authentication.
 	// +kubebuilder:default=Strict

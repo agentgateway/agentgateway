@@ -7792,6 +7792,8 @@ spec:
                     x-kubernetes-validations:
                     - message: jwtAuthentication.mcp requires exactly one provider
                       rule: '!has(self.mcp) || size(self.providers) == 1'
+                    - message: jwtAuthentication.mcp requires mode Strict
+                      rule: '!has(self.mcp) || !has(self.mode) || self.mode == ''Strict'''
                   phase:
                     description: |-
                       The phase to apply the traffic policy to. If the phase is `PreRouting`,
