@@ -351,43 +351,33 @@ function urlToSelectedKey(pathname: string, basePath: string): string | null {
   // Strip basePath prefix to get the hierarchy-relative path
   const rel = basePath ? pathname.slice(basePath.length) : pathname;
 
-  // Check if basePath already consumed the segment (e.g., basePath="/llm" or basePath="/mcp")
-  const baseIsLLM = basePath.endsWith("/llm");
-  const baseIsMCP = basePath.endsWith("/mcp");
-
   // Check for MCP target policy routes (must be before target route)
-  const mcpTargetPolicyPattern = baseIsMCP 
-    ? /^\/target\/(\d+)\/policy\/(.+)/ 
-    : /^\/mcp\/target\/(\d+)\/policy\/(.+)/;
+  const mcpTargetPolicyPattern = /^\/mcp\/target\/(\d+)\/policy\/(.+)/;
   const mcpTargetPolicyMatch = rel.match(mcpTargetPolicyPattern);
   if (mcpTargetPolicyMatch) return `mcp-target-${mcpTargetPolicyMatch[1]}-policy-${mcpTargetPolicyMatch[2]}`;
 
   // Check for model routes first (must be before general LLM route)
-  const modelPattern = baseIsLLM ? /^\/model\/(\d+)/ : /^\/llm\/model\/(\d+)/;
+  const modelPattern =  /^\/llm\/model\/(\d+)/;
   const modelMatch = rel.match(modelPattern);
   if (modelMatch) return `model-${modelMatch[1]}`;
 
   // Check for MCP target routes (must be before general MCP route)
-  const mcpTargetPattern = baseIsMCP ? /^\/target\/(\d+)/ : /^\/mcp\/target\/(\d+)/;
+  const mcpTargetPattern =  /^\/mcp\/target\/(\d+)/;
   const mcpTargetMatch = rel.match(mcpTargetPattern);
   if (mcpTargetMatch) return `mcp-target-${mcpTargetMatch[1]}`;
 
   // Check for LLM/MCP policy routes (must be before general top-level match)
-  const llmPolicyPattern = baseIsLLM ? /^\/policy\/([^/?]+)/ : /^\/llm\/policy\/([^/?]+)/;
+  const llmPolicyPattern =  /^\/llm\/policy\/([^/?]+)/;
   const llmPolicyMatch = rel.match(llmPolicyPattern);
   if (llmPolicyMatch) return `llm-policy-${llmPolicyMatch[1]}`;
 
-  const mcpPolicyPattern = baseIsMCP ? /^\/policy\/([^/?]+)/ : /^\/mcp\/policy\/([^/?]+)/;
+  const mcpPolicyPattern =  /^\/mcp\/policy\/([^/?]+)/;
   const mcpPolicyMatch = rel.match(mcpPolicyPattern);
   if (mcpPolicyMatch) return `mcp-policy-${mcpPolicyMatch[1]}`;
 
   // Check for top-level config routes
   const topLevelMatch = rel.match(/^\/(llm|mcp|frontendPolicies)/);
   if (topLevelMatch) return topLevelMatch[1];
-
-  // Special case: if rel is empty and basePath is /llm or /mcp, we're at the root
-  if (rel === "" && baseIsLLM) return "llm";
-  if (rel === "" && baseIsMCP) return "mcp";
 
   // Check for bind routes
   const m = rel.match(
@@ -886,8 +876,7 @@ function buildModelTitle(
   basePath: string,
 ): ReactNode {
   const modelName = mn.model.name || `Model ${mn.modelIndex + 1}`;
-  const llmBase = basePath.endsWith("/llm") ? basePath : `${basePath}/llm`;
-  const modelPath = `${llmBase}/model/${mn.modelIndex}`;
+  const modelPath = `${basePath}/llm/model/${mn.modelIndex}`;
 
   const menuItems: MenuProps["items"] = [
     {
@@ -977,6 +966,7 @@ function buildRouteTitle(
   const routeSeg = rn.isTcp ? "tcproute" : "route";
   const routePath = `${basePath}/bind/${bindPort}/listener/${listenerIndex}/${routeSeg}/${rn.categoryIndex}`;
   const listenerPath = `${basePath}/bind/${bindPort}/listener/${listenerIndex}`;
+
 
   // Check which policy types already exist
   const existingPolicyTypes = new Set(rn.policies.map((p) => p.policyType));
@@ -1160,9 +1150,8 @@ function buildTopLevelPolicyTitle(
   basePath: string,
 ): ReactNode{
   const label = getPolicyLabel(pn.policyType);
-  const scopeBase = basePath.endsWith(`/${scope}`) ? basePath : `${basePath}/${scope}`;
-  const policyPath = `${scopeBase}/policy/${pn.policyType}`;
-  const parentPath = scopeBase;
+  const parentPath = `${basePath}/${scope}`;
+  const policyPath = `${parentPath}/policy/${pn.policyType}`;
 
   const menuItems: MenuProps["items"] = [
     {
@@ -1842,13 +1831,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
   const navigate = useNavigate();
   const location = useLocation();
   const basePath = useMemo(() => {
-    const knownSegments = ["bind", "llm", "mcp", "frontendPolicies", "raw-config"];
-    const pathname = location.pathname;
-    for (const seg of knownSegments) {
-      const idx = pathname.indexOf(`/${seg}`);
-      if (idx !== -1) return idx === 0 ? `/${seg}` : pathname.substring(0, idx);
-    }
-    return pathname.replace(/\/$/, "") || "/";
+    return `/${location.pathname.split('/').at(1) ?? ''}`;
   }, [location.pathname]);
   const { modal } = App.useApp();
   const { mutate } = useConfig();

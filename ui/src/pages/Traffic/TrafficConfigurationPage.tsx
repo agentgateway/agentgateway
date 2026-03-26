@@ -105,7 +105,7 @@ const Description = styled.p`
 
 function parseTrafficPath(pathname: string): UrlParams | null {
   // Check for model routes first (must be before general LLM route)
-  const modelMatch = pathname.match(/\/traffic\/llm\/model\/(\d+)/);
+  const modelMatch = pathname.match(/\/traffic-configuration\/llm\/model\/(\d+)/);
   if (modelMatch) {
     return {
       topLevelType: "llm",
@@ -114,7 +114,7 @@ function parseTrafficPath(pathname: string): UrlParams | null {
   }
 
   // Check for LLM policy routes (must be before general LLM route)
-  const llmPolicyMatch = pathname.match(/\/traffic\/llm\/policy\/(.+)/);
+  const llmPolicyMatch = pathname.match(/\/traffic-configuration\/llm\/policy\/(.+)/);
   if (llmPolicyMatch) {
     return {
       topLevelType: "llm",
@@ -123,7 +123,7 @@ function parseTrafficPath(pathname: string): UrlParams | null {
   }
 
   // Check for MCP policy routes (must be before general MCP route)
-  const mcpPolicyMatch = pathname.match(/\/traffic\/mcp\/policy\/(.+)/);
+  const mcpPolicyMatch = pathname.match(/\/traffic-configuration\/mcp\/policy\/(.+)/);
   if (mcpPolicyMatch) {
     return {
       topLevelType: "mcp",
@@ -132,7 +132,7 @@ function parseTrafficPath(pathname: string): UrlParams | null {
   }
 
   // Check for MCP target policy routes (must be before target route)
-  const mcpTargetPolicyMatch = pathname.match(/\/traffic\/mcp\/target\/(\d+)\/policy\/(.+)/);
+  const mcpTargetPolicyMatch = pathname.match(/\/traffic-configuration\/mcp\/target\/(\d+)\/policy\/(.+)/);
   if (mcpTargetPolicyMatch) {
     return {
       topLevelType: "mcp",
@@ -142,7 +142,7 @@ function parseTrafficPath(pathname: string): UrlParams | null {
   }
 
   // Check for MCP target routes (must be before general MCP route)
-  const mcpTargetMatch = pathname.match(/\/traffic\/mcp\/target\/(\d+)/);
+  const mcpTargetMatch = pathname.match(/\/traffic-configuration\/mcp\/target\/(\d+)/);
   if (mcpTargetMatch) {
     return {
       topLevelType: "mcp",
@@ -151,7 +151,7 @@ function parseTrafficPath(pathname: string): UrlParams | null {
   }
 
   // Check for top-level config routes
-  const topLevelMatch = pathname.match(/\/traffic\/(llm|mcp|frontendPolicies)/);
+  const topLevelMatch = pathname.match(/\/traffic-configuration\/(llm|mcp|frontendPolicies)/);
   if (topLevelMatch) {
     return {
       topLevelType: topLevelMatch[1] as "llm" | "mcp" | "frontendPolicies",
@@ -160,7 +160,7 @@ function parseTrafficPath(pathname: string): UrlParams | null {
 
   // Check for bind routes
   const m = pathname.match(
-    /\/traffic\/bind\/(\d+)(?:\/listener\/(\d+)(?:\/(tcp)?route\/(\d+)(?:\/backend\/(\d+)|\/policy\/([^/?]+))?)?)?/,
+    /\/traffic-configuration\/bind\/(\d+)(?:\/listener\/(\d+)(?:\/(tcp)?route\/(\d+)(?:\/backend\/(\d+)|\/policy\/([^/?]+))?)?)?/,
   );
   if (!m) return null;
 
@@ -252,7 +252,7 @@ export function TrafficConfigurationPage() {
           </div>
           <Button
             icon={<CodeOutlined />}
-            onClick={() => navigate("/traffic/raw-config")}
+            onClick={() => navigate("/traffic-configuration/editor")}
           >
             Config Editor
           </Button>

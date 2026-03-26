@@ -21,6 +21,12 @@ binds:
           targets: []
           statefulMode: stateless
         weight: 1
+      - service:
+          name:
+            namespace: default
+            hostname: service
+          port: 8080
+        weight: 1
       name: route
       policies:
         cors:
@@ -35,7 +41,10 @@ binds:
           - '*'
           exposeHeaders: []
 llm:
-  models: []
+  port: 12111
+  models:
+  - name: model-1
+    provider: openAI
   policies:
     jwtAuth:
       issuer: ''
@@ -43,14 +52,18 @@ llm:
       jwks: '{"keys":[]}'
     basicAuth:
       htpasswd: ''
-    apiKey:
-      keys: []
-    authorization:
-      rules: []
     transformations: {}
 mcp:
-  targets: []
+  port: 221
+  statefulMode: stateless
+  targets:
+  - name: target-1
+    sse:
+      host: localhost
+      port: 8080
+      path: /sse
   policies:
     cors: {}
     apiKey:
       keys: []
+frontendPolicies: {}

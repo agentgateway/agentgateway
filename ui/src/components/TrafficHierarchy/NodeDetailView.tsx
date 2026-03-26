@@ -550,7 +550,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
   const { mutate } = useConfig();
 
   const basePath = useMemo(() => {
-    const knownSegments = ["bind", "llm", "mcp", "frontendPolicies", "raw-config"];
+    const knownSegments = ["bind", "llm", "mcp", "frontendPolicies", "editor"];
     const pathname = location.pathname;
     for (const seg of knownSegments) {
       const idx = pathname.indexOf(`/${seg}`);

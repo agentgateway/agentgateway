@@ -301,22 +301,22 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
       type: "group",
       children: [
         {
-          key: "/llm",
+          key: "/llm-configuration",
           icon: <Brain size={18} />,
           label: "Configuration",
         },
         {
-          key: "/llm/metrics",
+          key: "/llm-metrics",
           icon: <BarChart3 size={18} />,
           label: "Metrics",
         },
         {
-          key: "/llm/logs",
+          key: "/llm-logs",
           icon: <FileText size={18} />,
           label: "Logs",
         },
         {
-          key: "/llm/playground",
+          key: "/llm-playground",
           icon: <FlaskConical size={18} />,
           label: "Playground",
         },
@@ -328,22 +328,22 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
       type: "group",
       children: [
         {
-          key: "/mcp",
+          key: "/mcp-configuration",
           icon: <Network size={18} />,
           label: "Configuration",
         },
         {
-          key: "/mcp/metrics",
+          key: "/mcp-metrics",
           icon: <BarChart3 size={18} />,
           label: "Metrics",
         },
         {
-          key: "/mcp/logs",
+          key: "/mcp-logs",
           icon: <FileText size={18} />,
           label: "Logs",
         },
         {
-          key: "/mcp/playground",
+          key: "/mcp-playground",
           icon: <FlaskConical size={18} />,
           label: "Playground",
         },
@@ -355,17 +355,17 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
       type: "group",
       children: [
         {
-          key: "/traffic",
+          key: "/traffic-configuration",
           icon: <Route size={18} />,
           label: "Configuration",
         },
         {
-          key: "/traffic/metrics",
+          key: "/traffic-metrics",
           icon: <BarChart3 size={18} />,
           label: "Metrics",
         },
         {
-          key: "/traffic/logs",
+          key: "/traffic-logs",
           icon: <FileText size={18} />,
           label: "Logs",
         },
@@ -395,17 +395,17 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
 
   const selectedKeys = useMemo(() => {
     const knownPaths = [
-      "/traffic",
-      "/traffic/logs",
-      "/traffic/metrics",
-      "/llm",
-      "/llm/logs",
-      "/llm/metrics",
-      "/llm/playground",
-      "/mcp",
-      "/mcp/logs",
-      "/mcp/metrics",
-      "/mcp/playground",
+      "/traffic-configuration",
+      "/traffic-logs",
+      "/traffic-metrics",
+      "/llm-configuration",
+      "/llm-logs",
+      "/llm-metrics",
+      "/llm-playground",
+      "/mcp-configuration",
+      "/mcp-logs",
+      "/mcp-metrics",
+      "/mcp-playground",
       "/cel-playground",
       "/dashboard",
     ];

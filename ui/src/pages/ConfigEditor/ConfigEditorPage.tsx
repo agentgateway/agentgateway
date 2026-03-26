@@ -35,7 +35,7 @@ export function ConfigEditorPage() {
   const location = useLocation();
 
   const basePath = useMemo(
-    () => location.pathname.replace(/\/raw-config.*$/, "") || "/",
+    () => location.pathname.replace(/\/editor.*$/, "") || "/",
     [location.pathname],
   );
 

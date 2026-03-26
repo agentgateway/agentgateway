@@ -59,94 +59,96 @@ function App() {
                   <Route path="/dashboard" element={<DashboardPage />} />
 
                   {/* LLM Section */}
-                  <Route path="/llm" element={<LLMConfigurationPage />} />
-                  <Route path="/llm/model/:modelIndex" element={<LLMConfigurationPage />} />
-                  <Route path="/llm/policy/:policyType" element={<LLMConfigurationPage />} />
-                  <Route path="/llm/raw-config" element={<ConfigEditorPage />} />
-                  <Route path="/llm/logs" element={<LLMLogsPage />} />
-                  <Route path="/llm/metrics" element={<LLMMetricsPage />} />
+                  <Route path="/llm-configuration" element={<LLMConfigurationPage />} />
+                  <Route path="/llm-configuration/llm" element={<LLMConfigurationPage />} />
+                  <Route path="/llm-configuration/llm/model/:modelIndex" element={<LLMConfigurationPage />} />
+                  <Route path="/llm-configuration/llm/policy/:policyType" element={<LLMConfigurationPage />} />
+                  <Route path="/llm-configuration/editor" element={<ConfigEditorPage />} />
+                  <Route path="/llm-logs" element={<LLMLogsPage />} />
+                  <Route path="/llm-metrics" element={<LLMMetricsPage />} />
                   <Route
-                    path="/llm/playground"
+                    path="/llm-playground"
                     element={<LLMPlaygroundPage />}
                   />
 
                   {/* MCP Section */}
-                  <Route path="/mcp" element={<MCPConfigurationPage />} />
-                  <Route path="/mcp/target/:targetIndex" element={<MCPConfigurationPage />} />
-                  <Route path="/mcp/target/:targetIndex/policy/:policyType" element={<MCPConfigurationPage />} />
-                  <Route path="/mcp/policy/:policyType" element={<MCPConfigurationPage />} />
-                  <Route path="/mcp/raw-config" element={<ConfigEditorPage />} />
-                  <Route path="/mcp/logs" element={<MCPLogsPage />} />
-                  <Route path="/mcp/metrics" element={<MCPMetricsPage />} />
+                  <Route path="/mcp-configuration" element={<MCPConfigurationPage />} />
+                  <Route path="/mcp-configuration/mcp" element={<MCPConfigurationPage />} />
+                  <Route path="/mcp-configuration/mcp/target/:targetIndex" element={<MCPConfigurationPage />} />
+                  <Route path="/mcp-configuration/mcp/target/:targetIndex/policy/:policyType" element={<MCPConfigurationPage />} />
+                  <Route path="/mcp-configuration/mcp/policy/:policyType" element={<MCPConfigurationPage />} />
+                  <Route path="/mcp-configuration/editor" element={<ConfigEditorPage />} />
+                  <Route path="/mcp-logs" element={<MCPLogsPage />} />
+                  <Route path="/mcp-metrics" element={<MCPMetricsPage />} />
                   <Route
-                    path="/mcp/playground"
+                    path="/mcp-playground"
                     element={<MCPPlaygroundPage />}
                   />
 
                   {/* Traffic Section */}
-                  <Route path="/traffic" element={<TrafficConfigurationPage />} />
-                  <Route path="/traffic/logs" element={<TrafficLogsPage />} />
+                  <Route path="/traffic-logs" element={<TrafficLogsPage />} />
                   <Route
-                    path="/traffic/metrics"
+                    path="/traffic-metrics"
                     element={<TrafficMetricsPage />}
                   />
+                  <Route path="/traffic-configuration" element={<TrafficConfigurationPage />} />
                   <Route
-                    path="/traffic/raw-config"
+                    path="/traffic-configuration/editor"
                     element={<ConfigEditorPage />}
                   />
-                  <Route path="/traffic/llm" element={<TrafficConfigurationPage />} />
+                  <Route path="/traffic-configuration/llm" element={<TrafficConfigurationPage />} />
                   <Route
-                    path="/traffic/llm/model/:modelIndex"
+                    path="/traffic-configuration/llm/model/:modelIndex"
                     element={<TrafficConfigurationPage />}
                   />
                   <Route
-                    path="/traffic/llm/policy/:policyType"
+                    path="/traffic-configuration/llm/policy/:policyType"
                     element={<TrafficConfigurationPage />}
                   />
-                  <Route path="/traffic/mcp" element={<TrafficConfigurationPage />} />
+                  <Route path="/traffic-configuration/mcp" element={<TrafficConfigurationPage />} />
                   <Route
-                    path="/traffic/mcp/target/:targetIndex"
-                    element={<TrafficConfigurationPage />}
-                  />
-                  <Route
-                    path="/traffic/mcp/target/:targetIndex/policy/:policyType"
+                    path="/traffic-configuration/mcp/target/:targetIndex"
                     element={<TrafficConfigurationPage />}
                   />
                   <Route
-                    path="/traffic/mcp/policy/:policyType"
+                    path="/traffic-configuration/mcp/target/:targetIndex/policy/:policyType"
                     element={<TrafficConfigurationPage />}
                   />
                   <Route
-                    path="/traffic/frontendPolicies"
-                    element={<TrafficConfigurationPage />}
-                  />
-                  <Route path="/traffic/bind/:port" element={<TrafficConfigurationPage />} />
-                  <Route
-                    path="/traffic/bind/:port/listener/:li"
+                    path="/traffic-configuration/mcp/policy/:policyType"
                     element={<TrafficConfigurationPage />}
                   />
                   <Route
-                    path="/traffic/bind/:port/listener/:li/route/:ri"
+                    path="/traffic-configuration/frontendPolicies"
+                    element={<TrafficConfigurationPage />}
+                  />
+                  <Route path="/traffic-configuration/bind/:port" element={<TrafficConfigurationPage />} />
+                  <Route
+                    path="/traffic-configuration/bind/:port/listener/:li"
                     element={<TrafficConfigurationPage />}
                   />
                   <Route
-                    path="/traffic/bind/:port/listener/:li/tcproute/:ri"
+                    path="/traffic-configuration/bind/:port/listener/:li/route/:ri"
                     element={<TrafficConfigurationPage />}
                   />
                   <Route
-                    path="/traffic/bind/:port/listener/:li/route/:ri/backend/:bi"
+                    path="/traffic-configuration/bind/:port/listener/:li/tcproute/:ri"
                     element={<TrafficConfigurationPage />}
                   />
                   <Route
-                    path="/traffic/bind/:port/listener/:li/tcproute/:ri/backend/:bi"
+                    path="/traffic-configuration/bind/:port/listener/:li/route/:ri/backend/:bi"
                     element={<TrafficConfigurationPage />}
                   />
                   <Route
-                    path="/traffic/bind/:port/listener/:li/route/:ri/policy/:policyType"
+                    path="/traffic-configuration/bind/:port/listener/:li/tcproute/:ri/backend/:bi"
                     element={<TrafficConfigurationPage />}
                   />
                   <Route
-                    path="/traffic/bind/:port/listener/:li/tcproute/:ri/policy/:policyType"
+                    path="/traffic-configuration/bind/:port/listener/:li/route/:ri/policy/:policyType"
+                    element={<TrafficConfigurationPage />}
+                  />
+                  <Route
+                    path="/traffic-configuration/bind/:port/listener/:li/tcproute/:ri/policy/:policyType"
                     element={<TrafficConfigurationPage />}
                   />
 

@@ -7,9 +7,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
 import type { AddRootHandlers, UrlParams } from "../../components/TrafficHierarchy";
 import {
-    HierarchyTree,
-    NodeDetailView,
-    useTrafficHierarchy,
+  HierarchyTree,
+  NodeDetailView,
+  useTrafficHierarchy,
 } from "../../components/TrafficHierarchy";
 
 const PageRoot = styled.div`
@@ -197,7 +197,7 @@ export function LLMConfigurationPage() {
           </div>
           <Button
             icon={<CodeOutlined />}
-            onClick={() => navigate("/llm/raw-config")}
+            onClick={() => navigate("/llm-configuration/editor")}
           >
             Config Editor
           </Button>

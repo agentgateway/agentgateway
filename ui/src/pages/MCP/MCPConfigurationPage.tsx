@@ -7,9 +7,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
 import type { AddRootHandlers, UrlParams } from "../../components/TrafficHierarchy";
 import {
-    HierarchyTree,
-    NodeDetailView,
-    useTrafficHierarchy,
+  HierarchyTree,
+  NodeDetailView,
+  useTrafficHierarchy,
 } from "../../components/TrafficHierarchy";
 
 const PageRoot = styled.div`
@@ -205,7 +205,7 @@ export function MCPConfigurationPage() {
           </div>
           <Button
             icon={<CodeOutlined />}
-            onClick={() => navigate("/mcp/raw-config")}
+            onClick={() => navigate("/mcp-configuration/editor")}
           >
             Config Editor
           </Button>
