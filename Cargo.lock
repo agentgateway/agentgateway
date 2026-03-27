@@ -169,6 +169,7 @@ dependencies = [
  "google-cloud-auth",
  "hashbrown 0.16.1",
  "headers",
+ "headers-accept",
  "heck",
  "hex",
  "hickory-resolver",
@@ -191,6 +192,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "macro_rules_attribute",
+ "mediatype",
  "notify",
  "notify-debouncer-full",
  "num_cpus",
@@ -2722,6 +2724,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "headers-accept"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78beb98ea9a8f76b4a38c5ca651db6aa84701f307b63b4e0d78342ad4219c7e4"
+dependencies = [
+ "headers-core",
+ "http 1.4.0",
+ "mediatype",
+]
+
+[[package]]
 name = "headers-core"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3651,6 +3664,12 @@ dependencies = [
  "cfg-if",
  "digest 0.10.7",
 ]
+
+[[package]]
+name = "mediatype"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "120fa187be19d9962f0926633453784691731018a2bf936ddb4e29101b79c4a7"
 
 [[package]]
 name = "memchr"

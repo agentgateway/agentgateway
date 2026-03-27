@@ -4,8 +4,11 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
 use agent_core::drain::DrainWatcher;
+use headers::Header;
+use headers_accept::Accept;
 use hyper::Request;
 use hyper::body::Incoming;
+use mediatype::MediaType;
 use prometheus_client::encoding::text::encode as encode_text;
 use prometheus_client::encoding::protobuf::encode as encode_protobuf;
 use prost_v12::Message;
@@ -54,20 +57,17 @@ async fn handle_metrics(reg: Arc<Mutex<Registry>>, req: Request<Incoming>) -> Re
                 .map(|_| str_buf.into_bytes())
         },
         ContentType::Protobuf => encode_protobuf(&reg)
-            .map(|metrics| metrics.encode_to_vec())
+            .map(|metrics| metrics.encode_length_delimited_to_vec())
     };
-	if let Err(err) = result {
-		return ::http::Response::builder()
-			.status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-			.body(err.to_string().into())
-			.expect("builder with known status code should not fail");
-	}
-    let repsonse_content_type: &str = content_type.into();
-	::http::Response::builder()
-		.status(hyper::StatusCode::OK)
-		.header(hyper::header::CONTENT_TYPE, repsonse_content_type)
-		.body(result.unwrap().into())
-		.expect("builder with known status code should not fail")
+    match result {
+        Ok(buf) => ::http::Response::builder()
+            .status(hyper::StatusCode::OK)
+            .header(hyper::header::CONTENT_TYPE, Into::<&str>::into(content_type))
+            .body(buf.into()),
+        Err(err) => ::http::Response::builder()
+            .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
+            .body(err.to_string().into())
+	}.expect("builder with known status code should not fail")
 }
 
 #[derive(Default)]
@@ -88,31 +88,41 @@ impl From<ContentType> for &str {
 	}
 }
 
+fn content_type_from_media_type(m: &MediaType) -> Option<ContentType> {
+    let ty_str: &str = m.ty.as_str();
+    if ty_str == mediatype::names::TEXT.as_str() 
+        && m.subty == mediatype::names::PLAIN.as_str() {
+        return Some(ContentType::PlainText);
+    } else if ty_str != mediatype::names::APPLICATION.as_str() {
+        return None;
+    }
+    match m.subty.as_str() {
+        "openmetrics-text" => Some(ContentType::OpenMetrics),
+        "vnd.google.protobuf" | "protobuf" | "x-protobuf" => Some(ContentType::Protobuf),
+        _ => None
+    }
+}
+
+const AVAILABLE_MEDIA_TYPES: [MediaType; 5] = [
+    MediaType::new(mediatype::names::APPLICATION, mediatype::Name::new_unchecked("vnd.google.protobuf")),
+    MediaType::new(mediatype::names::APPLICATION, mediatype::Name::new_unchecked("protobuf")),
+    MediaType::new(mediatype::names::APPLICATION, mediatype::Name::new_unchecked("x-protobuf")),
+    MediaType::new(mediatype::names::APPLICATION, mediatype::Name::new_unchecked("openmetrics-text")),
+    MediaType::new(mediatype::names::TEXT, mediatype::names::PLAIN),
+];
+
 #[inline(always)]
 fn content_type<T>(req: &Request<T>) -> ContentType {
-	req
-		.headers()
-		.get_all(http::header::ACCEPT)
-		.iter()
-		.flat_map(|entry| entry.to_str().ok())
-		// get_all can return multiple in one line still
-		.flat_map(|entry| {
-			entry
-				.split(",")
-				.map(str::trim)
-				.map(|entry| entry.to_lowercase())
-		})
-		.find_map(|v| match v.split(";").collect::<Vec<_>>().first() {
-			Some(&"application/openmetrics-text") => Some(ContentType::OpenMetrics),
-            // Google utilised
-            Some(&"application/vnd.google.protobuf")
-                // Some proxies and other third-party libraries
-                | Some(&"application/x-protobuf")
-                // datatracker.ietf.org/doc/draft-ietf-dispatch-mime-protobuf
-                | Some(&"application/protobuf") => Some(ContentType::Protobuf),
-			_ => None,
-		})
-		.unwrap_or_default()
+    let mut values = req.headers()
+        .get_all(http::header::ACCEPT)
+        .iter();
+    let accept = match Accept::decode(&mut values) {
+        Ok(header) => header,
+        Err(_) => return ContentType::default(),
+    };
+    accept.negotiate(&AVAILABLE_MEDIA_TYPES)
+        .and_then(content_type_from_media_type)
+        .unwrap_or_default()
 }
 
 mod test {
@@ -137,7 +147,7 @@ mod test {
 
 		let mixed_req = http::Request::builder()
           .header("X-Custom-Beep", "boop")
-          .header("Accept", "application/vnd.google.protobuf;proto=io.prometheus.client.MetricFamily;encoding=delimited;q=0.6,application/openmetrics-text;version=1.0.0;escaping=allow-utf-8;q=0.5,application/openmetrics-text;version=0.0.1;q=0.4,text/plain;version=1.0.0;escaping=allow-utf-8;q=0.3,text/plain;version=0.0.4;q=0.2,*/*;q=0.1")
+          .header("Accept", "application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;q=0.6,application/openmetrics-text;version=1.0.0;escaping=allow-utf-8;q=0.5,application/openmetrics-text;version=0.0.1;q=0.4,text/plain;version=1.0.0;escaping=allow-utf-8;q=0.3,text/plain;version=0.0.4;q=0.2,*/*;q=0.1")
           .body("I would like protobuf")
           .unwrap();
 		assert_eq!(

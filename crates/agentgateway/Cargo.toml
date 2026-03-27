@@ -54,6 +54,7 @@ futures.workspace = true
 google-cloud-auth.workspace = true
 hashbrown.workspace = true
 headers.workspace = true
+headers-accept = "0.3.0"
 heck.workspace = true
 hex.workspace = true
 hickory-resolver.workspace = true
@@ -74,6 +75,7 @@ jemalloc_pprof = { workspace = true, optional = true }
 jsonwebtoken.workspace = true
 lazy_static.workspace = true
 macro_rules_attribute.workspace = true
+mediatype = "0.21.0"
 notify-debouncer-full.workspace = true
 notify.workspace = true
 num_cpus.workspace = true
