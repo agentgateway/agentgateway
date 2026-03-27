@@ -53,6 +53,43 @@ import { cn } from "@/lib/utils";
 import { getBackendName } from "@/lib/backend-utils";
 import { v4 as uuidv4 } from "uuid";
 
+
+const createSafeFetch = () => {
+  return async function safeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    try {
+      // Detailed logging for A2A requests
+      let url = "";
+      if (typeof input === "string") {
+        url = input;
+      } else if (input instanceof URL) {
+        url = input.toString();
+      } else if (input instanceof Request) {
+        url = input.url;
+      }
+
+      // Use fetch in correct context
+      const response = await fetch(input, init);
+
+      return response;
+    } catch (error) {
+      console.error("❌ Error in A2A fetch:", {
+        url:
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input instanceof Request
+                ? input.url
+                : "unknown",
+        error: error,
+        errorName: error instanceof Error ? error.name : "unknown",
+        errorMessage: error instanceof Error ? error.message : "unknown",
+      });
+      throw error;
+    }
+  };
+};
+
 import { CapabilitiesList } from "@/components/playground/CapabilitiesList";
 import { ActionPanel } from "@/components/playground/ActionPanel";
 import { ResponseDisplay } from "@/components/playground/ResponseDisplay";
@@ -515,12 +552,16 @@ export default function PlaygroundPage() {
             },
           };
 
-          const authenticatedFetch = createAuthenticatingFetchWithRetry(fetch, authHandler);
+          const safeFetch = createSafeFetch();
+          const authenticatedFetch = createAuthenticatingFetchWithRetry(safeFetch, authHandler);
           client = new A2AClient(connectUrl, {
             fetchImpl: authenticatedFetch,
           });
         } else {
-          client = new A2AClient(connectUrl);
+          const safeFetch = createSafeFetch();
+          client = new A2AClient(connectUrl, {
+            fetchImpl: safeFetch,
+          });
         }
 
         setA2aState((prev) => ({ ...prev, client }));
@@ -532,7 +573,11 @@ export default function PlaygroundPage() {
         try {
           // Fetch the agent card using the client's built-in method
           // The client already handles authentication via the fetchImpl we provided
+      
+
           const agentCard: AgentCard = await client.getAgentCard();
+
+          console.log("🎉 Agent Card loaded:", agentCard);
 
           // Extract skills from the agent card
           const skills = agentCard.skills || [];
@@ -542,7 +587,18 @@ export default function PlaygroundPage() {
             `Loaded A2A agent: ${agentCard.name} with ${skills.length} skill${skills.length !== 1 ? "s" : ""}`
           );
         } catch (error: any) {
-          console.error("Failed to load A2A capabilities:", error);
+          console.error("❌ Failed to load A2A capabilities:", error);
+
+          // Aditional error Logs
+          console.error("📊 Error Detail:", {
+            name: error?.name,
+            message: error?.message,
+            stack: error?.stack,
+            cause: error?.cause,
+            type: typeof error,
+            constructor: error?.constructor?.name,
+          });
+
           // Don't fail the connection, just continue without skills
           setA2aState((prev) => ({ ...prev, skills: [] }));
 
@@ -558,7 +614,7 @@ export default function PlaygroundPage() {
               error.message.includes("NetworkError") ||
               error.message.includes("Failed to fetch")
             ) {
-              errorMessage = "Network error - check if A2A endpoint is reachable and allows CORS";
+              errorMessage = `Network error - Endpoint: ${connectUrl} - Check if A2A endpoint is reachable and allows CORS`;
             } else {
               errorMessage = error.message;
             }
@@ -825,7 +881,7 @@ export default function PlaygroundPage() {
 
   const getStatusColor = (status: number) => {
     if (status >= 200 && status < 300) return "text-green-600";
-    if (status >= 300 && status < 400) return "text-primary";
+    if (status >= 300 && status < 400) return "text-blue-600";
     if (status >= 400 && status < 500) return "text-orange-600";
     if (status >= 500) return "text-red-600";
     return "text-gray-600";
@@ -892,7 +948,9 @@ export default function PlaygroundPage() {
                             <div className="flex items-center gap-2">
                               <Server className="h-4 w-4 text-muted-foreground" />
                               <span className="font-medium text-sm">{listenerName}</span>
-                              <Badge className="text-xs">Port {port}</Badge>
+                              <Badge variant="secondary" className="text-xs">
+                                Port {port}
+                              </Badge>
                             </div>
                             <div className="text-xs text-muted-foreground font-mono">
                               {endpoint}
@@ -944,13 +1002,19 @@ export default function PlaygroundPage() {
                                         {routeInfo.routePath}
                                       </Badge>
                                       {routeInfo.route.matches?.[0]?.path?.regex && (
-                                        <Badge className="text-xs">regex</Badge>
+                                        <Badge variant="secondary" className="text-xs">
+                                          regex
+                                        </Badge>
                                       )}
                                       {routeInfo.route.matches?.[0]?.path?.pathPrefix && (
-                                        <Badge className="text-xs">prefix</Badge>
+                                        <Badge variant="secondary" className="text-xs">
+                                          prefix
+                                        </Badge>
                                       )}
                                       {routeInfo.route.matches?.[0]?.path?.exact && (
-                                        <Badge className="text-xs">exact</Badge>
+                                        <Badge variant="secondary" className="text-xs">
+                                          exact
+                                        </Badge>
                                       )}
                                     </div>
 
@@ -993,14 +1057,18 @@ export default function PlaygroundPage() {
                                             {hasA2aPolicy && (
                                               <Badge
                                                 variant="default"
-                                                className="text-xs py-0 px-1 bg-primary hover:bg-primary/90"
+                                                className="text-xs py-0 px-1 bg-blue-600 hover:bg-blue-700"
                                               >
                                                 A2A
                                               </Badge>
                                             )}
                                             {hasBackends &&
                                               backendTypes.map((type, idx) => (
-                                                <Badge key={idx} className="text-xs py-0 px-1">
+                                                <Badge
+                                                  key={idx}
+                                                  variant="secondary"
+                                                  className="text-xs py-0 px-1"
+                                                >
                                                   {type}
                                                 </Badge>
                                               ))}
@@ -1166,13 +1234,19 @@ export default function PlaygroundPage() {
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-xs">{selectedRoute.routePath}</span>
                         {selectedRoute.route.matches?.[0]?.path?.regex && (
-                          <Badge className="text-xs">regex</Badge>
+                          <Badge variant="secondary" className="text-xs">
+                            regex
+                          </Badge>
                         )}
                         {selectedRoute.route.matches?.[0]?.path?.pathPrefix && (
-                          <Badge className="text-xs">prefix</Badge>
+                          <Badge variant="secondary" className="text-xs">
+                            prefix
+                          </Badge>
                         )}
                         {selectedRoute.route.matches?.[0]?.path?.exact && (
-                          <Badge className="text-xs">exact</Badge>
+                          <Badge variant="secondary" className="text-xs">
+                            exact
+                          </Badge>
                         )}
                       </div>
                     </div>
@@ -1191,7 +1265,9 @@ export default function PlaygroundPage() {
                           return (
                             <div key={idx} className="flex items-center gap-2">
                               <Icon className="h-3 w-3" />
-                              <Badge className="text-xs">{info.type}</Badge>
+                              <Badge variant="secondary" className="text-xs">
+                                {info.type}
+                              </Badge>
                               <span className="text-xs">{info.name}</span>
                               {backend.weight && backend.weight !== 1 && (
                                 <span className="text-xs text-muted-foreground">
@@ -1381,7 +1457,7 @@ export default function PlaygroundPage() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Type:</span>
-                      <Badge className="text-xs">
+                      <Badge variant="secondary" className="text-xs">
                         {connectionState.connectionType?.toUpperCase()}
                       </Badge>
                     </div>
