@@ -467,9 +467,14 @@ impl Policy {
 					}
 				},
 				RequestGuardKind::AzureContentSafety(acs) => {
-					if let Some(res) =
-						Self::apply_azure_content_safety_request(req, claims.clone(), &client, &g.rejection, acs)
-							.await?
+					if let Some(res) = Self::apply_azure_content_safety_request(
+						req,
+						claims.clone(),
+						&client,
+						&g.rejection,
+						acs,
+					)
+					.await?
 					{
 						Self::record_guardrail_trip(
 							&client,
@@ -570,14 +575,28 @@ impl Policy {
 		config: &AzureContentSafety,
 	) -> anyhow::Result<Option<Response>> {
 		if let Some(ref analyze_text) = config.analyze_text {
-			let resp = azure_content_safety::send_analyze_text_for_request(req, claims.clone(), client, config, analyze_text).await?;
+			let resp = azure_content_safety::send_analyze_text_for_request(
+				req,
+				claims.clone(),
+				client,
+				config,
+				analyze_text,
+			)
+			.await?;
 			let threshold = analyze_text.severity_threshold.unwrap_or(2);
 			if resp.is_blocked(threshold) {
 				return Ok(Some(rej.as_response()));
 			}
 		}
 		if let Some(ref detect_jailbreak) = config.detect_jailbreak {
-			let resp = azure_content_safety::send_detect_jailbreak_for_request(req, claims.clone(), client, config, detect_jailbreak).await?;
+			let resp = azure_content_safety::send_detect_jailbreak_for_request(
+				req,
+				claims.clone(),
+				client,
+				config,
+				detect_jailbreak,
+			)
+			.await?;
 			if resp.jailbreak_detected() {
 				return Ok(Some(rej.as_response()));
 			}
@@ -630,8 +649,14 @@ impl Policy {
 		}
 
 		if let Some(ref analyze_text) = config.analyze_text {
-			let guardrail_resp =
-				azure_content_safety::send_analyze_text_for_response(content.clone(), claims, client, config, analyze_text).await?;
+			let guardrail_resp = azure_content_safety::send_analyze_text_for_response(
+				content.clone(),
+				claims,
+				client,
+				config,
+				analyze_text,
+			)
+			.await?;
 			let threshold = analyze_text.severity_threshold.unwrap_or(2);
 			if guardrail_resp.is_blocked(threshold) {
 				return Ok(Some(rej.as_response()));

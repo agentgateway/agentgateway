@@ -86,7 +86,8 @@ impl AnalyzeTextResponse {
 		if !self.blocklists_match.is_empty() {
 			return true;
 		}
-		self.categories_analysis
+		self
+			.categories_analysis
 			.iter()
 			.any(|c| c.severity >= severity_threshold)
 	}
@@ -210,7 +211,10 @@ async fn send_content_safety_request<Req: Serialize, Resp: serde::de::Deserializ
 	operation: &str,
 ) -> anyhow::Result<Resp> {
 	let host = resolve_host(root);
-	let uri = format!("https://{}/contentsafety/{}?api-version={}", host, path, api_version);
+	let uri = format!(
+		"https://{}/contentsafety/{}?api-version={}",
+		host, path, api_version
+	);
 
 	debug!(
 		uri = %uri,
@@ -262,8 +266,12 @@ async fn send_content_safety_request<Req: Serialize, Resp: serde::de::Deserializ
 		);
 	}
 
-	serde_json::from_slice(&bytes)
-		.map_err(|e| anyhow::anyhow!("Failed to parse Azure Content Safety {} response: {e}", operation))
+	serde_json::from_slice(&bytes).map_err(|e| {
+		anyhow::anyhow!(
+			"Failed to parse Azure Content Safety {} response: {e}",
+			operation
+		)
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -280,11 +288,7 @@ async fn send_analyze_text(
 	let request_body = AnalyzeTextRequest {
 		text: text.to_string(),
 		categories: Vec::new(),
-		blocklist_names: config
-			.blocklist_names
-			.as_ref()
-			.cloned()
-			.unwrap_or_default(),
+		blocklist_names: config.blocklist_names.as_ref().cloned().unwrap_or_default(),
 		halt_on_blocklist_hit: config.halt_on_blocklist_hit,
 		output_type: None,
 	};
@@ -296,7 +300,13 @@ async fn send_analyze_text(
 		.unwrap_or("2024-09-01");
 
 	let resp: AnalyzeTextResponse = send_content_safety_request(
-		client, claims, root, "text:analyze", api_version, &request_body, "text analysis",
+		client,
+		claims,
+		root,
+		"text:analyze",
+		api_version,
+		&request_body,
+		"text analysis",
 	)
 	.await?;
 
@@ -342,7 +352,13 @@ async fn send_detect_jailbreak(
 		.unwrap_or("2024-02-15-preview");
 
 	let resp: DetectJailbreakResponse = send_content_safety_request(
-		client, claims, root, "text:detectJailbreak", api_version, &request_body, "jailbreak detection",
+		client,
+		claims,
+		root,
+		"text:detectJailbreak",
+		api_version,
+		&request_body,
+		"jailbreak detection",
 	)
 	.await?;
 
