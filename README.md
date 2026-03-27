@@ -29,7 +29,7 @@
 
 ---
 
-**Agentgateway** is an open source data plane optimized for agentic AI connectivity within or across any agent framework or environment. Agentgateway provides drop-in security, observability, and governance for agent-to-agent and agent-to-tool communication and supports leading interoperable protocols, including [Agent2Agent (A2A)](https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/) and [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction).
+**Agentgateway** is an open source proxy built on AI-native protocols ([MCP](https://modelcontextprotocol.io/introduction) & [A2A](https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/)) that provides drop-in security, observability, and governance for agent-to-LLM, agent-to-tool, and agent-to-agent communication across any framework and environment.
 
 <br> 
 <div align="center">
@@ -41,20 +41,31 @@
 
 [![Agentgateway Intro Video](https://img.youtube.com/vi/SomP92JWPmE/hqdefault.jpg)](https://youtu.be/SomP92JWPmE)
 
-## Key Features:
+## Key Features
 
-- [x] **Highly performant:** agentgateway is written in rust, and is designed from the ground up to handle any scale you can throw at it.
-- [x] **Security First:** agentgateway includes a robust MCP/A2A focused RBAC system.
-- [x] **Multi Tenant:** agentgateway supports multiple tenants, each with their own set of resources and users.
-- [x] **Dynamic:** agentgateway supports dynamic configuration updates via xDS, without any downtime.
-- [x] **Run Anywhere:** agentgateway can run anywhere with any agent framework, from a single machine to a large scale multi-tenant deployment.
-- [x] **Legacy API Support:** agentgateway can transform legacy APIs into MCP resources. Currently supports OpenAPI. (gRPC coming soon)
-- [x] **Kubernetes Native:** agentgateway includes a built-in Kubernetes controller for dynamic provisioning and management via the Kubernetes Gateway API.
+- **LLM Gateway**<br>
+  Route traffic to major LLM providers (OpenAI, Anthropic, Gemini, Bedrock, and more) through a unified OpenAI-compatible API with budget and spend controls, prompt enrichment, load balancing, and failover.
+
+- **MCP Gateway**<br>
+  Connect LLMs to tools and external data sources via MCP with tool federation, stdio/HTTP/SSE/Streamable HTTP transports, OpenAPI integration, and OAuth authentication.
+
+- **A2A Gateway**<br>
+  Enable secure agent-to-agent communication using A2A, with capability discovery, modality negotiation, and task collaboration.
+
+- **Inference Routing**<br>
+  Intelligent routing to self-hosted models using Kubernetes Inference Gateway extensions, with decisions based on GPU utilization, KV cache, LoRA adapters, and queue depth.
+
+- **Guardrails**<br>
+  Multi-layered content filtering with regex, OpenAI moderation, AWS Bedrock Guardrails, Google Model Armor, and custom webhooks.
+
+- **Security & Observability**<br>
+  Auth (JWT, API keys, OAuth), fine-grained RBAC with CEL policy engine, rate limiting, TLS, and OpenTelemetry metrics/logs/tracing.
 <br>
 
-## Getting Started 
+## Getting Started
 
-To get started with agentgateway, please check out the [Getting Started Guide](https://agentgateway.dev/docs/quickstart).
+- [Standalone Quickstart](https://agentgateway.dev/docs/quickstart) — Get started with agentgateway in minutes.
+- [Kubernetes Quickstart](https://agentgateway.dev/docs/kubernetes/latest) — Deploy on Kubernetes using the built-in controller and Gateway API.
 
 ## Documentation
 
@@ -80,7 +91,7 @@ Recordings of the community meetings will be published on our [google drive](htt
 
 ## Roadmap
 
-`agentgateway` is currently in active development. If you want a feature missing, open an issue in our [Github repo](https://github.com/agentgateway/agentgateway/issues).
+`agentgateway` is currently in active development. If you'd like a feature that's missing, open an issue in our [Github repo](https://github.com/agentgateway/agentgateway/issues).
 
 ## Contributors
 
