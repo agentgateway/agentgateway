@@ -122,3 +122,21 @@ func TranslateMCPSelectorTargets(
 	}
 	return mcpTargets, nil
 }
+
+func ResolveMCPBackendRefHost(
+	ctx plugins.PolicyCtx,
+	namespace string,
+	ref *corev1.LocalObjectReference,
+) (string, error) {
+	if ref == nil || ref.Name == "" {
+		return "", fmt.Errorf("mcp backendRef name is required")
+	}
+
+	key := namespace + "/" + ref.Name
+	service := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Services, krt.FilterKey(key)))
+	if service == nil {
+		return "", fmt.Errorf("mcp backendRef service %s not found", key)
+	}
+
+	return kubeutils.ServiceFQDN(service.ObjectMeta), nil
+}
