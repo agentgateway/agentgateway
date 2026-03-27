@@ -570,12 +570,19 @@ impl TestBind {
 		let pols = local::split_policies(
 			self.pi.upstream.clone(),
 			pol,
-			self.pi.cfg.oidc_cookie_encoder.as_ref(),
-			Some(local::OidcPolicyIdentity::IndexedTargeted {
-				key_prefix: strng::new("pol-"),
-				separator: "",
-				start_index: self.policies + 1,
-			}),
+			self
+				.pi
+				.cfg
+				.oidc_cookie_encoder
+				.as_ref()
+				.map(|encoder| local::OidcContext {
+					encoder,
+					identity: local::OidcPolicyIdentity::IndexedTargeted {
+						key_prefix: strng::new("pol-"),
+						separator: "",
+						start_index: self.policies + 1,
+					},
+				}),
 		)
 		.await
 		.unwrap();
@@ -616,14 +623,9 @@ impl TestBind {
 	}
 	pub async fn attached_backend_policy(&mut self, addr: &SocketAddr, p: serde_json::Value) {
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
-		let pols = local::split_policies(
-			self.pi.upstream.clone(),
-			pol,
-			self.pi.cfg.oidc_cookie_encoder.as_ref(),
-			None,
-		)
-		.await
-		.unwrap();
+		let pols = local::split_policies(self.pi.upstream.clone(), pol, None)
+			.await
+			.unwrap();
 		for v in pols.backend_policies.into_iter() {
 			self.policies += 1;
 			self.with_policy(TargetedPolicy {
