@@ -104,8 +104,11 @@ fn content_type<T>(req: &Request<T>) -> ContentType {
 		})
 		.find_map(|v| match v.split(";").collect::<Vec<_>>().first() {
 			Some(&"application/openmetrics-text") => Some(ContentType::OpenMetrics),
+            // Google utilised
             Some(&"application/vnd.google.protobuf")
+                // Some proxies and other third-party libraries
                 | Some(&"application/x-protobuf")
+                // datatracker.ietf.org/doc/draft-ietf-dispatch-mime-protobuf
                 | Some(&"application/protobuf") => Some(ContentType::Protobuf),
 			_ => None,
 		})
