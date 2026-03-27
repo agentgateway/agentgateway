@@ -621,10 +621,20 @@ message TrafficPolicySpec {
     message Descriptor {
       repeated Entry entries = 1;
       Type type = 2;
+      optional LimitOverride limit_override = 3;
     }
     message Entry {
       string key = 1;
       string value = 2; // CEL expr
+    }
+    // Dynamic rate limit override evaluated from request context.
+    // when set, the proxy evaluates the CEL expression and sends
+    // a `RateLimitOverride` to RLS, allowing per-request limit customization.
+    message LimitOverride {
+      // CEL expression evaluated against the request context.
+      // must resolve to an object with "requests_per_unit" (int) and "unit" (string).
+      // e.g: "extproc.dynamic_rate_limit",
+      string expression = 1;
     }
     FailureMode failure_mode = 4;
   }

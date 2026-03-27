@@ -57,7 +57,7 @@ pub enum Error {
 
 #[apply(schema!)]
 #[derive(Default, ::cel::DynamicType)]
-pub struct ExtProcDynamicMetadata(serde_json::Map<String, JsonValue>);
+pub struct ExtProcDynamicMetadata(pub(crate) serde_json::Map<String, JsonValue>);
 
 #[allow(warnings)]
 #[allow(clippy::derive_partial_eq_without_eq)]

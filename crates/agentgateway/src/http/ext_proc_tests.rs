@@ -1342,7 +1342,6 @@ fn test_dynamic_metadata_extraction() {
 
 mod extract_dynamic_metadata_tests {
 	use std::collections::HashMap;
-	use std::sync::Arc;
 
 	use prost_wkt_types::value::Kind;
 	use prost_wkt_types::{Struct, Value};
@@ -1370,7 +1369,7 @@ mod extract_dynamic_metadata_tests {
 
 		let extracted = req
 			.extensions()
-			.get::<Arc<ExtProcDynamicMetadata>>()
+			.get::<ExtProcDynamicMetadata>()
 			.expect("metadata should be in extensions");
 		assert_eq!(
 			extracted.0.get("user_id"),
@@ -1390,7 +1389,7 @@ mod extract_dynamic_metadata_tests {
 				.into_iter()
 				.collect(),
 		);
-		req.extensions_mut().insert(Arc::new(existing));
+		req.extensions_mut().insert(existing);
 
 		let metadata = Struct {
 			fields: [(
@@ -1403,10 +1402,7 @@ mod extract_dynamic_metadata_tests {
 		};
 		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
-		let extracted = req
-			.extensions()
-			.get::<Arc<ExtProcDynamicMetadata>>()
-			.unwrap();
+		let extracted = req.extensions().get::<ExtProcDynamicMetadata>().unwrap();
 		assert_eq!(extracted.0.len(), 2);
 		assert_eq!(
 			extracted.0.get("existing"),
@@ -1430,7 +1426,7 @@ mod extract_dynamic_metadata_tests {
 				.into_iter()
 				.collect(),
 		);
-		req.extensions_mut().insert(Arc::new(existing));
+		req.extensions_mut().insert(existing);
 
 		let metadata = Struct {
 			fields: [(
@@ -1443,10 +1439,7 @@ mod extract_dynamic_metadata_tests {
 		};
 		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
-		let extracted = req
-			.extensions()
-			.get::<Arc<ExtProcDynamicMetadata>>()
-			.unwrap();
+		let extracted = req.extensions().get::<ExtProcDynamicMetadata>().unwrap();
 		assert_eq!(extracted.0.len(), 1);
 		assert_eq!(
 			extracted.0.get("key"),
@@ -1466,12 +1459,7 @@ mod extract_dynamic_metadata_tests {
 
 		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
-		assert!(
-			req
-				.extensions()
-				.get::<Arc<ExtProcDynamicMetadata>>()
-				.is_none()
-		);
+		assert!(req.extensions().get::<ExtProcDynamicMetadata>().is_none());
 	}
 
 	#[test]
@@ -1507,10 +1495,7 @@ mod extract_dynamic_metadata_tests {
 
 		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
-		let extracted = req
-			.extensions()
-			.get::<Arc<ExtProcDynamicMetadata>>()
-			.unwrap();
+		let extracted = req.extensions().get::<ExtProcDynamicMetadata>().unwrap();
 
 		assert_eq!(extracted.0.len(), 3);
 		assert_eq!(
@@ -1553,10 +1538,7 @@ mod extract_dynamic_metadata_tests {
 		};
 		extract_dynamic_metadata(&mut req, &metadata2).unwrap();
 
-		let extracted = req
-			.extensions()
-			.get::<Arc<ExtProcDynamicMetadata>>()
-			.unwrap();
+		let extracted = req.extensions().get::<ExtProcDynamicMetadata>().unwrap();
 		assert_eq!(extracted.0.len(), 2);
 		assert_eq!(extracted.0.get("key1"), Some(&serde_json::json!("value1")));
 		assert_eq!(extracted.0.get("key2"), Some(&serde_json::json!(true)));
