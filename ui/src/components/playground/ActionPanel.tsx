@@ -2,7 +2,7 @@
 
 import type { AgentSkill } from "@a2a-js/sdk";
 import type { Tool as McpTool } from "@modelcontextprotocol/sdk/types.js";
-import { Button, Card, Checkbox, Input } from "antd";
+import { Button, Checkbox, Input } from "antd";
 import { BotMessageSquare, Loader2, Send, Wand2 } from "lucide-react";
 import React, { useState } from "react";
 

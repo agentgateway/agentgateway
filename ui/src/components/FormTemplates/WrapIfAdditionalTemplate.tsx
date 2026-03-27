@@ -1,7 +1,7 @@
 import { DeleteOutlined } from "@ant-design/icons";
 import styled from "@emotion/styled";
 import type { WrapIfAdditionalTemplateProps } from "@rjsf/utils";
-import { Button, Input, Space } from "antd";
+import { Button, Input } from "antd";
 
 /**
  * Container for the additional property (key-value pair) with visual grouping
@@ -96,20 +96,6 @@ export function WrapIfAdditionalTemplate(props: WrapIfAdditionalTemplateProps) {
     }
     if (idLower.includes("add") || idLower.includes("set")) {
       return "key";
-    }
-
-    return "";
-  };
-
-  const getValuePlaceholder = () => {
-    const schemaTitle = schema.title?.toLowerCase() || "";
-    const idLower = id.toLowerCase();
-
-    if (schemaTitle.includes("header") || idLower.includes("header")) {
-      return "header-value";
-    }
-    if (schemaTitle.includes("env") || schemaTitle.includes("environment") || idLower.includes("env")) {
-      return "value";
     }
 
     return "";

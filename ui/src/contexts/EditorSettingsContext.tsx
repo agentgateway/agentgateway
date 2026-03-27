@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 
 const VIM_MODE_STORAGE_KEY = "monaco-editor-vim-mode";
 const WORD_WRAP_STORAGE_KEY = "monaco-editor-word-wrap";

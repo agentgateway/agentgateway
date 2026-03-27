@@ -1,25 +1,32 @@
 binds:
-- port: 3002
-  listeners:
-  - routes:
-    - backends:
-      - mcp:
-          targets:
-          - name: time
-            stdio:
-              cmd: uvx
-              args:
-              - mcp-server-time
-          - name: everything
-            stdio:
-              cmd: npx
-              args:
-              - '@modelcontextprotocol/server-everything'
-      policies:
-        cors:
-          allowOrigins:
-          - '*'
-          allowHeaders:
-          - mcp-protocol-version
-          - content-type
-          - cache-control
+  - port: 8080
+    tunnelProtocol: direct
+    listeners:
+      - protocol: HTTP
+        name: listener
+        hostname: "*"
+        routes:
+          - hostnames: []
+            matches:
+              - path:
+                  pathPrefix: /
+            backends:
+              - ai:
+                  name: smallthinker-backend
+                  provider:
+                    openAI:
+                      model: smallthinker
+                  hostOverride: localhost:11434
+            name: route
+            policies:
+              cors:
+                allowCredentials: false
+                allowHeaders:
+                  - "*"
+                allowMethods:
+                  - GET
+                  - POST
+                  - OPTIONS
+                allowOrigins:
+                  - "*"
+                exposeHeaders: []

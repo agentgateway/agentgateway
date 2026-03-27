@@ -40,7 +40,7 @@ export const ConfirmProvider = ({ children }: ConfirmProviderProps) => {
       await currentOptions.onConfirm();
       setIsOpen(false);
       setCurrentOptions(null);
-    } catch (error) {
+    } catch {
       // Error handling is done in the onConfirm function
       setIsLoading(false);
     }

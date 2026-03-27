@@ -152,6 +152,13 @@ export function MonacoEditorWithSettings({
     (editor, monaco) => {
       editorRef.current = editor;
 
+      // Add keyboard shortcut for save (Cmd+S / Ctrl+S)
+      if (onSaveRef.current) {
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+          onSaveRef.current?.();
+        });
+      }
+
       // Initialize vim mode if enabled
       if (vimEnabled && statusNodeRef.current && !vimModeRef.current) {
         vimModeRef.current = initVimMode(editor, statusNodeRef.current);
@@ -203,7 +210,7 @@ export function MonacoEditorWithSettings({
     try {
       await navigator.clipboard.writeText(value);
       toast.success("Copied to clipboard");
-    } catch (error) {
+    } catch {
       toast.error("Failed to copy to clipboard");
     }
   }, [value]);
@@ -229,7 +236,7 @@ export function MonacoEditorWithSettings({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast.success("Downloaded successfully");
-    } catch (error) {
+    } catch {
       toast.error("Failed to download file");
     }
   }, [value, language, downloadFileName]);

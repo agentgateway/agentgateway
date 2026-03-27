@@ -2,6 +2,7 @@ import styled from "@emotion/styled";
 import { Breadcrumb } from "antd";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { capitalizeFirstLetters } from "../utils/helpers";
 
 const StyledBreadcrumb = styled(Breadcrumb)`
   .ant-breadcrumb-link {
@@ -30,32 +31,6 @@ const StyledBreadcrumb = styled(Breadcrumb)`
   }
 `;
 
-const pathLabels: Record<string, string> = {
-  dashboard: "Home",
-  listeners: "Listeners",
-  routes: "Routes",
-  backends: "Backends",
-  policies: "Policies",
-  playground: "Playground",
-  llm: "LLM",
-  mcp: "MCP",
-  traffic: "Traffic",
-  models: "Models",
-  logs: "Logs",
-  metrics: "Metrics",
-  servers: "Servers",
-  routing: "Routing",
-  "cel-playground": "CEL Playground",
-  "raw-config": "Config Editor",
-  listener: "Listener",
-  route: "Route",
-  tcproute: "TCP Route",
-  backend: "Backend",
-  policy: "Policy",
-  bind: "Bind",
-  create: "Create",
-  edit: "Edit",
-};
 
 export function Breadcrumbs() {
   const location = useLocation();
@@ -76,86 +51,34 @@ export function Breadcrumbs() {
       return [{ title: <span>Dashboard</span> }];
     }
 
-    // Special handling for traffic2 routes
-    // Traffic2 has structure: /traffic2/:resourceType/:action
-    // We want breadcrumbs: Traffic → Create/Edit ResourceType
-    if (pathSegments[0] === "traffic2" && pathSegments.length === 3) {
-      const [_, resourceType, action] = pathSegments;
-      const resourceLabel =
-        pathLabels[resourceType] ||
-        resourceType.charAt(0).toUpperCase() + resourceType.slice(1);
-      const actionLabel =
-        pathLabels[action] || action.charAt(0).toUpperCase() + action.slice(1);
-
-      return [
-        {
-          title: <a onClick={() => navigate("/traffic2")}>Traffic</a>,
-        },
-        {
-          title: `${actionLabel} ${resourceLabel}`,
-        },
-      ];
-    }
-
-    // Special handling for traffic routes
-    // Traffic has structure: /traffic/bind/:port/listener/:li/route/:ri/backend/:bi
-    // We want breadcrumbs: Traffic → Port X → Listener Y → Route Z → Backend N
-    if (pathSegments[0] === "traffic" && pathSegments.length > 1) {
-      const items = [
-        {
-          title: <a onClick={() => navigate("/traffic")}>Traffic</a>,
-        },
-      ];
-
-      // Build breadcrumbs from path segments
-      let currentPath = "/traffic";
-      for (let i = 1; i < pathSegments.length; i += 2) {
-        const type = pathSegments[i];
-        const value = pathSegments[i + 1];
-
-        if (!value) break;
-
-        currentPath += `/${type}/${value}`;
-        const isLast = i + 2 >= pathSegments.length;
-
-        let label = "";
-        if (type === "bind") {
-          label = `Port ${value}`;
-        } else if (type === "listener") {
-          label = `Listener ${value}`;
-        } else if (type === "route") {
-          label = `Route ${value}`;
-        } else if (type === "tcproute") {
-          label = `TCP Route ${value}`;
-        } else if (type === "backend") {
-          label = `Backend ${parseInt(value) + 1}`;
-        } else {
-          label = pathLabels[type] || type;
-        }
-
-        items.push({
-          title: isLast ? (
-            <span>{label}</span>
-          ) : (
-            <a onClick={() => navigate(currentPath)}>{label}</a>
-          ),
-        });
-      }
-
-      return items;
-    }
-
     return pathSegments.map((segment, index) => {
       const path = `/${pathSegments.slice(0, index + 1).join("/")}`;
       const isLast = index === pathSegments.length - 1;
-      const label =
-        pathLabels[segment] ||
-        segment.charAt(0).toUpperCase() + segment.slice(1);
+      const label = 
+        capitalizeFirstLetters(segment.replaceAll('-',' ').toLowerCase()
+          // Replace property names in the config.
+          .replaceAll("frontendpolicies", 'Frontend Policies')
+          .replaceAll("externalauth", 'External Auth')
+          .replaceAll("apikeyauth", 'API Key Auth')
+          .replaceAll("apikey", 'API Key')
+          .replaceAll("basicauth", 'Basic Auth')
+          .replaceAll("jwtauth", 'JWT Auth')
+          .replaceAll("cors", 'CORS')
+          .replaceAll("ai", 'AI')
+          // Replace any keywords 
+          .replaceAll("cel", 'CEL')
+          .replaceAll("llm", 'LLM')
+          .replaceAll('mcp','MCP')
+        );
 
       return {
         title: isLast ? (
           <span>{label}</span>
         ) : (
+          // TODO: the path can be like: /traffic-configuration/bind/8080/listener/0/route/0/backend/0
+          // In this case, breadcrumbs would be: Traffic Configuration/Bind/8080/Listener/0/Route/0/Backend/0
+          // If a user clicks on the "Listener" breadcrumb here, they would not get to a valid route (since the listener id would not be provided).
+          // Fix in App.ts, and in the Hierarchy Tree.
           <a onClick={() => navigate(path)}>{label}</a>
         ),
       };

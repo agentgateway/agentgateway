@@ -140,7 +140,7 @@ export const useWizard = (): WizardContextType => {
 
 // Helper hook to determine if a step is accessible
 export const useWizardNavigation = () => {
-  const { currentStep, stepIndex, data } = useWizard();
+  const { data } = useWizard();
 
   const isStepAccessible = useCallback(
     (step: WizardStep): boolean => {
@@ -151,7 +151,7 @@ export const useWizardNavigation = () => {
       // For now, allow all steps (validation can be added later)
       return true;
     },
-    [currentStep, stepIndex, data],
+    [],
   );
 
   const isStepComplete = useCallback(
