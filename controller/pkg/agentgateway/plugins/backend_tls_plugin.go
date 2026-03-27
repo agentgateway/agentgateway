@@ -20,8 +20,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/translator/sslutils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 // NewBackendTLSPlugin creates a new BackendTLSPolicy plugin
@@ -211,7 +210,7 @@ func translatePoliciesForBackendTLS(
 				if scrt == nil {
 					logger.Warn("ignoring Gateway.spec.tls.backend; secret not found")
 				} else {
-					if _, err := sslutils.ValidateTlsSecretData(nn.Name, nn.Namespace, scrt.Data); err != nil {
+					if _, err := ValidateTlsSecretData(nn.Name, nn.Namespace, scrt.Data); err != nil {
 						logger.Warn("ignoring Gateway.spec.tls.backend; secret not found")
 					} else {
 						res.Cert = scrt.Data[corev1.TLSCertKey]
@@ -353,7 +352,7 @@ func getBackendTLSCACert(
 			}
 			return nil, fmt.Errorf("certificate reference not found: %v", ref)
 		}
-		caCert, err := sslutils.GetCACertFromConfigMap(ptr.Flatten(cfgmap))
+		caCert, err := GetCACertFromConfigMap(ptr.Flatten(cfgmap))
 		if err != nil {
 			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].error = &ConfigError{
 				Reason:  string(gwv1.BackendTLSPolicyReasonInvalidCACertificateRef),

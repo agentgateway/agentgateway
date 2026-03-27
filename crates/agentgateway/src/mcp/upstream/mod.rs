@@ -84,6 +84,8 @@ pub enum UpstreamError {
 	Proxy(#[from] ProxyError),
 	#[error("stdio upstream error: {0}")]
 	Stdio(#[from] io::Error),
+	#[error("stdio server exited")]
+	StdioShutdown,
 	#[error("upstream closed on send")]
 	Send,
 	#[error("upstream closed on receive")]

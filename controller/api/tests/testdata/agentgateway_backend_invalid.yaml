@@ -41,6 +41,29 @@ spec:
           matchExpressions:
           - 'true'
 ---
+_err: path and pathPrefix are mutually exclusive
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: path-and-pathprefix
+spec:
+  ai:
+    provider:
+      openai: {}
+      path: /custom/path
+      pathPrefix: /custom
+---
+_err: pathPrefix requires host to be set
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: pathprefix-without-host
+spec:
+  ai:
+    provider:
+      openai: {}
+      pathPrefix: /custom
+---
 _err: both host and port must be set together
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend

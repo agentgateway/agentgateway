@@ -387,6 +387,9 @@ pub struct LocalLLMParams {
 	/// Override the upstream path for this provider.
 	#[serde(default)]
 	path_override: Option<Strng>,
+	/// Override the default base path prefix for this provider.
+	#[serde(default)]
+	path_prefix: Option<Strng>,
 	/// Whether to tokenize the request before forwarding it upstream.
 	#[serde(default)]
 	tokenize: bool,
@@ -599,8 +602,12 @@ pub struct LocalAIProviders {
 pub struct LocalNamedAIProvider {
 	pub name: Strng,
 	pub provider: AIProvider,
+	/// Override the upstream host for this provider.
 	pub host_override: Option<Target>,
+	/// Override the upstream path for this provider.
 	pub path_override: Option<Strng>,
+	/// Override the default base path prefix for this provider.
+	pub path_prefix: Option<Strng>,
 	/// Whether to tokenize on the request flow. This enables us to do more accurate rate limits,
 	/// since we know (part of) the cost of the request upfront.
 	/// This comes with the cost of an expensive operation.
@@ -634,6 +641,7 @@ impl LocalAIBackend {
 						provider: p.provider,
 						host_override: p.host_override,
 						path_override: p.path_override,
+						path_prefix: p.path_prefix,
 						tokenize: p.tokenize,
 						inline_policies: policies,
 					},
@@ -1227,6 +1235,9 @@ struct LocalFrontendPolicies {
 	/// Settings for handling incoming TCP connections.
 	#[serde(default)]
 	pub tcp: Option<frontend::TCP>,
+	/// CEL authorization for downstream network connections.
+	#[serde(default)]
+	pub network_authorization: Option<frontend::NetworkAuthorization>,
 	/// Settings for request access logs.
 	#[serde(default, alias = "logging")]
 	pub access_log: Option<frontend::LoggingPolicy>,
@@ -1661,6 +1672,7 @@ json(request.body).model
 			provider,
 			host_override: p.host_override,
 			path_override: p.path_override,
+			path_prefix: p.path_prefix,
 			tokenize: p.tokenize,
 			inline_policies: pols,
 		};
@@ -2195,6 +2207,7 @@ async fn split_frontend_policies(
 		http,
 		tls,
 		tcp,
+		network_authorization,
 		access_log,
 		tracing,
 	} = pol;
@@ -2206,6 +2219,12 @@ async fn split_frontend_policies(
 	}
 	if let Some(p) = tcp {
 		add(FrontendPolicy::TCP(p), "tcp");
+	}
+	if let Some(p) = network_authorization {
+		add(
+			FrontendPolicy::NetworkAuthorization(p),
+			"networkAuthorization",
+		);
 	}
 	if let Some(mut p) = access_log {
 		p.init_access_log_policy();

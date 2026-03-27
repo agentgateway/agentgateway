@@ -14,7 +14,6 @@ use agent_core::telemetry::{OptionExt, OtelLogSink, ValueBag, debug, display};
 use bytes::Buf;
 use crossbeam::atomic::AtomicCell;
 use frozen_collections::FzHashSet;
-use frozen_collections::SetQuery;
 use http_body::{Body, Frame, SizeHint};
 use indexmap::IndexMap;
 use itertools::Itertools;

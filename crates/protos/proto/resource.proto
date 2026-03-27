@@ -495,6 +495,12 @@ message FrontendPolicySpec {
     // TCP keepalive configuration
     KeepaliveConfig keepalives = 1;
   }
+
+  message NetworkAuthorization {
+    repeated string allow = 1;
+    repeated string deny = 2;
+    repeated string require = 3;
+  }
   // Logging configuration policy
   message Logging {
     // CEL expression to filter out logs. If unset, all logs are considered.
@@ -583,6 +589,7 @@ message FrontendPolicySpec {
     HTTP http = 3;
     Logging logging = 4;
     Tracing tracing = 5;
+    NetworkAuthorization network_authorization = 6;
   }
 }
 
@@ -1208,6 +1215,7 @@ message AIBackend {
     string name = 1;
     HostOverride host_override = 2;
     optional string path_override = 3;
+    optional string path_prefix = 12;
     oneof provider {
       OpenAI openai = 4;
       Gemini gemini = 5;

@@ -275,7 +275,7 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 
 	// Set location with default value if not specified
 	if armor.Location != nil {
-		pgArmor.Location = ptr.Of(string(*armor.Location))
+		pgArmor.Location = ptr.Of(*armor.Location)
 	} else {
 		pgArmor.Location = ptr.Of("us-central1")
 	}

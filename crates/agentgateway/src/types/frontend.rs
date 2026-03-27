@@ -115,6 +115,9 @@ pub struct TCP {
 }
 
 #[apply(schema!)]
+pub struct NetworkAuthorization(pub crate::http::authorization::RuleSet);
+
+#[apply(schema!)]
 pub struct LoggingPolicy {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub filter: Option<Arc<cel::Expression>>,

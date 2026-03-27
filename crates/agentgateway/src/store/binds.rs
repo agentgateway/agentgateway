@@ -9,7 +9,7 @@ use tracing::{Level, instrument};
 
 use crate::cel::ContextBuilder;
 use crate::http::auth::BackendAuth;
-use crate::http::authorization::HTTPAuthorizationSet;
+use crate::http::authorization::{HTTPAuthorizationSet, NetworkAuthorizationSet};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
 use crate::http::{ext_authz, ext_proc, filters, health, remoteratelimit, retry, timeout};
@@ -70,6 +70,7 @@ pub struct FrontendPolices {
 	pub http: Option<frontend::HTTP>,
 	pub tls: Option<frontend::TLS>,
 	pub tcp: Option<frontend::TCP>,
+	pub network_authorization: Option<NetworkAuthorizationSet>,
 	pub access_log: Option<frontend::LoggingPolicy>,
 	pub tracing: Option<Arc<crate::types::agent::TracingPolicy>>,
 	pub access_log_otlp: Option<Arc<crate::types::agent::AccessLogPolicy>>,
@@ -86,6 +87,13 @@ impl FrontendPolices {
 			},
 			FrontendPolicy::TCP(p) => {
 				self.tcp.get_or_insert_with(|| p.clone());
+			},
+			FrontendPolicy::NetworkAuthorization(p) => {
+				if let Some(existing) = self.network_authorization.as_mut() {
+					existing.merge_rule_set(p.0.clone());
+				} else {
+					self.network_authorization = Some(NetworkAuthorizationSet::new(vec![p.0.clone()].into()));
+				}
 			},
 			FrontendPolicy::AccessLog(p) => {
 				self.access_log.get_or_insert_with(|| p.clone());
@@ -159,6 +167,7 @@ impl BackendPolicies {
 			a2a: other.a2a.or(self.a2a),
 			llm_provider: other.llm_provider.or(self.llm_provider),
 			llm: other.llm.or(self.llm),
+			// TODO: is this right??
 			mcp_authorization: other.mcp_authorization.or(self.mcp_authorization),
 			mcp_authentication: other.mcp_authentication.or(self.mcp_authentication),
 			inference_routing: other.inference_routing.or(self.inference_routing),
@@ -1343,7 +1352,6 @@ mod tests {
 	use std::time::Duration;
 
 	use frozen_collections::FzHashSet;
-	use frozen_collections::SetQuery;
 
 	use super::*;
 	use crate::telemetry::log::OrderedStringMap;
@@ -1407,12 +1415,25 @@ mod tests {
 		})
 	}
 
+	fn create_network_authorization_policy(cidr: &str) -> FrontendPolicy {
+		FrontendPolicy::NetworkAuthorization(crate::types::frontend::NetworkAuthorization(
+			crate::http::authorization::RuleSet::new(crate::http::authorization::PolicySet::new(
+				vec![Arc::new(
+					cel::Expression::new_strict(format!(r#"cidr("{cidr}").containsIP(source.address)"#))
+						.unwrap(),
+				)],
+				vec![],
+				vec![],
+			)),
+		))
+	}
+
 	fn insert_policy_at_level(
 		store: &mut Store,
 		listener: &ListenerName,
 		policy_name: &str,
 		for_listener: bool,
-		remove_item: &str,
+		policy: FrontendPolicy,
 	) {
 		let policy_key = strng::new(policy_name);
 		let listener_name = if for_listener {
@@ -1429,7 +1450,7 @@ mod tests {
 			key: policy_key.clone(),
 			name: None,
 			target: target.clone(),
-			policy: agent::PolicyType::Frontend(create_access_log_policy(remove_item)),
+			policy: agent::PolicyType::Frontend(policy),
 		};
 
 		store
@@ -1447,7 +1468,13 @@ mod tests {
 		listener: &ListenerName,
 		remove_item: &str,
 	) {
-		insert_policy_at_level(store, listener, "gw_frontend_policy", false, remove_item);
+		insert_policy_at_level(
+			store,
+			listener,
+			"gw_frontend_policy",
+			false,
+			create_access_log_policy(remove_item),
+		);
 	}
 
 	fn insert_listener_level_frontend_policy(
@@ -1460,7 +1487,22 @@ mod tests {
 			listener,
 			"listener_frontend_policy",
 			true,
-			remove_item,
+			create_access_log_policy(remove_item),
+		);
+	}
+
+	fn insert_gateway_level_network_authorization_policy(
+		store: &mut Store,
+		listener: &ListenerName,
+		policy_name: &str,
+		cidr: &str,
+	) {
+		insert_policy_at_level(
+			store,
+			listener,
+			policy_name,
+			false,
+			create_network_authorization_policy(cidr),
 		);
 	}
 
@@ -1519,6 +1561,58 @@ mod tests {
 		assert!(
 			!access_log.remove.contains("gw_remove"),
 			"Gateway policy should not override listener policy"
+		);
+	}
+
+	#[test]
+	fn frontend_network_authorization_policies_merge() {
+		let mut store = Store::default();
+		let listener = listener();
+		insert_gateway_level_network_authorization_policy(
+			&mut store,
+			&listener,
+			"gw-frontend-network-authz-1",
+			"10.0.0.0/8",
+		);
+		insert_gateway_level_network_authorization_policy(
+			&mut store,
+			&listener,
+			"gw-frontend-network-authz-2",
+			"192.168.0.0/16",
+		);
+
+		let merged_pols = store.frontend_policies(listener.as_gateway_target_ref());
+		let network_authz = merged_pols
+			.network_authorization
+			.as_ref()
+			.expect("expected merged network authorization");
+
+		assert!(
+			network_authz
+				.apply(&crate::cel::SourceContext {
+					address: "10.1.2.3".parse().unwrap(),
+					port: 12345,
+					tls: None,
+				})
+				.is_ok()
+		);
+		assert!(
+			network_authz
+				.apply(&crate::cel::SourceContext {
+					address: "192.168.1.2".parse().unwrap(),
+					port: 12345,
+					tls: None,
+				})
+				.is_ok()
+		);
+		assert!(
+			network_authz
+				.apply(&crate::cel::SourceContext {
+					address: "172.16.0.1".parse().unwrap(),
+					port: 12345,
+					tls: None,
+				})
+				.is_err()
 		);
 	}
 

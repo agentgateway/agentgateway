@@ -5,7 +5,6 @@ package backendtls
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"path/filepath"
 
@@ -18,7 +17,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
-	reports "github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e"
@@ -41,17 +39,6 @@ var (
 			Namespace: namespace,
 		},
 	}
-	nginxMeta = metav1.ObjectMeta{
-		Name:      "backend",
-		Namespace: namespace,
-	}
-	nginx2Meta = metav1.ObjectMeta{
-		Name:      "backend2",
-		Namespace: namespace,
-	}
-	svcGroup = ""
-	svcKind  = "Service"
-
 	// test cases
 	testCases = map[string]*base.TestCase{}
 )
@@ -104,27 +91,12 @@ func (s *tsuite) TestBackendTLSPolicyAndStatus() {
 		curl.WithHostHeader("foo.com"),
 		curl.WithPath("/"),
 	)
-	agentgateway := true
-	if agentgateway {
-		// Agentgateway currently doesn't support Statuses for BackendTLSPolicy
-		s.T().Log("Skipping status assertions for Agentgateway as they are not currently supported")
-		return
-	}
 	s.assertPolicyStatus(metav1.Condition{
 		Type:               string(shared.PolicyConditionAccepted),
 		Status:             metav1.ConditionTrue,
-		Reason:             string(shared.PolicyReasonValid),
-		Message:            reports.PolicyAcceptedMsg,
+		Reason:             string(gwv1.PolicyReasonAccepted),
 		ObservedGeneration: backendTlsPolicy.Generation,
 	})
-	s.assertPolicyStatus(metav1.Condition{
-		Type:               string(shared.PolicyConditionAttached),
-		Status:             metav1.ConditionTrue,
-		Reason:             string(shared.PolicyReasonAttached),
-		Message:            reports.PolicyAttachedMsg,
-		ObservedGeneration: backendTlsPolicy.Generation,
-	})
-
 	// delete configmap so we can assert status updates correctly
 	err = s.TestInstallation.Actions.Kubectl().DeleteFile(s.Ctx, configMapManifest)
 	s.Require().NoError(err)
@@ -132,8 +104,7 @@ func (s *tsuite) TestBackendTLSPolicyAndStatus() {
 	s.assertPolicyStatus(metav1.Condition{
 		Type:               string(gwv1.PolicyConditionAccepted),
 		Status:             metav1.ConditionFalse,
-		Reason:             string(gwv1.PolicyReasonInvalid),
-		Message:            fmt.Sprintf("%s: %s/ca", ErrConfigMapNotFound, namespace),
+		Reason:             string(gwv1.BackendTLSPolicyReasonNoValidCACertificate),
 		ObservedGeneration: backendTlsPolicy.Generation,
 	})
 }
@@ -147,20 +118,13 @@ func (s *tsuite) assertPolicyStatus(inCondition metav1.Condition) {
 		err := s.TestInstallation.ClusterContext.Client.Get(s.Ctx, objKey, tlsPol)
 		g.Expect(err).NotTo(gomega.HaveOccurred(), "failed to get BackendTLSPolicy %s", objKey)
 
-		g.Expect(tlsPol.Status.Ancestors).To(gomega.HaveLen(2), "ancestors didn't have length of 2")
+		g.Expect(tlsPol.Status.Ancestors).To(gomega.HaveLen(1), "ancestors didn't have length of 1")
 
 		expectedAncestorRefs := []gwv1.ParentReference{
 			{
-				Group:     (*gwv1.Group)(&svcGroup),
-				Kind:      (*gwv1.Kind)(&svcKind),
-				Namespace: ptr.To(gwv1.Namespace(nginxMeta.Namespace)),
-				Name:      gwv1.ObjectName(nginxMeta.Name),
-			},
-			{
-				Group:     (*gwv1.Group)(&svcGroup),
-				Kind:      (*gwv1.Kind)(&svcKind),
-				Namespace: ptr.To(gwv1.Namespace(nginx2Meta.Namespace)),
-				Name:      gwv1.ObjectName(nginx2Meta.Name),
+				Group: (*gwv1.Group)(ptr.To("gateway.networking.k8s.io")),
+				Kind:  (*gwv1.Kind)(ptr.To("Gateway")),
+				Name:  gwv1.ObjectName("gateway"),
 			},
 		}
 
@@ -170,10 +134,9 @@ func (s *tsuite) assertPolicyStatus(inCondition metav1.Condition) {
 
 			g.Expect(ancestor.Conditions).To(gomega.HaveLen(2), "ancestors conditions wasn't length of 2")
 			cond := meta.FindStatusCondition(ancestor.Conditions, inCondition.Type)
-			g.Expect(cond).NotTo(gomega.BeNil(), "policy should have accepted condition")
+			g.Expect(cond).NotTo(gomega.BeNil(), "policy should have condition "+inCondition.Type)
 			g.Expect(cond.Status).To(gomega.Equal(inCondition.Status), "policy accepted condition should be true")
 			g.Expect(cond.Reason).To(gomega.Equal(inCondition.Reason), "policy reason should be accepted")
-			g.Expect(cond.Message).To(gomega.Equal(inCondition.Message))
 			g.Expect(cond.ObservedGeneration).To(gomega.Equal(inCondition.ObservedGeneration))
 		}
 	}, currentTimeout, pollingInterval).Should(gomega.Succeed())

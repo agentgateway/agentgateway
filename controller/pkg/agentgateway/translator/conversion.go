@@ -34,9 +34,9 @@ import (
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 // ConvertHTTPRouteToAgw converts a HTTPRouteRule to an agentgateway HTTPRoute
@@ -604,19 +604,6 @@ func buildAgwDestination(
 	ns string,
 	k schema.GroupVersionKind,
 ) (*api.RouteBackend, *reporter.RouteCondition) {
-	ref := NormalizeReference(to.Group, to.Kind, wellknown.ServiceGVK)
-	// check if the reference is allowed
-	if toNs := to.Namespace; toNs != nil && string(*toNs) != ns {
-		if !ctx.Grants.BackendAllowed(ctx.Krt, k, to.Name, *toNs, ns, ref) {
-			return nil, &reporter.RouteCondition{
-				Type:    gwv1.RouteConditionResolvedRefs,
-				Status:  metav1.ConditionFalse,
-				Reason:  gwv1.RouteReasonRefNotPermitted,
-				Message: fmt.Sprintf("backendRef %v/%v not accessible to a %s in namespace %q (missing a ReferenceGrant?)", to.Name, *toNs, k.Kind, ns),
-			}
-		}
-	}
-
 	weight := int32(1) // default
 	if to.Weight != nil {
 		weight = *to.Weight
@@ -624,16 +611,27 @@ func buildAgwDestination(
 	rb := &api.RouteBackend{
 		Weight: weight,
 	}
+	ref := NormalizeReference(to.Group, to.Kind, wellknown.ServiceGVK)
+	// check if the reference is allowed
+	if toNs := to.Namespace; toNs != nil && string(*toNs) != ns {
+		if !ctx.Grants.BackendAllowed(ctx.Krt, k, to.Name, *toNs, ns, ref) {
+			return rb, &reporter.RouteCondition{
+				Type:    gwv1.RouteConditionResolvedRefs,
+				Status:  metav1.ConditionFalse,
+				Reason:  gwv1.RouteReasonRefNotPermitted,
+				Message: fmt.Sprintf("backendRef %v/%v not accessible to a %s in namespace %q (missing a ReferenceGrant?)", to.Name, *toNs, k.Kind, ns),
+			}
+		}
+	}
 	backendRef, err := ctx.References.RouteBackend(ctx.Krt, ns, ref.GroupKind(), to.Name, to.Namespace, to.Port)
+	// Even in the error case, we still populate a partial backend
+	rb.Backend = backendRef
 	if err != nil {
 		var backendErr *plugins.BackendReferenceError
 		if errors.As(err, &backendErr) {
-			if backendErr.Backend != nil {
-				rb.Backend = backendErr.Backend
-			}
 			switch backendErr.Reason {
 			case plugins.BackendReferenceErrorReasonUnsupportedValue:
-				return nil, &reporter.RouteCondition{
+				return rb, &reporter.RouteCondition{
 					Type:    gwv1.RouteConditionAccepted,
 					Status:  metav1.ConditionFalse,
 					Reason:  gwv1.RouteReasonUnsupportedValue,
@@ -647,7 +645,7 @@ func buildAgwDestination(
 					Message: backendErr.Message,
 				}
 			case plugins.BackendReferenceErrorReasonInvalidKind:
-				return nil, &reporter.RouteCondition{
+				return rb, &reporter.RouteCondition{
 					Type:    gwv1.RouteConditionResolvedRefs,
 					Status:  metav1.ConditionFalse,
 					Reason:  gwv1.RouteReasonInvalidKind,
@@ -655,14 +653,13 @@ func buildAgwDestination(
 				}
 			}
 		}
-		return nil, &reporter.RouteCondition{
+		return rb, &reporter.RouteCondition{
 			Type:    gwv1.RouteConditionResolvedRefs,
 			Status:  metav1.ConditionFalse,
 			Reason:  gwv1.RouteReasonInvalidKind,
 			Message: err.Error(),
 		}
 	}
-	rb.Backend = backendRef
 	return rb, nil
 }
 

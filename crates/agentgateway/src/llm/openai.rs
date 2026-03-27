@@ -16,14 +16,14 @@ impl super::Provider for Provider {
 pub const DEFAULT_HOST_STR: &str = "api.openai.com";
 pub const DEFAULT_HOST: Strng = strng::literal!(DEFAULT_HOST_STR);
 
-pub fn path(route: RouteType) -> &'static str {
+pub const DEFAULT_BASE_PATH: &str = "/v1";
+
+pub fn path_suffix(route: RouteType) -> &'static str {
 	match route {
-		// For Responses we forward to the responses endpoint
-		RouteType::Responses => "/v1/responses",
-		// For Embeddings we forward to the embeddings endpoint
-		RouteType::Embeddings => "/v1/embeddings",
-		RouteType::Realtime => "/v1/realtime",
+		RouteType::Responses => "/responses",
+		RouteType::Embeddings => "/embeddings",
+		RouteType::Realtime => "/realtime",
 		// All others get translated down to completions
-		_ => "/v1/chat/completions",
+		_ => "/chat/completions",
 	}
 }
