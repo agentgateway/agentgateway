@@ -144,3 +144,16 @@ spec:
               policy:
                 matchExpressions:
                 - 'mcp.tool.name == "hello"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-backend-ref
+spec:
+  mcp:
+    targets:
+    - name: local-svc
+      static:
+        backendRef:
+          name: mcp-service
+        port: 8080

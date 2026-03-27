@@ -216,6 +216,36 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 	var errs []error
 	for _, target := range mcp.Targets {
 		if s := target.Static; s != nil {
+			if s.BackendRef != nil {
+				serviceHostname, err := ResolveMCPBackendRefHost(ctx, be.Namespace, s.BackendRef)
+				if err != nil {
+					return nil, err
+				}
+				mcpTarget := &api.MCPTarget{
+					Name: string(target.Name),
+					Backend: &api.BackendReference{
+						Kind: &api.BackendReference_Service_{
+							Service: &api.BackendReference_Service{
+								Hostname:  serviceHostname,
+								Namespace: be.Namespace,
+							},
+						},
+						Port: uint32(s.Port), //nolint:gosec // G115: validated by the CRD schema
+					},
+					Path: ptr.OrEmpty(s.Path),
+				}
+
+				switch ptr.OrEmpty(s.Protocol) {
+				case agentgateway.MCPProtocolSSE:
+					mcpTarget.Protocol = api.MCPTarget_SSE
+				case agentgateway.MCPProtocolStreamableHTTP:
+					mcpTarget.Protocol = api.MCPTarget_STREAMABLE_HTTP
+				}
+
+				mcpTargets = append(mcpTargets, mcpTarget)
+				continue
+			}
+
 			staticBackendRef := utils.InternalMCPStaticBackendName(be.Namespace, be.Name, string(target.Name))
 			pol, err := TranslateMCPBackendPolicies(ctx, be.Namespace, s.Policies)
 			if err != nil {
@@ -227,8 +257,8 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 				Name: plugins.ResourceName(be),
 				Kind: &api.Backend_Static{
 					Static: &api.StaticBackend{
-						Host: target.Static.Host,
-						Port: target.Static.Port,
+						Host: ptr.OrEmpty(s.Host),
+						Port: s.Port,
 					},
 				},
 				InlinePolicies: pol,
@@ -242,10 +272,10 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 						Backend: staticBackendRef,
 					},
 				},
-				Path: ptr.OrEmpty(target.Static.Path),
+				Path: ptr.OrEmpty(s.Path),
 			}
 
-			switch ptr.OrEmpty(target.Static.Protocol) {
+			switch ptr.OrEmpty(s.Protocol) {
 			case agentgateway.MCPProtocolSSE:
 				mcpTarget.Protocol = api.MCPTarget_SSE
 			case agentgateway.MCPProtocolStreamableHTTP:
