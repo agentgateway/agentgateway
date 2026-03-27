@@ -30,49 +30,37 @@ impl Provider {
 	}
 
 	pub fn prepare_anthropic_message_body(&self, body: Vec<u8>) -> Result<Vec<u8>, AIError> {
-		let mut body: Map<String, Value> =
-			serde_json::from_slice(&body).map_err(AIError::RequestMarshal)?;
-
-		body.insert(
-			"anthropic_version".to_string(),
-			Value::String(ANTHROPIC_VERSION.to_string()),
-		);
-		body.remove("model");
-		// Remove fields unsupported by Vertex AI's Anthropic endpoint.
-		// Note: metadata, context_management, and thinking ARE supported.
-		body.remove("output_config");
-		body.remove("output_format");
-		// Strip unsupported "scope" from cache_control objects throughout the body.
-		// Vertex AI supports cache_control: {"type": "ephemeral"} but not the
-		// "scope" field added by the prompt-caching-scope beta.
-		let mut body_value = Value::Object(body);
-		strip_cache_control_scope(&mut body_value);
-
-		serde_json::to_vec(&body_value).map_err(AIError::RequestMarshal)
+		self.prepare_anthropic_body(body, |b| {
+			b.remove("model");
+		})
 	}
 
 	pub fn prepare_anthropic_count_tokens_body(&self, body: Vec<u8>) -> Result<Vec<u8>, AIError> {
+		self.prepare_anthropic_body(body, |b| {
+			if let Some(Value::String(model)) = b.get("model") {
+				let normalized = self
+					.configured_model(Some(model))
+					.map(|s| s.to_string())
+					.unwrap_or_else(|| model.clone());
+				b.insert("model".to_string(), Value::String(normalized));
+			}
+		})
+	}
+
+	fn prepare_anthropic_body(
+		&self,
+		body: Vec<u8>,
+		fixup: impl FnOnce(&mut Map<String, Value>),
+	) -> Result<Vec<u8>, AIError> {
 		let mut body: Map<String, Value> =
 			serde_json::from_slice(&body).map_err(AIError::RequestMarshal)?;
-
 		body.insert(
 			"anthropic_version".to_string(),
 			Value::String(ANTHROPIC_VERSION.to_string()),
 		);
-
-		if let Some(Value::String(model)) = body.get("model") {
-			let normalized = self
-				.configured_model(Some(model))
-				.map(|s| s.to_string())
-				.unwrap_or_else(|| model.clone());
-			body.insert("model".to_string(), Value::String(normalized));
-		}
-		body.remove("output_config");
-		body.remove("output_format");
-		let mut body_value = Value::Object(body);
-		strip_cache_control_scope(&mut body_value);
-
-		serde_json::to_vec(&body_value).map_err(AIError::RequestMarshal)
+		fixup(&mut body);
+		remove_unsupported_vertex_fields(&mut body);
+		serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
 	}
 
 	pub fn get_path_for_model(
@@ -225,20 +213,28 @@ mod tests {
 	}
 }
 
-/// Recursively strip the "scope" field from any "cache_control" objects in the JSON tree.
-fn strip_cache_control_scope(value: &mut Value) {
+fn remove_unsupported_vertex_fields(body: &mut Map<String, Value>) {
+	body.remove("output_config");
+	body.remove("output_format");
+	// Vertex supports cache_control but not the "scope" child from the prompt-caching-scope beta.
+	for value in body.values_mut() {
+		remove_nested_field(value, "cache_control", "scope");
+	}
+}
+
+fn remove_nested_field(value: &mut Value, key: &str, child: &str) {
 	match value {
 		Value::Object(map) => {
-			if let Some(Value::Object(cc)) = map.get_mut("cache_control") {
-				cc.remove("scope");
+			if let Some(Value::Object(nested)) = map.get_mut(key) {
+				nested.remove(child);
 			}
-			for (_, v) in map.iter_mut() {
-				strip_cache_control_scope(v);
+			for v in map.values_mut() {
+				remove_nested_field(v, key, child);
 			}
 		},
 		Value::Array(arr) => {
-			for v in arr.iter_mut() {
-				strip_cache_control_scope(v);
+			for v in arr {
+				remove_nested_field(v, key, child);
 			}
 		},
 		_ => {},
