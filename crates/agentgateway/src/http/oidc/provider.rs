@@ -9,11 +9,10 @@ use serde::Deserialize;
 
 use crate::client::Client;
 use crate::http::filters::BackendRequestTimeout;
-use crate::http::{Body, Uri};
+use crate::http::{Body, Uri, jwt};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::serdes::FileInlineOrRemote;
 
-use super::config::ResolvedProvider;
 use super::{Error, Provider, TokenEndpointAuth};
 
 #[derive(Debug, Deserialize)]
@@ -37,6 +36,15 @@ pub(super) struct DiscoveredProviderMetadata {
 	pub token_endpoint: Uri,
 	pub token_endpoint_auth: TokenEndpointAuth,
 	pub jwks: FileInlineOrRemote,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct ResolvedProvider {
+	pub(super) issuer: String,
+	pub(super) authorization_endpoint: Uri,
+	pub(super) token_endpoint: Uri,
+	pub(super) token_endpoint_auth: TokenEndpointAuth,
+	pub(super) id_token_jwks: JwkSet,
 }
 
 const DEFAULT_TOKEN_EXCHANGE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -110,6 +118,25 @@ pub(super) async fn build_explicit_provider(
 		token_endpoint_auth,
 		id_token_jwks: jwks,
 	})
+}
+
+impl ResolvedProvider {
+	pub(super) fn compile(self, audiences: Vec<String>) -> Result<Provider, Error> {
+		let provider = jwt::Provider::from_jwks(
+			self.id_token_jwks,
+			self.issuer.clone(),
+			Some(audiences),
+			jwt::JWTValidationOptions::default(),
+		)
+		.map_err(|e| Error::Config(format!("failed to create id token validator: {e}")))?;
+
+		Ok(Provider {
+			issuer: self.issuer,
+			authorization_endpoint: self.authorization_endpoint,
+			token_endpoint: self.token_endpoint,
+			id_token_validator: jwt::Jwt::from_providers(vec![provider], jwt::Mode::Strict),
+		})
+	}
 }
 
 pub(crate) async fn exchange_code(

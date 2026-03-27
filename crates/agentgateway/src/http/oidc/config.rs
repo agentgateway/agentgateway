@@ -1,21 +1,20 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use jsonwebtoken::jwk::JwkSet;
 use macro_rules_attribute::apply;
 use secrecy::SecretString;
 
 use super::provider::{
-	build_explicit_provider, default_discovery_url, discover_provider_metadata, load_jwks,
-	normalize_token_endpoint_auth_methods,
+	ResolvedProvider, build_explicit_provider, default_discovery_url, discover_provider_metadata,
+	load_jwks, normalize_token_endpoint_auth_methods,
 };
 use super::session::derive_cookie_names;
 use super::{
-	ClientConfig, CookieSecureMode, Error, OidcPolicy, PolicyId, Provider, RedirectUri, SameSiteMode,
+	ClientConfig, CookieSecureMode, Error, OidcPolicy, PolicyId, RedirectUri, SameSiteMode,
 	SessionConfig, TokenEndpointAuth, dedupe_scopes,
 };
 use crate::client::Client;
-use crate::http::{Uri, jwt, sessionpersistence};
+use crate::http::{Uri, sessionpersistence};
 use crate::schema_de;
 use crate::serdes::FileInlineOrRemote;
 
@@ -76,15 +75,6 @@ struct ResolvedOidcPolicy {
 	client_secret: SecretString,
 	redirect_uri: RedirectUri,
 	scopes: Vec<String>,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct ResolvedProvider {
-	pub(super) issuer: String,
-	pub(super) authorization_endpoint: Uri,
-	pub(super) token_endpoint: Uri,
-	pub(super) token_endpoint_auth: TokenEndpointAuth,
-	pub(super) id_token_jwks: JwkSet,
 }
 
 impl LocalOidcConfig {
@@ -217,25 +207,6 @@ impl ResolvedOidcPolicy {
 				encoder: oidc_cookie_encoder.clone(),
 			},
 			scopes,
-		})
-	}
-}
-
-impl ResolvedProvider {
-	fn compile(self, audiences: Vec<String>) -> Result<Provider, Error> {
-		let provider = jwt::Provider::from_jwks(
-			self.id_token_jwks,
-			self.issuer.clone(),
-			Some(audiences),
-			jwt::JWTValidationOptions::default(),
-		)
-		.map_err(|e| Error::Config(format!("failed to create id token validator: {e}")))?;
-
-		Ok(Provider {
-			issuer: self.issuer,
-			authorization_endpoint: self.authorization_endpoint,
-			token_endpoint: self.token_endpoint,
-			id_token_validator: jwt::Jwt::from_providers(vec![provider], jwt::Mode::Strict),
 		})
 	}
 }
