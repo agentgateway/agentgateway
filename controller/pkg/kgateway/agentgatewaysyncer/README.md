@@ -1,9 +1,21 @@
 # agentgateway syncer
 
-This syncer configures xds updates for the [agentgateway](https://agentgateway.dev/) data plane.
+This syncer configures xDS updates for the [agentgateway](https://agentgateway.dev/) data plane, translating Kubernetes Gateway API resources into agentgateway configurations.
 
-You can configure the agentgateway Gateway class to use a specific image by setting the image field on the
-AgentgatewayParameters:
+## Key Concepts
+
+Below are key concepts relevant to how the agentgateway syncer maps Kubernetes Gateway API resources to the data plane.
+
+- **GatewayClass**: Specifies which controller manages Gateways and provides configuration that the agentgateway syncer uses when reconciling resources.
+- **Gateway**: Defines how incoming traffic enters the cluster, including ports, protocols, and TLS configuration used by the agentgateway data plane.
+- **ListenerSet**: A custom resource used to extend an existing Gateway with additional listeners without modifying the original Gateway resource.
+- **Route (HTTPRoute, TCPRoute, etc.)**: Defines how incoming traffic is matched and routed to backends based on rules such as hostnames or paths.
+- **Backend**: The destination where matched traffic is forwarded, such as a Kubernetes Service or external endpoint.
+- **Policy**: Defines additional behavior (such as security or request handling rules) that the syncer applies when generating data plane configuration.
+
+## Configuration
+
+The following example shows how to configure the agentgateway syncer using `AgentgatewayParameters`, `GatewayClass`, and `Gateway` resources.
 ```yaml
 kind: AgentgatewayParameters
 apiVersion: agentgateway.dev/v1alpha1
@@ -50,14 +62,14 @@ The syncer uses the following APIs:
 - [workload](https://github.com/agentgateway/agentgateway/tree/main/go/api/workload.pb.go)
 - [resource](https://github.com/agentgateway/agentgateway/tree/main/go/api/resource.pb.go)
 
-The workload API is originally derived from from Istio's [ztunnel](https://github.com/istio/ztunnel), where each address represents a unique address. The address API joins two sub-resources (Workload and Service) to support querying by IP address.
+The workload API is derived from Istio's ztunnel, where each entry represents a unique addressable workload. The address API joins two sub-resources (Workload and Service) to support querying by IP address.
 
-Resources contain agentgateway-specific config (Binds, Listeners, Routes, Backend, Policy, etc.).
+Resources contain agentgateway-specific configuration (Binds, Listeners, Routes, Backends, Policies, etc.).
 
 #### Bind:
 
 Bind resources define port bindings that associate gateway listeners with specific network ports. Each Bind contains:
-- **Key**: Unique identifier in the format `port/namespace/name` (e.g., `8080/default/my-gateway`)
+- **Key**: Unique identifier (`port/namespace/name`)
 - **Port**: The network port number that the gateway listens on
 
 Binds are created automatically when Gateway resources are processed, with one Bind per unique port used across all listeners.
@@ -67,8 +79,8 @@ Binds are created automatically when Gateway resources are processed, with one B
 Listener resources represent individual gateway listeners with their configuration. Each Listener contains:
 - **Key**: Unique identifier for the listener
 - **Name**: The section name from the Gateway listener specification
-- **BindKey**: References the associated Bind resource (format: `port/namespace/name`)
-- **GatewayName**: The gateway this listener belongs to (format: `namespace/name`)
+- **BindKey**: References the associated Bind resource (`port/namespace/name`)
+- **GatewayName**: The gateway this listener belongs to (`namespace/name`)
 - **Hostname**: The hostname this listener accepts traffic for
 - **Protocol**: The protocol type (HTTP, HTTPS, TCP, TLS)
 - **TLS**: TLS configuration including certificates and termination mode
@@ -85,10 +97,10 @@ Route resources define routing rules that determine how traffic is forwarded to 
 - **TLS Routes**: Convert from `TLSRoute` resources for TLS passthrough (SNI matching at listener level)
 
 Each Route contains:
-- **Key**: Unique identifier (format: `namespace.name.rule.match`)
-- **RouteName**: Source route name (format: `namespace/name`)
-- **ListenerKey**: Associated listener (populated during gateway binding)
-- **RuleName**: Optional rule name from the source route
+- **Key**: Unique identifier (`namespace.name.rule.match`)
+- **RouteName**: Source route name (`namespace/name`)
+- **ListenerKey**: Associated listener
+- **RuleName**: Optional rule name
 - **Matches**: Traffic matching criteria (path, headers, method, query params)
 - **Filters**: Request/response transformation filters
 - **Backends**: Target backend services with load balancing and health checking
@@ -102,11 +114,11 @@ Backend resources define target services and systems that traffic should be rout
 
 Each backend has a unique name in the format `namespace/name`. Backends are processed through the plugin system that translates Kubernetes AgentgatewayBackend CRDs to agentgateway API resources
 
-Backends for agentgateway are represented by the `AgentgatewayBackend` CRD and support the following backend types:
+Backends for agentgateway are represented by the `AgentgatewayBackend` CRD and support multiple backend types through plugins.
 
 **Backend Types (agentgateway):**
-- **AI**: Routes traffic to AI/LLM providers (OpenAI, Anthropic, Azure OpenAI, Bedrock, etc.)
-- **MCP**: Model Context Protocol backends for virtual MCP servers. Static MCP targets are supported via `spec.mcp.targets[].static`.
+- **AI**: Routes traffic to external AI/LLM providers.
+- **MCP**: Model Context Protocol backends for MCP-compatible services. Static MCP targets are supported via `spec.mcp.targets[].static`.
 
 **Usage in Routes:**
 Backends are referenced by HTTPRoute, GRPCRoute, TCPRoute, and TLSRoute resources using `backendRefs`:
@@ -128,11 +140,7 @@ spec:
 3. Plugins translate the backend configuration to agentgateway API format
 4. The resulting backend resources and associated policies are distributed to **all** gateways via xDS
 
-#### Policies:
-
-Policies for agentgateway are configured via the `AgentgatewayPolicy` CRD (attached to `Gateway`/`HTTPRoute`/`TCPRoute`). They configure the following agentgateway Policies:
-
-Policies are configurable rules that control traffic behavior, security, and transformations for routes and backends.
+Policies define additional behavior (such as security, routing logic, and transformations) that the syncer applies when generating data plane configuration.
 - Request Header Modifier: Add, set, or remove HTTP request headers.
 - Response Header Modifier: Add, set, or remove HTTP response headers.
 - Request Redirect: Redirect incoming requests to a different scheme, authority, path, or status code.
@@ -145,11 +153,9 @@ Policies are configurable rules that control traffic behavior, security, and tra
 - Retry: Configure retry attempts, backoff, and which response codes should trigger retries.
 - Transformations: Add, set or remove HTTP request and response headers and apply body transformations
 
-### CEL Transformations
-
 The agentgateway data plane supports [CEL](https://cel.dev/) (Common Expression Language) transformations through AgentgatewayPolicy resources. CEL transformations allow you to modify requests and responses using powerful expression language.
 
-Unlike the Envoy data plane transformations that support Inja, the agentgateway transformations use CEL expressions.
+Unlike other data planes that use templating approaches, agentgateway transformations use CEL expressions.
 
 #### Supported Transformation Types
 
@@ -355,7 +361,7 @@ Setup the cluster:
 ./hack/kind/setup-kind.sh
 ```
 
-Retag and load the image to match the default image tag in the values file for agentgateway, then run:
+Retag and load the image to match the default image tag in the values file, then run:
 
 ```
 make run HELM_ADDITIONAL_VALUES=test/e2e/tests/manifests/agent-gateway-integration.yaml; CONFORMANCE_GATEWAY_CLASS=agentgateway make conformance
@@ -367,6 +373,8 @@ kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/downloa
 helm upgrade -i --create-namespace --namespace agentgateway-system --version v2.3.0-main agentgateway-crds oci://cr.agentgateway.dev/agentgateway/charts/agentgateway-crds
 helm upgrade -i --namespace agentgateway-system --version v2.3.0-main agentgateway oci://cr.agentgateway/agentgateway/charts/agentgateway
 ```
+
+### Examples
 
 #### HTTPRoute
 
@@ -412,12 +420,14 @@ spec:
 EOF
 ```
 
-Port-forward and send a request through the gateway:
+To test the configuration, port-forward the gateway and send a request using curl:
 ```shell
- curl localhost:8080 -v -H "host: www.example.com"
+curl localhost:8080/ \
+  -H "Host: www.example.com" \
+  -v
 ```
 
-#### GRPC Route
+#### GRPCRoute
 
 Apply the following config to set up the GRPCRoute attached to the agentgateway Gateway:
 ```shell
@@ -518,7 +528,7 @@ spec:
 EOF
 ```
 
-Port-forward, and send a request through the gateway:
+
 ```shell
 grpcurl \
   -plaintext \
@@ -608,12 +618,13 @@ spec:
 EOF
 ```
 
-Port-forward, and send a request through the gateway:
+
 ```shell
-curl localhost:8080/ -i
+curl localhost:8080/ \
+  -i
 ```
 
-#### Static Backend routing
+#### Static Backend
 
 Apply the following config to set up the HTTPRoute pointing to the static backend:
 
@@ -659,12 +670,14 @@ spec:
 EOF
 ```
 
-Port-forward, and send a request through the gateway:
+
 ```shell
-curl localhost:8080/ -v -H "host: jsonplaceholder.typicode.com"
+curl localhost:8080/ \
+  -v \
+  -H "Host: jsonplaceholder.typicode.com"
 ```
 
-#### AI Backend routing
+#### AI Backend
 
 First, create secret in the cluster with the API key:
 ```shell
@@ -719,7 +732,7 @@ spec:
   ai:
     provider:
       openai:
-        model: "gpt-4o-mini"
+        model: "<model-name>"
   policies:
     auth:
       secretRef:
@@ -727,19 +740,22 @@ spec:
 EOF
 ```
 
-Port-forward, and send a request through the gateway:
+
 ```shell
-curl localhost:8080/openai -H content-type:application/json -v -d'{
-"model": "gpt-3.5-turbo",
-"messages": [
-  {
-    "role": "user",
-    "content": "Whats your favorite poem?"
-  }
-]}'
+curl localhost:8080/openai \
+  -H "Content-Type: application/json" \
+  -v \
+  -d '{
+  "model": "<model-name>",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What's your favorite poem?"
+    }
+  ]}'
 ```
 
-With agentgateway, you get a unified API to send requests to different providers in the same format.
+Agentgateway provides a unified API to send requests to different providers using a consistent format.
 
 Modify the HTTPRoute config to add another provider:
 
@@ -781,7 +797,7 @@ spec:
   ai:
     provider:
       bedrock:
-        model: anthropic.claude-3-5-haiku-20241022-v1:0
+        model: "<model-name>"
         region: us-west-2
   policies:
     auth:
@@ -799,30 +815,36 @@ stringData:
 type: Opaque
 EOF
 ```
-The request you send can be formatted in the same Open AI format:
+
 
 ```shell
-curl localhost:8080/ -H content-type:application/json -v -d'{
-"model": "anthropic.claude-3-5-haiku-20241022-v1:0",
-"messages": [
-  {
-    "role": "user",
-    "content": "Whats your favorite poem?"
-  }
-]}'
+curl localhost:8080/ \
+  -H "Content-Type: application/json" \
+  -v \
+  -d '{
+  "model": "<model-name>",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What's your favorite poem?"
+    }
+  ]}'
 ```
 
 You can send streaming requests using the Open AI format as well:
 ```shell
-curl localhost:8080/ -H content-type:application/json -v -d'{
-"model": "anthropic.claude-3-5-haiku-20241022-v1:0",
-"stream": true,
-"messages": [
-  {
-    "role": "user",
-    "content": "Whats your favorite poem?"
-  }
-]}'
+curl localhost:8080/ \
+  -H "Content-Type: application/json" \
+  -v \
+  -d '{
+  "model": "<model-name>",
+  "stream": true,
+  "messages": [
+    {
+      "role": "user",
+      "content": "What's your favorite poem?"
+    }
+  ]}'
 ```
 
 #### MCP Backend
@@ -917,9 +939,9 @@ EOF
 
 Note: Only streamable HTTP is currently supported for label selectors.
 
-Port-forward, and send a request through the gateway to start a session:
 ```shell
-curl localhost:8080/sse -v
+curl localhost:8080/sse \
+  -v
 ```
 
 You should see a response with the session id:
@@ -931,12 +953,27 @@ data: ?sessionId=c1a54dcb-be11-4f91-91b5-a1abf67deca2
 
 Then you can send a request using the sessionId to initialize the connection:
 ```shell
-curl "http://localhost:8080/mcp" -v \
+curl "http://localhost:8080/mcp" \
+  -v \
   -H "Accept: text/event-stream,application/json" \
-  --json '{"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{"roots":{}},"clientInfo":{"name":"claude-code","version":"1.0.60"}},"jsonrpc":"2.0","id":0}'
+  --json '{
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-06-18",
+      "capabilities": {
+        "roots": {}
+      },
+      "clientInfo": {
+        "name": "claude-code",
+        "version": "1.0.60"
+      }
+    },
+    "jsonrpc": "2.0",
+    "id": 0
+  }'
 ```
 
-Or inspect the mcp tool with [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
+Or inspect the MCP tool with [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
 ```shell
 npx @modelcontextprotocol/inspector
 ```
@@ -1048,7 +1085,7 @@ spec:
 EOF
 ```
 
-Note, you must use `kgateway.dev/a2a` as the app protocol for the kgateway control plane to configure agentgateway to use a2a.
+Note: The `appProtocol` must be set to `kgateway.dev/a2a` for the control plane to configure agentgateway correctly.
 
 Apply the routing config:
 ```shell
@@ -1084,33 +1121,34 @@ spec:
 EOF
 ```
 
-Port-forward, and send a request through the gateway:
+To test the configuration, send a request:
 ```shell
- curl -X POST http://localhost:8080/ \
--H "Content-Type: application/json" \
+curl -X POST http://localhost:8080/ \
+  -H "Content-Type: application/json" \
   -v \
   -d '{
-"jsonrpc": "2.0",
-"id": "1",
-"method": "tasks/send",
-"params": {
-  "id": "1",
-  "message": {
-    "role": "user",
-    "parts": [
-      {
-        "type": "text",
-        "text": "hello gateway!"
+    "jsonrpc": "2.0",
+    "id": "1",
+    "method": "tasks/send",
+    "params": {
+      "id": "1",
+      "message": {
+        "role": "user",
+        "parts": [
+          {
+            "type": "text",
+            "text": "hello gateway!"
+          }
+        ]
       }
-    ]
-  }
-}
-}'
+    }
+  }'
 ```
 
-### Tracing and Observability
+### Observability
 
-The agentgateway data plane supports comprehensive observability through OpenTelemetry (OTEL) tracing. You can configure tracing using the `rawConfig` field in AgentgatewayParameters to integrate with various observability platforms and add custom trace fields for enhanced monitoring of your AI/LLM traffic.
+The agentgateway data plane supports observability through OpenTelemetry (OTEL) tracing.
+ You can configure tracing using the `rawConfig` field in AgentgatewayParameters to integrate with various observability platforms and add custom trace fields for enhanced monitoring of your AI/LLM traffic.
 
 For detailed information about tracing configuration and observability features, see the [agentgateway observability documentation](https://agentgateway.dev/docs/reference/observability/traces/).
 
@@ -1289,10 +1327,10 @@ rawConfig:
 
 #### Important Notes
 
-- **RawConfig Updates**: Changes to `rawConfig` in AgentgatewayParameters will trigger an agentgateway pod rollout automatically
-- **Validation**: Invalid CEL expressions in trace fields will be logged but won't prevent the gateway from starting
-- **Performance**: Be mindful of the number and complexity of custom trace fields, as they impact performance
-- **Sampling**: Use `randomSampling` to control trace volume in production environments
+- Changes to `rawConfig` trigger an agentgateway pod rollout automatically.
+- Invalid CEL expressions are logged but do not block startup.
+- Complex trace fields may impact performance.
+- Use `randomSampling` to control trace volume in production.
 
 #### Complete Example with AI Backend
 
@@ -1357,7 +1395,7 @@ spec:
   ai:
     provider:
       openai:
-        model: "gpt-4o-mini"
+        model: "<model-name>"
   policies:
     auth:
       secretRef:
@@ -1544,44 +1582,20 @@ spec:
 EOF
 ```
 
-**Testing MCP Tool Calls with Traces:**
-
-1. **Set up port forwarding:**
-```bash
-# Port forward to the gateway pod
-kubectl port-forward deployment/agentgateway 15000:15000 3000:3000
-```
-
-**Verify traces:**
-
-1. **Open the agentgateway UI** to view your listener and target configuration.
-
-2. **Connect to the MCP server** with the agentgateway UI playground.
-   - From the navigation menu, click **Playground**.
-
-3. **In the Testing card**, review your Connection details and click **Connect**. The agentgateway UI connects to the target that you configured and retrieves the tools that are exposed on the target.
-
-4. **Verify that you see a list of Available Tools**.
-
-5. **Verify access to a tool**:
-   - From the Available Tools list, select the **echo** tool.
-   - In the message field, enter any string, such as `hello world`, and click **Run Tool**.
-   - Verify that you see your message echoed in the Response card.
-
-6. **Open the Jaeger UI**.
-
-7. **View traces**:
-   - From the Service drop down, select **agentgateway**.
-   - Click **Find Traces**.
-   - Verify that you can see trace spans for listing the MCP tools (`list_tools`) and calling a tool (`call_tool`).
-
-This configuration provides comprehensive tracing for your MCP tool interactions, making it easy to debug issues and monitor performance of your agent-to-agent communications.
+To verify tracing:
+1. Connect using the agentgateway UI Playground
+2. Invoke a tool (e.g., echo)
+3. Inspect traces in Jaeger
 
 
-### Additional AgentgatewayPolicy examples
+This configuration enables tracing for MCP tool interactions.
 
-#### JWTAuthentication
-Use `AgentgatewayPolicy.spec.traffic.jwtAuthentication` to validate JWTs at the Gateway or Route. You can configure multiple providers and supply keys via remote JWKS (`jwks.remote.jwksUri`) or inline JWKS (`jwks.inline`). JWT auth can be combined with `authorization.policy.matchExpressions` for simple RBAC-style allow rules.
+
+### Policy Examples
+
+#### JWT Authentication
+Configures JWT validation using `AgentgatewayPolicy.spec.traffic.jwtAuthentication`.
+ You can configure multiple providers and supply keys via remote JWKS (`jwks.remote.jwksUri`) or inline JWKS (`jwks.inline`). JWT auth can be combined with `authorization.policy.matchExpressions` for simple RBAC-style allow rules.
 
 ```shell
 kubectl apply -f- <<EOF
@@ -1678,10 +1692,7 @@ spec:
       providers:
       - issuer: https://kgateway.dev
         jwks:
-          inline: '{"keys":[{"use":"sig","kty":"RSA","kid":"5333780687551038659","n":"1ovFhi3vyvF6DsbWanZrUUVgQVIUULNRczlyu1dJw8SoqSz5HRtfQUSVq_yuprKrpSz6oam8gAsXtpp570f8P3zm3kXBRzBq6-DAjx-4V5l0x7O89a35FkDjaiS4ci1r6_Z0nWjlIw-WY4w1kf1OwuDYjYJCgHgcRhMXblhVvcpq74de_0aezXNHVaA9sqqa78wciQc1ho2T2jkJ5-5OdfPw6YrkUwHrQIP37fH4wJCVmdyxPgwqNphQInmOrlbeisS2ih-s7ZJcC8eXaZrNZopHyrw2rhWM4eCwogFVuYpF6-coMXyEGk_SzYUaX5XMgZcZW1-SmTNtxtEKqFDSlw","e":"AQAB","x5c":["MIIC3jCCAcagAwIBAgIBQzANBgkqhkiG9w0BAQsFADAXMRUwEwYDVQQKEwxrZ2F0ZXdheS5kZXYwHhcNMjUxMTE0MTc1MjA4WhcNMjUxMTE0MTk1MjA4WjAXMRUwEwYDVQQKEwxrZ2F0ZXdheS5kZXYwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDWi8WGLe/K8XoOxtZqdmtRRWBBUhRQs1FzOXK7V0nDxKipLPkdG19BRJWr/K6msqulLPqhqbyACxe2mnnvR/w/fObeRcFHMGrr4MCPH7hXmXTHs7z1rfkWQONqJLhyLWvr9nSdaOUjD5ZjjDWR/U7C4NiNgkKAeBxGExduWFW9ymrvh17/Rp7Nc0dVoD2yqprvzByJBzWGjZPaOQnn7k518/DpiuRTAetAg/ft8fjAkJWZ3LE+DCo2mFAieY6uVt6KxLaKH6ztklwLx5dpms1mikfKvDauFYzh4LCiAVW5ikXr5ygxfIQaT9LNhRpflcyBlxlbX5KZM23G0QqoUNKXAgMBAAGjNTAzMA4GA1UdDwEB/wQEAwIFoDATBgNVHSUEDDAKBggrBgEFBQcDATAMBgNVHRMBAf8EAjAAMA0GCSqGSIb3DQEBCwUAA4IBAQCC71YGcmJvrmjSOd33nPsRpTO+arEex2Se5f0nSrglTfubYl4Bb8L/MnF87yHkc+50/dvCbXB9lJwblfsO/HjWAwBnM94ePqIurLRn0tflsW+22PR/2lcnru74HDN+p8/9ZtedchYWetcD4k1boMhUOgolte1WrHNvAsm2divBsWrO6Fg3kKjgTItARFyrmhjFz+QYBuFKw6b16dB9n4kSbCiFVJ49GqU9T+7cs7cL8SCC69jMgcSK8ythN693rYDU5Cz/xTqNx+3Tk+yKFCg+vr4rIxV1ACrE61plnY8qGph64FEZpAPU6xL3K0V/Y+TXsfpjL9jhi+9bvOdNr3Vy"]}]}'
-      - issuer: https://kgateway.dev
-        jwks:
-          inline: '{"keys":[{"use":"sig","kty":"RSA","kid":"7105793955086939664","n":"oQqLI89RuTy4d_DLuDBInE2w5bEpTBnoMpo0x6pWJWm48jP-tTF3r6156HmLPzUGHMpKolfZReVXj1eXXp5NUiOB3McvaemUPYZe8ZSQ9YrbTmodiVc6_S0ipT-SlO-nyjxZM2rvc2PUoYNipTOWyhq7YWYmaQ607g5zUItcn_omiFAgJFAXQJ5BSe4RUKbObKvLxHKDPfqNmG_K_DJy_0TmoBV9OGIwECCi7wtZ9icYJgfclH_v2nDaaxRvXA_9NPASPLJ8-B3a_soJqzX_tGi2QfLgtnoJKxUp-mprQzXMK0TBUm3ycCjch4FMykJCeGluV0H7F025u4wUkGu71w","e":"AQAB","x5c":["MIIC3jCCAcagAwIBAgIBETANBgkqhkiG9w0BAQsFADAXMRUwEwYDVQQKEwxrZ2F0ZXdheS5kZXYwHhcNMjUxMTE0MTc1NTU1WhcNMjUxMTE0MTk1NTU1WjAXMRUwEwYDVQQKEwxrZ2F0ZXdheS5kZXYwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQChCosjz1G5PLh38Mu4MEicTbDlsSlMGegymjTHqlYlabjyM/61MXevrXnoeYs/NQYcykqiV9lF5VePV5denk1SI4Hcxy9p6ZQ9hl7xlJD1ittOah2JVzr9LSKlP5KU76fKPFkzau9zY9Shg2KlM5bKGrthZiZpDrTuDnNQi1yf+iaIUCAkUBdAnkFJ7hFQps5sq8vEcoM9+o2Yb8r8MnL/ROagFX04YjAQIKLvC1n2JxgmB9yUf+/acNprFG9cD/008BI8snz4Hdr+ygmrNf+0aLZB8uC2egkrFSn6amtDNcwrRMFSbfJwKNyHgUzKQkJ4aW5XQfsXTbm7jBSQa7vXAgMBAAGjNTAzMA4GA1UdDwEB/wQEAwIFoDATBgNVHSUEDDAKBggrBgEFBQcDATAMBgNVHRMBAf8EAjAAMA0GCSqGSIb3DQEBCwUAA4IBAQAt5kwem0VyLMkFaA/+XQsx+Q1FOZR3qdXEBK77fDiPpcCz5evDXxfwmiVpmvn+dbbNn00sDzzJw0msEYLi80l8vG5+IVkgFklgDveLs+sRnfme8WBNVMmb6jUUBtXGWmosEh7L+itd1faA1t4vTI+yXNdO0DmRtgUZeT7ucERwgYFs/cwjsbUg9AR0FdLXvOgXuLdSK5FfAQz/DZ1MGKgDLC8hXvrSnoO3P3ol1iLn6C1QBIHautBjJddaKVyhKbyleP8zYBjzee+VAwd/u1nepmwe1lchCAppLPefP1keaShHkxdy4ki0JoRdjxKTs93gbJVVeSoEMSYftOL6dqMb"]},{"use":"sig","kty":"RSA","kid":"8140227754244739431","n":"okB6eJdsTlNodvUUaR3Fqmz3gq8qfWyTcbiX-8wHYjQVsrGgWNq0MjfGhnnJFzkF1Yyz4V-SV-JpOLHz-GUqRjaLZ4jOYc-GVoPqD-tLmtaV0EE07Ti-Up_SuYh6ylyogzYAmJiLPgc4cI_pV3BVrfE9qd3KyP0vhzbbqEELeEEks-rBCgxTorL3lucN9Cg5LiBF-R1uJRnOqKfc94_aBOsMpRYjSuqsgEBOGuY-6wYgg_3cMZXc8EqFWZ92Kh06miAI6KLF6-39PRIgAm2BsIrknpWPbTSZEs463qatyFGFwh80nT3mRzSZxdgjmbdt6jQYWAaSG-p2zmsmrrrMJQ","e":"AQAB","x5c":["MIIC3jCCAcagAwIBAgIBCTANBgkqhkiG9w0BAQsFADAXMRUwEwYDVQQKEwxrZ2F0ZXdheS5kZXYwHhcNMjUxMTE0MTc1NzA2WhcNMjUxMTE0MTk1NzA2WjAXMRUwEwYDVQQKEwxrZ2F0ZXdheS5kZXYwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCiQHp4l2xOU2h29RRpHcWqbPeCryp9bJNxuJf7zAdiNBWysaBY2rQyN8aGeckXOQXVjLPhX5JX4mk4sfP4ZSpGNotniM5hz4ZWg+oP60ua1pXQQTTtOL5Sn9K5iHrKXKiDNgCYmIs+Bzhwj+lXcFWt8T2p3crI/S+HNtuoQQt4QSSz6sEKDFOisveW5w30KDkuIEX5HW4lGc6op9z3j9oE6wylFiNK6qyAQE4a5j7rBiCD/dwxldzwSoVZn3YqHTqaIAjoosXr7f09EiACbYGwiuSelY9tNJkSzjrepq3IUYXCHzSdPeZHNJnF2COZt23qNBhYBpIb6nbOayauuswlAgMBAAGjNTAzMA4GA1UdDwEB/wQEAwIFoDATBgNVHSUEDDAKBggrBgEFBQcDATAMBgNVHRMBAf8EAjAAMA0GCSqGSIb3DQEBCwUAA4IBAQBk387Q4W38xw03pcQTQXDZzo7zN0PeGl6CFqxf/uHTOutIWbCs5tu0HVqpmKtz7sxQiTShfEaoDQhwsFG2yv5czwmMX7ggj6x4rZN54cIaZLjyWZk+DY7B8zRq4Qn6zs9gvNla6iShc5P+w0fuCWBlX5s2d9HQRcbWRyI/jxmhOMnSoFJIJMkulPG+SnnsVblOvubzd5cPXHD7ynMxBw6XFSimLAlIqKgtfT+JehXD4M208nzYEcXhKp9RUh6PQCZ8RUc4zd11mIDZbGuDBjpIhspdyf0OhgljIkhZ3CNOzKqcE9YUWILiY6/oWhObVFQfObiCXj/raMXrTmoW/FB8"]}]}'
+          inline: '{"keys":[{...}]}'
 EOF
 ```
 
@@ -1724,10 +1735,10 @@ spec:
       providers:
       - issuer: https://kgateway.dev
         jwks:
-          inline: '{"keys":[{"use":"sig","kty":"RSA","kid":"6199783057790440763","n":"0VsRlUTAJuh-y-HHdtYDHZ64dBPh0OukIunXTzdCdlGBRsqdxp6yM8-NyUOd1knC220CqHjivu45EcLWFEfBGtoTGux6Um-qwuLOhtoI_83ipgXE6jl05aLv1O36FjwmBUVJ1beTNIFOa5pceC4Cvv_F-gVdaJwIWsz8TLkWLTIkKPOEWvPGshcCeP--5r-SwymqcebC8ZGOf1J1LMoCCoWj1o_DMcz889A13o_s82ZkS1XmyxmbgOJe2T8LdID3XHsGhEwVuPk93Rqal6g1U6NCeN8rSQy7qsweBstRvEoLCJDuw/rNS5Ah4+LxS/G7edBvlzOO+r3rAFjlmMwl69AgMBAAGjNTAzMA4GA1UdDwEB/wQEAwIFoDATBgNVHSUEDDAKBggrBgEFBQcDATAMBgNVHRMBAf8EAjAAMA0GCSqGSIb3DQEBCwUAA4IBAQAayiqIvfgW22YzEM0tfupq3qLsWsbmYyq5FWcWO1n833G+VBt1LzoTno2QYplxHOVUrPm7rf9aFeN1h68V1ab8xzjUQWrszo6QVmkbFgWafriUneBZE0SArNBiJq33UB3f4Jb3xzVSZQkE4xubmvBosEqLflSE7dbJCtpH18jDLNusAOtZB2ETVBxkI5xKrsiJto6OtoF9y7UA05zQBZkLU9F81vS1LdlAoryvDMa1M86dBzaMVHwbCEerCsJVYIhq+dNkvLAsPeohPpGZBVh7gqABJfxMHXj8R4R1mriPcBRWAuavext4LziugXA+pUuPKgD3EFGLhM+zOzLZcTkx"]}]}'
+          inline: '{"keys":[{...}]}'
 EOF
 ```
-#### Rate limit (local + global)
+#### Rate Limiting (Local + Global)
 Configure request limiting with `AgentgatewayPolicy.spec.traffic.rateLimit`. Local limits apply per proxy instance, while global limits use an external rate limit service (provide `backendRef`, `domain`, and `descriptors`). Combine `requests`, `unit`, and `burst` to shape traffic precisely.
 
 ```shell
@@ -1817,7 +1828,9 @@ spec:
 EOF
 ```
 
-#### Azure OpenAI support
+### AI Backend Examples
+
+#### Azure OpenAI
 
 You can now route to Azure OpenAI using the AI AgentgatewayBackend type:
 
@@ -1857,7 +1870,7 @@ spec:
 EOF
 ```
 
-#### Anthropic token counting
+#### Anthropic Token Counting
 Map provider-specific endpoints to behavior using `AgentgatewayPolicy.spec.backend.ai.routes`. The `anthropic_token_count` route type processes Anthropic `/v1/messages/count_tokens` requests to return token usage estimates.
 
 ```shell
