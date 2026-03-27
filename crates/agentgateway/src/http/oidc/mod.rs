@@ -211,6 +211,7 @@ impl OidcPolicy {
 				log.jwt_sub = Some(sub.clone());
 			}
 			req.extensions_mut().insert(claims);
+			crate::http::request_cookies::strip_cookies_by_prefix(req, RESERVED_COOKIE_PREFIX);
 			return Ok(PolicyResponse::default());
 		}
 

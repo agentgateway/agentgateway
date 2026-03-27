@@ -1488,7 +1488,7 @@ async fn convert(
 		workloads,
 		services,
 	};
-	validate_oidc_config(config, &normalized)?;
+	validate_oidc_callback_ownership(config, &normalized)?;
 	Ok(normalized)
 }
 
@@ -2304,7 +2304,7 @@ impl OidcPolicyIdentity {
 	}
 }
 
-fn validate_oidc_config(
+fn validate_oidc_callback_ownership(
 	config: &crate::Config,
 	normalized: &NormalizedLocalConfig,
 ) -> anyhow::Result<()> {

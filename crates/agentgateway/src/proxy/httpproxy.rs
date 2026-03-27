@@ -88,12 +88,6 @@ async fn apply_request_policies(
 			.map_err(|e| ProxyResponse::from(ProxyError::OidcFailure(e)))?
 			.apply(response_policies.headers())?;
 	}
-	if policies.oidc.is_some() {
-		crate::http::request_cookies::strip_cookies_by_prefix(
-			req,
-			crate::http::oidc::RESERVED_COOKIE_PREFIX,
-		);
-	}
 
 	if let Some(j) = &policies.jwt {
 		j.apply(Some(log), req)
