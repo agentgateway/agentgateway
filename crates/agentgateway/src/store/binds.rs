@@ -238,12 +238,6 @@ pub struct RoutePolicies {
 	pub cors: Option<http::cors::Cors>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RouteOidcSource {
-	Inline,
-	Targeted(PolicyKey),
-}
-
 #[derive(Debug, Default)]
 pub struct GatewayPolicies {
 	pub ext_proc: Option<ext_proc::ExtProc>,
@@ -523,51 +517,6 @@ impl Store {
 		}
 
 		pol
-	}
-
-	pub fn route_oidc_source(
-		&self,
-		path: &RoutePath<'_>,
-		inline: &[TrafficPolicy],
-	) -> Option<RouteOidcSource> {
-		if inline
-			.iter()
-			.any(|policy| matches!(policy, TrafficPolicy::Oidc(_)))
-		{
-			return Some(RouteOidcSource::Inline);
-		}
-
-		let &RoutePath { listener, route } = path;
-		let gateway = self
-			.policies_by_target
-			.get(&listener.as_gateway_target_ref());
-		let listener = self
-			.policies_by_target
-			.get(&listener.as_listener_target_ref());
-		let route_rule = self
-			.policies_by_target
-			.get(&route.as_route_rule_target_ref());
-		let route = self.policies_by_target.get(&route.as_route_target_ref());
-
-		route_rule
-			.iter()
-			.copied()
-			.flatten()
-			.chain(route.iter().copied().flatten())
-			.chain(listener.iter().copied().flatten())
-			.chain(gateway.iter().copied().flatten())
-			.find_map(|key| {
-				self
-					.policies_by_key
-					.get(key)
-					.filter(|policy| {
-						matches!(
-							policy.policy.as_traffic_route_phase(),
-							Some(TrafficPolicy::Oidc(_))
-						)
-					})
-					.map(|_| RouteOidcSource::Targeted(key.clone()))
-			})
 	}
 
 	pub fn gateway_policies(&self, name: &ListenerName) -> GatewayPolicies {

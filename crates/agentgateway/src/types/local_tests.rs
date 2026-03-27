@@ -173,58 +173,7 @@ binds:
 }
 
 #[tokio::test]
-async fn test_oidc_exact_callback_route_shadowed_by_different_policy_is_rejected() {
-	let yaml = r#"
-binds:
-- port: 3000
-  listeners:
-  - name: default
-    protocol: HTTP
-    routes:
-    - name: callback-a
-      matches:
-      - path:
-          exact: /oauth/callback
-      policies:
-        oidc:
-          issuer: https://issuer.example.com
-          authorizationEndpoint: https://issuer.example.com/authorize
-          tokenEndpoint: https://issuer.example.com/token
-          jwks: '{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}'
-          clientId: client-a
-          clientSecret: secret-a
-          redirectURI: http://localhost:3000/oauth/callback
-      backends:
-      - host: localhost:18080
-    - name: callback-b
-      matches:
-      - path:
-          exact: /oauth/callback
-      policies:
-        oidc:
-          issuer: https://issuer.example.com
-          authorizationEndpoint: https://issuer.example.com/authorize
-          tokenEndpoint: https://issuer.example.com/token
-          jwks: '{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}'
-          clientId: client-b
-          clientSecret: secret-b
-          redirectURI: http://localhost:3000/oauth/callback
-      backends:
-      - host: localhost:18080
-"#;
-
-	let err = normalize_test_yaml_with_oidc(yaml)
-		.await
-		.expect_err("different exact callback owners should fail validation");
-	assert!(
-		err
-			.to_string()
-			.contains("wins callback selection with a different effective oidc policy")
-	);
-}
-
-#[tokio::test]
-async fn test_oidc_callback_path_prefix_route_does_not_count_as_owner() {
+async fn test_oidc_duplicated_inline_split_routes_are_rejected() {
 	let yaml = r#"
 binds:
 - port: 3000
@@ -242,8 +191,23 @@ binds:
           authorizationEndpoint: https://issuer.example.com/authorize
           tokenEndpoint: https://issuer.example.com/token
           jwks: '{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}'
-          clientId: agentgateway-browser
-          clientSecret: agentgateway-secret
+          clientId: client-app
+          clientSecret: secret-app
+          redirectURI: http://localhost:3000/oauth/callback
+      backends:
+      - host: localhost:18080
+    - name: callback
+      matches:
+      - path:
+          exact: /oauth/callback
+      policies:
+        oidc:
+          issuer: https://issuer.example.com
+          authorizationEndpoint: https://issuer.example.com/authorize
+          tokenEndpoint: https://issuer.example.com/token
+          jwks: '{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}'
+          clientId: client-callback
+          clientSecret: secret-callback
           redirectURI: http://localhost:3000/oauth/callback
       backends:
       - host: localhost:18080
@@ -251,16 +215,16 @@ binds:
 
 	let err = normalize_test_yaml_with_oidc(yaml)
 		.await
-		.expect_err("prefix route should not count as callback owner");
+		.expect_err("duplicated inline oidc routes should fail validation");
 	assert!(
 		err
 			.to_string()
-			.contains("callback ownership requires an exact callback route")
+			.contains("shared session identity requires one shared real oidc policy identity")
 	);
 }
 
 #[tokio::test]
-async fn test_oidc_exact_callback_route_shadowed_by_non_oidc_route_is_rejected() {
+async fn test_oidc_callback_selection_without_oidc_is_rejected() {
 	let yaml = r#"
 binds:
 - port: 3000
@@ -309,20 +273,20 @@ binds:
   listeners:
   - name: default
     protocol: HTTP
+    policies:
+      oidc:
+        issuer: https://issuer.example.com
+        authorizationEndpoint: https://issuer.example.com/authorize
+        tokenEndpoint: https://issuer.example.com/token
+        jwks: '{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}'
+        clientId: agentgateway-browser
+        clientSecret: agentgateway-secret
+        redirectURI: http://localhost:3000/oauth/callback
     routes:
     - name: callback
       matches:
       - path:
           exact: /oauth/callback
-      policies:
-        oidc:
-          issuer: https://issuer.example.com
-          authorizationEndpoint: https://issuer.example.com/authorize
-          tokenEndpoint: https://issuer.example.com/token
-          jwks: '{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}'
-          clientId: agentgateway-browser
-          clientSecret: agentgateway-secret
-          redirectURI: http://localhost:3000/oauth/callback
       backends:
       - host: localhost:18080
     - name: application
@@ -330,14 +294,6 @@ binds:
       - path:
           pathPrefix: /app
       policies:
-        oidc:
-          issuer: https://issuer.example.com
-          authorizationEndpoint: https://issuer.example.com/authorize
-          tokenEndpoint: https://issuer.example.com/token
-          jwks: '{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}'
-          clientId: agentgateway-browser
-          clientSecret: agentgateway-secret
-          redirectURI: http://localhost:3000/oauth/callback
         jwtAuth:
           issuer: https://issuer.example.com
           audiences: [agentgateway-browser]
@@ -352,7 +308,7 @@ binds:
 }
 
 #[tokio::test]
-async fn test_oidc_callback_owner_with_competing_authn_is_rejected() {
+async fn test_oidc_callback_selection_with_competing_authn_is_rejected() {
 	let yaml = r#"
 binds:
 - port: 3000
@@ -403,6 +359,46 @@ binds:
 		err
 			.to_string()
 			.contains("oidc callback ownership must be unambiguous")
+	);
+}
+
+#[tokio::test]
+async fn test_oidc_callback_selection_with_query_constraints_is_rejected() {
+	let yaml = r#"
+binds:
+- port: 3000
+  listeners:
+  - name: default
+    protocol: HTTP
+    routes:
+    - name: application
+      matches:
+      - path:
+          pathPrefix: /
+        query:
+        - name: state
+          value:
+            exact: validation-state
+      policies:
+        oidc:
+          issuer: https://issuer.example.com
+          authorizationEndpoint: https://issuer.example.com/authorize
+          tokenEndpoint: https://issuer.example.com/token
+          jwks: '{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}'
+          clientId: agentgateway-browser
+          clientSecret: agentgateway-secret
+          redirectURI: http://localhost:3000/oauth/callback
+      backends:
+      - host: localhost:18080
+"#;
+
+	let err = normalize_test_yaml_with_oidc(yaml)
+		.await
+		.expect_err("query-constrained callback owner should fail validation");
+	assert!(
+		err
+			.to_string()
+			.contains("callback ownership requires a path-based GET route")
 	);
 }
 

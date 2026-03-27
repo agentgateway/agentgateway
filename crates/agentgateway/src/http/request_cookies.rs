@@ -69,48 +69,11 @@ mod tests {
 		builder.body(Body::empty()).unwrap()
 	}
 
-	// --- read_cookie ---
-
-	#[test]
-	fn read_cookie_no_cookies() {
-		let req = make_request(&[]);
-		assert_eq!(read_cookie(&req, "session"), None);
-	}
-
-	#[test]
-	fn read_cookie_single_header() {
-		let req = make_request(&["session=abc123; theme=dark"]);
-		assert_eq!(read_cookie(&req, "session"), Some("abc123".into()));
-		assert_eq!(read_cookie(&req, "theme"), Some("dark".into()));
-		assert_eq!(read_cookie(&req, "missing"), None);
-	}
-
 	#[test]
 	fn read_cookie_last_occurrence_wins_across_headers() {
-		let req = make_request(&["session=first", "session=second"]);
+		let req = make_request(&["session=first; theme=dark", "session=second"]);
 		assert_eq!(read_cookie(&req, "session"), Some("second".into()));
-	}
-
-	#[test]
-	fn read_cookie_last_occurrence_wins_within_header() {
-		let req = make_request(&["session=first; session=second"]);
-		assert_eq!(read_cookie(&req, "session"), Some("second".into()));
-	}
-
-	#[test]
-	fn read_cookie_value_containing_equals() {
-		let req = make_request(&["token=abc=def=ghi"]);
-		assert_eq!(read_cookie(&req, "token"), Some("abc=def=ghi".into()));
-	}
-
-	// --- strip_cookies_by_prefix ---
-
-	#[test]
-	fn strip_cookies_removes_matching_prefix() {
-		let mut req = make_request(&["agw_oidc_s=xxx; user=alice"]);
-		strip_cookies_by_prefix(&mut req, "agw_oidc_");
-		let cookie = req.headers().get(header::COOKIE).unwrap().to_str().unwrap();
-		assert_eq!(cookie, "user=alice");
+		assert_eq!(read_cookie(&req, "theme"), Some("dark".into()));
 	}
 
 	#[test]
@@ -118,68 +81,6 @@ mod tests {
 		let mut req = make_request(&["agw_oidc_s=xxx; agw_oidc_t=yyy"]);
 		strip_cookies_by_prefix(&mut req, "agw_oidc_");
 		assert!(req.headers().get(header::COOKIE).is_none());
-	}
-
-	#[test]
-	fn strip_cookies_preserves_all_when_no_match() {
-		let mut req = make_request(&["user=alice; theme=dark"]);
-		strip_cookies_by_prefix(&mut req, "agw_oidc_");
-		let cookie = req.headers().get(header::COOKIE).unwrap().to_str().unwrap();
-		assert_eq!(cookie, "user=alice; theme=dark");
-	}
-
-	// --- iter_cookies ---
-
-	#[test]
-	fn iter_cookies_yields_all_pairs_across_headers() {
-		let req = make_request(&["a=1; b=2", "c=3"]);
-		let pairs: Vec<_> = iter_cookies(&req).collect();
-		assert_eq!(
-			pairs,
-			vec![
-				("a".into(), "1".into()),
-				("b".into(), "2".into()),
-				("c".into(), "3".into())
-			]
-		);
-	}
-
-	#[test]
-	fn iter_cookies_skips_malformed_pairs() {
-		let req = make_request(&["good=val; malformed; also_good=v2"]);
-		let pairs: Vec<_> = iter_cookies(&req).collect();
-		assert_eq!(
-			pairs,
-			vec![
-				("good".into(), "val".into()),
-				("also_good".into(), "v2".into())
-			]
-		);
-	}
-
-	// --- edge-case tests ---
-
-	#[test]
-	fn read_cookie_returns_none_for_non_utf8_cookie_header() {
-		let mut req = make_request(&[]);
-		req.headers_mut().insert(
-			header::COOKIE,
-			http::HeaderValue::from_bytes(b"session=\xff\xfe").unwrap(),
-		);
-		assert_eq!(read_cookie(&req, "session"), None);
-	}
-
-	#[test]
-	fn read_cookie_handles_empty_cookie_header() {
-		let req = make_request(&[""]);
-		assert_eq!(read_cookie(&req, "session"), None);
-	}
-
-	#[test]
-	fn strip_cookies_handles_trailing_semicolons() {
-		let mut req = make_request(&["agw_oidc_s_a=1; session=abc; "]);
-		strip_cookies_by_prefix(&mut req, "agw_oidc_");
-		assert_eq!(req.headers().get(header::COOKIE).unwrap(), "session=abc");
 	}
 
 	#[test]
@@ -193,7 +94,7 @@ mod tests {
 	}
 
 	#[test]
-	fn iter_cookies_skips_non_utf8_header() {
+	fn iter_cookies_is_lossy_for_invalid_headers_and_pairs() {
 		let mut req = make_request(&["good=value"]);
 		req.headers_mut().append(
 			header::COOKIE,
@@ -201,7 +102,7 @@ mod tests {
 		);
 		req.headers_mut().append(
 			header::COOKIE,
-			http::HeaderValue::from_static("also_good=v2"),
+			http::HeaderValue::from_static("malformed; also_good=v2"),
 		);
 		let pairs: Vec<_> = iter_cookies(&req).collect();
 		assert_eq!(

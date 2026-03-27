@@ -4,8 +4,7 @@ This example shows the built-in `oidc` flow for browser authentication.
 
 It uses:
 - Keycloak as a local OIDC issuer
-- a normal callback route at `/oauth/callback`
-- a self-contained `policies.oidc` payload on both the callback and application routes
+- one OIDC-protected route that serves both app traffic and the `/oauth/callback` path
 - the standard JWT claims surface (`jwt.sub`, `jwt.email`) in access logs after login
 
 ### Running the example
@@ -44,22 +43,7 @@ binds:
   - name: default
     protocol: HTTP
     routes:
-    - name: callback
-      matches:
-      - path:
-          exact: /oauth/callback
-      backends:
-      - host: localhost:18080
-      policies:
-        oidc:
-          issuer: http://localhost:7080/realms/agentgateway
-          clientId: agentgateway-browser
-          clientSecret: agentgateway-secret
-          redirectURI: http://localhost:3000/oauth/callback
-          scopes:
-          - profile
-          - email
-    - name: application
+    - name: app
       matches:
       - path:
           pathPrefix: /

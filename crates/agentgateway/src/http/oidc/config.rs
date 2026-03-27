@@ -1,4 +1,3 @@
-use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -108,8 +107,12 @@ impl LocalOidcConfig {
 		self,
 		client: Client,
 		oidc_cookie_encoder: &sessionpersistence::Encoder,
+		policy_id: PolicyId,
 	) -> Result<OidcPolicy, Error> {
-		self.resolve(client).await?.compile(oidc_cookie_encoder)
+		self
+			.resolve(client)
+			.await?
+			.compile(oidc_cookie_encoder, policy_id)
 	}
 
 	async fn resolve(self, client: Client) -> Result<ResolvedOidcPolicy, Error> {
@@ -205,10 +208,12 @@ impl LocalOidcConfig {
 }
 
 impl ResolvedOidcPolicy {
-	fn compile(self, oidc_cookie_encoder: &sessionpersistence::Encoder) -> Result<OidcPolicy, Error> {
+	fn compile(
+		self,
+		oidc_cookie_encoder: &sessionpersistence::Encoder,
+		policy_id: PolicyId,
+	) -> Result<OidcPolicy, Error> {
 		let scopes = dedupe_scopes(self.scopes);
-		let policy_id =
-			derive_provisional_policy_id(&self.provider, &self.client_id, &self.redirect_uri, &scopes);
 		let (cookie_name, transaction_cookie_name) = derive_cookie_names(&policy_id);
 		let token_endpoint_auth = self.provider.token_endpoint_auth;
 		let provider = Arc::new(self.provider.compile()?);
@@ -265,43 +270,4 @@ pub(crate) fn default_transaction_ttl() -> std::time::Duration {
 
 fn default_explicit_token_endpoint_auth_methods() -> Vec<TokenEndpointAuth> {
 	vec![TokenEndpointAuth::ClientSecretBasic]
-}
-
-// Local OIDC translation runs before full config normalization can assign the final route/policy
-// identity, so compilation starts with a deterministic provisional id that normalization replaces
-// before the config becomes live.
-fn derive_provisional_policy_id(
-	provider: &ResolvedProvider,
-	client_id: &str,
-	redirect_uri: &RedirectUri,
-	scopes: &[String],
-) -> PolicyId {
-	let mut seed = String::new();
-	append_seed_field(&mut seed, "issuer", &provider.issuer);
-	append_seed_field(
-		&mut seed,
-		"authorizationEndpoint",
-		&provider.authorization_endpoint.to_string(),
-	);
-	append_seed_field(
-		&mut seed,
-		"tokenEndpoint",
-		&provider.token_endpoint.to_string(),
-	);
-	append_seed_field(
-		&mut seed,
-		"tokenEndpointAuthMethod",
-		provider.token_endpoint_auth.as_str(),
-	);
-	append_seed_field(&mut seed, "clientId", client_id);
-	append_seed_field(&mut seed, "redirectURI", &redirect_uri.canonical_uri());
-	for scope in scopes {
-		append_seed_field(&mut seed, "scope", scope);
-	}
-	let digest = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, seed.as_bytes());
-	PolicyId::from(hex::encode(digest.as_ref()))
-}
-
-fn append_seed_field(seed: &mut String, key: &str, value: &str) {
-	let _ = writeln!(seed, "{key}:{}:{value}", value.len());
 }

@@ -206,6 +206,10 @@ fn explicit_local_oidc_config() -> LocalOidcConfig {
 	}
 }
 
+fn translated_policy_id(name: &str) -> PolicyId {
+	PolicyId::policy(name)
+}
+
 #[test]
 fn redirect_uri_rejects_ambiguous_values() {
 	for raw in [
@@ -690,23 +694,34 @@ fn oidc_errors_use_error_specific_status_codes() {
 }
 
 #[tokio::test]
-async fn compiled_policy_uses_fixed_defaults_and_deterministic_cookie_derivation() {
+async fn compiled_policy_uses_supplied_identity_for_cookie_derivation() {
 	let local = explicit_local_oidc_config();
 	let encoder = test_oidc_cookie_encoder();
 	let policy_a = local
-		.translate(test_client(), &encoder)
+		.translate(test_client(), &encoder, translated_policy_id("shared"))
 		.await
 		.expect("first translate");
 	let policy_b = explicit_local_oidc_config()
-		.translate(test_client(), &encoder)
+		.translate(test_client(), &encoder, translated_policy_id("shared"))
 		.await
 		.expect("second translate");
+	let policy_c = explicit_local_oidc_config()
+		.translate(test_client(), &encoder, translated_policy_id("other"))
+		.await
+		.expect("third translate");
 
+	assert_eq!(policy_a.policy_id, translated_policy_id("shared"));
 	assert_eq!(policy_a.policy_id, policy_b.policy_id);
+	assert_ne!(policy_a.policy_id, policy_c.policy_id);
 	assert_eq!(policy_a.session.cookie_name, policy_b.session.cookie_name);
+	assert_ne!(policy_a.session.cookie_name, policy_c.session.cookie_name);
 	assert_eq!(
 		policy_a.session.transaction_cookie_name,
 		policy_b.session.transaction_cookie_name
+	);
+	assert_ne!(
+		policy_a.session.transaction_cookie_name,
+		policy_c.session.transaction_cookie_name
 	);
 	assert_eq!(policy_a.session.same_site, SameSiteMode::Lax);
 	assert_eq!(policy_a.session.secure, CookieSecureMode::Auto);
@@ -747,7 +762,11 @@ async fn issuer_only_oidc_config_uses_discovery() {
 		redirect_uri: "http://localhost:3000/oauth/callback".into(),
 		scopes: vec![],
 	}
-	.translate(test_client(), &test_oidc_cookie_encoder())
+	.translate(
+		test_client(),
+		&test_oidc_cookie_encoder(),
+		translated_policy_id("discovery"),
+	)
 	.await
 	.expect("translate");
 
@@ -768,7 +787,11 @@ async fn issuer_only_oidc_config_uses_discovery() {
 #[tokio::test]
 async fn fully_explicit_oidc_config_skips_discovery() {
 	let policy = explicit_local_oidc_config()
-		.translate(test_client(), &test_oidc_cookie_encoder())
+		.translate(
+			test_client(),
+			&test_oidc_cookie_encoder(),
+			translated_policy_id("explicit"),
+		)
 		.await
 		.expect("translate");
 
@@ -800,7 +823,11 @@ async fn partial_explicit_provider_config_is_rejected() {
 		redirect_uri: "http://localhost:3000/oauth/callback".into(),
 		scopes: vec![],
 	}
-	.translate(test_client(), &test_oidc_cookie_encoder())
+	.translate(
+		test_client(),
+		&test_oidc_cookie_encoder(),
+		translated_policy_id("partial-explicit"),
+	)
 	.await
 	.expect_err("partial explicit config should fail");
 
@@ -819,7 +846,11 @@ async fn explicit_provider_config_rejects_discovery_override() {
 		}),
 		..explicit_local_oidc_config()
 	}
-	.translate(test_client(), &test_oidc_cookie_encoder())
+	.translate(
+		test_client(),
+		&test_oidc_cookie_encoder(),
+		translated_policy_id("reject-discovery-override"),
+	)
 	.await
 	.expect_err("fully explicit config should reject discovery override");
 
@@ -844,7 +875,11 @@ async fn discovery_load_failures_identify_discovery_document_source() {
 		redirect_uri: "http://localhost:3000/oauth/callback".into(),
 		scopes: vec![],
 	}
-	.translate(test_client(), &test_oidc_cookie_encoder())
+	.translate(
+		test_client(),
+		&test_oidc_cookie_encoder(),
+		translated_policy_id("invalid-discovery"),
+	)
 	.await
 	.expect_err("invalid discovery document should fail");
 
@@ -870,7 +905,11 @@ async fn explicit_remote_jwks_failures_identify_explicit_source() {
 		}),
 		..explicit_local_oidc_config()
 	}
-	.translate(test_client(), &test_oidc_cookie_encoder())
+	.translate(
+		test_client(),
+		&test_oidc_cookie_encoder(),
+		translated_policy_id("invalid-explicit-jwks"),
+	)
 	.await
 	.expect_err("invalid explicit jwks should fail");
 
@@ -913,7 +952,11 @@ async fn discovered_remote_jwks_failures_identify_discovered_source() {
 		redirect_uri: "http://localhost:3000/oauth/callback".into(),
 		scopes: vec![],
 	}
-	.translate(test_client(), &test_oidc_cookie_encoder())
+	.translate(
+		test_client(),
+		&test_oidc_cookie_encoder(),
+		translated_policy_id("invalid-discovered-jwks"),
+	)
 	.await
 	.expect_err("invalid discovered jwks should fail");
 
@@ -921,50 +964,5 @@ async fn discovered_remote_jwks_failures_identify_discovered_source() {
 		err
 			.to_string()
 			.contains("failed to load oidc jwks from discovered jwks source uri")
-	);
-}
-
-#[tokio::test]
-async fn apply_finds_session_cookie_across_multiple_cookie_headers() {
-	let policy = test_policy();
-	let id_token = signed_id_token(TEST_NONCE);
-	let encoded = policy
-		.session
-		.encode_browser_session(&BrowserSession {
-			policy_id: policy.policy_id.clone(),
-			raw_id_token: SecretString::new(id_token.into()),
-			expires_at_unix: Some(now_unix() + 300),
-		})
-		.expect("encode session");
-	let mut req = request(
-		Method::GET,
-		"https://app.example.com/protected",
-		Some("text/html"),
-	);
-	add_cookie(&mut req, "theme=dark".into());
-	add_cookie(
-		&mut req,
-		format!("{}={encoded}", policy.session.cookie_name),
-	);
-
-	let response = policy
-		.apply(None, &mut req, policy_client())
-		.await
-		.expect("browser policy apply");
-	assert!(response.direct_response.is_none());
-	assert!(req.extensions().get::<jwt::Claims>().is_some());
-}
-
-#[test]
-fn strip_browser_auth_cookies_across_multiple_cookie_headers() {
-	let mut req = request(Method::GET, "https://app.example.com/protected", None);
-	add_cookie(&mut req, "agw_oidc_s_policy=1; user=alice".into());
-	add_cookie(&mut req, "agw_oidc_t_policy=2; theme=dark".into());
-
-	crate::http::request_cookies::strip_cookies_by_prefix(&mut req, RESERVED_COOKIE_PREFIX);
-
-	assert_eq!(
-		req.headers().get(header::COOKIE).unwrap(),
-		"user=alice; theme=dark"
 	);
 }

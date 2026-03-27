@@ -571,6 +571,11 @@ impl TestBind {
 			self.pi.upstream.clone(),
 			pol,
 			self.pi.cfg.oidc_cookie_encoder.as_ref(),
+			Some(local::OidcPolicyIdentity::IndexedTargeted {
+				key_prefix: strng::new("pol-"),
+				separator: "",
+				start_index: self.policies + 1,
+			}),
 		)
 		.await
 		.unwrap();
@@ -615,6 +620,7 @@ impl TestBind {
 			self.pi.upstream.clone(),
 			pol,
 			self.pi.cfg.oidc_cookie_encoder.as_ref(),
+			None,
 		)
 		.await
 		.unwrap();

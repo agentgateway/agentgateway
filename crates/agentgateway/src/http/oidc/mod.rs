@@ -38,6 +38,14 @@ impl PolicyId {
 	pub fn as_str(&self) -> &str {
 		&self.0
 	}
+
+	pub fn route(route_key: impl std::fmt::Display) -> Self {
+		Self(format!("route/{route_key}"))
+	}
+
+	pub fn policy(policy_key: impl std::fmt::Display) -> Self {
+		Self(format!("policy/{policy_key}"))
+	}
 }
 
 impl From<String> for PolicyId {
@@ -175,13 +183,6 @@ enum UnauthenticatedAction {
 }
 
 impl OidcPolicy {
-	pub(crate) fn assign_policy_id(&mut self, policy_id: PolicyId) {
-		let (cookie_name, transaction_cookie_name) = session::derive_cookie_names(&policy_id);
-		self.policy_id = policy_id;
-		self.session.cookie_name = cookie_name;
-		self.session.transaction_cookie_name = transaction_cookie_name;
-	}
-
 	pub async fn apply(
 		&self,
 		mut log: Option<&mut RequestLog>,

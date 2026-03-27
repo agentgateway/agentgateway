@@ -24,11 +24,11 @@ use crate::types::agent::{
 	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch, Listener,
 	ListenerKey, ListenerName, ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication,
 	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
-	PolicyKey, PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference,
-	RouteKey, RouteMatch, RouteName, RouteSet, ServerTLSConfig, SimpleBackend,
-	SimpleBackendReference, SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec,
-	TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig,
-	TrafficPolicy, TunnelProtocol, TypedResourceName,
+	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch,
+	RouteName, RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
+	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig, TrafficPolicy,
+	TunnelProtocol, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
@@ -1415,10 +1415,14 @@ async fn convert(
 	}
 
 	for p in policies {
+		let policy_key = p.name.to_string();
 		let res = split_policies(
 			client.clone(),
 			p.policy,
 			config.oidc_cookie_encoder.as_ref(),
+			Some(OidcPolicyIdentity::Fixed(
+				crate::http::oidc::PolicyId::policy(&policy_key),
+			)),
 		)
 		.await?;
 		if (res.route_policies.len() + res.backend_policies.len()) != 1 {
@@ -1478,14 +1482,14 @@ async fn convert(
 	// Add frontend policies targeted to this listener
 	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
 
-	let mut normalized = NormalizedLocalConfig {
+	let normalized = NormalizedLocalConfig {
 		binds: all_binds,
 		policies: all_policies,
 		backends: all_backends.into_iter().collect(),
 		workloads,
 		services,
 	};
-	finalize_oidc_normalized_config(config, &mut normalized)?;
+	validate_oidc_config(config, &normalized)?;
 	Ok(normalized)
 }
 
@@ -1549,12 +1553,18 @@ async fn convert_llm_config(
 				..Default::default()
 			},
 			config.oidc_cookie_encoder.as_ref(),
+			None,
 		)
 		.await?;
 		let gateway_policies = split_policies(
 			client.clone(),
 			gateway.into(),
 			config.oidc_cookie_encoder.as_ref(),
+			Some(OidcPolicyIdentity::IndexedTargeted {
+				key_prefix: strng::new("listener"),
+				separator: "/",
+				start_index: 0,
+			}),
 		)
 		.await?;
 		(
@@ -1940,7 +1950,15 @@ async fn convert_mcp_config(
 	let port = port.unwrap_or(DEFAULT_MCP_PORT);
 
 	let resolved_policies = if let Some(pol) = policies {
-		split_policies(client.clone(), pol, config.oidc_cookie_encoder.as_ref()).await?
+		split_policies(
+			client.clone(),
+			pol,
+			config.oidc_cookie_encoder.as_ref(),
+			Some(OidcPolicyIdentity::Fixed(
+				crate::http::oidc::PolicyId::route("mcp:default"),
+			)),
+		)
+		.await?
 	} else {
 		ResolvedPolicies::default()
 	};
@@ -2120,10 +2138,16 @@ async fn convert_listener(
 	}
 
 	if let Some(pol) = policies {
+		let oidc_key_prefix = strng::format!("listener/{key}");
 		let pols = split_policies(
 			client.clone(),
 			pol.into(),
 			config.oidc_cookie_encoder.as_ref(),
+			Some(OidcPolicyIdentity::IndexedTargeted {
+				key_prefix: oidc_key_prefix,
+				separator: "/",
+				start_index: 0,
+			}),
 		)
 		.await?;
 		for (idx, pol) in pols.route_policies.into_iter().enumerate() {
@@ -2206,7 +2230,15 @@ pub async fn convert_route(
 		external_backends.extend_from_slice(&backends);
 	}
 	let resolved = if let Some(pol) = policies {
-		split_policies(client, pol, config.oidc_cookie_encoder.as_ref()).await?
+		split_policies(
+			client,
+			pol,
+			config.oidc_cookie_encoder.as_ref(),
+			Some(OidcPolicyIdentity::Fixed(
+				crate::http::oidc::PolicyId::route(&key),
+			)),
+		)
+		.await?
 	} else {
 		ResolvedPolicies::default()
 	};
@@ -2237,18 +2269,37 @@ pub struct ResolvedPolicies {
 	pub route_policies: Vec<TrafficPolicy>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum OidcPolicySource {
-	Inline { route_key: RouteKey },
-	Targeted { policy_key: PolicyKey },
+#[derive(Debug, Clone)]
+pub(crate) enum OidcPolicyIdentity {
+	Fixed(crate::http::oidc::PolicyId),
+	IndexedTargeted {
+		key_prefix: Strng,
+		separator: &'static str,
+		start_index: usize,
+	},
 }
 
-fn finalize_oidc_normalized_config(
+impl OidcPolicyIdentity {
+	fn resolve(&self, route_policy_index: usize) -> crate::http::oidc::PolicyId {
+		match self {
+			Self::Fixed(policy_id) => policy_id.clone(),
+			Self::IndexedTargeted {
+				key_prefix,
+				separator,
+				start_index,
+			} => crate::http::oidc::PolicyId::policy(strng::format!(
+				"{key_prefix}{separator}{}",
+				start_index + route_policy_index
+			)),
+		}
+	}
+}
+
+fn validate_oidc_config(
 	config: &crate::Config,
-	normalized: &mut NormalizedLocalConfig,
+	normalized: &NormalizedLocalConfig,
 ) -> anyhow::Result<()> {
-	let stores = build_oidc_validation_stores(config, normalized);
-	let mut assignments = HashMap::new();
+	let stores = build_validation_stores(config, normalized);
 	for bind in normalized.binds.iter() {
 		for listener in bind.listeners.iter() {
 			for route in listener.routes.iter() {
@@ -2261,18 +2312,9 @@ fn finalize_oidc_normalized_config(
 					.route_policies(&path, &route.inline_policies);
 				if let Some(policy) = &policies.oidc {
 					let route_name = route.name.as_route_name();
-					let source = stores
-						.read_binds()
-						.route_oidc_source(&path, &route.inline_policies)
-						.ok_or_else(|| {
-							anyhow!(
-								"internal error: route '{}' resolved to oidc without an identifiable source",
-								route_name
-							)
-						})?;
 					let callback_path = policy.redirect_uri.callback_path.path();
-					let req = oidc_callback_validation_request(policy)?;
-					let Some((selected_route, path_match)) = crate::http::route::select_best_route(
+					let req = build_callback_request(policy)?;
+					let Some((selected_route, _)) = crate::http::route::select_best_route(
 						stores.clone(),
 						config.network.clone(),
 						config.self_addr.as_ref(),
@@ -2288,18 +2330,17 @@ fn finalize_oidc_normalized_config(
 						);
 					};
 
-					let selected_path_is_exact =
-						matches!(&path_match, PathMatch::Exact(path) if path.as_str() == callback_path);
-					let selected_route_is_explicit_owner = selected_route
+					let selected_route_can_handle_callback = selected_route
 						.matches
 						.iter()
-						.any(|m| route_match_is_explicit_oidc_callback_owner(m, callback_path));
+						.any(|m| route_match_can_handle_oidc_callback(m, callback_path));
 					anyhow::ensure!(
-						selected_path_is_exact && selected_route_is_explicit_owner,
-						"listener '{}' route '{}' resolves to an oidc policy with callback path '{}', but callback ownership requires an exact callback route without header or query constraints; prefix and regex routes do not count",
+						selected_route_can_handle_callback,
+						"listener '{}' route '{}' resolves to an oidc policy with callback path '{}', but route '{}' wins callback selection with header or query constraints that real oidc callbacks will not satisfy; callback ownership requires a path-based GET route",
 						listener.name.listener_name,
 						route_name,
-						callback_path
+						callback_path,
+						selected_route.name.as_route_name()
 					);
 
 					let selected_route_policies = stores.read_binds().route_policies(
@@ -2327,13 +2368,15 @@ fn finalize_oidc_normalized_config(
 					);
 					match &selected_route_policies.oidc {
 						Some(selected_policy) if selected_policy.policy_id == policy.policy_id => {},
-						Some(_) => {
+						Some(selected_policy) => {
 							anyhow::bail!(
-								"listener '{}' route '{}' resolves to an oidc policy with callback path '{}', but route '{}' wins callback selection with a different effective oidc policy",
+								"listener '{}' route '{}' resolves to an oidc policy with callback path '{}', but route '{}' wins callback selection with oidc policy identity '{}' instead of '{}'; shared session identity requires one shared real oidc policy identity, so use one route or one shared targeted route-phase oidc policy",
 								listener.name.listener_name,
 								route_name,
 								callback_path,
-								selected_route.name.as_route_name()
+								selected_route.name.as_route_name(),
+								selected_policy.policy_id.as_str(),
+								policy.policy_id.as_str()
 							);
 						},
 						None => {
@@ -2346,158 +2389,14 @@ fn finalize_oidc_normalized_config(
 							);
 						},
 					}
-
-					let source = oidc_policy_source_for_assignment(route, source);
-					let policy_id = stable_oidc_policy_id(&source, &selected_route);
-					match assignments.entry(source) {
-						std::collections::hash_map::Entry::Occupied(existing) => {
-							anyhow::ensure!(
-								existing.get() == &policy_id,
-								"internal error: conflicting normalized oidc identity assignment"
-							);
-						},
-						std::collections::hash_map::Entry::Vacant(entry) => {
-							entry.insert(policy_id);
-						},
-					}
 				}
 			}
 		}
 	}
-
-	apply_oidc_policy_assignments(normalized, assignments)?;
 	Ok(())
 }
 
-fn oidc_policy_source_for_assignment(
-	route: &Arc<Route>,
-	source: crate::store::RouteOidcSource,
-) -> OidcPolicySource {
-	match source {
-		crate::store::RouteOidcSource::Inline => OidcPolicySource::Inline {
-			route_key: route.key.clone(),
-		},
-		crate::store::RouteOidcSource::Targeted(policy_key) => {
-			OidcPolicySource::Targeted { policy_key }
-		},
-	}
-}
-
-fn stable_oidc_policy_id(
-	source: &OidcPolicySource,
-	callback_owner: &Route,
-) -> crate::http::oidc::PolicyId {
-	match source {
-		OidcPolicySource::Inline { .. } => {
-			crate::http::oidc::PolicyId::from(format!("route/{}", callback_owner.key))
-		},
-		OidcPolicySource::Targeted { policy_key } => {
-			crate::http::oidc::PolicyId::from(format!("policy/{policy_key}"))
-		},
-	}
-}
-
-fn apply_oidc_policy_assignments(
-	normalized: &mut NormalizedLocalConfig,
-	assignments: HashMap<OidcPolicySource, crate::http::oidc::PolicyId>,
-) -> anyhow::Result<()> {
-	for (source, policy_id) in assignments {
-		match source {
-			OidcPolicySource::Inline { route_key } => {
-				assign_inline_oidc_policy_id(normalized, &route_key, policy_id)?;
-			},
-			OidcPolicySource::Targeted { policy_key } => {
-				assign_targeted_oidc_policy_id(normalized, &policy_key, policy_id)?;
-			},
-		}
-	}
-	Ok(())
-}
-
-fn assign_inline_oidc_policy_id(
-	normalized: &mut NormalizedLocalConfig,
-	route_key: &RouteKey,
-	policy_id: crate::http::oidc::PolicyId,
-) -> anyhow::Result<()> {
-	for bind in normalized.binds.iter_mut() {
-		let listener_keys = bind.listeners.inner.keys().cloned().collect_vec();
-		for listener_key in listener_keys {
-			let Some(listener) = bind.listeners.remove(&listener_key) else {
-				continue;
-			};
-			let mut listener = Arc::unwrap_or_clone(listener);
-			let Some(route) = listener.routes.get(route_key) else {
-				bind.listeners.insert(listener);
-				continue;
-			};
-			let mut route = Arc::unwrap_or_clone(route);
-			assign_oidc_policy_id_in_route_policies(&mut route.inline_policies, policy_id)?;
-			listener.routes.insert(route);
-			bind.listeners.insert(listener);
-			return Ok(());
-		}
-	}
-
-	anyhow::bail!(
-		"internal error: failed to locate inline oidc policy source '{}'",
-		route_key
-	);
-}
-
-fn assign_targeted_oidc_policy_id(
-	normalized: &mut NormalizedLocalConfig,
-	policy_key: &PolicyKey,
-	policy_id: crate::http::oidc::PolicyId,
-) -> anyhow::Result<()> {
-	for policy in normalized.policies.iter_mut() {
-		if &policy.key != policy_key {
-			continue;
-		}
-		let PolicyType::Traffic(phased) = &mut policy.policy else {
-			anyhow::bail!(
-				"internal error: targeted oidc policy source '{}' is not a traffic policy",
-				policy_key
-			);
-		};
-		anyhow::ensure!(
-			phased.phase == PolicyPhase::Route,
-			"internal error: targeted oidc policy source '{}' is not route phase",
-			policy_key
-		);
-		let TrafficPolicy::Oidc(oidc) = &mut phased.policy else {
-			anyhow::bail!(
-				"internal error: targeted oidc policy source '{}' is not oidc",
-				policy_key
-			);
-		};
-		oidc.assign_policy_id(policy_id);
-		return Ok(());
-	}
-
-	anyhow::bail!(
-		"internal error: failed to locate targeted oidc policy source '{}'",
-		policy_key
-	);
-}
-
-fn assign_oidc_policy_id_in_route_policies(
-	policies: &mut [TrafficPolicy],
-	policy_id: crate::http::oidc::PolicyId,
-) -> anyhow::Result<()> {
-	for policy in policies.iter_mut() {
-		if let TrafficPolicy::Oidc(oidc) = policy {
-			oidc.assign_policy_id(policy_id);
-			return Ok(());
-		}
-	}
-
-	anyhow::bail!("internal error: route oidc source no longer contains oidc");
-}
-
-fn route_match_is_explicit_oidc_callback_owner(
-	route_match: &RouteMatch,
-	callback_path: &str,
-) -> bool {
+fn route_match_can_handle_oidc_callback(route_match: &RouteMatch, callback_path: &str) -> bool {
 	if route_match
 		.method
 		.as_ref()
@@ -2509,10 +2408,23 @@ fn route_match_is_explicit_oidc_callback_owner(
 		return false;
 	}
 
-	matches!(&route_match.path, PathMatch::Exact(path) if path.as_str() == callback_path)
+	match &route_match.path {
+		PathMatch::Exact(path) => path.as_str() == callback_path,
+		PathMatch::PathPrefix(prefix) => {
+			let prefix = prefix.trim_end_matches('/');
+			let Some(suffix) = callback_path.trim_end_matches('/').strip_prefix(prefix) else {
+				return false;
+			};
+			suffix.is_empty() || suffix.starts_with('/')
+		},
+		PathMatch::Regex(regex) => regex
+			.find(callback_path)
+			.map(|m| m.start() == 0 && m.end() == callback_path.len())
+			.unwrap_or(false),
+	}
 }
 
-fn oidc_callback_validation_request(
+fn build_callback_request(
 	policy: &crate::http::oidc::OidcPolicy,
 ) -> anyhow::Result<crate::http::Request> {
 	let uri = format!(
@@ -2526,7 +2438,7 @@ fn oidc_callback_validation_request(
 		.map_err(Into::into)
 }
 
-fn build_oidc_validation_stores(
+fn build_validation_stores(
 	config: &crate::Config,
 	normalized: &NormalizedLocalConfig,
 ) -> crate::store::Stores {
@@ -2606,10 +2518,11 @@ async fn split_frontend_policies(
 	}
 	Ok(pols)
 }
-pub async fn split_policies(
+pub(crate) async fn split_policies(
 	client: Client,
 	pol: FilterOrPolicy,
 	oidc_cookie_encoder: Option<&crate::http::sessionpersistence::Encoder>,
+	oidc_identity: Option<OidcPolicyIdentity>,
 ) -> Result<ResolvedPolicies, Error> {
 	let mut resolved = ResolvedPolicies::default();
 	let ResolvedPolicies {
@@ -2706,8 +2619,15 @@ pub async fn split_policies(
 				"OIDC_COOKIE_SECRET is required when oidc is configured",
 			));
 		};
+		let Some(oidc_policy_id) = oidc_identity
+			.as_ref()
+			.map(|identity| identity.resolve(route_policies.len()))
+		else {
+			return Err(Error::msg("internal error: missing oidc policy identity"));
+		};
 		route_policies.push(TrafficPolicy::Oidc(
-			p.translate(client.clone(), oidc_cookie_encoder).await?,
+			p.translate(client.clone(), oidc_cookie_encoder, oidc_policy_id)
+				.await?,
 		));
 	}
 	if let Some(p) = basic_auth {
