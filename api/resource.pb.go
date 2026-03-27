@@ -8448,10 +8448,14 @@ func (x *TrafficPolicySpec_RemoteRateLimit_Entry) GetValue() string {
 	return ""
 }
 
-// Dynamic rate limit override from metadata
+// Dynamic rate limit override evaluated from request context.
+// when set, the proxy evaluates the CEL expression and sends
+// a `RateLimitOverride` to RLS, allowing per-request limit customization.
 type TrafficPolicySpec_RemoteRateLimit_LimitOverride struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// CEL expression e.g.: "extproc.dynamic_rate_limit"
+	// CEL expression evaluated against the request context.
+	// must resolve to an object with "requests_per_unit" (int) and "unit" (string).
+	// e.g: "extproc.dynamic_rate_limit",
 	Expression    string `protobuf:"bytes,1,opt,name=expression,proto3" json:"expression,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
