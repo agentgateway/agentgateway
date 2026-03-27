@@ -36,7 +36,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
-	agentgatewaysyncer2 "github.com/agentgateway/agentgateway/controller/pkg/syncer"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/namespaces"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
@@ -63,9 +63,9 @@ type Options struct {
 	KrtDebugger                 *krt.DebugHandler
 	GlobalSettings              *apisettings.Settings
 	LeaderElectionID            string
-	ExtraStatusHandlers         map[schema.GroupVersionKind]agentgatewaysyncer2.ResourceStatusSyncer
+	ExtraStatusHandlers         map[schema.GroupVersionKind]syncer.ResourceStatusSyncer
 
-	AgentGatewaySyncerOptions []agentgatewaysyncer2.AgentgatewaySyncerOption
+	AgentGatewaySyncerOptions []syncer.AgentgatewaySyncerOption
 }
 
 type setup struct {
@@ -273,7 +273,7 @@ func (s *setup) buildSyncer(
 	mgr manager.Manager,
 	setupOpts *controller.SetupOpts,
 	agwCollections *agwplugins.AgwCollections,
-) (*agentgatewaysyncer2.Syncer, error) {
+) (*syncer.Syncer, error) {
 	slog.Info("creating krt collections")
 	krtOpts := krtutil.NewKrtOptions(ctx.Done(), setupOpts.KrtDebugger)
 

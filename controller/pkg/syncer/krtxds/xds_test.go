@@ -22,31 +22,31 @@ import (
 	"github.com/agentgateway/agentgateway/api"
 	agwir "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
-	agentgatewaysyncer2 "github.com/agentgateway/agentgateway/controller/pkg/syncer"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer/krtxds"
 )
 
 type Fake struct {
 	Server      *krtxds.DiscoveryServer
-	Addresses   krt.StaticCollection[agentgatewaysyncer2.Address]
+	Addresses   krt.StaticCollection[syncer.Address]
 	Resources   krt.StaticCollection[agwir.AgwResource]
 	BufListener *bufconn.Listener
 	t           *testing.T
 }
 
-func NewFakeDiscoveryServer(t *testing.T, initialAddress ...agentgatewaysyncer2.Address) Fake {
+func NewFakeDiscoveryServer(t *testing.T, initialAddress ...syncer.Address) Fake {
 	return NewFakeDiscoveryServerWith(t, initialAddress, nil)
 }
-func NewFakeDiscoveryServerWith(t *testing.T, initialAddress []agentgatewaysyncer2.Address, initialResource []agwir.AgwResource) Fake {
+func NewFakeDiscoveryServerWith(t *testing.T, initialAddress []syncer.Address, initialResource []agwir.AgwResource) Fake {
 	stop := test.NewStop(t)
 	opts := krtutil.NewKrtOptions(stop, new(krt.DebugHandler))
-	xdsAddress := krt.NewStaticCollection[agentgatewaysyncer2.Address](nil, initialAddress, opts.ToOptions("address")...)
+	xdsAddress := krt.NewStaticCollection[syncer.Address](nil, initialAddress, opts.ToOptions("address")...)
 	xdsResource := krt.NewStaticCollection[agwir.AgwResource](nil, initialResource, opts.ToOptions("resource")...)
 	agwResourcesByGateway := func(resource agwir.AgwResource) types.NamespacedName {
 		return resource.Gateway
 	}
 	reg := []krtxds.Registration{
-		krtxds.Collection[agentgatewaysyncer2.Address, *workloadapi.Address](xdsAddress, opts),
+		krtxds.Collection[syncer.Address, *workloadapi.Address](xdsAddress, opts),
 		krtxds.PerGatewayCollection[agwir.AgwResource, *api.Resource](xdsResource, agwResourcesByGateway, opts),
 	}
 	// we won't need a mock nack event publisher for this testing, so we pass nil
@@ -108,8 +108,8 @@ func (f Fake) ConnectDeltaADS() *istioxds.DeltaAdsTest {
 }
 
 var (
-	testWorkload1 = agentgatewaysyncer2.Address{
-		Workload: ptr.Of(agentgatewaysyncer2.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl1"}})),
+	testWorkload1 = syncer.Address{
+		Workload: ptr.Of(syncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl1"}})),
 	}
 )
 
@@ -131,8 +131,8 @@ func TestXDSUpdate(t *testing.T) {
 	ads := s.ConnectDeltaADS().WithType(krtxds.TargetTypeAddressUrl)
 	ads.RequestResponseAck(nil)
 
-	wl1Updated := agentgatewaysyncer2.Address{
-		Workload: ptr.Of(agentgatewaysyncer2.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl1", ClusterId: "cluster1"}})),
+	wl1Updated := syncer.Address{
+		Workload: ptr.Of(syncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl1", ClusterId: "cluster1"}})),
 	}
 	s.Addresses.UpdateObject(wl1Updated)
 	resp := ads.ExpectResponse()
@@ -153,8 +153,8 @@ func TestXDSDisconnect(t *testing.T) {
 		ads.RequestResponseAck(nil)
 		ads.Cleanup()
 
-		wl2 := agentgatewaysyncer2.Address{
-			Workload: ptr.Of(agentgatewaysyncer2.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl2", ClusterId: "cluster1"}})),
+		wl2 := syncer.Address{
+			Workload: ptr.Of(syncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl2", ClusterId: "cluster1"}})),
 		}
 		s.Addresses.DeleteObject("wl1")
 		s.Addresses.UpdateObject(wl2)

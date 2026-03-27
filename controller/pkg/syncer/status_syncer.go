@@ -21,7 +21,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
-	status2 "github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/stopwatch"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
@@ -49,7 +49,7 @@ type AgentGwStatusSyncer struct {
 	controllerName string
 	agwClassName   string
 
-	statusCollections *status2.StatusCollections
+	statusCollections *status.StatusCollections
 
 	cacheSyncs []cache.InformerSynced
 
@@ -69,7 +69,7 @@ func NewAgwStatusSyncer(
 	controllerName string,
 	agwClassName string,
 	client apiclient.Client,
-	statusCollections *status2.StatusCollections,
+	statusCollections *status.StatusCollections,
 	cacheSyncs []cache.InformerSynced,
 	extraHandlers map[schema.GroupVersionKind]ResourceStatusSyncer,
 	enableInference bool,
@@ -243,7 +243,7 @@ func (s *AgentGwStatusSyncer) Start(ctx context.Context) error {
 	return nil
 }
 
-func (s *AgentGwStatusSyncer) SyncStatus(ctx context.Context, resource status2.Resource, statusObj any) {
+func (s *AgentGwStatusSyncer) SyncStatus(ctx context.Context, resource status.Resource, statusObj any) {
 	switch resource.GroupVersionKind {
 	case wellknown.GatewayGVK:
 		s.gateways.ApplyStatus(ctx, resource, statusObj)
@@ -280,12 +280,12 @@ func (s *AgentGwStatusSyncer) SyncStatus(ctx context.Context, resource status2.R
 	}
 }
 
-func (s *AgentGwStatusSyncer) NewStatusWorker(ctx context.Context) *status2.WorkerPool {
-	return status2.NewWorkerPool(ctx, s.SyncStatus, 100)
+func (s *AgentGwStatusSyncer) NewStatusWorker(ctx context.Context) *status.WorkerPool {
+	return status.NewWorkerPool(ctx, s.SyncStatus, 100)
 }
 
 type ResourceStatusSyncer interface {
-	ApplyStatus(ctx context.Context, obj status2.Resource, statusObj any)
+	ApplyStatus(ctx context.Context, obj status.Resource, statusObj any)
 }
 
 type StatusSyncer[O controllers.ComparableObject, S any] struct {
@@ -302,7 +302,7 @@ type StatusSyncer[O controllers.ComparableObject, S any] struct {
 	Build func(om metav1.ObjectMeta, s S) O
 }
 
-func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status2.Resource, statusObj any) {
+func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource, statusObj any) {
 	var status S
 	if ta, ok := statusObj.(*any); ok {
 		if ta != nil && *ta != nil {

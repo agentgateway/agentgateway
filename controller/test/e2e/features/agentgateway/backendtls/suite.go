@@ -41,17 +41,6 @@ var (
 			Namespace: namespace,
 		},
 	}
-	nginxMeta = metav1.ObjectMeta{
-		Name:      "backend",
-		Namespace: namespace,
-	}
-	nginx2Meta = metav1.ObjectMeta{
-		Name:      "backend2",
-		Namespace: namespace,
-	}
-	svcGroup = ""
-	svcKind  = "Service"
-
 	// test cases
 	testCases = map[string]*base.TestCase{}
 )
@@ -141,20 +130,13 @@ func (s *tsuite) assertPolicyStatus(inCondition metav1.Condition) {
 		err := s.TestInstallation.ClusterContext.Client.Get(s.Ctx, objKey, tlsPol)
 		g.Expect(err).NotTo(gomega.HaveOccurred(), "failed to get BackendTLSPolicy %s", objKey)
 
-		g.Expect(tlsPol.Status.Ancestors).To(gomega.HaveLen(2), "ancestors didn't have length of 2")
+		g.Expect(tlsPol.Status.Ancestors).To(gomega.HaveLen(1), "ancestors didn't have length of 1")
 
 		expectedAncestorRefs := []gwv1.ParentReference{
 			{
-				Group:     (*gwv1.Group)(&svcGroup),
-				Kind:      (*gwv1.Kind)(&svcKind),
-				Namespace: ptr.To(gwv1.Namespace(nginxMeta.Namespace)),
-				Name:      gwv1.ObjectName(nginxMeta.Name),
-			},
-			{
-				Group:     (*gwv1.Group)(&svcGroup),
-				Kind:      (*gwv1.Kind)(&svcKind),
-				Namespace: ptr.To(gwv1.Namespace(nginx2Meta.Namespace)),
-				Name:      gwv1.ObjectName(nginx2Meta.Name),
+				Group: (*gwv1.Group)(ptr.To("gateway.networking.k8s.io")),
+				Kind:  (*gwv1.Kind)(ptr.To("Gateway")),
+				Name:  gwv1.ObjectName("gateway"),
 			},
 		}
 
