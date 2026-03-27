@@ -461,6 +461,7 @@ HELM ?= helm
 HELM_CHART_VERSION_NO_V ?= $(patsubst v%,%,$(VERSION))
 HELM_CHART_VERSION_V ?= v$(HELM_CHART_VERSION_NO_V)
 HELM_PACKAGE_ARGS ?= --version $(HELM_CHART_VERSION_NO_V) --app-version $(HELM_CHART_VERSION_NO_V)
+EXTRA_HELM_TAG ?=
 HELM_CHART_DIR_AGW=install/helm/agentgateway
 HELM_CHART_DIR_AGW_CRD=install/helm/agentgateway-crds
 HELM_ADDITIONAL_VALUES ?= hack/helm/dev.yaml
@@ -490,9 +491,20 @@ release-charts: package-agentgateway-charts
 	mkdir -p $(TEST_ASSET_DIR); \
 	$(HELM) package --version $(HELM_CHART_VERSION_V) --app-version $(HELM_CHART_VERSION_V) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_CRD); \
 	$(HELM) repo index $(TEST_ASSET_DIR);
+	@if [ -n "$(EXTRA_HELM_TAG)" ]; then \
+		mkdir -p $(TEST_ASSET_DIR); \
+		$(HELM) package --version $(EXTRA_HELM_TAG) --app-version $(VERSION) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW); \
+		$(HELM) repo index $(TEST_ASSET_DIR); \
+		mkdir -p $(TEST_ASSET_DIR); \
+		$(HELM) package --version $(EXTRA_HELM_TAG) --app-version $(VERSION) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_CRD); \
+		$(HELM) repo index $(TEST_ASSET_DIR); \
+	fi
 	@for chart in $(CHART_NAMES); do \
 		$(HELM) push $(TEST_ASSET_DIR)/$$chart-$(HELM_CHART_VERSION_NO_V).tgz oci://$(IMAGE_REGISTRY)/charts; \
 		$(HELM) push $(TEST_ASSET_DIR)/$$chart-$(HELM_CHART_VERSION_V).tgz oci://$(IMAGE_REGISTRY)/charts; \
+		if [ -n "$(EXTRA_HELM_TAG)" ]; then \
+			$(HELM) push $(TEST_ASSET_DIR)/$$chart-$(EXTRA_HELM_TAG).tgz oci://$(IMAGE_REGISTRY)/charts; \
+		fi; \
 	done;
 
 .PHONY: deploy-agentgateway-crd-chart
