@@ -2020,6 +2020,7 @@ pub enum FrontendPolicy {
 	HTTP(frontend::HTTP),
 	TLS(frontend::TLS),
 	TCP(frontend::TCP),
+	NetworkAuthorization(frontend::NetworkAuthorization),
 	AccessLog(frontend::LoggingPolicy),
 	Tracing(Arc<TracingPolicy>),
 }

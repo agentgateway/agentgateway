@@ -1,5 +1,5 @@
 use super::*;
-use crate::cel::RequestSnapshot;
+use crate::cel::{RequestSnapshot, SourceContext};
 use crate::http::authorization::PolicySet;
 use crate::http::{Body, jwt};
 use crate::mcp::{MCPInfo, ResourceId, ResourceType};
@@ -8,6 +8,7 @@ use ::http::Method;
 use assert_matches::assert_matches;
 use divan::Bencher;
 use serde_json::json;
+use std::net::{IpAddr, Ipv4Addr};
 
 fn create_policy_set(policies: Vec<&str>) -> PolicySet {
 	let mut policy_set = PolicySet::default();
@@ -172,6 +173,39 @@ fn test_deny_only_matching_denies() {
 	let exec = cel::Executor::new_mcp(req.as_ref(), &mcp);
 
 	assert_matches!(rs.validate(&exec), false);
+}
+
+#[test]
+fn test_network_authorization_allows_source_cidr() {
+	let rule_set = RuleSet::new(create_policy_set(vec![
+		r#"cidr("10.0.0.0/8").containsIP(source.address)"#,
+	]));
+	let network_authz = NetworkAuthorizationSet::new(vec![rule_set].into());
+	let source = SourceContext {
+		address: IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)),
+		port: 15000,
+		tls: None,
+	};
+
+	assert_matches!(network_authz.apply(&source), Ok(()));
+}
+
+#[test]
+fn test_network_authorization_deny_takes_precedence() {
+	let allow = RuleSet::new(create_policy_set(vec![
+		r#"cidr("10.0.0.0/8").containsIP(source.address)"#,
+	]));
+	let deny = RuleSet::new(create_deny_policy_set(vec![
+		r#"cidr("10.1.0.0/16").containsIP(source.address)"#,
+	]));
+	let network_authz = NetworkAuthorizationSet::new(vec![allow, deny].into());
+	let source = SourceContext {
+		address: IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)),
+		port: 15000,
+		tls: None,
+	};
+
+	assert_matches!(network_authz.apply(&source), Err(_));
 }
 
 #[test]

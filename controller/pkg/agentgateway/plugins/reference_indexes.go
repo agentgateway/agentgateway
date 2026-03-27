@@ -13,8 +13,8 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 type ReferenceTypes struct {
@@ -34,7 +34,6 @@ const (
 type BackendReferenceError struct {
 	Reason  BackendReferenceErrorReason
 	Message string
-	Backend *api.BackendReference
 }
 
 func (e *BackendReferenceError) Error() string {
@@ -126,108 +125,84 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 			}
 		},
 		RouteBackend: func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error) {
-			ns := string(ptr.OrDefault(namespace, gwv1.Namespace(defaultNamespace)))
-			switch gk {
-			case wellknown.InferencePoolGVK.GroupKind():
-				if strings.Contains(string(name), ".") {
-					return nil, &BackendReferenceError{
-						Reason:  BackendReferenceErrorReasonUnsupportedValue,
-						Message: "service name invalid; the name of the Service must be used, not the hostname.",
-					}
-				}
-				key := ns + "/" + string(name)
-				svc := ptr.Flatten(krt.FetchOne(krtctx, agw.InferencePools, krt.FilterKey(key)))
-				if svc == nil {
-					return nil, &BackendReferenceError{
-						Reason:  BackendReferenceErrorReasonBackendNotFound,
-						Message: fmt.Sprintf("backendRef %s not found", key),
-					}
-				}
-				return &api.BackendReference{
-					Kind: &api.BackendReference_Service_{
-						Service: &api.BackendReference_Service{
-							Hostname:  kubeutils.GetInferenceServiceHostname(string(name), ns),
-							Namespace: ns,
-						},
-					},
-					Port: uint32(svc.Spec.TargetPorts[0].Number), //nolint:gosec // G115: validated 1-65535
-				}, nil
-			case wellknown.HostnameGVK.GroupKind():
-				if port == nil {
-					return nil, &BackendReferenceError{
-						Reason:  BackendReferenceErrorReasonUnsupportedValue,
-						Message: "port is required in backendRef for Hostname kind",
-					}
-				}
-				if namespace != nil {
-					return nil, &BackendReferenceError{
-						Reason:  BackendReferenceErrorReasonUnsupportedValue,
-						Message: "namespace may not be set with Hostname type",
-					}
-				}
-				return &api.BackendReference{
-					Kind: &api.BackendReference_Service_{
-						Service: &api.BackendReference_Service{
-							Hostname:  string(name),
-							Namespace: ns,
-						},
-					},
-					Port: uint32(*port), //nolint:gosec // G115: validated 1-65535
-				}, nil
-			case wellknown.ServiceGVK.GroupKind():
-				if strings.Contains(string(name), ".") {
-					return nil, &BackendReferenceError{
-						Reason:  BackendReferenceErrorReasonUnsupportedValue,
-						Message: "service name invalid; the name of the Service must be used, not the hostname.",
-					}
-				}
-				if port == nil {
-					return nil, &BackendReferenceError{
-						Reason:  BackendReferenceErrorReasonUnsupportedValue,
-						Message: "port is required in backendRef",
-					}
-				}
-				key := ns + "/" + string(name)
-				backendRef := &api.BackendReference{
-					Kind: &api.BackendReference_Service_{
-						Service: &api.BackendReference_Service{
-							Hostname:  kubeutils.GetServiceHostname(string(name), ns),
-							Namespace: ns,
-						},
-					},
-					Port: uint32(*port), //nolint:gosec // G115: validated 1-65535
-				}
-				svc := ptr.Flatten(krt.FetchOne(krtctx, agw.Services, krt.FilterKey(key)))
-				if svc == nil {
-					return nil, &BackendReferenceError{
-						Reason:  BackendReferenceErrorReasonBackendNotFound,
-						Message: fmt.Sprintf("backend(%s) not found", kubeutils.GetServiceHostname(string(name), ns)),
-						Backend: backendRef,
-					}
-				}
-				return backendRef, nil
-			case wellknown.AgentgatewayBackendGVK.GroupKind():
-				key := ns + "/" + string(name)
-				be := ptr.Flatten(krt.FetchOne(krtctx, agw.Backends, krt.FilterKey(key)))
-				if be == nil {
-					return nil, &BackendReferenceError{
-						Reason:  BackendReferenceErrorReasonBackendNotFound,
-						Message: fmt.Sprintf("Backend not found: %s", key),
-					}
-				}
-				return &api.BackendReference{
-					Kind: &api.BackendReference_Backend{
-						Backend: key,
-					},
-				}, nil
-			default:
-				return nil, &BackendReferenceError{
-					Reason:  BackendReferenceErrorReasonInvalidKind,
-					Message: fmt.Sprintf("referencing unsupported backendRef: group %q kind %q", gk.Group, gk.Kind),
-				}
-			}
+			return DefaultRouteBackend(krtctx, agw, defaultNamespace, gk, name, namespace, port)
 		},
 	}
+}
+
+func DefaultRouteBackend(krtctx krt.HandlerContext, agw *AgwCollections, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error) {
+	ns := string(ptr.OrDefault(namespace, gwv1.Namespace(defaultNamespace)))
+	// All MUST return a BackendReference. We may not be able to fully populate it, though; this will get replaced with 'invalid'
+	ref := &api.BackendReference{}
+	switch gk {
+	case wellknown.InferencePoolGVK.GroupKind():
+		if strings.Contains(string(name), ".") {
+			return ref, &BackendReferenceError{
+				Reason:  BackendReferenceErrorReasonUnsupportedValue,
+				Message: "InferencePool name invalid; the name of the InferencePool must be used, not the hostname.",
+			}
+		}
+		key := ns + "/" + string(name)
+		svc := ptr.Flatten(krt.FetchOne(krtctx, agw.InferencePools, krt.FilterKey(key)))
+		if svc == nil {
+			return ref, &BackendReferenceError{
+				Reason:  BackendReferenceErrorReasonBackendNotFound,
+				Message: fmt.Sprintf("backendRef %s not found", key),
+			}
+		}
+		ref.Kind = &api.BackendReference_Service_{
+			Service: &api.BackendReference_Service{
+				Hostname:  kubeutils.GetInferenceServiceHostname(string(name), ns),
+				Namespace: ns,
+			},
+		}
+		ref.Port = uint32(svc.Spec.TargetPorts[0].Number) //nolint:gosec // G115: validated 1-65535
+	case wellknown.ServiceGVK.GroupKind():
+		if strings.Contains(string(name), ".") {
+			return ref, &BackendReferenceError{
+				Reason:  BackendReferenceErrorReasonUnsupportedValue,
+				Message: "service name invalid; the name of the Service must be used, not the hostname.",
+			}
+		}
+		if port == nil { // Validated by CEL so shouldn't happen
+			return ref, &BackendReferenceError{
+				Reason:  BackendReferenceErrorReasonUnsupportedValue,
+				Message: "port is required in Service backendRef",
+			}
+		}
+		// Populate resp now, so even if the service doesn't exist we can return a better error (Service not found vs invalid)
+		ref.Kind = &api.BackendReference_Service_{
+			Service: &api.BackendReference_Service{
+				Hostname:  kubeutils.GetServiceHostname(string(name), ns),
+				Namespace: ns,
+			}}
+		ref.Port = uint32(*port) //nolint:gosec // G115: validated 1-65535
+		key := ns + "/" + string(name)
+		svc := ptr.Flatten(krt.FetchOne(krtctx, agw.Services, krt.FilterKey(key)))
+		if svc == nil {
+			return ref, &BackendReferenceError{
+				Reason:  BackendReferenceErrorReasonBackendNotFound,
+				Message: fmt.Sprintf("backend(%s) not found", kubeutils.GetServiceHostname(string(name), ns)),
+			}
+		}
+	case wellknown.AgentgatewayBackendGVK.GroupKind():
+		key := ns + "/" + string(name)
+		ref.Kind = &api.BackendReference_Backend{Backend: key}
+		// Populate resp now, so even if the service doesn't exist we can return a better error (Service not found vs invalid)
+		be := ptr.Flatten(krt.FetchOne(krtctx, agw.Backends, krt.FilterKey(key)))
+		if be == nil {
+			return ref, &BackendReferenceError{
+				Reason:  BackendReferenceErrorReasonBackendNotFound,
+				Message: fmt.Sprintf("Backend not found: %s", key),
+			}
+		}
+	default:
+		return ref, &BackendReferenceError{
+			Reason:  BackendReferenceErrorReasonInvalidKind,
+			Message: fmt.Sprintf("referencing unsupported backendRef: group %q kind %q", gk.Group, gk.Kind),
+		}
+	}
+	return ref, nil
 }
 
 type RouteAttachment struct {

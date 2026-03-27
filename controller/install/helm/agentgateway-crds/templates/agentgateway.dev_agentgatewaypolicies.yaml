@@ -5982,6 +5982,56 @@ spec:
                         be set
                       rule: '[has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2WindowSize),has(self.maxBufferSize)].filter(x,x==true).size()
                         >= 1'
+                  networkAuthorization:
+                    description: |-
+                      networkAuthorization defines CEL authorization on downstream network connections.
+
+                      This runs before protocol handling and is intended for L4 access control,
+                      for example using `source.address` with `cidr(...).containsIP(...)`.
+                    properties:
+                      action:
+                        default: Allow
+                        description: |-
+                          `action` defines whether the rule allows, denies, or requires the request if
+                          matched. If unspecified, the default is `Allow`.
+                          Require policies are conjunctive across merged policies: all require policies must match.
+                        enum:
+                        - Allow
+                        - Deny
+                        - Require
+                        type: string
+                      policy:
+                        description: |-
+                          `policy` specifies the authorization rule to evaluate.
+
+                          * For `Allow` rules: any policy allows the request.
+                          * For `Require` rules: all policies must match for the request to be allowed.
+                          * For `Deny` rules: any matching policy denies the request. Note: a CEL expression that fails to evaluate is not
+                          considered to match, making this a risky policy; prefer to use `Require`.
+
+                          The presence of at least one `Allow` rule triggers a deny-by-default policy, requiring at least 1 match to allow.
+                          With no rules, all requires are allowed.
+                        properties:
+                          matchExpressions:
+                            description: |-
+                              MatchExpressions defines a set of conditions that must be satisfied for the rule to match.
+                              These expressions should be in the form of a Common Expression Language
+                              (`CEL`) expression.
+                            items:
+                              description: CELExpression represents a Common Expression
+                                Language (CEL) expression.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            maxItems: 256
+                            minItems: 1
+                            type: array
+                        required:
+                        - matchExpressions
+                        type: object
+                    required:
+                    - policy
+                    type: object
                   tcp:
                     description: tcp defines settings on managing incoming TCP connections.
                     properties:
@@ -6276,9 +6326,9 @@ spec:
                       rule: '!has(self.path) || self.path.startsWith(''/'')'
                 type: object
                 x-kubernetes-validations:
-                - message: at least one of the fields in [accessLog http tcp tls tracing]
-                    must be set
-                  rule: '[has(self.accessLog),has(self.http),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
+                - message: at least one of the fields in [accessLog http networkAuthorization
+                    tcp tls tracing] must be set
+                  rule: '[has(self.accessLog),has(self.http),has(self.networkAuthorization),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
                     >= 1'
               targetRefs:
                 description: |-
@@ -7023,6 +7073,15 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
+                      failureMode:
+                        description: |-
+                          FailureMode controls behavior when the external authorization service is
+                          unavailable or returns an error. "FailOpen" allows the request to continue.
+                          "FailClosed" (default) denies the request.
+                        enum:
+                        - FailOpen
+                        - FailClosed
+                        type: string
                       forwardBody:
                         description: |-
                           `forwardBody` configures whether to include the HTTP body in the request.
@@ -7870,6 +7929,15 @@ spec:
                               This is an arbitrary string that enables a rate limit server to distinguish between different applications.
                             maxLength: 256
                             minLength: 1
+                            type: string
+                          failureMode:
+                            description: |-
+                              `failureMode` controls behavior when the remote rate limit service is
+                              unavailable or returns an error. `FailOpen` allows the request to continue.
+                              `FailClosed` (default) denies the request.
+                            enum:
+                            - FailOpen
+                            - FailClosed
                             type: string
                         required:
                         - backendRef

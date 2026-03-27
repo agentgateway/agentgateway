@@ -1,15 +1,3 @@
-use ::http::{Method, Version};
-use agent_core::strng;
-use assert_matches::assert_matches;
-use http_body_util::BodyExt;
-use hyper_util::client::legacy::Client;
-use rand::RngExt;
-use serde_json::{Value, json};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::oneshot;
-use x509_parser::nom::AsBytes;
-
 use crate::http::tests_common::*;
 use crate::http::{Body, Response};
 use crate::llm::{AIProvider, openai};
@@ -22,6 +10,18 @@ use crate::types::agent::{
 };
 use crate::types::backend;
 use crate::*;
+use ::http::{Method, Version};
+use agent_core::strng;
+use assert_matches::assert_matches;
+use http_body_util::BodyExt;
+use hyper_util::client::legacy::Client;
+use rand::RngExt;
+use serde_json::{Value, json};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::oneshot;
+use url::Position;
+use x509_parser::nom::AsBytes;
 
 #[tokio::test]
 async fn basic_handling() {
@@ -57,6 +57,38 @@ async fn basic_http2() {
 		.unwrap();
 	assert_eq!(res.status(), 200);
 	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_2);
+}
+
+#[tokio::test]
+async fn network_authorization_allow() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_frontend_policy(json!({
+			"networkAuthorization": {
+				"rules": ["source.port == 12345"], // NOTE: the tests hardcode a dummy src port that matches
+			},
+		}))
+		.await;
+
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+}
+
+#[tokio::test]
+async fn network_authorization_deny() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_frontend_policy(json!({
+			"networkAuthorization": {
+				"rules": ["source.port == 54321"], // NOTE: the tests hardcode a dummy src port that does not match
+			},
+		}))
+		.await;
+
+	RequestBuilder::new(Method::GET, "http://lo")
+		.send(io)
+		.await
+		.expect_err("should be denied");
 }
 
 #[tokio::test]
@@ -430,6 +462,63 @@ async fn llm_openai_tokenize() {
 		want,
 	)
 	.await;
+}
+
+#[rstest::rstest]
+#[case::preserves_path(None, None, "/v1/messages?trace=repro")]
+#[case::path_override(Some("/custom/chat/completions"), None, "/custom/chat/completions")]
+#[case::path_prefix(None, Some("/v1/custom/"), "/v1/custom/chat/completions?trace=repro")]
+#[tokio::test]
+async fn llm_openai_messages_translation_with_host_override_path_behavior(
+	#[case] path_override: Option<&str>,
+	#[case] path_prefix: Option<&str>,
+	#[case] expected_url: &str,
+) {
+	let mock = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let provider = crate::test_helpers::proxymock::llm_named_provider(
+		&mock,
+		AIProvider::OpenAI(openai::Provider { model: None }),
+		false,
+	);
+	let provider = crate::types::local::LocalNamedAIProvider {
+		path_override: path_override.map(strng::new),
+		path_prefix: path_prefix.map(strng::new),
+		..provider
+	};
+	let (mock, mut bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"/v1/chat/completions": "completions",
+					"/v1/messages": "messages"
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/messages?trace=repro",
+		include_bytes!("../llm/tests/requests/messages/basic.json"),
+	)
+	.await;
+
+	assert_eq!(res.status(), 200);
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	let upstream = &requests[0];
+	assert_eq!(
+		&upstream.url[Position::BeforePath..Position::AfterQuery],
+		expected_url
+	);
 }
 
 #[tokio::test]

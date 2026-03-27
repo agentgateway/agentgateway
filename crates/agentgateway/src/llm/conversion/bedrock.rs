@@ -666,7 +666,7 @@ pub mod from_completions {
 
 	pub fn translate_stream(
 		b: Body,
-		_buffer_limit: usize,
+		buffer_limit: usize,
 		log: AmendOnDrop,
 		model: &str,
 		message_id: &str,
@@ -678,7 +678,7 @@ pub mod from_completions {
 		let mut tool_calls: HashMap<i32, String> = HashMap::new();
 		let model = model.to_string();
 		let message_id = message_id.to_string();
-		parse::aws_sse::transform(b, move |f| {
+		parse::aws_sse::transform(b, buffer_limit, move |f| {
 			let res = bedrock::ConverseStreamOutput::deserialize(f).ok()?;
 			let mk = |choices: Vec<completions::ChatChoiceStream>, usage: Option<completions::Usage>| {
 				Some(completions::StreamResponse {
@@ -1329,7 +1329,7 @@ pub mod from_messages {
 
 	pub fn translate_stream(
 		b: Body,
-		_buffer_limit: usize,
+		buffer_limit: usize,
 		log: AmendOnDrop,
 		model: &str,
 		_message_id: &str,
@@ -1339,7 +1339,7 @@ pub mod from_messages {
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
 		let model = model.to_string();
-		parse::aws_sse::transform_multi(b, move |aws_event| {
+		parse::aws_sse::transform_multi(b, buffer_limit, move |aws_event| {
 			let event = match bedrock::ConverseStreamOutput::deserialize(aws_event) {
 				Ok(e) => e,
 				Err(e) => {
@@ -2155,7 +2155,7 @@ pub mod from_responses {
 
 	pub fn translate_stream(
 		b: Body,
-		_buffer_limit: usize,
+		buffer_limit: usize,
 		log: AmendOnDrop,
 		model: &str,
 		_message_id: &str,
@@ -2186,7 +2186,7 @@ pub mod from_responses {
 			})
 		};
 
-		parse::aws_sse::transform_multi(b, move |aws_event| {
+		parse::aws_sse::transform_multi(b, buffer_limit, move |aws_event| {
 			tracing::debug!("Raw AWS event - headers: {:?}", aws_event.headers());
 			if let Ok(body_str) = std::str::from_utf8(aws_event.payload()) {
 				tracing::debug!("AWS event body: {}", body_str);

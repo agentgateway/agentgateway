@@ -19,9 +19,8 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/translator/sslutils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 const (
@@ -106,7 +105,7 @@ func translateBackendPolicyToAgw(
 
 	if s := backend.MCP; s != nil {
 		if backend.MCP.Authorization != nil {
-			appendPolicy("backendMCPAuthorization")(translateBackendMCPAuthorization(policy), nil)
+			appendPolicy("backendMCPAuthorization")(translateBackendMCPAuthorization(policy))
 		}
 
 		if backend.MCP.Authentication != nil {
@@ -159,7 +158,9 @@ func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy) (*api
 
 	var unhealthyCondition string
 	if healthPolicy.UnhealthyCondition != nil {
-		unhealthyCondition = string(*healthPolicy.UnhealthyCondition)
+		unhealthyCondition = *castCELPtr(healthPolicy.UnhealthyCondition, func(expr shared.CELExpression) {
+			errs = append(errs, fmt.Errorf("backend health unhealthyCondition is not a valid CEL expression: %s", expr))
+		})
 	}
 
 	p := &api.BackendPolicySpec_Health{
@@ -238,7 +239,7 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 		if scrt == nil {
 			errs = append(errs, fmt.Errorf("secret %s not found", nn))
 		} else {
-			if _, err := sslutils.ValidateTlsSecretData(nn.Name, nn.Namespace, scrt.Data); err != nil {
+			if _, err := ValidateTlsSecretData(nn.Name, nn.Namespace, scrt.Data); err != nil {
 				errs = append(errs, fmt.Errorf("secret %v contains invalid certificate: %v", nn, err))
 			}
 			p.Cert = scrt.Data[corev1.TLSCertKey]
@@ -260,7 +261,7 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 				errs = append(errs, fmt.Errorf("ConfigMap %s not found", nn))
 				continue
 			}
-			pem, err := sslutils.GetCACertFromConfigMap(ptr.Flatten(cfgmap))
+			pem, err := GetCACertFromConfigMap(ptr.Flatten(cfgmap))
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error extracting CA cert from ConfigMap %s: %w", nn, err))
 				continue
@@ -370,19 +371,23 @@ func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 	return tunnelPolicy, err
 }
 
-func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy) *api.Policy {
+func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
 	backend := policy.Spec.Backend
 	if backend == nil || backend.MCP == nil || backend.MCP.Authorization == nil {
-		return nil
+		return nil, nil
 	}
 	auth := backend.MCP.Authorization
+	var errs []error
 	var allowPolicies, denyPolicies, requirePolicies []string
+	policies := castCELSlice(auth.Policy.MatchExpressions, func(expr shared.CELExpression) {
+		errs = append(errs, fmt.Errorf("backend MCP authorization matchExpression is not a valid CEL expression: %s", expr))
+	})
 	if auth.Action == shared.AuthorizationPolicyActionDeny {
-		denyPolicies = append(denyPolicies, cast(auth.Policy.MatchExpressions)...)
+		denyPolicies = append(denyPolicies, policies...)
 	} else if auth.Action == shared.AuthorizationPolicyActionRequire {
-		requirePolicies = append(requirePolicies, cast(auth.Policy.MatchExpressions)...)
+		requirePolicies = append(requirePolicies, policies...)
 	} else {
-		allowPolicies = append(allowPolicies, cast(auth.Policy.MatchExpressions)...)
+		allowPolicies = append(allowPolicies, policies...)
 	}
 
 	mcpPolicy := &api.Policy{
@@ -405,7 +410,7 @@ func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy) *
 		"policy", policy.Name,
 		"agentgateway_policy", mcpPolicy.Name)
 
-	return mcpPolicy
+	return mcpPolicy, errors.Join(errs...)
 }
 
 func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {

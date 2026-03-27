@@ -26,7 +26,9 @@ use crate::proxy::ProxyError;
 use crate::store::{Event, FrontendPolices};
 use crate::telemetry::metrics::TCPLabels;
 use crate::transport::BufferLimit;
-use crate::transport::stream::{Extension, LoggingMode, Socket, TLSConnectionInfo};
+use crate::transport::stream::{
+	Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
+};
 use crate::types::agent::{
 	Bind, BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
 };
@@ -441,7 +443,17 @@ impl Gateway {
 					warn!(src.addr = %peer_addr, "proxy error: {e}");
 				}
 			},
-			BindProtocol::tcp => Self::proxy_tcp(bind_name, inputs, None, raw_stream, drain).await,
+			BindProtocol::tcp => {
+				Self::proxy_tcp(
+					bind_name,
+					inputs,
+					None,
+					raw_stream,
+					Arc::new(policies),
+					drain,
+				)
+				.await
+			},
 			BindProtocol::tls => {
 				match Self::maybe_terminate_tls(
 					inputs.clone(),
@@ -465,7 +477,15 @@ impl Gateway {
 							.await;
 						},
 						ListenerProtocol::TLS(_) => {
-							Self::proxy_tcp(bind_name, inputs, Some(selected_listener), stream, drain).await
+							Self::proxy_tcp(
+								bind_name,
+								inputs,
+								Some(selected_listener),
+								stream,
+								Arc::new(policies),
+								drain,
+							)
+							.await
 						},
 						_ => {
 							error!(
@@ -529,6 +549,7 @@ impl Gateway {
 											inputs,
 											Some(selected_listener),
 											tls_stream,
+											Arc::new(policies),
 											drain,
 										)
 										.await
@@ -618,7 +639,7 @@ impl Gateway {
 		bind_name: BindKey,
 		inputs: Arc<ProxyInputs>,
 		selected_listener: Option<Arc<Listener>>,
-		stream: Socket,
+		mut stream: Socket,
 		policies: Arc<FrontendPolices>,
 		drain: DrainWatcher,
 	) -> anyhow::Result<()> {
@@ -626,7 +647,11 @@ impl Gateway {
 		let server = auto_server(policies.http.as_ref());
 
 		// Precompute transport labels and metrics before moving `selected_listener` and `inputs`
-		let transport_protocol = if stream.ext::<TLSConnectionInfo>().is_some() {
+		let tcp = stream
+			.ext::<TCPConnectionInfo>()
+			.expect("tcp info must be set");
+		let tls = stream.ext::<TLSConnectionInfo>();
+		let transport_protocol = if tls.is_some() {
 			TransportProtocol::https
 		} else {
 			TransportProtocol::http
@@ -650,6 +675,18 @@ impl Gateway {
 			.downstream_connection
 			.get_or_create(&transport_labels)
 			.inc();
+
+		let src = crate::cel::SourceContext {
+			address: tcp.peer_addr.ip(),
+			port: tcp.peer_addr.port(),
+			tls: tls.and_then(|t| t.src_identity.clone()),
+		};
+		if let Some(network_authorization) = policies.network_authorization.as_ref()
+			&& let Err(e) = network_authorization.apply(&src)
+		{
+			anyhow::bail!("network authorization denied: {e}");
+		}
+		stream.ext_mut().insert(src);
 
 		let transport_metrics = inputs.metrics.clone();
 		let proxy = super::httpproxy::HTTPProxy {
@@ -701,6 +738,7 @@ impl Gateway {
 		inputs: Arc<ProxyInputs>,
 		selected_listener: Option<Arc<Listener>>,
 		stream: Socket,
+		policies: Arc<FrontendPolices>,
 		_drain: DrainWatcher,
 	) {
 		let selected_listener = match selected_listener {
@@ -723,7 +761,7 @@ impl Gateway {
 			selected_listener,
 			target_address,
 		};
-		proxy.proxy(stream).await
+		proxy.proxy(stream, policies).await
 	}
 
 	// maybe_terminate_tls will observe the TLS handshake, and once the client hello has been received, select
@@ -1080,7 +1118,15 @@ impl Gateway {
 				tcp_routes: Default::default(),
 				routes: Default::default(),
 			});
-			Self::proxy_tcp(bind_name, pi, Some(listener), socket, drain).await;
+			Self::proxy_tcp(
+				bind_name,
+				pi,
+				Some(listener),
+				socket,
+				policies.clone(),
+				drain,
+			)
+			.await;
 		}
 	}
 

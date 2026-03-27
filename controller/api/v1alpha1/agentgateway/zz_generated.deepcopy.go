@@ -1505,6 +1505,11 @@ func (in *Frontend) DeepCopyInto(out *Frontend) {
 		*out = new(FrontendTCP)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.NetworkAuthorization != nil {
+		in, out := &in.NetworkAuthorization, &out.NetworkAuthorization
+		*out = new(shared.Authorization)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.TLS != nil {
 		in, out := &in.TLS, &out.TLS
 		*out = new(FrontendTLS)

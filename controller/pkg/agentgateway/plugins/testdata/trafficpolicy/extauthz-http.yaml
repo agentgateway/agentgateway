@@ -13,6 +13,7 @@ spec:
       backendRef:
         name: extauthz
         port: 1024
+      failureMode: FailOpen
       forwardBody:
         maxSize: 1024
       http:
@@ -56,6 +57,7 @@ output:
           namespace: default
       traffic:
         extAuthz:
+          failureMode: ALLOW
           http:
             addRequestHeaders:
               x-custom-header: random()

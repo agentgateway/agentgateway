@@ -55,61 +55,50 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 	});
 
 	let client = PolicyClient { inputs: pi.clone() };
-	// Define a sample tool for testing
-	let test_tool_get = Tool {
-		name: Cow::Borrowed("get_user"),
-		description: Some(Cow::Borrowed("Get user details")), // Added description
-		icons: None,
-		title: None,
-		meta: None,
-		execution: None,
-		input_schema: Arc::new(
-			json!({ // Define a simple schema for testing
-					"type": "object",
-					"properties": {
-							"path": {
-									"type": "object",
-									"properties": {
-											"user_id": {"type": "string"}
-									},
-									"required": ["user_id"]
-							},
-							"query": {
-									"type": "object",
-									"properties": {
-											"verbose": {"type": "string"}
-									}
-							},
-							"header": {
-									"type": "object",
-									"properties": {
-											"X-Request-ID": {"type": "string"}
-									}
-							}
+	let test_tool_get = Tool::new(
+		Cow::Borrowed("get_user"),
+		Cow::Borrowed("Get user details"),
+		Arc::new(
+			json!({
+				"type": "object",
+				"properties": {
+					"path": {
+						"type": "object",
+						"properties": {
+							"user_id": {"type": "string"}
+						},
+						"required": ["user_id"]
 					},
-					"required": ["path"] // Only path is required for this tool
+					"query": {
+						"type": "object",
+						"properties": {
+							"verbose": {"type": "string"}
+						}
+					},
+					"header": {
+						"type": "object",
+						"properties": {
+							"X-Request-ID": {"type": "string"}
+						}
+					}
+				},
+				"required": ["path"]
 			})
 			.as_object()
 			.unwrap()
 			.clone(),
 		),
-		annotations: None,
-		output_schema: None,
-	};
+	);
 	let upstream_call_get = UpstreamOpenAPICall {
 		method: "GET".to_string(),
 		path: "/users/{user_id}".to_string(),
 		allowed_headers: HashSet::from(["X-Request-ID".to_string()]),
 	};
 
-	let test_tool_post = Tool {
-		name: Cow::Borrowed("create_user"),
-		description: Some(Cow::Borrowed("Create a new user")),
-		icons: None,
-		title: None,
-		meta: None,
-		execution: None,
-		input_schema: Arc::new(
+	let test_tool_post = Tool::new(
+		Cow::Borrowed("create_user"),
+		Cow::Borrowed("Create a new user"),
+		Arc::new(
 			json!({
 				"type": "object",
 				"properties": {
@@ -140,9 +129,7 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 			.unwrap()
 			.clone(),
 		),
-		output_schema: None,
-		annotations: None,
-	};
+	);
 	let upstream_call_post = UpstreamOpenAPICall {
 		method: "POST".to_string(),
 		path: "/users".to_string(),
@@ -963,21 +950,14 @@ async fn test_call_tool_structured_content_fallback() {
 	let request = JsonRpcRequest {
 		jsonrpc: JsonRpcVersion2_0,
 		id: RequestId::String("test-123".into()),
-		request: ClientRequest::CallToolRequest(CallToolRequest {
-			method: CallToolRequestMethod,
-			params: CallToolRequestParams {
-				meta: None,
-				task: None,
-				name: "get_user".into(),
-				arguments: Some(
-					json!({ "path": { "user_id": user_id } })
-						.as_object()
-						.unwrap()
-						.clone(),
-				),
-			},
-			extensions: Extensions::default(),
-		}),
+		request: ClientRequest::CallToolRequest(CallToolRequest::new(
+			CallToolRequestParams::new("get_user").with_arguments(
+				json!({ "path": { "user_id": user_id } })
+					.as_object()
+					.unwrap()
+					.clone(),
+			),
+		)),
 	};
 
 	let result = handler

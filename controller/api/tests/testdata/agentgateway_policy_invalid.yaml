@@ -247,6 +247,39 @@ spec:
                 expression: 'request.headers["x-user"]'
             unit: Minutes
 ---
+_err: 'failureMode: Unsupported value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-extauth-invalid-failure-mode
+spec:
+  traffic:
+    extAuth:
+      backendRef:
+        name: auth-server
+        kind: Service
+      failureMode: IgnoreErrors
+      grpc: {}
+---
+_err: 'failureMode: Unsupported value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-ratelimit-global-invalid-failure-mode
+spec:
+  traffic:
+    rateLimit:
+      global:
+        backendRef:
+          name: ratelimit-service
+          kind: Service
+        failureMode: IgnoreErrors
+        domain: example.com
+        descriptors:
+          - entries:
+              - name: user
+                expression: 'request.headers["x-user"]'
+---
 _err: 'phase: Unsupported value'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

@@ -864,7 +864,6 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 							name: provider_name.clone(),
 							provider,
 							tokenize: false,
-							path_override: provider_config.path_override.as_ref().map(strng::new),
 							host_override: provider_config
 								.r#host_override
 								.as_ref()
@@ -873,6 +872,8 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 										.map_err(|e| ProtoError::Generic(e.to_string()))
 								})
 								.transpose()?,
+							path_override: provider_config.path_override.as_ref().map(strng::new),
+							path_prefix: provider_config.path_prefix.as_ref().map(strng::new),
 							inline_policies: pols,
 						};
 						local_provider_group.push((provider_name, np));
@@ -1826,6 +1827,30 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 					.transpose()?
 					.unwrap_or_default(),
 			}),
+			Some(fps::Kind::NetworkAuthorization(rbac)) => {
+				let mut allow_exprs = Vec::new();
+				for allow_rule in &rbac.allow {
+					let expr = cel::Expression::new_permissive(allow_rule);
+					allow_exprs.push(Arc::new(expr));
+				}
+
+				let mut deny_exprs = Vec::new();
+				for deny_rule in &rbac.deny {
+					let expr = cel::Expression::new_permissive(deny_rule);
+					deny_exprs.push(Arc::new(expr));
+				}
+
+				let mut require_exprs = Vec::new();
+				for require_rule in &rbac.require {
+					let expr = cel::Expression::new_permissive(require_rule);
+					require_exprs.push(Arc::new(expr));
+				}
+
+				let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
+				FrontendPolicy::NetworkAuthorization(frontend::NetworkAuthorization(
+					authorization::RuleSet::new(policy_set),
+				))
+			},
 			Some(fps::Kind::Logging(p)) => {
 				let (add, rm) = p
 					.fields
@@ -2495,6 +2520,7 @@ mod tests {
 						name: "vertex".to_string(),
 						host_override: None,
 						path_override: None,
+						path_prefix: None,
 						provider: Some(Provider::Vertex(Vertex {
 							model: None,
 							region: "".to_string(),
@@ -2537,6 +2563,7 @@ mod tests {
 						name: "vertex".to_string(),
 						host_override: None,
 						path_override: None,
+						path_prefix: None,
 						provider: Some(Provider::Vertex(Vertex {
 							model: None,
 							region: "us-central1".to_string(),

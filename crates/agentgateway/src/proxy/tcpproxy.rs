@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::proxy::httpproxy::BackendCall;
 use crate::proxy::{ProxyError, httpproxy};
-use crate::store::{BackendPolicies, RoutePath};
+use crate::store::{BackendPolicies, FrontendPolices, RoutePath};
 use crate::telemetry::log;
 use crate::telemetry::log::{DropOnLog, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
@@ -29,7 +29,7 @@ pub struct TCPProxy {
 }
 
 impl TCPProxy {
-	pub async fn proxy(&self, connection: Socket) {
+	pub async fn proxy(&self, connection: Socket, policies: Arc<FrontendPolices>) {
 		let start = agent_core::Timestamp::now();
 
 		let tcp = connection
@@ -52,7 +52,15 @@ impl TCPProxy {
 		)
 		.into();
 		// Set source context for TCP logging
+		let authz_error = policies
+			.network_authorization
+			.as_ref()
+			.map(|p| p.apply(&src));
 		log.with(|l| l.source_context = Some(src));
+		if let Some(Err(e)) = authz_error {
+			log.with(|l| l.error = Some(e.to_string()));
+			return;
+		}
 		let ret = self.proxy_internal(connection, log.as_mut().unwrap()).await;
 		if let Err(e) = ret {
 			log.with(|l| l.error = Some(e.to_string()));

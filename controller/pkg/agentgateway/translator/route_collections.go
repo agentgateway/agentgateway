@@ -28,11 +28,11 @@ import (
 	agwir "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/status"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 // AgwRouteCollection creates the collection of translated Routes
@@ -261,7 +261,7 @@ func ProcessParentReferences[T any](
 					msg = "Parent listener not usable or not permitted"
 				} else if parent.OriginalReference.SectionName != nil || parent.OriginalReference.Port != nil {
 					// Use string literal to avoid compile issues if the constant name differs.
-					reason = gwv1.RouteConditionReason("NoMatchingParent")
+					reason = "NoMatchingParent"
 					msg = "No listener with the specified sectionName on the parent Gateway"
 				}
 				pr.SetCondition(reporter.RouteCondition{
@@ -352,7 +352,7 @@ func reasonResolvedRefs(cond *reporter.RouteCondition, ok bool) gwv1.RouteCondit
 	if cond != nil && cond.Reason != "" {
 		return cond.Reason
 	}
-	return gwv1.RouteConditionReason("Invalid")
+	return "Invalid"
 }
 
 // buildAttachedRoutesMapAllowed is the same as buildAttachedRoutesMap,

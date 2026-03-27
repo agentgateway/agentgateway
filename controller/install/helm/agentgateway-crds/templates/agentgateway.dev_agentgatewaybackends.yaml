@@ -210,6 +210,14 @@ spec:
                                 maxLength: 1024
                                 minLength: 1
                                 type: string
+                              pathPrefix:
+                                description: |-
+                                  PathPrefix overrides the default base path prefix (e.g. "/v1") for upstream requests.
+                                  Path translation for cross-format requests still applies using this prefix.
+                                  Only supported for OpenAI and Anthropic providers.
+                                maxLength: 1024
+                                minLength: 1
+                                type: string
                               policies:
                                 description: |-
                                   `policies` controls policies for communicating with this backend.
@@ -6374,6 +6382,10 @@ spec:
                             - message: both host and port must be set together
                               rule: 'has(self.host) || has(self.port) ? has(self.host)
                                 && has(self.port) : true'
+                            - message: path and pathPrefix are mutually exclusive
+                              rule: '!(has(self.path) && has(self.pathPrefix))'
+                            - message: pathPrefix requires host to be set
+                              rule: 'has(self.pathPrefix) ? has(self.host) : true'
                             - message: exactly one of the fields in [openai azureopenai
                                 anthropic gemini vertexai bedrock] must be set
                               rule: '[has(self.openai),has(self.azureopenai),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock)].filter(x,x==true).size()
@@ -6520,6 +6532,14 @@ spec:
                         maxLength: 1024
                         minLength: 1
                         type: string
+                      pathPrefix:
+                        description: |-
+                          PathPrefix overrides the default base path prefix (e.g. "/v1") for upstream requests.
+                          Path translation for cross-format requests still applies using this prefix.
+                          Only supported for OpenAI and Anthropic providers.
+                        maxLength: 1024
+                        minLength: 1
+                        type: string
                       port:
                         description: Port specifies the port to send the requests
                           to.
@@ -6559,6 +6579,10 @@ spec:
                     - message: both host and port must be set together
                       rule: 'has(self.host) || has(self.port) ? has(self.host) &&
                         has(self.port) : true'
+                    - message: path and pathPrefix are mutually exclusive
+                      rule: '!(has(self.path) && has(self.pathPrefix))'
+                    - message: pathPrefix requires host to be set
+                      rule: 'has(self.pathPrefix) ? has(self.host) : true'
                     - message: exactly one of the fields in [openai azureopenai anthropic
                         gemini vertexai bedrock] must be set
                       rule: '[has(self.openai),has(self.azureopenai),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock)].filter(x,x==true).size()

@@ -79,6 +79,7 @@ pub struct NamedAIProvider {
 	pub provider: AIProvider,
 	pub host_override: Option<Target>,
 	pub path_override: Option<Strng>,
+	pub path_prefix: Option<Strng>,
 	/// Whether to tokenize on the request flow. This enables us to do more accurate rate limits,
 	/// since we know (part of) the cost of the request upfront.
 	/// This comes with the cost of an expensive operation.
@@ -86,12 +87,6 @@ pub struct NamedAIProvider {
 	pub tokenize: bool,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub inline_policies: Vec<BackendPolicy>,
-}
-
-impl NamedAIProvider {
-	pub fn use_default_policies(&self) -> bool {
-		self.host_override.is_none()
-	}
 }
 
 #[apply(schema!)]
@@ -327,16 +322,26 @@ impl AIProvider {
 		req: &mut Request,
 		route_type: RouteType,
 		llm_request: Option<&LLMRequest>,
-		apply_host_path_defaults: bool,
+		path_override: Option<&str>,
+		path_prefix: Option<&str>,
+		has_host_override: bool,
 	) -> anyhow::Result<()> {
-		if apply_host_path_defaults {
-			self.set_host_path_defaults(req, route_type, llm_request)?;
+		if let Some(path_override) = path_override {
+			http::modify_req_uri(req, |uri| {
+				uri.path_and_query = Some(PathAndQuery::from_str(path_override)?);
+				Ok(())
+			})?;
+		} else {
+			self.set_default_path(req, route_type, llm_request, path_prefix, has_host_override)?;
+		}
+		if !has_host_override {
+			self.set_default_authority(req, llm_request)?;
 		}
 		self.set_required_fields(req)?;
 		Ok(())
 	}
 
-	fn set_path_and_query(uri: &mut http::uri::Parts, path: &'static str) -> anyhow::Result<()> {
+	fn set_path_and_query(uri: &mut http::uri::Parts, path: &str) -> anyhow::Result<()> {
 		let query = uri.path_and_query.as_ref().and_then(|p| p.query());
 		if let Some(query) = query {
 			uri.path_and_query = Some(PathAndQuery::from_maybe_shared(format!(
@@ -344,45 +349,60 @@ impl AIProvider {
 				path, query
 			))?);
 		} else {
-			uri.path_and_query = Some(PathAndQuery::from_static(path));
+			uri.path_and_query = Some(PathAndQuery::try_from(path)?);
 		};
 		Ok(())
 	}
 
-	pub fn set_host_path_defaults(
+	pub fn set_default_path(
 		&self,
 		req: &mut Request,
 		route_type: RouteType,
 		llm_request: Option<&LLMRequest>,
+		path_prefix: Option<&str>,
+		has_host_override: bool,
 	) -> anyhow::Result<()> {
-		let override_path = !matches!(route_type, RouteType::Passthrough | RouteType::Detect);
+		if matches!(route_type, RouteType::Passthrough | RouteType::Detect) {
+			return Ok(());
+		}
+
+		let supports_path_prefix = matches!(self, AIProvider::OpenAI(_) | AIProvider::Anthropic(_));
+		if has_host_override && !(supports_path_prefix && path_prefix.is_some()) {
+			return Ok(());
+		}
+
 		match self {
 			AIProvider::OpenAI(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
-					if override_path {
-						Self::set_path_and_query(uri, openai::path(route_type))?;
-					}
-					uri.authority = Some(Authority::from_static(openai::DEFAULT_HOST_STR));
+					let path = format!(
+						"{}{}",
+						path_prefix.map_or(openai::DEFAULT_BASE_PATH, |prefix| {
+							prefix.trim_end_matches('/')
+						}),
+						openai::path_suffix(route_type)
+					);
+					Self::set_path_and_query(uri, &path)?;
 					Ok(())
 				})?;
 				Ok(())
 			}),
 			AIProvider::Anthropic(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
-					if override_path {
-						Self::set_path_and_query(uri, anthropic::path(route_type))?;
-					}
-					uri.authority = Some(Authority::from_static(anthropic::DEFAULT_HOST_STR));
+					let path = format!(
+						"{}{}",
+						path_prefix.map_or(anthropic::DEFAULT_BASE_PATH, |prefix| {
+							prefix.trim_end_matches('/')
+						}),
+						anthropic::path_suffix(route_type),
+					);
+					Self::set_path_and_query(uri, &path)?;
 					Ok(())
 				})?;
 				Ok(())
 			}),
 			AIProvider::Gemini(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
-					if override_path {
-						Self::set_path_and_query(uri, gemini::path(route_type))?;
-					}
-					uri.authority = Some(Authority::from_static(gemini::DEFAULT_HOST_STR));
+					Self::set_path_and_query(uri, gemini::path(route_type))?;
 					Ok(())
 				})?;
 				Ok(())
@@ -392,46 +412,72 @@ impl AIProvider {
 				let streaming = llm_request.map(|l| l.streaming).unwrap_or(false);
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
-						if override_path {
-							let path = provider.get_path_for_model(route_type, request_model, streaming);
-							uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
-						}
-						uri.authority = Some(Authority::from_str(&provider.get_host(request_model))?);
+						let path = provider.get_path_for_model(route_type, request_model, streaming);
+						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
 						Ok(())
 					})?;
 					Ok(())
 				})
 			},
-			AIProvider::Bedrock(provider) => {
-				http::modify_req(req, |req| {
-					http::modify_uri(req, |uri| {
-						if override_path && let Some(l) = llm_request {
-							let path =
-								provider.get_path_for_route(route_type, l.streaming, l.request_model.as_str());
-							uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
-						}
-						uri.authority = Some(Authority::from_str(&provider.get_host())?);
-						Ok(())
-					})?;
-					// Store the region in request extensions so AWS signing can use it
-					req.extensions.insert(bedrock::AwsRegion {
-						region: provider.region.as_str().to_string(),
-					});
+			AIProvider::Bedrock(provider) => http::modify_req(req, |req| {
+				http::modify_uri(req, |uri| {
+					if let Some(l) = llm_request {
+						let path =
+							provider.get_path_for_route(route_type, l.streaming, l.request_model.as_str());
+						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+					}
 					Ok(())
-				})
-			},
+				})?;
+				Ok(())
+			}),
 			AIProvider::AzureOpenAI(provider) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
-					if override_path && let Some(l) = llm_request {
+					if let Some(l) = llm_request {
 						let path = provider.get_path_for_model(route_type, l.request_model.as_str());
 						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
 					}
-					uri.authority = Some(Authority::from_str(&provider.get_host())?);
 					Ok(())
 				})?;
 				Ok(())
 			}),
 		}
+	}
+
+	pub fn set_default_authority(
+		&self,
+		req: &mut Request,
+		llm_request: Option<&LLMRequest>,
+	) -> anyhow::Result<()> {
+		let authority = match self {
+			AIProvider::OpenAI(_) => Authority::from_static(openai::DEFAULT_HOST_STR),
+			AIProvider::Anthropic(_) => Authority::from_static(anthropic::DEFAULT_HOST_STR),
+			AIProvider::Gemini(_) => Authority::from_static(gemini::DEFAULT_HOST_STR),
+			AIProvider::Vertex(provider) => {
+				let request_model = llm_request.map(|l| l.request_model.as_str());
+				Authority::from_str(&provider.get_host(request_model))?
+			},
+			AIProvider::AzureOpenAI(provider) => Authority::from_str(&provider.get_host())?,
+			AIProvider::Bedrock(provider) => {
+				// Store the region in request extensions so AWS signing can use it.
+				return http::modify_req(req, |req| {
+					http::modify_uri(req, |uri| {
+						uri.authority = Some(Authority::from_str(&provider.get_host())?);
+						Ok(())
+					})?;
+					req.extensions.insert(bedrock::AwsRegion {
+						region: provider.region.as_str().to_string(),
+					});
+					Ok(())
+				});
+			},
+		};
+		http::modify_req(req, |req| {
+			http::modify_uri(req, |uri| {
+				uri.authority = Some(authority);
+				Ok(())
+			})?;
+			Ok(())
+		})
 	}
 
 	pub fn set_required_fields(&self, req: &mut Request) -> anyhow::Result<()> {

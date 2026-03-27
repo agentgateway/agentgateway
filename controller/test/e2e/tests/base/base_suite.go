@@ -76,29 +76,8 @@ var (
 		GwApiChannelStandard:     &GwApiV1_4_0,
 	}
 
-	GwApiRequireListenerSets = map[GwApiChannel]*GwApiVersion{
-		GwApiChannelExperimental: &GwApiV1_3_0,
-	}
-
-	GwApiRequireCorsFilters = map[GwApiChannel]*GwApiVersion{
-		GwApiChannelExperimental: &GwApiV1_3_0,
-	}
-
-	GwApiRequireTlsRoutes = map[GwApiChannel]*GwApiVersion{
-		GwApiChannelExperimental: &GwApiV0_3_0,
-	}
-
 	GwApiRequireTcpRoutes = map[GwApiChannel]*GwApiVersion{
 		GwApiChannelExperimental: &GwApiV0_3_0,
-	}
-
-	GwApiRequireSessionPersistence = map[GwApiChannel]*GwApiVersion{
-		GwApiChannelExperimental: &GwApiV1_1_0,
-	}
-
-	// Gateway.spec.tls.frontend was added in 1.4.0 experimental
-	GwApiRequireFrontendTLSConfig = map[GwApiChannel]*GwApiVersion{
-		GwApiChannelExperimental: &GwApiV1_4_0,
 	}
 )
 
@@ -202,11 +181,6 @@ func WithMinGwApiVersion(minVersions map[GwApiChannel]*GwApiVersion) SuiteOption
 }
 
 // WithSetupByVersion sets version-specific setup configurations for the suite
-func WithSetupByVersion(setupByVersion map[GwApiChannel]map[GwApiVersion]*TestCase) SuiteOption {
-	return func(s *BaseTestingSuite) {
-		s.setupByVersion = setupByVersion
-	}
-}
 
 func WithCrdPath(crdPath string) SuiteOption {
 	return func(s *BaseTestingSuite) {

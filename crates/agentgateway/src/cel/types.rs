@@ -322,6 +322,11 @@ impl<'a> Executor<'a> {
 		}
 		this
 	}
+	pub fn new_source(source_context: &'a SourceContext) -> Self {
+		let mut this = Self::new_empty();
+		this.source = ExtensionOrDirect::Direct(Some(source_context));
+		this
+	}
 	pub fn new_request(req: &'a crate::http::Request) -> Self {
 		let mut this = Self::new_empty();
 		this.set_request(req);
@@ -370,7 +375,17 @@ impl<'a> Executor<'a> {
 	pub fn eval_bool(&self, expr: &Expression) -> bool {
 		self
 			.eval(expr)
-			.map(|v| v.as_bool().unwrap_or_default())
+			.map(|v| match v.as_bool() {
+				Ok(b) => b,
+				Err(e) => {
+					event!(
+						target: "cel",
+						tracing::Level::TRACE,
+						"failed to convert expression result to bool: {v:?}: {e}",
+					);
+					false
+				},
+			})
 			.unwrap_or_default()
 	}
 

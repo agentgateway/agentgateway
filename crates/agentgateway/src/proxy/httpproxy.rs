@@ -392,19 +392,12 @@ impl HTTPProxy {
 		let start = agent_core::Timestamp::now();
 
 		// Copy connection level attributes into request level attributes
-		connection.copy::<TCPConnectionInfo>(req.extensions_mut());
-		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
-
 		let tcp = connection
-			.get::<TCPConnectionInfo>()
-			.expect("tcp connection must be set");
-		let tls = connection.get::<TLSConnectionInfo>();
-		let src = cel::SourceContext {
-			address: tcp.peer_addr.ip(),
-			port: tcp.peer_addr.port(),
-			tls: tls.and_then(|t| t.src_identity.clone()),
-		};
-		req.extensions_mut().insert(src);
+			.copy::<TCPConnectionInfo>(req.extensions_mut())
+			.expect("tcp connection must be set")
+			.clone();
+		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
+		connection.copy::<cel::SourceContext>(req.extensions_mut());
 		req
 			.extensions_mut()
 			.insert(RequestTime(start.as_datetime()));
@@ -1347,13 +1340,6 @@ async fn make_backend_call(
 			let effective_policies = provider_defaults
 				.merge(policies)
 				.merge(sub_backend_policies);
-			if let Some(po) = &provider.path_override {
-				http::modify_req_uri(&mut req, |p| {
-					p.path_and_query = Some(PathAndQuery::from_str(po)?);
-					Ok(())
-				})
-				.map_err(ProxyError::Processing)?;
-			}
 			BackendCall {
 				target,
 				backend_policies: effective_policies,
@@ -1552,7 +1538,9 @@ async fn make_backend_call(
 							&mut req,
 							route_type,
 							Some(&llm_request),
-							llm.use_default_policies(),
+							llm.path_override.as_deref(),
+							llm.path_prefix.as_deref(),
+							llm.host_override.is_some(),
 						)
 						.map_err(ProxyError::Processing)?;
 
@@ -1590,7 +1578,14 @@ async fn make_backend_call(
 					// For realtime we do the same and handle everything in the Websocket handler
 					llm
 						.provider
-						.setup_request(&mut req, route_type, None, true)
+						.setup_request(
+							&mut req,
+							route_type,
+							None,
+							llm.path_override.as_deref(),
+							llm.path_prefix.as_deref(),
+							llm.host_override.is_some(),
+						)
 						.map_err(ProxyError::Processing)?;
 					if route_type == RouteType::Realtime {
 						let request_model = http::as_url(req.uri())
