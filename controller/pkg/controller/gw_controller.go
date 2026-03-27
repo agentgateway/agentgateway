@@ -31,6 +31,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk"
@@ -86,7 +87,10 @@ func NewGatewayReconciler(
 		deploymentClient: kclient.NewFiltered[*appsv1.Deployment](cfg.Client, filter),
 		svcAccountClient: kclient.NewFiltered[*corev1.ServiceAccount](cfg.Client, filter),
 		configMapClient:  kclient.NewFiltered[*corev1.ConfigMap](cfg.Client, filter),
-		secretClient:     kclient.NewFiltered[*corev1.Secret](cfg.Client, filter),
+		secretClient: kclient.NewFiltered[*corev1.Secret](cfg.Client, kclient.Filter{
+			FieldSelector: apiclient.SecretsFieldSelector,
+			ObjectFilter:  cfg.Client.ObjectFilter(),
+		}),
 	}
 
 	// Reuse the parameter clients from the deployer to avoid duplicate watches
