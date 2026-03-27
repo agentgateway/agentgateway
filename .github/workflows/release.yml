@@ -13,6 +13,11 @@ on:
         required: false
         default: false
         type: boolean
+      extra_helm_tag:
+        description: 'Additional Helm chart version to push (e.g. 0.0.0-latest-dev)'
+        required: false
+        default: ''
+        type: string
   workflow_call:
     inputs:
       version:
@@ -21,6 +26,11 @@ on:
         type: string
       extra_tag:
         description: 'Additional Docker image tag to push (e.g. latest-dev)'
+        required: false
+        default: ''
+        type: string
+      extra_helm_tag:
+        description: 'Additional Helm chart version to push (e.g. 0.0.0-latest-dev)'
         required: false
         default: ''
         type: string
@@ -489,6 +499,7 @@ jobs:
         run: make -C controller release-charts
         env:
           IMAGE_REGISTRY: ${{ env.CHART_REGISTRY_IMAGE_BASE }}
+          EXTRA_HELM_TAG: ${{ inputs.extra_helm_tag }}
 
   build:
     if: ${{ github.event_name != 'workflow_call' && (github.event_name == 'push' || ! github.event.inputs.skip_gh_release) }}
