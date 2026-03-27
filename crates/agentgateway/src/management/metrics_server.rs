@@ -9,10 +9,10 @@ use headers_accept::Accept;
 use hyper::Request;
 use hyper::body::Incoming;
 use mediatype::MediaType;
-use prometheus_client::encoding::text::encode as encode_text;
 use prometheus_client::encoding::protobuf::encode as encode_protobuf;
-use prost_v12::Message;
+use prometheus_client::encoding::text::encode as encode_text;
 use prometheus_client::registry::Registry;
+use prost_v12::Message;
 
 use super::hyper_helpers;
 use crate::Address;
@@ -49,25 +49,29 @@ impl Server {
 
 async fn handle_metrics(reg: Arc<Mutex<Registry>>, req: Request<Incoming>) -> Response {
 	let reg = reg.lock().expect("mutex");
-    let content_type = content_type(&req);
-    let result = match content_type {
-        ContentType::PlainText | ContentType::OpenMetrics => {
-            let mut str_buf = String::new();
-            encode_text(&mut str_buf, &reg)
-                .map(|_| str_buf.into_bytes())
-        },
-        ContentType::Protobuf => encode_protobuf(&reg)
-            .map(|metrics| metrics.encode_length_delimited_to_vec())
-    };
-    match result {
-        Ok(buf) => ::http::Response::builder()
-            .status(hyper::StatusCode::OK)
-            .header(hyper::header::CONTENT_TYPE, Into::<&str>::into(content_type))
-            .body(buf.into()),
-        Err(err) => ::http::Response::builder()
-            .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-            .body(err.to_string().into())
-	}.expect("builder with known status code should not fail")
+	let content_type = content_type(&req);
+	let result = match content_type {
+		ContentType::PlainText | ContentType::OpenMetrics => {
+			let mut str_buf = String::new();
+			encode_text(&mut str_buf, &reg).map(|_| str_buf.into_bytes())
+		},
+		ContentType::Protobuf => {
+			encode_protobuf(&reg).map(|metrics| metrics.encode_length_delimited_to_vec())
+		},
+	};
+	match result {
+		Ok(buf) => ::http::Response::builder()
+			.status(hyper::StatusCode::OK)
+			.header(
+				hyper::header::CONTENT_TYPE,
+				Into::<&str>::into(content_type),
+			)
+			.body(buf.into()),
+		Err(err) => ::http::Response::builder()
+			.status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
+			.body(err.to_string().into()),
+	}
+	.expect("builder with known status code should not fail")
 }
 
 #[derive(Default)]
@@ -75,7 +79,7 @@ enum ContentType {
 	#[default]
 	PlainText,
 	OpenMetrics,
-    Protobuf,
+	Protobuf,
 }
 
 impl From<ContentType> for &str {
@@ -83,46 +87,58 @@ impl From<ContentType> for &str {
 		match c {
 			ContentType::PlainText => "text/plain; charset=utf-8",
 			ContentType::OpenMetrics => "application/openmetrics-text;charset=utf-8;version=1.0.0",
-            ContentType::Protobuf => "application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;version=1.0.0"
+			ContentType::Protobuf => {
+				"application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;version=1.0.0"
+			},
 		}
 	}
 }
 
 fn content_type_from_media_type(m: &MediaType) -> Option<ContentType> {
-    let ty_str: &str = m.ty.as_str();
-    if ty_str == mediatype::names::TEXT.as_str() 
-        && m.subty == mediatype::names::PLAIN.as_str() {
-        return Some(ContentType::PlainText);
-    } else if ty_str != mediatype::names::APPLICATION.as_str() {
-        return None;
-    }
-    match m.subty.as_str() {
-        "openmetrics-text" => Some(ContentType::OpenMetrics),
-        "vnd.google.protobuf" | "protobuf" | "x-protobuf" => Some(ContentType::Protobuf),
-        _ => None
-    }
+	let ty_str: &str = m.ty.as_str();
+	if ty_str == mediatype::names::TEXT.as_str() && m.subty == mediatype::names::PLAIN.as_str() {
+		return Some(ContentType::PlainText);
+	} else if ty_str != mediatype::names::APPLICATION.as_str() {
+		return None;
+	}
+	match m.subty.as_str() {
+		"openmetrics-text" => Some(ContentType::OpenMetrics),
+		"vnd.google.protobuf" | "protobuf" | "x-protobuf" => Some(ContentType::Protobuf),
+		_ => None,
+	}
 }
 
 const AVAILABLE_MEDIA_TYPES: [MediaType; 5] = [
-    MediaType::new(mediatype::names::APPLICATION, mediatype::Name::new_unchecked("vnd.google.protobuf")),
-    MediaType::new(mediatype::names::APPLICATION, mediatype::Name::new_unchecked("protobuf")),
-    MediaType::new(mediatype::names::APPLICATION, mediatype::Name::new_unchecked("x-protobuf")),
-    MediaType::new(mediatype::names::APPLICATION, mediatype::Name::new_unchecked("openmetrics-text")),
-    MediaType::new(mediatype::names::TEXT, mediatype::names::PLAIN),
+	MediaType::new(
+		mediatype::names::APPLICATION,
+		mediatype::Name::new_unchecked("vnd.google.protobuf"),
+	),
+	MediaType::new(
+		mediatype::names::APPLICATION,
+		mediatype::Name::new_unchecked("protobuf"),
+	),
+	MediaType::new(
+		mediatype::names::APPLICATION,
+		mediatype::Name::new_unchecked("x-protobuf"),
+	),
+	MediaType::new(
+		mediatype::names::APPLICATION,
+		mediatype::Name::new_unchecked("openmetrics-text"),
+	),
+	MediaType::new(mediatype::names::TEXT, mediatype::names::PLAIN),
 ];
 
 #[inline(always)]
 fn content_type<T>(req: &Request<T>) -> ContentType {
-    let mut values = req.headers()
-        .get_all(http::header::ACCEPT)
-        .iter();
-    let accept = match Accept::decode(&mut values) {
-        Ok(header) => header,
-        Err(_) => return ContentType::default(),
-    };
-    accept.negotiate(&AVAILABLE_MEDIA_TYPES)
-        .and_then(content_type_from_media_type)
-        .unwrap_or_default()
+	let mut values = req.headers().get_all(http::header::ACCEPT).iter();
+	let accept = match Accept::decode(&mut values) {
+		Ok(header) => header,
+		Err(_) => return ContentType::default(),
+	};
+	accept
+		.negotiate(&AVAILABLE_MEDIA_TYPES)
+		.and_then(content_type_from_media_type)
+		.unwrap_or_default()
 }
 
 mod test {
@@ -151,7 +167,7 @@ mod test {
           .body("I would like protobuf")
           .unwrap();
 		assert_eq!(
-            Into::<&str>::into(super::content_type(&mixed_req)),
+			Into::<&str>::into(super::content_type(&mixed_req)),
 			"application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;version=1.0.0"
 		);
 
