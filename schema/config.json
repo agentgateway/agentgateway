@@ -2905,13 +2905,56 @@
       ]
     },
     "AzureContentSafety": {
-      "description": "Configuration for Azure Content Safety integration.\n\nUses the Azure AI Content Safety Analyze Text API to detect harmful content\nincluding Hate, SelfHarm, Sexual, and Violence categories.",
+      "description": "Configuration for Azure Content Safety integration.\n\nUses the Azure AI Content Safety APIs to detect harmful content\nand jailbreak attempts. The endpoint and authentication are shared\nacross all enabled features.",
       "type": "object",
       "properties": {
         "endpoint": {
-          "description": "The Azure Content Safety endpoint URL (e.g., \"https://<resource-name>.cognitiveservices.azure.com\")",
+          "description": "The Azure Content Safety endpoint hostname (e.g., \"<resource-name>.cognitiveservices.azure.com\")",
           "type": "string"
         },
+        "policies": {
+          "description": "Backend policies for Azure authentication (optional, defaults to implicit Azure auth)",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "analyzeText": {
+          "description": "Analyze Text configuration for detecting harmful content categories\n(Hate, SelfHarm, Sexual, Violence) and blocklist matches.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AnalyzeTextConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detectJailbreak": {
+          "description": "Detect Text Jailbreak configuration for detecting jailbreak attempts.\nOnly applicable to request guards.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DetectJailbreakConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "endpoint"
+      ]
+    },
+    "AnalyzeTextConfig": {
+      "description": "Configuration for the Analyze Text API.",
+      "type": "object",
+      "properties": {
         "severityThreshold": {
           "description": "Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.",
           "type": [
@@ -2943,23 +2986,23 @@
             "boolean",
             "null"
           ]
-        },
-        "policies": {
-          "description": "Backend policies for Azure authentication (optional, defaults to implicit Azure auth)",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SimpleLocalBackendPolicies"
-            },
-            {
-              "type": "null"
-            }
+        }
+      },
+      "additionalProperties": false
+    },
+    "DetectJailbreakConfig": {
+      "description": "Configuration for the Detect Jailbreak API.",
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "description": "API version to use (default: \"2024-02-15-preview\")",
+          "type": [
+            "string",
+            "null"
           ]
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "endpoint"
-      ]
+      "additionalProperties": false
     },
     "ResponseGuard": {
       "type": "object",

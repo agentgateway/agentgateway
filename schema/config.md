@@ -482,12 +482,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -584,6 +580,13 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection.body`|array||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection.status`|integer||
@@ -811,12 +814,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -913,6 +912,13 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection.body`|array||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection.status`|integer||
@@ -1954,12 +1960,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -2056,6 +2058,13 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].rejection`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].rejection.body`|array||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].rejection.status`|integer||
@@ -2283,12 +2292,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -2385,6 +2390,13 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.body`|array||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.status`|integer||
@@ -2855,12 +2867,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -2957,6 +2965,13 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.body`|array||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.status`|integer||
@@ -3184,12 +3199,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -3286,6 +3297,13 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.body`|array||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.status`|integer||
@@ -3734,12 +3752,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -3836,6 +3850,13 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection.body`|array||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection.status`|integer||
@@ -4063,12 +4084,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -4165,6 +4182,13 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection.body`|array||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection.status`|integer||
@@ -5158,12 +5182,8 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -5260,6 +5280,13 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`policies[].policy.ai.promptGuard.request[].rejection`|object||
 |`policies[].policy.ai.promptGuard.request[].rejection.body`|array||
 |`policies[].policy.ai.promptGuard.request[].rejection.status`|integer||
@@ -5487,12 +5514,8 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -5589,6 +5612,13 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`policies[].policy.ai.promptGuard.response[].rejection`|object||
 |`policies[].policy.ai.promptGuard.response[].rejection.body`|array||
 |`policies[].policy.ai.promptGuard.response[].rejection.status`|integer||
@@ -6477,12 +6507,8 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -6579,6 +6605,13 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`backends[].policies.ai.promptGuard.request[].rejection`|object||
 |`backends[].policies.ai.promptGuard.request[].rejection.body`|array||
 |`backends[].policies.ai.promptGuard.request[].rejection.status`|integer||
@@ -6806,12 +6839,8 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -6908,6 +6937,13 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`backends[].policies.ai.promptGuard.response[].rejection`|object||
 |`backends[].policies.ai.promptGuard.response[].rejection.body`|array||
 |`backends[].policies.ai.promptGuard.response[].rejection.status`|integer||
@@ -7305,12 +7341,8 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.models[].guardrails.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`llm.models[].guardrails.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`llm.models[].guardrails.request[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`llm.models[].guardrails.request[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`llm.models[].guardrails.request[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`llm.models[].guardrails.request[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`llm.models[].guardrails.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`llm.models[].guardrails.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`llm.models[].guardrails.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -7407,6 +7439,13 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`llm.models[].guardrails.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`llm.models[].guardrails.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`llm.models[].guardrails.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`llm.models[].guardrails.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`llm.models[].guardrails.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`llm.models[].guardrails.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`llm.models[].guardrails.request[].rejection`|object||
 |`llm.models[].guardrails.request[].rejection.body`|array||
 |`llm.models[].guardrails.request[].rejection.status`|integer||
@@ -7634,12 +7673,8 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.models[].guardrails.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`llm.models[].guardrails.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`llm.models[].guardrails.response[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`llm.models[].guardrails.response[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`llm.models[].guardrails.response[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`llm.models[].guardrails.response[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`llm.models[].guardrails.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`llm.models[].guardrails.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`llm.models[].guardrails.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -7736,6 +7771,13 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`llm.models[].guardrails.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`llm.models[].guardrails.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`llm.models[].guardrails.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`llm.models[].guardrails.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`llm.models[].guardrails.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`llm.models[].guardrails.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`llm.models[].guardrails.response[].rejection`|object||
 |`llm.models[].guardrails.response[].rejection.body`|array||
 |`llm.models[].guardrails.response[].rejection.status`|integer||
@@ -8531,12 +8573,8 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -8633,6 +8671,13 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`mcp.policies.ai.promptGuard.request[].rejection`|object||
 |`mcp.policies.ai.promptGuard.request[].rejection.body`|array||
 |`mcp.policies.ai.promptGuard.request[].rejection.status`|integer||
@@ -8860,12 +8905,8 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety Analyze Text API to detect harmful content<br>including Hate, SelfHarm, Sexual, and Violence categories.|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.apiVersion`|string|API version to use (default: "2024-09-01")|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.blocklistNames`|[]string|Blocklist names to check against|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
@@ -8962,6 +9003,13 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`mcp.policies.ai.promptGuard.response[].rejection`|object||
 |`mcp.policies.ai.promptGuard.response[].rejection.body`|array||
 |`mcp.policies.ai.promptGuard.response[].rejection.status`|integer||
