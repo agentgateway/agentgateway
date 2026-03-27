@@ -376,6 +376,7 @@ fn convert_backend_ai_policy(
 						blocklist_names: if acs.blocklist_names.is_empty() { None } else { Some(acs.blocklist_names.clone()) },
 						halt_on_blocklist_hit: acs.halt_on_blocklist_hit,
 						policies: pols,
+						cached_azure_auth: Default::default(),
 					})
 				},
 			};
@@ -444,6 +445,7 @@ fn convert_backend_ai_policy(
 						blocklist_names: if acs.blocklist_names.is_empty() { None } else { Some(acs.blocklist_names.clone()) },
 						halt_on_blocklist_hit: acs.halt_on_blocklist_hit,
 						policies: pols,
+						cached_azure_auth: Default::default(),
 					})
 				},
 			};

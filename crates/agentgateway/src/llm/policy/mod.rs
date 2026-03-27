@@ -1220,6 +1220,10 @@ pub struct AzureContentSafety {
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
 	pub policies: Vec<BackendPolicy>,
+	/// Cached implicit Azure auth credential, shared across requests.
+	#[serde(skip)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub cached_azure_auth: crate::http::auth::AzureAuth,
 }
 
 #[apply(schema!)]

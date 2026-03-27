@@ -3,7 +3,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
-use crate::http::auth::{AzureAuth, BackendAuth};
+use crate::http::auth::BackendAuth;
 use crate::http::jwt::Claims;
 use crate::llm::RequestType;
 use crate::llm::policy::AzureContentSafety;
@@ -160,8 +160,8 @@ async fn send_analyze_text_request(
 
 	let mut pols = vec![
 		BackendPolicy::BackendTLS(crate::http::backendtls::SYSTEM_TRUST.clone()),
-		// Default to implicit Azure auth
-		BackendPolicy::BackendAuth(BackendAuth::Azure(AzureAuth::default())),
+		// Use the cached implicit Azure auth so the credential is reused across requests
+		BackendPolicy::BackendAuth(BackendAuth::Azure(config.cached_azure_auth.clone())),
 	];
 	pols.extend(config.policies.iter().cloned());
 
