@@ -9,6 +9,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/config/schema/gvr"
 	"istio.io/istio/pkg/kube"
@@ -86,7 +87,10 @@ func NewGatewayReconciler(
 		deploymentClient: kclient.NewFiltered[*appsv1.Deployment](cfg.Client, filter),
 		svcAccountClient: kclient.NewFiltered[*corev1.ServiceAccount](cfg.Client, filter),
 		configMapClient:  kclient.NewFiltered[*corev1.ConfigMap](cfg.Client, filter),
-		secretClient:     kclient.NewFiltered[*corev1.Secret](cfg.Client, filter),
+		secretClient: kclient.NewFiltered[*corev1.Secret](cfg.Client, kclient.Filter{
+			FieldSelector: apiclient.SecretsFieldSelector,
+			ObjectFilter:  cfg.Client.ObjectFilter(),
+		}),
 	}
 
 	// Reuse the parameter clients from the deployer to avoid duplicate watches
