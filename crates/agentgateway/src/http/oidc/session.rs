@@ -205,7 +205,7 @@ pub enum CookieSecureMode {
 	Never,
 }
 
-pub fn derive_cookie_names(policy_id: &PolicyId) -> (String, String) {
+pub(super) fn derive_cookie_names(policy_id: &PolicyId) -> (String, String) {
 	let digest = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, policy_id.as_str().as_bytes());
 	let mut hex = String::with_capacity(32);
 	for byte in digest.as_ref().iter().take(8) {
@@ -217,19 +217,19 @@ pub fn derive_cookie_names(policy_id: &PolicyId) -> (String, String) {
 	)
 }
 
-pub fn generate_nonce() -> String {
+pub(super) fn generate_nonce() -> String {
 	random_token(16)
 }
 
-pub fn generate_state() -> String {
+pub(super) fn generate_state() -> String {
 	random_token(16)
 }
 
-pub fn generate_pkce_verifier() -> String {
+pub(super) fn generate_pkce_verifier() -> String {
 	random_token(32)
 }
 
-pub fn normalize_original_uri(path_and_query: Option<&http::uri::PathAndQuery>) -> String {
+pub(super) fn normalize_original_uri(path_and_query: Option<&http::uri::PathAndQuery>) -> String {
 	let original = path_and_query
 		.map(http::uri::PathAndQuery::as_str)
 		.unwrap_or("/");

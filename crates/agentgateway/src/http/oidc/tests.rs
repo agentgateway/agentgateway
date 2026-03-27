@@ -851,7 +851,7 @@ async fn discovery_load_failures_identify_discovery_document_source() {
 	assert!(
 		err
 			.to_string()
-			.contains("failed to load oidc discovery document from inline configuration")
+			.contains("failed to decode oidc discovery response from inline configuration")
 	);
 }
 

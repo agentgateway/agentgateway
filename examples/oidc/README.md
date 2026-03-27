@@ -33,6 +33,11 @@ Use these demo credentials:
 Configuration:
 
 ```yaml
+frontendPolicies:
+  accessLog:
+    add:
+      user.id: jwt.sub
+      user.email: jwt.email
 binds:
 - port: 3000
   listeners:
@@ -43,24 +48,32 @@ binds:
       matches:
       - path:
           exact: /oauth/callback
+      backends:
+      - host: localhost:18080
       policies:
         oidc:
           issuer: http://localhost:7080/realms/agentgateway
           clientId: agentgateway-browser
           clientSecret: agentgateway-secret
           redirectURI: http://localhost:3000/oauth/callback
-          scopes: [profile, email]
+          scopes:
+          - profile
+          - email
     - name: application
       matches:
       - path:
           pathPrefix: /
+      backends:
+      - host: localhost:18080
       policies:
         oidc:
           issuer: http://localhost:7080/realms/agentgateway
           clientId: agentgateway-browser
           clientSecret: agentgateway-secret
           redirectURI: http://localhost:3000/oauth/callback
-          scopes: [profile, email]
+          scopes:
+          - profile
+          - email
 ```
 
 Stop the demo with:

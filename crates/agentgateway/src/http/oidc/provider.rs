@@ -58,7 +58,7 @@ pub(super) async fn discover_provider_metadata(
 		.await
 		.map_err(|e| {
 			Error::Config(format!(
-				"failed to load oidc discovery document from {}: {e}",
+				"failed to decode oidc discovery response from {}: {e}",
 				describe_file_inline_or_remote(&discovery)
 			))
 		})?;

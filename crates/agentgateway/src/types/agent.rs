@@ -1441,21 +1441,6 @@ impl HostnameMatch {
 	pub fn all_matches<'a>(hostname: &'a str) -> impl Iterator<Item = HostnameMatchRef<'a>> + '_ {
 		Self::all_actual_matches(hostname).chain(std::iter::once(HostnameMatchRef::None))
 	}
-	pub fn matches_host(&self, host: &str) -> bool {
-		Self::all_matches(host).any(|candidate| candidate == HostnameMatchRef::from(self))
-	}
-	pub fn overlaps(&self, other: &Self) -> bool {
-		match (self, other) {
-			(Self::None, _) | (_, Self::None) => true,
-			(Self::Exact(left), Self::Exact(right)) => left == right,
-			(Self::Exact(host), Self::Wildcard(scope)) | (Self::Wildcard(scope), Self::Exact(host)) => {
-				wildcard_matches_host(scope, host)
-			},
-			(Self::Wildcard(left), Self::Wildcard(right)) => {
-				wildcard_scope_contains(left, right) || wildcard_scope_contains(right, left)
-			},
-		}
-	}
 	fn all_actual_matches<'a>(hostname: &'a str) -> impl Iterator<Item = HostnameMatchRef<'a>> + '_ {
 		let has_wildcard_prefix = hostname.starts_with("*.");
 
@@ -1475,19 +1460,6 @@ impl HostnameMatch {
 
 		exact_match.into_iter().chain(wildcards)
 	}
-}
-
-fn wildcard_matches_host(scope: &str, host: &str) -> bool {
-	host
-		.strip_suffix(scope)
-		.is_some_and(|prefix| prefix.ends_with('.') && prefix.len() > 1)
-}
-
-fn wildcard_scope_contains(scope: &str, other: &str) -> bool {
-	scope == other
-		|| other
-			.strip_suffix(scope)
-			.is_some_and(|prefix| prefix.ends_with('.'))
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize)]
@@ -2589,32 +2561,6 @@ InvalidKeyData
 		assert_eq!(matches.len(), 2);
 		assert_eq!(matches[0], HostnameMatchRef::Exact("localhost"));
 		assert_eq!(matches[1], HostnameMatchRef::None);
-	}
-
-	#[test]
-	fn test_hostname_match_matches_host() {
-		assert!(HostnameMatch::Exact("app.example.com".into()).matches_host("app.example.com"));
-		assert!(!HostnameMatch::Exact("app.example.com".into()).matches_host("api.example.com"));
-		assert!(HostnameMatch::Wildcard("example.com".into()).matches_host("app.example.com"));
-		assert!(!HostnameMatch::Wildcard("example.com".into()).matches_host("example.com"));
-		assert!(HostnameMatch::None.matches_host("app.example.com"));
-	}
-
-	#[test]
-	fn test_hostname_match_overlaps() {
-		assert!(
-			HostnameMatch::Exact("app.example.com".into())
-				.overlaps(&HostnameMatch::Wildcard("example.com".into()))
-		);
-		assert!(
-			HostnameMatch::Wildcard("example.com".into())
-				.overlaps(&HostnameMatch::Wildcard("com".into()))
-		);
-		assert!(
-			!HostnameMatch::Wildcard("a.example.com".into())
-				.overlaps(&HostnameMatch::Wildcard("b.example.com".into()))
-		);
-		assert!(HostnameMatch::None.overlaps(&HostnameMatch::Exact("app.example.com".into())));
 	}
 
 	#[test]

@@ -14,9 +14,9 @@ use crate::telemetry::log::RequestLog;
 
 mod callback;
 pub mod config;
-pub mod provider;
+mod provider;
 mod redirect;
-pub mod session;
+mod session;
 
 #[cfg(test)]
 mod tests;

@@ -2259,21 +2259,6 @@ fn finalize_oidc_normalized_config(
 				let policies = stores
 					.read_binds()
 					.route_policies(&path, &route.inline_policies);
-				let authn_count = [
-					policies.oidc.is_some(),
-					policies.jwt.is_some(),
-					policies.basic_auth.is_some(),
-					policies.api_key.is_some(),
-				]
-				.into_iter()
-				.filter(|present| *present)
-				.count();
-				if authn_count > 1 {
-					anyhow::bail!(
-						"route '{}' resolves to multiple authentication mechanisms; oidc conflicts with jwt_auth, basic_auth, and api_key",
-						route.name.as_route_name()
-					);
-				}
 				if let Some(policy) = &policies.oidc {
 					let route_name = route.name.as_route_name();
 					let source = stores
@@ -2323,6 +2308,22 @@ fn finalize_oidc_normalized_config(
 							route: &selected_route.name,
 						},
 						&selected_route.inline_policies,
+					);
+					let callback_has_competing_authn = selected_route_policies.oidc.is_some()
+						&& [
+							selected_route_policies.jwt.is_some(),
+							selected_route_policies.basic_auth.is_some(),
+							selected_route_policies.api_key.is_some(),
+						]
+						.into_iter()
+						.any(|present| present);
+					anyhow::ensure!(
+						!callback_has_competing_authn,
+						"listener '{}' route '{}' resolves to an oidc policy with callback path '{}', but route '{}' wins callback selection with multiple authentication mechanisms; oidc callback ownership must be unambiguous",
+						listener.name.listener_name,
+						route_name,
+						callback_path,
+						selected_route.name.as_route_name()
 					);
 					match &selected_route_policies.oidc {
 						Some(selected_policy) if selected_policy.policy_id == policy.policy_id => {},
