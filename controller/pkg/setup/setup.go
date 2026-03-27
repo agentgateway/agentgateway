@@ -241,7 +241,7 @@ func (s *setup) Start(ctx context.Context) error {
 	}
 
 	// build jwks store if it doesn't exist
-	if runnablesRegistry.Contains(jwks.RunnableName) {
+	if !runnablesRegistry.Contains(jwks.RunnableName) {
 		if err := buildJwksStore(ctx, mgr, s.APIClient, agwCollections); err != nil {
 			return fmt.Errorf("error creating jwks store %w", err)
 		}
