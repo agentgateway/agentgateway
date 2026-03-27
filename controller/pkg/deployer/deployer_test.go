@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/test/util/assert"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -16,13 +17,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	_ "github.com/envoyproxy/go-control-plane/envoy/extensions/upstreams/http/v3"
-
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
-	deployerinternal "github.com/agentgateway/agentgateway/controller/pkg/kgateway/deployer"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
 )
 
@@ -40,7 +37,7 @@ func TestDeployObjs(t *testing.T) {
 	getDeployer := func(t *testing.T, fc apiclient.Client, patcher deployer.Patcher) *deployer.Deployer {
 		t.Helper()
 
-		d, err := deployerinternal.NewGatewayDeployer(
+		d, err := deployer.NewGatewayDeployer(
 			wellknown.DefaultAgwControllerName,
 			wellknown.DefaultAgwClassName,
 			scheme,
@@ -198,7 +195,7 @@ func TestPruneRemovedResources(t *testing.T) {
 
 	getDeployer := func(t *testing.T, fc apiclient.Client) *deployer.Deployer {
 		t.Helper()
-		d, err := deployerinternal.NewGatewayDeployer(
+		d, err := deployer.NewGatewayDeployer(
 			wellknown.DefaultAgwControllerName,
 			wellknown.DefaultAgwClassName,
 			scheme,

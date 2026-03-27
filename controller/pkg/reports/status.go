@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -15,7 +16,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 )
 

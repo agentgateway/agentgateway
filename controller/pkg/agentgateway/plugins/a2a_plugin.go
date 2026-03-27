@@ -3,6 +3,7 @@ package plugins
 import (
 	"fmt"
 
+	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
 
@@ -24,7 +24,7 @@ const (
 func NewA2APlugin(agw *AgwCollections) AgwPlugin {
 	return AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]PolicyPlugin{
-			wellknown.ServiceGVK.GroupKind(): {
+			wellknown2.ServiceGVK.GroupKind(): {
 				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy]) {
 					policyCol := krt.NewManyCollection(agw.Services, func(krtctx krt.HandlerContext, svc *corev1.Service) []AgwPolicy {
 						return translatePoliciesForService(krtctx, svc, kubeutils.GetClusterDomainName(), input.References)
@@ -40,7 +40,7 @@ func NewA2APlugin(agw *AgwCollections) AgwPlugin {
 func translatePoliciesForService(krtctx krt.HandlerContext, svc *corev1.Service, clusterDomain string, references ReferenceIndex) []AgwPolicy {
 	var a2aPolicies []AgwPolicy
 	gatewayTargets := references.LookupGatewaysForBackend(krtctx, utils.TypedNamespacedName{
-		Kind: wellknown.ServiceKind,
+		Kind: wellknown2.ServiceKind,
 		NamespacedName: types.NamespacedName{
 			Namespace: svc.Namespace,
 			Name:      svc.Name,
@@ -54,7 +54,7 @@ func translatePoliciesForService(krtctx krt.HandlerContext, svc *corev1.Service,
 			policy := &api.Policy{
 				Key: fmt.Sprintf("a2a/%s/%s/%d", svc.Namespace, svc.Name, port.Port),
 				// TODO: this is awkward since its doesn't include a Kind..
-				Name: TypedResourceName(wellknown.ServiceKind, svc),
+				Name: TypedResourceName(wellknown2.ServiceKind, svc),
 				Target: &api.PolicyTarget{Kind: &api.PolicyTarget_Service{Service: &api.PolicyTarget_ServiceTarget{
 					Namespace: svc.Namespace,
 					Hostname:  hostname,

@@ -26,12 +26,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	pkgdeployer "github.com/agentgateway/agentgateway/controller/pkg/deployer"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/version"

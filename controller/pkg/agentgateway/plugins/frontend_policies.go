@@ -4,13 +4,13 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"istio.io/istio/pkg/ptr"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 )
 
 const (
@@ -128,7 +128,7 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 
 	var path *string
 	if tracing.Path != nil {
-		path = ptr.Of(string(*tracing.Path))
+		path = ptr.Of(*tracing.Path)
 	}
 
 	var protocol api.FrontendPolicySpec_Tracing_Protocol
@@ -212,7 +212,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 
 		var path *string
 		if otlp.Path != nil {
-			path = ptr.Of(string(*otlp.Path))
+			path = ptr.Of(*otlp.Path)
 		}
 
 		spec.OtlpAccessLog = &api.FrontendPolicySpec_Logging_OtlpAccessLog{

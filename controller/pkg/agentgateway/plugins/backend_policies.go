@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	jsonpb "google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -19,8 +20,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/translator/sslutils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
 
@@ -170,7 +169,7 @@ func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy) (*api
 	}
 	evictPolicy := &api.Policy{
 		Key:  policy.Namespace + "/" + policy.Name + healthPolicySuffix,
-		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_Health_{
@@ -205,7 +204,7 @@ func translateBackendTransformation(
 
 	tp := &api.Policy{
 		Key:  policy.Namespace + "/" + policy.Name + backendTransformationSuffix,
-		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_Transformation{
@@ -240,7 +239,7 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 		if scrt == nil {
 			errs = append(errs, fmt.Errorf("secret %s not found", nn))
 		} else {
-			if _, err := sslutils.ValidateTlsSecretData(nn.Name, nn.Namespace, scrt.Data); err != nil {
+			if _, err := ValidateTlsSecretData(nn.Name, nn.Namespace, scrt.Data); err != nil {
 				errs = append(errs, fmt.Errorf("secret %v contains invalid certificate: %v", nn, err))
 			}
 			p.Cert = scrt.Data[corev1.TLSCertKey]
@@ -262,7 +261,7 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 				errs = append(errs, fmt.Errorf("ConfigMap %s not found", nn))
 				continue
 			}
-			pem, err := sslutils.GetCACertFromConfigMap(ptr.Flatten(cfgmap))
+			pem, err := GetCACertFromConfigMap(ptr.Flatten(cfgmap))
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error extracting CA cert from ConfigMap %s: %w", nn, err))
 				continue
@@ -297,7 +296,7 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 
 	tlsPolicy := &api.Policy{
 		Key:  policy.Namespace + "/" + policy.Name + tlsPolicySuffix,
-		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_BackendTls{
@@ -330,7 +329,7 @@ func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy) *api.Policy {
 	}
 	tp := &api.Policy{
 		Key:  policy.Namespace + "/" + policy.Name + backendHttpPolicySuffix,
-		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_BackendHttp{
@@ -353,7 +352,7 @@ func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 
 	tunnelPolicy := &api.Policy{
 		Key:  policy.Namespace + "/" + policy.Name + backendTunnelPolicySuffix,
-		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_BackendTunnel_{
@@ -393,7 +392,7 @@ func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy) (
 
 	mcpPolicy := &api.Policy{
 		Key:  policy.Namespace + "/" + policy.Name + mcpAuthorizationPolicySuffix,
-		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_McpAuthorization_{
@@ -480,7 +479,7 @@ func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.Agent
 	}
 	mcpAuthnPolicy := &api.Policy{
 		Key:  policy.Namespace + "/" + policy.Name + mcpAuthenticationPolicySuffix,
-		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_McpAuthentication_{
@@ -593,7 +592,7 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 
 	aiPolicy := &api.Policy{
 		Key:  name + aiPolicySuffix,
-		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, agwPolicy),
+		Name: TypedResourceName(wellknown2.AgentgatewayPolicyGVK.Kind, agwPolicy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_Ai_{
@@ -673,7 +672,7 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 
 	authPolicy := &api.Policy{
 		Key:  name + backendauthPolicySuffix,
-		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_Auth{
@@ -732,14 +731,14 @@ func buildAwsAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.AwsAuth, s
 		errs = append(errs, err)
 	} else {
 		// Extract access key
-		if value, exists := kubeutils.GetSecretValue(secret, wellknown.AccessKey); !exists {
+		if value, exists := kubeutils.GetSecretValue(secret, wellknown2.AccessKey); !exists {
 			errs = append(errs, errors.New("accessKey is missing or not a valid string"))
 		} else {
 			accessKeyId = value
 		}
 
 		// Extract secret key
-		if value, exists := kubeutils.GetSecretValue(secret, wellknown.SecretKey); !exists {
+		if value, exists := kubeutils.GetSecretValue(secret, wellknown2.SecretKey); !exists {
 			errs = append(errs, errors.New("secretKey is missing or not a valid string"))
 		} else {
 			secretAccessKey = value
@@ -747,7 +746,7 @@ func buildAwsAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.AwsAuth, s
 
 		// Extract session token (optional)
 		if secret != nil {
-			if value, exists := kubeutils.GetSecretValue(secret, wellknown.SessionToken); exists {
+			if value, exists := kubeutils.GetSecretValue(secret, wellknown2.SessionToken); exists {
 				sessionToken = ptr.Of(value)
 			}
 		}
@@ -821,21 +820,21 @@ func buildAzureClientSecret(secrets krt.Collection[*corev1.Secret], krtctx krt.H
 		errs = append(errs, err)
 	} else {
 		// Extract client ID
-		if value, exists := kubeutils.GetSecretValue(secret, wellknown.ClientID); !exists {
+		if value, exists := kubeutils.GetSecretValue(secret, wellknown2.ClientID); !exists {
 			errs = append(errs, errors.New("clientID is missing or not a valid string"))
 		} else {
 			clientID = value
 		}
 
 		// Extract tenant ID
-		if value, exists := kubeutils.GetSecretValue(secret, wellknown.TenantID); !exists {
+		if value, exists := kubeutils.GetSecretValue(secret, wellknown2.TenantID); !exists {
 			errs = append(errs, errors.New("tenantID is missing or not a valid string"))
 		} else {
 			tenantID = value
 		}
 
 		// Extract client secret
-		if value, exists := kubeutils.GetSecretValue(secret, wellknown.ClientSecret); !exists {
+		if value, exists := kubeutils.GetSecretValue(secret, wellknown2.ClientSecret); !exists {
 			errs = append(errs, errors.New("clientSecret is missing or not a valid string"))
 		} else {
 			clientSecret = value

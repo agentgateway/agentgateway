@@ -3,13 +3,13 @@ package translator
 import (
 	"fmt"
 
+	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/krt"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 )
 
@@ -45,18 +45,18 @@ func ReferenceGrantsCollection(referenceGrants krt.Collection[*gwv1b1.ReferenceG
 			fromKey := Reference{
 				Namespace: from.Namespace,
 			}
-			if string(from.Group) == wellknown.GatewayGVK.Group && string(from.Kind) == wellknown.GatewayKind {
-				fromKey.Kind = wellknown.GatewayGVK
-			} else if string(from.Group) == wellknown.HTTPRouteGVK.Group && string(from.Kind) == wellknown.HTTPRouteKind {
-				fromKey.Kind = wellknown.HTTPRouteGVK
-			} else if string(from.Group) == wellknown.GRPCRouteGVK.Group && string(from.Kind) == wellknown.GRPCRouteKind {
-				fromKey.Kind = wellknown.GRPCRouteGVK
-			} else if string(from.Group) == wellknown.TLSRouteGVK.Group && string(from.Kind) == wellknown.TLSRouteKind {
-				fromKey.Kind = wellknown.TLSRouteGVK
-			} else if string(from.Group) == wellknown.TCPRouteGVK.Group && string(from.Kind) == wellknown.TCPRouteKind {
-				fromKey.Kind = wellknown.TCPRouteGVK
-			} else if string(from.Group) == wellknown.ListenerSetGVK.Group && string(from.Kind) == wellknown.ListenerSetKind {
-				fromKey.Kind = wellknown.ListenerSetGVK
+			if string(from.Group) == wellknown2.GatewayGVK.Group && string(from.Kind) == wellknown2.GatewayKind {
+				fromKey.Kind = wellknown2.GatewayGVK
+			} else if string(from.Group) == wellknown2.HTTPRouteGVK.Group && string(from.Kind) == wellknown2.HTTPRouteKind {
+				fromKey.Kind = wellknown2.HTTPRouteGVK
+			} else if string(from.Group) == wellknown2.GRPCRouteGVK.Group && string(from.Kind) == wellknown2.GRPCRouteKind {
+				fromKey.Kind = wellknown2.GRPCRouteGVK
+			} else if string(from.Group) == wellknown2.TLSRouteGVK.Group && string(from.Kind) == wellknown2.TLSRouteKind {
+				fromKey.Kind = wellknown2.TLSRouteGVK
+			} else if string(from.Group) == wellknown2.TCPRouteGVK.Group && string(from.Kind) == wellknown2.TCPRouteKind {
+				fromKey.Kind = wellknown2.TCPRouteGVK
+			} else if string(from.Group) == wellknown2.ListenerSetGVK.Group && string(from.Kind) == wellknown2.ListenerSetKind {
+				fromKey.Kind = wellknown2.ListenerSetGVK
 			} else {
 				// Not supported type. Not an error; may be for another controller
 				continue
@@ -65,10 +65,10 @@ func ReferenceGrantsCollection(referenceGrants krt.Collection[*gwv1b1.ReferenceG
 				toKey := Reference{
 					Namespace: gwv1b1.Namespace(obj.Namespace),
 				}
-				if to.Group == "" && string(to.Kind) == wellknown.SecretGVK.Kind {
-					toKey.Kind = wellknown.SecretGVK
-				} else if to.Group == "" && string(to.Kind) == wellknown.ServiceKind {
-					toKey.Kind = wellknown.ServiceGVK
+				if to.Group == "" && string(to.Kind) == wellknown2.SecretGVK.Kind {
+					toKey.Kind = wellknown2.SecretGVK
+				} else if to.Group == "" && string(to.Kind) == wellknown2.ServiceKind {
+					toKey.Kind = wellknown2.ServiceGVK
 				} else {
 					// Not supported type. Not an error; may be for another controller
 					continue
@@ -126,7 +126,7 @@ func (g ReferenceGrant) ResourceName() string {
 // SecretAllowed checks if a secret is allowed to be used by a gateway
 func (refs ReferenceGrants) SecretAllowed(ctx krt.HandlerContext, kind schema.GroupVersionKind, secret types.NamespacedName, namespace string) bool {
 	from := Reference{Kind: kind, Namespace: gwv1b1.Namespace(namespace)}
-	to := Reference{Kind: wellknown.SecretGVK, Namespace: gwv1b1.Namespace(secret.Namespace)}
+	to := Reference{Kind: wellknown2.SecretGVK, Namespace: gwv1b1.Namespace(secret.Namespace)}
 	pair := ReferencePair{From: from, To: to}
 	grants := krt.Fetch(ctx, refs.collection, krt.FilterIndex(refs.index, pair))
 	for _, g := range grants {

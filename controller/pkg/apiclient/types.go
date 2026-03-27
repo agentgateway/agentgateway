@@ -3,6 +3,7 @@ package apiclient
 import (
 	"context"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/config/schema/kubeclient"
 	"istio.io/istio/pkg/kube/kubetypes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -10,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 
 	agwv1alpha1 "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 )
 
 // RegisterTypes registers all the types used by our API Client

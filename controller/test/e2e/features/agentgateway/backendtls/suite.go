@@ -104,12 +104,6 @@ func (s *tsuite) TestBackendTLSPolicyAndStatus() {
 		curl.WithHostHeader("foo.com"),
 		curl.WithPath("/"),
 	)
-	agentgateway := true
-	if agentgateway {
-		// Agentgateway currently doesn't support Statuses for BackendTLSPolicy
-		s.T().Log("Skipping status assertions for Agentgateway as they are not currently supported")
-		return
-	}
 	s.assertPolicyStatus(metav1.Condition{
 		Type:               string(shared.PolicyConditionAccepted),
 		Status:             metav1.ConditionTrue,

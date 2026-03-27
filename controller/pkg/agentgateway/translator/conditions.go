@@ -1,14 +1,13 @@
 package translator
 
 import (
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pilot/pkg/model/kstatus"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 )
 
 // ParentErrorReason is the error string for a ParentError (reason parent could not be referenced)

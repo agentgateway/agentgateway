@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
@@ -13,7 +14,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	krtpkg "github.com/agentgateway/agentgateway/controller/pkg/utils/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
@@ -81,7 +81,7 @@ func (f *defaultJwksUrlFactory) BuildJwksUrlAndTlsConfig(krtctx krt.HandlerConte
 	path := strings.TrimPrefix(remoteProvider.JwksPath, "/")
 
 	switch string(*ref.Kind) {
-	case wellknown.AgentgatewayBackendGVK.Kind:
+	case wellknown2.AgentgatewayBackendGVK.Kind:
 		backendRef := types.NamespacedName{
 			Name:      refName,
 			Namespace: refNamespace,
@@ -132,7 +132,7 @@ func (f *defaultJwksUrlFactory) BuildJwksUrlAndTlsConfig(krtctx krt.HandlerConte
 		}
 
 		return url, tlsConfig, nil
-	case wellknown.ServiceKind:
+	case wellknown2.ServiceKind:
 		agwPolicy := ptr.Flatten(krt.FetchOne(krtctx, f.agentgatewayPolicies, krt.FilterIndex(f.policiesByTargetRefIndex, TargetRefIndexKey{
 			Name:      refName,
 			Kind:      string(*ref.Kind),
@@ -191,7 +191,7 @@ func GetTLSConfig(
 		certPool := x509.NewCertPool()
 		for _, ref := range btls.CACertificateRefs {
 			nn := types.NamespacedName{
-				Name:      string(ref.Name),
+				Name:      ref.Name,
 				Namespace: namespace,
 			}
 			cfgmap := krt.FetchOne(krtctx, cfgmaps, krt.FilterObjectName(nn))

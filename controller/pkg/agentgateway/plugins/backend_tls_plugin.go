@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
@@ -20,8 +21,6 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/translator/sslutils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 )
 
 // NewBackendTLSPlugin creates a new BackendTLSPolicy plugin
@@ -40,7 +39,7 @@ func NewBackendTLSPlugin(agw *AgwCollections) AgwPlugin {
 	backendTLSTarget := backendTLSTargetIndex.AsCollection(append(agw.KrtOpts.ToOptions("agentgateway/BackendTLSPolicyTargets"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 	return AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]PolicyPlugin{
-			wellknown.BackendTLSPolicyGVK.GroupKind(): {
+			wellknown2.BackendTLSPolicyGVK.GroupKind(): {
 				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy]) {
 					st, o := krt.NewStatusManyCollection(agw.BackendTLSPolicies, func(krtctx krt.HandlerContext, btls *gwv1.BackendTLSPolicy) (*gwv1.PolicyStatus, []AgwPolicy) {
 						return translatePoliciesForBackendTLS(krtctx, agw.ControllerName, input.References, agw.ConfigMaps, agw.Secrets, agw.Services, backendTLSTarget, agw.Gateways, btls)
@@ -143,11 +142,11 @@ func translatePoliciesForBackendTLS(
 		}
 
 		switch string(target.Kind) {
-		case wellknown.AgentgatewayBackendGVK.Kind:
+		case wellknown2.AgentgatewayBackendGVK.Kind:
 			policyTarget = &api.PolicyTarget{
 				Kind: utils.BackendTarget(btls.Namespace, string(target.Name), target.SectionName),
 			}
-		case wellknown.ServiceKind:
+		case wellknown2.ServiceKind:
 			// BackendTLSPolicy supports named port sectionName (unfortunately)
 			policyTarget = &api.PolicyTarget{
 				Kind: utils.ServiceTarget(btls.Namespace, string(target.Name), (*string)(target.SectionName)),
@@ -169,7 +168,7 @@ func translatePoliciesForBackendTLS(
 					}
 				}
 			}
-		case wellknown.InferencePoolKind:
+		case wellknown2.InferencePoolKind:
 			policyTarget = &api.PolicyTarget{
 				Kind: utils.InferencePoolTarget(btls.Namespace, string(target.Name), (*string)(target.SectionName)),
 			}
@@ -194,11 +193,11 @@ func translatePoliciesForBackendTLS(
 				logger.Warn("ignoring Gateway.spec.tls.backend; cross namespace not permitted")
 				skip = true
 			}
-			if mtlsClientRef.Kind != nil && *mtlsClientRef.Kind != wellknown.SecretKind {
+			if mtlsClientRef.Kind != nil && *mtlsClientRef.Kind != wellknown2.SecretKind {
 				logger.Warn("ignoring Gateway.spec.tls.backend; only Secret is allowed")
 				skip = true
 			}
-			if mtlsClientRef.Group != nil && string(*mtlsClientRef.Group) != wellknown.SecretGVK.Group {
+			if mtlsClientRef.Group != nil && string(*mtlsClientRef.Group) != wellknown2.SecretGVK.Group {
 				logger.Warn("ignoring Gateway.spec.tls.backend; only core is allowed")
 				skip = true
 			}
@@ -211,7 +210,7 @@ func translatePoliciesForBackendTLS(
 				if scrt == nil {
 					logger.Warn("ignoring Gateway.spec.tls.backend; secret not found")
 				} else {
-					if _, err := sslutils.ValidateTlsSecretData(nn.Name, nn.Namespace, scrt.Data); err != nil {
+					if _, err := ValidateTlsSecretData(nn.Name, nn.Namespace, scrt.Data); err != nil {
 						logger.Warn("ignoring Gateway.spec.tls.backend; secret not found")
 					} else {
 						res.Cert = scrt.Data[corev1.TLSCertKey]
@@ -223,7 +222,7 @@ func translatePoliciesForBackendTLS(
 
 		policy := &api.Policy{
 			Key:    btls.Namespace + "/" + btls.Name + backendTlsPolicySuffix + attachmentName(policyTarget),
-			Name:   TypedResourceName(wellknown.BackendTLSPolicyKind, btls),
+			Name:   TypedResourceName(wellknown2.BackendTLSPolicyKind, btls),
 			Target: policyTarget,
 			Kind: &api.Policy_Backend{
 				Backend: &api.BackendPolicySpec{
@@ -334,7 +333,7 @@ func getBackendTLSCACert(
 
 	var sb strings.Builder
 	for _, ref := range validation.CACertificateRefs {
-		if ref.Group != gwv1.Group(wellknown.ConfigMapGVK.Group) || ref.Kind != gwv1.Kind(wellknown.ConfigMapGVK.Kind) {
+		if ref.Group != gwv1.Group(wellknown2.ConfigMapGVK.Group) || ref.Kind != gwv1.Kind(wellknown2.ConfigMapGVK.Kind) {
 			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].error = &ConfigError{
 				Reason:  string(gwv1.BackendTLSPolicyReasonInvalidKind),
 				Message: "Certificate reference invalid: " + string(ref.Kind),
@@ -353,7 +352,7 @@ func getBackendTLSCACert(
 			}
 			return nil, fmt.Errorf("certificate reference not found: %v", ref)
 		}
-		caCert, err := sslutils.GetCACertFromConfigMap(ptr.Flatten(cfgmap))
+		caCert, err := GetCACertFromConfigMap(ptr.Flatten(cfgmap))
 		if err != nil {
 			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].error = &ConfigError{
 				Reason:  string(gwv1.BackendTLSPolicyReasonInvalidCACertificateRef),

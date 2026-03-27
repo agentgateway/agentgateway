@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
 
@@ -136,9 +136,9 @@ func validateInferencePoolEndpointPickerRef(krtctx krt.HandlerContext, pool *inf
 	kind := epr.Kind
 	if kind == "" {
 		// InferencePool defaults this field to Service.
-		kind = inf.Kind(wellknown.ServiceKind)
+		kind = wellknown.ServiceKind
 	}
-	if kind != inf.Kind(wellknown.ServiceKind) {
+	if kind != wellknown.ServiceKind {
 		errs = append(errs, fmt.Sprintf("endpointPickerRef.kind must be %q, got %q", wellknown.ServiceKind, kind))
 	}
 
@@ -254,8 +254,8 @@ func desiredInferencePoolParentRefs(attachedGateways map[types.NamespacedName]st
 			return []inf.ParentReference{}
 		}
 		return []inf.ParentReference{{
-			Kind: inf.Kind(defaultInferencePoolStatusKind),
-			Name: inf.ObjectName(defaultInferencePoolStatusName),
+			Kind: defaultInferencePoolStatusKind,
+			Name: defaultInferencePoolStatusName,
 		}}
 	}
 
@@ -274,7 +274,7 @@ func desiredInferencePoolParentRefs(attachedGateways map[types.NamespacedName]st
 	for _, g := range gateways {
 		refs = append(refs, inf.ParentReference{
 			Group:     ptr.Of(inf.Group(wellknown.GatewayGroup)),
-			Kind:      inf.Kind(wellknown.GatewayKind),
+			Kind:      wellknown.GatewayKind,
 			Namespace: inf.Namespace(g.Namespace),
 			Name:      inf.ObjectName(g.Name),
 		})
