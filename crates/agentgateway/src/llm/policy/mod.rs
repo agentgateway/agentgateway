@@ -569,13 +569,20 @@ impl Policy {
 		rej: &RequestRejection,
 		config: &AzureContentSafety,
 	) -> anyhow::Result<Option<Response>> {
-		let resp = azure_content_safety::send_request(req, claims.clone(), client, config).await?;
-		let threshold = config.severity_threshold.unwrap_or(2);
-		if resp.is_blocked(threshold) {
-			Ok(Some(rej.as_response()))
-		} else {
-			Ok(None)
+		if let Some(ref analyze_text) = config.analyze_text {
+			let resp = azure_content_safety::send_analyze_text_for_request(req, claims.clone(), client, config, analyze_text).await?;
+			let threshold = analyze_text.severity_threshold.unwrap_or(2);
+			if resp.is_blocked(threshold) {
+				return Ok(Some(rej.as_response()));
+			}
 		}
+		if let Some(ref detect_jailbreak) = config.detect_jailbreak {
+			let resp = azure_content_safety::send_detect_jailbreak_for_request(req, claims.clone(), client, config, detect_jailbreak).await?;
+			if resp.jailbreak_detected() {
+				return Ok(Some(rej.as_response()));
+			}
+		}
+		Ok(None)
 	}
 
 	async fn apply_google_model_armor_response(
@@ -622,14 +629,16 @@ impl Policy {
 			return Ok(None);
 		}
 
-		let guardrail_resp =
-			azure_content_safety::send_response(content, claims, client, config).await?;
-		let threshold = config.severity_threshold.unwrap_or(2);
-		if guardrail_resp.is_blocked(threshold) {
-			Ok(Some(rej.as_response()))
-		} else {
-			Ok(None)
+		if let Some(ref analyze_text) = config.analyze_text {
+			let guardrail_resp =
+				azure_content_safety::send_analyze_text_for_response(content.clone(), claims, client, config, analyze_text).await?;
+			let threshold = analyze_text.severity_threshold.unwrap_or(2);
+			if guardrail_resp.is_blocked(threshold) {
+				return Ok(Some(rej.as_response()));
+			}
 		}
+		// Note: detect_jailbreak is request-only, not applied to responses.
+		Ok(None)
 	}
 
 	fn apply_regex(
@@ -1195,12 +1204,37 @@ pub struct GoogleModelArmor {
 
 /// Configuration for Azure Content Safety integration.
 ///
-/// Uses the Azure AI Content Safety Analyze Text API to detect harmful content
-/// including Hate, SelfHarm, Sexual, and Violence categories.
+/// Uses the Azure AI Content Safety APIs to detect harmful content
+/// and jailbreak attempts. The endpoint and authentication are shared
+/// across all enabled features.
 #[apply(schema!)]
 pub struct AzureContentSafety {
-	/// The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")
+	/// The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")
 	pub endpoint: Strng,
+	/// Backend policies for Azure authentication (optional, defaults to implicit Azure auth)
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+	)]
+	pub policies: Vec<BackendPolicy>,
+	/// Cached implicit Azure auth credential, shared across requests.
+	#[serde(skip)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub cached_azure_auth: crate::http::auth::AzureAuth,
+	/// Analyze Text configuration for detecting harmful content categories
+	/// (Hate, SelfHarm, Sexual, Violence) and blocklist matches.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub analyze_text: Option<AnalyzeTextConfig>,
+	/// Detect Text Jailbreak configuration for detecting jailbreak attempts.
+	/// Only applicable to request guards.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub detect_jailbreak: Option<DetectJailbreakConfig>,
+}
+
+/// Configuration for the Analyze Text API.
+#[apply(schema!)]
+pub struct AnalyzeTextConfig {
 	/// Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub severity_threshold: Option<i32>,
@@ -1213,17 +1247,14 @@ pub struct AzureContentSafety {
 	/// When true, further analysis stops if a blocklist is hit
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub halt_on_blocklist_hit: Option<bool>,
-	/// Backend policies for Azure authentication (optional, defaults to implicit Azure auth)
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
-	)]
-	pub policies: Vec<BackendPolicy>,
-	/// Cached implicit Azure auth credential, shared across requests.
-	#[serde(skip)]
-	#[cfg_attr(feature = "schema", schemars(skip))]
-	pub cached_azure_auth: crate::http::auth::AzureAuth,
+}
+
+/// Configuration for the Detect Jailbreak API.
+#[apply(schema!)]
+pub struct DetectJailbreakConfig {
+	/// API version to use (default: "2024-02-15-preview")
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub api_version: Option<Strng>,
 }
 
 #[apply(schema!)]

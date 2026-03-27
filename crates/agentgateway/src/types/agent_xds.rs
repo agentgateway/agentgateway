@@ -371,12 +371,15 @@ fn convert_backend_ai_policy(
 						.collect::<Result<Vec<_>, _>>()?;
 					llm::policy::RequestGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
 						endpoint: strng::new(&acs.endpoint),
-						severity_threshold: acs.severity_threshold,
-						api_version: acs.api_version.as_ref().map(strng::new),
-						blocklist_names: if acs.blocklist_names.is_empty() { None } else { Some(acs.blocklist_names.clone()) },
-						halt_on_blocklist_hit: acs.halt_on_blocklist_hit,
 						policies: pols,
 						cached_azure_auth: Default::default(),
+						analyze_text: Some(llm::policy::AnalyzeTextConfig {
+							severity_threshold: acs.severity_threshold,
+							api_version: acs.api_version.as_ref().map(strng::new),
+							blocklist_names: if acs.blocklist_names.is_empty() { None } else { Some(acs.blocklist_names.clone()) },
+							halt_on_blocklist_hit: acs.halt_on_blocklist_hit,
+						}),
+						detect_jailbreak: None,
 					})
 				},
 			};
@@ -440,12 +443,15 @@ fn convert_backend_ai_policy(
 						.collect::<Vec<_>>();
 					llm::policy::ResponseGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
 						endpoint: strng::new(&acs.endpoint),
-						severity_threshold: acs.severity_threshold,
-						api_version: acs.api_version.as_ref().map(strng::new),
-						blocklist_names: if acs.blocklist_names.is_empty() { None } else { Some(acs.blocklist_names.clone()) },
-						halt_on_blocklist_hit: acs.halt_on_blocklist_hit,
 						policies: pols,
 						cached_azure_auth: Default::default(),
+						analyze_text: Some(llm::policy::AnalyzeTextConfig {
+							severity_threshold: acs.severity_threshold,
+							api_version: acs.api_version.as_ref().map(strng::new),
+							blocklist_names: if acs.blocklist_names.is_empty() { None } else { Some(acs.blocklist_names.clone()) },
+							halt_on_blocklist_hit: acs.halt_on_blocklist_hit,
+						}),
+						detect_jailbreak: None,
 					})
 				},
 			};
