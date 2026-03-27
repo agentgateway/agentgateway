@@ -50,6 +50,6 @@ jobs:
     with:
       version: ${{ needs.prepare.outputs.version }}
       extra_tag: latest-dev
-      # Herlm is special and requires a semver.
+      # Helm is special and requires a semver.
       extra_helm_tag: 0.0.0-latest-dev
     secrets: inherit
