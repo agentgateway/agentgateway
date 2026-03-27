@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/config/schema/gvr"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/controllers"
@@ -25,6 +24,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 var _ manager.LeaderElectionRunnable = (*gatewayClassReconciler)(nil)

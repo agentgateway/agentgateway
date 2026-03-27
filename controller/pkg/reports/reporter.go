@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -13,6 +12,7 @@ import (
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 type ReportMap struct {

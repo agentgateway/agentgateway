@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strings"
 
-	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"istio.io/api/annotation"
 	"istio.io/istio/pilot/pkg/model/kstatus"
@@ -37,6 +36,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 // ConvertHTTPRouteToAgw converts a HTTPRouteRule to an agentgateway HTTPRoute
@@ -46,7 +46,7 @@ func ConvertHTTPRouteToAgw(ctx RouteContext, r gwv1.HTTPRouteRule,
 	res := &api.Route{
 		// unique for route rule
 		Key:  utils.InternalRouteRuleKey(obj.Namespace, obj.Name, pos),
-		Name: utils.RouteName(wellknown2.HTTPRouteKind, obj.Namespace, obj.Name, r.Name),
+		Name: utils.RouteName(wellknown.HTTPRouteKind, obj.Namespace, obj.Name, r.Name),
 		// filled in later
 		ListenerKey: "",
 	}
@@ -157,7 +157,7 @@ func ConvertTCPRouteToAgw(ctx RouteContext, r gwv1a2.TCPRouteRule,
 	res := &api.TCPRoute{
 		// unique for route rule
 		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, pos),
-		Name:        utils.RouteName(wellknown2.TCPRouteKind, obj.Namespace, obj.Name, r.Name),
+		Name:        utils.RouteName(wellknown.TCPRouteKind, obj.Namespace, obj.Name, r.Name),
 		ListenerKey: "",
 	}
 
@@ -180,7 +180,7 @@ func ConvertGRPCRouteToAgw(ctx RouteContext, r gwv1.GRPCRouteRule,
 		// unique for route rule
 		// Add .grpc suffix to distinguish from HTTP
 		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, pos) + ".grpc",
-		Name:        utils.RouteName(wellknown2.GRPCRouteKind, obj.Namespace, obj.Name, r.Name),
+		Name:        utils.RouteName(wellknown.GRPCRouteKind, obj.Namespace, obj.Name, r.Name),
 		ListenerKey: "",
 	}
 
@@ -247,7 +247,7 @@ func ConvertTLSRouteToAgw(ctx RouteContext, r gwv1.TLSRouteRule,
 	res := &api.TCPRoute{
 		// unique for route rule
 		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, pos) + ".tls",
-		Name:        utils.RouteName(wellknown2.TLSRouteKind, obj.Namespace, obj.Name, r.Name),
+		Name:        utils.RouteName(wellknown.TLSRouteKind, obj.Namespace, obj.Name, r.Name),
 		ListenerKey: "",
 	}
 
@@ -282,7 +282,7 @@ func buildAgwTCPDestination(
 		dst, err := buildAgwDestination(ctx, gwv1.HTTPBackendRef{
 			BackendRef: fwd,
 			Filters:    nil, // TCP Routes don't have per-backend filters?
-		}, ns, wellknown2.TCPRouteGVK)
+		}, ns, wellknown.TCPRouteGVK)
 		if err != nil {
 			logger.Error("error building agent gateway destination", "error", err)
 			if isInvalidBackend(err) {
@@ -312,7 +312,7 @@ func buildAgwTLSDestination(
 		dst, err := buildAgwDestination(ctx, gwv1.HTTPBackendRef{
 			BackendRef: fwd,
 			Filters:    nil, // TLS Routes don't have per-backend filters
-		}, ns, wellknown2.TLSRouteGVK)
+		}, ns, wellknown.TLSRouteGVK)
 		if err != nil {
 			logger.Error("error building agent gateway destination", "error", err)
 			if isInvalidBackend(err) {
@@ -379,7 +379,7 @@ func BuildAgwTrafficPolicyFilters(
 			hasTerminalFilter = true
 			terminalFilterType = "RequestRedirect"
 		case gwv1.HTTPRouteFilterRequestMirror:
-			h, err := CreateAgwMirrorFilter(ctx, filter.RequestMirror, ns, wellknown2.HTTPRouteGVK)
+			h, err := CreateAgwMirrorFilter(ctx, filter.RequestMirror, ns, wellknown.HTTPRouteGVK)
 			if err != nil {
 				if policyError == nil {
 					policyError = err
@@ -400,7 +400,7 @@ func BuildAgwTrafficPolicyFilters(
 			}
 			policies = append(policies, h)
 		case gwv1.HTTPRouteFilterExternalAuth:
-			h, err := CreateAgwExternalAuthFilter(ctx, filter.ExternalAuth, ns, wellknown2.HTTPRouteGVK)
+			h, err := CreateAgwExternalAuthFilter(ctx, filter.ExternalAuth, ns, wellknown.HTTPRouteGVK)
 			if err != nil {
 				if policyError == nil {
 					policyError = err
@@ -484,7 +484,7 @@ func BuildAgwBackendPolicyFilters(
 			hasTerminalFilter = true
 			terminalFilterType = "RequestRedirect"
 		case gwv1.HTTPRouteFilterRequestMirror:
-			h, err := CreateAgwMirrorFilter(ctx, filter.RequestMirror, ns, wellknown2.HTTPRouteGVK)
+			h, err := CreateAgwMirrorFilter(ctx, filter.RequestMirror, ns, wellknown.HTTPRouteGVK)
 			if err != nil {
 				if policyError == nil {
 					policyError = err
@@ -576,7 +576,7 @@ func buildAgwHTTPDestination(
 	var invalidBackendErr *reporter.RouteCondition
 	var res []*api.RouteBackend
 	for _, fwd := range forwardTo {
-		dst, err := buildAgwDestination(ctx, fwd, ns, wellknown2.HTTPRouteGVK)
+		dst, err := buildAgwDestination(ctx, fwd, ns, wellknown.HTTPRouteGVK)
 		if err != nil {
 			logger.Error("erroring building agent gateway destination", "error", err)
 			if isInvalidBackend(err) {
@@ -604,7 +604,7 @@ func buildAgwDestination(
 	ns string,
 	k schema.GroupVersionKind,
 ) (*api.RouteBackend, *reporter.RouteCondition) {
-	ref := NormalizeReference(to.Group, to.Kind, wellknown2.ServiceGVK)
+	ref := NormalizeReference(to.Group, to.Kind, wellknown.ServiceGVK)
 	// check if the reference is allowed
 	if toNs := to.Namespace; toNs != nil && string(*toNs) != ns {
 		if !ctx.Grants.BackendAllowed(ctx.Krt, k, to.Name, *toNs, ns, ref) {
@@ -667,18 +667,18 @@ func buildAgwDestination(
 }
 
 var knownReferences = sets.New(
-	wellknown2.GatewayGVK,
-	wellknown2.ListenerSetGVK,
-	wellknown2.ServiceGVK,
-	wellknown2.ServiceEntryGVK,
-	wellknown2.SecretGVK,
-	wellknown2.ConfigMapGVK,
+	wellknown.GatewayGVK,
+	wellknown.ListenerSetGVK,
+	wellknown.ServiceGVK,
+	wellknown.ServiceEntryGVK,
+	wellknown.SecretGVK,
+	wellknown.ConfigMapGVK,
 )
 var allowedParentReferences = sets.New(
-	wellknown2.GatewayGVK,
-	wellknown2.ListenerSetGVK,
-	wellknown2.ServiceGVK,
-	wellknown2.ServiceEntryGVK,
+	wellknown.GatewayGVK,
+	wellknown.ListenerSetGVK,
+	wellknown.ServiceGVK,
+	wellknown.ServiceEntryGVK,
 )
 
 // NormalizeReference normalizes group and kind references to a standard GVK format.
@@ -711,7 +711,7 @@ func NormalizeReference(group *gwv1.Group, kind *gwv1.Kind, defaultGVK schema.Gr
 
 // ToInternalParentReference converts a gwv1.ParentReference to a TypedNamespacedName.
 func ToInternalParentReference(p gwv1.ParentReference, localNamespace string) (utils.TypedNamespacedName, error) {
-	ref := NormalizeReference(p.Group, p.Kind, wellknown2.GatewayGVK)
+	ref := NormalizeReference(p.Group, p.Kind, wellknown.GatewayGVK)
 	if !allowedParentReferences.Contains(ref) {
 		return utils.TypedNamespacedName{}, fmt.Errorf("unsupported Parent: %v/%v", p.Group, p.Kind)
 	}
@@ -736,7 +736,7 @@ func ReferenceAllowed(
 	hostnames []gwv1.Hostname,
 	localNamespace string,
 ) *ParentError {
-	if parentRef.Kind == wellknown2.ServiceGVK.Kind {
+	if parentRef.Kind == wellknown.ServiceGVK.Kind {
 		key := parentRef.Namespace + "/" + parentRef.Name
 		svc := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Services, krt.FilterKey(key)))
 
@@ -747,7 +747,7 @@ func ReferenceAllowed(
 				Message: fmt.Sprintf("parent service: %q not found", parentRef.Name),
 			}
 		}
-	} else if parentRef.Kind == wellknown2.ServiceEntryGVK.Kind {
+	} else if parentRef.Kind == wellknown.ServiceEntryGVK.Kind {
 		// check that the referenced svc entry exists
 		key := parentRef.Namespace + "/" + parentRef.Name
 		svcEntry := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.ServiceEntries, krt.FilterKey(key)))
@@ -1358,8 +1358,8 @@ func buildCaCertificateReference(
 	}
 
 	switch NormalizeReference(&ref.Group, &ref.Kind, schema.GroupVersionKind{}) {
-	case wellknown2.ConfigMapGVK:
-		res.Kind = wellknown2.ConfigMapGVK.Kind
+	case wellknown.ConfigMapGVK:
+		res.Kind = wellknown.ConfigMapGVK.Kind
 		cm := ptr.Flatten(krt.FetchOne(ctx, configMaps, krt.FilterObjectName(res.Source)))
 		if cm == nil {
 			return nil, &ConfigError{
@@ -1375,8 +1375,8 @@ func buildCaCertificateReference(
 			}
 		}
 		res.Info.CaCert = certInfo.Cert
-	case wellknown2.SecretGVK:
-		res.Kind = wellknown2.SecretGVK.Kind
+	case wellknown.SecretGVK:
+		res.Kind = wellknown.SecretGVK.Kind
 		scrt := ptr.Flatten(krt.FetchOne(ctx, secrets, krt.FilterObjectName(res.Source)))
 		if scrt == nil {
 			return nil, &ConfigError{
@@ -1414,7 +1414,7 @@ func buildSecretReference(
 	gw controllers.Object,
 	secrets krt.Collection[*corev1.Secret],
 ) (*SecretReference, *ConfigError) {
-	if NormalizeReference(ref.Group, ref.Kind, wellknown2.SecretGVK) != wellknown2.SecretGVK {
+	if NormalizeReference(ref.Group, ref.Kind, wellknown.SecretGVK) != wellknown.SecretGVK {
 		return nil, &ConfigError{Reason: InvalidTLS, Message: fmt.Sprintf("invalid certificate reference %v, only secret is allowed", objectReferenceString(ref))}
 	}
 
@@ -1439,7 +1439,7 @@ func buildSecretReference(
 	}
 	res := SecretReference{
 		Source: secret,
-		Kind:   wellknown2.SecretGVK.Kind,
+		Kind:   wellknown.SecretGVK.Kind,
 		Info: TLSInfo{
 			Cert: certInfo.Cert,
 			Key:  certInfo.Key},
@@ -1549,15 +1549,15 @@ func toNamespaceSet(name string, labels map[string]string) klabels.Set {
 func GetCommonRouteInfo(spec any) ([]gwv1.ParentReference, []gwv1.Hostname, schema.GroupVersionKind) {
 	switch t := spec.(type) {
 	case *gwv1a2.TCPRoute:
-		return t.Spec.ParentRefs, nil, wellknown2.TCPRouteGVK
+		return t.Spec.ParentRefs, nil, wellknown.TCPRouteGVK
 	case *gwv1.TLSRoute:
-		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown2.TLSRouteGVK
+		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown.TLSRouteGVK
 	case *gwv1.HTTPRoute:
-		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown2.HTTPRouteGVK
+		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown.HTTPRouteGVK
 	case *gwv1b1.HTTPRoute:
-		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown2.HTTPRouteGVK
+		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown.HTTPRouteGVK
 	case *gwv1.GRPCRoute:
-		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown2.GRPCRouteGVK
+		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown.GRPCRouteGVK
 	default:
 		log.Fatalf("unknown type %T", t)
 		return nil, nil, schema.GroupVersionKind{}
@@ -1599,16 +1599,16 @@ func routeGroupKindEqual(rgk1, rgk2 gwv1.RouteGroupKind) bool {
 }
 
 func getGroup(rgk gwv1.RouteGroupKind) gwv1.Group {
-	return ptr.OrDefault(rgk.Group, wellknown2.GatewayGroup)
+	return ptr.OrDefault(rgk.Group, wellknown.GatewayGroup)
 }
 
 // We can use istio's once they bump to v1 GW API
 func GvkFromObject(obj any) schema.GroupVersionKind {
 	switch obj.(type) {
 	case *gwv1.Gateway:
-		return wellknown2.GatewayGVK
+		return wellknown.GatewayGVK
 	case *gwv1.ListenerSet:
-		return wellknown2.ListenerSetGVK
+		return wellknown.ListenerSetGVK
 	default:
 		panic("Uknown GVK")
 	}

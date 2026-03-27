@@ -1,12 +1,13 @@
 package kubeutils
 
 import (
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 func NamespacedNameFrom(obj client.Object) types.NamespacedName {

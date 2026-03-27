@@ -14,7 +14,6 @@ import (
 	stdatomic "sync/atomic"
 	"time"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/syncer/nack"
 	envoycorev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/google/uuid"
@@ -43,6 +42,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/metrics"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/nack"
 )
 
 var (

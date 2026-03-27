@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"github.com/google/cel-go/cel"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -36,6 +35,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 const (
@@ -91,7 +91,7 @@ func NewAgentPlugin(agw *AgwCollections) AgwPlugin {
 	})
 	return AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]PolicyPlugin{
-			wellknown2.AgentgatewayPolicyGVK.GroupKind(): {
+			wellknown.AgentgatewayPolicyGVK.GroupKind(): {
 				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy]) {
 					policyStatusCol, policyCol := krt.NewStatusManyCollection(agw.AgentgatewayPolicies, func(krtctx krt.HandlerContext, policyCR *agentgateway.AgentgatewayPolicy) (
 						*gwv1.PolicyStatus,
@@ -182,7 +182,7 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 		logger.Warn("failed to resolve one or more ancestor refs", "errors", attachmentErrors)
 		ancestors = append(ancestors, gwv1.PolicyAncestorStatus{
 			AncestorRef: gwv1.ParentReference{
-				Group: ptr.Of(gwv1.Group(wellknown2.AgentgatewayPolicyGVK.Group)),
+				Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayPolicyGVK.Group)),
 				Name:  "StatusSummary",
 			},
 			ControllerName: gwv1.GatewayController(agw.ControllerName),
@@ -312,8 +312,8 @@ func resolvePolicyAncestorRefs(
 		refs = append(refs, gwv1.ParentReference{
 			Name:      gwv1.ObjectName(gatewayTarget.Name),
 			Namespace: ptr.Of(gwv1.Namespace(gatewayTarget.Namespace)),
-			Group:     ptr.Of(gwv1.Group(wellknown2.GatewayGVK.Group)),
-			Kind:      ptr.Of(gwv1.Kind(wellknown2.GatewayGVK.Kind)),
+			Group:     ptr.Of(gwv1.Group(wellknown.GatewayGVK.Group)),
+			Kind:      ptr.Of(gwv1.Kind(wellknown.GatewayGVK.Kind)),
 		})
 	}
 	slices.SortStableFunc(refs, func(a, b gwv1.ParentReference) int {
@@ -505,7 +505,7 @@ func processRetriesPolicy(retry *agentgateway.Retry, basePolicyName string, poli
 
 	retryPolicy := &api.Policy{
 		Key:  basePolicyName + retryPolicySuffix,
-		Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_Retry{Retry: translatedRetry},
@@ -536,7 +536,7 @@ func processDirectResponse(directResponse *agentgateway.DirectResponse, basePoli
 
 	directRespPolicy := &api.Policy{
 		Key:  basePolicyName + directResponseSuffix,
-		Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: tp,
 		},
@@ -590,7 +590,7 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 
 	jwtPolicy := &api.Policy{
 		Key:  basePolicyName + jwtPolicySuffix,
-		Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Phase: phase(policyPhase),
@@ -642,7 +642,7 @@ func processBasicAuthenticationPolicy(
 	}
 	basicAuthPolicy := &api.Policy{
 		Key:  basePolicyName + basicAuthPolicySuffix,
-		Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Phase: phase(policyPhase),
@@ -728,7 +728,7 @@ func processAPIKeyAuthenticationPolicy(
 	})
 	apiKeyPolicy := &api.Policy{
 		Key:  basePolicyName + apiKeyPolicySuffix,
-		Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Phase: phase(policyPhase),
@@ -747,7 +747,7 @@ func processAPIKeyAuthenticationPolicy(
 func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string, policy types.NamespacedName) *api.Policy {
 	timeoutPolicy := &api.Policy{
 		Key:  basePolicyName + timeoutPolicySuffix,
-		Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_Timeout{Timeout: &api.Timeout{
@@ -775,7 +775,7 @@ func processHostnameRewritePolicy(hnrw *agentgateway.HostnameRewrite, basePolicy
 
 	p := &api.Policy{
 		Key:  basePolicyName + hostnameRewritePolicySuffix,
-		Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_HostRewrite_{HostRewrite: r},
@@ -797,7 +797,7 @@ func processHeaderModifierPolicy(headerModifier *shared.HeaderModifiers, basePol
 	if headerModifier.Request != nil {
 		headerModifierPolicyRequest = &api.Policy{
 			Key:  basePolicyName + headerModifierPolicySuffix,
-			Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+			Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 			Kind: &api.Policy_Traffic{
 				Traffic: &api.TrafficPolicySpec{
 					Kind: &api.TrafficPolicySpec_RequestHeaderModifier{RequestHeaderModifier: &api.HeaderModifier{
@@ -817,7 +817,7 @@ func processHeaderModifierPolicy(headerModifier *shared.HeaderModifiers, basePol
 	if headerModifier.Response != nil {
 		headerModifierPolicyResponse = &api.Policy{
 			Key:  basePolicyName + respHeaderModifierPolicySuffix,
-			Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+			Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 			Kind: &api.Policy_Traffic{
 				Traffic: &api.TrafficPolicySpec{
 					Kind: &api.TrafficPolicySpec_ResponseHeaderModifier{ResponseHeaderModifier: &api.HeaderModifier{
@@ -840,7 +840,7 @@ func processHeaderModifierPolicy(headerModifier *shared.HeaderModifiers, basePol
 func processCorsPolicy(cors *agentgateway.CORS, basePolicyName string, policy types.NamespacedName) *api.Policy {
 	corsPolicy := &api.Policy{
 		Key:  basePolicyName + corsPolicySuffix,
-		Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_Cors{Cors: &api.CORS{
@@ -931,7 +931,7 @@ func processExtAuthPolicy(
 
 	extauthPolicy := &api.Policy{
 		Key:  basePolicyName + extauthPolicySuffix,
-		Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Phase: phase(policyPhase),
@@ -971,7 +971,7 @@ func processExtProcPolicy(
 
 	extprocPolicy := &api.Policy{
 		Key:  basePolicyName + extprocPolicySuffix,
-		Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Phase: phase(policyPhase),
@@ -1068,7 +1068,7 @@ func processAuthorizationPolicy(
 
 	pol := &api.Policy{
 		Key:  basePolicyName + rbacPolicySuffix,
-		Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_Authorization{
@@ -1157,7 +1157,7 @@ func processLocalRateLimitPolicy(limits []agentgateway.LocalRateLimit, basePolic
 
 	localRateLimitPolicy := &api.Policy{
 		Key:  basePolicyName + localRateLimitPolicySuffix,
-		Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_LocalRateLimit_{
@@ -1196,7 +1196,7 @@ func processGlobalRateLimitPolicy(
 	// Build the RemoteRateLimit policy that agentgateway expects
 	p := &api.Policy{
 		Key:  basePolicyName + globalRateLimitPolicySuffix,
-		Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_RemoteRateLimit_{
@@ -1254,7 +1254,7 @@ func remoteRateLimitFailureMode(mode agentgateway.FailureMode) api.TrafficPolicy
 }
 
 func buildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS string) (*api.BackendReference, error) {
-	kind := ptr.OrDefault(ref.Kind, wellknown2.ServiceKind)
+	kind := ptr.OrDefault(ref.Kind, wellknown.ServiceKind)
 	group := ptr.OrDefault(ref.Group, "")
 	gk := schema.GroupKind{
 		Group: string(group),
@@ -1284,7 +1284,7 @@ func toJSONValue(j apiextensionsv1.JSON) (string, error) {
 func processCSRFPolicy(csrf *agentgateway.CSRF, basePolicyName string, policy types.NamespacedName) *api.Policy {
 	csrfPolicy := &api.Policy{
 		Key:  basePolicyName + csrfPolicySuffix,
-		Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_Csrf{
@@ -1319,7 +1319,7 @@ func processTransformationPolicy(
 	if convertedResp != nil || convertedReq != nil {
 		transformationPolicy := &api.Policy{
 			Key:  basePolicyName + transformationPolicySuffix,
-			Name: TypedResourceFromName(wellknown2.AgentgatewayPolicyGVK.Kind, policy),
+			Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 			Kind: &api.Policy_Traffic{
 				Traffic: &api.TrafficPolicySpec{
 					Phase: phase(policyPhase),
@@ -1488,7 +1488,7 @@ func BackendReferencesFromPolicy(policy *agentgateway.AgentgatewayPolicy) []*Pol
 	s := policy.Spec
 	self := utils.TypedNamespacedName{
 		NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name},
-		Kind:           wellknown2.AgentgatewayPolicyGVK.Kind,
+		Kind:           wellknown.AgentgatewayPolicyGVK.Kind,
 	}
 	app := func(ref gwv1.BackendObjectReference) {
 		for _, tgt := range s.TargetRefs {
@@ -1499,7 +1499,7 @@ func BackendReferencesFromPolicy(policy *agentgateway.AgentgatewayPolicy) []*Pol
 				},
 				Backend: utils.TypedNamespacedName{
 					NamespacedName: types.NamespacedName{Namespace: DefaultString(ref.Namespace, policy.Namespace), Name: string(ref.Name)},
-					Kind:           DefaultString(ref.Kind, wellknown2.ServiceKind),
+					Kind:           DefaultString(ref.Kind, wellknown.ServiceKind),
 				},
 				Source: self,
 			})

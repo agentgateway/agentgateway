@@ -3,7 +3,6 @@ package collections
 import (
 	"fmt"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
@@ -14,6 +13,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 type TargetRefIndexKey struct {

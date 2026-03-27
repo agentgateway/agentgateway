@@ -1,13 +1,14 @@
 package deployer
 
 import (
+	"context"
+	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
 
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
-	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
-	"github.com/agentgateway/agentgateway/controller/pkg/helm"
 	"helm.sh/helm/v3/pkg/chart"
 	"istio.io/istio/pkg/kube/kclient"
 	appsv1 "k8s.io/api/apps/v1"
@@ -17,11 +18,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	"context"
-	"crypto/sha256"
-	"errors"
-	"log/slog"
-	"strings"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
+	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
+	"github.com/agentgateway/agentgateway/controller/pkg/helm"
 )
 
 // Inputs is the set of options used to configure gateway/inference pool deployment.

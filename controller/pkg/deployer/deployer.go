@@ -9,7 +9,6 @@ import (
 	"io"
 	"slices"
 
-	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/storage"
@@ -28,6 +27,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 var logger = logging.New("deployer")
@@ -336,7 +336,7 @@ func (d *Deployer) DeployObjsWithSource(ctx context.Context, objs []client.Objec
 // resources from persisting when configuration changes.
 func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Object, desiredObjs []client.Object) error {
 	ownerNamespace := owner.GetNamespace()
-	labelSelector := fmt.Sprintf("%s=%s", wellknown2.GatewayNameLabel, owner.GetName())
+	labelSelector := fmt.Sprintf("%s=%s", wellknown.GatewayNameLabel, owner.GetName())
 
 	// Build map of desired resources by GVK
 	desiredByGVK := make(map[schema.GroupVersionKind]map[string]bool)
@@ -350,9 +350,9 @@ func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Objec
 
 	// Check each target GVK for resources to prune
 	targetGVKs := []schema.GroupVersionKind{
-		wellknown2.PodDisruptionBudgetGVK,
-		wellknown2.HorizontalPodAutoscalerGVK,
-		wellknown2.VerticalPodAutoscalerGVK,
+		wellknown.PodDisruptionBudgetGVK,
+		wellknown.HorizontalPodAutoscalerGVK,
+		wellknown.VerticalPodAutoscalerGVK,
 	}
 
 	var pruningErrors []error
@@ -416,7 +416,7 @@ func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Objec
 
 func (d *Deployer) gvkToGVR(gvk schema.GroupVersionKind) (schema.GroupVersionResource, error) {
 	// 1. Try our lib
-	gvr, err := wellknown2.GVKToGVR(gvk)
+	gvr, err := wellknown.GVKToGVR(gvk)
 	if err == nil {
 		return gvr, nil
 	}

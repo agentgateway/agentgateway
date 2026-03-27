@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"iter"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
-	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	networkingclient "istio.io/client-go/pkg/apis/networking/v1"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/controllers"
@@ -33,6 +31,8 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 // AgwRouteCollection creates the collection of translated Routes
@@ -115,10 +115,10 @@ func AgwRouteCollection(
 	routes := krt.JoinCollection([]krt.Collection[agwir.AgwResource]{httpRoutes, grpcRoutes, tcpRoutes, tlsRoutes}, krtopts.ToOptions("ADPRoutes")...)
 
 	routeAttachments := krt.JoinCollection([]krt.Collection[*plugins.RouteAttachment]{
-		gatewayRouteAttachmentCountCollection(inputs, httpRouteCol, wellknown2.HTTPRouteGVK, krtopts),
-		gatewayRouteAttachmentCountCollection(inputs, grpcRouteCol, wellknown2.GRPCRouteGVK, krtopts),
-		gatewayRouteAttachmentCountCollection(inputs, tlsRouteCol, wellknown2.TLSRouteGVK, krtopts),
-		gatewayRouteAttachmentCountCollection(inputs, tcpRouteCol, wellknown2.TCPRouteGVK, krtopts),
+		gatewayRouteAttachmentCountCollection(inputs, httpRouteCol, wellknown.HTTPRouteGVK, krtopts),
+		gatewayRouteAttachmentCountCollection(inputs, grpcRouteCol, wellknown.GRPCRouteGVK, krtopts),
+		gatewayRouteAttachmentCountCollection(inputs, tlsRouteCol, wellknown.TLSRouteGVK, krtopts),
+		gatewayRouteAttachmentCountCollection(inputs, tcpRouteCol, wellknown.TCPRouteGVK, krtopts),
 	})
 
 	ancestorBackends := krt.JoinCollection([]krt.Collection[*utils.AncestorBackend]{
@@ -370,7 +370,7 @@ func buildAttachedRoutesMapAllowed(
 	seen := make(map[attachKey]struct{})
 
 	for _, parent := range allowedParents {
-		if parent.ParentKey.Kind != wellknown2.GatewayGVK.Kind {
+		if parent.ParentKey.Kind != wellknown.GatewayGVK.Kind {
 			continue
 		}
 		gw := types.NamespacedName{Namespace: parent.ParentKey.Namespace, Name: parent.ParentKey.Name}
@@ -440,7 +440,7 @@ func createRouteCollectionGeneric[T controllers.Object, R comparable, ST any](
 func ListenersPerGateway(parentRefs []RouteParentReference) map[types.NamespacedName]map[string]struct{} {
 	l := make(map[types.NamespacedName]map[string]struct{})
 	for _, p := range parentRefs {
-		if p.ParentKey.Kind != wellknown2.GatewayGVK.Kind {
+		if p.ParentKey.Kind != wellknown.GatewayGVK.Kind {
 			continue
 		}
 		gw := types.NamespacedName{Namespace: p.ParentKey.Namespace, Name: p.ParentKey.Name}
@@ -572,7 +572,7 @@ func gatewayRouteAttachmentCountCollection[T controllers.Object](
 
 		parentRefs := extractParentReferenceInfo(ctx, inputs.RouteParents, obj)
 		return slices.MapFilter(FilteredReferences(parentRefs), func(e RouteParentReference) **plugins.RouteAttachment {
-			if e.ParentKey.Kind != wellknown2.GatewayGVK.Kind && e.ParentKey.Kind != wellknown2.ListenerSetGVK.Kind {
+			if e.ParentKey.Kind != wellknown.GatewayGVK.Kind && e.ParentKey.Kind != wellknown.ListenerSetGVK.Kind {
 				return nil
 			}
 			return ptr.Of(&plugins.RouteAttachment{
@@ -629,11 +629,11 @@ func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext,
 func GetBackendRef[I any](spec I) (schema.GroupVersionKind, *gwv1.Namespace, gwv1.ObjectName) {
 	switch t := any(spec).(type) {
 	case gwv1.HTTPBackendRef:
-		return NormalizeReference(t.Group, t.Kind, wellknown2.ServiceGVK), t.Namespace, t.Name
+		return NormalizeReference(t.Group, t.Kind, wellknown.ServiceGVK), t.Namespace, t.Name
 	case gwv1.GRPCBackendRef:
-		return NormalizeReference(t.Group, t.Kind, wellknown2.ServiceGVK), t.Namespace, t.Name
+		return NormalizeReference(t.Group, t.Kind, wellknown.ServiceGVK), t.Namespace, t.Name
 	case gwv1.BackendRef:
-		return NormalizeReference(t.Group, t.Kind, wellknown2.ServiceGVK), t.Namespace, t.Name
+		return NormalizeReference(t.Group, t.Kind, wellknown.ServiceGVK), t.Namespace, t.Name
 	default:
 		log.Fatalf("unknown GetBackendRef type %T", t)
 		return schema.GroupVersionKind{}, nil, ""

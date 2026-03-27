@@ -7,10 +7,6 @@ import (
 	"net"
 	"sync"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/admin"
-	"github.com/agentgateway/agentgateway/controller/pkg/controller"
-	agentgatewaysyncer2 "github.com/agentgateway/agentgateway/controller/pkg/syncer"
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"github.com/go-logr/logr"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/security"
@@ -26,19 +22,23 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
+	"github.com/agentgateway/agentgateway/controller/pkg/admin"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
 	agentjwksstore "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwksstore"
 	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/common"
+	"github.com/agentgateway/agentgateway/controller/pkg/controller"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/metrics"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
+	agentgatewaysyncer2 "github.com/agentgateway/agentgateway/controller/pkg/syncer"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/namespaces"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 type Server interface {

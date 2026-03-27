@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/util/sets"
@@ -15,6 +14,7 @@ import (
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 type ReferenceTypes struct {
@@ -47,23 +47,23 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 		PolicyTargets: func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) (*api.PolicyTarget, bool) {
 			key := namespace + "/" + string(name)
 			switch gk {
-			case wellknown2.GatewayGVK.GroupKind():
+			case wellknown.GatewayGVK.GroupKind():
 				return &api.PolicyTarget{
 					Kind: utils.GatewayTarget(namespace, string(name), sectionName),
 				}, ptr.Flatten(krt.FetchOne(krtctx, agw.Gateways, krt.FilterKey(key))) != nil
-			case wellknown2.HTTPRouteGVK.GroupKind():
+			case wellknown.HTTPRouteGVK.GroupKind():
 				return &api.PolicyTarget{
-					Kind: utils.RouteTarget(namespace, string(name), wellknown2.HTTPRouteGVK.Kind, sectionName),
+					Kind: utils.RouteTarget(namespace, string(name), wellknown.HTTPRouteGVK.Kind, sectionName),
 				}, ptr.Flatten(krt.FetchOne(krtctx, agw.HTTPRoutes, krt.FilterKey(key))) != nil
-			case wellknown2.GRPCRouteGVK.GroupKind():
+			case wellknown.GRPCRouteGVK.GroupKind():
 				return &api.PolicyTarget{
-					Kind: utils.RouteTarget(namespace, string(name), wellknown2.GRPCRouteGVK.Kind, sectionName),
+					Kind: utils.RouteTarget(namespace, string(name), wellknown.GRPCRouteGVK.Kind, sectionName),
 				}, ptr.Flatten(krt.FetchOne(krtctx, agw.GRPCRoutes, krt.FilterKey(key))) != nil
-			case wellknown2.AgentgatewayBackendGVK.GroupKind():
+			case wellknown.AgentgatewayBackendGVK.GroupKind():
 				return &api.PolicyTarget{
 					Kind: utils.BackendTarget(namespace, string(name), sectionName),
 				}, ptr.Flatten(krt.FetchOne(krtctx, agw.Backends, krt.FilterKey(key))) != nil
-			case wellknown2.ServiceGVK.GroupKind():
+			case wellknown.ServiceGVK.GroupKind():
 				return &api.PolicyTarget{
 					Kind: utils.ServiceTarget(namespace, string(name), sectionName),
 				}, ptr.Flatten(krt.FetchOne(krtctx, agw.Services, krt.FilterKey(key))) != nil
@@ -74,7 +74,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 		PolicyBackend: func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error) {
 			ns := string(ptr.OrDefault(namespace, gwv1.Namespace(defaultNamespace)))
 			switch gk {
-			case wellknown2.ServiceGVK.GroupKind():
+			case wellknown.ServiceGVK.GroupKind():
 				if strings.Contains(string(name), ".") {
 					return nil, &BackendReferenceError{
 						Reason:  BackendReferenceErrorReasonUnsupportedValue,
@@ -104,7 +104,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 					},
 					Port: uint32(*port), //nolint:gosec // G115: validated 1-65535
 				}, nil
-			case wellknown2.AgentgatewayBackendGVK.GroupKind():
+			case wellknown.AgentgatewayBackendGVK.GroupKind():
 				key := ns + "/" + string(name)
 				be := ptr.Flatten(krt.FetchOne(krtctx, agw.Backends, krt.FilterKey(key)))
 				if be == nil {
@@ -128,7 +128,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 		RouteBackend: func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error) {
 			ns := string(ptr.OrDefault(namespace, gwv1.Namespace(defaultNamespace)))
 			switch gk {
-			case wellknown2.InferencePoolGVK.GroupKind():
+			case wellknown.InferencePoolGVK.GroupKind():
 				if strings.Contains(string(name), ".") {
 					return nil, &BackendReferenceError{
 						Reason:  BackendReferenceErrorReasonUnsupportedValue,
@@ -152,7 +152,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 					},
 					Port: uint32(svc.Spec.TargetPorts[0].Number), //nolint:gosec // G115: validated 1-65535
 				}, nil
-			case wellknown2.HostnameGVK.GroupKind():
+			case wellknown.HostnameGVK.GroupKind():
 				if port == nil {
 					return nil, &BackendReferenceError{
 						Reason:  BackendReferenceErrorReasonUnsupportedValue,
@@ -174,7 +174,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 					},
 					Port: uint32(*port), //nolint:gosec // G115: validated 1-65535
 				}, nil
-			case wellknown2.ServiceGVK.GroupKind():
+			case wellknown.ServiceGVK.GroupKind():
 				if strings.Contains(string(name), ".") {
 					return nil, &BackendReferenceError{
 						Reason:  BackendReferenceErrorReasonUnsupportedValue,
@@ -206,7 +206,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 					}
 				}
 				return backendRef, nil
-			case wellknown2.AgentgatewayBackendGVK.GroupKind():
+			case wellknown.AgentgatewayBackendGVK.GroupKind():
 				key := ns + "/" + string(name)
 				be := ptr.Flatten(krt.FetchOne(krtctx, agw.Backends, krt.FilterKey(key)))
 				if be == nil {
@@ -242,7 +242,7 @@ type RouteAttachment struct {
 
 func (r RouteAttachment) ResourceName() string {
 	to := r.To.String()
-	if r.To.Kind != wellknown2.GatewayGVK.Kind {
+	if r.To.Kind != wellknown.GatewayGVK.Kind {
 		to += "/" + r.Gateway.String()
 	}
 	return r.From.Kind + "/" + r.From.NamespacedName.String() + "->" + to + "/" + r.ListenerName
@@ -295,10 +295,10 @@ type ReferenceIndex struct {
 
 func (p ReferenceIndex) LookupGatewaysForTarget(ctx krt.HandlerContext, object utils.TypedNamespacedName) sets.Set[types.NamespacedName] {
 	switch object.Kind {
-	case wellknown2.GatewayGVK.Kind:
+	case wellknown.GatewayGVK.Kind:
 		// Trivial case
 		return sets.New(object.NamespacedName)
-	case wellknown2.HTTPRouteGVK.Kind, wellknown2.GRPCRouteGVK.Kind, wellknown2.TCPRouteGVK.Kind, wellknown2.TLSRouteGVK.Kind:
+	case wellknown.HTTPRouteGVK.Kind, wellknown.GRPCRouteGVK.Kind, wellknown.TCPRouteGVK.Kind, wellknown.TLSRouteGVK.Kind:
 		gateways := sets.New[types.NamespacedName]()
 		for _, ancestor := range krt.FetchOne(ctx, p.attachments, krt.FilterKey(object.String())).Objects {
 			gateways.Insert(ancestor.Gateway)

@@ -5,8 +5,6 @@ import (
 	"net"
 	"testing"
 
-	agentgatewaysyncer2 "github.com/agentgateway/agentgateway/controller/pkg/syncer"
-	"github.com/agentgateway/agentgateway/controller/pkg/syncer/krtxds"
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -24,6 +22,8 @@ import (
 	"github.com/agentgateway/agentgateway/api"
 	agwir "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
+	agentgatewaysyncer2 "github.com/agentgateway/agentgateway/controller/pkg/syncer"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/krtxds"
 )
 
 type Fake struct {

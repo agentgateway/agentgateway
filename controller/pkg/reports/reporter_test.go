@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/test/util/assert"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 const fakeCondition = "kgateway.dev/SomeCondition"

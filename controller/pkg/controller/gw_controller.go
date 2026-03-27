@@ -9,7 +9,6 @@ import (
 	"math"
 	"slices"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/config/schema/gvr"
 	"istio.io/istio/pkg/kube"
@@ -38,6 +37,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 var logger = logging.New("gateway-controller")

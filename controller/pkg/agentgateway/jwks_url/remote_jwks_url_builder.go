@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
@@ -16,6 +15,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	krtpkg "github.com/agentgateway/agentgateway/controller/pkg/utils/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 type JwksUrlBuilder interface {
@@ -81,7 +81,7 @@ func (f *defaultJwksUrlFactory) BuildJwksUrlAndTlsConfig(krtctx krt.HandlerConte
 	path := strings.TrimPrefix(remoteProvider.JwksPath, "/")
 
 	switch string(*ref.Kind) {
-	case wellknown2.AgentgatewayBackendGVK.Kind:
+	case wellknown.AgentgatewayBackendGVK.Kind:
 		backendRef := types.NamespacedName{
 			Name:      refName,
 			Namespace: refNamespace,
@@ -132,7 +132,7 @@ func (f *defaultJwksUrlFactory) BuildJwksUrlAndTlsConfig(krtctx krt.HandlerConte
 		}
 
 		return url, tlsConfig, nil
-	case wellknown2.ServiceKind:
+	case wellknown.ServiceKind:
 		agwPolicy := ptr.Flatten(krt.FetchOne(krtctx, f.agentgatewayPolicies, krt.FilterIndex(f.policiesByTargetRefIndex, TargetRefIndexKey{
 			Name:      refName,
 			Kind:      string(*ref.Kind),

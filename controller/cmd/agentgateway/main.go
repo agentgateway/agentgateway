@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/setup"
 	"github.com/spf13/cobra"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/setup"
 	"github.com/agentgateway/agentgateway/controller/pkg/version"
 )
 

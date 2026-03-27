@@ -5,7 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/test/util/assert"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -21,6 +20,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 var scheme = schemes.DefaultScheme()

@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
@@ -16,6 +15,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
 )
 
 func TestReferences(t *testing.T) {

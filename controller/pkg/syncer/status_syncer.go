@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	status2 "github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
-	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"github.com/avast/retry-go/v4"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/kclient"
@@ -23,7 +21,9 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
+	status2 "github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/stopwatch"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 var _ manager.LeaderElectionRunnable = &AgentGwStatusSyncer{}
@@ -86,7 +86,7 @@ func NewAgwStatusSyncer(
 		agentgatewayPolicies: StatusSyncer[*agentgateway.AgentgatewayPolicy, gwv1.PolicyStatus]{
 			Name:           "agentgatewayPolicy",
 			ControllerName: controllerName,
-			Client:         kclient.NewFilteredDelayed[*agentgateway.AgentgatewayPolicy](client, wellknown2.AgentgatewayPolicyGVR, f),
+			Client:         kclient.NewFilteredDelayed[*agentgateway.AgentgatewayPolicy](client, wellknown.AgentgatewayPolicyGVR, f),
 			Build: func(om metav1.ObjectMeta, s gwv1.PolicyStatus) *agentgateway.AgentgatewayPolicy {
 				return &agentgateway.AgentgatewayPolicy{
 					ObjectMeta: om,
@@ -99,7 +99,7 @@ func NewAgwStatusSyncer(
 		agentgatewayBackends: StatusSyncer[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus]{
 			Name:           "agentgatewayBackend",
 			ControllerName: controllerName,
-			Client:         kclient.NewFilteredDelayed[*agentgateway.AgentgatewayBackend](client, wellknown2.AgentgatewayBackendGVR, f),
+			Client:         kclient.NewFilteredDelayed[*agentgateway.AgentgatewayBackend](client, wellknown.AgentgatewayBackendGVR, f),
 			Build: func(om metav1.ObjectMeta, s agentgateway.AgentgatewayBackendStatus) *agentgateway.AgentgatewayBackend {
 				return &agentgateway.AgentgatewayBackend{
 					ObjectMeta: om,
@@ -110,7 +110,7 @@ func NewAgwStatusSyncer(
 		httpRoutes: StatusSyncer[*gwv1.HTTPRoute, *gwv1.HTTPRouteStatus]{
 			Name:           "httpRoute",
 			ControllerName: controllerName,
-			Client:         kclient.NewFilteredDelayed[*gwv1.HTTPRoute](client, wellknown2.HTTPRouteGVR, f),
+			Client:         kclient.NewFilteredDelayed[*gwv1.HTTPRoute](client, wellknown.HTTPRouteGVR, f),
 			Build: func(om metav1.ObjectMeta, s *gwv1.HTTPRouteStatus) *gwv1.HTTPRoute {
 				return &gwv1.HTTPRoute{
 					ObjectMeta: om,
@@ -121,7 +121,7 @@ func NewAgwStatusSyncer(
 		grpcRoutes: StatusSyncer[*gwv1.GRPCRoute, *gwv1.GRPCRouteStatus]{
 			Name:           "grpcRoute",
 			ControllerName: controllerName,
-			Client:         kclient.NewFilteredDelayed[*gwv1.GRPCRoute](client, wellknown2.GRPCRouteGVR, f),
+			Client:         kclient.NewFilteredDelayed[*gwv1.GRPCRoute](client, wellknown.GRPCRouteGVR, f),
 			Build: func(om metav1.ObjectMeta, s *gwv1.GRPCRouteStatus) *gwv1.GRPCRoute {
 				return &gwv1.GRPCRoute{
 					ObjectMeta: om,
@@ -132,7 +132,7 @@ func NewAgwStatusSyncer(
 		tlsRoutes: StatusSyncer[*gwv1.TLSRoute, *gwv1.TLSRouteStatus]{
 			Name:           "tlsRoute",
 			ControllerName: controllerName,
-			Client:         kclient.NewFilteredDelayed[*gwv1.TLSRoute](client, wellknown2.TLSRouteGVR, f),
+			Client:         kclient.NewFilteredDelayed[*gwv1.TLSRoute](client, wellknown.TLSRouteGVR, f),
 			Build: func(om metav1.ObjectMeta, s *gwv1.TLSRouteStatus) *gwv1.TLSRoute {
 				return &gwv1.TLSRoute{
 					ObjectMeta: om,
@@ -143,7 +143,7 @@ func NewAgwStatusSyncer(
 		tcpRoutes: StatusSyncer[*gwv1a2.TCPRoute, *gwv1a2.TCPRouteStatus]{
 			Name:           "tcpRoute",
 			ControllerName: controllerName,
-			Client:         kclient.NewFilteredDelayed[*gwv1a2.TCPRoute](client, wellknown2.TCPRouteGVR, f),
+			Client:         kclient.NewFilteredDelayed[*gwv1a2.TCPRoute](client, wellknown.TCPRouteGVR, f),
 			Build: func(om metav1.ObjectMeta, s *gwv1a2.TCPRouteStatus) *gwv1a2.TCPRoute {
 				return &gwv1a2.TCPRoute{
 					ObjectMeta: om,
@@ -154,7 +154,7 @@ func NewAgwStatusSyncer(
 		listenerSets: StatusSyncer[*gwv1.ListenerSet, *gwv1.ListenerSetStatus]{
 			Name:           "listenerSet",
 			ControllerName: controllerName,
-			Client:         kclient.NewFilteredDelayed[*gwv1.ListenerSet](client, wellknown2.ListenerSetGVR, f),
+			Client:         kclient.NewFilteredDelayed[*gwv1.ListenerSet](client, wellknown.ListenerSetGVR, f),
 			Build: func(om metav1.ObjectMeta, s *gwv1.ListenerSetStatus) *gwv1.ListenerSet {
 				return &gwv1.ListenerSet{
 					ObjectMeta: om,
@@ -165,7 +165,7 @@ func NewAgwStatusSyncer(
 		gateways: StatusSyncer[*gwv1.Gateway, *gwv1.GatewayStatus]{
 			Name:           "gateway",
 			ControllerName: controllerName,
-			Client:         kclient.NewFilteredDelayed[*gwv1.Gateway](client, wellknown2.GatewayGVR, f),
+			Client:         kclient.NewFilteredDelayed[*gwv1.Gateway](client, wellknown.GatewayGVR, f),
 			Build: func(om metav1.ObjectMeta, s *gwv1.GatewayStatus) *gwv1.Gateway {
 				return &gwv1.Gateway{
 					ObjectMeta: om,
@@ -175,7 +175,7 @@ func NewAgwStatusSyncer(
 		},
 		backendTLSPolicies: StatusSyncer[*gwv1.BackendTLSPolicy, gwv1.PolicyStatus]{
 			Name:   "backendTLSPolicy",
-			Client: kclient.NewFilteredDelayed[*gwv1.BackendTLSPolicy](client, wellknown2.BackendTLSPolicyGVR, f),
+			Client: kclient.NewFilteredDelayed[*gwv1.BackendTLSPolicy](client, wellknown.BackendTLSPolicyGVR, f),
 			Build: func(om metav1.ObjectMeta, s gwv1.PolicyStatus) *gwv1.BackendTLSPolicy {
 				return &gwv1.BackendTLSPolicy{
 					ObjectMeta: om,
@@ -187,7 +187,7 @@ func NewAgwStatusSyncer(
 	if enableInference {
 		syncer.inferencePools = StatusSyncer[*inf.InferencePool, inf.InferencePoolStatus]{
 			Name:   "inferencePools",
-			Client: kclient.NewFilteredDelayed[*inf.InferencePool](client, wellknown2.InferencePoolGVR, f),
+			Client: kclient.NewFilteredDelayed[*inf.InferencePool](client, wellknown.InferencePoolGVR, f),
 			Build: func(om metav1.ObjectMeta, s inf.InferencePoolStatus) *inf.InferencePool {
 				return &inf.InferencePool{
 					ObjectMeta: om,
@@ -245,25 +245,25 @@ func (s *AgentGwStatusSyncer) Start(ctx context.Context) error {
 
 func (s *AgentGwStatusSyncer) SyncStatus(ctx context.Context, resource status2.Resource, statusObj any) {
 	switch resource.GroupVersionKind {
-	case wellknown2.GatewayGVK:
+	case wellknown.GatewayGVK:
 		s.gateways.ApplyStatus(ctx, resource, statusObj)
-	case wellknown2.ListenerSetGVK:
+	case wellknown.ListenerSetGVK:
 		s.listenerSets.ApplyStatus(ctx, resource, statusObj)
-	case wellknown2.GRPCRouteGVK:
+	case wellknown.GRPCRouteGVK:
 		s.grpcRoutes.ApplyStatus(ctx, resource, statusObj)
-	case wellknown2.TLSRouteGVK:
+	case wellknown.TLSRouteGVK:
 		s.tlsRoutes.ApplyStatus(ctx, resource, statusObj)
-	case wellknown2.TCPRouteGVK:
+	case wellknown.TCPRouteGVK:
 		s.tcpRoutes.ApplyStatus(ctx, resource, statusObj)
-	case wellknown2.HTTPRouteGVK:
+	case wellknown.HTTPRouteGVK:
 		s.httpRoutes.ApplyStatus(ctx, resource, statusObj)
-	case wellknown2.AgentgatewayPolicyGVK:
+	case wellknown.AgentgatewayPolicyGVK:
 		s.agentgatewayPolicies.ApplyStatus(ctx, resource, statusObj)
-	case wellknown2.AgentgatewayBackendGVK:
+	case wellknown.AgentgatewayBackendGVK:
 		s.agentgatewayBackends.ApplyStatus(ctx, resource, statusObj)
-	case wellknown2.BackendTLSPolicyGVK:
+	case wellknown.BackendTLSPolicyGVK:
 		s.backendTLSPolicies.ApplyStatus(ctx, resource, statusObj)
-	case wellknown2.InferencePoolGVK:
+	case wellknown.InferencePoolGVK:
 		if s.inferencePools.Client != nil {
 			s.inferencePools.ApplyStatus(ctx, resource, statusObj)
 		}

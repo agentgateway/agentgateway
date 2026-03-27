@@ -6,10 +6,6 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/syncer/krtxds"
-	"github.com/agentgateway/agentgateway/controller/pkg/syncer/nack"
-	"github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	securityclient "istio.io/client-go/pkg/apis/security/v1"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube/controller/ambient"
@@ -38,8 +34,12 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/krtxds"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/nack"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
 	krtpkg "github.com/agentgateway/agentgateway/controller/pkg/utils/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 var (

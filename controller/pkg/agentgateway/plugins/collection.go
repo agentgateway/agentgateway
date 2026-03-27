@@ -1,7 +1,6 @@
 package plugins
 
 import (
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	networkingclient "istio.io/client-go/pkg/apis/networking/v1"
 	"istio.io/istio/pkg/config/schema/gvr"
 	istiokube "istio.io/istio/pkg/kube"
@@ -23,6 +22,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	krtpkg "github.com/agentgateway/agentgateway/controller/pkg/utils/krtutil"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 type AgwCollections struct {

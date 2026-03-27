@@ -3,7 +3,6 @@ package nack
 import (
 	"time"
 
-	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/config/schema/gvr"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/kclient"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 var log = logging.New("nack/publisher")
@@ -46,7 +46,7 @@ func NewPublisher(client kube.Client) *Publisher {
 	eventBroadcaster := record.NewBroadcaster()
 	eventRecorder := eventBroadcaster.NewRecorder(
 		schemes.DefaultScheme(),
-		corev1.EventSource{Component: wellknown2.DefaultAgwControllerName},
+		corev1.EventSource{Component: wellknown.DefaultAgwControllerName},
 	)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{
 		Interface: client.Kube().CoreV1().Events(""),
@@ -82,15 +82,15 @@ func (p *Publisher) PublishNack(event *NackEvent) {
 	deployUID = dep.GetUID()
 
 	gatewayRef := &corev1.ObjectReference{
-		Kind:       wellknown2.GatewayKind,
-		APIVersion: wellknown2.GatewayGVK.GroupVersion().String(),
+		Kind:       wellknown.GatewayKind,
+		APIVersion: wellknown.GatewayGVK.GroupVersion().String(),
 		Name:       event.Gateway.Name,
 		Namespace:  event.Gateway.Namespace,
 		UID:        gatewayUID,
 	}
 	deploymentRef := &corev1.ObjectReference{
-		Kind:       wellknown2.DeploymentGVK.Kind,
-		APIVersion: wellknown2.DeploymentGVK.GroupVersion().String(),
+		Kind:       wellknown.DeploymentGVK.Kind,
+		APIVersion: wellknown.DeploymentGVK.GroupVersion().String(),
 		Name:       event.Gateway.Name,
 		Namespace:  event.Gateway.Namespace,
 		UID:        deployUID,

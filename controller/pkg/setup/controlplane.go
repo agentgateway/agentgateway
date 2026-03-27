@@ -8,8 +8,6 @@ import (
 	"math"
 	"net"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/syncer/krtxds"
-	"github.com/agentgateway/agentgateway/controller/pkg/syncer/nack"
 	envoy_service_discovery_v3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
@@ -21,6 +19,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/metrics"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/krtxds"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/nack"
 )
 
 const (

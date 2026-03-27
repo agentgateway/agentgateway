@@ -10,11 +10,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/controller"
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/kube/krt"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/controller"
 	"github.com/agentgateway/agentgateway/controller/pkg/version"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 func RunAdminServer(ctx context.Context, setupOpts *controller.SetupOpts) {

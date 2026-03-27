@@ -9,7 +9,6 @@ import (
 	"maps"
 	"strings"
 
-	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/util/smallset"
 	corev1 "k8s.io/api/core/v1"
@@ -24,6 +23,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer/strategicpatch"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 const sessionKeyEnvVar = "SESSION_KEY"
@@ -174,8 +174,8 @@ type agentgatewayParametersHelmValuesGenerator struct {
 func newAgentgatewayParametersHelmValuesGenerator(cli apiclient.Client, inputs *Inputs) *agentgatewayParametersHelmValuesGenerator {
 	filter := kclient.Filter{ObjectFilter: cli.ObjectFilter()}
 	return &agentgatewayParametersHelmValuesGenerator{
-		agwParamClient: kclient.NewFilteredDelayed[*agentgateway.AgentgatewayParameters](cli, wellknown2.AgentgatewayParametersGVR, filter),
-		gwClassClient:  kclient.NewFilteredDelayed[*gwv1.GatewayClass](cli, wellknown2.GatewayClassGVR, filter),
+		agwParamClient: kclient.NewFilteredDelayed[*agentgateway.AgentgatewayParameters](cli, wellknown.AgentgatewayParametersGVR, filter),
+		gwClassClient:  kclient.NewFilteredDelayed[*gwv1.GatewayClass](cli, wellknown.GatewayClassGVR, filter),
 		secretClient:   kclient.NewFiltered[*corev1.Secret](cli, filter),
 		inputs:         inputs,
 		sessionKeyGen:  generateSessionKey,
@@ -243,7 +243,7 @@ func (g *agentgatewayParametersHelmValuesGenerator) resolveParameters(gw *gwv1.G
 		ref := gwc.Spec.ParametersRef
 
 		// Check for AgentgatewayParameters on GatewayClass
-		if ref.Group == agentgateway.GroupName && string(ref.Kind) == wellknown2.AgentgatewayParametersGVK.Kind {
+		if ref.Group == agentgateway.GroupName && string(ref.Kind) == wellknown.AgentgatewayParametersGVK.Kind {
 			agwpNamespace := ""
 			if ref.Namespace != nil {
 				agwpNamespace = string(*ref.Namespace)
@@ -264,7 +264,7 @@ func (g *agentgatewayParametersHelmValuesGenerator) resolveParameters(gw *gwv1.G
 	if gw.Spec.Infrastructure != nil && gw.Spec.Infrastructure.ParametersRef != nil {
 		ref := gw.Spec.Infrastructure.ParametersRef
 
-		if ref.Group == agentgateway.GroupName && ref.Kind == gwv1.Kind(wellknown2.AgentgatewayParametersGVK.Kind) {
+		if ref.Group == agentgateway.GroupName && ref.Kind == gwv1.Kind(wellknown.AgentgatewayParametersGVK.Kind) {
 			agwp := g.agwParamClient.Get(ref.Name, gw.GetNamespace())
 			if agwp == nil {
 				return nil, fmt.Errorf("AgentgatewayParameters %s/%s not found for Gateway %s/%s",
@@ -321,8 +321,8 @@ func (g *agentgatewayParametersHelmValuesGenerator) GetResolvedParametersForGate
 }
 func DefaultGatewayIRGetter(gw *gwv1.Gateway, agwCollections *agwplugins.AgwCollections) *collections.GatewayForDeployer {
 	gwKey := collections.ObjectSource{
-		Group:     wellknown2.GatewayGVK.GroupKind().Group,
-		Kind:      wellknown2.GatewayGVK.GroupKind().Kind,
+		Group:     wellknown.GatewayGVK.GroupKind().Group,
+		Kind:      wellknown.GatewayGVK.GroupKind().Kind,
 		Name:      gw.GetName(),
 		Namespace: gw.GetNamespace(),
 	}
@@ -433,8 +433,8 @@ func (g *agentgatewayParametersHelmValuesGenerator) buildSessionKeySecret(
 			Name:      secretName,
 			Namespace: gw.Namespace,
 			Labels: map[string]string{
-				wellknown2.GatewayNameLabel:      safeLabelValue(gw.Name),
-				wellknown2.GatewayClassNameLabel: string(gw.Spec.GatewayClassName),
+				wellknown.GatewayNameLabel:      safeLabelValue(gw.Name),
+				wellknown.GatewayClassNameLabel: string(gw.Spec.GatewayClassName),
 			},
 		},
 		Type: corev1.SecretTypeOpaque,
@@ -481,7 +481,7 @@ func GatewayIRFrom(gw *gwv1.Gateway, controllerNameGuess string) *collections.Ga
 	return &collections.GatewayForDeployer{
 		ObjectSource: collections.ObjectSource{
 			Group:     gwv1.GroupVersion.Group,
-			Kind:      wellknown2.GatewayKind,
+			Kind:      wellknown.GatewayKind,
 			Namespace: gw.Namespace,
 			Name:      gw.Name,
 		},

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/config/schema/gvr"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -20,6 +19,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/yaml"
+
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 var AllCRDs = []schema.GroupVersionResource{
@@ -33,8 +34,8 @@ var AllCRDs = []schema.GroupVersionResource{
 	gvr.ReferenceGrant,
 	gvr.BackendTLSPolicy,
 	gvr.ListenerSet,
-	wellknown2.InferencePoolGVR,
-	wellknown2.BackendTLSPolicyGVR,
+	wellknown.InferencePoolGVR,
+	wellknown.BackendTLSPolicyGVR,
 	// K8s API
 	gvr.Service,
 	gvr.Pod,
@@ -43,9 +44,9 @@ var AllCRDs = []schema.GroupVersionResource{
 	gvr.WorkloadEntry,
 	gvr.AuthorizationPolicy,
 	// agentgateway api
-	wellknown2.AgentgatewayBackendGVR,
-	wellknown2.AgentgatewayParametersGVR,
-	wellknown2.AgentgatewayPolicyGVR,
+	wellknown.AgentgatewayBackendGVR,
+	wellknown.AgentgatewayParametersGVR,
+	wellknown.AgentgatewayPolicyGVR,
 }
 
 const (

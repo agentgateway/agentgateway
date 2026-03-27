@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
 	"google.golang.org/protobuf/proto"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
@@ -18,6 +17,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
 

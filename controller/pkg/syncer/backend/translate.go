@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pilot/pkg/model/kstatus"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/controllers"
@@ -22,6 +21,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 var logger = logging.New("agentgateway/backend")
@@ -30,7 +30,7 @@ var logger = logging.New("agentgateway/backend")
 func NewBackendPlugin(agw *plugins.AgwCollections) plugins.AgwPlugin {
 	return plugins.AgwPlugin{
 		ContributesBackends: map[schema.GroupKind]plugins.BackendPlugin{
-			wellknown2.AgentgatewayBackendGVK.GroupKind(): {
+			wellknown.AgentgatewayBackendGVK.GroupKind(): {
 				BuildReferences: func() krt.Collection[*plugins.PolicyAttachment] {
 					return krt.NewManyCollection(agw.Backends, func(ctx krt.HandlerContext, backend *agentgateway.AgentgatewayBackend) []*plugins.PolicyAttachment {
 						return BuildAgwBackendReferences(backend)
@@ -61,14 +61,14 @@ func BuildAgwBackendReferences(
 	var attachments []*plugins.PolicyAttachment
 	self := utils.TypedNamespacedName{
 		NamespacedName: types.NamespacedName{Namespace: backend.Namespace, Name: backend.Name},
-		Kind:           wellknown2.AgentgatewayBackendGVK.Kind,
+		Kind:           wellknown.AgentgatewayBackendGVK.Kind,
 	}
 	app := func(ref gwv1.BackendObjectReference) {
 		attachments = append(attachments, &plugins.PolicyAttachment{
 			Target: self,
 			Backend: utils.TypedNamespacedName{
 				NamespacedName: types.NamespacedName{Namespace: plugins.DefaultString(ref.Namespace, backend.Namespace), Name: string(ref.Name)},
-				Kind:           plugins.DefaultString(ref.Kind, wellknown2.ServiceKind),
+				Kind:           plugins.DefaultString(ref.Kind, wellknown.ServiceKind),
 			},
 			Source: self,
 		})
@@ -182,7 +182,7 @@ func TranslateAgwBackend(
 
 	gtws := references.LookupGatewaysForBackend(ctx.Krt, utils.TypedNamespacedName{
 		NamespacedName: config.NamespacedName(backend),
-		Kind:           wellknown2.AgentgatewayBackendGVK.Kind,
+		Kind:           wellknown.AgentgatewayBackendGVK.Kind,
 	})
 	// handle all backends created as an MCPBackend backend may create multiple backends
 	for gateway := range gtws {

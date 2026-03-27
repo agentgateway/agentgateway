@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/kclient/clienttest"
 	"istio.io/istio/pkg/test"
@@ -21,6 +20,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned/fake"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 

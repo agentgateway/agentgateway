@@ -5,10 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/admin"
 	"istio.io/istio/pkg/test/util/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/agentgateway/agentgateway/controller/pkg/admin"
 )
 
 func TestSnapshotResponseDataMarshalJSONString(t *testing.T) {

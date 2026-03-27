@@ -7,9 +7,6 @@ import (
 	"maps"
 	"net/http"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
-	"github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/kube/krt"
 	istiolog "istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/ptr"
@@ -28,9 +25,12 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/namespaces"
 	"github.com/agentgateway/agentgateway/controller/pkg/version"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 type SetupOpts struct {

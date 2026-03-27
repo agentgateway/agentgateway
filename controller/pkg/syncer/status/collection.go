@@ -3,7 +3,6 @@ package status
 import (
 	"sync"
 
-	wellknown2 "github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
@@ -16,6 +15,7 @@ import (
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 type NamedStatus[T any] struct {
@@ -112,25 +112,25 @@ func enqueueStatus[T any](sw WorkerQueue, obj controllers.Object, ws T, extraGVK
 	}
 	switch obj.(type) {
 	case *gwv1.Gateway:
-		res.GroupVersionKind = wellknown2.GatewayGVK
+		res.GroupVersionKind = wellknown.GatewayGVK
 	case *gwv1.HTTPRoute:
-		res.GroupVersionKind = wellknown2.HTTPRouteGVK
+		res.GroupVersionKind = wellknown.HTTPRouteGVK
 	case *gwv1a2.TCPRoute:
-		res.GroupVersionKind = wellknown2.TCPRouteGVK
+		res.GroupVersionKind = wellknown.TCPRouteGVK
 	case *gwv1.TLSRoute:
-		res.GroupVersionKind = wellknown2.TLSRouteGVK
+		res.GroupVersionKind = wellknown.TLSRouteGVK
 	case *gwv1.GRPCRoute:
-		res.GroupVersionKind = wellknown2.GRPCRouteGVK
+		res.GroupVersionKind = wellknown.GRPCRouteGVK
 	case *agentgateway.AgentgatewayPolicy:
-		res.GroupVersionKind = wellknown2.AgentgatewayPolicyGVK
+		res.GroupVersionKind = wellknown.AgentgatewayPolicyGVK
 	case *agentgateway.AgentgatewayBackend:
-		res.GroupVersionKind = wellknown2.AgentgatewayBackendGVK
+		res.GroupVersionKind = wellknown.AgentgatewayBackendGVK
 	case *gwv1.ListenerSet:
-		res.GroupVersionKind = wellknown2.ListenerSetGVK
+		res.GroupVersionKind = wellknown.ListenerSetGVK
 	case *gwv1.BackendTLSPolicy:
-		res.GroupVersionKind = wellknown2.BackendTLSPolicyGVK
+		res.GroupVersionKind = wellknown.BackendTLSPolicyGVK
 	case *inf.InferencePool:
-		res.GroupVersionKind = wellknown2.InferencePoolGVK
+		res.GroupVersionKind = wellknown.InferencePoolGVK
 	default:
 		// Prefer the object's own GVK if available
 		if gvk := obj.GetObjectKind().GroupVersionKind(); !gvk.Empty() {
