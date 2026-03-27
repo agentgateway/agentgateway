@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Bitcoin MCP Example
+#
+# Proxies bitcoin-mcp (49 Bitcoin network analysis tools) through
+# agentgateway with rate limiting and CORS support.
+#
+# Prerequisites:
+#   pip install bitcoin-mcp
+#
+# Usage:
+#   agentgateway -f examples/bitcoin/config.yaml
+#
+# Then connect any MCP client to http://localhost:3000
+#
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        localRateLimit:
+          - maxTokens: 30
+            tokensPerFill: 1
+            fillInterval: 2s
+        cors:
+          allowOrigins:
+          - "*"
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          - cache-control
+          exposeHeaders:
+          - "Mcp-Session-Id"
+      backends:
+      - mcp:
+          targets:
+          - name: bitcoin-mcp
+            stdio:
+              cmd: uvx
+              args:
+                - bitcoin-mcp
