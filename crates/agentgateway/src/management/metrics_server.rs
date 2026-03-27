@@ -6,7 +6,9 @@ use std::sync::{Arc, Mutex};
 use agent_core::drain::DrainWatcher;
 use hyper::Request;
 use hyper::body::Incoming;
-use prometheus_client::encoding::text::encode;
+use prometheus_client::encoding::text::encode as encode_text;
+use prometheus_client::encoding::protobuf::encode as encode_protobuf;
+use prost_v12::Message;
 use prometheus_client::registry::Registry;
 
 use super::hyper_helpers;
@@ -43,21 +45,28 @@ impl Server {
 }
 
 async fn handle_metrics(reg: Arc<Mutex<Registry>>, req: Request<Incoming>) -> Response {
-	let mut buf = String::new();
 	let reg = reg.lock().expect("mutex");
-	if let Err(err) = encode(&mut buf, &reg) {
+    let content_type = content_type(&req);
+    let result = match content_type {
+        ContentType::PlainText | ContentType::OpenMetrics => {
+            let mut str_buf = String::new();
+            encode_text(&mut str_buf, &reg)
+                .map(|_| str_buf.into_bytes())
+        },
+        ContentType::Protobuf => encode_protobuf(&reg)
+            .map(|metrics| metrics.encode_to_vec())
+    };
+	if let Err(err) = result {
 		return ::http::Response::builder()
 			.status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
 			.body(err.to_string().into())
 			.expect("builder with known status code should not fail");
 	}
-
-	let response_content_type = content_type(&req);
-
+    let repsonse_content_type: &str = content_type.into();
 	::http::Response::builder()
 		.status(hyper::StatusCode::OK)
-		.header(hyper::header::CONTENT_TYPE, response_content_type)
-		.body(buf.into())
+		.header(hyper::header::CONTENT_TYPE, repsonse_content_type)
+		.body(result.unwrap().into())
 		.expect("builder with known status code should not fail")
 }
 
@@ -66,6 +75,7 @@ enum ContentType {
 	#[default]
 	PlainText,
 	OpenMetrics,
+    Protobuf,
 }
 
 impl From<ContentType> for &str {
@@ -73,12 +83,13 @@ impl From<ContentType> for &str {
 		match c {
 			ContentType::PlainText => "text/plain; charset=utf-8",
 			ContentType::OpenMetrics => "application/openmetrics-text;charset=utf-8;version=1.0.0",
+            ContentType::Protobuf => "application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;version=1.0.0"
 		}
 	}
 }
 
 #[inline(always)]
-fn content_type<T>(req: &Request<T>) -> &str {
+fn content_type<T>(req: &Request<T>) -> ContentType {
 	req
 		.headers()
 		.get_all(http::header::ACCEPT)
@@ -93,10 +104,12 @@ fn content_type<T>(req: &Request<T>) -> &str {
 		})
 		.find_map(|v| match v.split(";").collect::<Vec<_>>().first() {
 			Some(&"application/openmetrics-text") => Some(ContentType::OpenMetrics),
+            Some(&"application/vnd.google.protobuf")
+                | Some(&"application/x-protobuf")
+                | Some(&"application/protobuf") => Some(ContentType::Protobuf),
 			_ => None,
 		})
 		.unwrap_or_default()
-		.into()
 }
 
 mod test {
@@ -104,7 +117,7 @@ mod test {
 	fn test_content_type() {
 		let plain_text_req = http::Request::new("I want some plain text");
 		assert_eq!(
-			super::content_type(&plain_text_req),
+			Into::<&str>::into(super::content_type(&plain_text_req)),
 			"text/plain; charset=utf-8"
 		);
 
@@ -115,18 +128,18 @@ mod test {
 			.body("I would like openmetrics")
 			.unwrap();
 		assert_eq!(
-			super::content_type(&openmetrics_req),
+			Into::<&str>::into(super::content_type(&openmetrics_req)),
 			"application/openmetrics-text;charset=utf-8;version=1.0.0"
 		);
 
 		let mixed_req = http::Request::builder()
           .header("X-Custom-Beep", "boop")
           .header("Accept", "application/vnd.google.protobuf;proto=io.prometheus.client.MetricFamily;encoding=delimited;q=0.6,application/openmetrics-text;version=1.0.0;escaping=allow-utf-8;q=0.5,application/openmetrics-text;version=0.0.1;q=0.4,text/plain;version=1.0.0;escaping=allow-utf-8;q=0.3,text/plain;version=0.0.4;q=0.2,*/*;q=0.1")
-          .body("I would like openmetrics")
+          .body("I would like protobuf")
           .unwrap();
 		assert_eq!(
-			super::content_type(&mixed_req),
-			"application/openmetrics-text;charset=utf-8;version=1.0.0"
+            Into::<&str>::into(super::content_type(&mixed_req)),
+			"application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;version=1.0.0"
 		);
 
 		let unsupported_req_accept = http::Request::builder()
@@ -135,7 +148,7 @@ mod test {
 			.unwrap();
 		// asking for something we don't support, fall back to plaintext
 		assert_eq!(
-			super::content_type(&unsupported_req_accept),
+			Into::<&str>::into(super::content_type(&unsupported_req_accept)),
 			"text/plain; charset=utf-8"
 		)
 	}
