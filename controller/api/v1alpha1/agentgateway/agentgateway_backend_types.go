@@ -417,6 +417,7 @@ type McpSelector struct {
 }
 
 // McpTarget defines a single MCPBackend target configuration.
+// +kubebuilder:validation:XValidation:rule="!(has(self.policies) && has(self.policies.mcp) && has(self.policies.mcp.authentication))",message="MCP authentication is not supported on static MCP target policies"
 type McpTarget struct {
 	// Host is the hostname or IP address of the MCP target.
 	// +required
