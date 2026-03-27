@@ -15,8 +15,11 @@ binds:
             request:
             - azureContentSafety:
                 endpoint: your-resource-name.cognitiveservices.azure.com
-                severityThreshold: 2
+                analyzeText:
+                  severityThreshold: 2
+                detectJailbreak: {}
             response:
             - azureContentSafety:
                 endpoint: your-resource-name.cognitiveservices.azure.com
-                severityThreshold: 2
+                analyzeText:
+                  severityThreshold: 2
