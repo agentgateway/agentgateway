@@ -91,7 +91,7 @@ Recordings of the community meetings will be published on our [google drive](htt
 
 ## Roadmap
 
-`agentgateway` is currently in active development. If you'd like a feature that's missing, open an issue in our [Github repo](https://github.com/agentgateway/agentgateway/issues).
+`agentgateway` is currently in active development. If you'd like a feature that's missing, open an issue in our [GitHub repo](https://github.com/agentgateway/agentgateway/issues).
 
 ## Contributors
 
