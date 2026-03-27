@@ -1,6 +1,7 @@
 package agentgateway
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -417,10 +418,18 @@ type McpSelector struct {
 }
 
 // McpTarget defines a single MCPBackend target configuration.
+// +kubebuilder:validation:ExactlyOneOf=host;backendRef
+// +kubebuilder:validation:XValidation:rule="!has(self.backendRef) || !has(self.policies)",message="mcp target policies may not be used with backendRef"
 type McpTarget struct {
 	// Host is the hostname or IP address of the MCP target.
-	// +required
-	Host ShortString `json:"host"`
+	// +optional
+	Host *ShortString `json:"host,omitempty"`
+
+	// `backendRef` references a namespace-local `Service` resource by name.
+	// When set, this replaces `host` only; `port`, `path`, and `protocol`
+	// remain configured on this target.
+	// +optional
+	BackendRef *corev1.LocalObjectReference `json:"backendRef,omitempty"`
 
 	// Port is the port number of the MCP target.
 	// +kubebuilder:validation:Minimum=1
@@ -443,6 +452,8 @@ type McpTarget struct {
 	// Policies may also be set in `AgentgatewayPolicy`, or in the top-level
 	// `AgentgatewayBackend`. Policies are merged on a field-level basis, with
 	// order: `AgentgatewayPolicy` < `AgentgatewayBackend` < `AgentgatewayBackend` MCP (this field).
+	// This field may only be used with host-based static targets, not
+	// `backendRef`.
 	// +optional
 	Policies *BackendWithMCP `json:"policies,omitempty"`
 }
