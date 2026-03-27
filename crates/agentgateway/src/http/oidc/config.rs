@@ -69,36 +69,21 @@ pub struct LocalOidcConfig {
 	pub scopes: Vec<String>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[derive(Debug, Clone)]
 struct ResolvedOidcPolicy {
 	provider: ResolvedProvider,
 	client_id: String,
-	#[serde(serialize_with = "crate::serdes::ser_redact")]
 	client_secret: SecretString,
 	redirect_uri: RedirectUri,
-	#[serde(default)]
 	scopes: Vec<String>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[derive(Debug, Clone)]
 pub(super) struct ResolvedProvider {
 	pub(super) issuer: String,
-	#[serde(
-		serialize_with = "crate::serdes::ser_display",
-		deserialize_with = "crate::serdes::de_parse"
-	)]
 	pub(super) authorization_endpoint: Uri,
-	#[serde(
-		serialize_with = "crate::serdes::ser_display",
-		deserialize_with = "crate::serdes::de_parse"
-	)]
 	pub(super) token_endpoint: Uri,
 	pub(super) token_endpoint_auth: TokenEndpointAuth,
-	pub(super) id_token_audiences: Vec<String>,
-	#[serde(default)]
-	pub(super) jwt_validation_options: jwt::JWTValidationOptions,
 	pub(super) id_token_jwks: JwkSet,
 }
 
@@ -129,8 +114,6 @@ impl LocalOidcConfig {
 			scopes,
 		} = self;
 		let redirect_uri = RedirectUri::parse(redirect_uri)?;
-		let effective_audiences = vec![client_id.clone()];
-
 		let explicit_field_count = usize::from(authorization_endpoint.is_some())
 			+ usize::from(token_endpoint.is_some())
 			+ usize::from(jwks.is_some());
@@ -161,20 +144,18 @@ impl LocalOidcConfig {
 					authorization_endpoint: discovered.authorization_endpoint,
 					token_endpoint: discovered.token_endpoint,
 					token_endpoint_auth,
-					id_token_audiences: effective_audiences,
-					jwt_validation_options: jwt::JWTValidationOptions::default(),
 					id_token_jwks: jwks,
 				}
 			},
 			3 => {
 				if discovery.is_some() {
 					return Err(Error::Config(
-						"oidc discovery must be omitted when authorizationEndpoint, tokenEndpoint, and jwks are configured explicitly".into(),
-					));
+							"oidc discovery must be omitted when authorizationEndpoint, tokenEndpoint, and jwks are configured explicitly".into(),
+						));
 				}
 				let token_endpoint_auth_methods_supported =
 					if token_endpoint_auth_methods_supported.is_empty() {
-						default_explicit_token_endpoint_auth_methods()
+						vec![TokenEndpointAuth::ClientSecretBasic]
 					} else {
 						token_endpoint_auth_methods_supported
 					};
@@ -184,7 +165,6 @@ impl LocalOidcConfig {
 					authorization_endpoint.expect("checked above"),
 					token_endpoint.expect("checked above"),
 					jwks.expect("checked above"),
-					effective_audiences,
 					token_endpoint_auth_methods_supported,
 				)
 				.await?
@@ -216,7 +196,7 @@ impl ResolvedOidcPolicy {
 		let scopes = dedupe_scopes(self.scopes);
 		let (cookie_name, transaction_cookie_name) = derive_cookie_names(&policy_id);
 		let token_endpoint_auth = self.provider.token_endpoint_auth;
-		let provider = Arc::new(self.provider.compile()?);
+		let provider = Arc::new(self.provider.compile(vec![self.client_id.clone()])?);
 
 		Ok(OidcPolicy {
 			policy_id,
@@ -242,12 +222,12 @@ impl ResolvedOidcPolicy {
 }
 
 impl ResolvedProvider {
-	fn compile(self) -> Result<Provider, Error> {
+	fn compile(self, audiences: Vec<String>) -> Result<Provider, Error> {
 		let provider = jwt::Provider::from_jwks(
 			self.id_token_jwks,
 			self.issuer.clone(),
-			Some(self.id_token_audiences.clone()),
-			self.jwt_validation_options.clone(),
+			Some(audiences),
+			jwt::JWTValidationOptions::default(),
 		)
 		.map_err(|e| Error::Config(format!("failed to create id token validator: {e}")))?;
 
@@ -266,8 +246,4 @@ pub(crate) fn default_session_ttl() -> std::time::Duration {
 
 pub(crate) fn default_transaction_ttl() -> std::time::Duration {
 	Duration::from_secs(5 * 60)
-}
-
-fn default_explicit_token_endpoint_auth_methods() -> Vec<TokenEndpointAuth> {
-	vec![TokenEndpointAuth::ClientSecretBasic]
 }

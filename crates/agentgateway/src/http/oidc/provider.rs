@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 use crate::client::Client;
 use crate::http::filters::BackendRequestTimeout;
-use crate::http::{Body, Uri, jwt};
+use crate::http::{Body, Uri};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::serdes::FileInlineOrRemote;
 
@@ -97,7 +97,6 @@ pub(super) async fn build_explicit_provider(
 	authorization_endpoint: Uri,
 	token_endpoint: Uri,
 	jwks: FileInlineOrRemote,
-	effective_audiences: Vec<String>,
 	token_endpoint_auth_methods_supported: Vec<TokenEndpointAuth>,
 ) -> Result<ResolvedProvider, Error> {
 	let jwks = load_jwks(client, jwks, JwksLoadSource::Explicit).await?;
@@ -109,8 +108,6 @@ pub(super) async fn build_explicit_provider(
 		authorization_endpoint,
 		token_endpoint,
 		token_endpoint_auth,
-		id_token_audiences: effective_audiences,
-		jwt_validation_options: jwt::JWTValidationOptions::default(),
 		id_token_jwks: jwks,
 	})
 }
