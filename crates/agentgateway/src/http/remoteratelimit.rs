@@ -20,6 +20,7 @@ mod tests;
 #[allow(clippy::derive_partial_eq_without_eq)]
 pub mod proto {
 	pub use protos::envoy::service::common::v3::HeaderValue;
+	pub use protos::envoy::service::ratelimit::v3::rate_limit_descriptor::RateLimitOverride;
 	pub use protos::envoy::service::ratelimit::v3::*;
 }
 
@@ -73,6 +74,16 @@ pub struct Descriptor(pub String, pub cel::Expression);
 #[apply(schema!)]
 pub struct DescriptorSet(pub Vec<DescriptorEntry>);
 
+/// Dynamic rate limit override configuration.
+/// This maps to
+/// When set, evaluates the CEL expression against the request context
+/// to extract rate limit override values from ext-proc metadata.
+#[derive(Debug, Clone)]
+pub struct LimitOverride {
+	/// Parsed CEL expression (e.g., "extproc.rate_limit")
+	pub expression: Arc<cel::Expression>,
+}
+
 #[apply(schema!)]
 pub struct DescriptorEntry {
 	#[serde(deserialize_with = "de_descriptors")]
@@ -81,6 +92,9 @@ pub struct DescriptorEntry {
 	#[serde(default)]
 	#[serde(rename = "type")]
 	pub limit_type: RateLimitType,
+	/// Optional limit override from metadata (set via XDS, not local config)
+	#[serde(skip)]
+	pub limit_override: Option<LimitOverride>,
 }
 
 #[derive(serde::Deserialize)]
@@ -181,9 +195,16 @@ impl RemoteRateLimit {
 					limit_type,
 					kv_pairs.join(", ")
 				);
+
+				// evaluate limit override if configured
+				let limit = desc_entry
+					.limit_override
+					.as_ref()
+					.and_then(|lo| Self::eval_limit_override(req, lo));
+
 				descriptors.push(RateLimitDescriptor {
 					entries: rl_entries,
-					limit: None,
+					limit,
 					hits_addend: cost,
 				});
 			} else {
@@ -405,12 +426,94 @@ impl RemoteRateLimit {
 		Some(rl_entries)
 	}
 
+	/// Evaluate a limit override expression against the request context.
+	/// returns `Some(RateLimitOverride)` if the expression evaluates successfully
+	/// and contains valid `requests_per_unit` and `unit` fields.
+	/// returns `None` if evaluation fails, metadata is missing, or fields are invalid.
+	fn eval_limit_override(
+		req: &Request,
+		limit_override: &LimitOverride,
+	) -> Option<proto::RateLimitOverride> {
+		let exec = cel::Executor::new_request(req);
+		match exec.eval(&limit_override.expression) {
+			Ok(value) => {
+				// the CEL result should be a map with requests_per_unit and unit
+				let map = match value.json() {
+					Ok(serde_json::Value::Object(m)) => m,
+					Ok(other) => {
+						trace!("ratelimit limit_override: expected object, got {:?}", other);
+						return None;
+					},
+					Err(e) => {
+						trace!("ratelimit limit_override: failed to convert to JSON: {}", e);
+						return None;
+					},
+				};
+
+				// extract requests_per_unit
+				let requests_per_unit = match map.get("requests_per_unit") {
+					Some(serde_json::Value::Number(n)) => n.as_u64().and_then(|v| v.try_into().ok()),
+					_ => {
+						trace!("ratelimit limit_override: missing or invalid requests_per_unit field");
+						return None;
+					},
+				}?;
+
+				// extract unit and convert to RateLimitUnit enum
+				let unit = match map.get("unit") {
+					Some(serde_json::Value::String(s)) => Self::parse_rate_limit_unit(s),
+					Some(serde_json::Value::Number(n)) => {
+						// Allow numeric unit values too
+						n.as_i64().and_then(|v| v.try_into().ok())
+					},
+					_ => {
+						trace!("ratelimit limit_override: missing or invalid unit field");
+						return None;
+					},
+				}?;
+
+				trace!(
+					"ratelimit limit_override: evaluated to requests_per_unit={}, unit={}",
+					requests_per_unit, unit
+				);
+
+				Some(proto::RateLimitOverride {
+					requests_per_unit,
+					unit,
+				})
+			},
+			Err(e) => {
+				trace!(
+					"ratelimit limit_override: failed to evaluate expression {:?}: {}",
+					limit_override.expression, e
+				);
+				None
+			},
+		}
+	}
+
+	/// parse a unit string to its corresponding RateLimitUnit enum value.
+	fn parse_rate_limit_unit(s: &str) -> Option<i32> {
+		match s.to_uppercase().as_str() {
+			"SECOND" => Some(proto::RateLimitUnit::Second as i32),
+			"MINUTE" => Some(proto::RateLimitUnit::Minute as i32),
+			"HOUR" => Some(proto::RateLimitUnit::Hour as i32),
+			"DAY" => Some(proto::RateLimitUnit::Day as i32),
+			"MONTH" => Some(proto::RateLimitUnit::Month as i32),
+			"YEAR" => Some(proto::RateLimitUnit::Year as i32),
+			_ => {
+				trace!("ratelimit limit_override: unknown unit string: {}", s);
+				None
+			},
+		}
+	}
+
 	pub fn expressions(&self) -> impl Iterator<Item = &Expression> {
-		self
-			.descriptors
-			.0
-			.iter()
-			.flat_map(|v| v.entries.iter().map(|v| &v.1))
+		self.descriptors.0.iter().flat_map(|v| {
+			let entry_exprs = v.entries.iter().map(|e| &e.1);
+			let override_expr = v.limit_override.iter().map(|lo| lo.expression.as_ref());
+			entry_exprs.chain(override_expr)
+		})
 	}
 }
 

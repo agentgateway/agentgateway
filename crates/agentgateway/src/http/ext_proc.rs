@@ -57,7 +57,7 @@ pub enum Error {
 
 #[apply(schema!)]
 #[derive(Default, ::cel::DynamicType)]
-pub struct ExtProcDynamicMetadata(serde_json::Map<String, JsonValue>);
+pub struct ExtProcDynamicMetadata(pub(crate) serde_json::Map<String, JsonValue>);
 
 #[allow(warnings)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -724,8 +724,7 @@ impl ExtProcInstance {
 		// Get or create metadata container, merging with existing metadata
 		let mut dynamic_metadata = req
 			.extensions_mut()
-			.remove::<Arc<ExtProcDynamicMetadata>>()
-			.map(|arc| (*arc).clone())
+			.remove::<ExtProcDynamicMetadata>()
 			.unwrap_or_default();
 
 		// Merge new fields into existing metadata
@@ -737,7 +736,7 @@ impl ExtProcInstance {
 		}
 
 		if !dynamic_metadata.0.is_empty() {
-			req.extensions_mut().insert(Arc::new(dynamic_metadata));
+			req.extensions_mut().insert(dynamic_metadata);
 		}
 
 		Ok(())
