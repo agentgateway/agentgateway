@@ -45,6 +45,8 @@ jobs:
         # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
         # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
         save-if: ${{ github.ref == 'refs/heads/main' }}
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
     - name: Test
       run: make test
     - name: Validate
@@ -65,6 +67,8 @@ jobs:
         # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
         # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
         save-if: ${{ github.ref == 'refs/heads/main' }}
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
     - name: Generation
       run: make generate-schema check-clean-repo
     - name: Lint
@@ -140,6 +144,8 @@ jobs:
         # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
         # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
         save-if: ${{ github.ref == 'refs/heads/main' }}
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
     - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
       with:
         go-version: "${{ env.GO_VERSION }}"
@@ -185,6 +191,8 @@ jobs:
         # We only read the cache from 'E2E' job, since they should have identical cache.
         save-if: "false"
         shared-key: "controller-e2e" # Pull E2E job's cache
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
     - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
       with:
         go-version: "${{ env.GO_VERSION }}"
