@@ -669,7 +669,7 @@ async fn assert_log_with_output_range(
 ) {
 	let log = agent_core::telemetry::testing::eventually_find(&[
 		("scope", "request"),
-		("http.path", path),
+		("url.path", path),
 		("req.id", test_id),
 	])
 	.await
@@ -690,7 +690,7 @@ async fn assert_log_with_output_range(
 async fn assert_count_log(path: &str, test_id: &str) {
 	let log = agent_core::telemetry::testing::eventually_find(&[
 		("scope", "request"),
-		("http.path", path),
+		("url.path", path),
 		("req.id", test_id),
 	])
 	.await
@@ -711,7 +711,7 @@ async fn assert_embeddings_log(
 ) {
 	let log = agent_core::telemetry::testing::eventually_find(&[
 		("scope", "request"),
-		("http.path", path),
+		("url.path", path),
 		("req.id", test_id),
 	])
 	.await
