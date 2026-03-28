@@ -11,7 +11,7 @@ use super::provider::{
 use super::session::derive_cookie_names;
 use super::{
 	ClientConfig, CookieSecureMode, Error, OidcPolicy, PolicyId, RedirectUri, SameSiteMode,
-	SessionConfig, TokenEndpointAuth, dedupe_scopes,
+	SessionConfig, TokenEndpointAuth, UnauthenticatedAction, dedupe_scopes,
 };
 use crate::client::Client;
 use crate::http::{Uri, sessionpersistence};
@@ -66,6 +66,10 @@ pub struct LocalOidcConfig {
 	/// Additional OAuth2 scopes to request. `openid` is always included.
 	#[serde(default)]
 	pub scopes: Vec<String>,
+
+	/// How unauthenticated non-callback requests should be handled.
+	#[serde(default)]
+	pub unauthenticated_action: UnauthenticatedAction,
 }
 
 #[derive(Debug, Clone)]
@@ -75,6 +79,7 @@ struct ResolvedOidcPolicy {
 	client_secret: SecretString,
 	redirect_uri: RedirectUri,
 	scopes: Vec<String>,
+	unauthenticated_action: UnauthenticatedAction,
 }
 
 impl LocalOidcConfig {
@@ -102,6 +107,7 @@ impl LocalOidcConfig {
 			client_secret,
 			redirect_uri,
 			scopes,
+			unauthenticated_action,
 		} = self;
 		let redirect_uri = RedirectUri::parse(redirect_uri)?;
 		let explicit_field_count = usize::from(authorization_endpoint.is_some())
@@ -173,6 +179,7 @@ impl LocalOidcConfig {
 			client_secret,
 			redirect_uri,
 			scopes,
+			unauthenticated_action,
 		})
 	}
 }
@@ -197,6 +204,7 @@ impl ResolvedOidcPolicy {
 				token_endpoint_auth,
 			},
 			redirect_uri: self.redirect_uri,
+			unauthenticated_action: self.unauthenticated_action,
 			session: SessionConfig {
 				cookie_name,
 				transaction_cookie_name,

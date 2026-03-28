@@ -67,6 +67,7 @@ pub struct OidcPolicy {
 	pub provider: Arc<Provider>,
 	pub client: ClientConfig,
 	pub redirect_uri: RedirectUri,
+	pub unauthenticated_action: UnauthenticatedAction,
 	pub session: SessionConfig,
 	pub scopes: Vec<String>,
 }
@@ -176,10 +177,16 @@ struct CallbackQuery {
 	error: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum UnauthenticatedAction {
-	StartLoginRedirect,
-	RejectUnauthorized,
+#[derive(
+	Debug, Clone, Copy, serde::Serialize, serde::Deserialize, Default, PartialEq, Eq, PartialOrd, Ord,
+)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum UnauthenticatedAction {
+	#[default]
+	Auto,
+	Redirect,
+	Deny,
 }
 
 impl OidcPolicy {
@@ -215,9 +222,14 @@ impl OidcPolicy {
 			return Ok(PolicyResponse::default());
 		}
 
-		match unauthenticated_action(req) {
-			UnauthenticatedAction::StartLoginRedirect => callback::start_login(self, log, req),
-			UnauthenticatedAction::RejectUnauthorized => Err(Error::AuthenticationRequired),
+		match self.unauthenticated_action {
+			UnauthenticatedAction::Auto if should_start_login_redirect(req) => {
+				callback::start_login(self, log, req)
+			},
+			UnauthenticatedAction::Auto | UnauthenticatedAction::Deny => {
+				Err(Error::AuthenticationRequired)
+			},
+			UnauthenticatedAction::Redirect => callback::start_login(self, log, req),
 		}
 	}
 
@@ -286,18 +298,14 @@ impl CallbackQuery {
 	}
 }
 
-fn unauthenticated_action(req: &Request) -> UnauthenticatedAction {
+fn should_start_login_redirect(req: &Request) -> bool {
 	// Keep the default narrow: only GET requests that explicitly prefer an HTML document enter the
 	// interactive browser login flow. Everything else gets a normal 401.
 	if req.method() != ::http::Method::GET {
-		return UnauthenticatedAction::RejectUnauthorized;
+		return false;
 	}
 
-	if accepts_html_document(req) {
-		UnauthenticatedAction::StartLoginRedirect
-	} else {
-		UnauthenticatedAction::RejectUnauthorized
-	}
+	accepts_html_document(req)
 }
 
 fn accepts_html_document(req: &Request) -> bool {

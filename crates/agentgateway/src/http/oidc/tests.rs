@@ -124,6 +124,7 @@ fn test_policy() -> OidcPolicy {
 			token_endpoint_auth: TokenEndpointAuth::ClientSecretBasic,
 		},
 		redirect_uri: test_redirect_uri(),
+		unauthenticated_action: UnauthenticatedAction::Auto,
 		session,
 		scopes: vec!["openid".into(), "profile".into()],
 	}
@@ -203,6 +204,7 @@ fn explicit_local_oidc_config() -> LocalOidcConfig {
 		client_secret: SecretString::new("client-secret".into()),
 		redirect_uri: test_redirect_uri().redirect_uri,
 		scopes: vec!["profile".into(), "email".into()],
+		unauthenticated_action: UnauthenticatedAction::Auto,
 	}
 }
 
@@ -306,6 +308,41 @@ async fn auto_mode_returns_unauthorized_for_json_requests() {
 		.expect_err("oidc should reject API requests without redirect");
 	assert!(matches!(err, Error::AuthenticationRequired));
 	assert_eq!(err.status_code(), ::http::StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn redirect_mode_redirects_non_html_requests() {
+	let mut policy = test_policy();
+	policy.unauthenticated_action = UnauthenticatedAction::Redirect;
+	let mut req = request(
+		Method::GET,
+		"https://app.example.com/private",
+		Some("application/json"),
+	);
+
+	let response = policy
+		.apply(None, &mut req, policy_client())
+		.await
+		.expect("redirect mode should redirect");
+	let response = response.direct_response.expect("redirect response");
+	assert_eq!(response.status(), ::http::StatusCode::FOUND);
+}
+
+#[tokio::test]
+async fn deny_mode_rejects_html_navigation() {
+	let mut policy = test_policy();
+	policy.unauthenticated_action = UnauthenticatedAction::Deny;
+	let mut req = request(
+		Method::GET,
+		"https://app.example.com/private",
+		Some("text/html"),
+	);
+
+	let err = policy
+		.apply(None, &mut req, policy_client())
+		.await
+		.expect_err("deny mode should reject without redirect");
+	assert!(matches!(err, Error::AuthenticationRequired));
 }
 
 #[tokio::test]
@@ -761,6 +798,7 @@ async fn issuer_only_oidc_config_uses_discovery() {
 		client_secret: SecretString::new("client-secret".into()),
 		redirect_uri: "http://localhost:3000/oauth/callback".into(),
 		scopes: vec![],
+		unauthenticated_action: UnauthenticatedAction::Auto,
 	}
 	.translate(
 		test_client(),
@@ -822,6 +860,7 @@ async fn partial_explicit_provider_config_is_rejected() {
 		client_secret: SecretString::new("client-secret".into()),
 		redirect_uri: "http://localhost:3000/oauth/callback".into(),
 		scopes: vec![],
+		unauthenticated_action: UnauthenticatedAction::Auto,
 	}
 	.translate(
 		test_client(),
@@ -874,6 +913,7 @@ async fn discovery_load_failures_identify_discovery_document_source() {
 		client_secret: SecretString::new("client-secret".into()),
 		redirect_uri: "http://localhost:3000/oauth/callback".into(),
 		scopes: vec![],
+		unauthenticated_action: UnauthenticatedAction::Auto,
 	}
 	.translate(
 		test_client(),
@@ -951,6 +991,7 @@ async fn discovered_remote_jwks_failures_identify_discovered_source() {
 		client_secret: SecretString::new("client-secret".into()),
 		redirect_uri: "http://localhost:3000/oauth/callback".into(),
 		scopes: vec![],
+		unauthenticated_action: UnauthenticatedAction::Auto,
 	}
 	.translate(
 		test_client(),
