@@ -899,9 +899,14 @@ impl HTTPProxy {
 		//     * If no other Listener matches the Host, the Gateway MUST return a
 		//       404.
 		let host = http::get_host(req).map_err(|_| ProxyError::RouteNotFound)?;
+		// Use protocol-filtered matching: since we're in a TLS context (checked
+		// above), only compare against other TLS-capable listeners. Without this
+		// filter, an HTTP listener with the same wildcard hostname could be
+		// returned by best_match(), causing a spurious 421 when BindProtocol::auto
+		// serves both HTTP and HTTPS listeners on the same bind.
 		let new_best_listener = bind
 			.listeners
-			.best_match(host)
+			.best_match_tls(host)
 			.filter(|l| l.key != selected_listener.key);
 
 		// "If another listener has a more specific match..."
