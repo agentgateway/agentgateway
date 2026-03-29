@@ -78,9 +78,10 @@ var (
 	gatewayNamespace = "agentgateway-base"
 
 	// manifests
-	staticSetupManifest  = filepath.Join(fsutils.MustGetThisDir(), "testdata", "static.yaml")
-	dynamicSetupManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "dynamic.yaml")
-	authnPolicyManifest  = filepath.Join(fsutils.MustGetThisDir(), "testdata", "remote-authn-auth0.yaml")
+	staticSetupManifest      = filepath.Join(fsutils.MustGetThisDir(), "testdata", "static.yaml")
+	dynamicSetupManifest     = filepath.Join(fsutils.MustGetThisDir(), "testdata", "dynamic.yaml")
+	authnPolicyManifest      = filepath.Join(fsutils.MustGetThisDir(), "testdata", "remote-authn-auth0.yaml")
+	routeAuthnPolicyManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "remote-route-authn-auth0.yaml")
 
 	// Base test setup - common resources
 	setup = base.TestCase{
@@ -100,5 +101,10 @@ var (
 	// MCP authn keycloak test setup (resources needed for non-dynamic tests)
 	authnSetup = base.TestCase{
 		Manifests: []string{authnPolicyManifest},
+	}
+
+	// MCP authn keycloak test setup (resources needed for non-dynamic tests)
+	authnRouteSetup = base.TestCase{
+		Manifests: []string{routeAuthnPolicyManifest},
 	}
 )

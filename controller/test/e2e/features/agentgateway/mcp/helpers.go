@@ -94,6 +94,7 @@ func (s *testingSuite) initializeAndGetSessionID(extraHeaders map[string]string)
 	return sid
 }
 
+// nolint: unparam
 func (s *testingSuite) testUnauthorizedToolsListWithSession(sessionID string, extraHeaders map[string]string, expectedStatus int) {
 	s.T().Log("Testing tools/list with session ID")
 
@@ -433,6 +434,7 @@ func (s *testingSuite) waitForMCP200(
 	s.T().Logf("%s init ready (status=%d)", label, httpOKCode)
 }
 
+// nolint: unparam
 func (s *testingSuite) testInitializeWithExpectedStatus(headers map[string]string, expectedStatus int, _ string) {
 	initBody := buildInitializeRequest("test-client", 1)
 	hdr := mcpHeaders(headers)

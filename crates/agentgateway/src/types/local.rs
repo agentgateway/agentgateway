@@ -21,14 +21,14 @@ use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendPolicy, BackendReference,
-	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch, Listener,
-	ListenerKey, ListenerName, ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication,
-	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
-	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch,
-	RouteName, RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
-	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig, TrafficPolicy,
-	TunnelProtocol, TypedResourceName,
+	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch,
+	JwtAuthentication, Listener, ListenerKey, ListenerName, ListenerProtocol, ListenerSet,
+	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpTarget, McpTargetName,
+	McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType, ResourceName,
+	Route, RouteBackendReference, RouteMatch, RouteName, RouteSet, ServerTLSConfig, SimpleBackend,
+	SimpleBackendReference, SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec,
+	TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig,
+	TrafficPolicy, TunnelProtocol, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
@@ -2314,10 +2314,11 @@ pub async fn split_policies(
 		backend_policies.push(BackendPolicy::McpAuthorization(p))
 	}
 	if let Some(p) = mcp_authentication {
-		// Translate local MCP authn into runtime authn with a ready JWT validator.
 		let authn: McpAuthentication = p.translate(client.clone()).await?;
-		backend_policies.push(BackendPolicy::McpAuthentication(authn));
-		// Do NOT inject a separate route-level JwtAuth; MCP router handles validation using jwt_validator.
+		route_policies.push(TrafficPolicy::JwtAuth(JwtAuthentication {
+			jwt: authn.jwt_validator.as_ref().clone(),
+			mcp: Some(authn),
+		}));
 	}
 	if let Some(p) = a2a {
 		backend_policies.push(BackendPolicy::A2a(p))
@@ -2338,7 +2339,10 @@ pub async fn split_policies(
 		route_policies.push(TrafficPolicy::AI(Arc::new(p)))
 	}
 	if let Some(p) = jwt_auth {
-		route_policies.push(TrafficPolicy::JwtAuth(p.try_into(client.clone()).await?));
+		route_policies.push(TrafficPolicy::JwtAuth(JwtAuthentication {
+			jwt: p.try_into(client.clone()).await?,
+			mcp: None,
+		}));
 	}
 	if let Some(p) = basic_auth {
 		route_policies.push(TrafficPolicy::BasicAuth(p.try_into()?));

@@ -83,9 +83,7 @@ async fn apply_request_policies(
 	}
 
 	if let Some(j) = &policies.jwt {
-		j.apply(Some(log), req)
-			.await
-			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
+		j.apply(&client, Some(log), req).await?;
 	}
 	if let Some(b) = &policies.basic_auth {
 		b.apply(req).await?;
@@ -258,9 +256,7 @@ async fn apply_gateway_policies(
 	response_headers: &mut HeaderMap,
 ) -> Result<(), ProxyResponse> {
 	if let Some(j) = &policies.jwt {
-		j.apply(Some(log), req)
-			.await
-			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
+		j.apply(&client, Some(log), req).await?;
 	}
 	if let Some(b) = &policies.basic_auth {
 		b.apply(req).await?;
