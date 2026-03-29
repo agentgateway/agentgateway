@@ -7780,6 +7780,11 @@ spec:
                           - host
                           - port
                           type: object
+                          x-kubernetes-validations:
+                          - message: MCP authentication is not supported on static
+                              MCP target policies
+                            rule: '!(has(self.policies) && has(self.policies.mcp)
+                              && has(self.policies.mcp.authentication))'
                       required:
                       - name
                       type: object
