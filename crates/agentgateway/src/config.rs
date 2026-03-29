@@ -249,6 +249,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			Some(session) => crate::http::sessionpersistence::Encoder::aes(session.key.expose_secret())?,
 		}
 	};
+	// Browser OIDC cookie crypto is core gateway runtime config, not per-policy input.
 	let oidc_cookie_encoder = parse::<String>("OIDC_COOKIE_SECRET")?
 		.map(|key| crate::http::sessionpersistence::Encoder::aes(key.trim()))
 		.transpose()?;

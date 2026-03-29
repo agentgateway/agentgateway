@@ -4,7 +4,6 @@ use serde_json::Value;
 
 use crate::http::Request;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::log::RequestLog;
 use tracing::debug;
 
 use super::provider;
@@ -23,7 +22,6 @@ pub(super) struct CallbackRequestContext {
 
 pub(super) fn start_login(
 	policy: &OidcPolicy,
-	_log: Option<&mut RequestLog>,
 	req: &Request,
 ) -> Result<crate::http::PolicyResponse, Error> {
 	let is_https = req.uri().scheme_str() == Some("https");
@@ -69,7 +67,6 @@ pub(super) fn start_login(
 
 pub(super) async fn handle_callback(
 	policy: &OidcPolicy,
-	_log: Option<&mut RequestLog>,
 	context: CallbackRequestContext,
 	client: PolicyClient,
 ) -> Result<crate::http::PolicyResponse, Error> {
@@ -137,9 +134,8 @@ pub(super) async fn handle_callback(
 	Ok(crate::http::PolicyResponse::default().with_response(response))
 }
 
-fn with_query(uri: &http::Uri, params: &[(&str, String)]) -> String {
-	let mut url =
-		url::Url::parse(&uri.to_string()).expect("authorization endpoint must be a valid URL");
+fn with_query(uri: &super::ProviderEndpoint, params: &[(&str, String)]) -> String {
+	let mut url = uri.as_url().clone();
 	{
 		let mut query = url.query_pairs_mut();
 		for (key, value) in params {

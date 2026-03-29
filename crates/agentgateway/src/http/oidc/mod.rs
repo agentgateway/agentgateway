@@ -1,10 +1,12 @@
 use std::collections::HashSet;
+use std::fmt;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ::http::{HeaderValue, StatusCode, header};
 use secrecy::ExposeSecret;
 use secrecy::SecretString;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 
 use crate::http::jwt;
@@ -13,7 +15,7 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
 
 mod callback;
-pub mod config;
+mod local;
 mod provider;
 mod redirect;
 mod session;
@@ -21,7 +23,8 @@ mod session;
 #[cfg(test)]
 mod tests;
 
-pub use config::LocalOidcConfig;
+pub use crate::http::oauth::TokenEndpointAuth;
+pub use local::LocalOidcConfig;
 pub use redirect::RedirectUri;
 pub use session::{
 	BrowserSession, CookieSecureMode, RESERVED_COOKIE_PREFIX, SameSiteMode, SessionConfig,
@@ -60,6 +63,88 @@ impl From<&str> for PolicyId {
 	}
 }
 
+/// Validated absolute HTTP(S) endpoint used by an OIDC provider.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderEndpoint {
+	uri: Uri,
+	url: url::Url,
+}
+
+impl ProviderEndpoint {
+	pub fn as_uri(&self) -> &Uri {
+		&self.uri
+	}
+
+	pub fn as_url(&self) -> &url::Url {
+		&self.url
+	}
+}
+
+impl TryFrom<&str> for ProviderEndpoint {
+	type Error = String;
+
+	fn try_from(value: &str) -> Result<Self, Self::Error> {
+		let url =
+			url::Url::parse(value).map_err(|e| format!("must be an absolute http(s) URL: {e}"))?;
+		if !matches!(url.scheme(), "http" | "https") {
+			return Err(format!(
+				"must use an http or https scheme, got '{}'",
+				url.scheme()
+			));
+		}
+
+		let uri = value
+			.parse::<Uri>()
+			.map_err(|e| format!("must be a valid HTTP URI: {e}"))?;
+		if uri.scheme().is_none() || uri.authority().is_none() {
+			return Err("must be an absolute http(s) URL".into());
+		}
+
+		Ok(Self { uri, url })
+	}
+}
+
+impl std::str::FromStr for ProviderEndpoint {
+	type Err = String;
+
+	fn from_str(value: &str) -> Result<Self, Self::Err> {
+		Self::try_from(value)
+	}
+}
+
+impl TryFrom<Uri> for ProviderEndpoint {
+	type Error = String;
+
+	fn try_from(value: Uri) -> Result<Self, Self::Error> {
+		Self::try_from(value.to_string().as_str())
+	}
+}
+
+impl fmt::Display for ProviderEndpoint {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		self.uri.fmt(f)
+	}
+}
+
+impl Serialize for ProviderEndpoint {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		self.to_string().serialize(serializer)
+	}
+}
+
+impl<'de> Deserialize<'de> for ProviderEndpoint {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let value = String::deserialize(deserializer)?;
+		Self::try_from(value.as_str()).map_err(serde::de::Error::custom)
+	}
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OidcPolicy {
@@ -67,7 +152,6 @@ pub struct OidcPolicy {
 	pub provider: Arc<Provider>,
 	pub client: ClientConfig,
 	pub redirect_uri: RedirectUri,
-	pub unauthenticated_action: UnauthenticatedAction,
 	pub session: SessionConfig,
 	pub scopes: Vec<String>,
 }
@@ -76,10 +160,8 @@ pub struct OidcPolicy {
 #[serde(rename_all = "camelCase")]
 pub struct Provider {
 	pub issuer: String,
-	#[serde(serialize_with = "crate::serdes::ser_display")]
-	pub authorization_endpoint: Uri,
-	#[serde(serialize_with = "crate::serdes::ser_display")]
-	pub token_endpoint: Uri,
+	pub authorization_endpoint: ProviderEndpoint,
+	pub token_endpoint: ProviderEndpoint,
 	pub id_token_validator: jwt::Jwt,
 }
 
@@ -90,26 +172,6 @@ pub struct ClientConfig {
 	#[serde(serialize_with = "crate::serdes::ser_redact")]
 	pub client_secret: SecretString,
 	pub token_endpoint_auth: TokenEndpointAuth,
-}
-
-#[derive(
-	Debug, Clone, Copy, serde::Serialize, serde::Deserialize, Default, PartialEq, Eq, PartialOrd, Ord,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub enum TokenEndpointAuth {
-	#[default]
-	ClientSecretBasic,
-	ClientSecretPost,
-}
-
-impl TokenEndpointAuth {
-	pub fn as_str(self) -> &'static str {
-		match self {
-			Self::ClientSecretBasic => "clientSecretBasic",
-			Self::ClientSecretPost => "clientSecretPost",
-		}
-	}
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -148,94 +210,47 @@ pub enum Error {
 	Http(#[from] anyhow::Error),
 }
 
-impl Error {
-	pub fn status_code(&self) -> StatusCode {
-		match self {
-			Self::AuthenticationRequired => StatusCode::UNAUTHORIZED,
-			Self::MissingSession
-			| Self::InvalidSession
-			| Self::MissingTransaction
-			| Self::InvalidTransaction
-			| Self::PolicyMismatch
-			| Self::CsrfMismatch
-			| Self::NonceMismatch
-			| Self::InvalidCallback
-			| Self::ProviderCallback(_) => StatusCode::BAD_REQUEST,
-			Self::SessionCookieTooLarge
-			| Self::TokenExchangeFailed(_)
-			| Self::MissingIdToken
-			| Self::InvalidIdToken(_)
-			| Self::Config(_)
-			| Self::Http(_) => StatusCode::INTERNAL_SERVER_ERROR,
-		}
-	}
-}
-
 struct CallbackQuery {
 	state: String,
 	code: Option<String>,
 	error: Option<String>,
 }
 
-#[derive(
-	Debug, Clone, Copy, serde::Serialize, serde::Deserialize, Default, PartialEq, Eq, PartialOrd, Ord,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub enum UnauthenticatedAction {
-	#[default]
-	Auto,
-	Redirect,
-	Deny,
-}
-
 impl OidcPolicy {
 	pub async fn apply(
 		&self,
-		mut log: Option<&mut RequestLog>,
+		log: Option<&mut RequestLog>,
 		req: &mut Request,
 		client: PolicyClient,
 	) -> Result<PolicyResponse, Error> {
-		if let Some(response) = self
-			.maybe_handle_callback(log.as_deref_mut(), req, client.clone())
-			.await?
-		{
+		if let Some(response) = self.maybe_handle_callback(req, client.clone()).await? {
 			return Ok(response);
 		}
 
-		if let Some(cookie) = crate::http::request_cookies::read_cookie(req, &self.session.cookie_name)
+		if let Some(cookie) = read_cookie(req, &self.session.cookie_name)
 			&& let Ok(browser_session) = self.session.decode_browser_session(&cookie)
 			&& browser_session.policy_id == self.policy_id
-			&& !browser_session.is_expired()
 			&& let Ok(claims) = self
 				.provider
 				.id_token_validator
 				.validate_claims(browser_session.raw_id_token.expose_secret())
 		{
 			if let Some(Value::String(sub)) = claims.inner.get("sub")
-				&& let Some(log) = log.as_deref_mut()
+				&& let Some(log) = log
 			{
 				log.jwt_sub = Some(sub.clone());
 			}
 			req.extensions_mut().insert(claims);
-			crate::http::request_cookies::strip_cookies_by_prefix(req, RESERVED_COOKIE_PREFIX);
+			strip_reserved_cookies(req);
 			return Ok(PolicyResponse::default());
 		}
 
-		match self.unauthenticated_action {
-			UnauthenticatedAction::Auto if should_start_login_redirect(req) => {
-				callback::start_login(self, log, req)
-			},
-			UnauthenticatedAction::Auto | UnauthenticatedAction::Deny => {
-				Err(Error::AuthenticationRequired)
-			},
-			UnauthenticatedAction::Redirect => callback::start_login(self, log, req),
-		}
+		// OIDC is an interactive browser policy: unauthenticated non-callback requests enter login.
+		callback::start_login(self, req)
 	}
 
 	async fn maybe_handle_callback(
 		&self,
-		log: Option<&mut RequestLog>,
 		req: &mut Request,
 		client: PolicyClient,
 	) -> Result<Option<PolicyResponse>, Error> {
@@ -254,11 +269,9 @@ impl OidcPolicy {
 		}
 		let code = query.code.ok_or(Error::InvalidCallback)?;
 		let transaction_cookie =
-			crate::http::request_cookies::read_cookie(req, &self.session.transaction_cookie_name)
-				.ok_or(Error::MissingTransaction)?;
+			read_cookie(req, &self.session.transaction_cookie_name).ok_or(Error::MissingTransaction)?;
 		let response = callback::handle_callback(
 			self,
-			log,
 			callback::CallbackRequestContext {
 				is_https: req.uri().scheme_str() == Some("https"),
 				code,
@@ -298,26 +311,42 @@ impl CallbackQuery {
 	}
 }
 
-fn should_start_login_redirect(req: &Request) -> bool {
-	// Keep the default narrow: only GET requests that explicitly prefer an HTML document enter the
-	// interactive browser login flow. Everything else gets a normal 401.
-	if req.method() != ::http::Method::GET {
-		return false;
-	}
-
-	accepts_html_document(req)
+fn iter_request_cookies(req: &Request) -> impl Iterator<Item = (String, String)> + '_ {
+	req
+		.headers()
+		.get_all(header::COOKIE)
+		.into_iter()
+		.filter_map(|value| value.to_str().ok())
+		.flat_map(|header_value| {
+			cookie::Cookie::split_parse(header_value.to_owned())
+				.filter_map(|c: Result<cookie::Cookie<'_>, _>| c.ok())
+				.map(|c: cookie::Cookie<'_>| (c.name().to_owned(), c.value().to_owned()))
+				.collect::<Vec<_>>()
+		})
 }
 
-fn accepts_html_document(req: &Request) -> bool {
-	let accept = req
-		.headers()
-		.get(header::ACCEPT)
-		.and_then(|v| v.to_str().ok())
-		.unwrap_or_default();
-	let html = accept.find("text/html").unwrap_or(usize::MAX);
-	let json = accept.find("application/json").unwrap_or(usize::MAX);
-	let sse = accept.find("text/event-stream").unwrap_or(usize::MAX);
-	html != usize::MAX && html < json && html < sse
+fn read_cookie(req: &Request, name: &str) -> Option<String> {
+	let mut matched = None;
+	for (cookie_name, cookie_value) in iter_request_cookies(req) {
+		if cookie_name == name {
+			matched = Some(cookie_value);
+		}
+	}
+	matched
+}
+
+fn strip_reserved_cookies(req: &mut Request) {
+	let preserved: Vec<String> = iter_request_cookies(req)
+		.filter(|(name, _)| !name.starts_with(RESERVED_COOKIE_PREFIX))
+		.map(|(name, value)| format!("{name}={value}"))
+		.collect();
+
+	req.headers_mut().remove(header::COOKIE);
+	if !preserved.is_empty() {
+		let hv = HeaderValue::from_str(&preserved.join("; "))
+			.expect("re-joined cookie header from valid source data");
+		req.headers_mut().insert(header::COOKIE, hv);
+	}
 }
 
 pub(crate) fn build_redirect_response(

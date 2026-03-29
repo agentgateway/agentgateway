@@ -1419,24 +1419,26 @@ async fn convert(
 		let res = split_policies(
 			client.clone(),
 			p.policy,
-			config.oidc_context(OidcPolicyIdentity::Fixed(
-				crate::http::oidc::PolicyId::policy(&policy_key),
+			Some(OidcCompileContext::policy(
+				&policy_key,
+				config.oidc_cookie_encoder.as_ref(),
 			)),
 		)
 		.await?;
 		if (res.route_policies.len() + res.backend_policies.len()) != 1 {
 			anyhow::bail!("'policies' must contain exactly 1 policy")
 		}
-		if let Some(TrafficPolicy::Oidc(_)) = res.route_policies.first()
+		if let Some(route_policy) = res.route_policies.first()
+			&& matches!(route_policy, TrafficPolicy::Oidc(_))
 			&& p.phase == PolicyPhase::Gateway
 		{
 			anyhow::bail!("oidc policies must run at route phase");
 		}
-		let tp = res
-			.route_policies
-			.first()
-			.map(|r| PolicyType::from((r.clone(), p.phase)))
-			.unwrap_or_else(|| res.backend_policies.first().unwrap().clone().into());
+		let tp = if let Some(route_policy) = res.route_policies.into_iter().next() {
+			PolicyType::from((route_policy, p.phase))
+		} else {
+			res.backend_policies.first().unwrap().clone().into()
+		};
 		let tgt_policy = TargetedPolicy {
 			name: Some(TypedResourceName {
 				kind: strng::literal!("Local"),
@@ -1488,7 +1490,6 @@ async fn convert(
 		workloads,
 		services,
 	};
-	validate_oidc_callback_ownership(config, &normalized)?;
 	Ok(normalized)
 }
 
@@ -1557,11 +1558,11 @@ async fn convert_llm_config(
 		let gateway_policies = split_policies(
 			client.clone(),
 			gateway.into(),
-			config.oidc_context(OidcPolicyIdentity::IndexedTargeted {
-				key_prefix: strng::new("listener"),
-				separator: "/",
-				start_index: 0,
-			}),
+			Some(OidcCompileContext::indexed_policy(
+				strng::new("listener"),
+				0,
+				config.oidc_cookie_encoder.as_ref(),
+			)),
 		)
 		.await?;
 		(
@@ -1874,23 +1875,29 @@ json(request.body).model
 
 	if !listener_gateway_policies.is_empty() || !listener_route_policies.is_empty() {
 		let pc = listener_gateway_policies.len();
+		let target = PolicyTarget::Gateway(listener_name.clone().into());
 		for (idx, pol) in listener_gateway_policies.into_iter().enumerate() {
 			let key = strng::format!("listener/{idx}");
+			let phase = if matches!(&pol, TrafficPolicy::Oidc(_)) {
+				PolicyPhase::Route
+			} else {
+				PolicyPhase::Gateway
+			};
 			all_policies.push(TargetedPolicy {
-				key: key.clone(),
+				key,
 				name: None,
-				target: PolicyTarget::Gateway(listener_name.clone().into()),
-				policy: (pol, PolicyPhase::Gateway).into(),
-			})
+				target: target.clone(),
+				policy: (pol, phase).into(),
+			});
 		}
 		for (idx, pol) in listener_route_policies.into_iter().enumerate() {
 			let key = strng::format!("listener/{}", pc + idx);
 			all_policies.push(TargetedPolicy {
-				key: key.clone(),
+				key,
 				name: None,
-				target: PolicyTarget::Gateway(listener_name.clone().into()),
+				target: target.clone(),
 				policy: (pol, PolicyPhase::Route).into(),
-			})
+			});
 		}
 	}
 
@@ -1945,13 +1952,15 @@ async fn convert_mcp_config(
 		policies,
 	} = mcp_config;
 	let port = port.unwrap_or(DEFAULT_MCP_PORT);
+	let route_key = strng::new("mcp:default");
 
 	let resolved_policies = if let Some(pol) = policies {
 		split_policies(
 			client.clone(),
 			pol,
-			config.oidc_context(OidcPolicyIdentity::Fixed(
-				crate::http::oidc::PolicyId::route("mcp:default"),
+			Some(OidcCompileContext::route(
+				&route_key,
+				config.oidc_cookie_encoder.as_ref(),
 			)),
 		)
 		.await?
@@ -1961,7 +1970,7 @@ async fn convert_mcp_config(
 
 	let mut routes = RouteSet::default();
 	let route = Route {
-		key: strng::new("mcp:default"),
+		key: route_key.clone(),
 		service_key: None,
 		name: RouteName {
 			name: strng::new("default"),
@@ -2134,30 +2143,31 @@ async fn convert_listener(
 	}
 
 	if let Some(pol) = policies {
-		let oidc_key_prefix = strng::format!("listener/{key}");
+		let listener_policy_prefix = strng::format!("listener/{key}");
 		let pols = split_policies(
 			client.clone(),
 			pol.into(),
-			config.oidc_context(OidcPolicyIdentity::IndexedTargeted {
-				key_prefix: oidc_key_prefix,
-				separator: "/",
-				start_index: 0,
-			}),
+			Some(OidcCompileContext::indexed_policy(
+				listener_policy_prefix,
+				0,
+				config.oidc_cookie_encoder.as_ref(),
+			)),
 		)
 		.await?;
+		let target = PolicyTarget::Gateway(name.clone().into());
 		for (idx, pol) in pols.route_policies.into_iter().enumerate() {
 			let key = strng::format!("listener/{key}/{idx}");
-			let phase = if matches!(pol, TrafficPolicy::Oidc(_)) {
+			let phase = if matches!(&pol, TrafficPolicy::Oidc(_)) {
 				PolicyPhase::Route
 			} else {
 				PolicyPhase::Gateway
 			};
 			all_policies.push(TargetedPolicy {
-				key: key.clone(),
+				key,
 				name: None,
-				target: PolicyTarget::Gateway(name.clone().into()),
+				target: target.clone(),
 				policy: (pol, phase).into(),
-			})
+			});
 		}
 	}
 
@@ -2228,8 +2238,9 @@ pub async fn convert_route(
 		split_policies(
 			client,
 			pol,
-			config.oidc_context(OidcPolicyIdentity::Fixed(
-				crate::http::oidc::PolicyId::route(&key),
+			Some(OidcCompileContext::route(
+				&key,
+				config.oidc_cookie_encoder.as_ref(),
 			)),
 		)
 		.await?
@@ -2240,6 +2251,7 @@ pub async fn convert_route(
 		br.inline_policies
 			.extend_from_slice(&resolved.backend_policies);
 	}
+	let inline_policies = resolved.route_policies;
 	let route = Route {
 		key,
 		service_key: None,
@@ -2252,219 +2264,69 @@ pub async fn convert_route(
 		hostnames,
 		matches,
 		backends: backend_refs,
-		inline_policies: resolved.route_policies,
+		inline_policies,
 	};
 	Ok((route, external_backends))
 }
 
 #[derive(Default)]
-pub struct ResolvedPolicies {
-	pub backend_policies: Vec<BackendPolicy>,
-	pub route_policies: Vec<TrafficPolicy>,
+pub(crate) struct ResolvedPolicies {
+	pub(crate) backend_policies: Vec<BackendPolicy>,
+	pub(crate) route_policies: Vec<TrafficPolicy>,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct OidcContext<'a> {
-	pub encoder: &'a crate::http::sessionpersistence::Encoder,
-	pub identity: OidcPolicyIdentity,
-}
-
-impl crate::Config {
-	fn oidc_context(&self, identity: OidcPolicyIdentity) -> Option<OidcContext<'_>> {
-		self
-			.oidc_cookie_encoder
-			.as_ref()
-			.map(|encoder| OidcContext { encoder, identity })
-	}
+pub(crate) struct OidcCompileContext<'a> {
+	policy_ids: OidcPolicyIdSource,
+	oidc_cookie_encoder: Option<&'a crate::http::sessionpersistence::Encoder>,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum OidcPolicyIdentity {
+enum OidcPolicyIdSource {
 	Fixed(crate::http::oidc::PolicyId),
-	IndexedTargeted {
-		key_prefix: Strng,
-		separator: &'static str,
-		start_index: usize,
-	},
+	IndexedPolicy { prefix: Strng, offset: usize },
 }
 
-impl OidcPolicyIdentity {
-	fn resolve(&self, route_policy_index: usize) -> crate::http::oidc::PolicyId {
-		match self {
-			Self::Fixed(policy_id) => policy_id.clone(),
-			Self::IndexedTargeted {
-				key_prefix,
-				separator,
-				start_index,
-			} => crate::http::oidc::PolicyId::policy(strng::format!(
-				"{key_prefix}{separator}{}",
-				start_index + route_policy_index
-			)),
+impl<'a> OidcCompileContext<'a> {
+	pub(crate) fn route(
+		route_key: &Strng,
+		oidc_cookie_encoder: Option<&'a crate::http::sessionpersistence::Encoder>,
+	) -> Self {
+		Self {
+			policy_ids: OidcPolicyIdSource::Fixed(crate::http::oidc::PolicyId::route(route_key)),
+			oidc_cookie_encoder,
 		}
 	}
-}
 
-fn validate_oidc_callback_ownership(
-	config: &crate::Config,
-	normalized: &NormalizedLocalConfig,
-) -> anyhow::Result<()> {
-	let stores = build_validation_stores(config, normalized);
-	for bind in normalized.binds.iter() {
-		for listener in bind.listeners.iter() {
-			for route in listener.routes.iter() {
-				let path = crate::store::RoutePath {
-					listener: &listener.name,
-					route: &route.name,
-				};
-				let policies = stores
-					.read_binds()
-					.route_policies(&path, &route.inline_policies);
-				if let Some(policy) = &policies.oidc {
-					let route_name = route.name.as_route_name();
-					let callback_path = policy.redirect_uri.callback_path.path();
-					let req = build_callback_request(policy)?;
-					let Some((selected_route, _)) = crate::http::route::select_best_route(
-						stores.clone(),
-						config.network.clone(),
-						config.self_addr.as_ref(),
-						bind.address,
-						listener,
-						&req,
-					) else {
-						anyhow::bail!(
-							"listener '{}' route '{}' resolves to an oidc policy with callback path '{}', but no route can own that callback",
-							listener.name.listener_name,
-							route_name,
-							callback_path
-						);
-					};
-
-					let selected_route_can_handle_callback = selected_route
-						.matches
-						.iter()
-						.any(|m| route_match_can_handle_oidc_callback(m, callback_path));
-					anyhow::ensure!(
-						selected_route_can_handle_callback,
-						"listener '{}' route '{}' resolves to an oidc policy with callback path '{}', but route '{}' wins callback selection with header or query constraints that real oidc callbacks will not satisfy; callback ownership requires a path-based GET route",
-						listener.name.listener_name,
-						route_name,
-						callback_path,
-						selected_route.name.as_route_name()
-					);
-
-					let selected_route_policies = stores.read_binds().route_policies(
-						&crate::store::RoutePath {
-							listener: &listener.name,
-							route: &selected_route.name,
-						},
-						&selected_route.inline_policies,
-					);
-					let callback_has_competing_authn = selected_route_policies.oidc.is_some()
-						&& [
-							selected_route_policies.jwt.is_some(),
-							selected_route_policies.basic_auth.is_some(),
-							selected_route_policies.api_key.is_some(),
-						]
-						.into_iter()
-						.any(|present| present);
-					anyhow::ensure!(
-						!callback_has_competing_authn,
-						"listener '{}' route '{}' resolves to an oidc policy with callback path '{}', but route '{}' wins callback selection with multiple authentication mechanisms; oidc callback ownership must be unambiguous",
-						listener.name.listener_name,
-						route_name,
-						callback_path,
-						selected_route.name.as_route_name()
-					);
-					match &selected_route_policies.oidc {
-						Some(selected_policy) if selected_policy.policy_id == policy.policy_id => {},
-						Some(selected_policy) => {
-							anyhow::bail!(
-								"listener '{}' route '{}' resolves to an oidc policy with callback path '{}', but route '{}' wins callback selection with oidc policy identity '{}' instead of '{}'; shared session identity requires one shared real oidc policy identity, so use one route or one shared targeted route-phase oidc policy",
-								listener.name.listener_name,
-								route_name,
-								callback_path,
-								selected_route.name.as_route_name(),
-								selected_policy.policy_id.as_str(),
-								policy.policy_id.as_str()
-							);
-						},
-						None => {
-							anyhow::bail!(
-								"listener '{}' route '{}' resolves to an oidc policy with callback path '{}', but route '{}' wins callback selection without oidc",
-								listener.name.listener_name,
-								route_name,
-								callback_path,
-								selected_route.name.as_route_name()
-							);
-						},
-					}
-				}
-			}
+	pub(crate) fn policy(
+		policy_key: &str,
+		oidc_cookie_encoder: Option<&'a crate::http::sessionpersistence::Encoder>,
+	) -> Self {
+		Self {
+			policy_ids: OidcPolicyIdSource::Fixed(crate::http::oidc::PolicyId::policy(policy_key)),
+			oidc_cookie_encoder,
 		}
 	}
-	Ok(())
-}
 
-fn route_match_can_handle_oidc_callback(route_match: &RouteMatch, callback_path: &str) -> bool {
-	if route_match
-		.method
-		.as_ref()
-		.is_some_and(|m| m.method.as_str() != "GET")
-	{
-		return false;
-	}
-	if !route_match.headers.is_empty() || !route_match.query.is_empty() {
-		return false;
-	}
-
-	match &route_match.path {
-		PathMatch::Exact(path) => path.as_str() == callback_path,
-		PathMatch::PathPrefix(prefix) => {
-			let prefix = prefix.trim_end_matches('/');
-			let Some(suffix) = callback_path.trim_end_matches('/').strip_prefix(prefix) else {
-				return false;
-			};
-			suffix.is_empty() || suffix.starts_with('/')
-		},
-		PathMatch::Regex(regex) => regex
-			.find(callback_path)
-			.map(|m| m.start() == 0 && m.end() == callback_path.len())
-			.unwrap_or(false),
-	}
-}
-
-fn build_callback_request(
-	policy: &crate::http::oidc::OidcPolicy,
-) -> anyhow::Result<crate::http::Request> {
-	let uri = format!(
-		"{}?code=validation-code&state=validation-state",
-		policy.redirect_uri.canonical_uri()
-	);
-	::http::Request::builder()
-		.method(::http::Method::GET)
-		.uri(uri)
-		.body(crate::http::Body::empty())
-		.map_err(Into::into)
-}
-
-fn build_validation_stores(
-	config: &crate::Config,
-	normalized: &NormalizedLocalConfig,
-) -> crate::store::Stores {
-	let stores = crate::store::Stores::with_ipv6_enabled(config.ipv6_enabled);
-	{
-		let mut binds = stores.binds.write();
-		for bind in normalized.binds.iter().cloned() {
-			binds.insert_bind(bind);
-		}
-		for backend in normalized.backends.iter().cloned() {
-			binds.insert_backend(backend.backend.name(), backend);
-		}
-		for policy in normalized.policies.iter().cloned() {
-			binds.insert_policy(policy);
+	pub(crate) fn indexed_policy(
+		prefix: Strng,
+		offset: usize,
+		oidc_cookie_encoder: Option<&'a crate::http::sessionpersistence::Encoder>,
+	) -> Self {
+		Self {
+			policy_ids: OidcPolicyIdSource::IndexedPolicy { prefix, offset },
+			oidc_cookie_encoder,
 		}
 	}
-	stores
+
+	fn policy_id(&self, route_policy_index: usize) -> crate::http::oidc::PolicyId {
+		match &self.policy_ids {
+			OidcPolicyIdSource::Fixed(policy_id) => policy_id.clone(),
+			OidcPolicyIdSource::IndexedPolicy { prefix, offset } => crate::http::oidc::PolicyId::policy(
+				strng::format!("{prefix}/{}", offset + route_policy_index),
+			),
+		}
+	}
 }
 
 async fn split_frontend_policies(
@@ -2530,7 +2392,7 @@ async fn split_frontend_policies(
 pub(crate) async fn split_policies(
 	client: Client,
 	pol: FilterOrPolicy,
-	oidc: Option<OidcContext<'_>>,
+	oidc_context: Option<OidcCompileContext<'_>>,
 ) -> Result<ResolvedPolicies, Error> {
 	let mut resolved = ResolvedPolicies::default();
 	let ResolvedPolicies {
@@ -2622,14 +2484,18 @@ pub(crate) async fn split_policies(
 		route_policies.push(TrafficPolicy::JwtAuth(p.try_into(client.clone()).await?));
 	}
 	if let Some(p) = oidc_config {
-		let Some(oidc) = &oidc else {
+		let Some(oidc_context) = oidc_context.as_ref() else {
+			return Err(Error::msg("oidc policies must run at route phase"));
+		};
+		let Some(oidc_cookie_encoder) = oidc_context.oidc_cookie_encoder else {
 			return Err(Error::msg(
 				"OIDC_COOKIE_SECRET is required when oidc is configured",
 			));
 		};
-		let policy_id = oidc.identity.resolve(route_policies.len());
+		let policy_id = oidc_context.policy_id(route_policies.len());
 		route_policies.push(TrafficPolicy::Oidc(
-			p.translate(client.clone(), oidc.encoder, policy_id).await?,
+			p.compile(client.clone(), policy_id, oidc_cookie_encoder)
+				.await?,
 		));
 	}
 	if let Some(p) = basic_auth {

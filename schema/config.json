@@ -3374,7 +3374,7 @@
       ]
     },
     "LocalOidcConfig": {
-      "description": "Browser-based OIDC authentication policy.",
+      "description": "Browser-based OIDC authentication policy.\n\nExplicit mode is still OIDC: it supplies provider metadata manually instead of using discovery.\nUnauthenticated non-callback requests always redirect to the provider login flow. Routes that\nneed non-redirect authentication behavior should use a different auth policy.",
       "type": "object",
       "properties": {
         "issuer": {
@@ -3419,14 +3419,6 @@
             }
           ]
         },
-        "tokenEndpointAuthMethodsSupported": {
-          "description": "Supported client authentication methods for the token endpoint.\n\nWhen omitted and discovery is used, the discovery document decides.\nWhen omitted and the provider is fully explicit, this defaults to\n`[\"clientSecretBasic\"]`.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/TokenEndpointAuth"
-          },
-          "default": []
-        },
         "clientId": {
           "description": "OAuth2 client identifier used for authorization and token exchange.",
           "type": "string"
@@ -3436,7 +3428,7 @@
           "type": "string"
         },
         "redirectURI": {
-          "description": "Absolute callback URI handled by the gateway.",
+          "description": "Absolute callback URI handled by the gateway.\nThis policy always redirects unauthenticated non-callback requests back through this login\nflow.",
           "type": "string"
         },
         "scopes": {
@@ -3454,13 +3446,6 @@
         "clientId",
         "clientSecret",
         "redirectURI"
-      ]
-    },
-    "TokenEndpointAuth": {
-      "type": "string",
-      "enum": [
-        "clientSecretBasic",
-        "clientSecretPost"
       ]
     },
     "LocalBasicAuth": {

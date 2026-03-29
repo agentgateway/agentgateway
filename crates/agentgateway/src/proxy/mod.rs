@@ -212,6 +212,7 @@ impl ProxyError {
 		}
 	}
 	pub fn into_response(self) -> Response {
+		let msg = self.to_string();
 		let code = match self {
 			ProxyError::BindNotFound => StatusCode::NOT_FOUND,
 			ProxyError::ListenerNotFound => StatusCode::NOT_FOUND,
@@ -233,7 +234,24 @@ impl ProxyError {
 			ProxyError::InvalidRequest => StatusCode::BAD_REQUEST,
 
 			ProxyError::JwtAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
-			ProxyError::OidcFailure(ref error) => error.status_code(),
+			ProxyError::OidcFailure(ref error) => match error {
+				http::oidc::Error::AuthenticationRequired => StatusCode::UNAUTHORIZED,
+				http::oidc::Error::MissingSession
+				| http::oidc::Error::InvalidSession
+				| http::oidc::Error::MissingTransaction
+				| http::oidc::Error::InvalidTransaction
+				| http::oidc::Error::PolicyMismatch
+				| http::oidc::Error::CsrfMismatch
+				| http::oidc::Error::NonceMismatch
+				| http::oidc::Error::InvalidCallback
+				| http::oidc::Error::ProviderCallback(_) => StatusCode::BAD_REQUEST,
+				http::oidc::Error::SessionCookieTooLarge
+				| http::oidc::Error::TokenExchangeFailed(_)
+				| http::oidc::Error::MissingIdToken
+				| http::oidc::Error::InvalidIdToken(_)
+				| http::oidc::Error::Config(_)
+				| http::oidc::Error::Http(_) => StatusCode::INTERNAL_SERVER_ERROR,
+			},
 			ProxyError::BasicAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::APIKeyAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::McpJwtAuthenticationFailure(_, _) => StatusCode::UNAUTHORIZED,
@@ -279,7 +297,6 @@ impl ProxyError {
 			// Note: we do not return a 401/403 here, as the obscure that it was rejected due to auth
 			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::BAD_REQUEST,
 		};
-		let msg = self.to_string();
 		let mut rb = ::http::Response::builder().status(code);
 
 		// Apply per-error headers

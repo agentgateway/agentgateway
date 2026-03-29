@@ -3,6 +3,8 @@ use std::time::Duration;
 
 use crate::http::sessionpersistence;
 use base64::Engine;
+use cookie::Cookie;
+use cookie::SameSite;
 use rand::RngExt;
 use secrecy::ExposeSecret;
 use secrecy::SecretString;
@@ -16,6 +18,14 @@ pub const RESERVED_COOKIE_PREFIX: &str = "agw_oidc_";
 // silently dropped session cookies.
 const MAX_BROWSER_COOKIE_VALUE_SIZE: usize = 3800;
 const ORIGINAL_URI_LIMIT: usize = 2048;
+
+pub(super) fn default_session_ttl() -> Duration {
+	Duration::from_secs(60 * 60)
+}
+
+pub(super) fn default_transaction_ttl() -> Duration {
+	Duration::from_secs(5 * 60)
+}
 
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -255,24 +265,24 @@ fn cookie_header(
 	max_age: Option<Duration>,
 	expire_now: bool,
 ) -> String {
-	let mut cookie = format!("{name}={value}; Path=/; HttpOnly");
-	if let Some(max_age) = max_age {
-		let secs = max_age.as_secs();
-		let secs = if expire_now { 0 } else { secs };
-		let _ = write!(cookie, "; Max-Age={secs}");
-	}
-	match same_site {
-		SameSiteMode::Lax => cookie.push_str("; SameSite=Lax"),
-		SameSiteMode::Strict => cookie.push_str("; SameSite=Strict"),
-		SameSiteMode::None => cookie.push_str("; SameSite=None"),
-	}
 	let secure = match secure_mode {
 		CookieSecureMode::Always => true,
 		CookieSecureMode::Never => false,
 		CookieSecureMode::Auto => is_https,
 	};
-	if secure {
-		cookie.push_str("; Secure");
+	let mut cookie = Cookie::build((name, value))
+		.path("/")
+		.http_only(true)
+		.same_site(match same_site {
+			SameSiteMode::Lax => SameSite::Lax,
+			SameSiteMode::Strict => SameSite::Strict,
+			SameSiteMode::None => SameSite::None,
+		})
+		.secure(secure);
+	if let Some(max_age) = max_age {
+		let secs = if expire_now { 0 } else { max_age.as_secs() };
+		let secs = i64::try_from(secs).unwrap_or(i64::MAX);
+		cookie = cookie.max_age(cookie::time::Duration::seconds(secs));
 	}
-	cookie
+	cookie.build().to_string()
 }

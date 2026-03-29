@@ -36,8 +36,8 @@ use crate::transport::tls;
 use crate::types::agent::{
 	Backend, BackendPolicy, BackendReference, BackendTarget, BackendWithPolicies, Bind, BindKey,
 	BindProtocol, Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget, McpTargetSpec,
-	PathMatch, PolicyTarget, ResourceName, Route, RouteBackendReference, RouteMatch, RouteName,
-	RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	PathMatch, PolicyPhase, PolicyTarget, ResourceName, Route, RouteBackendReference, RouteMatch,
+	RouteName, RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
 	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy,
 };
 use crate::types::local;
@@ -570,26 +570,19 @@ impl TestBind {
 		let pols = local::split_policies(
 			self.pi.upstream.clone(),
 			pol,
-			self
-				.pi
-				.cfg
-				.oidc_cookie_encoder
-				.as_ref()
-				.map(|encoder| local::OidcContext {
-					encoder,
-					identity: local::OidcPolicyIdentity::IndexedTargeted {
-						key_prefix: strng::new("pol-"),
-						separator: "",
-						start_index: self.policies + 1,
-					},
-				}),
+			Some(local::OidcCompileContext::indexed_policy(
+				strng::new("pol"),
+				self.policies + 1,
+				self.pi.cfg.oidc_cookie_encoder.as_ref(),
+			)),
 		)
 		.await
 		.unwrap();
 		for v in pols.route_policies.into_iter() {
 			self.policies += 1;
+			let key = strng::format!("pol/{}", self.policies);
 			self.with_policy(TargetedPolicy {
-				key: strng::format!("pol-{}", self.policies),
+				key,
 				name: None,
 				target: PolicyTarget::Route(RouteName {
 					name: "route".into(),
@@ -597,7 +590,7 @@ impl TestBind {
 					rule_name: None,
 					kind: None,
 				}),
-				policy: v.into(),
+				policy: (v, PolicyPhase::Route).into(),
 			});
 		}
 	}
@@ -616,7 +609,7 @@ impl TestBind {
 		for v in normalized.policies.into_iter() {
 			self.policies += 1;
 			self.with_policy(TargetedPolicy {
-				key: strng::format!("pol-{}", self.policies),
+				key: strng::format!("pol/{}", self.policies),
 				..v
 			});
 		}
@@ -629,7 +622,7 @@ impl TestBind {
 		for v in pols.backend_policies.into_iter() {
 			self.policies += 1;
 			self.with_policy(TargetedPolicy {
-				key: strng::format!("pol-{}", self.policies),
+				key: strng::format!("pol/{}", self.policies),
 				name: None,
 				target: PolicyTarget::Backend(BackendTarget::Backend {
 					name: addr.to_string().into(),

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use ::http::{Method, Request as HttpRequest, Uri, header};
+use ::http::{Method, Request as HttpRequest, header};
 use base64::Engine as _;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use jsonwebtoken::jwk::JwkSet;
@@ -9,13 +9,12 @@ use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 use serde_json::json;
-use wiremock::matchers::{header as match_header, method, path};
+use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
 use crate::client;
 use crate::http::jwt;
-use crate::proxy::ProxyError;
 use crate::serdes::FileInlineOrRemote;
 use crate::test_helpers::proxymock::setup_proxy_test;
 
@@ -99,6 +98,10 @@ fn test_oidc_cookie_encoder() -> crate::http::sessionpersistence::Encoder {
 	.expect("aes encoder")
 }
 
+fn provider_endpoint(value: impl AsRef<str>) -> ProviderEndpoint {
+	value.as_ref().parse().expect("provider endpoint")
+}
+
 fn test_policy() -> OidcPolicy {
 	let session = SessionConfig {
 		cookie_name: "agw_oidc_s_test".into(),
@@ -114,8 +117,8 @@ fn test_policy() -> OidcPolicy {
 		policy_id: "policy".into(),
 		provider: Arc::new(Provider {
 			issuer: TEST_ISSUER.into(),
-			authorization_endpoint: Uri::from_static("https://issuer.example.com/authorize"),
-			token_endpoint: Uri::from_static("https://issuer.example.com/token"),
+			authorization_endpoint: provider_endpoint("https://issuer.example.com/authorize"),
+			token_endpoint: provider_endpoint("https://issuer.example.com/token"),
 			id_token_validator: test_id_token_validator(),
 		}),
 		client: ClientConfig {
@@ -124,17 +127,16 @@ fn test_policy() -> OidcPolicy {
 			token_endpoint_auth: TokenEndpointAuth::ClientSecretBasic,
 		},
 		redirect_uri: test_redirect_uri(),
-		unauthenticated_action: UnauthenticatedAction::Auto,
 		session,
 		scopes: vec!["openid".into(), "profile".into()],
 	}
 }
 
-fn test_callback_policy(token_endpoint: Uri) -> OidcPolicy {
+fn test_callback_policy(token_endpoint: ProviderEndpoint) -> OidcPolicy {
 	let mut policy = test_policy();
 	policy.provider = Arc::new(Provider {
 		issuer: TEST_ISSUER.into(),
-		authorization_endpoint: Uri::from_static("https://issuer.example.com/authorize"),
+		authorization_endpoint: provider_endpoint("https://issuer.example.com/authorize"),
 		token_endpoint,
 		id_token_validator: test_id_token_validator(),
 	});
@@ -196,20 +198,27 @@ fn explicit_local_oidc_config() -> LocalOidcConfig {
 	LocalOidcConfig {
 		issuer: TEST_ISSUER.into(),
 		discovery: None,
-		authorization_endpoint: Some(Uri::from_static("https://issuer.example.com/authorize")),
-		token_endpoint: Some(Uri::from_static("https://issuer.example.com/token")),
+		authorization_endpoint: Some(provider_endpoint("https://issuer.example.com/authorize")),
+		token_endpoint: Some(provider_endpoint("https://issuer.example.com/token")),
 		jwks: Some(test_jwks_inline()),
-		token_endpoint_auth_methods_supported: vec![],
 		client_id: TEST_CLIENT_ID.into(),
 		client_secret: SecretString::new("client-secret".into()),
 		redirect_uri: test_redirect_uri().redirect_uri,
 		scopes: vec!["profile".into(), "email".into()],
-		unauthenticated_action: UnauthenticatedAction::Auto,
 	}
 }
 
 fn translated_policy_id(name: &str) -> PolicyId {
 	PolicyId::policy(name)
+}
+
+async fn compile_local_policy(
+	config: LocalOidcConfig,
+	policy_id: PolicyId,
+) -> Result<OidcPolicy, Error> {
+	config
+		.compile(test_client(), policy_id, &test_oidc_cookie_encoder())
+		.await
 }
 
 #[test]
@@ -234,6 +243,22 @@ fn redirect_uri_accepts_valid_absolute_http_callbacks() {
 	assert_eq!(redirect.port, 80);
 	assert!(!redirect.https);
 	assert_eq!(redirect.callback_path.path(), "/oauth/callback");
+}
+
+#[test]
+fn explicit_provider_config_rejects_relative_endpoints_during_deserialization() {
+	let err = serde_json::from_value::<LocalOidcConfig>(json!({
+		"issuer": TEST_ISSUER,
+		"authorizationEndpoint": "/authorize",
+		"tokenEndpoint": "https://issuer.example.com/token",
+		"jwks": serde_json::to_string(&test_jwks()).expect("jwks"),
+		"clientId": TEST_CLIENT_ID,
+		"clientSecret": "client-secret",
+		"redirectURI": "http://localhost:3000/oauth/callback"
+	}))
+	.expect_err("relative authorization endpoint should be rejected");
+
+	assert!(err.to_string().contains("must be an absolute http(s) URL"));
 }
 
 #[tokio::test]
@@ -272,310 +297,265 @@ async fn apply_derives_claims_from_stored_id_token() {
 }
 
 #[tokio::test]
-async fn auto_mode_redirects_html_navigation() {
-	let mut policy = test_policy();
-	policy.redirect_uri = RedirectUri::parse("http://127.0.0.1/oauth/callback".into()).unwrap();
-	let mut req = request(Method::GET, "http://127.0.0.1/private", Some("text/html"));
+async fn apply_redirects_unauthenticated_requests_to_login() {
+	let cases = [
+		(
+			"html request",
+			"http://127.0.0.1/private",
+			"text/html",
+			"http://127.0.0.1/oauth/callback",
+			Some("redirect_uri=http%3A%2F%2F127.0.0.1%2Foauth%2Fcallback"),
+		),
+		(
+			"json request",
+			"https://app.example.com/private",
+			"application/json",
+			"https://app.example.com/oauth/callback",
+			None,
+		),
+		(
+			"callback path without query",
+			"https://app.example.com/oauth/callback",
+			"text/html",
+			"https://app.example.com/oauth/callback",
+			None,
+		),
+	];
 
-	let response = policy
-		.apply(None, &mut req, policy_client())
+	for (name, request_uri, accept, redirect_uri, expected_fragment) in cases {
+		let mut policy = test_policy();
+		policy.redirect_uri = RedirectUri::parse(redirect_uri.to_string()).expect("redirect uri");
+		let mut req = request(Method::GET, request_uri, Some(accept));
+
+		let response = policy
+			.apply(None, &mut req, policy_client())
+			.await
+			.expect(name);
+		let response = response.direct_response.expect("redirect response");
+		assert_eq!(response.status(), ::http::StatusCode::FOUND, "{name}");
+
+		let location = response
+			.headers()
+			.get(header::LOCATION)
+			.expect("location header")
+			.to_str()
+			.expect("location utf8");
+		assert!(
+			location.starts_with("https://issuer.example.com/authorize?"),
+			"{name}"
+		);
+		if let Some(expected_fragment) = expected_fragment {
+			assert!(location.contains(expected_fragment), "{name}");
+		}
+	}
+}
+
+#[tokio::test]
+async fn token_endpoint_auth_modes_shape_exchange_requests() {
+	#[derive(Copy, Clone)]
+	enum Expectation {
+		AuthorizationHeader,
+		FormBodyCredentials,
+	}
+
+	let cases = [
+		(
+			"client_secret_basic",
+			TokenEndpointAuth::ClientSecretBasic,
+			"client:id",
+			"s e:c",
+			Expectation::AuthorizationHeader,
+		),
+		(
+			"client_secret_post",
+			TokenEndpointAuth::ClientSecretPost,
+			"client-id",
+			"client-secret",
+			Expectation::FormBodyCredentials,
+		),
+	];
+
+	for (name, token_endpoint_auth, client_id, client_secret, expectation) in cases {
+		let mock = MockServer::start().await;
+		Mock::given(method("POST"))
+			.and(path("/token"))
+			.respond_with(ResponseTemplate::new(200).set_body_json(json!({
+				"id_token": signed_id_token(TEST_NONCE)
+			})))
+			.mount(&mock)
+			.await;
+
+		let provider = Provider {
+			issuer: TEST_ISSUER.into(),
+			authorization_endpoint: provider_endpoint("https://issuer.example.com/authorize"),
+			token_endpoint: provider_endpoint(format!("{}/token", mock.uri())),
+			id_token_validator: test_id_token_validator(),
+		};
+		let client_config = ClientConfig {
+			client_id: client_id.into(),
+			client_secret: SecretString::new(client_secret.into()),
+			token_endpoint_auth,
+		};
+
+		let response = provider::exchange_code(
+			policy_client(),
+			&provider,
+			&client_config,
+			"https://app.example.com/oauth/callback",
+			"code",
+			&SecretString::new("verifier".into()),
+		)
 		.await
-		.expect("apply");
-	let response = response.direct_response.expect("redirect response");
-	assert_eq!(response.status(), ::http::StatusCode::FOUND);
-	let location = response
-		.headers()
-		.get(header::LOCATION)
-		.unwrap()
-		.to_str()
-		.unwrap();
-	assert!(location.starts_with("https://issuer.example.com/authorize?"));
-	assert!(location.contains("redirect_uri=http%3A%2F%2F127.0.0.1%2Foauth%2Fcallback"));
+		.expect(name);
+		assert!(response.id_token.is_some(), "{name}");
+
+		let request = &mock.received_requests().await.expect("requests")[0];
+		let body = String::from_utf8(request.body.clone()).expect("utf8 body");
+		match expectation {
+			Expectation::AuthorizationHeader => {
+				let encoded_client_id = url::form_urlencoded::Serializer::new(String::new())
+					.append_pair("", client_id)
+					.finish();
+				let encoded_client_secret = url::form_urlencoded::Serializer::new(String::new())
+					.append_pair("", client_secret)
+					.finish();
+				let expected_auth = format!(
+					"Basic {}",
+					base64::engine::general_purpose::STANDARD.encode(format!(
+						"{}:{}",
+						encoded_client_id.trim_start_matches('='),
+						encoded_client_secret.trim_start_matches('=')
+					))
+				);
+				assert_eq!(
+					request
+						.headers
+						.get("authorization")
+						.expect("authorization header")
+						.to_str()
+						.expect("authorization header value"),
+					expected_auth.as_str(),
+					"{name}"
+				);
+				assert!(!body.contains("client_id="), "{name}");
+				assert!(!body.contains("client_secret="), "{name}");
+			},
+			Expectation::FormBodyCredentials => {
+				assert!(!request.headers.contains_key("authorization"), "{name}");
+				assert!(body.contains("client_id=client-id"), "{name}");
+				assert!(body.contains("client_secret=client-secret"), "{name}");
+			},
+		}
+	}
 }
 
 #[tokio::test]
-async fn auto_mode_returns_unauthorized_for_json_requests() {
-	let policy = test_policy();
-	let mut req = request(
-		Method::GET,
-		"https://app.example.com/private",
-		Some("application/json"),
-	);
+async fn token_exchange_bounds_transport_failures() {
+	#[derive(Copy, Clone)]
+	enum FailureMode {
+		Timeout,
+		OversizedBody,
+	}
 
-	let err = policy
-		.apply(None, &mut req, policy_client())
-		.await
-		.expect_err("oidc should reject API requests without redirect");
-	assert!(matches!(err, Error::AuthenticationRequired));
-	assert_eq!(err.status_code(), ::http::StatusCode::UNAUTHORIZED);
+	let cases = [
+		("timeout", FailureMode::Timeout),
+		("oversized body", FailureMode::OversizedBody),
+	];
+
+	for (name, failure_mode) in cases {
+		let mock = MockServer::start().await;
+		let response = match failure_mode {
+			FailureMode::Timeout => ResponseTemplate::new(200).set_delay(Duration::from_millis(200)),
+			FailureMode::OversizedBody => {
+				ResponseTemplate::new(200).set_body_string("x".repeat(70 * 1024))
+			},
+		};
+		Mock::given(method("POST"))
+			.and(path("/token"))
+			.respond_with(response)
+			.mount(&mock)
+			.await;
+
+		let provider = Provider {
+			issuer: TEST_ISSUER.into(),
+			authorization_endpoint: provider_endpoint("https://issuer.example.com/authorize"),
+			token_endpoint: provider_endpoint(format!("{}/token", mock.uri())),
+			id_token_validator: test_id_token_validator(),
+		};
+		let client_config = ClientConfig {
+			client_id: TEST_CLIENT_ID.into(),
+			client_secret: SecretString::new("client-secret".into()),
+			token_endpoint_auth: TokenEndpointAuth::ClientSecretBasic,
+		};
+
+		let err = match failure_mode {
+			FailureMode::Timeout => {
+				provider::exchange_code_with_timeout(
+					policy_client(),
+					&provider,
+					&client_config,
+					"https://app.example.com/oauth/callback",
+					"code",
+					&SecretString::new("verifier".into()),
+					Duration::from_millis(50),
+				)
+				.await
+			},
+			FailureMode::OversizedBody => {
+				provider::exchange_code(
+					policy_client(),
+					&provider,
+					&client_config,
+					"https://app.example.com/oauth/callback",
+					"code",
+					&SecretString::new("verifier".into()),
+				)
+				.await
+			},
+		}
+		.expect_err(name);
+		assert!(matches!(err, Error::TokenExchangeFailed(_)), "{name}");
+	}
 }
 
 #[tokio::test]
-async fn redirect_mode_redirects_non_html_requests() {
-	let mut policy = test_policy();
-	policy.unauthenticated_action = UnauthenticatedAction::Redirect;
-	let mut req = request(
-		Method::GET,
-		"https://app.example.com/private",
-		Some("application/json"),
-	);
+async fn callback_rejects_invalid_transaction_state() {
+	let cases = [
+		(
+			"missing transaction",
+			None,
+			"https://app.example.com/oauth/callback?code=auth-code&state=test-state",
+			Error::MissingTransaction,
+		),
+		(
+			"csrf mismatch",
+			Some(("expected-state", TEST_NONCE, "/protected")),
+			"https://app.example.com/oauth/callback?code=auth-code&state=wrong-state",
+			Error::CsrfMismatch,
+		),
+	];
 
-	let response = policy
-		.apply(None, &mut req, policy_client())
-		.await
-		.expect("redirect mode should redirect");
-	let response = response.direct_response.expect("redirect response");
-	assert_eq!(response.status(), ::http::StatusCode::FOUND);
-}
+	for (name, transaction, uri, expected_error) in cases {
+		let policy = test_policy();
+		let mut req = request(Method::GET, uri, Some("text/html"));
+		if let Some((state, nonce, original_uri)) = transaction {
+			let encoded = encoded_transaction(&policy, state, nonce, original_uri, now_unix() + 300);
+			add_cookie(
+				&mut req,
+				format!("{}={encoded}", policy.session.transaction_cookie_name),
+			);
+		}
 
-#[tokio::test]
-async fn deny_mode_rejects_html_navigation() {
-	let mut policy = test_policy();
-	policy.unauthenticated_action = UnauthenticatedAction::Deny;
-	let mut req = request(
-		Method::GET,
-		"https://app.example.com/private",
-		Some("text/html"),
-	);
-
-	let err = policy
-		.apply(None, &mut req, policy_client())
-		.await
-		.expect_err("deny mode should reject without redirect");
-	assert!(matches!(err, Error::AuthenticationRequired));
-}
-
-#[tokio::test]
-async fn missing_accept_header_does_not_redirect() {
-	let mut req = request(Method::GET, "https://app.example.com/private", None);
-
-	let err = test_policy()
-		.apply(None, &mut req, policy_client())
-		.await
-		.expect_err("missing accept should not redirect");
-	assert!(matches!(err, Error::AuthenticationRequired));
-}
-
-#[tokio::test]
-async fn html_must_be_preferred_over_json_to_redirect() {
-	let mut req = request(
-		Method::GET,
-		"https://app.example.com/private",
-		Some("application/json, text/html"),
-	);
-
-	let err = test_policy()
-		.apply(None, &mut req, policy_client())
-		.await
-		.expect_err("json-preferred accept should not redirect");
-	assert!(matches!(err, Error::AuthenticationRequired));
-}
-
-#[tokio::test]
-async fn client_secret_basic_uses_form_encoded_credentials() {
-	let mock = MockServer::start().await;
-	let expected_id_token = signed_id_token(TEST_NONCE);
-	let encoded_client_id = url::form_urlencoded::Serializer::new(String::new())
-		.append_pair("", "client:id")
-		.finish();
-	let encoded_client_secret = url::form_urlencoded::Serializer::new(String::new())
-		.append_pair("", "s e:c")
-		.finish();
-	let expected_auth = format!(
-		"Basic {}",
-		base64::engine::general_purpose::STANDARD.encode(format!(
-			"{}:{}",
-			encoded_client_id.trim_start_matches('='),
-			encoded_client_secret.trim_start_matches('=')
-		))
-	);
-	Mock::given(method("POST"))
-		.and(path("/token"))
-		.and(match_header("authorization", expected_auth.as_str()))
-		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
-			"id_token": expected_id_token
-		})))
-		.mount(&mock)
-		.await;
-
-	let provider = Provider {
-		issuer: TEST_ISSUER.into(),
-		authorization_endpoint: Uri::from_static("https://issuer.example.com/authorize"),
-		token_endpoint: format!("{}/token", mock.uri()).parse().unwrap(),
-		id_token_validator: test_id_token_validator(),
-	};
-	let client_config = ClientConfig {
-		client_id: "client:id".into(),
-		client_secret: SecretString::new("s e:c".into()),
-		token_endpoint_auth: TokenEndpointAuth::ClientSecretBasic,
-	};
-
-	let response = provider::exchange_code(
-		policy_client(),
-		&provider,
-		&client_config,
-		"https://app.example.com/oauth/callback",
-		"code",
-		&SecretString::new("verifier".into()),
-	)
-	.await
-	.expect("token exchange");
-	assert!(response.id_token.is_some());
-}
-
-#[tokio::test]
-async fn client_secret_post_sends_credentials_in_form_body() {
-	let mock = MockServer::start().await;
-	let expected_id_token = signed_id_token(TEST_NONCE);
-	Mock::given(method("POST"))
-		.and(path("/token"))
-		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
-			"id_token": expected_id_token
-		})))
-		.mount(&mock)
-		.await;
-
-	let provider = Provider {
-		issuer: TEST_ISSUER.into(),
-		authorization_endpoint: Uri::from_static("https://issuer.example.com/authorize"),
-		token_endpoint: format!("{}/token", mock.uri()).parse().unwrap(),
-		id_token_validator: test_id_token_validator(),
-	};
-	let client_config = ClientConfig {
-		client_id: "client-id".into(),
-		client_secret: SecretString::new("client-secret".into()),
-		token_endpoint_auth: TokenEndpointAuth::ClientSecretPost,
-	};
-
-	let response = provider::exchange_code(
-		policy_client(),
-		&provider,
-		&client_config,
-		"https://app.example.com/oauth/callback",
-		"code",
-		&SecretString::new("verifier".into()),
-	)
-	.await
-	.expect("token exchange");
-	assert!(response.id_token.is_some());
-
-	let request = &mock.received_requests().await.expect("requests")[0];
-	let body = String::from_utf8(request.body.clone()).expect("utf8 body");
-	assert!(body.contains("client_id=client-id"));
-	assert!(body.contains("client_secret=client-secret"));
-	assert!(!request.headers.contains_key("authorization"));
-}
-
-#[tokio::test]
-async fn token_exchange_times_out() {
-	let mock = MockServer::start().await;
-	Mock::given(method("POST"))
-		.and(path("/token"))
-		.respond_with(ResponseTemplate::new(200).set_delay(Duration::from_millis(200)))
-		.mount(&mock)
-		.await;
-
-	let provider = Provider {
-		issuer: TEST_ISSUER.into(),
-		authorization_endpoint: Uri::from_static("https://issuer.example.com/authorize"),
-		token_endpoint: format!("{}/token", mock.uri()).parse().unwrap(),
-		id_token_validator: test_id_token_validator(),
-	};
-	let client_config = ClientConfig {
-		client_id: TEST_CLIENT_ID.into(),
-		client_secret: SecretString::new("client-secret".into()),
-		token_endpoint_auth: TokenEndpointAuth::ClientSecretBasic,
-	};
-
-	let err = provider::exchange_code_with_timeout(
-		policy_client(),
-		&provider,
-		&client_config,
-		"https://app.example.com/oauth/callback",
-		"code",
-		&SecretString::new("verifier".into()),
-		Duration::from_millis(50),
-	)
-	.await
-	.expect_err("timeout expected");
-	assert!(matches!(err, Error::TokenExchangeFailed(_)));
-}
-
-#[tokio::test]
-async fn token_exchange_rejects_oversized_response_body() {
-	let mock = MockServer::start().await;
-	Mock::given(method("POST"))
-		.and(path("/token"))
-		.respond_with(ResponseTemplate::new(200).set_body_string("x".repeat(70 * 1024)))
-		.mount(&mock)
-		.await;
-
-	let provider = Provider {
-		issuer: TEST_ISSUER.into(),
-		authorization_endpoint: Uri::from_static("https://issuer.example.com/authorize"),
-		token_endpoint: format!("{}/token", mock.uri()).parse().unwrap(),
-		id_token_validator: test_id_token_validator(),
-	};
-	let client_config = ClientConfig {
-		client_id: TEST_CLIENT_ID.into(),
-		client_secret: SecretString::new("client-secret".into()),
-		token_endpoint_auth: TokenEndpointAuth::ClientSecretBasic,
-	};
-
-	let err = provider::exchange_code(
-		policy_client(),
-		&provider,
-		&client_config,
-		"https://app.example.com/oauth/callback",
-		"code",
-		&SecretString::new("verifier".into()),
-	)
-	.await
-	.expect_err("oversized body expected");
-	assert!(matches!(err, Error::TokenExchangeFailed(_)));
-}
-
-#[tokio::test]
-async fn callback_requires_transaction_cookie() {
-	let policy = test_policy();
-	let mut req = request(
-		Method::GET,
-		"https://app.example.com/oauth/callback?code=auth-code&state=test-state",
-		Some("text/html"),
-	);
-
-	let err = policy
-		.apply(None, &mut req, policy_client())
-		.await
-		.expect_err("missing transaction cookie");
-	assert!(matches!(err, Error::MissingTransaction));
-}
-
-#[tokio::test]
-async fn callback_rejects_state_mismatch() {
-	let policy = test_policy();
-	let encoded = encoded_transaction(
-		&policy,
-		"expected-state",
-		TEST_NONCE,
-		"/protected",
-		now_unix() + 300,
-	);
-	let mut req = request(
-		Method::GET,
-		"https://app.example.com/oauth/callback?code=auth-code&state=wrong-state",
-		Some("text/html"),
-	);
-	add_cookie(
-		&mut req,
-		format!("{}={encoded}", policy.session.transaction_cookie_name),
-	);
-
-	let err = policy
-		.apply(None, &mut req, policy_client())
-		.await
-		.expect_err("state mismatch");
-	assert!(matches!(err, Error::CsrfMismatch));
+		let err = policy
+			.apply(None, &mut req, policy_client())
+			.await
+			.expect_err(name);
+		match expected_error {
+			Error::MissingTransaction => assert!(matches!(err, Error::MissingTransaction), "{name}"),
+			Error::CsrfMismatch => assert!(matches!(err, Error::CsrfMismatch), "{name}"),
+			_ => unreachable!("unexpected test error"),
+		}
+	}
 }
 
 #[tokio::test]
@@ -590,7 +570,7 @@ async fn callback_success_sets_session_cookie_and_clears_transaction_cookie() {
 		.mount(&mock)
 		.await;
 
-	let policy = test_callback_policy(format!("{}/token", mock.uri()).parse().unwrap());
+	let policy = test_callback_policy(provider_endpoint(format!("{}/token", mock.uri())));
 	let encoded = encoded_transaction(
 		&policy,
 		"test-state",
@@ -647,7 +627,7 @@ async fn callback_matching_uses_path_not_redirect_host_or_port() {
 		.mount(&mock)
 		.await;
 
-	let policy = test_callback_policy(format!("{}/token", mock.uri()).parse().unwrap());
+	let policy = test_callback_policy(provider_endpoint(format!("{}/token", mock.uri())));
 	let encoded = encoded_transaction(
 		&policy,
 		"test-state",
@@ -680,95 +660,44 @@ async fn callback_matching_uses_path_not_redirect_host_or_port() {
 	);
 }
 
-#[tokio::test]
-async fn callback_path_without_callback_query_falls_back_to_login_redirect() {
-	let policy = test_policy();
-	let mut req = request(
-		Method::GET,
-		"https://app.example.com/oauth/callback",
-		Some("text/html"),
-	);
-
-	let response = policy
-		.apply(None, &mut req, policy_client())
-		.await
-		.expect("apply");
-	let response = response.direct_response.expect("redirect response");
-	assert_eq!(response.status(), ::http::StatusCode::FOUND);
-	assert!(
-		response
-			.headers()
-			.get(header::LOCATION)
-			.unwrap()
-			.to_str()
-			.unwrap()
-			.starts_with("https://issuer.example.com/authorize?")
-	);
-}
-
 #[test]
 fn oidc_errors_use_error_specific_status_codes() {
-	assert_eq!(
-		Error::AuthenticationRequired.status_code(),
-		::http::StatusCode::UNAUTHORIZED
-	);
-	assert_eq!(
-		Error::MissingTransaction.status_code(),
-		::http::StatusCode::BAD_REQUEST
-	);
-	assert_eq!(
-		Error::NonceMismatch.status_code(),
-		::http::StatusCode::BAD_REQUEST
-	);
-	assert_eq!(
-		Error::TokenExchangeFailed(anyhow::anyhow!("boom")).status_code(),
-		::http::StatusCode::INTERNAL_SERVER_ERROR
-	);
-	assert!(matches!(
-		ProxyError::OidcFailure(Error::MissingTransaction),
-		ProxyError::OidcFailure(_)
-	));
+	let cases = [
+		(
+			"authentication required",
+			Error::AuthenticationRequired,
+			::http::StatusCode::UNAUTHORIZED,
+		),
+		(
+			"missing transaction",
+			Error::MissingTransaction,
+			::http::StatusCode::BAD_REQUEST,
+		),
+		(
+			"nonce mismatch",
+			Error::NonceMismatch,
+			::http::StatusCode::BAD_REQUEST,
+		),
+		(
+			"token exchange failure",
+			Error::TokenExchangeFailed(anyhow::anyhow!("boom")),
+			::http::StatusCode::INTERNAL_SERVER_ERROR,
+		),
+	];
+
+	for (name, error, expected_status) in cases {
+		assert_eq!(
+			crate::proxy::ProxyError::OidcFailure(error)
+				.into_response()
+				.status(),
+			expected_status,
+			"{name}"
+		);
+	}
 }
 
 #[tokio::test]
-async fn compiled_policy_uses_supplied_identity_for_cookie_derivation() {
-	let local = explicit_local_oidc_config();
-	let encoder = test_oidc_cookie_encoder();
-	let policy_a = local
-		.translate(test_client(), &encoder, translated_policy_id("shared"))
-		.await
-		.expect("first translate");
-	let policy_b = explicit_local_oidc_config()
-		.translate(test_client(), &encoder, translated_policy_id("shared"))
-		.await
-		.expect("second translate");
-	let policy_c = explicit_local_oidc_config()
-		.translate(test_client(), &encoder, translated_policy_id("other"))
-		.await
-		.expect("third translate");
-
-	assert_eq!(policy_a.policy_id, translated_policy_id("shared"));
-	assert_eq!(policy_a.policy_id, policy_b.policy_id);
-	assert_ne!(policy_a.policy_id, policy_c.policy_id);
-	assert_eq!(policy_a.session.cookie_name, policy_b.session.cookie_name);
-	assert_ne!(policy_a.session.cookie_name, policy_c.session.cookie_name);
-	assert_eq!(
-		policy_a.session.transaction_cookie_name,
-		policy_b.session.transaction_cookie_name
-	);
-	assert_ne!(
-		policy_a.session.transaction_cookie_name,
-		policy_c.session.transaction_cookie_name
-	);
-	assert_eq!(policy_a.session.same_site, SameSiteMode::Lax);
-	assert_eq!(policy_a.session.secure, CookieSecureMode::Auto);
-	assert_eq!(policy_a.session.ttl, Duration::from_secs(3600));
-	assert_eq!(policy_a.session.transaction_ttl, Duration::from_secs(300));
-	assert_eq!(policy_a.scopes, vec!["openid", "profile", "email"]);
-}
-
-#[tokio::test]
-async fn issuer_only_oidc_config_uses_discovery() {
+async fn local_oidc_config_compiles_supported_provider_sources() {
 	let mock = MockServer::start().await;
 	Mock::given(method("GET"))
 		.and(path("/.well-known/openid-configuration"))
@@ -787,223 +716,129 @@ async fn issuer_only_oidc_config_uses_discovery() {
 		.mount(&mock)
 		.await;
 
+	let cases = [
+		(
+			"discovery",
+			LocalOidcConfig {
+				issuer: mock.uri(),
+				discovery: None,
+				authorization_endpoint: None,
+				token_endpoint: None,
+				jwks: None,
+				client_id: TEST_CLIENT_ID.into(),
+				client_secret: SecretString::new("client-secret".into()),
+				redirect_uri: "http://localhost:3000/oauth/callback".into(),
+				scopes: vec![],
+			},
+			provider_endpoint(format!("{}/authorize", mock.uri())),
+			provider_endpoint(format!("{}/token", mock.uri())),
+			TokenEndpointAuth::ClientSecretPost,
+		),
+		(
+			"explicit",
+			explicit_local_oidc_config(),
+			provider_endpoint("https://issuer.example.com/authorize"),
+			provider_endpoint("https://issuer.example.com/token"),
+			TokenEndpointAuth::ClientSecretBasic,
+		),
+	];
+
+	for (
+		name,
+		config,
+		expected_authorization_endpoint,
+		expected_token_endpoint,
+		expected_token_endpoint_auth,
+	) in cases
+	{
+		let policy = compile_local_policy(config, translated_policy_id(name))
+			.await
+			.expect(name);
+
+		assert_eq!(
+			policy.provider.authorization_endpoint, expected_authorization_endpoint,
+			"{name}"
+		);
+		assert_eq!(
+			policy.provider.token_endpoint, expected_token_endpoint,
+			"{name}"
+		);
+		assert_eq!(
+			policy.client.token_endpoint_auth, expected_token_endpoint_auth,
+			"{name}"
+		);
+	}
+}
+
+#[tokio::test]
+async fn discovery_rejects_relative_provider_endpoints() {
+	let mock = MockServer::start().await;
+	Mock::given(method("GET"))
+		.and(path("/.well-known/openid-configuration"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
+			"issuer": mock.uri(),
+			"authorization_endpoint": "/authorize",
+			"token_endpoint": format!("{}/token", mock.uri()),
+			"jwks_uri": format!("{}/jwks", mock.uri()),
+			"token_endpoint_auth_methods_supported": ["client_secret_post"]
+		})))
+		.mount(&mock)
+		.await;
+
 	let policy = LocalOidcConfig {
 		issuer: mock.uri(),
 		discovery: None,
 		authorization_endpoint: None,
 		token_endpoint: None,
 		jwks: None,
-		token_endpoint_auth_methods_supported: vec![],
 		client_id: TEST_CLIENT_ID.into(),
 		client_secret: SecretString::new("client-secret".into()),
 		redirect_uri: "http://localhost:3000/oauth/callback".into(),
 		scopes: vec![],
-		unauthenticated_action: UnauthenticatedAction::Auto,
-	}
-	.translate(
-		test_client(),
-		&test_oidc_cookie_encoder(),
-		translated_policy_id("discovery"),
-	)
-	.await
-	.expect("translate");
-
-	assert_eq!(
-		policy.provider.authorization_endpoint,
-		format!("{}/authorize", mock.uri()).parse::<Uri>().unwrap()
-	);
-	assert_eq!(
-		policy.provider.token_endpoint,
-		format!("{}/token", mock.uri()).parse::<Uri>().unwrap()
-	);
-	assert_eq!(
-		policy.client.token_endpoint_auth,
-		TokenEndpointAuth::ClientSecretPost
-	);
-}
-
-#[tokio::test]
-async fn fully_explicit_oidc_config_skips_discovery() {
-	let policy = explicit_local_oidc_config()
-		.translate(
-			test_client(),
-			&test_oidc_cookie_encoder(),
-			translated_policy_id("explicit"),
-		)
+	};
+	let err = compile_local_policy(policy, translated_policy_id("discovery-relative-endpoints"))
 		.await
-		.expect("translate");
+		.expect_err("relative discovery endpoint should fail");
 
-	assert_eq!(
-		policy.provider.authorization_endpoint,
-		Uri::from_static("https://issuer.example.com/authorize")
-	);
-	assert_eq!(
-		policy.provider.token_endpoint,
-		Uri::from_static("https://issuer.example.com/token")
-	);
-	assert_eq!(
-		policy.client.token_endpoint_auth,
-		TokenEndpointAuth::ClientSecretBasic
-	);
+	assert!(err.to_string().contains("invalid authorization endpoint"));
 }
 
 #[tokio::test]
-async fn partial_explicit_provider_config_is_rejected() {
-	let err = LocalOidcConfig {
-		issuer: TEST_ISSUER.into(),
-		discovery: None,
-		authorization_endpoint: None,
-		token_endpoint: Some(Uri::from_static("https://issuer.example.com/token")),
-		jwks: Some(test_jwks_inline()),
-		token_endpoint_auth_methods_supported: vec![],
-		client_id: TEST_CLIENT_ID.into(),
-		client_secret: SecretString::new("client-secret".into()),
-		redirect_uri: "http://localhost:3000/oauth/callback".into(),
-		scopes: vec![],
-		unauthenticated_action: UnauthenticatedAction::Auto,
+async fn local_oidc_config_rejects_ambiguous_provider_source_configuration() {
+	let cases = [
+		(
+			"partial explicit",
+			LocalOidcConfig {
+				issuer: TEST_ISSUER.into(),
+				discovery: None,
+				authorization_endpoint: None,
+				token_endpoint: Some(provider_endpoint("https://issuer.example.com/token")),
+				jwks: Some(test_jwks_inline()),
+				client_id: TEST_CLIENT_ID.into(),
+				client_secret: SecretString::new("client-secret".into()),
+				redirect_uri: "http://localhost:3000/oauth/callback".into(),
+				scopes: vec![],
+			},
+			"authorizationEndpoint, tokenEndpoint, and jwks must either all be set or all be omitted",
+		),
+		(
+			"explicit with discovery override",
+			LocalOidcConfig {
+				discovery: Some(FileInlineOrRemote::Remote {
+					url: "https://example.invalid/should-not-be-called"
+						.parse()
+						.expect("discovery override url"),
+				}),
+				..explicit_local_oidc_config()
+			},
+			"oidc discovery must be omitted when authorizationEndpoint, tokenEndpoint, and jwks are configured explicitly",
+		),
+	];
+
+	for (name, config, expected_error_fragment) in cases {
+		let err = compile_local_policy(config, translated_policy_id(name))
+			.await
+			.expect_err(name);
+		assert!(err.to_string().contains(expected_error_fragment), "{name}");
 	}
-	.translate(
-		test_client(),
-		&test_oidc_cookie_encoder(),
-		translated_policy_id("partial-explicit"),
-	)
-	.await
-	.expect_err("partial explicit config should fail");
-
-	assert!(err.to_string().contains(
-		"authorizationEndpoint, tokenEndpoint, and jwks must either all be set or all be omitted"
-	));
-}
-
-#[tokio::test]
-async fn explicit_provider_config_rejects_discovery_override() {
-	let err = LocalOidcConfig {
-		discovery: Some(FileInlineOrRemote::Remote {
-			url: "https://example.invalid/should-not-be-called"
-				.parse()
-				.unwrap(),
-		}),
-		..explicit_local_oidc_config()
-	}
-	.translate(
-		test_client(),
-		&test_oidc_cookie_encoder(),
-		translated_policy_id("reject-discovery-override"),
-	)
-	.await
-	.expect_err("fully explicit config should reject discovery override");
-
-	assert!(
-		err
-			.to_string()
-			.contains("oidc discovery must be omitted when authorizationEndpoint, tokenEndpoint, and jwks are configured explicitly")
-	);
-}
-
-#[tokio::test]
-async fn discovery_load_failures_identify_discovery_document_source() {
-	let err = LocalOidcConfig {
-		issuer: TEST_ISSUER.into(),
-		discovery: Some(FileInlineOrRemote::Inline("{".into())),
-		authorization_endpoint: None,
-		token_endpoint: None,
-		jwks: None,
-		token_endpoint_auth_methods_supported: vec![],
-		client_id: TEST_CLIENT_ID.into(),
-		client_secret: SecretString::new("client-secret".into()),
-		redirect_uri: "http://localhost:3000/oauth/callback".into(),
-		scopes: vec![],
-		unauthenticated_action: UnauthenticatedAction::Auto,
-	}
-	.translate(
-		test_client(),
-		&test_oidc_cookie_encoder(),
-		translated_policy_id("invalid-discovery"),
-	)
-	.await
-	.expect_err("invalid discovery document should fail");
-
-	assert!(
-		err
-			.to_string()
-			.contains("failed to decode oidc discovery response from inline configuration")
-	);
-}
-
-#[tokio::test]
-async fn explicit_remote_jwks_failures_identify_explicit_source() {
-	let mock = MockServer::start().await;
-	Mock::given(method("GET"))
-		.and(path("/jwks"))
-		.respond_with(ResponseTemplate::new(200).set_body_string("{"))
-		.mount(&mock)
-		.await;
-
-	let err = LocalOidcConfig {
-		jwks: Some(FileInlineOrRemote::Remote {
-			url: format!("{}/jwks", mock.uri()).parse().unwrap(),
-		}),
-		..explicit_local_oidc_config()
-	}
-	.translate(
-		test_client(),
-		&test_oidc_cookie_encoder(),
-		translated_policy_id("invalid-explicit-jwks"),
-	)
-	.await
-	.expect_err("invalid explicit jwks should fail");
-
-	assert!(
-		err
-			.to_string()
-			.contains("failed to load oidc jwks from explicit jwks source uri")
-	);
-}
-
-#[tokio::test]
-async fn discovered_remote_jwks_failures_identify_discovered_source() {
-	let mock = MockServer::start().await;
-	Mock::given(method("GET"))
-		.and(path("/.well-known/openid-configuration"))
-		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
-			"issuer": mock.uri(),
-			"authorization_endpoint": format!("{}/authorize", mock.uri()),
-			"token_endpoint": format!("{}/token", mock.uri()),
-			"jwks_uri": format!("{}/jwks", mock.uri()),
-			"token_endpoint_auth_methods_supported": ["client_secret_basic"]
-		})))
-		.mount(&mock)
-		.await;
-	Mock::given(method("GET"))
-		.and(path("/jwks"))
-		.respond_with(ResponseTemplate::new(200).set_body_string("{"))
-		.mount(&mock)
-		.await;
-
-	let err = LocalOidcConfig {
-		issuer: mock.uri(),
-		discovery: None,
-		authorization_endpoint: None,
-		token_endpoint: None,
-		jwks: None,
-		token_endpoint_auth_methods_supported: vec![],
-		client_id: TEST_CLIENT_ID.into(),
-		client_secret: SecretString::new("client-secret".into()),
-		redirect_uri: "http://localhost:3000/oauth/callback".into(),
-		scopes: vec![],
-		unauthenticated_action: UnauthenticatedAction::Auto,
-	}
-	.translate(
-		test_client(),
-		&test_oidc_cookie_encoder(),
-		translated_policy_id("invalid-discovered-jwks"),
-	)
-	.await
-	.expect_err("invalid discovered jwks should fail");
-
-	assert!(
-		err
-			.to_string()
-			.contains("failed to load oidc jwks from discovered jwks source uri")
-	);
 }

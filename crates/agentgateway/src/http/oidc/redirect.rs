@@ -1,20 +1,15 @@
 use ::http::uri::PathAndQuery;
 use percent_encoding::percent_decode_str;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::Error;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RedirectUri {
-	#[serde(rename = "redirectURI")]
 	pub redirect_uri: String,
 	pub host: String,
 	pub port: u16,
 	pub https: bool,
-	#[serde(
-		serialize_with = "crate::serdes::ser_display",
-		deserialize_with = "crate::serdes::de_parse"
-	)]
 	pub callback_path: PathAndQuery,
 }
 
@@ -79,6 +74,38 @@ impl RedirectUri {
 	}
 }
 
+impl Serialize for RedirectUri {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		self.redirect_uri.serialize(serializer)
+	}
+}
+
+impl<'de> Deserialize<'de> for RedirectUri {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		#[derive(Deserialize)]
+		#[serde(untagged)]
+		enum RedirectUriRepr {
+			String(String),
+			Object {
+				#[serde(rename = "redirectURI")]
+				redirect_uri: String,
+			},
+		}
+
+		let redirect_uri = match RedirectUriRepr::deserialize(deserializer)? {
+			RedirectUriRepr::String(redirect_uri) => redirect_uri,
+			RedirectUriRepr::Object { redirect_uri } => redirect_uri,
+		};
+		Self::parse(redirect_uri).map_err(serde::de::Error::custom)
+	}
+}
+
 fn normalize_callback_path(path: &str) -> Result<PathAndQuery, Error> {
 	if path.is_empty() || path == "/" {
 		return Err(Error::Config(
@@ -88,7 +115,7 @@ fn normalize_callback_path(path: &str) -> Result<PathAndQuery, Error> {
 	if !path.starts_with('/') {
 		return Err(Error::Config("redirectURI path must start with '/'".into()));
 	}
-	// Reject dot segments and encoded slash/backslash forms so callback ownership stays exact and
+	// Reject dot segments and encoded slash/backslash forms so callback matching stays exact and
 	// does not depend on downstream path normalization behavior.
 	for segment in path.split('/').skip(1) {
 		let decoded = percent_decode_str(segment)

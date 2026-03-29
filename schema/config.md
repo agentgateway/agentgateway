@@ -922,10 +922,9 @@
 |`binds[].listeners[].routes[].policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`binds[].listeners[].routes[].policies.oidc.jwks.file`|string||
 |`binds[].listeners[].routes[].policies.oidc.jwks.url`|string||
-|`binds[].listeners[].routes[].policies.oidc.tokenEndpointAuthMethodsSupported`|[]string|Supported client authentication methods for the token endpoint.<br><br>When omitted and discovery is used, the discovery document decides.<br>When omitted and the provider is fully explicit, this defaults to<br>`["clientSecretBasic"]`.|
 |`binds[].listeners[].routes[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`binds[].listeners[].routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
-|`binds[].listeners[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.|
+|`binds[].listeners[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`binds[].listeners[].routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`binds[].listeners[].routes[].policies.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|object|.htpasswd file contents/reference|
@@ -3442,10 +3441,9 @@
 |`binds[].listeners[].policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`binds[].listeners[].policies.oidc.jwks.file`|string||
 |`binds[].listeners[].policies.oidc.jwks.url`|string||
-|`binds[].listeners[].policies.oidc.tokenEndpointAuthMethodsSupported`|[]string|Supported client authentication methods for the token endpoint.<br><br>When omitted and discovery is used, the discovery document decides.<br>When omitted and the provider is fully explicit, this defaults to<br>`["clientSecretBasic"]`.|
 |`binds[].listeners[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`binds[].listeners[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
-|`binds[].listeners[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.|
+|`binds[].listeners[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`binds[].listeners[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`binds[].listeners[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`binds[].listeners[].policies.jwtAuth.mode`|string||
@@ -4812,10 +4810,9 @@
 |`policies[].policy.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`policies[].policy.oidc.jwks.file`|string||
 |`policies[].policy.oidc.jwks.url`|string||
-|`policies[].policy.oidc.tokenEndpointAuthMethodsSupported`|[]string|Supported client authentication methods for the token endpoint.<br><br>When omitted and discovery is used, the discovery document decides.<br>When omitted and the provider is fully explicit, this defaults to<br>`["clientSecretBasic"]`.|
 |`policies[].policy.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`policies[].policy.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
-|`policies[].policy.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.|
+|`policies[].policy.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`policies[].policy.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`policies[].policy.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`policies[].policy.basicAuth.htpasswd`|object|.htpasswd file contents/reference|
@@ -6377,10 +6374,9 @@
 |`llm.policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`llm.policies.oidc.jwks.file`|string||
 |`llm.policies.oidc.jwks.url`|string||
-|`llm.policies.oidc.tokenEndpointAuthMethodsSupported`|[]string|Supported client authentication methods for the token endpoint.<br><br>When omitted and discovery is used, the discovery document decides.<br>When omitted and the provider is fully explicit, this defaults to<br>`["clientSecretBasic"]`.|
 |`llm.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`llm.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
-|`llm.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.|
+|`llm.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`llm.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`llm.policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`llm.policies.jwtAuth.mode`|string||
@@ -7603,10 +7599,9 @@
 |`mcp.policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`mcp.policies.oidc.jwks.file`|string||
 |`mcp.policies.oidc.jwks.url`|string||
-|`mcp.policies.oidc.tokenEndpointAuthMethodsSupported`|[]string|Supported client authentication methods for the token endpoint.<br><br>When omitted and discovery is used, the discovery document decides.<br>When omitted and the provider is fully explicit, this defaults to<br>`["clientSecretBasic"]`.|
 |`mcp.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`mcp.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
-|`mcp.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.|
+|`mcp.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`mcp.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`mcp.policies.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`mcp.policies.basicAuth.htpasswd`|object|.htpasswd file contents/reference|
