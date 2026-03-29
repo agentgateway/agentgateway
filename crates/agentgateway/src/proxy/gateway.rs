@@ -1131,6 +1131,15 @@ impl Gateway {
 	}
 
 	/// serve_gateway_connect handles a single connection from a client.
+	///
+	/// In HBONE_GATEWAY mode, the CONNECT URI carries the HBONE endpoint
+	/// address (pod-ip:15008), not the original destination port. We need
+	/// to dispatch the inner request to a local application bind (HTTP on
+	/// port 80, HTTPS on 443, etc.) rather than back to the HBONE bind.
+	///
+	/// Strategy: try find_bind with the CONNECT URI first. If the matched
+	/// bind is the HBONE bind itself (tunnel_protocol is HboneGateway),
+	/// find the first non-HBONE bind with a compatible protocol instead.
 	#[allow(clippy::too_many_arguments)]
 	async fn serve_gateway_connect(
 		pi: Arc<ProxyInputs>,
@@ -1153,7 +1162,39 @@ impl Gateway {
 				)
 			})
 			.unwrap();
-		let Some(bind) = pi.stores.read_binds().find_bind(socket_addr) else {
+
+		// Try to find a matching bind. If the CONNECT URI port matches the
+		// HBONE bind (port 15008), dispatch to a local application bind
+		// instead — this is the HBONE_GATEWAY "expose local ports over
+		// HBONE" behavior.
+		let bind = {
+			let binds = pi.stores.read_binds();
+			let direct = binds.find_bind(socket_addr);
+			match direct {
+				Some(ref b) if b.tunnel_protocol == TunnelProtocol::HboneGateway => {
+					// The CONNECT URI matched the HBONE bind itself.
+					// Find a non-HBONE bind to dispatch to. Prefer HTTP.
+					let local_bind = binds.all().into_iter().find(|b| {
+						b.tunnel_protocol == TunnelProtocol::Direct
+							&& matches!(b.protocol, BindProtocol::http | BindProtocol::tls)
+					});
+					if let Some(lb) = local_bind {
+						debug!(
+							"HBONE_GATEWAY: dispatching to local bind {} (port {})",
+							lb.key,
+							lb.address.port()
+						);
+						Some(lb)
+					} else {
+						debug!("HBONE_GATEWAY: no local bind found, falling back to HBONE bind");
+						direct
+					}
+				},
+				other => other,
+			}
+		};
+
+		let Some(bind) = bind else {
 			warn!("no bind for {hbone_addr}");
 			let Ok(_) = req
 				.send_response(build_response(StatusCode::NOT_FOUND))
