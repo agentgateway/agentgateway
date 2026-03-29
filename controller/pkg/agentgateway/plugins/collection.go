@@ -133,7 +133,8 @@ func NewAgwCollections(
 
 		Secrets: krt.WrapClient(
 			kclient.NewFiltered[*corev1.Secret](client, kubetypes.Filter{
-				ObjectFilter: client.ObjectFilter(),
+				FieldSelector: apiclient.SecretsFieldSelector,
+				ObjectFilter:  client.ObjectFilter(),
 			}),
 		),
 		ConfigMaps: krt.WrapClient(
