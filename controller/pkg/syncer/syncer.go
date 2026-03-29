@@ -595,7 +595,9 @@ func (s *Syncer) getBindProtocol(obj *translator.GatewayListener) api.Bind_Proto
 	case gwv1.TCPProtocolType:
 		return api.Bind_TCP
 	case gwv1.ProtocolType(protocol.HBONE):
-		// HBONE uses HTTP/2 CONNECT framing; bind protocol is HTTP.
+		// HBONE_GATEWAY dispatches inner requests to local application binds,
+		// so this bind protocol is not used by the data plane. Set to HTTP
+		// as a default; the actual protocol is determined by the target bind.
 		return api.Bind_HTTP
 	default:
 		return api.Bind_HTTP
