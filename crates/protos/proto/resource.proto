@@ -903,6 +903,25 @@ message BackendPolicySpec {
       repeated BackendPolicySpec inline_policies = 4;
     }
 
+    message AzureContentSafety {
+      // The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")
+      string endpoint = 1;
+
+      // Severity threshold (0-6). Content at or above this level is blocked. Default: 2.
+      optional int32 severity_threshold = 2;
+
+      // API version to use (default: "2024-09-01")
+      optional string api_version = 3;
+
+      // Blocklist names to check against
+      repeated string blocklist_names = 4;
+
+      // When true, further analysis stops if a blocklist is hit
+      optional bool halt_on_blocklist_hit = 5;
+
+      repeated BackendPolicySpec inline_policies = 6;
+    }
+
     // Response sent when rejecting a request
     message RequestRejection {
       bytes body = 1;
@@ -918,6 +937,7 @@ message BackendPolicySpec {
         Webhook webhook = 3;
         GoogleModelArmor google_model_armor = 4;
         BedrockGuardrails bedrock_guardrails = 5;
+        AzureContentSafety azure_content_safety = 6;
       }
     }
 
@@ -931,6 +951,7 @@ message BackendPolicySpec {
         Moderation openai_moderation = 4;
         GoogleModelArmor google_model_armor = 5;
         BedrockGuardrails bedrock_guardrails = 6;
+        AzureContentSafety azure_content_safety = 7;
       }
     }
 

@@ -15,6 +15,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod webhook;
 
+mod azure_content_safety;
 mod bedrock_guardrails;
 mod google_model_armor;
 mod moderation;
@@ -465,6 +466,30 @@ impl Policy {
 						);
 					}
 				},
+				RequestGuardKind::AzureContentSafety(acs) => {
+					if let Some(res) = Self::apply_azure_content_safety_request(
+						req,
+						claims.clone(),
+						&client,
+						&g.rejection,
+						acs,
+					)
+					.await?
+					{
+						Self::record_guardrail_trip(
+							&client,
+							crate::telemetry::metrics::GuardrailPhase::Request,
+							crate::telemetry::metrics::GuardrailAction::Reject,
+						);
+						return Ok(Some(res));
+					} else {
+						Self::record_guardrail_trip(
+							&client,
+							crate::telemetry::metrics::GuardrailPhase::Request,
+							crate::telemetry::metrics::GuardrailAction::Allow,
+						);
+					}
+				},
 			}
 		}
 		Ok(None)
@@ -542,6 +567,43 @@ impl Policy {
 		}
 	}
 
+	async fn apply_azure_content_safety_request(
+		req: &mut dyn RequestType,
+		claims: Option<Claims>,
+		client: &PolicyClient,
+		rej: &RequestRejection,
+		config: &AzureContentSafety,
+	) -> anyhow::Result<Option<Response>> {
+		if let Some(ref analyze_text) = config.analyze_text {
+			let resp = azure_content_safety::send_analyze_text_for_request(
+				req,
+				claims.clone(),
+				client,
+				config,
+				analyze_text,
+			)
+			.await?;
+			let threshold = analyze_text.severity_threshold.unwrap_or(2);
+			if resp.is_blocked(threshold) {
+				return Ok(Some(rej.as_response()));
+			}
+		}
+		if let Some(ref detect_jailbreak) = config.detect_jailbreak {
+			let resp = azure_content_safety::send_detect_jailbreak_for_request(
+				req,
+				claims.clone(),
+				client,
+				config,
+				detect_jailbreak,
+			)
+			.await?;
+			if resp.jailbreak_detected() {
+				return Ok(Some(rej.as_response()));
+			}
+		}
+		Ok(None)
+	}
+
 	async fn apply_google_model_armor_response(
 		resp: &mut dyn ResponseType,
 		claims: Option<Claims>,
@@ -567,6 +629,41 @@ impl Policy {
 		} else {
 			Ok(None)
 		}
+	}
+
+	async fn apply_azure_content_safety_response(
+		resp: &mut dyn ResponseType,
+		claims: Option<Claims>,
+		client: &PolicyClient,
+		rej: &RequestRejection,
+		config: &AzureContentSafety,
+	) -> anyhow::Result<Option<Response>> {
+		let content: Vec<String> = resp
+			.to_webhook_choices()
+			.into_iter()
+			.map(|c| c.message.content.to_string())
+			.collect();
+
+		if content.is_empty() {
+			return Ok(None);
+		}
+
+		if let Some(ref analyze_text) = config.analyze_text {
+			let guardrail_resp = azure_content_safety::send_analyze_text_for_response(
+				content.clone(),
+				claims,
+				client,
+				config,
+				analyze_text,
+			)
+			.await?;
+			let threshold = analyze_text.severity_threshold.unwrap_or(2);
+			if guardrail_resp.is_blocked(threshold) {
+				return Ok(Some(rej.as_response()));
+			}
+		}
+		// Note: detect_jailbreak is request-only, not applied to responses.
+		Ok(None)
 	}
 
 	fn apply_regex(
@@ -964,6 +1061,24 @@ impl Policy {
 						);
 					}
 				},
+				ResponseGuardKind::AzureContentSafety(acs) => {
+					if let Some(res) =
+						Self::apply_azure_content_safety_response(resp, None, client, &g.rejection, acs).await?
+					{
+						Self::record_guardrail_trip(
+							client,
+							crate::telemetry::metrics::GuardrailPhase::Response,
+							crate::telemetry::metrics::GuardrailAction::Reject,
+						);
+						return Ok(Some(res));
+					} else {
+						Self::record_guardrail_trip(
+							client,
+							crate::telemetry::metrics::GuardrailPhase::Response,
+							crate::telemetry::metrics::GuardrailAction::Allow,
+						);
+					}
+				},
 			}
 		}
 		Ok(None)
@@ -990,6 +1105,7 @@ pub enum RequestGuardKind {
 	OpenAIModeration(Moderation),
 	BedrockGuardrails(BedrockGuardrails),
 	GoogleModelArmor(GoogleModelArmor),
+	AzureContentSafety(AzureContentSafety),
 }
 
 #[apply(schema!)]
@@ -1111,6 +1227,61 @@ pub struct GoogleModelArmor {
 	pub policies: Vec<BackendPolicy>,
 }
 
+/// Configuration for Azure Content Safety integration.
+///
+/// Uses the Azure AI Content Safety APIs to detect harmful content
+/// and jailbreak attempts. The endpoint and authentication are shared
+/// across all enabled features.
+#[apply(schema!)]
+pub struct AzureContentSafety {
+	/// The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")
+	pub endpoint: Strng,
+	/// Backend policies for Azure authentication (optional, defaults to implicit Azure auth)
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+	)]
+	pub policies: Vec<BackendPolicy>,
+	/// Cached implicit Azure auth credential, shared across requests.
+	#[serde(skip)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub cached_azure_auth: crate::http::auth::AzureAuth,
+	/// Analyze Text configuration for detecting harmful content categories
+	/// (Hate, SelfHarm, Sexual, Violence) and blocklist matches.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub analyze_text: Option<AnalyzeTextConfig>,
+	/// Detect Text Jailbreak configuration for detecting jailbreak attempts.
+	/// Only applicable to request guards.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub detect_jailbreak: Option<DetectJailbreakConfig>,
+}
+
+/// Configuration for the Analyze Text API.
+#[apply(schema!)]
+pub struct AnalyzeTextConfig {
+	/// Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub severity_threshold: Option<i32>,
+	/// API version to use (default: "2024-09-01")
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub api_version: Option<Strng>,
+	/// Blocklist names to check against
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub blocklist_names: Option<Vec<String>>,
+	/// When true, further analysis stops if a blocklist is hit
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub halt_on_blocklist_hit: Option<bool>,
+}
+
+/// Configuration for the Detect Jailbreak API.
+#[apply(schema!)]
+pub struct DetectJailbreakConfig {
+	/// API version to use (default: "2024-02-15-preview")
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub api_version: Option<Strng>,
+}
+
 #[apply(schema!)]
 #[derive(Default)]
 pub enum Action {
@@ -1155,6 +1326,7 @@ pub enum ResponseGuardKind {
 	Webhook(Webhook),
 	BedrockGuardrails(BedrockGuardrails),
 	GoogleModelArmor(GoogleModelArmor),
+	AzureContentSafety(AzureContentSafety),
 }
 
 #[apply(schema!)]

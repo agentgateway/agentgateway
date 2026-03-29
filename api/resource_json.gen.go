@@ -1062,6 +1062,17 @@ func (this *BackendPolicySpec_Ai_GoogleModelArmor) UnmarshalJSON(b []byte) error
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for BackendPolicySpec_Ai_AzureContentSafety
+func (this *BackendPolicySpec_Ai_AzureContentSafety) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_Ai_AzureContentSafety
+func (this *BackendPolicySpec_Ai_AzureContentSafety) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for BackendPolicySpec_Ai_RequestRejection
 func (this *BackendPolicySpec_Ai_RequestRejection) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)

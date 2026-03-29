@@ -482,6 +482,111 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.duration`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection.body`|array||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection.status`|integer||
@@ -709,6 +814,111 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.duration`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection.body`|array||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection.status`|integer||
@@ -1750,6 +1960,111 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.duration`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].rejection`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].rejection.body`|array||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].rejection.status`|integer||
@@ -1977,6 +2292,111 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.duration`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.body`|array||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.status`|integer||
@@ -2447,6 +2867,111 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.duration`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.body`|array||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.status`|integer||
@@ -2674,6 +3199,111 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.duration`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.body`|array||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.status`|integer||
@@ -3122,6 +3752,111 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.duration`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection.body`|array||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection.status`|integer||
@@ -3349,6 +4084,111 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.duration`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection.body`|array||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection.status`|integer||
@@ -4342,6 +5182,111 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.request`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.add`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.set`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.set`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.key`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.root`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.duration`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`policies[].policy.ai.promptGuard.request[].rejection`|object||
 |`policies[].policy.ai.promptGuard.request[].rejection.body`|array||
 |`policies[].policy.ai.promptGuard.request[].rejection.status`|integer||
@@ -4569,6 +5514,111 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.request`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.add`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.set`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.set`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.key`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.root`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.duration`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`policies[].policy.ai.promptGuard.response[].rejection`|object||
 |`policies[].policy.ai.promptGuard.response[].rejection.body`|array||
 |`policies[].policy.ai.promptGuard.response[].rejection.status`|integer||
@@ -5457,6 +6507,111 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.add`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.set`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.set`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.key`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.root`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.duration`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`backends[].policies.ai.promptGuard.request[].rejection`|object||
 |`backends[].policies.ai.promptGuard.request[].rejection.body`|array||
 |`backends[].policies.ai.promptGuard.request[].rejection.status`|integer||
@@ -5684,6 +6839,111 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.add`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.set`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.set`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.key`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.root`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.duration`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`backends[].policies.ai.promptGuard.response[].rejection`|object||
 |`backends[].policies.ai.promptGuard.response[].rejection.body`|array||
 |`backends[].policies.ai.promptGuard.response[].rejection.status`|integer||
@@ -6081,6 +7341,111 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`llm.models[].guardrails.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`llm.models[].guardrails.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.path`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.request`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.request.add`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.request.set`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.request.body`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.response`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.response.add`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.response.set`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.response.body`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTLS.cert`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTLS.key`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTLS.root`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.http.version`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.http.requestTimeout`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.tcp.keepalives`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.health.eviction.duration`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`llm.models[].guardrails.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`llm.models[].guardrails.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`llm.models[].guardrails.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`llm.models[].guardrails.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`llm.models[].guardrails.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`llm.models[].guardrails.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`llm.models[].guardrails.request[].rejection`|object||
 |`llm.models[].guardrails.request[].rejection.body`|array||
 |`llm.models[].guardrails.request[].rejection.status`|integer||
@@ -6308,6 +7673,111 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`llm.models[].guardrails.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`llm.models[].guardrails.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.path`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.request`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.request.add`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.request.set`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.request.body`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.response`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.response.add`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.response.set`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.response.body`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTLS.cert`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTLS.key`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTLS.root`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.http.version`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.http.requestTimeout`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.tcp.keepalives`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.health.eviction.duration`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`llm.models[].guardrails.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`llm.models[].guardrails.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`llm.models[].guardrails.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`llm.models[].guardrails.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`llm.models[].guardrails.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`llm.models[].guardrails.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`llm.models[].guardrails.response[].rejection`|object||
 |`llm.models[].guardrails.response[].rejection.body`|array||
 |`llm.models[].guardrails.response[].rejection.status`|integer||
@@ -7103,6 +8573,111 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.add`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.set`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.set`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.key`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.root`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.duration`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`mcp.policies.ai.promptGuard.request[].rejection`|object||
 |`mcp.policies.ai.promptGuard.request[].rejection.body`|array||
 |`mcp.policies.ai.promptGuard.request[].rejection.status`|integer||
@@ -7330,6 +8905,111 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety`|object|Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.status`|integer||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.add`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.set`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.set`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|Send TLS to the backend.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.key`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.root`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.hostname`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecure`|boolean||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.file`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|Specify HTTP settings for the backend|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|Specify TCP settings for the backend|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.time`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.interval`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.retries`|integer||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.duration`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.apiVersion`|string|API version to use (default: "2024-09-01")|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.blocklistNames`|[]string|Blocklist names to check against|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.haltOnBlocklistHit`|boolean|When true, further analysis stops if a blocklist is hit|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak`|object|Detect Text Jailbreak configuration for detecting jailbreak attempts.<br>Only applicable to request guards.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.detectJailbreak.apiVersion`|string|API version to use (default: "2024-02-15-preview")|
 |`mcp.policies.ai.promptGuard.response[].rejection`|object||
 |`mcp.policies.ai.promptGuard.response[].rejection.body`|array||
 |`mcp.policies.ai.promptGuard.response[].rejection.status`|integer||
