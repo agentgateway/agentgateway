@@ -1310,9 +1310,13 @@ impl ListenerSet {
 		self.best_match_filtered(host, |_| true)
 	}
 
-	/// Match only listeners with HTTP protocol (no TLS).
+	/// Match only listeners intended for HTTP request processing.
+	/// HBONE is included because by the time httpproxy is invoked, the HBONE
+	/// tunnel has already been decoded — the inner request is handled as plain HTTP.
 	pub fn best_match_http(&self, host: &str) -> Option<Arc<Listener>> {
-		self.best_match_filtered(host, |p| matches!(p, ListenerProtocol::HTTP))
+		self.best_match_filtered(host, |p| {
+			matches!(p, ListenerProtocol::HTTP | ListenerProtocol::HBONE)
+		})
 	}
 
 	/// Match only listeners with TLS-capable protocol (HTTPS or TLS).
@@ -2390,6 +2394,61 @@ mod tests {
 			hostnames: hostnames.into_iter().map(strng::new).collect(),
 			backends: vec![],
 		}
+	}
+
+	fn listener(key: &'static str, hostname: &'static str, protocol: ListenerProtocol) -> Listener {
+		Listener {
+			key: strng::new(key),
+			name: ListenerName::default(),
+			hostname: strng::new(hostname),
+			protocol,
+			routes: RouteSet::default(),
+			tcp_routes: TCPRouteSet::default(),
+		}
+	}
+
+	#[test]
+	fn test_best_match_http_includes_hbone_excludes_tls() {
+		let set = ListenerSet::from_list([
+			listener("http", "example.com", ListenerProtocol::HTTP),
+			listener("hbone", "example.com", ListenerProtocol::HBONE),
+			listener("tls", "example.com", ListenerProtocol::TLS(None)),
+		]);
+
+		// HTTP listener matches
+		let http_set =
+			ListenerSet::from_list([listener("http", "example.com", ListenerProtocol::HTTP)]);
+		assert!(
+			http_set.best_match_http("example.com").is_some(),
+			"HTTP listener should match"
+		);
+
+		// HBONE listener matches
+		let hbone_set =
+			ListenerSet::from_list([listener("hbone", "example.com", ListenerProtocol::HBONE)]);
+		assert!(
+			hbone_set.best_match_http("example.com").is_some(),
+			"HBONE listener should match best_match_http"
+		);
+
+		// TLS listener is excluded
+		let tls_set =
+			ListenerSet::from_list([listener("tls", "example.com", ListenerProtocol::TLS(None))]);
+		assert!(
+			tls_set.best_match_http("example.com").is_none(),
+			"TLS listener should not match best_match_http"
+		);
+
+		// When multiple protocols are present, HBONE is returned (not the TLS one)
+		let result = set.best_match_http("example.com");
+		assert!(result.is_some());
+		assert!(
+			matches!(
+				result.unwrap().protocol,
+				ListenerProtocol::HTTP | ListenerProtocol::HBONE
+			),
+			"best_match_http should not return a TLS listener"
+		);
 	}
 
 	#[test]
