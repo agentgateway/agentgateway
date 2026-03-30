@@ -20,6 +20,7 @@ import (
 
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
@@ -69,6 +70,7 @@ type StartConfig struct {
 	Client apiclient.Client
 
 	AgwCollections *agwplugins.AgwCollections
+	JWKSLookup     jwks.Lookup
 
 	KrtOptions                     krtutil.KrtOptions
 	ExtraAgwResourceStatusHandlers map[schema.GroupVersionKind]syncer.ResourceStatusSyncer
@@ -105,7 +107,15 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 	// This only effects metrics in the resources subsystem and is not required for other metrics.
 	//metrics.StartResourceSyncMetricsProcessing(ctx)
 
+	if cfg.JWKSLookup == nil {
+		return nil, errors.New("jwks lookup is not configured")
+	}
 	agwMergedPlugins := agwPluginFactory(cfg)(ctx, cfg.AgwCollections)
+	syncerOptions := append([]syncer.AgentgatewaySyncerOption{}, cfg.AgentgatewaySyncerOptions...)
+	syncerOptions = append(syncerOptions, syncer.WithBuildReferenceTypes(func(agw *agwplugins.AgwCollections, base agwplugins.ReferenceTypes) agwplugins.ReferenceTypes {
+		base.InlineJWKS = cfg.JWKSLookup.InlineForOwner
+		return base
+	}))
 
 	// Compute the extra GVKs list to provide at initialization time
 	var gvks []schema.GroupVersionKind
@@ -121,7 +131,7 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 		cfg.AdditionalGatewayClasses,
 		cfg.KrtOptions,
 		gvks,
-		cfg.AgentgatewaySyncerOptions...,
+		syncerOptions...,
 	)
 
 	if err := cfg.Manager.Add(agwSyncer); err != nil {
@@ -214,6 +224,7 @@ func (c *ControllerBuilder) Build() (*syncer.Syncer, error) {
 			defaultTag = ptr.Of(version.GitVersion)
 		}
 	}
+
 	gwCfg := GatewayConfig{
 		Client:            c.cfg.Client,
 		Mgr:               c.mgr,

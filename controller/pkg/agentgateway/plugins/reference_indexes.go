@@ -12,6 +12,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
@@ -21,6 +22,7 @@ type ReferenceTypes struct {
 	PolicyTargets func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) (*api.PolicyTarget, bool)
 	PolicyBackend func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error)
 	RouteBackend  func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error)
+	InlineJWKS    func(krtctx krt.HandlerContext, owner jwks.RemoteJwksOwner) (string, error)
 }
 
 type BackendReferenceErrorReason string
@@ -126,6 +128,9 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 		},
 		RouteBackend: func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error) {
 			return DefaultRouteBackend(krtctx, agw, defaultNamespace, gk, name, namespace, port)
+		},
+		InlineJWKS: func(krtctx krt.HandlerContext, owner jwks.RemoteJwksOwner) (string, error) {
+			return "", fmt.Errorf("remote JWKS lookup is not configured for %s", owner.ID.String())
 		},
 	}
 }
@@ -324,4 +329,8 @@ func (p ReferenceIndex) PolicyBackend(krtctx krt.HandlerContext, defaultNamespac
 
 func (p ReferenceIndex) RouteBackend(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error) {
 	return p.explicitReferences.RouteBackend(krtctx, defaultNamespace, gk, name, namespace, port)
+}
+
+func (p ReferenceIndex) InlineJWKS(krtctx krt.HandlerContext, owner jwks.RemoteJwksOwner) (string, error) {
+	return p.explicitReferences.InlineJWKS(krtctx, owner)
 }

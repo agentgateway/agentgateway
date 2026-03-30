@@ -70,6 +70,7 @@ func startDummyIDP() (shutdownFunc, error) {
 	mux.HandleFunc("/token", handleToken)
 	// Handle .well-known paths - register each path explicitly
 	mux.HandleFunc("/.well-known/jwks.json", handleJWKS)
+	mux.HandleFunc("/.well-known/openid-configuration", handleDiscovery)
 	mux.HandleFunc("/.well-known/oauth-authorization-server", handleDiscovery)
 
 	// Add CORS middleware for all routes

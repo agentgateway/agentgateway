@@ -34,9 +34,8 @@ status:
   status:
     conditions:
     - lastTransitionTime: fake
-      message: |-
-        failed to translate backend: JwksUrlBuilderFactory must be initialized before use
-        JwksUrlBuilderFactory must be initialized before use
+      message: 'failed to translate backend: jwks keyset for "http://store-uninitialized.default.svc.cluster.local:8080/"
+        isn''t available (not yet fetched or fetch failed)'
       reason: TranslationError
       status: "False"
       type: Accepted

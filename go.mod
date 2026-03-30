@@ -13,7 +13,6 @@ require (
 	github.com/envoyproxy/go-control-plane/envoy v1.37.1-0.20260313105501-0df655d8a214
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
 	github.com/go-logr/logr v1.4.3
-	github.com/golang/mock v1.7.0-rc.1
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-cmp v0.7.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
