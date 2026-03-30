@@ -508,7 +508,9 @@ pub fn set_resource_defaults_from_config(cfg: &crate::Config) {
 
 	// Resolve service name: config > OTEL_SERVICE_NAME env > default
 	let resolved_service_name = if service_name.is_empty() {
-		std::env::var("OTEL_SERVICE_NAME").ok().filter(|s| !s.is_empty())
+		std::env::var("OTEL_SERVICE_NAME")
+			.ok()
+			.filter(|s| !s.is_empty())
 	} else {
 		Some(service_name)
 	};
