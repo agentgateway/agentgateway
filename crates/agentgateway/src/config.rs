@@ -249,6 +249,10 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			Some(session) => crate::http::sessionpersistence::Encoder::aes(session.key.expose_secret())?,
 		}
 	};
+	// Browser OIDC cookie crypto is core gateway runtime config, not per-policy input.
+	let oidc_cookie_encoder = parse::<String>("OIDC_COOKIE_SECRET")?
+		.map(|key| crate::http::sessionpersistence::Encoder::aes(key.trim()))
+		.transpose()?;
 
 	Ok(crate::Config {
 		ipv6_enabled,
@@ -405,6 +409,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			node_id: ENV.node_id.clone(),
 		},
 		session_encoder,
+		oidc_cookie_encoder,
 		hbone: Arc::new(agent_hbone::Config {
 			// window size: per-stream limit
 			window_size: parse("HTTP2_STREAM_WINDOW_SIZE")?

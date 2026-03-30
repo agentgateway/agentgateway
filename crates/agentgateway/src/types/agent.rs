@@ -1,6 +1,6 @@
 use std::cmp;
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
@@ -1580,6 +1580,10 @@ impl RouteSet {
 		self.all.contains_key(key)
 	}
 
+	pub fn get(&self, key: &RouteKey) -> Option<Arc<Route>> {
+		self.all.get(key).cloned()
+	}
+
 	pub fn remove(&mut self, key: &RouteKey) {
 		let Some(old_route) = self.all.remove(key) else {
 			return;
@@ -2038,6 +2042,7 @@ pub enum TrafficPolicy {
 	ExtAuthz(ext_authz::ExtAuthz),
 	ExtProc(ext_proc::ExtProc),
 	JwtAuth(crate::http::jwt::Jwt),
+	Oidc(crate::http::oidc::OidcPolicy),
 	BasicAuth(crate::http::basicauth::BasicAuthentication),
 	APIKey(crate::http::apikey::APIKeyAuthentication),
 	Transformation(crate::http::transformation_cel::Transformation),

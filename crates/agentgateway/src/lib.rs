@@ -470,6 +470,8 @@ pub struct Config {
 	pub proxy_metadata: ProxyMetadata,
 	pub threading_mode: ThreadingMode,
 	pub session_encoder: http::sessionpersistence::Encoder,
+	/// Runtime cookie/session crypto for browser OIDC flows.
+	pub oidc_cookie_encoder: Option<http::sessionpersistence::Encoder>,
 	/// Handle for tasks/spans emitted on the admin runtime.
 	#[serde(skip)]
 	pub admin_runtime_handle: Option<tokio::runtime::Handle>,

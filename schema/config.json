@@ -1215,6 +1215,17 @@
             }
           ]
         },
+        "oidc": {
+          "description": "Authenticate incoming browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "basicAuth": {
           "description": "Authenticate incoming requests using Basic Authentication with htpasswd.",
           "anyOf": [
@@ -3362,6 +3373,81 @@
         "jwks"
       ]
     },
+    "LocalOidcConfig": {
+      "description": "Browser-based OIDC authentication policy.\n\nExplicit mode is still OIDC: it supplies provider metadata manually instead of using discovery.\nUnauthenticated non-callback requests always redirect to the provider login flow. Routes that\nneed non-redirect authentication behavior should use a different auth policy.",
+      "type": "object",
+      "properties": {
+        "issuer": {
+          "description": "Issuer used for discovery and ID token validation.",
+          "type": "string"
+        },
+        "discovery": {
+          "description": "Optional discovery document override. If omitted, discovery uses\n`${issuer}/.well-known/openid-configuration`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileInlineOrRemote"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorizationEndpoint": {
+          "description": "Authorization endpoint used to start the browser login flow.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "tokenEndpoint": {
+          "description": "Token endpoint used to exchange the authorization code.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "jwks": {
+          "description": "JWKS source used to validate returned ID tokens.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileInlineOrRemote"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clientId": {
+          "description": "OAuth2 client identifier used for authorization and token exchange.",
+          "type": "string"
+        },
+        "clientSecret": {
+          "description": "OAuth2 client secret used for token exchange.",
+          "type": "string"
+        },
+        "redirectURI": {
+          "description": "Absolute callback URI handled by the gateway.\nThis policy always redirects unauthenticated non-callback requests back through this login\nflow.",
+          "type": "string"
+        },
+        "scopes": {
+          "description": "Additional OAuth2 scopes to request. `openid` is always included.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "issuer",
+        "clientId",
+        "clientSecret",
+        "redirectURI"
+      ]
+    },
     "LocalBasicAuth": {
       "type": "object",
       "properties": {
@@ -5044,6 +5130,17 @@
     "LocalGatewayPolicy": {
       "type": "object",
       "properties": {
+        "oidc": {
+          "description": "Authenticate incoming browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "jwtAuth": {
           "description": "Authenticate incoming JWT requests.",
           "anyOf": [
@@ -6120,6 +6217,17 @@
     "LocalLLMPolicy": {
       "type": "object",
       "properties": {
+        "oidc": {
+          "description": "Authenticate incoming browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "jwtAuth": {
           "description": "Authenticate incoming JWT requests.",
           "anyOf": [

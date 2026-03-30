@@ -82,6 +82,13 @@ async fn apply_request_policies(
 			.apply(response_policies.headers())?;
 	}
 
+	if let Some(o) = &policies.oidc {
+		o.apply(Some(log), req, client.clone())
+			.await
+			.map_err(|e| ProxyResponse::from(ProxyError::OidcFailure(e)))?
+			.apply(response_policies.headers())?;
+	}
+
 	if let Some(j) = &policies.jwt {
 		j.apply(Some(log), req)
 			.await

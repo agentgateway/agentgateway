@@ -912,6 +912,20 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks.url`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`binds[].listeners[].routes[].policies.oidc`|object|Authenticate incoming browser requests with OIDC authorization code flow.|
+|`binds[].listeners[].routes[].policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
+|`binds[].listeners[].routes[].policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
+|`binds[].listeners[].routes[].policies.oidc.discovery.file`|string||
+|`binds[].listeners[].routes[].policies.oidc.discovery.url`|string||
+|`binds[].listeners[].routes[].policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
+|`binds[].listeners[].routes[].policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
+|`binds[].listeners[].routes[].policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
+|`binds[].listeners[].routes[].policies.oidc.jwks.file`|string||
+|`binds[].listeners[].routes[].policies.oidc.jwks.url`|string||
+|`binds[].listeners[].routes[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
+|`binds[].listeners[].routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`binds[].listeners[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
+|`binds[].listeners[].routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`binds[].listeners[].routes[].policies.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|object|.htpasswd file contents/reference|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.file`|string||
@@ -3417,6 +3431,20 @@
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].policies`|object||
+|`binds[].listeners[].policies.oidc`|object|Authenticate incoming browser requests with OIDC authorization code flow.|
+|`binds[].listeners[].policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
+|`binds[].listeners[].policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
+|`binds[].listeners[].policies.oidc.discovery.file`|string||
+|`binds[].listeners[].policies.oidc.discovery.url`|string||
+|`binds[].listeners[].policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
+|`binds[].listeners[].policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
+|`binds[].listeners[].policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
+|`binds[].listeners[].policies.oidc.jwks.file`|string||
+|`binds[].listeners[].policies.oidc.jwks.url`|string||
+|`binds[].listeners[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
+|`binds[].listeners[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`binds[].listeners[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
+|`binds[].listeners[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`binds[].listeners[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`binds[].listeners[].policies.jwtAuth.mode`|string||
 |`binds[].listeners[].policies.jwtAuth.providers`|[]object||
@@ -4772,6 +4800,20 @@
 |`policies[].policy.jwtAuth.jwks.url`|string||
 |`policies[].policy.jwtAuth.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`policies[].policy.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`policies[].policy.oidc`|object|Authenticate incoming browser requests with OIDC authorization code flow.|
+|`policies[].policy.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
+|`policies[].policy.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
+|`policies[].policy.oidc.discovery.file`|string||
+|`policies[].policy.oidc.discovery.url`|string||
+|`policies[].policy.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
+|`policies[].policy.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
+|`policies[].policy.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
+|`policies[].policy.oidc.jwks.file`|string||
+|`policies[].policy.oidc.jwks.url`|string||
+|`policies[].policy.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
+|`policies[].policy.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`policies[].policy.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
+|`policies[].policy.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`policies[].policy.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`policies[].policy.basicAuth.htpasswd`|object|.htpasswd file contents/reference|
 |`policies[].policy.basicAuth.htpasswd.file`|string||
@@ -6322,6 +6364,20 @@
 |`llm.models[].matches[].headers[].value.exact`|string||
 |`llm.models[].matches[].headers[].value.regex`|string||
 |`llm.policies`|object|policies defines policies for handling incoming requests, before a model is selected|
+|`llm.policies.oidc`|object|Authenticate incoming browser requests with OIDC authorization code flow.|
+|`llm.policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
+|`llm.policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
+|`llm.policies.oidc.discovery.file`|string||
+|`llm.policies.oidc.discovery.url`|string||
+|`llm.policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
+|`llm.policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
+|`llm.policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
+|`llm.policies.oidc.jwks.file`|string||
+|`llm.policies.oidc.jwks.url`|string||
+|`llm.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
+|`llm.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`llm.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
+|`llm.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`llm.policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`llm.policies.jwtAuth.mode`|string||
 |`llm.policies.jwtAuth.providers`|[]object||
@@ -7533,6 +7589,20 @@
 |`mcp.policies.jwtAuth.jwks.url`|string||
 |`mcp.policies.jwtAuth.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`mcp.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`mcp.policies.oidc`|object|Authenticate incoming browser requests with OIDC authorization code flow.|
+|`mcp.policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
+|`mcp.policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
+|`mcp.policies.oidc.discovery.file`|string||
+|`mcp.policies.oidc.discovery.url`|string||
+|`mcp.policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
+|`mcp.policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
+|`mcp.policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
+|`mcp.policies.oidc.jwks.file`|string||
+|`mcp.policies.oidc.jwks.url`|string||
+|`mcp.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
+|`mcp.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`mcp.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
+|`mcp.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`mcp.policies.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`mcp.policies.basicAuth.htpasswd`|object|.htpasswd file contents/reference|
 |`mcp.policies.basicAuth.htpasswd.file`|string||
