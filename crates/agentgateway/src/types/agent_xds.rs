@@ -1231,6 +1231,9 @@ fn convert_health(
 	Ok(health::Policy {
 		unhealthy_expression,
 		eviction,
+		health_threshold: None,
+		health_on_unevict: None,
+		probe: None,
 	})
 }
 

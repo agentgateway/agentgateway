@@ -4,7 +4,7 @@ use itertools::Itertools;
 use rand::RngExt;
 use serde::ser::SerializeSeq;
 use std::cmp::Ordering;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use tokio::sync::mpsc;
 use tokio::time::sleep_until;
@@ -41,6 +41,12 @@ impl<T> Default for EndpointGroup<T> {
 			active: IndexMap::new(),
 			rejected: IndexMap::new(),
 		}
+	}
+}
+
+impl<T> EndpointGroup<T> {
+	pub fn all(&self) -> impl Iterator<Item = (&EndpointKey, &EndpointWithInfo<T>)> {
+		self.active.iter().chain(self.rejected.iter())
 	}
 }
 
@@ -291,6 +297,26 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		}
 		false
 	}
+	pub fn all_endpoints(&self) -> impl Iterator<Item = (Strng, Arc<T>)> {
+		let mut seen = HashSet::new();
+		self
+			.buckets
+			.iter()
+			.flat_map(|b| {
+				b.load_full()
+					.all()
+					.map(|(k, v)| (k.clone(), v.endpoint.clone()))
+					.collect::<Vec<_>>()
+			})
+			.into_iter()
+			.filter_map(move |(k, v)| {
+				if seen.insert(k.clone()) {
+					Some((k, v))
+				} else {
+					None
+				}
+			})
+	}
 
 	pub fn iter(&self) -> ActiveEndpointsIter<T> {
 		ActiveEndpointsIter(self.best_bucket())
@@ -383,7 +409,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 			}
 		});
 	}
-	pub async fn evict(&mut self, key: EndpointKey, time: Instant) {
+	pub async fn evict(&self, key: EndpointKey, time: Instant) {
 		let Some(bucket) = self.find_bucket(&key) else {
 			return;
 		};

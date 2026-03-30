@@ -481,6 +481,10 @@ pub struct Service {
 
 	#[serde(default, skip_serializing_if = "is_default")]
 	pub ip_families: Option<IpFamily>,
+
+	/// Active health policy for the service.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub health: Option<crate::http::health::Policy>,
 }
 
 impl Service {
@@ -877,6 +881,7 @@ impl TryFrom<&XdsService> for Service {
 			waypoint,
 			load_balancer: lb,
 			ip_families,
+			health: None,
 		};
 		Ok(svc)
 	}
