@@ -1467,6 +1467,13 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 									)
 								})
 								.collect();
+							// parse limit_override if present
+							let limit_override =
+								d.limit_override
+									.as_ref()
+									.map(|lo| http::remoteratelimit::LimitOverride {
+										expression: Arc::new(cel::Expression::new_permissive(&lo.expression)),
+									});
 							Ok(http::remoteratelimit::DescriptorEntry {
 								entries: Arc::new(entries),
 								limit_type: match tps::remote_rate_limit::Type::try_from(d.r#type)
@@ -1479,6 +1486,7 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 										http::localratelimit::RateLimitType::Tokens
 									},
 								},
+								limit_override,
 							})
 						},
 					)
