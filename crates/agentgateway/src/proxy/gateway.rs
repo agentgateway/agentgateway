@@ -1153,7 +1153,34 @@ impl Gateway {
 				)
 			})
 			.unwrap();
-		let Some(bind) = pi.stores.read_binds().find_bind(socket_addr) else {
+		// HBONE_GATEWAY dispatch: if the CONNECT URI port matches the
+		// HBONE bind (port 15008), redirect to a local application bind.
+		// This is the "expose local ports over HBONE" behavior.
+		let bind = {
+			let binds = pi.stores.read_binds();
+			let direct = binds.find_bind(socket_addr);
+			match direct {
+				Some(ref b) if b.address.port() == socket_addr.port() => {
+					// Matched the HBONE bind itself. Find a local app bind.
+					let local = binds.all().into_iter().find(|c| {
+						c.address.port() != socket_addr.port()
+							&& matches!(c.protocol, BindProtocol::http | BindProtocol::tls)
+					});
+					if let Some(lb) = local {
+						debug!(
+							"HBONE_GATEWAY: dispatching to local bind {} (port {})",
+							lb.key,
+							lb.address.port()
+						);
+						Some(lb)
+					} else {
+						direct
+					}
+				},
+				other => other,
+			}
+		};
+		let Some(bind) = bind else {
 			warn!("no bind for {hbone_addr}");
 			let Ok(_) = req
 				.send_response(build_response(StatusCode::NOT_FOUND))
