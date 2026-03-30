@@ -19,9 +19,9 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::store::Event;
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendPolicy, BackendTargetRef, BackendWithPolicies, Bind,
-	BindKey, FrontendPolicy, Listener, ListenerKey, ListenerName, McpAuthentication, PolicyKey,
-	PolicyTarget, Route, RouteKey, RouteName, RouteSet, TCPRoute, TCPRouteSet, TargetedPolicy,
-	TracingPolicy, TrafficPolicy,
+	BindKey, FrontendPolicy, JwtAuthentication, Listener, ListenerKey, ListenerName,
+	McpAuthentication, PolicyKey, PolicyTarget, Route, RouteKey, RouteName, RouteSet, TCPRoute,
+	TCPRouteSet, TargetedPolicy, TracingPolicy, TrafficPolicy,
 };
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::agent::resource::Kind as XdsKind;
@@ -215,7 +215,7 @@ pub struct RoutePolicies {
 	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
 	pub remote_rate_limit: Option<remoteratelimit::RemoteRateLimit>,
 	pub authorization: Option<http::authorization::HTTPAuthorizationSet>,
-	pub jwt: Option<http::jwt::Jwt>,
+	pub jwt: Option<JwtAuthentication>,
 	pub basic_auth: Option<http::basicauth::BasicAuthentication>,
 	pub api_key: Option<http::apikey::APIKeyAuthentication>,
 	pub ext_authz: Option<ext_authz::ExtAuthz>,
@@ -239,7 +239,7 @@ pub struct RoutePolicies {
 #[derive(Debug, Default)]
 pub struct GatewayPolicies {
 	pub ext_proc: Option<ext_proc::ExtProc>,
-	pub jwt: Option<http::jwt::Jwt>,
+	pub jwt: Option<JwtAuthentication>,
 	pub ext_authz: Option<ext_authz::ExtAuthz>,
 	pub transformation: Option<http::transformation_cel::Transformation>,
 	pub basic_auth: Option<http::basicauth::BasicAuthentication>,

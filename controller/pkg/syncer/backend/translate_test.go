@@ -41,7 +41,7 @@ func TestBuildMCP(t *testing.T) {
 							{
 								Name: "static-target",
 								Static: &agentgateway.McpTarget{
-									Host:     "mcp-server.example.com",
+									Host:     shortStringPtr("mcp-server.example.com"),
 									Port:     8080,
 									Path:     stringPtr("override-sse"),
 									Protocol: ptr.Of(agentgateway.MCPProtocolSSE),
@@ -131,6 +131,31 @@ func TestBuildMCP(t *testing.T) {
 				},
 			},
 			inputs: []any{createMockMCPServiceWithProtocol("test-ns", "mcp-service", "app=mcp-server", "agentgateway.dev/mcp")},
+		},
+		{
+			name: "Service backendRef MCPBackend backend - same namespace",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "service-ref-mcp-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "service-ref-target",
+								Static: &agentgateway.McpTarget{
+									BackendRef: &corev1.LocalObjectReference{
+										Name: "mcp-service",
+									},
+									Port: 8080,
+								},
+							},
+						},
+					},
+				},
+			},
+			inputs: []any{createMockMCPService("test-ns", "mcp-service", "app=mcp-server")},
 		},
 		{
 			name: "Error case - invalid service selector",
@@ -552,6 +577,11 @@ func TestBuildAIBackend(t *testing.T) {
 // Helper function to create a string pointer
 func stringPtr(s string) *string {
 	return &s
+}
+
+func shortStringPtr(s string) *agentgateway.ShortString {
+	v := agentgateway.ShortString(s)
+	return &v
 }
 
 // Helper function to create a mock SecretIndex for testing

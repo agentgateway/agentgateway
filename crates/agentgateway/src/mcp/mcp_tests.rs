@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 
 use agent_core::strng;
 use itertools::Itertools;
+use openapiv3::OpenAPI;
 use rmcp::RoleClient;
 use rmcp::model::InitializeRequestParams;
 use rmcp::service::RunningService;
@@ -10,6 +11,7 @@ use secrecy::SecretString;
 
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::{PolicySet, RuleSet};
+use crate::http::sessionpersistence::MCPSession;
 use crate::mcp::FailureMode;
 use crate::mcp::McpAuthorization;
 use crate::mcp::handler::Relay;
@@ -1553,6 +1555,66 @@ fn fake_streamable_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 	})
 }
 
+fn fake_sse_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
+	Arc::new(McpTarget {
+		name: name.into(),
+		spec: crate::types::agent::McpTargetSpec::Sse(crate::types::agent::SseTargetSpec {
+			backend: crate::types::agent::SimpleBackendReference::Backend(strng::format!(
+				"/unused-{name}"
+			)),
+			path: "/sse".to_string(),
+		}),
+		backend_policies: Default::default(),
+		backend: Some(crate::types::agent::SimpleBackend::Opaque(
+			crate::types::agent::ResourceName::new(strng::format!("backend-{name}"), "".into()),
+			crate::types::agent::Target::Address(addr),
+		)),
+		always_use_prefix: false,
+	})
+}
+
+fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
+	let schema: OpenAPI = serde_json::from_value(serde_json::json!({
+		"openapi": "3.0.0",
+		"info": {
+			"title": "Test API",
+			"version": "1.0.0"
+		},
+		"paths": {}
+	}))
+	.expect("valid OpenAPI schema");
+
+	Arc::new(McpTarget {
+		name: name.into(),
+		spec: crate::types::agent::McpTargetSpec::OpenAPI(crate::types::agent::OpenAPITarget {
+			backend: crate::types::agent::SimpleBackendReference::Backend(strng::format!(
+				"/unused-{name}"
+			)),
+			schema: Arc::new(schema),
+		}),
+		backend_policies: Default::default(),
+		backend: Some(crate::types::agent::SimpleBackend::Opaque(
+			crate::types::agent::ResourceName::new(strng::format!("backend-{name}"), "".into()),
+			crate::types::agent::Target::Address(addr),
+		)),
+		always_use_prefix: false,
+	})
+}
+
+fn fake_stdio_target(name: &str) -> Arc<McpTarget> {
+	Arc::new(McpTarget {
+		name: name.into(),
+		spec: crate::types::agent::McpTargetSpec::Stdio {
+			cmd: "cat".into(),
+			args: vec![],
+			env: Default::default(),
+		},
+		backend_policies: Default::default(),
+		backend: None,
+		always_use_prefix: false,
+	})
+}
+
 fn empty_mcp_policies() -> crate::mcp::McpAuthorizationSet {
 	crate::mcp::McpAuthorizationSet::new(crate::http::authorization::RuleSets::from(Vec::new()))
 }
@@ -1567,6 +1629,131 @@ fn persisted_session(
 		session: Some(session.to_string()),
 		backend: Some(backend),
 	}
+}
+
+fn persisted_stateless_session(
+	target_name: &str,
+	backend: SocketAddr,
+) -> http::sessionpersistence::MCPSession {
+	http::sessionpersistence::MCPSession {
+		target_name: Some(target_name.to_string()),
+		session: None,
+		backend: Some(backend),
+	}
+}
+
+#[test]
+fn test_openapi_targets_emit_stateless_session_state() {
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_openapi_target(
+				"openapi",
+				SocketAddr::from(([127, 0, 0, 1], 30031)),
+			)],
+			stateful: true,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	let sessions = relay
+		.get_sessions()
+		.expect("OpenAPI should support stateless sessions");
+	assert_eq!(
+		sessions,
+		vec![MCPSession {
+			target_name: Some("openapi".to_string()),
+			session: None,
+			backend: None,
+		}]
+	);
+
+	let pinned = SocketAddr::from(([127, 0, 0, 1], 31031));
+	relay
+		.set_sessions(vec![persisted_stateless_session("openapi", pinned)])
+		.unwrap();
+
+	let sessions = relay
+		.get_sessions()
+		.expect("OpenAPI session state should still be available");
+	assert_eq!(
+		sessions,
+		vec![MCPSession {
+			target_name: Some("openapi".to_string()),
+			session: None,
+			backend: Some(pinned),
+		}]
+	);
+}
+
+#[test]
+fn test_sse_targets_emit_stateless_session_state() {
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_sse_target(
+				"sse",
+				SocketAddr::from(([127, 0, 0, 1], 30032)),
+			)],
+			stateful: true,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	let sessions = relay
+		.get_sessions()
+		.expect("SSE should support stateless sessions");
+	assert_eq!(
+		sessions,
+		vec![MCPSession {
+			target_name: Some("sse".to_string()),
+			session: None,
+			backend: None,
+		}]
+	);
+
+	let pinned = SocketAddr::from(([127, 0, 0, 1], 31032));
+	relay
+		.set_sessions(vec![persisted_stateless_session("sse", pinned)])
+		.unwrap();
+
+	let sessions = relay
+		.get_sessions()
+		.expect("SSE session state should still be available");
+	assert_eq!(
+		sessions,
+		vec![MCPSession {
+			target_name: Some("sse".to_string()),
+			session: None,
+			backend: Some(pinned),
+		}]
+	);
+}
+
+#[tokio::test]
+async fn test_stdio_targets_remain_non_stateless() {
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_stdio_target("stdio")],
+			stateful: false,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	assert!(relay.get_sessions().is_none());
 }
 
 #[tokio::test]

@@ -820,6 +820,13 @@ impl Drop for DropOnLog {
 			// Report our non-customized metrics
 			if !is_tcp {
 				log.metrics.requests.get_or_create(&http_labels).inc();
+				if let Some(retry_count) = log.retry_attempt {
+					log
+						.metrics
+						.retries
+						.get_or_create(&http_labels)
+						.inc_by(retry_count as u64);
+				}
 			}
 			return;
 		}
@@ -860,6 +867,14 @@ impl Drop for DropOnLog {
 			.request_duration
 			.get_or_create(&http_labels)
 			.observe(duration.as_secs_f64());
+
+		if let Some(retry_count) = log.retry_attempt {
+			log
+				.metrics
+				.retries
+				.get_or_create(&http_labels)
+				.inc_by(retry_count as u64);
+		}
 
 		Self::add_llm_metrics(
 			&log,

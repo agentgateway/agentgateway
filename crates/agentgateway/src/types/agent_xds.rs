@@ -190,21 +190,6 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthentication> for McpAuthe
 	fn try_from(
 		m: &proto::agent::backend_policy_spec::McpAuthentication,
 	) -> Result<Self, Self::Error> {
-		let provider = match m.provider {
-			x if x
-				== proto::agent::backend_policy_spec::mcp_authentication::McpIdp::Unspecified as i32 =>
-			{
-				None
-			},
-			x if x == proto::agent::backend_policy_spec::mcp_authentication::McpIdp::Auth0 as i32 => {
-				Some(McpIDP::Auth0 {})
-			},
-			x if x == proto::agent::backend_policy_spec::mcp_authentication::McpIdp::Keycloak as i32 => {
-				Some(McpIDP::Keycloak {})
-			},
-			_ => None,
-		};
-
 		if m.jwks_inline.is_empty() {
 			return Err(ProtoError::Generic(
 				"MCP Authentication requires jwks_inline to be set. \
@@ -249,29 +234,66 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthentication> for McpAuthe
 		};
 
 		let jwt_validator = http::jwt::Jwt::from_providers(vec![jwt_provider], mode.into());
-		Ok(McpAuthentication {
-			issuer: m.issuer.clone(),
-			audiences: m.audiences.clone(),
-			provider,
-			resource_metadata: {
-				let extra = m
-					.resource_metadata
-					.as_ref()
-					.map(|rm| {
-						rm.extra
-							.iter()
-							.map(|(k, v)| {
-								let val = serde_json::to_value(v).unwrap_or(serde_json::Value::Null);
-								(k.clone(), val)
-							})
-							.collect::<std::collections::BTreeMap<_, _>>()
-					})
-					.unwrap_or_default();
-				ResourceMetadata { extra }
-			},
-			jwt_validator: std::sync::Arc::new(jwt_validator),
+		Ok(build_mcp_authentication(
+			m.issuer.clone(),
+			m.audiences.clone(),
+			m.provider,
+			convert_mcp_resource_metadata(m.resource_metadata.as_ref().map(|rm| rm.extra.iter())),
+			std::sync::Arc::new(jwt_validator),
 			mode,
+		))
+	}
+}
+
+fn convert_mcp_provider(provider: i32) -> Option<McpIDP> {
+	match provider {
+		x if x == proto::agent::backend_policy_spec::mcp_authentication::McpIdp::Unspecified as i32 => {
+			None
+		},
+		x if x == proto::agent::backend_policy_spec::mcp_authentication::McpIdp::Auth0 as i32 => {
+			Some(McpIDP::Auth0 {})
+		},
+		x if x == proto::agent::backend_policy_spec::mcp_authentication::McpIdp::Keycloak as i32 => {
+			Some(McpIDP::Keycloak {})
+		},
+		_ => None,
+	}
+}
+
+fn convert_mcp_resource_metadata<'a, I, V>(entries: Option<I>) -> ResourceMetadata
+where
+	I: IntoIterator<Item = (&'a String, &'a V)>,
+	V: serde::Serialize + 'a,
+{
+	let extra = entries
+		.map(|entries| {
+			entries
+				.into_iter()
+				.map(|(key, value)| {
+					let value = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
+					(key.clone(), value)
+				})
+				.collect()
 		})
+		.unwrap_or_default();
+	ResourceMetadata { extra }
+}
+
+fn build_mcp_authentication(
+	issuer: String,
+	audiences: Vec<String>,
+	provider: i32,
+	resource_metadata: ResourceMetadata,
+	jwt_validator: Arc<http::jwt::Jwt>,
+	mode: McpAuthenticationMode,
+) -> McpAuthentication {
+	McpAuthentication {
+		issuer,
+		audiences,
+		provider: convert_mcp_provider(provider),
+		resource_metadata,
+		jwt_validator,
+		mode,
 	}
 }
 
@@ -1446,7 +1468,35 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					})
 					.collect::<Result<Vec<_>, _>>()?;
 				let jwt_auth = http::jwt::Jwt::from_providers(providers, mode);
-				TrafficPolicy::JwtAuth(jwt_auth)
+				let mcp = match &jwt.mcp {
+					Some(mcp) => {
+						if jwt.providers.len() != 1 {
+							return Err(ProtoError::Generic(format!(
+								"JWT MCP extension requires exactly one provider, found {}",
+								jwt.providers.len()
+							)));
+						}
+						let provider = &jwt.providers[0];
+						Some(build_mcp_authentication(
+							provider.issuer.clone(),
+							provider.audiences.clone(),
+							mcp.provider,
+							convert_mcp_resource_metadata(
+								mcp.resource_metadata.as_ref().map(|rm| rm.extra.iter()),
+							),
+							Arc::new(jwt_auth.clone()),
+							match tps::jwt::Mode::try_from(jwt.mode)
+								.map_err(|_| ProtoError::EnumParse("invalid JWT mode".to_string()))?
+							{
+								tps::jwt::Mode::Optional => McpAuthenticationMode::Optional,
+								tps::jwt::Mode::Strict => McpAuthenticationMode::Strict,
+								tps::jwt::Mode::Permissive => McpAuthenticationMode::Permissive,
+							},
+						))
+					},
+					None => None,
+				};
+				TrafficPolicy::JwtAuth(JwtAuthentication { jwt: jwt_auth, mcp })
 			},
 			Some(tps::Kind::Transformation(tp)) => {
 				TrafficPolicy::Transformation(Transformation::try_from(tp)?)
