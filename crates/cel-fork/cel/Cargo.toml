@@ -12,7 +12,7 @@ categories = ["compilers"]
 [dependencies]
 antlr4rust = "0.5.2"
 lazy_static = "1.5.0"
-nom = "8.0.0"
+nom = "7.1.3"
 chrono = { version = "0.4", default-features = false, features = ["alloc", "serde"] }
 regex = { version = "1.10.5"}
 serde = "1.0"
@@ -33,7 +33,7 @@ arcstr = "1.2.0"
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 pprof = { version = "0.15", features = ["protobuf", "protobuf-codec", "criterion"] }
 [dev-dependencies]
-criterion = { version = "0.8.2", features = ["html_reports"] }
+criterion = { version = "0.5.1", features = ["html_reports"] }
 serde_bytes = "0.11.14"
 dhat = { version = "0.3.3" }
 tracking-allocator = "0.4.0"

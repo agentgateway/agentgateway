@@ -12,6 +12,9 @@ updates:
       cargo-weekly:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "nom"
+      - dependency-name: "criterion"
     open-pull-requests-limit: 1
 
   # Disable regular version updates while still allowing Dependabot security PRs.
