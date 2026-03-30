@@ -2,9 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use agent_xds::{RejectedConfig, XdsUpdate};
-use futures_core::Stream;
 use itertools::Itertools;
-use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::{Level, instrument};
 
 use crate::cel::ContextBuilder;
@@ -62,7 +60,7 @@ pub struct Store {
 	service_routes: HashMap<NamespacedHostname, RouteSet>,
 	service_tcp_routes: HashMap<NamespacedHostname, TCPRouteSet>,
 
-	tx: tokio::sync::broadcast::Sender<Event<Arc<Bind>>>,
+	tx: tokio::sync::mpsc::UnboundedSender<crate::store::BindEvent>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -369,9 +367,11 @@ pub struct LLMResponsePolicies {
 	pub prompt_guard: Vec<ResponseGuard>,
 }
 
-impl Default for Store {
-	fn default() -> Self {
-		Self::with_ipv6_enabled(true)
+impl Store {
+	/// Create a store with a disconnected channel (for tests that don't need bind events).
+	pub fn new_disconnected(ipv6_enabled: bool) -> Self {
+		let (store, _rx) = Self::with_ipv6_enabled(ipv6_enabled);
+		store
 	}
 }
 
@@ -383,9 +383,11 @@ pub struct RoutePath<'a> {
 }
 
 impl Store {
-	pub fn with_ipv6_enabled(ipv6_enabled: bool) -> Self {
-		let (tx, _) = tokio::sync::broadcast::channel(1000);
-		Self {
+	pub fn with_ipv6_enabled(
+		ipv6_enabled: bool,
+	) -> (Self, tokio::sync::mpsc::UnboundedReceiver<crate::store::BindEvent>) {
+		let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+		let store = Self {
 			ipv6_enabled,
 			binds: Default::default(),
 			resources: Default::default(),
@@ -398,13 +400,8 @@ impl Store {
 			service_routes: Default::default(),
 			service_tcp_routes: Default::default(),
 			tx,
-		}
-	}
-	pub fn subscribe(
-		&self,
-	) -> impl Stream<Item = Result<Event<Arc<Bind>>, BroadcastStreamRecvError>> + use<> {
-		let sub = self.tx.subscribe();
-		tokio_stream::wrappers::BroadcastStream::new(sub)
+		};
+		(store, rx)
 	}
 
 	pub fn route_policies(&self, path: &RoutePath<'_>, inline: &[TrafficPolicy]) -> RoutePolicies {
@@ -811,7 +808,10 @@ impl Store {
     )]
 	pub fn remove_bind(&mut self, bind: BindKey) {
 		if let Some(old) = self.binds.remove(&bind) {
-			let _ = self.tx.send(Event::Remove(old));
+			let _ = self.tx.send(crate::store::BindEvent {
+				event: Event::Remove(old),
+				ack: None,
+			});
 		}
 	}
 	#[instrument(
@@ -911,7 +911,24 @@ impl Store {
         skip_all,
         fields(bind=%bind.key),
     )]
-	pub fn insert_bind(&mut self, mut bind: Bind) {
+	pub fn insert_bind(&mut self, bind: Bind) {
+		self.insert_bind_with_ack(bind, None);
+	}
+
+	/// Insert a bind and return a [`oneshot::Receiver`] that resolves once the
+	/// TCP listener is actually bound.  Use this when you need to block until
+	/// the listener is ready (e.g. before telling a sandbox it can send traffic).
+	#[instrument(
+        level = Level::INFO,
+        name="insert_bind_with_ack",
+        skip_all,
+        fields(bind=%bind.key),
+    )]
+	pub fn insert_bind_with_ack(
+		&mut self,
+		mut bind: Bind,
+		ack: Option<tokio::sync::oneshot::Sender<()>>,
+	) {
 		debug!(bind=%bind.key, "insert bind");
 
 		// Insert any staged listeners
@@ -934,8 +951,10 @@ impl Store {
 		}
 		let arc = Arc::new(bind);
 		self.binds.insert(arc.key.clone(), arc.clone());
-		// ok to have no subs
-		let _ = self.tx.send(Event::Add(arc));
+		let _ = self.tx.send(crate::store::BindEvent {
+			event: Event::Add(arc),
+			ack,
+		});
 	}
 
 	pub fn insert_backend(&mut self, key: BackendKey, b: BackendWithPolicies) {
@@ -1508,7 +1527,7 @@ mod tests {
 
 	#[test]
 	fn route_policies_are_kind_scoped() {
-		let mut store = Store::default();
+		let mut store = Store::new_disconnected(true);
 		let listener = listener();
 
 		let http_route = route("r", "ns", Some("HTTPRoute"));
@@ -1539,7 +1558,7 @@ mod tests {
 	/// Tests that frontend policies at listener level take precedence over gateway level policies
 	#[test]
 	fn frontend_policy_listener_precedence() {
-		let mut store = Store::default();
+		let mut store = Store::new_disconnected(true);
 		let listener = listener();
 
 		// Insert both gateway and listener level frontend policies
@@ -1566,7 +1585,7 @@ mod tests {
 
 	#[test]
 	fn frontend_network_authorization_policies_merge() {
-		let mut store = Store::default();
+		let mut store = Store::new_disconnected(true);
 		let listener = listener();
 		insert_gateway_level_network_authorization_policy(
 			&mut store,

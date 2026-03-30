@@ -19,6 +19,9 @@ pub struct StateManager {
 
 	#[serde(skip_serializing)]
 	xds_client: Option<agent_xds::AdsClient>,
+
+	#[serde(skip_serializing)]
+	bind_rx: Option<tokio::sync::mpsc::UnboundedReceiver<crate::store::BindEvent>>,
 }
 
 pub const ADDRESS_TYPE: Strng = strng::literal!("type.googleapis.com/istio.workload.Address");
@@ -35,7 +38,8 @@ impl StateManager {
 		awaiting_ready: tokio::sync::watch::Sender<()>,
 	) -> anyhow::Result<Self> {
 		let xds = &config.xds;
-		let stores = Stores::with_ipv6_enabled(config.ipv6_enabled);
+		let crate::store::StoresWithBindRx { stores, bind_rx } =
+			Stores::with_ipv6_enabled(config.ipv6_enabled);
 		let xds_client = if let Some(addr) = &xds.address {
 			let connector = control::grpc_connector(
 				client.clone(),
@@ -72,11 +76,25 @@ impl StateManager {
 			};
 			Box::pin(local_client.run()).await?;
 		}
-		Ok(Self { stores, xds_client })
+		Ok(Self {
+			stores,
+			xds_client,
+			bind_rx: Some(bind_rx),
+		})
 	}
 
 	pub fn stores(&self) -> Stores {
 		self.stores.clone()
+	}
+
+	/// Take the bind event receiver. Must be called exactly once before
+	/// passing it to [`crate::proxy::gateway::Gateway::new`].
+	pub fn take_bind_rx(
+		&mut self,
+	) -> tokio::sync::mpsc::UnboundedReceiver<crate::store::BindEvent> {
+		self.bind_rx
+			.take()
+			.expect("bind_rx already taken or StateManager not properly initialized")
 	}
 
 	pub async fn run(self) -> anyhow::Result<()> {

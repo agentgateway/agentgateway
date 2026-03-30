@@ -17,7 +17,6 @@ use rand::RngExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
 use tokio::task::{AbortHandle, JoinSet};
-use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, event, info, info_span, warn};
 
 use agent_core::strng;
@@ -127,84 +126,100 @@ impl TryFrom<&http::Uri> for HboneAddress {
 pub struct Gateway {
 	pi: Arc<ProxyInputs>,
 	drain: drain::DrainWatcher,
+	bind_rx: tokio::sync::mpsc::UnboundedReceiver<crate::store::BindEvent>,
 }
 
 impl Gateway {
-	pub fn new(pi: Arc<ProxyInputs>, drain: DrainWatcher) -> Gateway {
-		Gateway { drain, pi }
+	pub fn new(
+		pi: Arc<ProxyInputs>,
+		drain: DrainWatcher,
+		bind_rx: tokio::sync::mpsc::UnboundedReceiver<crate::store::BindEvent>,
+	) -> Gateway {
+		Gateway { drain, pi, bind_rx }
 	}
 
-	pub async fn run(self) {
+	pub async fn run(mut self) {
 		let drain = self.drain.clone();
 		let subdrain = self.drain.clone();
 		let mut js = JoinSet::new();
-		let (initial_binds, mut binds) = {
+		let initial_binds = {
 			let binds = self.pi.stores.read_binds();
-			(binds.all(), binds.subscribe())
+			binds.all()
 		};
 		let mut active: HashMap<SocketAddr, AbortHandle> = HashMap::new();
-		let mut handle_bind = |js: &mut JoinSet<anyhow::Result<()>>, b: Event<Arc<Bind>>| {
-			let b = match b {
-				Event::Add(b) => b,
-				Event::Remove(to_remove) => {
-					if let Some(h) = active.remove(&to_remove.address) {
-						h.abort();
+		let mut handle_bind =
+			|js: &mut JoinSet<anyhow::Result<()>>,
+			 b: Event<Arc<Bind>>,
+			 ack: Option<tokio::sync::oneshot::Sender<()>>| {
+				let b = match b {
+					Event::Add(b) => b,
+					Event::Remove(to_remove) => {
+						if let Some(h) = active.remove(&to_remove.address) {
+							h.abort();
+						}
+						return;
+					},
+				};
+				if active.contains_key(&b.address) {
+					debug!("bind already exists");
+					// Still ack — the bind address is already listening.
+					if let Some(tx) = ack {
+						let _ = tx.send(());
 					}
 					return;
-				},
-			};
-			if active.contains_key(&b.address) {
-				debug!("bind already exists");
-				return;
-			}
+				}
 
-			debug!("add bind {}", b.address);
-			if self.pi.cfg.threading_mode == crate::ThreadingMode::ThreadPerCore {
-				let core_ids = core_affinity::get_core_ids().unwrap();
-				let _ = core_ids
-					.into_iter()
-					.map(|id| {
-						let subdrain = subdrain.clone();
-						let pi = self.pi.clone();
-						let b = b.clone();
-						std::thread::spawn(move || {
-							let res = core_affinity::set_for_current(id);
-							if !res {
-								panic!("failed to set current CPU")
-							}
-							tokio::runtime::Builder::new_current_thread()
-								.enable_all()
-								.build()
-								.unwrap()
-								.block_on(async {
-									let _ = Self::run_bind(pi.clone(), subdrain.clone(), b.clone())
-										.in_current_span()
-										.await;
-								})
+				debug!("add bind {}", b.address);
+				if self.pi.cfg.threading_mode == crate::ThreadingMode::ThreadPerCore {
+					let core_ids = core_affinity::get_core_ids().unwrap();
+					let _ = core_ids
+						.into_iter()
+						.map(|id| {
+							let subdrain = subdrain.clone();
+							let pi = self.pi.clone();
+							let b = b.clone();
+							std::thread::spawn(move || {
+								let res = core_affinity::set_for_current(id);
+								if !res {
+									panic!("failed to set current CPU")
+								}
+								tokio::runtime::Builder::new_current_thread()
+									.enable_all()
+									.build()
+									.unwrap()
+									.block_on(async {
+										let _ =
+											Self::run_bind(pi.clone(), subdrain.clone(), b.clone(), None)
+												.in_current_span()
+												.await;
+									})
+							})
 						})
-					})
-					.collect::<Vec<_>>();
-			} else {
-				let task =
-					js.spawn(Self::run_bind(self.pi.clone(), subdrain.clone(), b.clone()).in_current_span());
-				active.insert(b.address, task);
-			}
-		};
+						.collect::<Vec<_>>();
+					// ThreadPerCore spawns OS threads — we can't easily plumb the ack
+					// through all of them.  Send the ack now; in practice ThreadPerCore
+					// binds synchronously before spawning the accept loop.
+					if let Some(tx) = ack {
+						let _ = tx.send(());
+					}
+				} else {
+					let task = js.spawn(
+						Self::run_bind(self.pi.clone(), subdrain.clone(), b.clone(), ack)
+							.in_current_span(),
+					);
+					active.insert(b.address, task);
+				}
+			};
 		for bind in initial_binds {
-			handle_bind(&mut js, Event::Add(bind))
+			handle_bind(&mut js, Event::Add(bind), None)
 		}
 
 		let wait = drain.wait_for_drain();
 		tokio::pin!(wait);
 		loop {
 			tokio::select! {
-				Some(res) = binds.next() => {
-					let Ok(res) = res else {
-						// TODO: move to unbuffered
-						warn!("lagged on bind update");
-						continue;
-					};
-					handle_bind(&mut js, res);
+				Some(bind_event) = self.bind_rx.recv() => {
+					handle_bind(&mut js, bind_event.event, bind_event.ack);
 				}
 				Some(res) = js.join_next() => {
 					warn!("bind complete {res:?}");
@@ -225,6 +240,7 @@ impl Gateway {
 		pi: Arc<ProxyInputs>,
 		drain: DrainWatcher,
 		b: Arc<Bind>,
+		ack: Option<tokio::sync::oneshot::Sender<()>>,
 	) -> anyhow::Result<()> {
 		let min_deadline = pi.cfg.termination_min_deadline;
 		let max_deadline = pi.cfg.termination_max_deadline;
@@ -257,6 +273,10 @@ impl Gateway {
 		} else {
 			(pi, TcpListener::bind(b.address).await?)
 		};
+		// Listener is bound — notify the caller that it's safe to send traffic.
+		if let Some(tx) = ack {
+			let _ = tx.send(());
+		}
 		info!(bind = name.as_str(), "started bind");
 		let component = format!("bind {name}");
 
