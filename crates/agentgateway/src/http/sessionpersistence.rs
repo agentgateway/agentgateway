@@ -59,6 +59,7 @@ impl MCPSessionState {
 }
 
 #[apply(schema!)]
+#[derive(Eq, PartialEq)]
 pub struct MCPSession {
 	#[serde(default, rename = "t", skip_serializing_if = "Option::is_none")]
 	pub target_name: Option<String>,
