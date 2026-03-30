@@ -2174,6 +2174,7 @@ fn convert_prompt_caching(
 		cache_messages: pc.cache_messages,
 		cache_tools: pc.cache_tools,
 		min_tokens: pc.min_tokens.map(|t| t as usize),
+		cache_message_offset: pc.cache_message_offset.unwrap_or(0) as usize,
 	}
 }
 

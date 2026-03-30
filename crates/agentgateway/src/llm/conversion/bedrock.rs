@@ -556,7 +556,10 @@ pub mod from_completions {
 
 		if let Some(caching) = prompt_caching {
 			if caching.cache_messages && supports_caching {
-				helpers::insert_cache_point_in_last_user_message(&mut bedrock_request.messages);
+				helpers::insert_message_cache_point(
+					&mut bedrock_request.messages,
+					caching.cache_message_offset,
+				);
 			}
 			if caching.cache_tools
 				&& supports_caching
@@ -2019,7 +2022,7 @@ pub mod from_responses {
 		// Apply user message and tool caching
 		if let Some(caching) = prompt_caching {
 			if caching.cache_messages && supports_caching {
-				insert_cache_point_in_last_user_message(&mut bedrock_request.messages);
+				insert_message_cache_point(&mut bedrock_request.messages, caching.cache_message_offset);
 			}
 			if caching.cache_tools
 				&& supports_caching
@@ -2561,7 +2564,7 @@ mod helpers {
 		(word_count * 13) / 10
 	}
 
-	pub fn insert_cache_point_in_last_user_message(messages: &mut [bedrock::Message]) {
+	pub fn insert_message_cache_point(messages: &mut [bedrock::Message], offset: usize) {
 		// Strategy: Cache everything BEFORE the last message (not including it)
 		// This caches the conversation history but not the current turn's input
 		//
@@ -2572,6 +2575,10 @@ mod helpers {
 		// This way:
 		//   - Conversation history: cached (cheap reads on subsequent turns)
 		//   - Current input: full price (it's new each turn anyway)
+		//
+		// The `offset` parameter shifts the cache point further back:
+		//   offset 0 → second-to-last message (default)
+		//   offset N → N additional messages back from default, clamped to bounds
 
 		let len = messages.len();
 
@@ -2580,16 +2587,16 @@ mod helpers {
 			return;
 		}
 
-		// Insert cache point in the second-to-last message
-		// This caches all history BEFORE the current turn
-		let second_to_last_idx = len - 2;
-		messages[second_to_last_idx]
+		// Clamp so the index never goes below 0
+		let target_idx = (len - 2).saturating_sub(offset);
+		messages[target_idx]
 			.content
 			.push(bedrock::ContentBlock::CachePoint(create_cache_point()));
 
 		tracing::debug!(
-			"Inserted cachePoint before last message (in message at index {})",
-			second_to_last_idx
+			"Inserted cachePoint in message at index {} (offset={})",
+			target_idx,
+			offset
 		);
 	}
 

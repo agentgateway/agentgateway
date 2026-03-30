@@ -732,6 +732,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptCaching.cacheMessages`|boolean||
 |`binds[].listeners[].routes[].policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].policies.ai.promptCaching.minTokens`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`binds[].listeners[].routes[].policies.ai.routes`|object||
 |`binds[].listeners[].routes[].policies.backendTLS`|object|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.backendTLS.cert`|string||
@@ -2000,6 +2001,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.cacheMessages`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.minTokens`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.routes`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers`|[]object||
@@ -2697,6 +2699,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessages`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.minTokens`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.routes`|object||
 |`binds[].listeners[].routes[].backends[].aws`|object||
 |`binds[].listeners[].routes[].backends[].aws.agentCore`|object||
@@ -3372,6 +3375,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheMessages`|boolean||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.minTokens`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.routes`|object||
 |`binds[].listeners[].tcpRoutes`|[]object||
 |`binds[].listeners[].tcpRoutes[].name`|string||
@@ -4592,6 +4596,7 @@
 |`policies[].policy.ai.promptCaching.cacheMessages`|boolean||
 |`policies[].policy.ai.promptCaching.cacheTools`|boolean||
 |`policies[].policy.ai.promptCaching.minTokens`|integer||
+|`policies[].policy.ai.promptCaching.cacheMessageOffset`|integer||
 |`policies[].policy.ai.routes`|object||
 |`policies[].policy.backendTLS`|object|Send TLS to the backend.|
 |`policies[].policy.backendTLS.cert`|string||
@@ -5707,6 +5712,7 @@
 |`backends[].policies.ai.promptCaching.cacheMessages`|boolean||
 |`backends[].policies.ai.promptCaching.cacheTools`|boolean||
 |`backends[].policies.ai.promptCaching.minTokens`|integer||
+|`backends[].policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`backends[].policies.ai.routes`|object||
 |`llm`|object||
 |`llm.port`|integer||
@@ -7353,6 +7359,7 @@
 |`mcp.policies.ai.promptCaching.cacheMessages`|boolean||
 |`mcp.policies.ai.promptCaching.cacheTools`|boolean||
 |`mcp.policies.ai.promptCaching.minTokens`|integer||
+|`mcp.policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`mcp.policies.ai.routes`|object||
 |`mcp.policies.backendTLS`|object|Send TLS to the backend.|
 |`mcp.policies.backendTLS.cert`|string||

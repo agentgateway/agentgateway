@@ -187,6 +187,9 @@ pub struct PromptCachingConfig {
 
 	#[serde(rename = "minTokens")]
 	pub min_tokens: Option<usize>,
+
+	#[serde(rename = "cacheMessageOffset")]
+	pub cache_message_offset: usize,
 }
 
 impl Default for PromptCachingConfig {
@@ -196,6 +199,7 @@ impl Default for PromptCachingConfig {
 			cache_messages: true,
 			cache_tools: false,
 			min_tokens: Some(1024),
+			cache_message_offset: 0,
 		}
 	}
 }

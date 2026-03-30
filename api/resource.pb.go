@@ -10461,13 +10461,14 @@ func (x *BackendPolicySpec_Ai_PromptGuard) GetResponse() []*BackendPolicySpec_Ai
 
 // Default JSON key-value pairs to add to the LLM request if the key is not set in the request.
 type BackendPolicySpec_Ai_PromptCaching struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	CacheSystem   bool                   `protobuf:"varint,1,opt,name=cache_system,json=cacheSystem,proto3" json:"cache_system,omitempty"`
-	CacheMessages bool                   `protobuf:"varint,2,opt,name=cache_messages,json=cacheMessages,proto3" json:"cache_messages,omitempty"`
-	CacheTools    bool                   `protobuf:"varint,3,opt,name=cache_tools,json=cacheTools,proto3" json:"cache_tools,omitempty"`
-	MinTokens     *uint32                `protobuf:"varint,4,opt,name=min_tokens,json=minTokens,proto3,oneof" json:"min_tokens,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	CacheSystem        bool                   `protobuf:"varint,1,opt,name=cache_system,json=cacheSystem,proto3" json:"cache_system,omitempty"`
+	CacheMessages      bool                   `protobuf:"varint,2,opt,name=cache_messages,json=cacheMessages,proto3" json:"cache_messages,omitempty"`
+	CacheTools         bool                   `protobuf:"varint,3,opt,name=cache_tools,json=cacheTools,proto3" json:"cache_tools,omitempty"`
+	MinTokens          *uint32                `protobuf:"varint,4,opt,name=min_tokens,json=minTokens,proto3,oneof" json:"min_tokens,omitempty"`
+	CacheMessageOffset *uint32                `protobuf:"varint,5,opt,name=cache_message_offset,json=cacheMessageOffset,proto3,oneof" json:"cache_message_offset,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *BackendPolicySpec_Ai_PromptCaching) Reset() {
@@ -10524,6 +10525,13 @@ func (x *BackendPolicySpec_Ai_PromptCaching) GetCacheTools() bool {
 func (x *BackendPolicySpec_Ai_PromptCaching) GetMinTokens() uint32 {
 	if x != nil && x.MinTokens != nil {
 		return *x.MinTokens
+	}
+	return 0
+}
+
+func (x *BackendPolicySpec_Ai_PromptCaching) GetCacheMessageOffset() uint32 {
+	if x != nil && x.CacheMessageOffset != nil {
+		return *x.CacheMessageOffset
 	}
 	return 0
 }
@@ -11793,7 +11801,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xb6B\n" +
+	"\x04kind\"\x86C\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -11813,7 +11821,7 @@ const file_resource_proto_rawDesc = "" +
 	"backendTcp\x12k\n" +
 	"\x0etransformation\x18\x0e \x01(\v2A.agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicyH\x00R\x0etransformation\x12M\n" +
 	"\x06health\x18\x0f \x01(\v23.agentgateway.dev.resource.BackendPolicySpec.HealthH\x00R\x06health\x12c\n" +
-	"\x0ebackend_tunnel\x18\x10 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.BackendTunnelH\x00R\rbackendTunnel\x1a\x93\"\n" +
+	"\x0ebackend_tunnel\x18\x10 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.BackendTunnelH\x00R\rbackendTunnel\x1a\xe3\"\n" +
 	"\x02Ai\x12^\n" +
 	"\fprompt_guard\x18\x01 \x01(\v2;.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuardR\vpromptGuard\x12Y\n" +
 	"\bdefaults\x18\x02 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntryR\bdefaults\x12\\\n" +
@@ -11880,15 +11888,17 @@ const file_resource_proto_rawDesc = "" +
 	"\x04kind\x1a\xc0\x01\n" +
 	"\vPromptGuard\x12V\n" +
 	"\arequest\x18\x01 \x03(\v2<.agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuardR\arequest\x12Y\n" +
-	"\bresponse\x18\x02 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuardR\bresponse\x1a\xad\x01\n" +
+	"\bresponse\x18\x02 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuardR\bresponse\x1a\xfd\x01\n" +
 	"\rPromptCaching\x12!\n" +
 	"\fcache_system\x18\x01 \x01(\bR\vcacheSystem\x12%\n" +
 	"\x0ecache_messages\x18\x02 \x01(\bR\rcacheMessages\x12\x1f\n" +
 	"\vcache_tools\x18\x03 \x01(\bR\n" +
 	"cacheTools\x12\"\n" +
 	"\n" +
-	"min_tokens\x18\x04 \x01(\rH\x00R\tminTokens\x88\x01\x01B\r\n" +
-	"\v_min_tokens\x1a;\n" +
+	"min_tokens\x18\x04 \x01(\rH\x00R\tminTokens\x88\x01\x01\x125\n" +
+	"\x14cache_message_offset\x18\x05 \x01(\rH\x01R\x12cacheMessageOffset\x88\x01\x01B\r\n" +
+	"\v_min_tokensB\x17\n" +
+	"\x15_cache_message_offset\x1a;\n" +
 	"\rDefaultsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a<\n" +

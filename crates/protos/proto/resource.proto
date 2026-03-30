@@ -954,6 +954,7 @@ message BackendPolicySpec {
       bool cache_messages = 2;
       bool cache_tools = 3;
       optional uint32 min_tokens = 4;
+      optional uint32 cache_message_offset = 5;
     }
 
     map<string, string> defaults = 2;
