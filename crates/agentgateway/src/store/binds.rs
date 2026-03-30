@@ -1,11 +1,12 @@
 use std::collections::{HashMap, HashSet};
+use std::net::TcpListener as StdTcpListener;
 use std::sync::Arc;
 
 use agent_xds::{RejectedConfig, XdsUpdate};
+use anyhow::Context;
 use futures_core::Stream;
 use itertools::Itertools;
-use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
-use tracing::{Level, instrument};
+use tracing::{Level, instrument, warn};
 
 use crate::cel::ContextBuilder;
 use crate::http::auth::BackendAuth;
@@ -16,7 +17,6 @@ use crate::http::{ext_authz, ext_proc, filters, health, remoteratelimit, retry, 
 use crate::llm::policy::ResponseGuard;
 use crate::mcp::McpAuthorizationSet;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::store::Event;
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendPolicy, BackendTargetRef, BackendWithPolicies, Bind,
 	BindKey, FrontendPolicy, JwtAuthentication, Listener, ListenerKey, ListenerName,
@@ -45,6 +45,7 @@ enum ResourceKind {
 #[derive(Debug)]
 pub struct Store {
 	ipv6_enabled: bool,
+	core_ids: Option<Vec<core_affinity::CoreId>>,
 	binds: HashMap<BindKey, Arc<Bind>>,
 	resources: HashMap<Strng, ResourceKind>,
 
@@ -62,7 +63,20 @@ pub struct Store {
 	service_routes: HashMap<NamespacedHostname, RouteSet>,
 	service_tcp_routes: HashMap<NamespacedHostname, TCPRouteSet>,
 
-	tx: tokio::sync::broadcast::Sender<Event<Arc<Bind>>>,
+	tx: tokio::sync::mpsc::UnboundedSender<BindEvent>,
+	rx: Option<tokio::sync::mpsc::UnboundedReceiver<BindEvent>>,
+}
+
+#[derive(Debug)]
+pub enum BindEvent {
+	Add(Bind, BindListeners),
+	Remove(BindKey),
+}
+
+#[derive(Debug)]
+pub enum BindListeners {
+	Single(StdTcpListener),
+	PerCore(HashMap<core_affinity::CoreId, StdTcpListener>),
 }
 
 #[derive(Default, Debug, Clone)]
@@ -383,10 +397,68 @@ pub struct RoutePath<'a> {
 }
 
 impl Store {
+	fn bind_listener_single(address: std::net::SocketAddr) -> anyhow::Result<StdTcpListener> {
+		let listener =
+			StdTcpListener::bind(address).with_context(|| format!("bind listener for {address}"))?;
+		listener
+			.set_nonblocking(true)
+			.with_context(|| format!("set nonblocking on {address}"))?;
+		Ok(listener)
+	}
+
+	fn bind_listener_per_core(
+		core_ids: &[core_affinity::CoreId],
+		address: std::net::SocketAddr,
+	) -> anyhow::Result<HashMap<core_affinity::CoreId, StdTcpListener>> {
+		let domain = if address.is_ipv4() {
+			socket2::Domain::IPV4
+		} else {
+			socket2::Domain::IPV6
+		};
+		let mut listeners = HashMap::with_capacity(core_ids.len());
+		for &core_id in core_ids {
+			let socket = socket2::Socket::new(domain, socket2::Type::STREAM, None)
+				.with_context(|| format!("create listener for {address} on core {}", core_id.id))?;
+			#[cfg(target_family = "unix")]
+			socket.set_reuse_port(true)?;
+			socket
+				.bind(&address.into())
+				.with_context(|| format!("bind listener for {address} on core {}", core_id.id))?;
+			socket
+				.listen(1024)
+				.with_context(|| format!("listen on {address} on core {}", core_id.id))?;
+			let listener: StdTcpListener = socket.into();
+			listener
+				.set_nonblocking(true)
+				.with_context(|| format!("set nonblocking on {address} on core {}", core_id.id))?;
+			listeners.insert(core_id, listener);
+		}
+		Ok(listeners)
+	}
+
+	fn bind_listeners(&self, address: std::net::SocketAddr) -> anyhow::Result<BindListeners> {
+		match self.core_ids.as_deref() {
+			Some(core_ids) => Ok(BindListeners::PerCore(Self::bind_listener_per_core(
+				core_ids, address,
+			)?)),
+			None => Ok(BindListeners::Single(Self::bind_listener_single(address)?)),
+		}
+	}
+
 	pub fn with_ipv6_enabled(ipv6_enabled: bool) -> Self {
-		let (tx, _) = tokio::sync::broadcast::channel(1000);
+		Self::new(ipv6_enabled, crate::ThreadingMode::Multithreaded)
+	}
+
+	pub fn new(ipv6_enabled: bool, threading_mode: crate::ThreadingMode) -> Self {
+		let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 		Self {
 			ipv6_enabled,
+			core_ids: match threading_mode {
+				crate::ThreadingMode::Multithreaded => None,
+				crate::ThreadingMode::ThreadPerCore => {
+					Some(core_affinity::get_core_ids().unwrap_or_default())
+				},
+			},
 			binds: Default::default(),
 			resources: Default::default(),
 			policies_by_key: Default::default(),
@@ -398,13 +470,12 @@ impl Store {
 			service_routes: Default::default(),
 			service_tcp_routes: Default::default(),
 			tx,
+			rx: Some(rx),
 		}
 	}
-	pub fn subscribe(
-		&self,
-	) -> impl Stream<Item = Result<Event<Arc<Bind>>, BroadcastStreamRecvError>> + use<> {
-		let sub = self.tx.subscribe();
-		tokio_stream::wrappers::BroadcastStream::new(sub)
+	pub fn subscribe(&mut self) -> impl Stream<Item = BindEvent> + use<> {
+		let sub = self.rx.take().expect("bind subscriber already taken");
+		tokio_stream::wrappers::UnboundedReceiverStream::new(sub)
 	}
 
 	pub fn route_policies(&self, path: &RoutePath<'_>, inline: &[TrafficPolicy]) -> RoutePolicies {
@@ -791,10 +862,6 @@ impl Store {
 			.cloned()
 	}
 
-	pub fn all(&self) -> Vec<Arc<Bind>> {
-		self.binds.values().cloned().collect()
-	}
-
 	pub fn all_policies(&self) -> Vec<Arc<TargetedPolicy>> {
 		self.policies_by_key.values().cloned().collect()
 	}
@@ -810,9 +877,8 @@ impl Store {
         fields(bind),
     )]
 	pub fn remove_bind(&mut self, bind: BindKey) {
-		if let Some(old) = self.binds.remove(&bind) {
-			let _ = self.tx.send(Event::Remove(old));
-		}
+		self.binds.remove(&bind);
+		let _ = self.tx.send(BindEvent::Remove(bind));
 	}
 	#[instrument(
         level = Level::INFO,
@@ -932,10 +998,22 @@ impl Store {
 			}
 			bind.listeners.insert(v)
 		}
-		let arc = Arc::new(bind);
-		self.binds.insert(arc.key.clone(), arc.clone());
-		// ok to have no subs
-		let _ = self.tx.send(Event::Add(arc));
+		let key = bind.key.clone();
+		let listeners = if self.binds.contains_key(&key) {
+			None
+		} else {
+			match self.bind_listeners(bind.address) {
+				Ok(listeners) => Some(listeners),
+				Err(err) => {
+					warn!(bind=%key, address=%bind.address, error=%err, "failed to start bind listener");
+					None
+				},
+			}
+		};
+		self.binds.insert(key.clone(), Arc::new(bind.clone()));
+		if let Some(listeners) = listeners {
+			let _ = self.tx.send(BindEvent::Add(bind, listeners));
+		}
 	}
 
 	pub fn insert_backend(&mut self, key: BackendKey, b: BackendWithPolicies) {
@@ -1108,11 +1186,11 @@ impl Store {
 		self.service_tcp_routes.get(key)
 	}
 
-	fn remove_resource(&mut self, res: &Strng) {
+	fn remove_resource(&mut self, res: &Strng) -> anyhow::Result<()> {
 		trace!("removing res {res}...");
 		let Some(old) = self.resources.remove(res) else {
 			debug!("unknown resource name {res}");
-			return;
+			return Ok(());
 		};
 		match old {
 			ResourceKind::Policy(n) => self.remove_policy(n),
@@ -1122,6 +1200,7 @@ impl Store {
 			ResourceKind::Listener(n) => self.remove_listener(n),
 			ResourceKind::Backend(n) => self.remove_backend(n),
 		}
+		Ok(())
 	}
 
 	fn insert_xds(&mut self, name: Strng, res: ADPResource) -> anyhow::Result<()> {
@@ -1171,9 +1250,9 @@ impl Store {
 		let mut bind = Bind::try_from_xds(&raw, self.ipv6_enabled)?;
 		// If XDS server pushes the same bind twice (which it shouldn't really do, but oh well),
 		// we need to copy the listeners over.
-		if let Some(old) = self.binds.remove(&bind.key) {
+		if let Some(old) = self.binds.get(&bind.key) {
 			debug!("bind update, copy old listeners over");
-			bind.listeners = Arc::unwrap_or_clone(old).listeners;
+			bind.listeners = Arc::unwrap_or_clone(old.clone()).listeners;
 		}
 		self.insert_bind(bind);
 		Ok(())
@@ -1187,19 +1266,21 @@ impl Store {
 		let (route, listener_name) = Route::try_from_xds(&raw)?;
 		if let Some(sk) = route.service_key.clone() {
 			self.insert_service_route(route, sk);
+			Ok(())
 		} else {
 			self.insert_route(route, listener_name);
+			Ok(())
 		}
-		Ok(())
 	}
 	fn insert_xds_tcp_route(&mut self, raw: XdsTcpRoute) -> anyhow::Result<()> {
 		let (route, listener_name) = TCPRoute::try_from_xds(&raw)?;
 		if let Some(sk) = route.service_key.clone() {
 			self.insert_service_tcp_route(route, sk);
+			Ok(())
 		} else {
 			self.insert_tcp_route(route, listener_name);
+			Ok(())
 		}
-		Ok(())
 	}
 	fn insert_xds_backend(&mut self, raw: XdsBackend) -> anyhow::Result<()> {
 		let key = strng::new(&raw.key);
@@ -1326,7 +1407,7 @@ impl agent_xds::Handler<ADPResource> for StoreUpdater {
 				XdsUpdate::Update(w) => state.insert_xds(w.name, w.resource)?,
 				XdsUpdate::Remove(name) => {
 					debug!("handling delete {}", name);
-					state.remove_resource(&strng::new(name))
+					state.remove_resource(&strng::new(name))?
 				},
 			}
 			Ok(())

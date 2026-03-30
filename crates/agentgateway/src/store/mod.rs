@@ -3,8 +3,9 @@ mod binds;
 use std::sync::Arc;
 
 pub use binds::{
-	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
-	RoutePath, RoutePolicies, Store as BindStore, StoreUpdater as BindStoreUpdater,
+	BackendPolicies, BindEvent, BindListeners, FrontendPolices, GatewayPolicies, LLMRequestPolicies,
+	LLMResponsePolicies, RoutePath, RoutePolicies, Store as BindStore,
+	StoreUpdater as BindStoreUpdater,
 };
 use serde::{Serialize, Serializer};
 mod discovery;
@@ -17,12 +18,6 @@ pub use discovery::{
 };
 
 use crate::store;
-
-#[derive(Clone, Debug)]
-pub enum Event<T> {
-	Add(T),
-	Remove(T),
-}
 
 #[derive(Clone, Debug)]
 pub struct Stores {
@@ -38,10 +33,15 @@ impl Default for Stores {
 
 impl Stores {
 	pub fn with_ipv6_enabled(ipv6_enabled: bool) -> Stores {
+		Self::new(ipv6_enabled, crate::ThreadingMode::Multithreaded)
+	}
+
+	pub fn new(ipv6_enabled: bool, threading_mode: crate::ThreadingMode) -> Stores {
 		Stores {
 			discovery: discovery::StoreUpdater::new(Arc::new(RwLock::new(discovery::Store::new()))),
-			binds: binds::StoreUpdater::new(Arc::new(RwLock::new(binds::Store::with_ipv6_enabled(
+			binds: binds::StoreUpdater::new(Arc::new(RwLock::new(binds::Store::new(
 				ipv6_enabled,
+				threading_mode,
 			)))),
 		}
 	}
