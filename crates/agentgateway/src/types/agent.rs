@@ -1310,9 +1310,13 @@ impl ListenerSet {
 		self.best_match_filtered(host, |_| true)
 	}
 
-	/// Match only listeners with HTTP protocol (no TLS).
+	/// Match only listeners with HTTP-compatible protocol (no TLS).
+	/// HBONE is included because by the time httpproxy is invoked, the HBONE
+	/// tunnel has already been decoded — the inner request is plain HTTP.
 	pub fn best_match_http(&self, host: &str) -> Option<Arc<Listener>> {
-		self.best_match_filtered(host, |p| matches!(p, ListenerProtocol::HTTP))
+		self.best_match_filtered(host, |p| {
+			matches!(p, ListenerProtocol::HTTP | ListenerProtocol::HBONE)
+		})
 	}
 
 	/// Match only listeners with TLS-capable protocol (HTTPS or TLS).
