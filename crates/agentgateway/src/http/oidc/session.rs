@@ -239,15 +239,25 @@ pub(super) fn generate_pkce_verifier() -> String {
 	random_token(32)
 }
 
+/// Capture only local post-login redirect targets so callback can safely reflect the stored value.
 pub(super) fn normalize_original_uri(path_and_query: Option<&http::uri::PathAndQuery>) -> String {
 	let original = path_and_query
 		.map(http::uri::PathAndQuery::as_str)
 		.unwrap_or("/");
-	if original.len() > ORIGINAL_URI_LIMIT {
-		"/".into()
-	} else {
-		original.to_string()
+	if original.len() > ORIGINAL_URI_LIMIT || !is_safe_local_redirect_target(original) {
+		return "/".into();
 	}
+
+	original.to_string()
+}
+
+fn is_safe_local_redirect_target(target: &str) -> bool {
+	if !target.starts_with('/') || target.starts_with("//") || target.contains('\\') {
+		return false;
+	}
+
+	let decoded = percent_encoding::percent_decode_str(target).decode_utf8_lossy();
+	decoded.starts_with('/') && !decoded.starts_with("//") && !decoded.contains('\\')
 }
 
 fn random_token(bytes: usize) -> String {

@@ -246,6 +246,32 @@ fn redirect_uri_accepts_valid_absolute_http_callbacks() {
 }
 
 #[test]
+fn normalize_original_uri_preserves_only_safe_local_targets() {
+	let over_limit = format!("/{}", "a".repeat(2050));
+	let cases = [
+		("missing path", None, "/"),
+		("local path", Some("/protected?x=1"), "/protected?x=1"),
+		("scheme-relative path", Some("//evil.example/path"), "/"),
+		(
+			"percent-decoded scheme-relative path",
+			Some("/%2Fevil.example/path"),
+			"/",
+		),
+		("over limit", Some(over_limit.as_str()), "/"),
+	];
+
+	for (name, raw, expected) in cases {
+		let path_and_query =
+			raw.map(|raw| http::uri::PathAndQuery::try_from(raw).expect("path and query"));
+		assert_eq!(
+			super::session::normalize_original_uri(path_and_query.as_ref()),
+			expected,
+			"{name}"
+		);
+	}
+}
+
+#[test]
 fn explicit_provider_config_rejects_relative_endpoints_during_deserialization() {
 	let err = serde_json::from_value::<LocalOidcConfig>(json!({
 		"issuer": TEST_ISSUER,
