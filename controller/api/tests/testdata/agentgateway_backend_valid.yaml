@@ -65,6 +65,11 @@ metadata:
 spec:
   policies:
     mcp:
+      authorization:
+        action: Deny
+        policy:
+          matchExpressions:
+            - 'mcp.tool.name == "hello"'
       authentication:
         issuer: https://issuer.example.com/
         jwks:
@@ -80,12 +85,6 @@ spec:
         port: 443
         policies:
           tls: {}
-          mcp:
-            authorization:
-              action: Deny
-              policy:
-                matchExpressions:
-                - 'mcp.tool.name == "hello"'
     - name: k8s
       selector:
         namespaces:
@@ -146,13 +145,13 @@ spec:
       static:
         host: example.com
         port: 443
-        policies:
-          mcp:
-            authorization:
-              action: Require
-              policy:
-                matchExpressions:
-                - 'mcp.tool.name == "hello"'
+  policies:
+    mcp:
+      authorization:
+        action: Require
+        policy:
+          matchExpressions:
+          - 'mcp.tool.name == "hello"'
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend

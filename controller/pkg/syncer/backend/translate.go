@@ -92,11 +92,8 @@ func BuildAgwBackendReferences(
 	if mcp := backend.Spec.MCP; mcp != nil {
 		for _, r := range mcp.Targets {
 			if r.Static != nil && r.Static.Policies != nil {
-				p := r.Static.Policies
 				plugins.BackendReferencesFromBackendPolicy(&agentgateway.BackendFull{
-					BackendSimple: p.BackendSimple,
-					MCP:           p.MCP,
-					AI:            nil,
+					BackendSimple: *r.Static.Policies,
 				}, app)
 			}
 		}
@@ -247,11 +244,7 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 			}
 
 			staticBackendRef := utils.InternalMCPStaticBackendName(be.Namespace, be.Name, string(target.Name))
-			pol, err := TranslateMCPBackendPolicies(ctx, be.Namespace, s.Policies)
-			if err != nil {
-				logger.Error("failed to translate static MCP backend policies", "err", err)
-				errs = append(errs, err)
-			}
+
 			staticBackend := &api.Backend{
 				Key:  staticBackendRef,
 				Name: plugins.ResourceName(be),
@@ -261,7 +254,17 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 						Port: s.Port,
 					},
 				},
-				InlinePolicies: pol,
+			}
+
+			if s.Policies != nil {
+				polt, err := TranslateBackendPolicies(ctx, be.Namespace, &agentgateway.BackendFull{
+					BackendSimple: *s.Policies,
+				})
+				if err != nil {
+					logger.Error("failed to translate static MCP backend policies", "err", err)
+					errs = append(errs, err)
+				}
+				staticBackend.InlinePolicies = polt
 			}
 			backends = append(backends, staticBackend)
 

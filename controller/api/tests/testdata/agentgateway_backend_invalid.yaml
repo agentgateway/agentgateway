@@ -41,7 +41,7 @@ spec:
           matchExpressions:
           - 'true'
 ---
-_err: MCP authentication is not supported on static MCP target policies
+_err: unknown fields
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
 metadata:
