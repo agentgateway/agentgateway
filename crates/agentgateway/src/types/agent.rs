@@ -2416,33 +2416,24 @@ mod tests {
 		]);
 
 		// HTTP listener matches
-		let http_set = ListenerSet::from_list([listener(
-			"http",
-			"example.com",
-			ListenerProtocol::HTTP,
-		)]);
+		let http_set =
+			ListenerSet::from_list([listener("http", "example.com", ListenerProtocol::HTTP)]);
 		assert!(
 			http_set.best_match_http("example.com").is_some(),
 			"HTTP listener should match"
 		);
 
 		// HBONE listener matches
-		let hbone_set = ListenerSet::from_list([listener(
-			"hbone",
-			"example.com",
-			ListenerProtocol::HBONE,
-		)]);
+		let hbone_set =
+			ListenerSet::from_list([listener("hbone", "example.com", ListenerProtocol::HBONE)]);
 		assert!(
 			hbone_set.best_match_http("example.com").is_some(),
 			"HBONE listener should match best_match_http"
 		);
 
 		// TLS listener is excluded
-		let tls_set = ListenerSet::from_list([listener(
-			"tls",
-			"example.com",
-			ListenerProtocol::TLS(None),
-		)]);
+		let tls_set =
+			ListenerSet::from_list([listener("tls", "example.com", ListenerProtocol::TLS(None))]);
 		assert!(
 			tls_set.best_match_http("example.com").is_none(),
 			"TLS listener should not match best_match_http"
