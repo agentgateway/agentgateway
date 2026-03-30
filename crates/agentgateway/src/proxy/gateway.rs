@@ -20,8 +20,6 @@ use tokio::task::{AbortHandle, JoinSet};
 use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, event, info, info_span, warn};
 
-use agent_core::strng;
-
 use crate::proxy::ProxyError;
 use crate::store::{Event, FrontendPolices};
 use crate::telemetry::metrics::TCPLabels;
@@ -1100,33 +1098,20 @@ impl Gateway {
 			drain_tx: None,
 		};
 
+		// Look up the real HBONE listener from the bind's ListenerSet
+		let listener = pi.stores.read_binds().bind(&bind_name).and_then(|b| {
+			b.listeners
+				.inner
+				.values()
+				.find(|l| matches!(l.protocol, ListenerProtocol::HBONE))
+				.cloned()
+		});
+
 		let socket = Socket::from_hbone(ext, socket_addr, con);
 		if is_http {
-			let _ = Self::proxy(bind_name, pi, None, socket, policies.clone(), drain).await;
+			let _ = Self::proxy(bind_name, pi, listener, socket, policies.clone(), drain).await;
 		} else {
-			// TCP: create a synthetic HBONE listener for the TCP proxy path
-			let listener = Arc::new(Listener {
-				key: Default::default(),
-				name: crate::types::agent::ListenerName {
-					gateway_name: strng::EMPTY,
-					gateway_namespace: strng::EMPTY,
-					listener_name: strng::literal!("_waypoint-tcp"),
-					listener_set: None,
-				},
-				hostname: Default::default(),
-				protocol: ListenerProtocol::HBONE,
-				tcp_routes: Default::default(),
-				routes: Default::default(),
-			});
-			Self::proxy_tcp(
-				bind_name,
-				pi,
-				Some(listener),
-				socket,
-				policies.clone(),
-				drain,
-			)
-			.await;
+			Self::proxy_tcp(bind_name, pi, listener, socket, policies.clone(), drain).await;
 		}
 	}
 

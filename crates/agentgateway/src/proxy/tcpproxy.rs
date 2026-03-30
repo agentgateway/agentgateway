@@ -359,7 +359,9 @@ mod tests {
 	use agent_core::strng;
 
 	use crate::store::Stores;
-	use crate::types::agent::{ListenerProtocol, SimpleBackendReference};
+	use crate::types::agent::{
+		ListenerProtocol, SimpleBackendReference, TCPRoute, TCPRouteBackendReference, TCPRouteSet,
+	};
 	use crate::types::discovery::{
 		GatewayAddress, NamespacedHostname, NetworkAddress, Service, WaypointIdentity,
 		gatewayaddress::Destination,
@@ -724,5 +726,67 @@ mod tests {
 		);
 		assert!(route.is_some(), "should fall through to default");
 		assert_eq!(route.unwrap().key.as_str(), "_waypoint-default-tcp");
+	}
+
+	#[tokio::test]
+	async fn test_hbone_listener_tcp_route_overrides_default() {
+		// An HBONE listener with a directly-attached TCP route should use that
+		// route, not the generated _waypoint-default-tcp.
+		let svc = make_service(
+			"mysql-db",
+			"default",
+			"mysql-db.default.svc.cluster.local",
+			"10.0.0.50",
+			"network",
+			Some(GatewayAddress {
+				destination: Destination::Hostname(NamespacedHostname {
+					namespace: strng::new("istio-system"),
+					hostname: strng::new("my-waypoint.istio-system.svc.cluster.local"),
+				}),
+				hbone_mtls_port: 15008,
+			}),
+		);
+		let stores = stores_with_services(vec![svc]);
+		let network = strng::literal!("network");
+		let dst = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 50)), 3306);
+		let self_addr = make_self_addr("my-waypoint", "istio-system");
+
+		// HBONE listener with a custom TCP route attached directly
+		let listener = Arc::new(crate::types::agent::Listener {
+			key: Default::default(),
+			name: crate::types::agent::ListenerName {
+				gateway_name: strng::EMPTY,
+				gateway_namespace: strng::EMPTY,
+				listener_name: strng::literal!("test"),
+				listener_set: None,
+			},
+			hostname: Default::default(),
+			protocol: ListenerProtocol::HBONE,
+			tcp_routes: TCPRouteSet::from_list(vec![TCPRoute {
+				key: strng::literal!("listener-mysql-route"),
+				service_key: None,
+				name: Default::default(),
+				hostnames: vec![],
+				backends: vec![TCPRouteBackendReference {
+					weight: 1,
+					backend: SimpleBackendReference::Service {
+						name: NamespacedHostname {
+							namespace: strng::new("default"),
+							hostname: strng::new("mysql-db.default.svc.cluster.local"),
+						},
+						port: 3306,
+					},
+					inline_policies: vec![],
+				}],
+			}]),
+			routes: Default::default(),
+		});
+
+		let route = super::select_best_route(None, listener, &stores, &network, dst, Some(&self_addr));
+		assert_eq!(
+			route.unwrap().key.as_str(),
+			"listener-mysql-route",
+			"should use the listener-attached TCP route, not _waypoint-default-tcp"
+		);
 	}
 }

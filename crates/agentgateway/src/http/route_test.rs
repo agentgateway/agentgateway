@@ -1508,6 +1508,78 @@ async fn test_no_service_routes_falls_through_to_default() {
 	assert_eq!(result.unwrap().0.key.as_str(), "_waypoint-default");
 }
 
+#[tokio::test]
+async fn test_hbone_listener_route_overrides_default() {
+	// An HBONE listener with a directly-attached route should use that route,
+	// not the generated _waypoint-default.
+	let stores = stores_with_services(vec![waypoint_svc()]);
+	let self_id = waypoint_self_id();
+
+	// Create an HBONE listener with a route attached directly
+	let listener = Arc::new(Listener {
+		key: Default::default(),
+		name: Default::default(),
+		hostname: Default::default(),
+		protocol: ListenerProtocol::HBONE,
+		tcp_routes: Default::default(),
+		routes: RouteSet::from_list(vec![Route {
+			key: strng::literal!("listener-api-route"),
+			service_key: None,
+			name: Default::default(),
+			hostnames: vec![],
+			matches: vec![RouteMatch {
+				path: PathMatch::PathPrefix(strng::new("/api")),
+				headers: vec![],
+				method: None,
+				query: vec![],
+			}],
+			backends: vec![],
+			inline_policies: vec![],
+		}]),
+	});
+	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
+
+	// Request matching the listener route
+	let req = request(
+		"http://my-app.default.svc.cluster.local/api/v1",
+		http::Method::GET,
+		&[],
+	);
+	let result = super::select_best_route(
+		stores.clone(),
+		strng::literal!("network"),
+		Some(&self_id),
+		dst,
+		&listener,
+		&req,
+	);
+	assert_eq!(
+		result.unwrap().0.key.as_str(),
+		"listener-api-route",
+		"should use the listener-attached route, not _waypoint-default"
+	);
+
+	// Request NOT matching the listener route falls to default
+	let req = request(
+		"http://my-app.default.svc.cluster.local/other",
+		http::Method::GET,
+		&[],
+	);
+	let result = super::select_best_route(
+		stores,
+		strng::literal!("network"),
+		Some(&self_id),
+		dst,
+		&listener,
+		&req,
+	);
+	assert_eq!(
+		result.unwrap().0.key.as_str(),
+		"_waypoint-default",
+		"non-matching request should fall through to default"
+	);
+}
+
 #[divan::bench(args = [(1,1), (100, 100), (5000,100)])]
 fn bench(b: Bencher, (host, route): (u64, u64)) {
 	let mut routes = vec![];
