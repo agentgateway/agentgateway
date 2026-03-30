@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync/atomic"
 
 	securityclient "istio.io/client-go/pkg/apis/security/v1"
@@ -611,12 +612,20 @@ func (s *Syncer) getBindProtocol(obj *translator.GatewayListener) api.Bind_Proto
 }
 
 // getTunnelProtocol determines the tunnel protocol for a Gateway listener.
-// Istio ambient mesh waypoint protocols require specific tunnel termination:
-//   - HBONE: HBONE_WAYPOINT — proxy terminates ztunnel's HBONE (HTTP/2 CONNECT over mTLS)
+//
+// HBONE listeners have two modes:
+//   - HBONE_WAYPOINT: for waypoint GatewayClasses. The proxy terminates
+//     ztunnel's HBONE and routes using istiod's service/VIP config.
+//   - HBONE_GATEWAY: for non-waypoint GatewayClasses. The proxy terminates
+//     HBONE and dispatches inner requests to local application binds.
+//     Used for mesh-enrolled ingress/egress gateways.
 func (s *Syncer) getTunnelProtocol(obj *translator.GatewayListener) api.Bind_TunnelProtocol {
 	switch obj.ParentInfo.Protocol {
 	case gwv1.ProtocolType(protocol.HBONE):
-		return api.Bind_HBONE_WAYPOINT
+		if strings.Contains(obj.ParentInfo.ParentGatewayClassName, "waypoint") {
+			return api.Bind_HBONE_WAYPOINT
+		}
+		return api.Bind_HBONE_GATEWAY
 	default:
 		return api.Bind_DIRECT
 	}
