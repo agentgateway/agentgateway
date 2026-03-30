@@ -987,7 +987,6 @@ impl Gateway {
 		// Determine protocol from service discovery. Default to HTTP since the vast
 		// majority of waypoint traffic is HTTP; only use TCP when there is a positive
 		// signal via explicit AppProtocol::Tcp/Tls (from istio/istio#59259).
-		let should_sniff_tls = svc.port_is_tls(socket_addr.port());
 		let is_http = !svc.port_is_tcp(socket_addr.port());
 
 		let Ok(resp) = req.send_response(build_response(StatusCode::OK)).await else {
@@ -1000,8 +999,21 @@ impl Gateway {
 			drain_tx: None,
 		};
 
-		// Look up the real HBONE listener for policy resolution (gateway/listener-targeted
-		// policies require the listener's name to match).
+		let socket = Socket::from_hbone(ext, socket_addr, con);
+		Self::handle_waypoint(bind_name, pi, svc, socket, is_http, drain).await;
+	}
+
+	/// Resolve the HBONE listener and dispatch to the HTTP or TCP proxy.
+	pub(crate) async fn handle_waypoint(
+		bind_name: BindKey,
+		pi: Arc<ProxyInputs>,
+		svc: Arc<crate::types::discovery::Service>,
+		mut socket: Socket,
+		is_http: bool,
+		drain: DrainWatcher,
+	) {
+		// Find HBONE listener, or fall back to a synthetic one using gateway
+		// config names so gateway/listener-targeted policies still match.
 		let listener = pi
 			.stores
 			.read_binds()
@@ -1031,13 +1043,13 @@ impl Gateway {
 				})
 			});
 
+		let should_sniff_tls = svc.port_is_tls(socket.target_address().port());
 		let wps = WaypointService(svc);
 		// Ensure we load policies per-stream so we don't cache stale policies on long-lived HBONE connections.
 		let policies = pi
 			.stores
 			.read_binds()
 			.listener_frontend_policies(&listener.name, Some(wps.as_policy_ref()));
-		let mut socket = Socket::from_hbone(ext, socket_addr, con);
 		socket.ext_mut().insert(wps);
 		if is_http {
 			let _ = Self::proxy(

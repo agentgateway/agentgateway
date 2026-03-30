@@ -2194,3 +2194,113 @@ async fn auto_protocol_peek_timeout() {
 	tokio::time::sleep(std::time::Duration::from_secs(10)).await;
 	// If we reach here, the timeout worked (auto-advance means no real wait).
 }
+
+/// HTTP request through the waypoint path with an HBONE listener reaches the backend.
+#[tokio::test]
+async fn waypoint_http_basic() {
+	let mock = simple_mock().await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(waypoint_bind(ListenerProtocol::HBONE))
+		.with_waypoint_service(*mock.address());
+	let io = t.serve_waypoint_http(BIND_KEY);
+	let res = send_request(io, Method::GET, "http://my-svc.default.svc.cluster.local").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body(res.into_body()).await;
+	assert_eq!(body.method, Method::GET);
+}
+
+/// Waypoint fallback (no HBONE listener) still proxies HTTP successfully.
+#[tokio::test]
+async fn waypoint_http_fallback() {
+	let mock = simple_mock().await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(waypoint_bind(ListenerProtocol::HTTP))
+		.with_waypoint_service(*mock.address());
+	let io = t.serve_waypoint_http(BIND_KEY);
+	let res = send_request(io, Method::POST, "http://my-svc.default.svc.cluster.local").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body(res.into_body()).await;
+	assert_eq!(body.method, Method::POST);
+}
+
+/// Network authorization policy allows HTTP waypoint traffic when source matches.
+#[tokio::test]
+async fn waypoint_http_policy_allow() {
+	let mock = simple_mock().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(waypoint_bind(ListenerProtocol::HBONE))
+		.with_waypoint_service(*mock.address());
+	t.attach_frontend_policy(json!({
+		"networkAuthorization": {
+			"rules": ["source.port == 12345"],
+		},
+	}))
+	.await;
+	let io = t.serve_waypoint_http(BIND_KEY);
+	let res = send_request(io, Method::GET, "http://my-svc.default.svc.cluster.local").await;
+	assert_eq!(res.status(), 200);
+}
+
+/// Network authorization policy denies HTTP waypoint traffic when source doesn't match.
+#[tokio::test]
+async fn waypoint_http_policy_deny() {
+	let mock = simple_mock().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(waypoint_bind(ListenerProtocol::HBONE))
+		.with_waypoint_service(*mock.address());
+	t.attach_frontend_policy(json!({
+		"networkAuthorization": {
+			"rules": ["source.port == 54321"],
+		},
+	}))
+	.await;
+	let io = t.serve_waypoint_http(BIND_KEY);
+	RequestBuilder::new(Method::GET, "http://my-svc.default.svc.cluster.local")
+		.send(io)
+		.await
+		.expect_err("should be denied by network authorization");
+}
+
+/// TCP through the waypoint path reaches the backend.
+#[tokio::test]
+async fn waypoint_tcp_basic() {
+	let mock = simple_mock().await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(waypoint_bind(ListenerProtocol::HBONE))
+		.with_waypoint_service(*mock.address());
+	let io = t.serve_waypoint_tcp(BIND_KEY);
+	let res = send_request(io, Method::GET, "http://my-svc.default.svc.cluster.local").await;
+	assert_eq!(res.status(), 200);
+}
+
+/// Network authorization policy denies TCP waypoint traffic when source doesn't match.
+#[tokio::test]
+async fn waypoint_tcp_policy_deny() {
+	let mock = simple_mock().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(waypoint_bind(ListenerProtocol::HBONE))
+		.with_waypoint_service(*mock.address());
+	t.attach_frontend_policy(json!({
+		"networkAuthorization": {
+			"rules": ["source.port == 54321"],
+		},
+	}))
+	.await;
+	let io = t.serve_waypoint_tcp(BIND_KEY);
+	RequestBuilder::new(Method::GET, "http://my-svc.default.svc.cluster.local")
+		.send(io)
+		.await
+		.expect_err("should be denied by network authorization");
+}
