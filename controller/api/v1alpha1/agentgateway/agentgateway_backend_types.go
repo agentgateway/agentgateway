@@ -420,7 +420,6 @@ type McpSelector struct {
 // McpTarget defines a single MCPBackend target configuration.
 // +kubebuilder:validation:ExactlyOneOf=host;backendRef
 // +kubebuilder:validation:XValidation:rule="!has(self.backendRef) || !has(self.policies)",message="mcp target policies may not be used with backendRef"
-// +kubebuilder:validation:XValidation:rule="!(has(self.policies) && has(self.policies.mcp) && has(self.policies.mcp.authentication))",message="MCP authentication is not supported on static MCP target policies"
 type McpTarget struct {
 	// Host is the hostname or IP address of the MCP target.
 	// +optional
@@ -456,7 +455,7 @@ type McpTarget struct {
 	// This field may only be used with host-based static targets, not
 	// `backendRef`.
 	// +optional
-	Policies *BackendWithMCP `json:"policies,omitempty"`
+	Policies *BackendSimple `json:"policies,omitempty"`
 }
 
 // MCPProtocol defines the protocol to use for the `MCPBackend` target.

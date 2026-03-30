@@ -2201,7 +2201,7 @@ func (in *McpTarget) DeepCopyInto(out *McpTarget) {
 	}
 	if in.Policies != nil {
 		in, out := &in.Policies, &out.Policies
-		*out = new(BackendWithMCP)
+		*out = new(BackendSimple)
 		(*in).DeepCopyInto(*out)
 	}
 }
