@@ -8,7 +8,7 @@ import (
 // Control-plane Authorization rules not specific to policies:
 // +kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
 
-// Select the object by Name and Namespace.
+// Select the object by `name` and `namespace`.
 // You can target only one object at a time.
 type NamespacedObjectReference struct {
 	// The name of the target resource.
@@ -21,7 +21,7 @@ type NamespacedObjectReference struct {
 	Namespace *gwv1.Namespace `json:"namespace,omitempty"`
 }
 
-// Select the object to attach the policy by Group, Kind, and Name.
+// Select the object to attach the policy by `Group`, `Kind`, and `Name`.
 // The object must be in the same namespace as the policy.
 // You can target only one object at a time.
 type LocalPolicyTargetReference struct {
@@ -30,8 +30,7 @@ type LocalPolicyTargetReference struct {
 	// +required
 	Group gwv1.Group `json:"group"`
 
-	// The API kind of the target resource,
-	// such as Gateway or HTTPRoute.
+	// The API kind of the target resource, such as `Gateway` or `HTTPRoute`.
 	// +required
 	Kind gwv1.Kind `json:"kind"`
 
@@ -40,7 +39,8 @@ type LocalPolicyTargetReference struct {
 	Name gwv1.ObjectName `json:"name"`
 }
 
-// Select the object to attach the policy by Group, Kind, Name and SectionName.
+// Select the object to attach the policy by `Group`, `Kind`, `Name`, and
+// `SectionName`.
 // The object must be in the same namespace as the policy.
 // You can target only one object at a time.
 type LocalPolicyTargetReferenceWithSectionName struct {
@@ -51,20 +51,17 @@ type LocalPolicyTargetReferenceWithSectionName struct {
 	SectionName *gwv1.SectionName `json:"sectionName,omitempty"`
 }
 
-// LocalPolicyTargetSelector selects the object to attach the policy by Group, Kind, and MatchLabels.
+// LocalPolicyTargetSelector selects the object to attach the policy by
+// `Group`, `Kind`, and `MatchLabels`.
 // The object must be in the same namespace as the policy and match the
 // specified labels.
-// Do not use targetSelectors when reconciliation times are critical, especially if you
-// have a large number of policies that target the same resource.
-// Instead, use targetRefs to attach the policy.
 type LocalPolicyTargetSelector struct {
 	// The API group of the target resource.
 	// For Kubernetes Gateway API resources, the group is `gateway.networking.k8s.io`.
 	// +required
 	Group gwv1.Group `json:"group"`
 
-	// The API kind of the target resource,
-	// such as Gateway or HTTPRoute.
+	// The API kind of the target resource, such as `Gateway` or `HTTPRoute`.
 	// +required
 	Kind gwv1.Kind `json:"kind"`
 
@@ -73,12 +70,14 @@ type LocalPolicyTargetSelector struct {
 	MatchLabels map[string]string `json:"matchLabels"`
 }
 
-// LocalPolicyTargetSelectorWithSectionName the object to attach the policy by Group, Kind, MatchLabels, and optionally SectionName.
+// LocalPolicyTargetSelectorWithSectionName selects the object to attach the
+// policy by `Group`, `Kind`, `MatchLabels`, and optionally `SectionName`.
 // The object must be in the same namespace as the policy and match the
 // specified labels.
-// Do not use targetSelectors when reconciliation times are critical, especially if you
+// Do not use `targetSelectors` when reconciliation times are critical,
+// especially if you
 // have a large number of policies that target the same resource.
-// Instead, use targetRefs to attach the policy.
+// Instead, use `targetRefs` to attach the policy.
 type LocalPolicyTargetSelectorWithSectionName struct {
 	LocalPolicyTargetSelector `json:",inline"`
 
@@ -108,17 +107,17 @@ type PolicyAncestorStatus struct {
 
 	// ControllerName is a domain/path string that indicates the name of the
 	// controller that wrote this status. This corresponds with the
-	// controllerName field on GatewayClass.
+	// `controllerName` field on `GatewayClass`.
 	//
-	// Example: "example.net/gateway-controller".
+	// Example: `example.net/gateway-controller`.
 	//
-	// The format of this field is DOMAIN "/" PATH, where DOMAIN and PATH are
+	// The format of this field is `DOMAIN "/" PATH`, where `DOMAIN` and `PATH` are
 	// valid Kubernetes names
 	// (https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names).
 	//
-	// Controllers MUST populate this field when writing status. Controllers should ensure that
-	// entries to status populated with their ControllerName are cleaned up when they are no
-	// longer necessary.
+	// Controllers MUST populate this field when writing status. Controllers
+	// should ensure that entries in status populated with their `ControllerName`
+	// are cleaned up when they are no longer necessary.
 	// +required
 	ControllerName string `json:"controllerName"`
 
@@ -136,24 +135,24 @@ type PolicyAncestorStatus struct {
 // +kubebuilder:validation:ExactlyOneOf=exact;prefix;suffix;contains;safeRegex
 type StringMatcher struct {
 	// The input string must match exactly the string specified here.
-	// Example: abc matches the value abc
+	// Example: `abc` matches the value `abc`.
 	// +optional
 	Exact *string `json:"exact,omitempty"`
 
 	// The input string must have the prefix specified here.
 	// Note: empty prefix is not allowed, please use regex instead.
-	// Example: abc matches the value abc.xyz
+	// Example: `abc` matches the value `abc.xyz`.
 	// +optional
 	Prefix *string `json:"prefix,omitempty"`
 
 	// The input string must have the suffix specified here.
 	// Note: empty prefix is not allowed, please use regex instead.
-	// Example: abc matches the value xyz.abc
+	// Example: `abc` matches the value `xyz.abc`.
 	// +optional
 	Suffix *string `json:"suffix,omitempty"`
 
 	// The input string must contain the substring specified here.
-	// Example: abc matches the value xyz.abc.def
+	// Example: `abc` matches the value `xyz.abc.def`.
 	// +optional
 	Contains *string `json:"contains,omitempty"`
 

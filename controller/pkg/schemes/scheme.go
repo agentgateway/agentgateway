@@ -8,10 +8,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
@@ -70,20 +68,6 @@ func GatewayScheme() *runtime.Scheme {
 	}
 	if err := gwxv1a1.Install(s); err != nil {
 		panic(fmt.Sprintf("Failed to install gateway experimental v1alpha1 scheme: %v", err))
-	}
-	return s
-}
-
-// InferExtScheme unconditionally includes the default, Gateway API, and Inference Extension schemes.
-// Use the Default scheme with AddInferExtV1A2Scheme to conditionally add the v1alpha2 scheme.
-func InferExtScheme() *runtime.Scheme {
-	s := GatewayScheme()
-	// Required to deploy RBAC resources for endpoint picker extension.
-	if err := rbacv1.AddToScheme(s); err != nil {
-		panic(fmt.Sprintf("Failed to add RBAC v1 scheme: %v", err))
-	}
-	if err := inf.Install(s); err != nil {
-		panic(fmt.Sprintf("Failed to add Gateway API Inference Extension v1alpha2 scheme: %v", err))
 	}
 	return s
 }

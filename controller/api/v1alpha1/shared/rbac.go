@@ -2,14 +2,22 @@ package shared
 
 // Authorization defines the configuration for role-based access control.
 type Authorization struct {
-	// Policy specifies the Authorization rule to evaluate.
-	// A policy matches when **any** of the conditions evaluates to true.
+	// `policy` specifies the authorization rule to evaluate.
+	//
+	// * For `Allow` rules: any policy allows the request.
+	// * For `Require` rules: all policies must match for the request to be allowed.
+	// * For `Deny` rules: any matching policy denies the request. Note: a CEL expression that fails to evaluate is not
+	// considered to match, making this a risky policy; prefer to use `Require`.
+	//
+	// The presence of at least one `Allow` rule triggers a deny-by-default policy, requiring at least 1 match to allow.
+	// With no rules, all requires are allowed.
 	// +required
 	Policy AuthorizationPolicy `json:"policy"`
 
-	// Action defines whether the rule allows or denies the request if matched.
-	// If unspecified, the default is "Allow".
-	// +kubebuilder:validation:Enum=Allow;Deny
+	// `action` defines whether the rule allows, denies, or requires the request if
+	// matched. If unspecified, the default is `Allow`.
+	// Require policies are conjunctive across merged policies: all require policies must match.
+	// +kubebuilder:validation:Enum=Allow;Deny;Require
 	// +kubebuilder:default=Allow
 	// +optional
 	Action AuthorizationPolicyAction `json:"action,omitempty"`
@@ -21,10 +29,11 @@ type Authorization struct {
 // +k8s:deepcopy-gen=false
 type CELExpression string
 
-// AuthorizationPolicy defines a single Authorization rule.
+// AuthorizationPolicy defines a single authorization rule.
 type AuthorizationPolicy struct {
 	// MatchExpressions defines a set of conditions that must be satisfied for the rule to match.
-	// These expression should be in the form of a Common Expression Language (CEL) expression.
+	// These expressions should be in the form of a Common Expression Language
+	// (`CEL`) expression.
 	//
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=256
@@ -32,12 +41,17 @@ type AuthorizationPolicy struct {
 	MatchExpressions []CELExpression `json:"matchExpressions"`
 }
 
-// AuthorizationPolicyAction defines the action to take when the RBACPolicies matches.
+// AuthorizationPolicyAction defines the action to take when the
+// `RBACPolicies` matches.
 type AuthorizationPolicyAction string
 
 const (
-	// AuthorizationPolicyActionAllow defines the action to take when the RBACPolicies matches.
+	// AuthorizationPolicyActionAllow defines the action to take when the
+	// `RBACPolicies` matches.
 	AuthorizationPolicyActionAllow AuthorizationPolicyAction = "Allow"
-	// AuthorizationPolicyActionDeny denies the action to take when the RBACPolicies matches.
+	// AuthorizationPolicyActionDeny denies the action to take when the
+	// `RBACPolicies` matches.
 	AuthorizationPolicyActionDeny AuthorizationPolicyAction = "Deny"
+	// AuthorizationPolicyActionRequire requires the action to take when the RBACPolicies matches.
+	AuthorizationPolicyActionRequire AuthorizationPolicyAction = "Require"
 )

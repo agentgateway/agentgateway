@@ -18,7 +18,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 // ResourceOverlays contains all the overlays that can be applied to rendered objects.

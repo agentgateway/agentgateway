@@ -18,10 +18,12 @@ pub const DEFAULT_HOST: Strng = strng::literal!(DEFAULT_HOST_STR);
 
 pub const OAUTH_TOKEN_PREFIX: &str = "sk-ant-oat";
 
-pub fn path(route: RouteType) -> &'static str {
+pub const DEFAULT_BASE_PATH: &str = "/v1";
+
+pub fn path_suffix(route: RouteType) -> &'static str {
 	match route {
-		RouteType::AnthropicTokenCount => "/v1/messages/count_tokens",
-		_ => "/v1/messages",
+		RouteType::AnthropicTokenCount => "/messages/count_tokens",
+		_ => "/messages",
 	}
 }
 

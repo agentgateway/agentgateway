@@ -1,6 +1,7 @@
 package agentgateway
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -120,33 +121,35 @@ type StaticBackend struct {
 // AIBackend specifies the AI backend configuration
 // +kubebuilder:validation:ExactlyOneOf=provider;groups
 type AIBackend struct {
-	// provider specifies configuration for how to reach the configured LLM provider.
+	// `provider` specifies configuration for how to reach the configured LLM
+	// provider.
 	// +optional
 	LLM *LLMProvider `json:"provider,omitempty"`
 
-	// groups specifies a list of groups in priority order where each group defines
-	// a set of LLM providers. The priority determines the priority of the backend endpoints chosen.
-	// Note: provider names must be unique across all providers in all priority groups. Backend policies
-	// may target a specific provider by name using targetRefs[].sectionName.
+	// `groups` specifies a list of groups in priority order where each group
+	// defines a set of LLM providers. The priority determines the priority of
+	// the backend endpoints chosen.
+	// Note: provider names must be unique across all providers in all priority
+	// groups. Backend policies may target a specific provider by name using
+	// `targetRefs[].sectionName`.
 	//
 	// Example configuration with two priority groups:
-	// ```yaml
-	// groups:
-	// - providers:
-	//   - azureopenai:
-	//       deploymentName: gpt-4o-mini
-	//       apiVersion: 2024-02-15-preview
-	//       endpoint: ai-gateway.openai.azure.com
-	// - providers:
-	//   - azureopenai:
-	//       deploymentName: gpt-4o-mini-2
-	//       apiVersion: 2024-02-15-preview
-	//       endpoint: ai-gateway-2.openai.azure.com
-	//      policies:
-	//        auth:
-	//          secretRef:
-	//            name: azure-secret
-	// ```
+	//
+	//	groups:
+	//	- providers:
+	//	  - azureopenai:
+	//	      deploymentName: gpt-4o-mini
+	//	      apiVersion: 2024-02-15-preview
+	//	      endpoint: ai-gateway.openai.azure.com
+	//	- providers:
+	//	  - azureopenai:
+	//	      deploymentName: gpt-4o-mini-2
+	//	      apiVersion: 2024-02-15-preview
+	//	      endpoint: ai-gateway-2.openai.azure.com
+	//	     policies:
+	//	       auth:
+	//	         secretRef:
+	//	           name: azure-secret
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=8
 	// +optional
@@ -170,9 +173,11 @@ type NamedLLMProvider struct {
 	// +required
 	Name gwv1.SectionName `json:"name"`
 
-	// policies controls policies for communicating with this backend. Policies may also be set in AgentgatewayPolicy, or
-	// in the top level AgentgatewayBackend. policies are merged on a field-level basis, with order: AgentgatewayPolicy <
-	// AgentgatewayBackend < AgentgatewayBackend LLM provider (this field).
+	// `policies` controls policies for communicating with this backend.
+	// Policies may also be set in `AgentgatewayPolicy`, or in the top-level
+	// `AgentgatewayBackend`. Policies are merged on a field-level basis, with
+	// order: `AgentgatewayPolicy` < `AgentgatewayBackend` < `AgentgatewayBackend`
+	// LLM provider (this field).
 	// +optional
 	Policies *BackendWithAI `json:"policies,omitempty"`
 
@@ -182,6 +187,8 @@ type NamedLLMProvider struct {
 // LLMProvider specifies the target large language model provider that the backend should route requests to.
 // +kubebuilder:validation:ExactlyOneOf=openai;azureopenai;anthropic;gemini;vertexai;bedrock
 // +kubebuilder:validation:XValidation:rule="has(self.host) || has(self.port) ? has(self.host) && has(self.port) : true",message="both host and port must be set together"
+// +kubebuilder:validation:XValidation:rule="!(has(self.path) && has(self.pathPrefix))",message="path and pathPrefix are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="has(self.pathPrefix) ? has(self.host) : true",message="pathPrefix requires host to be set"
 type LLMProvider struct {
 	// OpenAI provider
 	// +optional
@@ -224,6 +231,12 @@ type LLMProvider struct {
 	// If not specified, the default path for the provider is used.
 	// +optional
 	Path LongString `json:"path,omitempty"`
+
+	// PathPrefix overrides the default base path prefix (e.g. "/v1") for upstream requests.
+	// Path translation for cross-format requests still applies using this prefix.
+	// Only supported for OpenAI and Anthropic providers.
+	// +optional
+	PathPrefix LongString `json:"pathPrefix,omitempty"`
 }
 
 // OpenAIConfig settings for the [OpenAI](https://developers.openai.com/api/docs/guides/streaming-responses) LLM provider.
@@ -244,13 +257,14 @@ type AzureOpenAIConfig struct {
 
 	// The name of the Azure OpenAI model deployment to use.
 	// For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
-	// This is required if ApiVersion is not 'v1'. For v1, the model can be set in the request.
+	// This is required if `apiVersion` is not `v1`. For `v1`, the model can be
+	// set in the request.
 	// +optional
 	DeploymentName *ShortString `json:"deploymentName,omitempty"`
 
 	// The version of the Azure OpenAI API to use.
 	// For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/ai-foundry/?view=foundry-classicreference#api-specs).
-	// If unset, defaults to "v1"
+	// If unset, defaults to `v1`.
 	// +optional
 	ApiVersion *TinyString `json:"apiVersion,omitempty"`
 }
@@ -275,8 +289,10 @@ type VertexAIConfig struct {
 	ProjectId TinyString `json:"projectId"`
 
 	// The location of the Google Cloud Project that you use for the Vertex AI.
-	// +required
-	Region TinyString `json:"region"`
+	// Defaults to `global` if not specified.
+	// +optional
+	// +kubebuilder:default=global
+	Region TinyString `json:"region,omitempty"`
 }
 
 // AnthropicConfig settings for the [Anthropic](https://platform.claude.com/docs/en/release-notes/overview) LLM provider.
@@ -289,7 +305,7 @@ type AnthropicConfig struct {
 
 type BedrockConfig struct {
 	// Region is the AWS region to use for the backend.
-	// Defaults to us-east-1 if not specified.
+	// Defaults to `us-east-1` if not specified.
 	// +optional
 	// +kubebuilder:default=us-east-1
 	// +kubebuilder:validation:MinLength=1
@@ -302,7 +318,8 @@ type BedrockConfig struct {
 	// +optional
 	Model *ShortString `json:"model,omitempty"`
 
-	// Guardrail configures the Guardrail policy to use for the backend. See <https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html>
+	// `guardrail` configures the Guardrail policy to use for the backend. See
+	// <https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html>.
 	// If not specified, the AWS Guardrail policy will not be used.
 	// +optional
 	Guardrail *AWSGuardrailConfig `json:"guardrail,omitempty"`
@@ -318,11 +335,12 @@ type AWSGuardrailConfig struct {
 	GuardrailVersion ShortString `json:"version"`
 }
 
-// MCPBackend configures mcp backends
+// MCPBackend configures `mcp` backends.
 type MCPBackend struct {
-	// Targets is a list of MCPBackend targets to use for this backend.
-	// Policies targeting MCPBackend targets must use targetRefs[].sectionName
-	// to select the target by name.
+	// `targets` is a list of MCP targets to use for this backend. Policies
+	// targeting MCP targets must use `targetRefs[].sectionName` to select
+	// the target by name.
+	//
 	// +listType=map
 	// +listMapKey=name
 	// +kubebuilder:validation:MinItems=1
@@ -331,14 +349,14 @@ type MCPBackend struct {
 	// +required
 	Targets []McpTargetSelector `json:"targets"`
 
-	// SessionRouting configures MCP session behavior for requests.
-	// Defaults to Stateful if not set.
+	// `sessionRouting` configures MCP session behavior for requests.
+	// Defaults to `Stateful` if not set.
 	// +optional
 	SessionRouting SessionRouting `json:"sessionRouting,omitempty"`
 
-	// FailureMode controls behavior when MCP targets fail to initialize or
-	// become unavailable at runtime. "FailOpen" skips failed targets and
-	// continues serving from healthy ones. "FailClosed" (default) fails the
+	// `failureMode` controls behavior when MCP targets fail to initialize or
+	// become unavailable at runtime. `FailOpen` skips failed targets and
+	// continues serving from healthy ones. `FailClosed` (default) fails the
 	// entire session if any target fails.
 	// +optional
 	FailureMode FailureMode `json:"failureMode,omitempty"`
@@ -357,23 +375,26 @@ type FailureMode string
 // McpTargetSelector defines the MCPBackend target to use for this backend.
 // +kubebuilder:validation:ExactlyOneOf=selector;static
 type McpTargetSelector struct {
-	// Name of the MCPBackend target.
+	// Name of the MCP target.
 	// +required
 	Name gwv1.SectionName `json:"name"`
 
-	// selector is a label selector is the selector to use to select Services.
-	// If policies are needed on a per-service basis, AgentgatewayPolicy can target the desired Service.
+	// `selector` is the label selector used to select `Service` resources.
+	// If policies are needed on a per-service basis, `AgentgatewayPolicy` can
+	// target the desired `Service`.
 	// +optional
 	Selector *McpSelector `json:"selector,omitempty"`
 
-	// static configures a static MCP destination. When connecting to in-cluster Services, it is recommended to use
-	// 'selector' instead.
+	// `static` configures a static MCP destination. When connecting to
+	// in-cluster `Service` resources, it is recommended to use `selector`
+	// instead.
 	// +optional
 	Static *McpTarget `json:"static,omitempty"`
 }
 
 const (
-	// Stateful mode creates an MCP session (via mcp-session-id) and internally
+	// `Stateful` mode creates an MCP session (via `mcp-session-id`) and
+	// internally
 	// ensures requests for that session are routed to a consistent backend replica.
 	Stateful  SessionRouting = "Stateful"
 	Stateless SessionRouting = "Stateless"
@@ -384,53 +405,69 @@ type SessionRouting string
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type McpSelector struct {
-	// namespace is the label selector in which namespaces Services should be selected from.
-	// If unset, only the namespace of the AgentgatewayBackend is searched.
+	// `namespace` is the label selector for namespaces that `Service`
+	// resources should be selected from. If unset, only the namespace of the
+	// `AgentgatewayBackend` is searched.
 	// +optional
 	Namespace *metav1.LabelSelector `json:"namespaces,omitempty"`
 
-	// services is the label selector for which Services should be selected.
+	// `services` is the label selector for which `Service` resources should be
+	// selected.
 	// +optional
 	Service *metav1.LabelSelector `json:"services,omitempty"`
 }
 
 // McpTarget defines a single MCPBackend target configuration.
+// +kubebuilder:validation:ExactlyOneOf=host;backendRef
+// +kubebuilder:validation:XValidation:rule="!has(self.backendRef) || !has(self.policies)",message="mcp target policies may not be used with backendRef"
 type McpTarget struct {
-	// Host is the hostname or IP address of the MCPBackend target.
-	// +required
-	Host ShortString `json:"host"`
+	// Host is the hostname or IP address of the MCP target.
+	// +optional
+	Host *ShortString `json:"host,omitempty"`
 
-	// Port is the port number of the MCPBackend target.
+	// `backendRef` references a namespace-local `Service` resource by name.
+	// When set, this replaces `host` only; `port`, `path`, and `protocol`
+	// remain configured on this target.
+	// +optional
+	BackendRef *corev1.LocalObjectReference `json:"backendRef,omitempty"`
+
+	// Port is the port number of the MCP target.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	// +required
 	Port int32 `json:"port"`
 
-	// Path is the URL path of the MCPBackend target endpoint.
-	// Defaults to "/sse" for SSE protocol or "/mcp" for StreamableHTTP protocol if not specified.
+	// Path is the URL path of the MCP target endpoint.
+	// Defaults to `"/sse"` for the `SSE` protocol or `"/mcp"` for the
+	// `StreamableHTTP` protocol if not specified.
 	// +optional
 	Path *LongString `json:"path,omitempty"`
 
-	// Protocol is the protocol to use for the connection to the MCPBackend target.
+	// Protocol is the protocol to use for the connection to the MCP
+	// target.
 	// +optional
 	Protocol *MCPProtocol `json:"protocol,omitempty"`
 
-	// policies controls policies for communicating with this backend. Policies may also be set in AgentgatewayPolicy, or
-	// in the top level AgentgatewayBackend. Policies are merged on a field-level basis, with order: AgentgatewayPolicy <
-	// AgentgatewayBackend < AgentgatewayBackend MCP (this field).
+	// `policies` controls policies for communicating with this backend.
+	// Policies may also be set in `AgentgatewayPolicy`, or in the top-level
+	// `AgentgatewayBackend`. Policies are merged on a field-level basis, with
+	// order: `AgentgatewayPolicy` < `AgentgatewayBackend` < `AgentgatewayBackend` MCP (this field).
+	// This field may only be used with host-based static targets, not
+	// `backendRef`.
 	// +optional
 	Policies *BackendWithMCP `json:"policies,omitempty"`
 }
 
-// MCPProtocol defines the protocol to use for the MCPBackend target
+// MCPProtocol defines the protocol to use for the `MCPBackend` target.
 // +kubebuilder:validation:Enum=StreamableHTTP;SSE
 type MCPProtocol string
 
 const (
-
-	// MCPProtocolStreamableHTTP specifies Streamable HTTP must be used as the protocol
+	// MCPProtocolStreamableHTTP specifies that `StreamableHTTP` must be used as
+	// the protocol.
 	MCPProtocolStreamableHTTP MCPProtocol = "StreamableHTTP"
 
-	// MCPProtocolSSE specifies Server-Sent Events (SSE) must be used as the protocol
+	// MCPProtocolSSE specifies that Server-Sent Events (`SSE`) must be used as
+	// the protocol.
 	MCPProtocolSSE MCPProtocol = "SSE"
 )

@@ -32,12 +32,12 @@ jobs:
           validate: false
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
       with:
         toolchain: "${{ env.RUST_VERSION }}"
-    - uses: Swatinem/rust-cache@v2
+    - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       # Github cache is too tiny to handle the full matrix :-(
       if: ${{ startsWith(matrix.os, 'ubuntu-') }}
       with:
@@ -54,12 +54,12 @@ jobs:
   proxy-lint:
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
       with:
         toolchain: "${{ env.RUST_VERSION }}"
-    - uses: Swatinem/rust-cache@v2
+    - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       with:
         # Github cache will restore from 'main' OR the current branch.
         # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
@@ -77,8 +77,8 @@ jobs:
       run:
         working-directory: ui
     steps:
-    - uses: actions/checkout@v6
-    - uses: actions/setup-node@v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
       with:
         node-version: 24
     - name: Lint
@@ -90,8 +90,8 @@ jobs:
   controller-test:
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6
-    - uses: actions/setup-go@v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
       with:
         go-version: "${{ env.GO_VERSION }}"
         cache-dependency-path: |
@@ -103,8 +103,8 @@ jobs:
   controller-lint:
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6
-    - uses: actions/setup-go@v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
       with:
         go-version: "${{ env.GO_VERSION }}"
         cache-dependency-path: |
@@ -123,7 +123,7 @@ jobs:
   controller-e2e:
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
     - name: Check Runner Info
       run: |
         cat /sys/fs/cgroup/cpu.stat || true
@@ -131,16 +131,16 @@ jobs:
         lscpu || true
         openssl speed -seconds 1  -bytes 256 sha256 || rtue
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
       with:
         toolchain: "${{ env.RUST_VERSION }}"
-    - uses: Swatinem/rust-cache@v2
+    - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       with:
         # Github cache will restore from 'main' OR the current branch.
         # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
         # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
         save-if: ${{ github.ref == 'refs/heads/main' }}
-    - uses: actions/setup-go@v6
+    - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
       with:
         go-version: "${{ env.GO_VERSION }}"
         cache-dependency-path: |
@@ -156,13 +156,13 @@ jobs:
         CGO_ENABLED=0 PERSIST_INSTALL=true go test -tags=e2e -v ./controller/test/e2e/tests -run '^TestAgentgatewayIntegration'
     - name: Archive bug report directory on failure
       if: ${{ failure() }}
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
       with:
         name: bug-report
         path: ./controller/_test/bug_report/kind
         retention-days: 2
     - name: Upload cargo timings
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
       with:
         name: cargo-timings-e2e
         path: target/cargo-timings/cargo-timing*.html
@@ -175,17 +175,17 @@ jobs:
   controller-conformance:
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
       with:
         toolchain: "${{ env.RUST_VERSION }}"
-    - uses: Swatinem/rust-cache@v2
+    - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       with:
         # We only read the cache from 'E2E' job, since they should have identical cache.
         save-if: "false"
         shared-key: "controller-e2e" # Pull E2E job's cache
-    - uses: actions/setup-go@v6
+    - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
       with:
         go-version: "${{ env.GO_VERSION }}"
         cache-dependency-path: |
@@ -206,7 +206,7 @@ jobs:
         kubectl get pods -n agentgateway-system
         kubectl logs -n agentgateway-system -l app.kubernetes.io/name=agentgateway
     - name: Upload cargo timings
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
       with:
         name: cargo-timings-conformance
         path: target/cargo-timings/cargo-timing*.html

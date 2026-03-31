@@ -18,9 +18,9 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned"
 	"github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned/fake"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 

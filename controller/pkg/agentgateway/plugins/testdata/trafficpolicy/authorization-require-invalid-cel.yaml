@@ -1,0 +1,59 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: authorization-require-invalid-cel
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    authorization:
+      action: Require
+      policy:
+        matchExpressions:
+        - foolen_{{request.path}}
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/authorization-require-invalid-cel:rbac:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: authorization-require-invalid-cel
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        authorization:
+          require:
+          - foolen_{{request.path}}
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: authorization-require-invalid-cel
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: 'authorization matchExpression is not a valid CEL expression: foolen_{{request.path}}'
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

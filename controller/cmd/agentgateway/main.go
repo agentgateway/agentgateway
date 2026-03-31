@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/setup"
+	"github.com/agentgateway/agentgateway/controller/pkg/setup"
 	"github.com/agentgateway/agentgateway/controller/pkg/version"
 )
 

@@ -1,0 +1,93 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/responses/parallel-tool-call.json
+info:
+  model: gpt-4o
+  max_output_tokens: 1024
+  input:
+    - type: message
+      role: user
+      content:
+        - type: input_text
+          text: How is the weather in Columbus and New York?
+    - type: function_call
+      call_id: call_1
+      name: get_weather
+      arguments: "{\"location\":\"Columbus, OH\"}"
+    - type: function_call
+      call_id: call_2
+      name: get_weather
+      arguments: "{\"location\":\"New York, NY\"}"
+    - type: function_call_output
+      call_id: call_1
+      output: "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+    - type: function_call_output
+      call_id: call_2
+      output: "{ \"temperature\": 22, \"condition\": \"Sunny\" }"
+---
+{
+  "modelId": "gpt-4o",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "How is the weather in Columbus and New York?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "toolUse": {
+            "toolUseId": "call_1",
+            "name": "get_weather",
+            "input": {
+              "location": "Columbus, OH"
+            }
+          }
+        },
+        {
+          "toolUse": {
+            "toolUseId": "call_2",
+            "name": "get_weather",
+            "input": {
+              "location": "New York, NY"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "toolResult": {
+            "toolUseId": "call_1",
+            "content": [
+              {
+                "text": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+              }
+            ],
+            "status": null
+          }
+        },
+        {
+          "toolResult": {
+            "toolUseId": "call_2",
+            "content": [
+              {
+                "text": "{ \"temperature\": 22, \"condition\": \"Sunny\" }"
+              }
+            ],
+            "status": null
+          }
+        }
+      ]
+    }
+  ],
+  "inferenceConfig": {
+    "maxTokens": 1024
+  }
+}

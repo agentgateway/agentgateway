@@ -155,6 +155,7 @@ mod requests {
 		("basic", &[ANTHROPIC, BEDROCK]),
 		("full", &[ANTHROPIC, BEDROCK]),
 		("tool-call", &[ANTHROPIC, BEDROCK]),
+		("parallel-tool-call", &[BEDROCK]),
 		("reasoning", &[ANTHROPIC, BEDROCK]),
 		("reasoning_max", &[ANTHROPIC]),
 	];
@@ -167,6 +168,7 @@ mod requests {
 		("basic", &[BEDROCK]),
 		("instructions", &[BEDROCK]),
 		("input-list", &[BEDROCK]),
+		("parallel-tool-call", &[BEDROCK]),
 	];
 	pub const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
@@ -921,4 +923,131 @@ fn test_get_messages() {
 		&input_raw,
 		"get-messages-messages",
 	);
+}
+
+/// Verifies that `process_response` routes a non-success response through
+/// the buffered error path even when the request has `streaming: true`.
+///
+/// Constructs a Bedrock 400 JSON error response and passes it through
+/// `process_response` with a streaming `LLMRequest`. Asserts the returned
+/// body is non-empty, valid JSON, and preserves the original error message.
+#[tokio::test]
+async fn process_response_routes_streaming_error_to_buffered_path() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let bedrock = AIProvider::Bedrock(bedrock::Provider {
+		model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
+		region: strng::new("us-west-2"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	});
+
+	let error_json = r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#;
+
+	let req = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Completions,
+		request_model: "input-model".into(),
+		provider: Default::default(),
+		streaming: true,
+		params: Default::default(),
+		prompt: None,
+	};
+
+	let body = Body::from(error_json.as_bytes().to_vec());
+	let mut resp = Response::new(body);
+	*resp.status_mut() = ::http::StatusCode::BAD_REQUEST;
+	resp.headers_mut().insert(
+		::http::header::CONTENT_TYPE,
+		"application/json".parse().unwrap(),
+	);
+
+	let client = PolicyClient {
+		inputs: setup_proxy_test("{}").unwrap().pi,
+	};
+
+	let result = bedrock
+		.process_response(
+			client,
+			req,
+			LLMResponsePolicies::default(),
+			AsyncLog::default(),
+			false,
+			resp,
+		)
+		.await
+		.expect("process_response should succeed for error responses");
+
+	assert_eq!(result.status(), ::http::StatusCode::BAD_REQUEST);
+
+	let result_body = result.collect().await.unwrap().to_bytes();
+	assert!(
+		!result_body.is_empty(),
+		"error response body must not be empty",
+	);
+
+	let parsed: Value =
+		serde_json::from_slice(&result_body).expect("translated error should be valid JSON");
+
+	let message = parsed
+		.pointer("/error/message")
+		.and_then(|v| v.as_str())
+		.unwrap_or_default();
+	assert!(
+		message.contains("toolResult"),
+		"translated error should preserve the original message, got: {message}",
+	);
+}
+
+#[test]
+fn setup_request_openai_applies_prefixed_path_without_host_override() {
+	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/messages?trace=repro",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Messages,
+			None,
+			None,
+			Some("/v1/custom"),
+			false,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(
+		req.uri().authority().map(|a| a.as_str()),
+		Some("api.openai.com")
+	);
+	assert_eq!(req.uri().path(), "/v1/custom/chat/completions");
+	assert_eq!(req.uri().query(), Some("trace=repro"));
+}
+
+#[test]
+fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
+	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/messages?trace=repro",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Messages,
+			None,
+			None,
+			Some("/v1/custom/"),
+			false,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), "/v1/custom/chat/completions");
+	assert_eq!(req.uri().query(), Some("trace=repro"));
 }

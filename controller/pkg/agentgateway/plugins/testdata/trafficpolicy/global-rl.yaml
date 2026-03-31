@@ -14,6 +14,7 @@ spec:
         backendRef:
           name: rl-svc
           port: 4444
+        failureMode: FailOpen
         domain: "api-gateway"
         descriptors:
           - entries:
@@ -52,6 +53,7 @@ output:
             - key: user-agent
               value: request.headers["user-agent"]
           domain: api-gateway
+          failureMode: FAIL_OPEN
           target:
             port: 4444
             service:

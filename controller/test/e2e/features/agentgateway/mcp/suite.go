@@ -31,12 +31,68 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 			"TestDynamicMCPDefaultRouting":   &dynamicSetup,
 			"TestDynamicMCPAdminVsUserTools": &dynamicSetup,
 			// Authn tests
-			"TestMCPAuthn": &authnSetup,
+			"TestMCPAuthn":      &authnSetup,
+			"TestMCPAuthnRoute": &authnRouteSetup,
 		}),
 	}
 }
 
 func (s *testingSuite) TestMCPAuthn() {
+	// Single test that does the full workflow with session management
+	s.T().Log("Testing complete MCP workflow with session management")
+
+	// Ensure static components are ready
+	s.waitStaticReady()
+	// Ensure auth0 server is ready
+	s.waitAuth0Ready()
+
+	// Wait for the authentication policy to be accepted before testing
+	s.T().Log("Waiting for authentication policy to be accepted")
+	s.TestInstallation.AssertionsT(s.T()).EventuallyAgwPolicyCondition(
+		s.Ctx,
+		"auth0-mcp-authn-policy",
+		"default",
+		"Accepted",
+		metav1.ConditionTrue,
+	)
+
+	// The token is hard coded in the mock auth0 server
+	testJwt := "eyJhbGciOiJSUzI1NiIsImtpZCI6IjUzNTAyMzEyMTkzMDYwMzg2OTIiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2tnYXRld2F5LmRldiIsInN1YiI6Imlnbm9yZUBrZ2F0ZXdheS5kZXYiLCJleHAiOjIwNzExNjM0MDcsIm5iZiI6MTc2MzU3OTQwNywiaWF0IjoxNzYzNTc5NDA3fQ.TsHCCdd0_629wibU4EviEi1-_UXaFUX1NuLgXCrC-tr7kqlcnUJIJC0WSab1EgXKtF8gTfwTUeQcAQNrunwngQU-K9DFcH5-2vnGeiXV3_X3SokkPq74ceRrCFEL2d7YNaGfhq_UNyvKRJsRz-pwdKK7QIPXALmWaUHn7EV7zU-CcPCKNwmt62P88qNp5HYSbgqz_WfnzIIH8LANpCC8fUqVedgTJMJ86E06pfDNUuuXe_fhjgMQXlfyDeUxIuzJunvS2qIqt4IYMzjcQbl2QI1QK3xz37tridSP_WVuuMUe2Lqo0oDjWVpxqPb5fb90W6a6khRP59Pf6qKMbQ9SQg"
+	validAuthnHeader := map[string]string{"Authorization": "Bearer " + testJwt}
+
+	// Verify authentication is actually enforced (not just policy accepted)
+	// by waiting for an unauthenticated request to return 401
+	s.T().Log("Verifying authentication is enforced")
+	s.waitForAuthnEnforced()
+
+	// Test 1: Initialize without token should fail
+	s.T().Log("Test 1: Initialize without Authorization header should return 401")
+	s.testInitializeWithExpectedStatus(nil, 401, "missing token")
+
+	// Test 2: Initialize with invalid token should fail
+	s.T().Log("Test 2: Initialize with invalid token should return 401")
+	invalidAuthnHeader := map[string]string{"Authorization": "Bearer " + "fake"}
+	s.testInitializeWithExpectedStatus(invalidAuthnHeader, 401, "invalid token")
+
+	// Test 3: Initialize with valid token should succeed
+	s.T().Log("Test 3: Initialize with valid token should succeed")
+	sessionID := s.initializeAndGetSessionID(validAuthnHeader)
+	s.Require().NotEmpty(sessionID, "Failed to get session ID from initialize")
+
+	// Test 4: tools/list with valid token should succeed
+	s.T().Log("Test 4: tools/list with valid token should succeed")
+	s.testToolsListWithSession(sessionID, validAuthnHeader)
+
+	// Test 5: tools/list with invalid token should fail
+	s.T().Log("Test 5: tools/list with invalid token should fail")
+	s.testUnauthorizedToolsListWithSession(sessionID, invalidAuthnHeader, 401)
+
+	// Test 6: tools/list with missing token should fail
+	s.T().Log("Test 6: tools/list with missing token should fail")
+	s.testUnauthorizedToolsListWithSession(sessionID, nil, 401)
+}
+
+func (s *testingSuite) TestMCPAuthnRoute() {
 	// Single test that does the full workflow with session management
 	s.T().Log("Testing complete MCP workflow with session management")
 

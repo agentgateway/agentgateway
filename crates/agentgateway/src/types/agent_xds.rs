@@ -171,7 +171,13 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthorization> for McpAuthor
 			deny_exprs.push(Arc::new(expr));
 		}
 
-		let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs);
+		let mut require_exprs = Vec::new();
+		for require_rule in &rbac.require {
+			let expr = cel::Expression::new_permissive(require_rule);
+			require_exprs.push(Arc::new(expr));
+		}
+
+		let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
 		Ok(McpAuthorization::new(authorization::RuleSet::new(
 			policy_set,
 		)))
@@ -184,21 +190,6 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthentication> for McpAuthe
 	fn try_from(
 		m: &proto::agent::backend_policy_spec::McpAuthentication,
 	) -> Result<Self, Self::Error> {
-		let provider = match m.provider {
-			x if x
-				== proto::agent::backend_policy_spec::mcp_authentication::McpIdp::Unspecified as i32 =>
-			{
-				None
-			},
-			x if x == proto::agent::backend_policy_spec::mcp_authentication::McpIdp::Auth0 as i32 => {
-				Some(McpIDP::Auth0 {})
-			},
-			x if x == proto::agent::backend_policy_spec::mcp_authentication::McpIdp::Keycloak as i32 => {
-				Some(McpIDP::Keycloak {})
-			},
-			_ => None,
-		};
-
 		if m.jwks_inline.is_empty() {
 			return Err(ProtoError::Generic(
 				"MCP Authentication requires jwks_inline to be set. \
@@ -243,29 +234,66 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthentication> for McpAuthe
 		};
 
 		let jwt_validator = http::jwt::Jwt::from_providers(vec![jwt_provider], mode.into());
-		Ok(McpAuthentication {
-			issuer: m.issuer.clone(),
-			audiences: m.audiences.clone(),
-			provider,
-			resource_metadata: {
-				let extra = m
-					.resource_metadata
-					.as_ref()
-					.map(|rm| {
-						rm.extra
-							.iter()
-							.map(|(k, v)| {
-								let val = serde_json::to_value(v).unwrap_or(serde_json::Value::Null);
-								(k.clone(), val)
-							})
-							.collect::<std::collections::BTreeMap<_, _>>()
-					})
-					.unwrap_or_default();
-				ResourceMetadata { extra }
-			},
-			jwt_validator: std::sync::Arc::new(jwt_validator),
+		Ok(build_mcp_authentication(
+			m.issuer.clone(),
+			m.audiences.clone(),
+			m.provider,
+			convert_mcp_resource_metadata(m.resource_metadata.as_ref().map(|rm| rm.extra.iter())),
+			std::sync::Arc::new(jwt_validator),
 			mode,
+		))
+	}
+}
+
+fn convert_mcp_provider(provider: i32) -> Option<McpIDP> {
+	match provider {
+		x if x == proto::agent::backend_policy_spec::mcp_authentication::McpIdp::Unspecified as i32 => {
+			None
+		},
+		x if x == proto::agent::backend_policy_spec::mcp_authentication::McpIdp::Auth0 as i32 => {
+			Some(McpIDP::Auth0 {})
+		},
+		x if x == proto::agent::backend_policy_spec::mcp_authentication::McpIdp::Keycloak as i32 => {
+			Some(McpIDP::Keycloak {})
+		},
+		_ => None,
+	}
+}
+
+fn convert_mcp_resource_metadata<'a, I, V>(entries: Option<I>) -> ResourceMetadata
+where
+	I: IntoIterator<Item = (&'a String, &'a V)>,
+	V: serde::Serialize + 'a,
+{
+	let extra = entries
+		.map(|entries| {
+			entries
+				.into_iter()
+				.map(|(key, value)| {
+					let value = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
+					(key.clone(), value)
+				})
+				.collect()
 		})
+		.unwrap_or_default();
+	ResourceMetadata { extra }
+}
+
+fn build_mcp_authentication(
+	issuer: String,
+	audiences: Vec<String>,
+	provider: i32,
+	resource_metadata: ResourceMetadata,
+	jwt_validator: Arc<http::jwt::Jwt>,
+	mode: McpAuthenticationMode,
+) -> McpAuthentication {
+	McpAuthentication {
+		issuer,
+		audiences,
+		provider: convert_mcp_provider(provider),
+		resource_metadata,
+		jwt_validator,
+		mode,
 	}
 }
 
@@ -637,10 +665,22 @@ impl Listener {
 	}
 }
 
+/// Convert a proto NamespacedHostname to the Rust type.
+fn service_key_from_proto(
+	sk: Option<&proto::workload::NamespacedHostname>,
+) -> Option<NamespacedHostname> {
+	sk.filter(|sk| !sk.namespace.is_empty() || !sk.hostname.is_empty())
+		.map(|sk| NamespacedHostname {
+			namespace: Strng::from(&sk.namespace),
+			hostname: Strng::from(&sk.hostname),
+		})
+}
+
 impl TCPRoute {
 	pub fn try_from_xds(s: &proto::agent::TcpRoute) -> Result<(Self, ListenerKey), ProtoError> {
 		let r = TCPRoute {
 			key: strng::new(&s.key),
+			service_key: service_key_from_proto(s.service_key.as_ref()),
 			name: s
 				.name
 				.as_ref()
@@ -672,6 +712,7 @@ impl Route {
 			.into();
 		let r = Route {
 			key: strng::new(&s.key),
+			service_key: service_key_from_proto(s.service_key.as_ref()),
 			name,
 			hostnames: s.hostnames.iter().map(strng::new).collect(),
 			matches: s
@@ -765,7 +806,7 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 							Some(proto::agent::ai_backend::provider::Provider::Vertex(vertex)) => {
 								AIProvider::Vertex(llm::vertex::Provider {
 									model: vertex.model.as_deref().map(strng::new),
-									region: Some(strng::new(&vertex.region)),
+									region: (!vertex.region.is_empty()).then(|| strng::new(&vertex.region)),
 									project_id: strng::new(&vertex.project_id),
 								})
 							},
@@ -807,7 +848,6 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 							name: provider_name.clone(),
 							provider,
 							tokenize: false,
-							path_override: provider_config.path_override.as_ref().map(strng::new),
 							host_override: provider_config
 								.r#host_override
 								.as_ref()
@@ -816,6 +856,8 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 										.map_err(|e| ProtoError::Generic(e.to_string()))
 								})
 								.transpose()?,
+							path_override: provider_config.path_override.as_ref().map(strng::new),
+							path_prefix: provider_config.path_prefix.as_ref().map(strng::new),
 							inline_policies: pols,
 						};
 						local_provider_group.push((provider_name, np));
@@ -978,8 +1020,14 @@ impl TryFrom<&proto::agent::traffic_policy_spec::Rbac> for Authorization {
 			deny_exprs.push(Arc::new(expr));
 		}
 
+		let mut require_exprs = Vec::new();
+		for require_rule in &rbac.require {
+			let expr = cel::Expression::new_permissive(require_rule);
+			require_exprs.push(Arc::new(expr));
+		}
+
 		// Create PolicySet using the same pattern as in de_policies function
-		let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs);
+		let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
 		Ok(Authorization(authorization::RuleSet::new(policy_set)))
 	}
 }
@@ -1420,7 +1468,35 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					})
 					.collect::<Result<Vec<_>, _>>()?;
 				let jwt_auth = http::jwt::Jwt::from_providers(providers, mode);
-				TrafficPolicy::JwtAuth(jwt_auth)
+				let mcp = match &jwt.mcp {
+					Some(mcp) => {
+						if jwt.providers.len() != 1 {
+							return Err(ProtoError::Generic(format!(
+								"JWT MCP extension requires exactly one provider, found {}",
+								jwt.providers.len()
+							)));
+						}
+						let provider = &jwt.providers[0];
+						Some(build_mcp_authentication(
+							provider.issuer.clone(),
+							provider.audiences.clone(),
+							mcp.provider,
+							convert_mcp_resource_metadata(
+								mcp.resource_metadata.as_ref().map(|rm| rm.extra.iter()),
+							),
+							Arc::new(jwt_auth.clone()),
+							match tps::jwt::Mode::try_from(jwt.mode)
+								.map_err(|_| ProtoError::EnumParse("invalid JWT mode".to_string()))?
+							{
+								tps::jwt::Mode::Optional => McpAuthenticationMode::Optional,
+								tps::jwt::Mode::Strict => McpAuthenticationMode::Strict,
+								tps::jwt::Mode::Permissive => McpAuthenticationMode::Permissive,
+							},
+						))
+					},
+					None => None,
+				};
+				TrafficPolicy::JwtAuth(JwtAuthentication { jwt: jwt_auth, mcp })
 			},
 			Some(tps::Kind::Transformation(tp)) => {
 				TrafficPolicy::Transformation(Transformation::try_from(tp)?)
@@ -1763,6 +1839,30 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 					.transpose()?
 					.unwrap_or_default(),
 			}),
+			Some(fps::Kind::NetworkAuthorization(rbac)) => {
+				let mut allow_exprs = Vec::new();
+				for allow_rule in &rbac.allow {
+					let expr = cel::Expression::new_permissive(allow_rule);
+					allow_exprs.push(Arc::new(expr));
+				}
+
+				let mut deny_exprs = Vec::new();
+				for deny_rule in &rbac.deny {
+					let expr = cel::Expression::new_permissive(deny_rule);
+					deny_exprs.push(Arc::new(expr));
+				}
+
+				let mut require_exprs = Vec::new();
+				for require_rule in &rbac.require {
+					let expr = cel::Expression::new_permissive(require_rule);
+					require_exprs.push(Arc::new(expr));
+				}
+
+				let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
+				FrontendPolicy::NetworkAuthorization(frontend::NetworkAuthorization(
+					authorization::RuleSet::new(policy_set),
+				))
+			},
 			Some(fps::Kind::Logging(p)) => {
 				let (add, rm) = p
 					.fields
@@ -2412,6 +2512,92 @@ mod tests {
 		let path = config.get_path();
 		assert!(path.starts_with("/runtimes/"));
 		assert!(path.contains("qualifier=v1"));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_vertex_provider_empty_region_is_none() -> Result<(), ProtoError> {
+		use proto::agent::ai_backend::Vertex;
+		use proto::agent::ai_backend::provider::Provider;
+
+		let proto_backend = proto::agent::Backend {
+			key: "test-ns/vertex-backend".to_string(),
+			name: Some(proto::agent::ResourceName {
+				name: "vertex-backend".to_string(),
+				namespace: "test-ns".to_string(),
+			}),
+			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
+				provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
+					providers: vec![proto::agent::ai_backend::Provider {
+						name: "vertex".to_string(),
+						host_override: None,
+						path_override: None,
+						path_prefix: None,
+						provider: Some(Provider::Vertex(Vertex {
+							model: None,
+							region: "".to_string(),
+							project_id: "my-project".to_string(),
+						})),
+						inline_policies: vec![],
+					}],
+				}],
+			})),
+			inline_policies: vec![],
+		};
+
+		let bw = BackendWithPolicies::try_from(&proto_backend)?;
+		let Backend::AI(_, ai_backend) = &bw.backend else {
+			panic!("Expected Backend::AI, got {:?}", bw.backend);
+		};
+		let providers = ai_backend.providers.iter();
+		let (provider, _) = providers.iter().next().unwrap();
+		let AIProvider::Vertex(vertex) = &provider.provider else {
+			panic!("Expected AIProvider::Vertex");
+		};
+		assert!(vertex.region.is_none(), "empty region should map to None");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_vertex_provider_with_region() -> Result<(), ProtoError> {
+		use proto::agent::ai_backend::Vertex;
+		use proto::agent::ai_backend::provider::Provider;
+
+		let proto_backend = proto::agent::Backend {
+			key: "test-ns/vertex-backend".to_string(),
+			name: Some(proto::agent::ResourceName {
+				name: "vertex-backend".to_string(),
+				namespace: "test-ns".to_string(),
+			}),
+			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
+				provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
+					providers: vec![proto::agent::ai_backend::Provider {
+						name: "vertex".to_string(),
+						host_override: None,
+						path_override: None,
+						path_prefix: None,
+						provider: Some(Provider::Vertex(Vertex {
+							model: None,
+							region: "us-central1".to_string(),
+							project_id: "my-project".to_string(),
+						})),
+						inline_policies: vec![],
+					}],
+				}],
+			})),
+			inline_policies: vec![],
+		};
+
+		let bw = BackendWithPolicies::try_from(&proto_backend)?;
+		let Backend::AI(_, ai_backend) = &bw.backend else {
+			panic!("Expected Backend::AI, got {:?}", bw.backend);
+		};
+		let providers = ai_backend.providers.iter();
+		let (provider, _) = providers.iter().next().unwrap();
+		let AIProvider::Vertex(vertex) = &provider.provider else {
+			panic!("Expected AIProvider::Vertex");
+		};
+		assert_eq!(vertex.region.as_deref(), Some("us-central1"));
 		Ok(())
 	}
 }

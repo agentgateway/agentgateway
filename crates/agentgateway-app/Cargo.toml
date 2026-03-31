@@ -21,7 +21,6 @@ agentgateway.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 fs-err = { workspace = true, features = ["tokio"] }
-lazy_static.workspace = true
 libc.workspace = true
 tokio.workspace = true
 tracing.workspace = true

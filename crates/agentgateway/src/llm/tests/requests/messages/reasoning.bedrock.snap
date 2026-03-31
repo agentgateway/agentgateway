@@ -8,9 +8,15 @@ info:
     type: adaptive
   output_config:
     effort: high
+  output_format: markdown
   messages:
     - role: user
-      content: Give one concise insight about distributed consensus.
+      content:
+        - type: text
+          text: Give one concise insight about distributed consensus.
+          cache_control:
+            type: ephemeral
+            scope: turn
 ---
 {
   "modelId": "claude-opus-4-6",
@@ -20,6 +26,11 @@ info:
       "content": [
         {
           "text": "Give one concise insight about distributed consensus."
+        },
+        {
+          "cachePoint": {
+            "type": "default"
+          }
         }
       ]
     }

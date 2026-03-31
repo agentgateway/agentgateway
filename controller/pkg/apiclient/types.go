@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 
 	agwv1alpha1 "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 // RegisterTypes registers all the types used by our API Client

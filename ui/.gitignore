@@ -12,6 +12,7 @@ out
 dist
 dist-ssr
 *.local
+tsconfig.test.tsbuildinfo
 
 # Editor directories and files
 .vscode/*

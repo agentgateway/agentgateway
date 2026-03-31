@@ -22,9 +22,8 @@ use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
 	ClientNotification, ClientRequest, Implementation, JsonRpcNotification, JsonRpcRequest,
-	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, Prompt,
-	PromptsCapability, ProtocolVersion, RequestId, ResourcesCapability, ServerCapabilities,
-	ServerInfo, ServerJsonRpcMessage, ServerResult, Tool, ToolsCapability,
+	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
+	ProtocolVersion, RequestId, ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerResult,
 };
 use tracing::warn;
 
@@ -176,13 +175,13 @@ impl Relay {
 							)
 						})
 						// Rename to handle multiplexing
-						.map(|t| Tool {
-							name: Cow::Owned(resource_name(
+						.map(|mut t| {
+							t.name = Cow::Owned(resource_name(
 								default_target_name.as_ref(),
 								server_name.as_str(),
 								&t.name,
-							)),
-							..t
+							));
+							t
 						})
 						.collect_vec()
 				})
@@ -211,20 +210,28 @@ impl Relay {
 				}
 				// If we got here in FailOpen mode, it means the only target failed.
 				// Return a default info response to keep the client session alive.
-				return Ok(Self::get_info(pv, multiplexing).into());
+				return Ok(Self::get_info(pv, multiplexing, Vec::new()).into());
 			}
 
-			// Multiplexing is more complex. We need to find the lowest protocol version that all servers support.
-			let lowest_version = s
-				.into_iter()
-				.flat_map(|(_, v)| match v {
-					ServerResult::InitializeResult(r) => Some(r.protocol_version),
-					_ => None,
-				})
-				.min_by_key(|i| i.to_string())
-				.unwrap_or(pv);
-			// For now, we just send our own info. In the future, we should merge the results from each upstream.
-			Ok(Self::get_info(lowest_version, multiplexing).into())
+			// Multiplexing is more complex. We need to find the lowest protocol version
+			// that all servers support and merge instructions from all upstreams.
+			let mut lowest_version = pv;
+			let mut upstream_instructions: Vec<(String, String)> = Vec::new();
+
+			for (server_name, v) in s {
+				if let ServerResult::InitializeResult(r) = v {
+					if r.protocol_version.to_string() < lowest_version.to_string() {
+						lowest_version = r.protocol_version;
+					}
+					if let Some(instructions) = r.instructions
+						&& !instructions.is_empty()
+					{
+						upstream_instructions.push((server_name.to_string(), instructions));
+					}
+				}
+			}
+
+			Ok(Self::get_info(lowest_version, multiplexing, upstream_instructions).into())
 		})
 	}
 
@@ -250,9 +257,9 @@ impl Relay {
 								&cel,
 							)
 						})
-						.map(|p| Prompt {
-							name: resource_name(default_target_name.as_ref(), server_name.as_str(), &p.name),
-							..p
+						.map(|mut p| {
+							p.name = resource_name(default_target_name.as_ref(), server_name.as_str(), &p.name);
+							p
 						})
 						.collect_vec()
 				})
@@ -347,6 +354,7 @@ impl Relay {
 		r: JsonRpcRequest<ClientRequest>,
 		ctx: IncomingRequestContext,
 		service_name: &str,
+		mcp_log: Option<AsyncLog<MCPInfo>>,
 	) -> Result<Response, UpstreamError> {
 		let id = r.id.clone();
 		let Ok(us) = self.upstreams.get(service_name) else {
@@ -356,7 +364,7 @@ impl Relay {
 		};
 		let stream = us.generic_stream(r, &ctx).await?;
 
-		messages_to_response(id, stream)
+		messages_to_response(id, stream, mcp_log)
 	}
 	// For some requests, we don't have a sane mapping of incoming requests to a specific
 	// downstream service when multiplexing. Only forward when we have only one backend.
@@ -364,11 +372,12 @@ impl Relay {
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
 		ctx: IncomingRequestContext,
+		mcp_log: Option<AsyncLog<MCPInfo>>,
 	) -> Result<Response, UpstreamError> {
 		let Some(service_name) = &self.upstreams.default_target_name else {
 			return Err(UpstreamError::InvalidMethod(r.request.method().to_string()));
 		};
-		self.send_single(r, ctx, service_name).await
+		self.send_single(r, ctx, service_name, mcp_log).await
 	}
 	pub async fn send_fanout_deletion(
 		&self,
@@ -413,11 +422,11 @@ impl Relay {
 			// FailClosed: unreachable — InitializeRequest would have failed with NoBackends.
 			// FailOpen: keep the SSE connection open so legacy SSE clients do not immediately
 			// reconnect in a tight loop after all upstream GET streams disappear.
-			return messages_to_response(RequestId::Number(0), Messages::pending());
+			return messages_to_response(RequestId::Number(0), Messages::pending(), None);
 		}
 
 		let ms = mergestream::MergeStream::new_without_merge(streams, self.upstreams.failure_mode);
-		messages_to_response(RequestId::Number(0), ms)
+		messages_to_response(RequestId::Number(0), ms, None)
 	}
 	pub async fn send_fanout(
 		&self,
@@ -452,7 +461,7 @@ impl Relay {
 		}
 
 		let ms = mergestream::MergeStream::new(streams, id.clone(), merge, self.upstreams.failure_mode);
-		messages_to_response(id, ms)
+		messages_to_response(id, ms, None)
 	}
 	pub async fn send_notification(
 		&self,
@@ -477,44 +486,38 @@ impl Relay {
 
 		Ok(accepted_response())
 	}
-	fn get_info(pv: ProtocolVersion, multiplexing: bool) -> ServerInfo {
+	fn get_info(
+		pv: ProtocolVersion,
+		multiplexing: bool,
+		upstream_instructions: Vec<(String, String)>,
+	) -> ServerInfo {
 		let capabilities = if multiplexing {
-			ServerCapabilities {
-				completions: None,
-				experimental: None,
-				logging: None,
-				tasks: None,
-				extensions: None,
-				tools: Some(ToolsCapability::default()),
-				// These are not supported when multiplexing.
-				prompts: None,
-				resources: None,
-			}
+			// These are not supported when multiplexing.
+			ServerCapabilities::builder().enable_tools().build()
 		} else {
-			ServerCapabilities {
-				completions: None,
-				experimental: None,
-				logging: None,
-				tasks: None,
-				extensions: None,
-				tools: Some(ToolsCapability::default()),
-				prompts: Some(PromptsCapability::default()),
-				resources: Some(ResourcesCapability::default()),
-			}
+			ServerCapabilities::builder()
+				.enable_tools()
+				.enable_prompts()
+				.enable_resources()
+				.build()
 		};
-		let instructions = Some(
-            "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.".to_string(),
-        );
-		ServerInfo {
-			protocol_version: pv,
-			capabilities,
-			server_info: Implementation {
-				name: "agentgateway".to_string(),
-				version: BuildInfo::new().version.to_string(),
-				..Default::default()
-			},
-			instructions,
-		}
+		let gateway_preamble = "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.";
+		let instructions = if upstream_instructions.is_empty() {
+			Some(gateway_preamble.to_string())
+		} else {
+			let mut merged = String::from(gateway_preamble);
+			for (server_name, instruction) in &upstream_instructions {
+				merged.push_str(&format!("\n\n[{server_name}]\n{instruction}"));
+			}
+			Some(merged)
+		};
+		ServerInfo::new(capabilities)
+			.with_protocol_version(pv)
+			.with_server_info(Implementation::new(
+				"agentgateway",
+				BuildInfo::new().version.to_string(),
+			))
+			.with_instructions(instructions.unwrap_or_default())
 	}
 }
 
@@ -541,12 +544,19 @@ pub fn setup_request_log(
 fn messages_to_response(
 	id: RequestId,
 	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
+	mcp_log: Option<AsyncLog<MCPInfo>>,
 ) -> Result<Response, UpstreamError> {
 	use futures_util::StreamExt;
-	use rmcp::model::ServerJsonRpcMessage;
+	let request_id = id.clone();
+	let mut captured_terminal = false;
 	let stream = stream.map(move |rpc| {
 		let r = match rpc {
-			Ok(rpc) => rpc,
+			Ok(rpc) => {
+				if !captured_terminal && let Some(log) = mcp_log.as_ref() {
+					captured_terminal = capture_terminal_mcp_payload(log, &request_id, &rpc);
+				}
+				rpc
+			},
 			Err(e) => {
 				ServerJsonRpcMessage::error(ErrorData::internal_error(e.to_string(), None), id.clone())
 			},
@@ -560,9 +570,131 @@ fn messages_to_response(
 	Ok(mcp::session::sse_stream_response(stream, None))
 }
 
+fn capture_terminal_mcp_payload(
+	log: &AsyncLog<MCPInfo>,
+	request_id: &RequestId,
+	message: &ServerJsonRpcMessage,
+) -> bool {
+	match message {
+		ServerJsonRpcMessage::Response(response) if response.id == *request_id => {
+			if let ServerResult::CallToolResult(result) = &response.result {
+				log.non_atomic_mutate(|mcp| mcp.capture_call_result(result));
+			}
+			true
+		},
+		ServerJsonRpcMessage::Error(error) if error.id == *request_id => {
+			log.non_atomic_mutate(|mcp| mcp.capture_call_error(&error.error));
+			true
+		},
+		_ => false,
+	}
+}
+
 fn accepted_response() -> Response {
 	::http::Response::builder()
 		.status(StatusCode::ACCEPTED)
 		.body(crate::http::Body::empty())
 		.expect("valid response")
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use futures_util::stream;
+	use rmcp::model::{CallToolResult, ListToolsResult};
+	use serde_json::json;
+
+	#[tokio::test]
+	async fn messages_to_response_captures_first_matching_tool_result() {
+		let log = AsyncLog::default();
+		let mut info = MCPInfo::default();
+		info.set_tool("mcp".to_string(), "echo".to_string());
+		log.store(Some(info));
+
+		let stream = stream::iter(vec![
+			Ok(ServerJsonRpcMessage::response(
+				ServerResult::ListToolsResult(ListToolsResult {
+					tools: vec![],
+					next_cursor: None,
+					meta: None,
+				}),
+				RequestId::Number(1),
+			)),
+			Ok(ServerJsonRpcMessage::response(
+				ServerResult::CallToolResult(CallToolResult::structured(json!({
+					"status": "ok",
+				}))),
+				RequestId::Number(42),
+			)),
+			Ok(ServerJsonRpcMessage::error(
+				ErrorData::internal_error("later error", None),
+				RequestId::Number(42),
+			)),
+		]);
+
+		let response = messages_to_response(RequestId::Number(42), stream, Some(log.clone())).unwrap();
+		let _ = crate::http::read_resp_body(response).await.unwrap();
+
+		let info = log.take().unwrap();
+		assert_eq!(
+			info.tool.as_ref().unwrap().result.as_ref().unwrap()["structuredContent"]["status"],
+			"ok"
+		);
+		assert!(info.tool.as_ref().unwrap().error.is_none());
+	}
+
+	#[tokio::test]
+	async fn messages_to_response_ignores_transport_errors_before_result() {
+		let log = AsyncLog::default();
+		let mut info = MCPInfo::default();
+		info.set_tool("mcp".to_string(), "echo".to_string());
+		log.store(Some(info));
+
+		let stream = stream::iter(vec![
+			Err(ClientError::new(anyhow::anyhow!("boom"))),
+			Ok(ServerJsonRpcMessage::response(
+				ServerResult::CallToolResult(CallToolResult::structured(json!({
+					"status": "ok",
+				}))),
+				RequestId::Number(7),
+			)),
+		]);
+		let response = messages_to_response(RequestId::Number(7), stream, Some(log.clone())).unwrap();
+		let _ = crate::http::read_resp_body(response).await.unwrap();
+
+		let info = log.take().unwrap();
+		assert_eq!(
+			info.tool.as_ref().unwrap().result.as_ref().unwrap()["structuredContent"]["status"],
+			"ok"
+		);
+		assert!(info.tool.as_ref().unwrap().error.is_none());
+	}
+
+	#[tokio::test]
+	async fn messages_to_response_captures_json_rpc_error() {
+		let log = AsyncLog::default();
+		let mut info = MCPInfo::default();
+		info.set_tool("mcp".to_string(), "echo".to_string());
+		log.store(Some(info));
+
+		let stream = stream::iter(vec![Ok(ServerJsonRpcMessage::error(
+			ErrorData::internal_error("boom", None),
+			RequestId::Number(7),
+		))]);
+		let response = messages_to_response(RequestId::Number(7), stream, Some(log.clone())).unwrap();
+		let _ = crate::http::read_resp_body(response).await.unwrap();
+
+		let info = log.take().unwrap();
+		assert!(info.tool.as_ref().unwrap().result.is_none());
+		assert_eq!(
+			info.tool.as_ref().unwrap().error.as_ref().unwrap()["code"],
+			-32603
+		);
+		assert!(
+			info.tool.as_ref().unwrap().error.as_ref().unwrap()["message"]
+				.as_str()
+				.unwrap()
+				.contains("boom")
+		);
+	}
 }

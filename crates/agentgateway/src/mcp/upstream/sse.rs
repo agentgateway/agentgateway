@@ -10,6 +10,7 @@ use rmcp::model::{
 use rmcp::transport::common::http_header::EVENT_STREAM_MIME_TYPE;
 use sse_stream::{Sse, SseStream};
 
+use crate::client::ResolvedDestination;
 use crate::mcp::ClientError;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::streamablehttp::StreamableHttpPostResponse;
@@ -152,6 +153,24 @@ impl Client {
 			active_stream: Default::default(),
 		}
 	}
+
+	pub fn get_session_state(&self) -> http::sessionpersistence::MCPSession {
+		http::sessionpersistence::MCPSession {
+			target_name: Some(self.client.http_client.target_name().to_string()),
+			session: None,
+			backend: self.client.http_client.pinned_backend(),
+		}
+	}
+
+	pub fn set_session_id(&self, _: Option<&str>, pinned: Option<SocketAddr>) {
+		if let Some(pinned) = pinned {
+			self
+				.client
+				.http_client
+				.pin_backend(ResolvedDestination(pinned));
+		}
+	}
+
 	pub async fn stop(&self) -> Result<(), UpstreamError> {
 		let mut stream = self.active_stream.lock().await;
 		if let Some(s) = stream.as_ref() {

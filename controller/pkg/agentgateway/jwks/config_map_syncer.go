@@ -41,6 +41,7 @@ func NewConfigMapSyncer(client apiclient.Client, storePrefix, deploymentNamespac
 	cmCollection := krt.NewFilteredInformer[*corev1.ConfigMap](client,
 		kclient.Filter{
 			ObjectFilter:  client.ObjectFilter(),
+			Namespace:     deploymentNamespace,
 			LabelSelector: JwksStoreLabelSelector(storePrefix)},
 		krtOptions.ToOptions("config_map_syncer/ConfigMaps")...)
 

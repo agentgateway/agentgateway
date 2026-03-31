@@ -153,7 +153,7 @@ func generateCRDs(paths []string, outputDir string, maxDescLen int, crdVersion s
 
 	kubeKinds := crd.FindKubeKinds(parser, metav1Pkg)
 	if len(kubeKinds) == 0 {
-		return nil
+		return fmt.Errorf("found zero Kubernetes kinds for paths: %s", strings.Join(paths, ", "))
 	}
 
 	for _, groupKind := range kubeKinds {

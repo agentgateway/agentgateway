@@ -1,0 +1,79 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: tracing-invalid-attribute
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  frontend:
+    tracing:
+      backendRef:
+        name: otel-collector
+        port: 4318
+      attributes:
+        add:
+        - name: trace.id
+          expression: foolen_{{request.id}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: default
+spec:
+  ports:
+  - port: 4318
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      frontend:
+        tracing:
+          attributes:
+          - name: trace.id
+            value: foolen_{{request.id}}
+          protocol: GRPC
+          providerBackend:
+            port: 4318
+            service:
+              hostname: otel-collector.default.svc.cluster.local
+              namespace: default
+      key: frontend/default/tracing-invalid-attribute:frontend-tracing:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: tracing-invalid-attribute
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: tracing-invalid-attribute
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: 'frontend tracing attribute "trace.id" is not a valid CEL expression:
+          foolen_{{request.id}}'
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

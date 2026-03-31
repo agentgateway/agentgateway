@@ -64,9 +64,9 @@ const (
 )
 
 type AgentgatewayParametersLogging struct {
-	// Logging level in standard RUST_LOG syntax, e.g. 'info', the default, or
-	// by module, comma-separated. E.g.,
-	// "rmcp=warn,hickory_server::server::server_future=off,typespec_client_core::http::policies::logging=warn"
+	// Logging level in standard `RUST_LOG` syntax, for example `info` (the
+	// default), or a comma-separated per-module setting such as
+	// `rmcp=warn,hickory_server::server::server_future=off,typespec_client_core::http::policies::logging=warn`.
 	// +optional
 	Level string `json:"level,omitempty"`
 	// +optional
@@ -74,16 +74,16 @@ type AgentgatewayParametersLogging struct {
 }
 
 type AgentgatewayParametersConfigs struct {
-	// logging configuration for Agentgateway. By default, all logs are set to "info" level.
+	// `logging` configuration for Agentgateway. By default, all logs are set to
+	// `info` level.
 	// +optional
 	Logging *AgentgatewayParametersLogging `json:"logging,omitempty"`
 
-	// rawConfig provides an opaque mechanism to configure the agentgateway
-	// config file (the agentgateway binary has a '-f' option to specify a
-	// config file, and this is that file).  This will be merged with
-	// configuration derived from typed fields like
-	// AgentgatewayParametersLogging.Format, and those typed fields will take
-	// precedence.
+	// `rawConfig` provides an opaque mechanism to configure the `agentgateway`
+	// config file. The `agentgateway` binary has a `-f` option to specify a
+	// config file, and this field supplies that file. This will be merged with
+	// configuration derived from typed fields like `logging.format`, and those
+	// typed fields will take precedence.
 	//
 	// Example:
 	//
@@ -95,11 +95,11 @@ type AgentgatewayParametersConfigs struct {
 	//	      - policies:
 	//	          cors:
 	//	            allowOrigins:
-	//	              - "*"
+	//	            - "*"
 	//	            allowHeaders:
-	//	              - mcp-protocol-version
-	//	              - content-type
-	//	              - cache-control
+	//	            - mcp-protocol-version
+	//	            - content-type
+	//	            - cache-control
 	//	        backends:
 	//	        - mcp:
 	//	            targets:
@@ -129,16 +129,16 @@ type AgentgatewayParametersConfigs struct {
 
 	// The container environment variables. These override any existing
 	// values. If you want to delete an environment variable entirely, use
-	// `$patch: delete` with AgentgatewayParametersOverlays instead. Note that
+	// `$patch: delete` with `AgentgatewayParametersOverlays` instead. Note that
 	// [variable
 	// expansion](https://kubernetes.io/docs/tasks/inject-data-application/define-interdependent-environment-variables/)
 	// does apply, but is highly discouraged -- to set dependent environment
-	// variables, you can use $(VAR_NAME), but it's highly
-	// discouraged. `$$(VAR_NAME)` avoids expansion and results in a literal
+	// variables, you can use `$(VAR_NAME)`, but it's highly discouraged.
+	// `$$(VAR_NAME)` avoids expansion and results in a literal
 	// `$(VAR_NAME)`.
 	//
 	// If `SESSION_KEY` is specified, it takes precedence over the
-	// controller-managed per-Gateway session key Secret.
+	// controller-managed per-`Gateway` session key `Secret`.
 	//
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`
@@ -150,10 +150,11 @@ type AgentgatewayParametersConfigs struct {
 	// +optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 
-	// Shutdown delay configuration.  How graceful planned or unplanned data
+	// Shutdown delay configuration. How graceful planned or unplanned data
 	// plane changes happen is in tension with how quickly rollouts of the data
 	// plane complete. How long a data plane pod must wait for shutdown to be
-	// perfectly graceful depends on how you have configured your Gateways.
+	// perfectly graceful depends on how you have configured your `Gateway`
+	// resources.
 	//
 	// +optional
 	Shutdown *ShutdownSpec `json:"shutdown,omitempty"`
@@ -178,8 +179,8 @@ type IstioSpec struct {
 // +kubebuilder:validation:XValidation:rule="self.min <= self.max",message="The 'min' value must be less than or equal to the 'max' value."
 type ShutdownSpec struct {
 	// Minimum time (in seconds) to wait before allowing Agentgateway to
-	// terminate. Refer to the CONNECTION_MIN_TERMINATION_DEADLINE environment
-	// variable for details.
+	// terminate. Refer to the `CONNECTION_MIN_TERMINATION_DEADLINE`
+	// environment variable for details.
 	//
 	// +required
 	// +kubebuilder:validation:Minimum=0
@@ -187,8 +188,8 @@ type ShutdownSpec struct {
 	Min int64 `json:"min"`
 
 	// Maximum time (in seconds) to wait before allowing Agentgateway to
-	// terminate. Refer to the TERMINATION_GRACE_PERIOD_SECONDS environment
-	// variable for details.
+	// terminate. Refer to the `TERMINATION_GRACE_PERIOD_SECONDS`
+	// environment variable for details.
 	//
 	// +required
 	// +kubebuilder:validation:Minimum=0
@@ -197,29 +198,34 @@ type ShutdownSpec struct {
 }
 
 type AgentgatewayParametersOverlays struct {
-	// deployment allows specifying overrides for the generated Deployment resource.
+	// `deployment` allows specifying overrides for the generated
+	// `Deployment` resource.
 	// +optional
 	Deployment *shared.KubernetesResourceOverlay `json:"deployment,omitempty"`
 
-	// service allows specifying overrides for the generated Service resource.
+	// `service` allows specifying overrides for the generated `Service`
+	// resource.
 	// +optional
 	Service *shared.KubernetesResourceOverlay `json:"service,omitempty"`
 
-	// serviceAccount allows specifying overrides for the generated ServiceAccount resource.
+	// `serviceAccount` allows specifying overrides for the generated
+	// `ServiceAccount` resource.
 	// +optional
 	ServiceAccount *shared.KubernetesResourceOverlay `json:"serviceAccount,omitempty"`
 
-	// podDisruptionBudget allows creating a PodDisruptionBudget for the agentgateway proxy.
-	// If absent, no PDB is created. If present, a PDB is created with its selector
-	// automatically configured to target the agentgateway proxy Deployment.
-	// The metadata and spec fields from this overlay are applied to the generated PDB.
+	// `podDisruptionBudget` allows creating a `PodDisruptionBudget` for the
+	// agentgateway proxy. If absent, no PDB is created. If present, a PDB is
+	// created with its selector automatically configured to target the
+	// agentgateway proxy `Deployment`. The `metadata` and `spec` fields from
+	// this overlay are applied to the generated PDB.
 	// +optional
 	PodDisruptionBudget *shared.KubernetesResourceOverlay `json:"podDisruptionBudget,omitempty"`
 
-	// horizontalPodAutoscaler allows creating a HorizontalPodAutoscaler for the agentgateway proxy.
-	// If absent, no HPA is created. If present, an HPA is created with its scaleTargetRef
-	// automatically configured to target the agentgateway proxy Deployment.
-	// The metadata and spec fields from this overlay are applied to the generated HPA.
+	// `horizontalPodAutoscaler` allows creating a `HorizontalPodAutoscaler`
+	// for the agentgateway proxy. If absent, no HPA is created. If present, an
+	// HPA is created with its `scaleTargetRef` automatically configured to
+	// target the agentgateway proxy `Deployment`. The `metadata` and `spec`
+	// fields from this overlay are applied to the generated HPA.
 	// +optional
 	HorizontalPodAutoscaler *shared.KubernetesResourceOverlay `json:"horizontalPodAutoscaler,omitempty"`
 }

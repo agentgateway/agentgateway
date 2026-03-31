@@ -137,17 +137,19 @@ pub fn setup_llm_mock(
 	tokenize: bool,
 	config: &str,
 ) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+	let provider = llm_named_provider(&mock, provider, tokenize);
+	setup_llm_named_provider_mock(mock, provider, config)
+}
+
+pub fn setup_llm_named_provider_mock(
+	mock: MockServer,
+	provider: LocalNamedAIProvider,
+	config: &str,
+) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
 	let t = setup_proxy_test(config).unwrap();
-	let be = crate::types::local::LocalAIBackend::Provider(LocalNamedAIProvider {
-		name: "default".into(),
-		provider,
-		host_override: Some(Target::Address(*mock.address())),
-		path_override: None,
-		tokenize,
-		policies: None,
-	})
-	.translate()
-	.unwrap();
+	let be = crate::types::local::LocalAIBackend::Provider(provider)
+		.translate()
+		.unwrap();
 	let b = Backend::AI(
 		ResourceName::new(strng::format!("{}", mock.address()), "".into()),
 		be,
@@ -158,6 +160,22 @@ pub fn setup_llm_mock(
 	(mock, t, io)
 }
 
+pub fn llm_named_provider(
+	mock: &MockServer,
+	provider: AIProvider,
+	tokenize: bool,
+) -> LocalNamedAIProvider {
+	LocalNamedAIProvider {
+		name: "default".into(),
+		provider,
+		host_override: Some(Target::Address(*mock.address())),
+		path_override: None,
+		path_prefix: None,
+		tokenize,
+		policies: None,
+	}
+}
+
 pub fn basic_route(target: SocketAddr) -> Route {
 	basic_named_route(strng::format!("/{}", target.to_string()))
 }
@@ -165,6 +183,7 @@ pub fn basic_route(target: SocketAddr) -> Route {
 pub fn basic_named_route(target: Strng) -> Route {
 	Route {
 		key: "route".into(),
+		service_key: None,
 		name: RouteName {
 			name: "route".into(),
 			namespace: Default::default(),
@@ -190,6 +209,7 @@ pub fn basic_named_route(target: Strng) -> Route {
 pub fn basic_named_tcp_route(target: Strng) -> TCPRoute {
 	TCPRoute {
 		key: "route".into(),
+		service_key: None,
 		name: RouteName {
 			name: "route".into(),
 			namespace: Default::default(),
@@ -560,6 +580,26 @@ impl TestBind {
 			});
 		}
 	}
+	pub async fn attach_frontend_policy(&mut self, p: serde_json::Value) {
+		let cfg = serde_json::json!({
+			"frontendPolicies": p,
+		});
+		let normalized = local::NormalizedLocalConfig::from(
+			self.pi.cfg.as_ref(),
+			self.pi.upstream.clone(),
+			self.pi.cfg.gateway(),
+			&serde_json::to_string(&cfg).unwrap(),
+		)
+		.await
+		.unwrap();
+		for v in normalized.policies.into_iter() {
+			self.policies += 1;
+			self.with_policy(TargetedPolicy {
+				key: strng::format!("pol-{}", self.policies),
+				..v
+			});
+		}
+	}
 	pub async fn attached_backend_policy(&mut self, addr: &SocketAddr, p: serde_json::Value) {
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
 		let pols = local::split_policies(self.pi.upstream.clone(), pol)
@@ -695,7 +735,7 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 	agent_core::telemetry::testing::setup_test_logging();
 	let config = crate::config::parse_config(cfg.to_string(), None)?;
 	let encoder = config.session_encoder.clone();
-	let stores = Stores::with_ipv6_enabled(config.ipv6_enabled);
+	let stores = Stores::new(config.ipv6_enabled, config.threading_mode);
 	let client = client::Client::new(&config.dns, None, Default::default(), None);
 	let (drain_tx, drain_rx) = drain::new();
 	let pi = Arc::new(ProxyInputs {

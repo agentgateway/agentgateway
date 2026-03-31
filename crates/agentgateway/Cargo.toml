@@ -99,7 +99,7 @@ libc.workspace = true
 rcgen.workspace = true
 regex.workspace = true
 
-rmcp = { version = "0.16", features = [
+rmcp = { version = "1.3", features = [
     "client",
     "server",
     "base64",
@@ -130,7 +130,6 @@ tokio-rustls.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
 tokio_sse_codec.workspace = true
-tonic-prost.workspace = true
 tonic.workspace = true
 tower-http.workspace = true
 tower-serve-static.workspace = true
@@ -169,7 +168,7 @@ rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true
-rmcp = { version = "0.16", features = [
+rmcp = { version = "1.3", features = [
     "client",
     "server",
     "base64",

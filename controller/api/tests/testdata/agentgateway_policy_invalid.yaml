@@ -247,6 +247,39 @@ spec:
                 expression: 'request.headers["x-user"]'
             unit: Minutes
 ---
+_err: 'failureMode: Unsupported value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-extauth-invalid-failure-mode
+spec:
+  traffic:
+    extAuth:
+      backendRef:
+        name: auth-server
+        kind: Service
+      failureMode: IgnoreErrors
+      grpc: {}
+---
+_err: 'failureMode: Unsupported value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-ratelimit-global-invalid-failure-mode
+spec:
+  traffic:
+    rateLimit:
+      global:
+        backendRef:
+          name: ratelimit-service
+          kind: Service
+        failureMode: IgnoreErrors
+        domain: example.com
+        descriptors:
+          - entries:
+              - name: user
+                expression: 'request.headers["x-user"]'
+---
 _err: 'phase: Unsupported value'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -260,6 +293,21 @@ spec:
         set:
           - name: X-Test
             value: '"test"'
+---
+_err: 'jwtAuthentication.mcp requires mode Strict'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-jwt-mcp-nonstrict
+spec:
+  traffic:
+    jwtAuthentication:
+      mode: Optional
+      providers:
+        - issuer: https://example.com
+          jwks:
+            inline: '{"keys":[]}'
+      mcp: {}
 ---
 _err: 'pseudo-headers must be one of'
 apiVersion: agentgateway.dev/v1alpha1
@@ -385,6 +433,28 @@ spec:
       defaults:
         - field: a
           value: b
+---
+_err: 'traffic.jwtAuthentication may not be used with backend.mcp.authentication in the same policy'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-and-mcp-authentication
+spec:
+  traffic:
+    jwtAuthentication:
+      providers:
+        - issuer: https://example.com
+          jwks:
+            inline: '{"keys":[]}'
+  backend:
+    mcp:
+      authentication:
+        issuer: https://example.com
+        jwks:
+          backendRef:
+            kind: Service
+            name: jwks
+          jwksPath: /.well-known/jwks.json
 ---
 _err: "targetRefs may only"
 apiVersion: agentgateway.dev/v1alpha1

@@ -1,0 +1,109 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-mcp
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    jwtAuthentication:
+      mode: Strict
+      providers:
+      - issuer: https://auth.example.com/
+        audiences:
+        - my-api
+        jwks:
+          inline: |
+            {
+              "keys": [
+                {
+                  "kty": "RSA",
+                  "e": "AQAB",
+                  "use": "sig",
+                  "kid": "test-key",
+                  "alg": "RS256",
+                  "n": "test"
+                }
+              ]
+            }
+      mcp:
+        provider: Auth0
+        resourceMetadata:
+          oauthScopesSupported:
+          - read
+          - write
+          resourceDocumentation: https://docs.example.com/mcp
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/jwt-mcp:jwt:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: jwt-mcp
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        jwt:
+          mcp:
+            provider: AUTH0
+            resourceMetadata:
+              extra:
+                oauthScopesSupported:
+                - read
+                - write
+                resourceDocumentation: https://docs.example.com/mcp
+          mode: STRICT
+          providers:
+          - audiences:
+            - my-api
+            inline: |
+              {
+                "keys": [
+                  {
+                    "kty": "RSA",
+                    "e": "AQAB",
+                    "use": "sig",
+                    "kid": "test-key",
+                    "alg": "RS256",
+                    "n": "test"
+                  }
+                ]
+              }
+            issuer: https://auth.example.com/
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: jwt-mcp
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

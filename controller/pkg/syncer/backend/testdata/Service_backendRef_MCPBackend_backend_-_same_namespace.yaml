@@ -1,0 +1,12 @@
+- key: test-ns/service-ref-mcp-backend
+  mcp:
+    targets:
+    - backend:
+        port: 8080
+        service:
+          hostname: mcp-service.test-ns.svc.cluster.local
+          namespace: test-ns
+      name: service-ref-target
+  name:
+    name: service-ref-mcp-backend
+    namespace: test-ns

@@ -13,7 +13,7 @@ use agent_core::strng::{RichStrng, Strng};
 use agent_core::telemetry::{OptionExt, OtelLogSink, ValueBag, debug, display};
 use bytes::Buf;
 use crossbeam::atomic::AtomicCell;
-use frozen_collections::{FzHashSet, FzStringMap};
+use frozen_collections::FzHashSet;
 use http_body::{Body, Frame, SizeHint};
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -31,7 +31,7 @@ use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::Request;
 use crate::http::health;
 use crate::llm::InputFormat;
-use crate::mcp::{MCPOperation, ResourceId, ResourceType};
+use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::ProxyResponseReason;
 use crate::telemetry::metrics::{
 	GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics, RouteIdentifier,
@@ -127,7 +127,7 @@ pub struct MetricFields {
 
 #[derive(Clone, Debug)]
 pub struct OrderedStringMap<V> {
-	map: FzStringMap<Box<str>, V>,
+	map: std::collections::HashMap<Box<str>, V>,
 	order: Box<[Box<str>]>,
 }
 
@@ -204,7 +204,10 @@ where
 	fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
 		let items = iter.into_iter().collect_vec();
 		let order: Box<[Box<str>]> = items.iter().map(|(k, _)| k.as_ref().into()).collect();
-		let map: FzStringMap<Box<str>, V> = items.into_iter().collect();
+		let map: std::collections::HashMap<Box<str>, V> = items
+			.into_iter()
+			.map(|(k, v)| (k.as_ref().into(), v))
+			.collect();
 		Self { map, order }
 	}
 }
@@ -401,12 +404,7 @@ impl CelLogging {
 
 	pub fn build<'a>(
 		&'a self,
-		req: Option<&'a cel::RequestSnapshot>,
-		resp: Option<&'a cel::ResponseSnapshot>,
-		llm_response: Option<&'a LLMContext>,
-		mcp: Option<&'a ResourceType>,
-		end_time: Option<&'a cel::RequestTime>,
-		source_context: Option<&'a cel::SourceContext>,
+		inputs: CelLoggingBuildInputs<'a>,
 	) -> Result<CelLoggingExecutor<'a>, cel::Error> {
 		let CelLogging {
 			cel_context: _,
@@ -414,12 +412,18 @@ impl CelLogging {
 			fields,
 			metric_fields,
 		} = self;
-		let executor = if req.is_none() && source_context.is_some() {
+		let executor = if inputs.req.is_none() && inputs.source_context.is_some() {
 			// TCP case: use new_tcp_logger
-			cel::Executor::new_tcp_logger(source_context, end_time)
+			cel::Executor::new_tcp_logger(inputs.source_context, inputs.end_time)
 		} else {
 			// HTTP case: use new_logger
-			cel::Executor::new_logger(req, resp, llm_response, mcp, end_time)
+			cel::Executor::new_logger(
+				inputs.req,
+				inputs.resp,
+				inputs.llm_response,
+				inputs.mcp,
+				inputs.end_time,
+			)
 		};
 		Ok(CelLoggingExecutor {
 			executor,
@@ -428,6 +432,15 @@ impl CelLogging {
 			metric_fields,
 		})
 	}
+}
+
+pub struct CelLoggingBuildInputs<'a> {
+	pub req: Option<&'a cel::RequestSnapshot>,
+	pub resp: Option<&'a cel::ResponseSnapshot>,
+	pub llm_response: Option<&'a LLMContext>,
+	pub mcp: Option<&'a MCPInfo>,
+	pub end_time: Option<&'a cel::RequestTime>,
+	pub source_context: Option<&'a cel::SourceContext>,
 }
 
 #[derive(Debug)]
@@ -765,18 +778,7 @@ impl Drop for DropOnLog {
 		let llm_response = log.llm_response.take().map(Into::into);
 
 		let mcp = log.mcp_status.take();
-		let mcp_cel = mcp.as_ref().and_then(|m| {
-			let resource = ResourceId::new(
-				m.target_name.as_deref()?.to_string(),
-				m.resource_name.as_deref()?.to_string(),
-			);
-			match m.resource {
-				Some(MCPOperation::Prompt) => Some(ResourceType::Prompt(resource)),
-				Some(MCPOperation::Tool) => Some(ResourceType::Tool(resource)),
-				Some(MCPOperation::Resource) => Some(ResourceType::Resource(resource)),
-				_ => None,
-			}
-		});
+		let mcp_cel = mcp.as_ref().filter(|m| !m.is_empty());
 		let needs_cel_for_outputs = maybe_enable_log || enable_trace || enable_custom_metrics;
 		let needs_cel_for_eviction = log
 			.health_policy
@@ -787,14 +789,14 @@ impl Drop for DropOnLog {
 		let cel_exec = if needs_cel_for_outputs || needs_cel_for_eviction {
 			log
 				.cel
-				.build(
-					log.request_snapshot.as_ref(),
-					log.response_snapshot.as_ref(),
-					llm_response.as_ref(),
-					mcp_cel.as_ref(),
-					cel_end_time.as_ref(),
-					log.source_context.as_ref(),
-				)
+				.build(CelLoggingBuildInputs {
+					req: log.request_snapshot.as_ref(),
+					resp: log.response_snapshot.as_ref(),
+					llm_response: llm_response.as_ref(),
+					mcp: mcp_cel,
+					end_time: cel_end_time.as_ref(),
+					source_context: log.source_context.as_ref(),
+				})
 				.ok()
 		} else {
 			None
@@ -818,6 +820,13 @@ impl Drop for DropOnLog {
 			// Report our non-customized metrics
 			if !is_tcp {
 				log.metrics.requests.get_or_create(&http_labels).inc();
+				if let Some(retry_count) = log.retry_attempt {
+					log
+						.metrics
+						.retries
+						.get_or_create(&http_labels)
+						.inc_by(retry_count as u64);
+				}
 			}
 			return;
 		}
@@ -859,6 +868,14 @@ impl Drop for DropOnLog {
 			.get_or_create(&http_labels)
 			.observe(duration.as_secs_f64());
 
+		if let Some(retry_count) = log.retry_attempt {
+			log
+				.metrics
+				.retries
+				.get_or_create(&http_labels)
+				.inc_by(retry_count as u64);
+		}
+
 		Self::add_llm_metrics(
 			&log,
 			&route_identifier,
@@ -876,9 +893,9 @@ impl Drop for DropOnLog {
 				.mcp_requests
 				.get_or_create(&MCPCall {
 					method: mcp.method_name.as_ref().map(RichStrng::from).into(),
-					resource_type: mcp.resource.into(),
-					server: mcp.target_name.as_ref().map(RichStrng::from).into(),
-					resource: mcp.resource_name.as_ref().map(RichStrng::from).into(),
+					resource_type: mcp.resource_type().into(),
+					server: mcp.target_name().map(RichStrng::from).into(),
+					resource: mcp.resource_name().map(RichStrng::from).into(),
 
 					route: route_identifier.clone(),
 					custom: custom_metric_fields.clone(),
@@ -898,11 +915,22 @@ impl Drop for DropOnLog {
 
 		let trace_id = log.outgoing_span.as_ref().map(|id| id.trace_id());
 		let span_id = log.outgoing_span.as_ref().map(|id| id.span_id());
-
 		let fields = cel_exec.fields;
 		let reason = log.reason.and_then(|r| match r {
 			ProxyResponseReason::Upstream => None,
 			_ => Some(r),
+		});
+		let mcp_target = mcp
+			.as_ref()
+			.and_then(|m| m.target_name())
+			.map(str::to_owned);
+		let mcp_resource_type = mcp.as_ref().and_then(|m| m.resource_type());
+		let mcp_resource_uri = mcp.as_ref().and_then(|m| {
+			if matches!(m.resource_type(), Some(MCPOperation::Resource)) {
+				m.resource_name().map(str::to_owned)
+			} else {
+				None
+			}
 		});
 
 		let mut kv = vec![
@@ -948,37 +976,9 @@ impl Drop for DropOnLog {
 					.and_then(|m| m.method_name.as_ref())
 					.map(display),
 			),
-			(
-				"gen_ai.tool.name",
-				mcp.as_ref().and_then(|m| {
-					if matches!(m.resource, Some(MCPOperation::Tool)) {
-						m.resource_name.as_ref().map(display)
-					} else {
-						None
-					}
-				}),
-			),
-			(
-				"mcp.target",
-				mcp
-					.as_ref()
-					.and_then(|m| m.target_name.as_ref())
-					.map(display),
-			),
-			(
-				"mcp.resource.type",
-				mcp.as_ref().and_then(|m| m.resource.as_ref()).map(display),
-			),
-			(
-				"mcp.resource.uri",
-				mcp.as_ref().and_then(|m| {
-					if matches!(m.resource, Some(MCPOperation::Resource)) {
-						m.resource_name.as_ref().map(display)
-					} else {
-						None
-					}
-				}),
-			),
+			("mcp.target", mcp_target.as_ref().map(display)),
+			("mcp.resource.type", mcp_resource_type.as_ref().map(display)),
+			("mcp.resource.uri", mcp_resource_uri.as_ref().map(display)),
 			(
 				"mcp.session.id",
 				mcp

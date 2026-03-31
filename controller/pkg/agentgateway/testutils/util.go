@@ -29,11 +29,12 @@ import (
 	agwv1alpha1 "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/status"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
+	"github.com/agentgateway/agentgateway/controller/pkg/controller"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 func CompareGolden(t test.Failer, content []byte, goldenFile string) {
@@ -149,7 +150,7 @@ type testOutput[Status any, Output any] struct {
 	Output []Output `json:"output"`
 }
 
-func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (*TestStatusQueue, *agentgatewaysyncer.Syncer) {
+func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (*TestStatusQueue, *syncer.Syncer) {
 	fc := fake.NewClient(t)
 	stop := test.NewStop(t)
 	debugger := new(krt.DebugHandler)
@@ -160,7 +161,7 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 			t.Log(string(b))
 		}
 	})
-	syncer := agentgatewaysyncer.NewAgwSyncer(
+	syncer := syncer.NewAgwSyncer(
 		wellknown.DefaultAgwControllerName,
 		// Only used for NACK, so no need to do anything special here.
 		fc,
@@ -189,7 +190,7 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 // agwPluginFactory is a factory function that returns the agent gateway plugins
 // It is based on agwPluginFactory(cfg)(ctx, cfg.AgwCollections) in start.go
 func agwPluginFactory(agwCollections *plugins.AgwCollections) plugins.AgwPlugin {
-	agwPlugins := plugins.Plugins(agwCollections)
+	agwPlugins := controller.Plugins(agwCollections)
 	mergedPlugins := plugins.MergePlugins(agwPlugins...)
 	return mergedPlugins
 }

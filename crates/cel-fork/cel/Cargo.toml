@@ -21,7 +21,7 @@ serde_json = { version = "1.0"}
 base64 = { version = "0.22.1"}
 bytes = { version = "1"}
 
-thiserror = "1.0"
+thiserror = "2.0"
 paste = "1.0"
 hashbrown = "0.16.1"
 vector-map = { version = "1.0.2", features = ["serde_impl"] }

@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 
 use agent_core::strng;
 use itertools::Itertools;
+use openapiv3::OpenAPI;
 use rmcp::RoleClient;
 use rmcp::model::InitializeRequestParams;
 use rmcp::service::RunningService;
@@ -10,6 +11,7 @@ use secrecy::SecretString;
 
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::{PolicySet, RuleSet};
+use crate::http::sessionpersistence::MCPSession;
 use crate::mcp::FailureMode;
 use crate::mcp::McpAuthorization;
 use crate::mcp::handler::Relay;
@@ -18,7 +20,7 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::test_helpers::proxymock::{
 	BIND_KEY, TestBind, basic_named_route, basic_route, setup_proxy_test, simple_bind,
 };
-use crate::types::agent::BackendPolicy;
+use crate::types::agent::{BackendPolicy, FrontendPolicy, PolicyTarget, TargetedPolicy};
 use crate::*;
 
 #[tokio::test]
@@ -91,12 +93,14 @@ async fn stream_to_multiplex() {
 	);
 
 	let ctr = client
-		.call_tool(rmcp::model::CallToolRequestParams {
-			meta: None,
-			task: None,
-			name: "mcp_echo".into(),
-			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
-		})
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("mcp_echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await
 		.unwrap();
 	assert_eq!(
@@ -105,12 +109,14 @@ async fn stream_to_multiplex() {
 	);
 
 	let ctr = client
-		.call_tool(rmcp::model::CallToolRequestParams {
-			meta: None,
-			task: None,
-			name: "sse_echo".into(),
-			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
-		})
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("sse_echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await
 		.unwrap();
 	assert_eq!(
@@ -121,12 +127,14 @@ async fn stream_to_multiplex() {
 	// No target set...
 	assert!(
 		client
-			.call_tool(rmcp::model::CallToolRequestParams {
-				meta: None,
-				task: None,
-				name: "echo".into(),
-				arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
-			})
+			.call_tool(
+				rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+					serde_json::json!({"hi": "world"})
+						.as_object()
+						.cloned()
+						.unwrap(),
+				),
+			)
 			.await
 			.is_err()
 	);
@@ -162,12 +170,14 @@ async fn stream_to_stream_single_tls() {
 	.await;
 	let client = mcp_streamable_client(io).await;
 	let ctr = client
-		.call_tool(rmcp::model::CallToolRequestParams {
-			meta: None,
-			task: None,
-			name: "echo_http".into(),
-			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
-		})
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo_http").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await
 		.unwrap();
 	assert_eq!(
@@ -187,6 +197,7 @@ async fn authorization_denied_returns_unknown_tool_error() {
 	let deny_all_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
 		vec![],                                                       // no allow rules
 		vec![Arc::new(cel::Expression::new_strict("true").unwrap())], // deny all
+		vec![],
 	)));
 
 	let (_bind, io) = setup_proxy_policies(
@@ -201,12 +212,14 @@ async fn authorization_denied_returns_unknown_tool_error() {
 
 	// Attempt to call a tool - should fail with "Unknown tool" error
 	let result = client
-		.call_tool(rmcp::model::CallToolRequestParams {
-			meta: None,
-			task: None,
-			name: "echo".into(),
-			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
-		})
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await;
 
 	// The call should fail
@@ -218,22 +231,23 @@ async fn authorization_denied_returns_unknown_tool_error() {
 	let err = result.unwrap_err();
 
 	// Verify error code is INVALID_PARAMS (-32602) and message format
-	match &err {
-		rmcp::ServiceError::McpError(mcp_error) => {
-			assert_eq!(
-				mcp_error.code.0, -32602,
-				"Expected INVALID_PARAMS error code (-32602), got: {}",
-				mcp_error.code.0
-			);
-			assert_eq!(
-				mcp_error.message.as_ref(),
-				"Unknown tool: echo",
-				"Expected error message 'Unknown tool: echo', got: {}",
-				mcp_error.message
-			);
-		},
+	let mcp_error = match &err {
+		rmcp::ServiceError::McpError(mcp_error) => mcp_error,
+		// rmcp::ServiceError::TransportSend(d) => d.downcast::(),
 		other => panic!("Expected ServiceError::McpError, got: {:?}", other),
-	}
+	};
+
+	assert_eq!(
+		mcp_error.code.0, -32602,
+		"Expected INVALID_PARAMS error code (-32602), got: {}",
+		mcp_error.code.0
+	);
+	assert_eq!(
+		mcp_error.message.as_ref(),
+		"Unknown tool: echo",
+		"Expected error message 'Unknown tool: echo', got: {}",
+		mcp_error.message
+	);
 }
 
 /// Test that getting a prompt denied by MCP authorization policy returns proper JSON-RPC error
@@ -246,6 +260,7 @@ async fn authorization_denied_returns_unknown_prompt_error() {
 	let deny_all_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
 		vec![],                                                       // no allow rules
 		vec![Arc::new(cel::Expression::new_strict("true").unwrap())], // deny all
+		vec![],
 	)));
 
 	let (_bind, io) = setup_proxy_policies(
@@ -260,11 +275,7 @@ async fn authorization_denied_returns_unknown_prompt_error() {
 
 	// Attempt to get a prompt - should fail with "Unknown prompt" error
 	let result = client
-		.get_prompt(rmcp::model::GetPromptRequestParams {
-			meta: None,
-			name: "example_prompt".into(),
-			arguments: None,
-		})
+		.get_prompt(rmcp::model::GetPromptRequestParams::new("example_prompt"))
 		.await;
 
 	// The call should fail
@@ -304,6 +315,7 @@ async fn authorization_denied_returns_unknown_resource_error() {
 	let deny_all_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
 		vec![],                                                       // no allow rules
 		vec![Arc::new(cel::Expression::new_strict("true").unwrap())], // deny all
+		vec![],
 	)));
 
 	let (_bind, io) = setup_proxy_policies(
@@ -318,10 +330,9 @@ async fn authorization_denied_returns_unknown_resource_error() {
 
 	// Attempt to read a resource - should fail with "Unknown resource" error
 	let result = client
-		.read_resource(rmcp::model::ReadResourceRequestParams {
-			meta: None,
-			uri: "memo://insights".into(),
-		})
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(
+			"memo://insights",
+		))
 		.await;
 
 	// The call should fail
@@ -363,6 +374,7 @@ async fn authorization_deny_specific_tool_filters_only_that_tool() {
 		vec![Arc::new(
 			cel::Expression::new_strict(r#"mcp.tool.name == "echo""#).unwrap(),
 		)],
+		vec![],
 	)));
 
 	let (_bind, io) = setup_proxy_policies(
@@ -433,6 +445,7 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 			)
 			.unwrap(),
 		)],
+		vec![],
 	)));
 
 	let (_bind, io) = setup_proxy_policies(
@@ -453,19 +466,10 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 		let config = StreamableHttpClientTransportConfig::with_uri(format!("http://{addr}/mcp"))
 			.custom_headers(headers);
 		let transport = StreamableHttpClientTransport::from_config(config);
-		let client_info = ClientInfo {
-			meta: None,
-			protocol_version: Default::default(),
-			capabilities: ClientCapabilities::default(),
-			client_info: Implementation {
-				name: format!("test-{agent_name}"),
-				version: "0.0.1".to_string(),
-				title: None,
-				website_url: None,
-				icons: None,
-				description: None,
-			},
-		};
+		let client_info = ClientInfo::new(
+			ClientCapabilities::default(),
+			Implementation::new(format!("test-{agent_name}"), "0.0.1"),
+		);
 		client_info
 			.serve(transport)
 			.await
@@ -530,12 +534,14 @@ async fn standard_assertions(client: RunningService<RoleClient, InitializeReques
 		.collect_vec();
 	assert_eq!(t, vec!["decrement".to_string(), "echo".to_string()]);
 	let ctr = client
-		.call_tool(rmcp::model::CallToolRequestParams {
-			meta: None,
-			task: None,
-			name: "echo".into(),
-			arguments: serde_json::json!({"hi": "world"}).as_object().cloned(),
-		})
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await
 		.unwrap();
 	assert_eq!(
@@ -565,6 +571,228 @@ async fn standard_sse_assertions(client: LegacyService) {
 		&ctr.content[0].raw.as_text().unwrap().text,
 		r#"{"hi":"world"}"#
 	);
+}
+
+fn access_log_payload_policy() -> crate::types::frontend::LoggingPolicy {
+	let mut policy: crate::types::frontend::LoggingPolicy =
+		serde_json::from_value(serde_json::json!({
+			"add": {
+				"mcp_trace": "mcp.tool.arguments.traceId",
+				"mcp_method_cel": "mcp.methodName",
+				"mcp_session_cel": "mcp.sessionId",
+				"mcp_tool_name_cel": "mcp.tool.name",
+				"mcp_tool_target_cel": "mcp.tool.target",
+				"mcp_args_cel": "mcp.tool.arguments",
+				"mcp_result_cel": "mcp.tool.result",
+				"mcp_error_cel": "mcp.tool.error"
+			}
+		}))
+		.unwrap();
+	policy.init_access_log_policy();
+	policy
+}
+
+async fn setup_access_log_mcp_proxy(mock: &MockServer) -> (TestBind, SocketAddr) {
+	let (mut t, io) = setup_proxy(mock, true, false).await;
+	let listener_name = t
+		.pi
+		.stores
+		.read_binds()
+		.bind(&BIND_KEY)
+		.unwrap()
+		.listeners
+		.iter()
+		.next()
+		.unwrap()
+		.name
+		.clone();
+	t.with_policy(TargetedPolicy {
+		key: "frontend/accessLog".into(),
+		name: None,
+		target: PolicyTarget::Gateway(listener_name.clone().into()),
+		policy: FrontendPolicy::AccessLog(access_log_payload_policy()).into(),
+	});
+	assert!(
+		t.pi
+			.stores
+			.read_binds()
+			.listener_frontend_policies(&listener_name)
+			.access_log
+			.is_some()
+	);
+	(t, io)
+}
+
+#[tokio::test]
+async fn tool_call_exposes_payload_fields_to_access_log_cel() {
+	let mock = mock_streamable_http_server(true).await;
+	let trace_id = format!("mcp-e2e-{}", uuid::Uuid::new_v4());
+	let (_t, io) = setup_access_log_mcp_proxy(&mock).await;
+	let client = mcp_streamable_client(io).await;
+
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({
+					"traceId": trace_id,
+					"hi": "world",
+				})
+				.as_object()
+				.cloned()
+				.expect("tool arguments should serialize to an object"),
+			),
+		)
+		.await
+		.unwrap();
+	let direct_result_text = &result.content[0].raw.as_text().unwrap().text;
+	let direct_result_json: serde_json::Value =
+		serde_json::from_str(direct_result_text).expect("tool result should be valid JSON text");
+	assert_eq!(direct_result_json["traceId"], trace_id);
+	assert_eq!(direct_result_json["hi"], "world");
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("mcp_trace", &trace_id),
+	])
+	.await
+	.unwrap();
+
+	assert_eq!(
+		log.get("mcp_method_cel"),
+		Some(&serde_json::json!("tools/call"))
+	);
+	assert_eq!(
+		log.get("mcp_tool_name_cel"),
+		Some(&serde_json::json!("echo"))
+	);
+	assert_eq!(
+		log.get("mcp_tool_target_cel"),
+		Some(&serde_json::json!("mcp"))
+	);
+	assert_eq!(log["mcp_args_cel"]["traceId"], trace_id);
+	assert_eq!(log["mcp_args_cel"]["hi"], "world");
+	assert!(
+		log["mcp_session_cel"]
+			.as_str()
+			.is_some_and(|session_id| !session_id.is_empty())
+	);
+	assert_eq!(log["mcp_result_cel"]["isError"], false);
+
+	let result_text = log["mcp_result_cel"]["content"][0]["text"]
+		.as_str()
+		.expect("tool result text should be logged");
+	let result_json: serde_json::Value =
+		serde_json::from_str(result_text).expect("tool result should be valid JSON text");
+	assert_eq!(result_json["traceId"], trace_id);
+	assert_eq!(result_json["hi"], "world");
+	assert!(log.get("mcp_error_cel").is_none());
+
+	assert!(log.get("gen_ai.tool.name").is_none());
+	assert!(log.get("gen_ai.tool.call.arguments").is_none());
+	assert!(log.get("gen_ai.tool.call.result").is_none());
+}
+
+#[tokio::test]
+async fn tool_call_error_exposes_error_payload_to_access_log_cel() {
+	let mock = mock_streamable_http_server(true).await;
+	let trace_id = format!("mcp-e2e-error-{}", uuid::Uuid::new_v4());
+	let (_t, io) = setup_access_log_mcp_proxy(&mock).await;
+	let client = mcp_streamable_client(io).await;
+
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("does_not_exist").with_arguments(
+				serde_json::json!({
+					"traceId": trace_id,
+				})
+				.as_object()
+				.cloned()
+				.expect("tool arguments should serialize to an object"),
+			),
+		)
+		.await
+		.unwrap_err();
+	match &err {
+		rmcp::ServiceError::McpError(mcp_error) => assert_eq!(mcp_error.code.0, -32602),
+		other => panic!("Expected ServiceError::McpError, got: {other:?}"),
+	}
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("mcp_trace", &trace_id),
+	])
+	.await
+	.unwrap();
+
+	assert_eq!(
+		log.get("mcp_method_cel"),
+		Some(&serde_json::json!("tools/call"))
+	);
+	assert_eq!(
+		log.get("mcp_tool_name_cel"),
+		Some(&serde_json::json!("does_not_exist"))
+	);
+	assert_eq!(log["mcp_args_cel"]["traceId"], trace_id);
+	assert_eq!(log["mcp_error_cel"]["code"], -32602);
+	assert!(
+		log["mcp_error_cel"]["message"]
+			.as_str()
+			.is_some_and(|message| message.contains("tool"))
+	);
+	assert!(log.get("mcp_result_cel").is_none());
+	assert!(log.get("gen_ai.tool.name").is_none());
+	assert!(log.get("gen_ai.tool.call.arguments").is_none());
+	assert!(log.get("gen_ai.tool.call.result").is_none());
+}
+
+#[tokio::test]
+async fn legacy_sse_tool_call_exposes_arguments_without_terminal_payloads() {
+	let mock = mock_streamable_http_server(true).await;
+	let trace_id = format!("mcp-e2e-sse-{}", uuid::Uuid::new_v4());
+	let (_t, io) = setup_access_log_mcp_proxy(&mock).await;
+	let client = mcp_sse_client(io).await;
+
+	let result = client
+		.call_tool(legacy_rmcp::model::CallToolRequestParam {
+			name: "echo".into(),
+			arguments: serde_json::json!({
+				"traceId": trace_id,
+				"hi": "world",
+			})
+			.as_object()
+			.cloned(),
+		})
+		.await
+		.unwrap();
+	let direct_result_text = &result.content[0].raw.as_text().unwrap().text;
+	let direct_result_json: serde_json::Value =
+		serde_json::from_str(direct_result_text).expect("tool result should be valid JSON text");
+	assert_eq!(direct_result_json["traceId"], trace_id);
+	assert_eq!(direct_result_json["hi"], "world");
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("mcp_trace", &trace_id),
+	])
+	.await
+	.unwrap();
+
+	assert_eq!(
+		log.get("mcp_method_cel"),
+		Some(&serde_json::json!("tools/call"))
+	);
+	assert_eq!(
+		log.get("mcp_tool_name_cel"),
+		Some(&serde_json::json!("echo"))
+	);
+	assert_eq!(log["mcp_args_cel"]["traceId"], trace_id);
+	assert_eq!(log["mcp_args_cel"]["hi"], "world");
+	assert!(log.get("mcp_result_cel").is_none());
+	assert!(log.get("mcp_error_cel").is_none());
+
+	assert!(log.get("gen_ai.tool.name").is_none());
+	assert!(log.get("gen_ai.tool.call.arguments").is_none());
+	assert!(log.get("gen_ai.tool.call.result").is_none());
 }
 
 async fn setup_proxy(
@@ -597,19 +825,10 @@ pub async fn mcp_streamable_client(
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
 		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
-	let client_info = ClientInfo {
-		meta: None,
-		protocol_version: Default::default(),
-		capabilities: ClientCapabilities::default(),
-		client_info: Implementation {
-			name: "test client".to_string(),
-			version: "0.0.1".to_string(),
-			title: None,
-			website_url: None,
-			icons: None,
-			description: None,
-		},
-	};
+	let client_info = ClientInfo::new(
+		ClientCapabilities::default(),
+		Implementation::new("test client".to_string(), "0.0.1".to_string()),
+	);
 
 	client_info
 		.serve(transport)
@@ -661,12 +880,11 @@ async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 	let service = StreamableHttpService::new(
 		|| Ok(Counter::new()),
 		LocalSessionManager::default().into(),
-		StreamableHttpServerConfig {
-			sse_retry: None,
-			sse_keep_alive: None,
-			stateful_mode: stateful,
-			cancellation_token: Default::default(),
-		},
+		StreamableHttpServerConfig::default()
+			.with_sse_retry(None)
+			.with_sse_keep_alive(None)
+			.with_stateful_mode(stateful)
+			.with_json_response(false),
 	);
 
 	let (tx, rx) = tokio::sync::oneshot::channel();
@@ -846,10 +1064,10 @@ mod mockserver {
 				"This is an example prompt with your message here: '{}'",
 				args.message
 			);
-			Ok(vec![PromptMessage {
-				role: PromptMessageRole::User,
-				content: PromptMessageContent::text(prompt),
-			}])
+			Ok(vec![PromptMessage::new(
+				PromptMessageRole::User,
+				PromptMessageContent::text(prompt),
+			)])
 		}
 
 		/// Analyze the current counter value and suggest next steps
@@ -877,13 +1095,10 @@ mod mockserver {
 				),
 			];
 
-			Ok(GetPromptResult {
-				description: Some(format!(
-					"Counter analysis for reaching {} from {}",
-					args.goal, current_value
-				)),
-				messages,
-			})
+			Ok(GetPromptResult::new(messages).with_description(format!(
+				"Counter analysis for reaching {} from {}",
+				args.goal, current_value
+			)))
 		}
 	}
 
@@ -891,16 +1106,15 @@ mod mockserver {
 	#[prompt_handler]
 	impl ServerHandler for Counter {
 		fn get_info(&self) -> ServerInfo {
-			ServerInfo {
-				protocol_version: ProtocolVersion::V_2025_06_18,
-				capabilities: ServerCapabilities::builder()
+			ServerInfo::new(
+				ServerCapabilities::builder()
 					.enable_prompts()
 					.enable_resources()
 					.enable_tools()
 					.build(),
-				server_info: Implementation::from_build_env(),
-				instructions: Some("This server provides counter tools and prompts.".to_string()),
-			}
+			)
+			.with_protocol_version(ProtocolVersion::V_2025_06_18)
+			.with_instructions("This server provides counter tools and prompts.")
 		}
 
 		async fn list_resources(
@@ -926,15 +1140,15 @@ mod mockserver {
 			match uri.as_str() {
 				"str:////Users/to/some/path/" => {
 					let cwd = "/Users/to/some/path/";
-					Ok(ReadResourceResult {
-						contents: vec![ResourceContents::text(cwd, uri)],
-					})
+					Ok(ReadResourceResult::new(vec![ResourceContents::text(
+						cwd, uri,
+					)]))
 				},
 				"memo://insights" => {
 					let memo = "Business Intelligence Memo\n\nAnalysis has revealed 5 key insights ...";
-					Ok(ReadResourceResult {
-						contents: vec![ResourceContents::text(memo, uri)],
-					})
+					Ok(ReadResourceResult::new(vec![ResourceContents::text(
+						memo, uri,
+					)]))
 				},
 				_ => Err(McpError::resource_not_found(
 					"resource_not_found",
@@ -1341,6 +1555,66 @@ fn fake_streamable_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 	})
 }
 
+fn fake_sse_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
+	Arc::new(McpTarget {
+		name: name.into(),
+		spec: crate::types::agent::McpTargetSpec::Sse(crate::types::agent::SseTargetSpec {
+			backend: crate::types::agent::SimpleBackendReference::Backend(strng::format!(
+				"/unused-{name}"
+			)),
+			path: "/sse".to_string(),
+		}),
+		backend_policies: Default::default(),
+		backend: Some(crate::types::agent::SimpleBackend::Opaque(
+			crate::types::agent::ResourceName::new(strng::format!("backend-{name}"), "".into()),
+			crate::types::agent::Target::Address(addr),
+		)),
+		always_use_prefix: false,
+	})
+}
+
+fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
+	let schema: OpenAPI = serde_json::from_value(serde_json::json!({
+		"openapi": "3.0.0",
+		"info": {
+			"title": "Test API",
+			"version": "1.0.0"
+		},
+		"paths": {}
+	}))
+	.expect("valid OpenAPI schema");
+
+	Arc::new(McpTarget {
+		name: name.into(),
+		spec: crate::types::agent::McpTargetSpec::OpenAPI(crate::types::agent::OpenAPITarget {
+			backend: crate::types::agent::SimpleBackendReference::Backend(strng::format!(
+				"/unused-{name}"
+			)),
+			schema: Arc::new(schema),
+		}),
+		backend_policies: Default::default(),
+		backend: Some(crate::types::agent::SimpleBackend::Opaque(
+			crate::types::agent::ResourceName::new(strng::format!("backend-{name}"), "".into()),
+			crate::types::agent::Target::Address(addr),
+		)),
+		always_use_prefix: false,
+	})
+}
+
+fn fake_stdio_target(name: &str) -> Arc<McpTarget> {
+	Arc::new(McpTarget {
+		name: name.into(),
+		spec: crate::types::agent::McpTargetSpec::Stdio {
+			cmd: "cat".into(),
+			args: vec![],
+			env: Default::default(),
+		},
+		backend_policies: Default::default(),
+		backend: None,
+		always_use_prefix: false,
+	})
+}
+
 fn empty_mcp_policies() -> crate::mcp::McpAuthorizationSet {
 	crate::mcp::McpAuthorizationSet::new(crate::http::authorization::RuleSets::from(Vec::new()))
 }
@@ -1355,6 +1629,131 @@ fn persisted_session(
 		session: Some(session.to_string()),
 		backend: Some(backend),
 	}
+}
+
+fn persisted_stateless_session(
+	target_name: &str,
+	backend: SocketAddr,
+) -> http::sessionpersistence::MCPSession {
+	http::sessionpersistence::MCPSession {
+		target_name: Some(target_name.to_string()),
+		session: None,
+		backend: Some(backend),
+	}
+}
+
+#[test]
+fn test_openapi_targets_emit_stateless_session_state() {
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_openapi_target(
+				"openapi",
+				SocketAddr::from(([127, 0, 0, 1], 30031)),
+			)],
+			stateful: true,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	let sessions = relay
+		.get_sessions()
+		.expect("OpenAPI should support stateless sessions");
+	assert_eq!(
+		sessions,
+		vec![MCPSession {
+			target_name: Some("openapi".to_string()),
+			session: None,
+			backend: None,
+		}]
+	);
+
+	let pinned = SocketAddr::from(([127, 0, 0, 1], 31031));
+	relay
+		.set_sessions(vec![persisted_stateless_session("openapi", pinned)])
+		.unwrap();
+
+	let sessions = relay
+		.get_sessions()
+		.expect("OpenAPI session state should still be available");
+	assert_eq!(
+		sessions,
+		vec![MCPSession {
+			target_name: Some("openapi".to_string()),
+			session: None,
+			backend: Some(pinned),
+		}]
+	);
+}
+
+#[test]
+fn test_sse_targets_emit_stateless_session_state() {
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_sse_target(
+				"sse",
+				SocketAddr::from(([127, 0, 0, 1], 30032)),
+			)],
+			stateful: true,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	let sessions = relay
+		.get_sessions()
+		.expect("SSE should support stateless sessions");
+	assert_eq!(
+		sessions,
+		vec![MCPSession {
+			target_name: Some("sse".to_string()),
+			session: None,
+			backend: None,
+		}]
+	);
+
+	let pinned = SocketAddr::from(([127, 0, 0, 1], 31032));
+	relay
+		.set_sessions(vec![persisted_stateless_session("sse", pinned)])
+		.unwrap();
+
+	let sessions = relay
+		.get_sessions()
+		.expect("SSE session state should still be available");
+	assert_eq!(
+		sessions,
+		vec![MCPSession {
+			target_name: Some("sse".to_string()),
+			session: None,
+			backend: Some(pinned),
+		}]
+	);
+}
+
+#[tokio::test]
+async fn test_stdio_targets_remain_non_stateless() {
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_stdio_target("stdio")],
+			stateful: false,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	assert!(relay.get_sessions().is_none());
 }
 
 #[tokio::test]
@@ -1479,6 +1878,180 @@ fn test_set_sessions_rejects_mismatched_target_set() {
 			.to_string()
 			.contains("missing persisted session for target alpha")
 	);
+}
+
+#[test]
+fn test_merge_initialize_merges_upstream_instructions_when_multiplexing() {
+	use rmcp::model::{
+		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30101))),
+				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30102))),
+			],
+			stateful: true,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	let merge_fn = relay.merge_initialize(ProtocolVersion::V_2025_06_18, true);
+
+	let results: Vec<(Strng, ServerResult)> = vec![
+		(
+			"alpha".into(),
+			ServerResult::InitializeResult(
+				InitializeResult::new(ServerCapabilities::default())
+					.with_protocol_version(ProtocolVersion::V_2025_06_18)
+					.with_server_info(Implementation::new("alpha-server", "1.0"))
+					.with_instructions("Alpha server: handles data processing."),
+			),
+		),
+		(
+			"beta".into(),
+			ServerResult::InitializeResult(
+				InitializeResult::new(ServerCapabilities::default())
+					.with_protocol_version(ProtocolVersion::V_2025_06_18)
+					.with_server_info(Implementation::new("beta-server", "1.0"))
+					.with_instructions("Beta server: handles notifications."),
+			),
+		),
+	];
+
+	let result = merge_fn(results).unwrap();
+	let info = match result {
+		ServerResult::InitializeResult(ir) => ir,
+		other => panic!("expected InitializeResult, got: {:?}", other),
+	};
+
+	let instructions = info.instructions.expect("instructions should be present");
+	assert!(
+		instructions.contains("Alpha server: handles data processing."),
+		"merged instructions should contain alpha's instructions, got: {instructions}"
+	);
+	assert!(
+		instructions.contains("Beta server: handles notifications."),
+		"merged instructions should contain beta's instructions, got: {instructions}"
+	);
+	assert!(
+		instructions.contains("[alpha]"),
+		"merged instructions should label alpha's section, got: {instructions}"
+	);
+	assert!(
+		instructions.contains("[beta]"),
+		"merged instructions should label beta's section, got: {instructions}"
+	);
+	assert!(
+		instructions.contains("gateway"),
+		"merged instructions should contain gateway preamble, got: {instructions}"
+	);
+}
+
+#[test]
+fn test_merge_initialize_no_instructions_when_multiplexing() {
+	use rmcp::model::{
+		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_streamable_target(
+				"alpha",
+				SocketAddr::from(([127, 0, 0, 1], 30103)),
+			)],
+			stateful: true,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	let merge_fn = relay.merge_initialize(ProtocolVersion::V_2025_06_18, true);
+
+	let results: Vec<(Strng, ServerResult)> = vec![(
+		"alpha".into(),
+		ServerResult::InitializeResult(
+			InitializeResult::new(ServerCapabilities::default())
+				.with_protocol_version(ProtocolVersion::V_2025_06_18)
+				.with_server_info(Implementation::new("alpha-server", "1.0")),
+		),
+	)];
+
+	let result = merge_fn(results).unwrap();
+	let info = match result {
+		ServerResult::InitializeResult(ir) => ir,
+		other => panic!("expected InitializeResult, got: {:?}", other),
+	};
+
+	let instructions = info.instructions.expect("instructions should be present");
+	// When no upstream provides instructions, only the gateway preamble should be present
+	assert!(
+		instructions.contains("gateway"),
+		"should contain gateway preamble, got: {instructions}"
+	);
+	assert!(
+		!instructions.contains("[alpha]"),
+		"should not contain server sections when no instructions provided, got: {instructions}"
+	);
+}
+
+#[test]
+fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
+	use rmcp::model::{
+		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_streamable_target(
+				"solo",
+				SocketAddr::from(([127, 0, 0, 1], 30104)),
+			)],
+			stateful: true,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	let merge_fn = relay.merge_initialize(ProtocolVersion::V_2025_06_18, false);
+
+	let results: Vec<(Strng, ServerResult)> = vec![(
+		"solo".into(),
+		ServerResult::InitializeResult(
+			InitializeResult::new(ServerCapabilities::default())
+				.with_protocol_version(ProtocolVersion::V_2025_06_18)
+				.with_server_info(Implementation::new("solo-server", "1.0"))
+				.with_instructions("Solo server instructions."),
+		),
+	)];
+
+	let result = merge_fn(results).unwrap();
+	let info = match result {
+		ServerResult::InitializeResult(ir) => ir,
+		other => panic!("expected InitializeResult, got: {:?}", other),
+	};
+
+	// Non-multiplexing should forward the upstream's instructions directly
+	assert_eq!(
+		info.instructions.as_deref(),
+		Some("Solo server instructions."),
+		"non-multiplexing should forward upstream instructions unchanged"
+	);
+	assert_eq!(info.server_info.name, "solo-server");
 }
 
 #[tokio::test]

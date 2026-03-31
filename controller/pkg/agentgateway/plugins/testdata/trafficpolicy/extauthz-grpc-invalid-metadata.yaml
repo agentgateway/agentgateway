@@ -1,0 +1,77 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: grpc-invalid-metadata
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    extAuth:
+      backendRef:
+        name: extauthz
+        port: 1024
+      grpc:
+        requestMetadata:
+          user: foolen_{{jwt.sub}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extauthz
+  namespace: default
+spec:
+  ports:
+  - port: 1024
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/grpc-invalid-metadata:extauth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: grpc-invalid-metadata
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        extAuthz:
+          grpc:
+            metadata:
+              user: foolen_{{jwt.sub}}
+          target:
+            port: 1024
+            service:
+              hostname: extauthz.default.svc.cluster.local
+              namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: grpc-invalid-metadata
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: 'extAuth grpc requestMetadata "user" is not a valid CEL expression:
+          foolen_{{jwt.sub}}'
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

@@ -12,6 +12,7 @@ import (
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -19,9 +20,8 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/translator/sslutils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 const (
@@ -106,7 +106,7 @@ func translateBackendPolicyToAgw(
 
 	if s := backend.MCP; s != nil {
 		if backend.MCP.Authorization != nil {
-			appendPolicy("backendMCPAuthorization")(translateBackendMCPAuthorization(policy), nil)
+			appendPolicy("backendMCPAuthorization")(translateBackendMCPAuthorization(policy))
 		}
 
 		if backend.MCP.Authentication != nil {
@@ -159,7 +159,9 @@ func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy) (*api
 
 	var unhealthyCondition string
 	if healthPolicy.UnhealthyCondition != nil {
-		unhealthyCondition = string(*healthPolicy.UnhealthyCondition)
+		unhealthyCondition = *castCELPtr(healthPolicy.UnhealthyCondition, func(expr shared.CELExpression) {
+			errs = append(errs, fmt.Errorf("backend health unhealthyCondition is not a valid CEL expression: %s", expr))
+		})
 	}
 
 	p := &api.BackendPolicySpec_Health{
@@ -238,7 +240,7 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 		if scrt == nil {
 			errs = append(errs, fmt.Errorf("secret %s not found", nn))
 		} else {
-			if _, err := sslutils.ValidateTlsSecretData(nn.Name, nn.Namespace, scrt.Data); err != nil {
+			if _, err := ValidateTlsSecretData(nn.Name, nn.Namespace, scrt.Data); err != nil {
 				errs = append(errs, fmt.Errorf("secret %v contains invalid certificate: %v", nn, err))
 			}
 			p.Cert = scrt.Data[corev1.TLSCertKey]
@@ -260,7 +262,7 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 				errs = append(errs, fmt.Errorf("ConfigMap %s not found", nn))
 				continue
 			}
-			pem, err := sslutils.GetCACertFromConfigMap(ptr.Flatten(cfgmap))
+			pem, err := GetCACertFromConfigMap(ptr.Flatten(cfgmap))
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error extracting CA cert from ConfigMap %s: %w", nn, err))
 				continue
@@ -370,17 +372,23 @@ func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 	return tunnelPolicy, err
 }
 
-func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy) *api.Policy {
+func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
 	backend := policy.Spec.Backend
 	if backend == nil || backend.MCP == nil || backend.MCP.Authorization == nil {
-		return nil
+		return nil, nil
 	}
 	auth := backend.MCP.Authorization
-	var allowPolicies, denyPolicies []string
+	var errs []error
+	var allowPolicies, denyPolicies, requirePolicies []string
+	policies := castCELSlice(auth.Policy.MatchExpressions, func(expr shared.CELExpression) {
+		errs = append(errs, fmt.Errorf("backend MCP authorization matchExpression is not a valid CEL expression: %s", expr))
+	})
 	if auth.Action == shared.AuthorizationPolicyActionDeny {
-		denyPolicies = append(denyPolicies, cast(auth.Policy.MatchExpressions)...)
+		denyPolicies = append(denyPolicies, policies...)
+	} else if auth.Action == shared.AuthorizationPolicyActionRequire {
+		requirePolicies = append(requirePolicies, policies...)
 	} else {
-		allowPolicies = append(allowPolicies, cast(auth.Policy.MatchExpressions)...)
+		allowPolicies = append(allowPolicies, policies...)
 	}
 
 	mcpPolicy := &api.Policy{
@@ -390,8 +398,9 @@ func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy) *
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_McpAuthorization_{
 					McpAuthorization: &api.BackendPolicySpec_McpAuthorization{
-						Allow: allowPolicies,
-						Deny:  denyPolicies,
+						Allow:   allowPolicies,
+						Deny:    denyPolicies,
+						Require: requirePolicies,
 					},
 				},
 			},
@@ -402,20 +411,41 @@ func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy) *
 		"policy", policy.Name,
 		"agentgateway_policy", mcpPolicy.Name)
 
-	return mcpPolicy
+	return mcpPolicy, errors.Join(errs...)
 }
 
 func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
 	authnPolicy := policy.Spec.Backend.MCP.Authentication
 
-	idp := api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
-	if authnPolicy.McpIDP != nil {
-		if *authnPolicy.McpIDP == agentgateway.Keycloak {
-			idp = api.BackendPolicySpec_McpAuthentication_KEYCLOAK
-		} else if *authnPolicy.McpIDP == agentgateway.Auth0 {
-			idp = api.BackendPolicySpec_McpAuthentication_AUTH0
-		}
+	mcpAuthn, err := translateMCPAuthenticationSpec(ctx, types.NamespacedName{
+		Namespace: policy.Namespace,
+		Name:      policy.Name,
+	}, authnPolicy)
+	mcpAuthnPolicy := &api.Policy{
+		Key:  policy.Namespace + "/" + policy.Name + mcpAuthenticationPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Backend{
+			Backend: &api.BackendPolicySpec{
+				Kind: &api.BackendPolicySpec_McpAuthentication_{
+					McpAuthentication: mcpAuthn,
+				},
+			},
+		},
 	}
+
+	logger.Debug("generated MCP authentication policy",
+		"policy", policy.Name,
+		"agentgateway_policy", mcpAuthnPolicy.Name)
+
+	return mcpAuthnPolicy, err
+}
+
+func translateMCPAuthenticationSpec(
+	ctx PolicyCtx,
+	policy types.NamespacedName,
+	authnPolicy *agentgateway.MCPAuthentication,
+) (*api.BackendPolicySpec_McpAuthentication, error) {
+	idp := translateMcpIDP(authnPolicy.McpIDP)
 
 	// default mode is Strict
 	mode := api.BackendPolicySpec_McpAuthentication_STRICT
@@ -442,8 +472,55 @@ func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.Agent
 		errs = append(errs, err)
 	}
 
+	extraResourceMetadata, metadataErr := translateMCPResourceMetadata(authnPolicy.ResourceMetadata)
+	if metadataErr != nil {
+		errs = append(errs, metadataErr)
+	}
+
+	mcpAuthn := &api.BackendPolicySpec_McpAuthentication{
+		Issuer:    authnPolicy.Issuer,
+		Audiences: authnPolicy.Audiences,
+		Provider:  idp,
+		ResourceMetadata: &api.BackendPolicySpec_McpAuthentication_ResourceMetadata{
+			Extra: extraResourceMetadata,
+		},
+		JwksInline: translatedInlineJwks,
+		Mode:       mode,
+	}
+	return mcpAuthn, errors.Join(errs...)
+}
+
+func translateJWTMCPConfig(mcp *agentgateway.JWTMCPConfig) (*api.TrafficPolicySpec_JWT_MCP, error) {
+	extraResourceMetadata, err := translateMCPResourceMetadata(mcp.ResourceMetadata)
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.TrafficPolicySpec_JWT_MCP{
+		Provider: translateMcpIDP(mcp.Provider),
+		ResourceMetadata: &api.BackendPolicySpec_McpAuthentication_ResourceMetadata{
+			Extra: extraResourceMetadata,
+		},
+	}, nil
+}
+
+func translateMcpIDP(provider *agentgateway.McpIDP) api.BackendPolicySpec_McpAuthentication_McpIDP {
+	if provider == nil {
+		return api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
+	}
+	if *provider == agentgateway.Keycloak {
+		return api.BackendPolicySpec_McpAuthentication_KEYCLOAK
+	}
+	if *provider == agentgateway.Auth0 {
+		return api.BackendPolicySpec_McpAuthentication_AUTH0
+	}
+	return api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
+}
+
+func translateMCPResourceMetadata(resourceMetadata map[string]apiextensionsv1.JSON) (map[string]*structpb.Value, error) {
+	var errs []error
 	var extraResourceMetadata map[string]*structpb.Value
-	for k, v := range authnPolicy.ResourceMetadata {
+	for k, v := range resourceMetadata {
 		if extraResourceMetadata == nil {
 			extraResourceMetadata = make(map[string]*structpb.Value)
 		}
@@ -458,34 +535,7 @@ func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.Agent
 
 		extraResourceMetadata[k] = proto
 	}
-
-	mcpAuthn := &api.BackendPolicySpec_McpAuthentication{
-		Issuer:    authnPolicy.Issuer,
-		Audiences: authnPolicy.Audiences,
-		Provider:  idp,
-		ResourceMetadata: &api.BackendPolicySpec_McpAuthentication_ResourceMetadata{
-			Extra: extraResourceMetadata,
-		},
-		JwksInline: translatedInlineJwks,
-		Mode:       mode,
-	}
-	mcpAuthnPolicy := &api.Policy{
-		Key:  policy.Namespace + "/" + policy.Name + mcpAuthenticationPolicySuffix,
-		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Kind: &api.Policy_Backend{
-			Backend: &api.BackendPolicySpec{
-				Kind: &api.BackendPolicySpec_McpAuthentication_{
-					McpAuthentication: mcpAuthn,
-				},
-			},
-		},
-	}
-
-	logger.Debug("generated MCP authentication policy",
-		"policy", policy.Name,
-		"agentgateway_policy", mcpAuthnPolicy.Name)
-
-	return mcpAuthnPolicy, errors.Join(errs...)
+	return extraResourceMetadata, errors.Join(errs...)
 }
 
 // translateBackendAI processes AI configuration and creates corresponding Agw policies

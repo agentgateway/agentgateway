@@ -25,7 +25,8 @@ output:
   resource:
     route:
       backends:
-      - {}
+      - backend: {}
+        weight: 1
       key: default/example-grpc-route.00.grpc.http
       listenerKey: default/test-gateway.http
       matches:

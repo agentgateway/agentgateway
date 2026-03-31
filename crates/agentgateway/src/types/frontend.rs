@@ -1,10 +1,15 @@
 use std::time::Duration;
 
 use frozen_collections::FzHashSet;
+use frozen_collections::Len;
 use serde::{Deserialize, Serialize};
 
 use crate::telemetry::log::OrderedStringMap;
 use crate::{apply, defaults, *};
+
+fn empty_string_set(set: &Arc<FzHashSet<String>>) -> bool {
+	set.is_empty()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -110,6 +115,9 @@ pub struct TCP {
 }
 
 #[apply(schema!)]
+pub struct NetworkAuthorization(pub crate::http::authorization::RuleSet);
+
+#[apply(schema!)]
 pub struct LoggingPolicy {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub filter: Option<Arc<cel::Expression>>,
@@ -123,7 +131,7 @@ pub struct LoggingPolicy {
 		feature = "schema",
 		schemars(with = "std::collections::HashSet<String>")
 	)]
-	#[serde(default, skip_serializing_if = "FzHashSet::is_empty")]
+	#[serde(default, skip_serializing_if = "empty_string_set")]
 	pub remove: Arc<FzHashSet<String>>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub otlp: Option<OtlpLoggingConfig>,

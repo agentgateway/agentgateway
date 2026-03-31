@@ -7,6 +7,7 @@ use std::sync::Arc;
 use ::http::uri::PathAndQuery;
 use ::http::{HeaderMap, header};
 use anyhow::anyhow;
+use frozen_collections::Len;
 use headers::HeaderMapExt;
 use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
@@ -82,9 +83,7 @@ async fn apply_request_policies(
 	}
 
 	if let Some(j) = &policies.jwt {
-		j.apply(Some(log), req)
-			.await
-			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
+		j.apply(&client, Some(log), req).await?;
 	}
 	if let Some(b) = &policies.basic_auth {
 		b.apply(req).await?;
@@ -257,9 +256,7 @@ async fn apply_gateway_policies(
 	response_headers: &mut HeaderMap,
 ) -> Result<(), ProxyResponse> {
 	if let Some(j) = &policies.jwt {
-		j.apply(Some(log), req)
-			.await
-			.map_err(|e| ProxyResponse::from(ProxyError::JwtAuthenticationFailure(e)))?;
+		j.apply(&client, Some(log), req).await?;
 	}
 	if let Some(b) = &policies.basic_auth {
 		b.apply(req).await?;
@@ -391,19 +388,12 @@ impl HTTPProxy {
 		let start = agent_core::Timestamp::now();
 
 		// Copy connection level attributes into request level attributes
-		connection.copy::<TCPConnectionInfo>(req.extensions_mut());
-		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
-
 		let tcp = connection
-			.get::<TCPConnectionInfo>()
-			.expect("tcp connection must be set");
-		let tls = connection.get::<TLSConnectionInfo>();
-		let src = cel::SourceContext {
-			address: tcp.peer_addr.ip(),
-			port: tcp.peer_addr.port(),
-			tls: tls.and_then(|t| t.src_identity.clone()),
-		};
-		req.extensions_mut().insert(src);
+			.copy::<TCPConnectionInfo>(req.extensions_mut())
+			.expect("tcp connection must be set")
+			.clone();
+		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
+		connection.copy::<cel::SourceContext>(req.extensions_mut());
 		req
 			.extensions_mut()
 			.insert(RequestTime(start.as_datetime()));
@@ -531,7 +521,7 @@ impl HTTPProxy {
 
 		// Now check if we actually have a listener - fail after tracing is set up
 		let selected_listener = selected_listener
-			.or_else(|| bind.listeners.best_match(&host))
+			.or_else(|| bind.listeners.best_match_http(&host))
 			.ok_or(ProxyError::ListenerNotFound);
 		let selected_listener = match selected_listener {
 			Ok(l) => {
@@ -905,9 +895,14 @@ impl HTTPProxy {
 		//     * If no other Listener matches the Host, the Gateway MUST return a
 		//       404.
 		let host = http::get_host(req).map_err(|_| ProxyError::RouteNotFound)?;
+		// Use protocol-filtered matching: since we're in a TLS context (checked
+		// above), only compare against other TLS-capable listeners. Without this
+		// filter, an HTTP listener with the same wildcard hostname could be
+		// returned by best_match(), causing a spurious 421 when BindProtocol::auto
+		// serves both HTTP and HTTPS listeners on the same bind.
 		let new_best_listener = bind
 			.listeners
-			.best_match(host)
+			.best_match_tls(host)
 			.filter(|l| l.key != selected_listener.key);
 
 		// "If another listener has a more specific match..."
@@ -1346,13 +1341,6 @@ async fn make_backend_call(
 			let effective_policies = provider_defaults
 				.merge(policies)
 				.merge(sub_backend_policies);
-			if let Some(po) = &provider.path_override {
-				http::modify_req_uri(&mut req, |p| {
-					p.path_and_query = Some(PathAndQuery::from_str(po)?);
-					Ok(())
-				})
-				.map_err(ProxyError::Processing)?;
-			}
 			BackendCall {
 				target,
 				backend_policies: effective_policies,
@@ -1551,7 +1539,9 @@ async fn make_backend_call(
 							&mut req,
 							route_type,
 							Some(&llm_request),
-							llm.use_default_policies(),
+							llm.path_override.as_deref(),
+							llm.path_prefix.as_deref(),
+							llm.host_override.is_some(),
 						)
 						.map_err(ProxyError::Processing)?;
 
@@ -1589,7 +1579,14 @@ async fn make_backend_call(
 					// For realtime we do the same and handle everything in the Websocket handler
 					llm
 						.provider
-						.setup_request(&mut req, route_type, None, true)
+						.setup_request(
+							&mut req,
+							route_type,
+							None,
+							llm.path_override.as_deref(),
+							llm.path_prefix.as_deref(),
+							llm.host_override.is_some(),
+						)
 						.map_err(ProxyError::Processing)?;
 					if route_type == RouteType::Realtime {
 						let request_model = http::as_url(req.uri())

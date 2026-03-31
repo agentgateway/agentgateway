@@ -12,7 +12,7 @@ import (
 	"istio.io/istio/pkg/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer/status"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
 )
 
 var _ status.WorkerQueue = &TestStatusQueue{}

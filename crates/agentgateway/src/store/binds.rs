@@ -1,27 +1,29 @@
 use std::collections::{HashMap, HashSet};
+use std::net::TcpListener as StdTcpListener;
 use std::sync::Arc;
 
 use agent_xds::{RejectedConfig, XdsUpdate};
+use anyhow::Context;
 use futures_core::Stream;
 use itertools::Itertools;
-use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
-use tracing::{Level, instrument};
+use tracing::{Level, instrument, warn};
 
 use crate::cel::ContextBuilder;
 use crate::http::auth::BackendAuth;
-use crate::http::authorization::HTTPAuthorizationSet;
+use crate::http::authorization::{HTTPAuthorizationSet, NetworkAuthorizationSet};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
 use crate::http::{ext_authz, ext_proc, filters, health, remoteratelimit, retry, timeout};
 use crate::llm::policy::ResponseGuard;
 use crate::mcp::McpAuthorizationSet;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::store::Event;
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendPolicy, BackendTargetRef, BackendWithPolicies, Bind,
-	BindKey, FrontendPolicy, Listener, ListenerKey, ListenerName, McpAuthentication, PolicyKey,
-	PolicyTarget, Route, RouteKey, RouteName, TCPRoute, TargetedPolicy, TracingPolicy, TrafficPolicy,
+	BindKey, FrontendPolicy, JwtAuthentication, Listener, ListenerKey, ListenerName,
+	McpAuthentication, PolicyKey, PolicyTarget, Route, RouteKey, RouteName, RouteSet, TCPRoute,
+	TCPRouteSet, TargetedPolicy, TracingPolicy, TrafficPolicy,
 };
+use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
 	Backend as XdsBackend, Bind as XdsBind, Listener as XdsListener, Policy as XdsPolicy,
@@ -43,6 +45,7 @@ enum ResourceKind {
 #[derive(Debug)]
 pub struct Store {
 	ipv6_enabled: bool,
+	core_ids: Option<Vec<core_affinity::CoreId>>,
 	binds: HashMap<BindKey, Arc<Bind>>,
 	resources: HashMap<Strng, ResourceKind>,
 
@@ -56,7 +59,24 @@ pub struct Store {
 	staged_routes: HashMap<ListenerKey, HashMap<RouteKey, Route>>,
 	staged_tcp_routes: HashMap<ListenerKey, HashMap<RouteKey, TCPRoute>>,
 
-	tx: tokio::sync::broadcast::Sender<Event<Arc<Bind>>>,
+	// Service-keyed routes (GAMMA spec: routes with parentRef targeting a Service)
+	service_routes: HashMap<NamespacedHostname, RouteSet>,
+	service_tcp_routes: HashMap<NamespacedHostname, TCPRouteSet>,
+
+	tx: tokio::sync::mpsc::UnboundedSender<BindEvent>,
+	rx: Option<tokio::sync::mpsc::UnboundedReceiver<BindEvent>>,
+}
+
+#[derive(Debug)]
+pub enum BindEvent {
+	Add(Bind, BindListeners),
+	Remove(BindKey),
+}
+
+#[derive(Debug)]
+pub enum BindListeners {
+	Single(StdTcpListener),
+	PerCore(HashMap<core_affinity::CoreId, StdTcpListener>),
 }
 
 #[derive(Default, Debug, Clone)]
@@ -64,6 +84,7 @@ pub struct FrontendPolices {
 	pub http: Option<frontend::HTTP>,
 	pub tls: Option<frontend::TLS>,
 	pub tcp: Option<frontend::TCP>,
+	pub network_authorization: Option<NetworkAuthorizationSet>,
 	pub access_log: Option<frontend::LoggingPolicy>,
 	pub tracing: Option<Arc<crate::types::agent::TracingPolicy>>,
 	pub access_log_otlp: Option<Arc<crate::types::agent::AccessLogPolicy>>,
@@ -80,6 +101,13 @@ impl FrontendPolices {
 			},
 			FrontendPolicy::TCP(p) => {
 				self.tcp.get_or_insert_with(|| p.clone());
+			},
+			FrontendPolicy::NetworkAuthorization(p) => {
+				if let Some(existing) = self.network_authorization.as_mut() {
+					existing.merge_rule_set(p.0.clone());
+				} else {
+					self.network_authorization = Some(NetworkAuthorizationSet::new(vec![p.0.clone()].into()));
+				}
 			},
 			FrontendPolicy::AccessLog(p) => {
 				self.access_log.get_or_insert_with(|| p.clone());
@@ -153,6 +181,7 @@ impl BackendPolicies {
 			a2a: other.a2a.or(self.a2a),
 			llm_provider: other.llm_provider.or(self.llm_provider),
 			llm: other.llm.or(self.llm),
+			// TODO: is this right??
 			mcp_authorization: other.mcp_authorization.or(self.mcp_authorization),
 			mcp_authentication: other.mcp_authentication.or(self.mcp_authentication),
 			inference_routing: other.inference_routing.or(self.inference_routing),
@@ -200,7 +229,7 @@ pub struct RoutePolicies {
 	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
 	pub remote_rate_limit: Option<remoteratelimit::RemoteRateLimit>,
 	pub authorization: Option<http::authorization::HTTPAuthorizationSet>,
-	pub jwt: Option<http::jwt::Jwt>,
+	pub jwt: Option<JwtAuthentication>,
 	pub basic_auth: Option<http::basicauth::BasicAuthentication>,
 	pub api_key: Option<http::apikey::APIKeyAuthentication>,
 	pub ext_authz: Option<ext_authz::ExtAuthz>,
@@ -224,7 +253,7 @@ pub struct RoutePolicies {
 #[derive(Debug, Default)]
 pub struct GatewayPolicies {
 	pub ext_proc: Option<ext_proc::ExtProc>,
-	pub jwt: Option<http::jwt::Jwt>,
+	pub jwt: Option<JwtAuthentication>,
 	pub ext_authz: Option<ext_authz::ExtAuthz>,
 	pub transformation: Option<http::transformation_cel::Transformation>,
 	pub basic_auth: Option<http::basicauth::BasicAuthentication>,
@@ -368,10 +397,68 @@ pub struct RoutePath<'a> {
 }
 
 impl Store {
+	fn bind_listener_single(address: std::net::SocketAddr) -> anyhow::Result<StdTcpListener> {
+		let listener =
+			StdTcpListener::bind(address).with_context(|| format!("bind listener for {address}"))?;
+		listener
+			.set_nonblocking(true)
+			.with_context(|| format!("set nonblocking on {address}"))?;
+		Ok(listener)
+	}
+
+	fn bind_listener_per_core(
+		core_ids: &[core_affinity::CoreId],
+		address: std::net::SocketAddr,
+	) -> anyhow::Result<HashMap<core_affinity::CoreId, StdTcpListener>> {
+		let domain = if address.is_ipv4() {
+			socket2::Domain::IPV4
+		} else {
+			socket2::Domain::IPV6
+		};
+		let mut listeners = HashMap::with_capacity(core_ids.len());
+		for &core_id in core_ids {
+			let socket = socket2::Socket::new(domain, socket2::Type::STREAM, None)
+				.with_context(|| format!("create listener for {address} on core {}", core_id.id))?;
+			#[cfg(target_family = "unix")]
+			socket.set_reuse_port(true)?;
+			socket
+				.bind(&address.into())
+				.with_context(|| format!("bind listener for {address} on core {}", core_id.id))?;
+			socket
+				.listen(1024)
+				.with_context(|| format!("listen on {address} on core {}", core_id.id))?;
+			let listener: StdTcpListener = socket.into();
+			listener
+				.set_nonblocking(true)
+				.with_context(|| format!("set nonblocking on {address} on core {}", core_id.id))?;
+			listeners.insert(core_id, listener);
+		}
+		Ok(listeners)
+	}
+
+	fn bind_listeners(&self, address: std::net::SocketAddr) -> anyhow::Result<BindListeners> {
+		match self.core_ids.as_deref() {
+			Some(core_ids) => Ok(BindListeners::PerCore(Self::bind_listener_per_core(
+				core_ids, address,
+			)?)),
+			None => Ok(BindListeners::Single(Self::bind_listener_single(address)?)),
+		}
+	}
+
 	pub fn with_ipv6_enabled(ipv6_enabled: bool) -> Self {
-		let (tx, _) = tokio::sync::broadcast::channel(1000);
+		Self::new(ipv6_enabled, crate::ThreadingMode::Multithreaded)
+	}
+
+	pub fn new(ipv6_enabled: bool, threading_mode: crate::ThreadingMode) -> Self {
+		let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 		Self {
 			ipv6_enabled,
+			core_ids: match threading_mode {
+				crate::ThreadingMode::Multithreaded => None,
+				crate::ThreadingMode::ThreadPerCore => {
+					Some(core_affinity::get_core_ids().unwrap_or_default())
+				},
+			},
 			binds: Default::default(),
 			resources: Default::default(),
 			policies_by_key: Default::default(),
@@ -380,14 +467,15 @@ impl Store {
 			staged_routes: Default::default(),
 			staged_listeners: Default::default(),
 			staged_tcp_routes: Default::default(),
+			service_routes: Default::default(),
+			service_tcp_routes: Default::default(),
 			tx,
+			rx: Some(rx),
 		}
 	}
-	pub fn subscribe(
-		&self,
-	) -> impl Stream<Item = Result<Event<Arc<Bind>>, BroadcastStreamRecvError>> + use<> {
-		let sub = self.tx.subscribe();
-		tokio_stream::wrappers::BroadcastStream::new(sub)
+	pub fn subscribe(&mut self) -> impl Stream<Item = BindEvent> + use<> {
+		let sub = self.rx.take().expect("bind subscriber already taken");
+		tokio_stream::wrappers::UnboundedReceiverStream::new(sub)
 	}
 
 	pub fn route_policies(&self, path: &RoutePath<'_>, inline: &[TrafficPolicy]) -> RoutePolicies {
@@ -774,10 +862,6 @@ impl Store {
 			.cloned()
 	}
 
-	pub fn all(&self) -> Vec<Arc<Bind>> {
-		self.binds.values().cloned().collect()
-	}
-
 	pub fn all_policies(&self) -> Vec<Arc<TargetedPolicy>> {
 		self.policies_by_key.values().cloned().collect()
 	}
@@ -793,9 +877,8 @@ impl Store {
         fields(bind),
     )]
 	pub fn remove_bind(&mut self, bind: BindKey) {
-		if let Some(old) = self.binds.remove(&bind) {
-			let _ = self.tx.send(Event::Remove(old));
-		}
+		self.binds.remove(&bind);
+		let _ = self.tx.send(BindEvent::Remove(bind));
 	}
 	#[instrument(
         level = Level::INFO,
@@ -846,6 +929,9 @@ impl Store {
         fields(route),
     )]
 	pub fn remove_route(&mut self, route: RouteKey) {
+		if self.remove_service_route(&route) {
+			return;
+		}
 		let Some((_, bind, listener)) = self.binds.iter().find_map(|(k, v)| {
 			let l = v.listeners.iter().find(|l| l.routes.contains(&route));
 			l.map(|l| (k.clone(), v.clone(), l.clone()))
@@ -866,6 +952,9 @@ impl Store {
         fields(tcp_route),
     )]
 	pub fn remove_tcp_route(&mut self, tcp_route: RouteKey) {
+		if self.remove_service_tcp_route(&tcp_route) {
+			return;
+		}
 		let Some((_, bind, listener)) = self.binds.iter().find_map(|(k, v)| {
 			let l = v
 				.listeners
@@ -909,10 +998,22 @@ impl Store {
 			}
 			bind.listeners.insert(v)
 		}
-		let arc = Arc::new(bind);
-		self.binds.insert(arc.key.clone(), arc.clone());
-		// ok to have no subs
-		let _ = self.tx.send(Event::Add(arc));
+		let key = bind.key.clone();
+		let listeners = if self.binds.contains_key(&key) {
+			None
+		} else {
+			match self.bind_listeners(bind.address) {
+				Ok(listeners) => Some(listeners),
+				Err(err) => {
+					warn!(bind=%key, address=%bind.address, error=%err, "failed to start bind listener");
+					None
+				},
+			}
+		};
+		self.binds.insert(key.clone(), Arc::new(bind.clone()));
+		if let Some(listeners) = listeners {
+			let _ = self.tx.send(BindEvent::Add(bind, listeners));
+		}
 	}
 
 	pub fn insert_backend(&mut self, key: BackendKey, b: BackendWithPolicies) {
@@ -1035,11 +1136,61 @@ impl Store {
 		self.insert_bind(bind);
 	}
 
-	fn remove_resource(&mut self, res: &Strng) {
+	pub fn insert_service_route(&mut self, r: Route, service_key: NamespacedHostname) {
+		debug!(service=%service_key, route=%r.key, "insert service route");
+		self
+			.service_routes
+			.entry(service_key)
+			.or_default()
+			.insert(r);
+	}
+
+	pub fn insert_service_tcp_route(&mut self, r: TCPRoute, service_key: NamespacedHostname) {
+		debug!(service=%service_key, route=%r.key, "insert service tcp route");
+		self
+			.service_tcp_routes
+			.entry(service_key)
+			.or_default()
+			.insert(r);
+	}
+
+	fn remove_service_route(&mut self, route_key: &RouteKey) -> bool {
+		let mut found = false;
+		self.service_routes.retain(|_, route_set| {
+			if route_set.contains(route_key) {
+				route_set.remove(route_key);
+				found = true;
+			}
+			!route_set.is_empty()
+		});
+		found
+	}
+
+	fn remove_service_tcp_route(&mut self, route_key: &RouteKey) -> bool {
+		let mut found = false;
+		self.service_tcp_routes.retain(|_, route_set| {
+			if route_set.contains(route_key) {
+				route_set.remove(route_key);
+				found = true;
+			}
+			!route_set.is_empty()
+		});
+		found
+	}
+
+	pub fn get_service_routes(&self, key: &NamespacedHostname) -> Option<&RouteSet> {
+		self.service_routes.get(key)
+	}
+
+	pub fn get_service_tcp_routes(&self, key: &NamespacedHostname) -> Option<&TCPRouteSet> {
+		self.service_tcp_routes.get(key)
+	}
+
+	fn remove_resource(&mut self, res: &Strng) -> anyhow::Result<()> {
 		trace!("removing res {res}...");
 		let Some(old) = self.resources.remove(res) else {
 			debug!("unknown resource name {res}");
-			return;
+			return Ok(());
 		};
 		match old {
 			ResourceKind::Policy(n) => self.remove_policy(n),
@@ -1049,6 +1200,7 @@ impl Store {
 			ResourceKind::Listener(n) => self.remove_listener(n),
 			ResourceKind::Backend(n) => self.remove_backend(n),
 		}
+		Ok(())
 	}
 
 	fn insert_xds(&mut self, name: Strng, res: ADPResource) -> anyhow::Result<()> {
@@ -1098,9 +1250,9 @@ impl Store {
 		let mut bind = Bind::try_from_xds(&raw, self.ipv6_enabled)?;
 		// If XDS server pushes the same bind twice (which it shouldn't really do, but oh well),
 		// we need to copy the listeners over.
-		if let Some(old) = self.binds.remove(&bind.key) {
+		if let Some(old) = self.binds.get(&bind.key) {
 			debug!("bind update, copy old listeners over");
-			bind.listeners = Arc::unwrap_or_clone(old).listeners;
+			bind.listeners = Arc::unwrap_or_clone(old.clone()).listeners;
 		}
 		self.insert_bind(bind);
 		Ok(())
@@ -1112,13 +1264,23 @@ impl Store {
 	}
 	fn insert_xds_route(&mut self, raw: XdsRoute) -> anyhow::Result<()> {
 		let (route, listener_name) = Route::try_from_xds(&raw)?;
-		self.insert_route(route, listener_name);
-		Ok(())
+		if let Some(sk) = route.service_key.clone() {
+			self.insert_service_route(route, sk);
+			Ok(())
+		} else {
+			self.insert_route(route, listener_name);
+			Ok(())
+		}
 	}
 	fn insert_xds_tcp_route(&mut self, raw: XdsTcpRoute) -> anyhow::Result<()> {
 		let (route, listener_name) = TCPRoute::try_from_xds(&raw)?;
-		self.insert_tcp_route(route, listener_name);
-		Ok(())
+		if let Some(sk) = route.service_key.clone() {
+			self.insert_service_tcp_route(route, sk);
+			Ok(())
+		} else {
+			self.insert_tcp_route(route, listener_name);
+			Ok(())
+		}
 	}
 	fn insert_xds_backend(&mut self, raw: XdsBackend) -> anyhow::Result<()> {
 		let key = strng::new(&raw.key);
@@ -1245,7 +1407,7 @@ impl agent_xds::Handler<ADPResource> for StoreUpdater {
 				XdsUpdate::Update(w) => state.insert_xds(w.name, w.resource)?,
 				XdsUpdate::Remove(name) => {
 					debug!("handling delete {}", name);
-					state.remove_resource(&strng::new(name))
+					state.remove_resource(&strng::new(name))?
 				},
 			}
 			Ok(())
@@ -1334,12 +1496,25 @@ mod tests {
 		})
 	}
 
+	fn create_network_authorization_policy(cidr: &str) -> FrontendPolicy {
+		FrontendPolicy::NetworkAuthorization(crate::types::frontend::NetworkAuthorization(
+			crate::http::authorization::RuleSet::new(crate::http::authorization::PolicySet::new(
+				vec![Arc::new(
+					cel::Expression::new_strict(format!(r#"cidr("{cidr}").containsIP(source.address)"#))
+						.unwrap(),
+				)],
+				vec![],
+				vec![],
+			)),
+		))
+	}
+
 	fn insert_policy_at_level(
 		store: &mut Store,
 		listener: &ListenerName,
 		policy_name: &str,
 		for_listener: bool,
-		remove_item: &str,
+		policy: FrontendPolicy,
 	) {
 		let policy_key = strng::new(policy_name);
 		let listener_name = if for_listener {
@@ -1356,7 +1531,7 @@ mod tests {
 			key: policy_key.clone(),
 			name: None,
 			target: target.clone(),
-			policy: agent::PolicyType::Frontend(create_access_log_policy(remove_item)),
+			policy: agent::PolicyType::Frontend(policy),
 		};
 
 		store
@@ -1374,7 +1549,13 @@ mod tests {
 		listener: &ListenerName,
 		remove_item: &str,
 	) {
-		insert_policy_at_level(store, listener, "gw_frontend_policy", false, remove_item);
+		insert_policy_at_level(
+			store,
+			listener,
+			"gw_frontend_policy",
+			false,
+			create_access_log_policy(remove_item),
+		);
 	}
 
 	fn insert_listener_level_frontend_policy(
@@ -1387,7 +1568,22 @@ mod tests {
 			listener,
 			"listener_frontend_policy",
 			true,
-			remove_item,
+			create_access_log_policy(remove_item),
+		);
+	}
+
+	fn insert_gateway_level_network_authorization_policy(
+		store: &mut Store,
+		listener: &ListenerName,
+		policy_name: &str,
+		cidr: &str,
+	) {
+		insert_policy_at_level(
+			store,
+			listener,
+			policy_name,
+			false,
+			create_network_authorization_policy(cidr),
 		);
 	}
 
@@ -1446,6 +1642,58 @@ mod tests {
 		assert!(
 			!access_log.remove.contains("gw_remove"),
 			"Gateway policy should not override listener policy"
+		);
+	}
+
+	#[test]
+	fn frontend_network_authorization_policies_merge() {
+		let mut store = Store::default();
+		let listener = listener();
+		insert_gateway_level_network_authorization_policy(
+			&mut store,
+			&listener,
+			"gw-frontend-network-authz-1",
+			"10.0.0.0/8",
+		);
+		insert_gateway_level_network_authorization_policy(
+			&mut store,
+			&listener,
+			"gw-frontend-network-authz-2",
+			"192.168.0.0/16",
+		);
+
+		let merged_pols = store.frontend_policies(listener.as_gateway_target_ref());
+		let network_authz = merged_pols
+			.network_authorization
+			.as_ref()
+			.expect("expected merged network authorization");
+
+		assert!(
+			network_authz
+				.apply(&crate::cel::SourceContext {
+					address: "10.1.2.3".parse().unwrap(),
+					port: 12345,
+					tls: None,
+				})
+				.is_ok()
+		);
+		assert!(
+			network_authz
+				.apply(&crate::cel::SourceContext {
+					address: "192.168.1.2".parse().unwrap(),
+					port: 12345,
+					tls: None,
+				})
+				.is_ok()
+		);
+		assert!(
+			network_authz
+				.apply(&crate::cel::SourceContext {
+					address: "172.16.0.1".parse().unwrap(),
+					port: 12345,
+					tls: None,
+				})
+				.is_err()
 		);
 	}
 

@@ -1,0 +1,82 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: global-rl-invalid-cel
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    rateLimit:
+      global:
+        backendRef:
+          name: rl-svc
+          port: 4444
+        domain: api-gateway
+        descriptors:
+        - entries:
+          - name: user-agent
+            expression: foolen_{{request.headers["user-agent"]}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rl-svc
+  namespace: default
+spec:
+  ports:
+  - port: 4444
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/global-rl-invalid-cel:rl-global:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: global-rl-invalid-cel
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        remoteRateLimit:
+          descriptors:
+          - entries:
+            - key: user-agent
+              value: foolen_{{request.headers["user-agent"]}}
+          domain: api-gateway
+          target:
+            port: 4444
+            service:
+              hostname: rl-svc.default.svc.cluster.local
+              namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: global-rl-invalid-cel
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: 'rate limit descriptor entry "user-agent" is not a valid CEL expression:
+          foolen_{{request.headers["user-agent"]}}'
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

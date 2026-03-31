@@ -393,7 +393,10 @@ pub mod from_completions {
 						content: vec![bedrock::ContentBlock::Text(s.clone())],
 					}),
 			})
-			.collect();
+			.fold(Vec::new(), |mut msgs, msg| {
+				helpers::push_or_merge_message(&mut msgs, msg);
+				msgs
+			});
 
 		let inference_config = bedrock::InferenceConfiguration {
 			max_tokens: req.max_tokens(),
@@ -663,7 +666,7 @@ pub mod from_completions {
 
 	pub fn translate_stream(
 		b: Body,
-		_buffer_limit: usize,
+		buffer_limit: usize,
 		log: AmendOnDrop,
 		model: &str,
 		message_id: &str,
@@ -675,7 +678,7 @@ pub mod from_completions {
 		let mut tool_calls: HashMap<i32, String> = HashMap::new();
 		let model = model.to_string();
 		let message_id = message_id.to_string();
-		parse::aws_sse::transform(b, move |f| {
+		parse::aws_sse::transform(b, buffer_limit, move |f| {
 			let res = bedrock::ConverseStreamOutput::deserialize(f).ok()?;
 			let mk = |choices: Vec<completions::ChatChoiceStream>, usage: Option<completions::Usage>| {
 				Some(completions::StreamResponse {
@@ -1326,7 +1329,7 @@ pub mod from_messages {
 
 	pub fn translate_stream(
 		b: Body,
-		_buffer_limit: usize,
+		buffer_limit: usize,
 		log: AmendOnDrop,
 		model: &str,
 		_message_id: &str,
@@ -1336,7 +1339,7 @@ pub mod from_messages {
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
 		let model = model.to_string();
-		parse::aws_sse::transform_multi(b, move |aws_event| {
+		parse::aws_sse::transform_multi(b, buffer_limit, move |aws_event| {
 			let event = match bedrock::ConverseStreamOutput::deserialize(aws_event) {
 				Ok(e) => e,
 				Err(e) => {
@@ -1706,7 +1709,7 @@ pub mod from_responses {
 						EasyInputContent::ContentList(parts) => input_parts_to_blocks(parts),
 					};
 
-					messages.push(bedrock::Message { role, content });
+					helpers::push_or_merge_message(&mut messages, bedrock::Message { role, content });
 				},
 				InputItem::Item(Item::Message(MessageItem::Input(msg))) => {
 					let role = match msg.role {
@@ -1727,7 +1730,7 @@ pub mod from_responses {
 					};
 
 					let content = input_parts_to_blocks(&msg.content);
-					messages.push(bedrock::Message { role, content });
+					helpers::push_or_merge_message(&mut messages, bedrock::Message { role, content });
 				},
 				InputItem::Item(Item::Message(MessageItem::Output(msg))) => {
 					let content = msg
@@ -1741,10 +1744,13 @@ pub mod from_responses {
 						})
 						.collect::<Vec<_>>();
 					if !content.is_empty() {
-						messages.push(bedrock::Message {
-							role: bedrock::Role::Assistant,
-							content,
-						});
+						helpers::push_or_merge_message(
+							&mut messages,
+							bedrock::Message {
+								role: bedrock::Role::Assistant,
+								content,
+							},
+						);
 					}
 				},
 				InputItem::Item(Item::FunctionCall(call)) => {
@@ -1757,14 +1763,17 @@ pub mod from_responses {
 						continue;
 					};
 
-					messages.push(bedrock::Message {
-						role: bedrock::Role::Assistant,
-						content: vec![bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
-							tool_use_id: call.call_id,
-							name: call.name,
-							input,
-						})],
-					});
+					helpers::push_or_merge_message(
+						&mut messages,
+						bedrock::Message {
+							role: bedrock::Role::Assistant,
+							content: vec![bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
+								tool_use_id: call.call_id,
+								name: call.name,
+								input,
+							})],
+						},
+					);
 				},
 				InputItem::Item(Item::FunctionCallOutput(output)) => {
 					let output_text = match output.output {
@@ -1779,28 +1788,34 @@ pub mod from_responses {
 							.join("\n"),
 					};
 
-					messages.push(bedrock::Message {
-						role: bedrock::Role::User,
-						content: vec![bedrock::ContentBlock::ToolResult(
-							bedrock::ToolResultBlock {
-								tool_use_id: output.call_id,
-								content: vec![bedrock::ToolResultContentBlock::Text(output_text)],
-								// Responses tool outputs do not carry explicit success/error metadata.
-								// Leave Bedrock status unset instead of assuming success.
-								status: None,
-							},
-						)],
-					});
+					helpers::push_or_merge_message(
+						&mut messages,
+						bedrock::Message {
+							role: bedrock::Role::User,
+							content: vec![bedrock::ContentBlock::ToolResult(
+								bedrock::ToolResultBlock {
+									tool_use_id: output.call_id,
+									content: vec![bedrock::ToolResultContentBlock::Text(output_text)],
+									// Responses tool outputs do not carry explicit success/error metadata.
+									// Leave Bedrock status unset instead of assuming success.
+									status: None,
+								},
+							)],
+						},
+					);
 				},
 				InputItem::Item(Item::CustomToolCall(call)) => {
-					messages.push(bedrock::Message {
-						role: bedrock::Role::Assistant,
-						content: vec![bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
-							tool_use_id: call.call_id,
-							name: call.name,
-							input: serde_json::json!({ "input": call.input }),
-						})],
-					});
+					helpers::push_or_merge_message(
+						&mut messages,
+						bedrock::Message {
+							role: bedrock::Role::Assistant,
+							content: vec![bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
+								tool_use_id: call.call_id,
+								name: call.name,
+								input: serde_json::json!({ "input": call.input }),
+							})],
+						},
+					);
 				},
 				InputItem::Item(Item::CustomToolCallOutput(CustomToolCallOutput {
 					call_id,
@@ -1819,18 +1834,21 @@ pub mod from_responses {
 							.join("\n"),
 					};
 
-					messages.push(bedrock::Message {
-						role: bedrock::Role::User,
-						content: vec![bedrock::ContentBlock::ToolResult(
-							bedrock::ToolResultBlock {
-								tool_use_id: call_id,
-								content: vec![bedrock::ToolResultContentBlock::Text(output_text)],
-								// Responses tool outputs do not carry explicit success/error metadata.
-								// Leave Bedrock status unset instead of assuming success.
-								status: None,
-							},
-						)],
-					});
+					helpers::push_or_merge_message(
+						&mut messages,
+						bedrock::Message {
+							role: bedrock::Role::User,
+							content: vec![bedrock::ContentBlock::ToolResult(
+								bedrock::ToolResultBlock {
+									tool_use_id: call_id,
+									content: vec![bedrock::ToolResultContentBlock::Text(output_text)],
+									// Responses tool outputs do not carry explicit success/error metadata.
+									// Leave Bedrock status unset instead of assuming success.
+									status: None,
+								},
+							)],
+						},
+					);
 				},
 				_ => {
 					tracing::debug!("Skipping unsupported Responses input item for Bedrock translation");
@@ -2137,7 +2155,7 @@ pub mod from_responses {
 
 	pub fn translate_stream(
 		b: Body,
-		_buffer_limit: usize,
+		buffer_limit: usize,
 		log: AmendOnDrop,
 		model: &str,
 		_message_id: &str,
@@ -2168,7 +2186,7 @@ pub mod from_responses {
 			})
 		};
 
-		parse::aws_sse::transform_multi(b, move |aws_event| {
+		parse::aws_sse::transform_multi(b, buffer_limit, move |aws_event| {
 			tracing::debug!("Raw AWS event - headers: {:?}", aws_event.headers());
 			if let Ok(body_str) = std::str::from_utf8(aws_event.payload()) {
 				tracing::debug!("AWS event body: {}", body_str);
@@ -2645,6 +2663,20 @@ mod helpers {
 		let timestamp = chrono::Utc::now().timestamp_millis();
 		let random: u32 = rand::random();
 		format!("msg_{:x}{:08x}", timestamp, random)
+	}
+
+	/// Push a message, or merge it into the last message if roles match.
+	/// Bedrock's Converse API requires strict user/assistant alternation;
+	/// this handles the OpenAI convention where each parallel tool result
+	/// is a separate `tool` role message (all mapped to Bedrock `User`).
+	pub fn push_or_merge_message(messages: &mut Vec<bedrock::Message>, msg: bedrock::Message) {
+		if let Some(last) = messages.last_mut()
+			&& last.role == msg.role
+		{
+			last.content.extend(msg.content);
+		} else {
+			messages.push(msg);
+		}
 	}
 }
 

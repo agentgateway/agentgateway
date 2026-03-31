@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use agent_core::{metrics, strng};
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-use openapiv3::ReferenceOr;
+use openapiv3::{OpenAPI, ReferenceOr};
 use prometheus_client::registry::Registry;
 use rmcp::model::Tool;
 use rstest::rstest;
@@ -23,8 +23,9 @@ use crate::types::local::{
 };
 use crate::{BackendConfig, ProxyInputs, client, mcp};
 
-// Helper to create a handler and mock server for tests
-async fn setup() -> (MockServer, Handler) {
+// Helper to create a handler and mock server for tests.
+// Use prefix "" for no path prefix, or e.g. "/v2" for a path prefix.
+async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 	let server = MockServer::start().await;
 	let host = server.uri();
 	let parsed = reqwest::Url::parse(&host).unwrap();
@@ -54,61 +55,50 @@ async fn setup() -> (MockServer, Handler) {
 	});
 
 	let client = PolicyClient { inputs: pi.clone() };
-	// Define a sample tool for testing
-	let test_tool_get = Tool {
-		name: Cow::Borrowed("get_user"),
-		description: Some(Cow::Borrowed("Get user details")), // Added description
-		icons: None,
-		title: None,
-		meta: None,
-		execution: None,
-		input_schema: Arc::new(
-			json!({ // Define a simple schema for testing
-					"type": "object",
-					"properties": {
-							"path": {
-									"type": "object",
-									"properties": {
-											"user_id": {"type": "string"}
-									},
-									"required": ["user_id"]
-							},
-							"query": {
-									"type": "object",
-									"properties": {
-											"verbose": {"type": "string"}
-									}
-							},
-							"header": {
-									"type": "object",
-									"properties": {
-											"X-Request-ID": {"type": "string"}
-									}
-							}
+	let test_tool_get = Tool::new(
+		Cow::Borrowed("get_user"),
+		Cow::Borrowed("Get user details"),
+		Arc::new(
+			json!({
+				"type": "object",
+				"properties": {
+					"path": {
+						"type": "object",
+						"properties": {
+							"user_id": {"type": "string"}
+						},
+						"required": ["user_id"]
 					},
-					"required": ["path"] // Only path is required for this tool
+					"query": {
+						"type": "object",
+						"properties": {
+							"verbose": {"type": "string"}
+						}
+					},
+					"header": {
+						"type": "object",
+						"properties": {
+							"X-Request-ID": {"type": "string"}
+						}
+					}
+				},
+				"required": ["path"]
 			})
 			.as_object()
 			.unwrap()
 			.clone(),
 		),
-		annotations: None,
-		output_schema: None,
-	};
+	);
 	let upstream_call_get = UpstreamOpenAPICall {
 		method: "GET".to_string(),
 		path: "/users/{user_id}".to_string(),
 		allowed_headers: HashSet::from(["X-Request-ID".to_string()]),
 	};
 
-	let test_tool_post = Tool {
-		name: Cow::Borrowed("create_user"),
-		description: Some(Cow::Borrowed("Create a new user")),
-		icons: None,
-		title: None,
-		meta: None,
-		execution: None,
-		input_schema: Arc::new(
+	let test_tool_post = Tool::new(
+		Cow::Borrowed("create_user"),
+		Cow::Borrowed("Create a new user"),
+		Arc::new(
 			json!({
 				"type": "object",
 				"properties": {
@@ -139,9 +129,7 @@ async fn setup() -> (MockServer, Handler) {
 			.unwrap()
 			.clone(),
 		),
-		output_schema: None,
-		annotations: None,
-	};
+	);
 	let upstream_call_post = UpstreamOpenAPICall {
 		method: "POST".to_string(),
 		path: "/users".to_string(),
@@ -168,10 +156,86 @@ async fn setup() -> (MockServer, Handler) {
 			(test_tool_get, upstream_call_get),
 			(test_tool_post, upstream_call_post),
 		],
-		"".to_string(),
+		prefix.to_string(),
 	);
 
 	(server, handler)
+}
+
+async fn setup() -> (MockServer, Handler) {
+	setup_with_prefix("").await
+}
+
+#[tokio::test]
+async fn test_call_tool_full_url_server_prefix() {
+	// When OpenAPI spec has servers: [{ url: "https://api.example.com/" }],
+	// get_server_prefix returns "" so the request goes to /users/{id} (no double host).
+	let prefix = super::get_server_prefix(&openapi_with_servers(
+		json!([{ "url": "https://api.example.com/" }]),
+	))
+	.expect("should parse");
+	assert_eq!(
+		prefix, "",
+		"full URL with root path should yield empty prefix"
+	);
+
+	let (server, handler) = setup_with_prefix(&prefix).await;
+	let user_id = "123";
+	let expected_response = json!({ "id": user_id, "name": "Test User" });
+
+	Mock::given(method("GET"))
+		.and(path(format!("/users/{user_id}")))
+		.respond_with(ResponseTemplate::new(200).set_body_json(&expected_response))
+		.mount(&server)
+		.await;
+
+	let args = json!({ "path": { "user_id": user_id } });
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+
+	assert!(
+		result.is_ok(),
+		"full-URL server prefix should not cause invalid authority"
+	);
+	assert_eq!(result.unwrap(), expected_response);
+}
+
+#[tokio::test]
+async fn test_call_tool_path_prefix_server() {
+	// When OpenAPI spec has servers: [{ url: "https://api.example.com/v2" }],
+	// get_server_prefix returns "/v2" and requests go to /v2/users/{id}.
+	let prefix = super::get_server_prefix(&openapi_with_servers(
+		json!([{ "url": "https://api.example.com/v2" }]),
+	))
+	.expect("should parse");
+	assert_eq!(prefix, "/v2", "full URL with path should yield path prefix");
+
+	let (server, handler) = setup_with_prefix(&prefix).await;
+	let user_id = "456";
+	let expected_response = json!({ "id": user_id, "name": "Versioned User" });
+
+	Mock::given(method("GET"))
+		.and(path(format!("/v2/users/{user_id}")))
+		.respond_with(ResponseTemplate::new(200).set_body_json(&expected_response))
+		.mount(&server)
+		.await;
+
+	let args = json!({ "path": { "user_id": user_id } });
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+
+	assert!(result.is_ok());
+	assert_eq!(result.unwrap(), expected_response);
 }
 
 #[tokio::test]
@@ -597,6 +661,50 @@ fn test_normalize_url_path(#[case] prefix: &str, #[case] path: &str, #[case] exp
 	assert_eq!(result, expected);
 }
 
+fn openapi_with_servers(servers: serde_json::Value) -> OpenAPI {
+	let spec = json!({
+		"openapi": "3.0.0",
+		"info": { "title": "Test", "version": "1.0.0" },
+		"servers": servers,
+		"paths": { "/x": { "get": { "operationId": "getX", "responses": { "200": { "description": "ok" } } } } }
+	});
+	serde_json::from_value(spec).expect("valid OpenAPI spec")
+}
+
+#[rstest]
+#[case::full_url_root("https://api.example.com/", "")]
+#[case::full_url_no_trailing_slash("https://api.example.com", "")]
+#[case::full_url_with_path("https://api.example.com/v2", "/v2")]
+#[case::full_url_with_path_trailing_slash("https://api.example.com/v2/", "/v2")]
+#[case::full_url_with_host_variable("https://{tenant}.example.com/v1", "/v1")]
+#[case::full_url_with_host_variable_no_path("https://{tenant}.example.com", "")]
+#[case::full_url_with_host_variable_root("https://{tenant}.example.com/", "")]
+#[case::full_url_with_path_variable("https://api.example.com/v1/{version}", "/v1/{version}")]
+#[case::relative_path("/api/v1", "/api/v1")]
+#[case::empty_string("", "")]
+fn test_get_server_prefix(#[case] server_url: &str, #[case] expected: &str) {
+	let spec = openapi_with_servers(json!([{ "url": server_url }]));
+	let result = super::get_server_prefix(&spec).expect("should succeed");
+	assert_eq!(result, expected, "server_url={server_url}");
+}
+
+#[tokio::test]
+async fn test_get_server_prefix_empty_servers() {
+	let spec = openapi_with_servers(json!([]));
+	let result = super::get_server_prefix(&spec).expect("should succeed");
+	assert_eq!(result, "");
+}
+
+#[tokio::test]
+async fn test_get_server_prefix_multiple_servers_err() {
+	let spec = openapi_with_servers(json!([
+		{ "url": "https://api.example.com/" },
+		{ "url": "https://api2.example.com/" }
+	]));
+	let result = super::get_server_prefix(&spec);
+	assert!(result.is_err(), "multiple servers should yield error");
+}
+
 #[rstest]
 #[case::empty_string(json!({"verbose": ""}), vec![("verbose", "")])]
 #[case::string_value(json!({"verbose": "true"}), vec![("verbose", "true")])]
@@ -842,21 +950,14 @@ async fn test_call_tool_structured_content_fallback() {
 	let request = JsonRpcRequest {
 		jsonrpc: JsonRpcVersion2_0,
 		id: RequestId::String("test-123".into()),
-		request: ClientRequest::CallToolRequest(CallToolRequest {
-			method: CallToolRequestMethod,
-			params: CallToolRequestParams {
-				meta: None,
-				task: None,
-				name: "get_user".into(),
-				arguments: Some(
-					json!({ "path": { "user_id": user_id } })
-						.as_object()
-						.unwrap()
-						.clone(),
-				),
-			},
-			extensions: Extensions::default(),
-		}),
+		request: ClientRequest::CallToolRequest(CallToolRequest::new(
+			CallToolRequestParams::new("get_user").with_arguments(
+				json!({ "path": { "user_id": user_id } })
+					.as_object()
+					.unwrap()
+					.clone(),
+			),
+		)),
 	};
 
 	let result = handler

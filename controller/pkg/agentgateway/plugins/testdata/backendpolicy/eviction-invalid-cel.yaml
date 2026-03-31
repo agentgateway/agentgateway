@@ -1,0 +1,66 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: be
+  namespace: default
+spec:
+  static:
+    host: example.com
+    port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: eviction-invalid-cel
+  namespace: default
+spec:
+  targetRefs:
+  - kind: AgentgatewayBackend
+    name: be
+    group: agentgateway.dev
+  backend:
+    health:
+      unhealthyCondition: foolen_{{response.code}}
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        health:
+          unhealthyCondition: foolen_{{response.code}}
+      key: default/eviction-invalid-cel:health:default/be
+      name:
+        kind: AgentgatewayPolicy
+        name: eviction-invalid-cel
+        namespace: default
+      target:
+        backend:
+          name: be
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: eviction-invalid-cel
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: 'backend health unhealthyCondition is not a valid CEL expression:
+          foolen_{{response.code}}'
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

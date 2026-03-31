@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use ::http::header::{HeaderName, HeaderValue};
@@ -15,6 +16,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{debug, warn};
 
+use crate::client::ResolvedDestination;
+use crate::http::sessionpersistence;
 use crate::mcp::mergestream;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
@@ -49,8 +52,44 @@ pub enum ParseError {
 
 pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> {
 	match server.servers.len() {
-		0 => Ok("".to_string()), // Return empty string instead of "/" to avoid double slash
-		1 => Ok(server.servers[0].url.clone()),
+		0 => Ok("".to_string()),
+		1 => {
+			let raw = &server.servers[0].url;
+
+			let extract_path = |after_scheme: &str| -> String {
+				if let Some(path_idx) = after_scheme.find('/') {
+					let path = &after_scheme[path_idx..];
+					let path = path.split('?').next().unwrap_or(path);
+					let path = path.split('#').next().unwrap_or(path);
+					let path = path.trim_end_matches('/');
+					if path.is_empty() || path == "/" {
+						"".to_string()
+					} else {
+						path.to_string()
+					}
+				} else {
+					"".to_string()
+				}
+			};
+
+			if let Some(idx) = raw.find("://") {
+				Ok(extract_path(&raw[idx + 3..]))
+			} else if let Some(stripped) = raw.strip_prefix("//") {
+				Ok(extract_path(stripped))
+			} else {
+				// Not an absolute URL -- treat as a relative path prefix (existing behavior)
+				if let Ok(parsed) = url::Url::parse(raw) {
+					let path = parsed.path().trim_end_matches('/').to_string();
+					if path.is_empty() || path == "/" {
+						Ok("".to_string())
+					} else {
+						Ok(path)
+					}
+				} else {
+					Ok(raw.clone())
+				}
+			}
+		},
 		_ => Err(ParseError::UnsupportedReference(format!(
 			"multiple servers are not supported: {:?}",
 			server.servers
@@ -373,23 +412,16 @@ pub(crate) fn parse_openapi_schema(
 									"final schema is not an object".to_string(),
 								))?
 								.clone();
-							let tool = Tool {
-								execution: None,
-								meta: None,
-								annotations: None,
-								name: Cow::Owned(name.clone()),
-								description: Some(Cow::Owned(
+							let tool = Tool::new_with_raw(
+								Cow::Owned(name.clone()),
+								Some(Cow::Owned(
 									op.description
 										.as_ref()
 										.unwrap_or_else(|| op.summary.as_ref().unwrap_or(&name))
 										.to_string(),
 								)),
-								input_schema: Arc::new(final_json),
-								// TODO: support output_schema
-								output_schema: None,
-								icons: None,
-								title: None,
-							};
+								Arc::new(final_json),
+							);
 							let upstream = UpstreamOpenAPICall {
 								// method: Method::from_bytes(method.as_ref()).expect("todo"),
 								method: method.to_string(),
@@ -568,6 +600,20 @@ impl Handler {
 		}
 	}
 
+	pub fn get_session_state(&self) -> sessionpersistence::MCPSession {
+		sessionpersistence::MCPSession {
+			target_name: Some(self.http_client.target_name().to_string()),
+			session: None,
+			backend: self.http_client.pinned_backend(),
+		}
+	}
+
+	pub fn set_session_id(&self, _: Option<&str>, pinned: Option<SocketAddr>) {
+		if let Some(pinned) = pinned {
+			self.http_client.pin_backend(ResolvedDestination(pinned));
+		}
+	}
+
 	pub async fn send_message(
 		&self,
 		request: JsonRpcRequest<ClientRequest>,
@@ -579,18 +625,9 @@ impl Handler {
 		let res = match request.request {
 			ClientRequest::InitializeRequest(_) => Messages::from_result(
 				id,
-				ServerInfo {
-					capabilities: ServerCapabilities::builder().enable_tools().build(),
-					..Default::default()
-				},
+				ServerInfo::new(ServerCapabilities::builder().enable_tools().build()),
 			),
-			ClientRequest::GetPromptRequest(_) => Messages::from_result(
-				id,
-				GetPromptResult {
-					description: None,
-					messages: vec![],
-				},
-			),
+			ClientRequest::GetPromptRequest(_) => Messages::from_result(id, GetPromptResult::new(vec![])),
 			ClientRequest::ListPromptsRequest(_) => Messages::from_result(
 				id,
 				ListPromptsResult {
@@ -615,14 +652,7 @@ impl Handler {
 					resource_templates: vec![],
 				},
 			),
-			ClientRequest::ListTasksRequest(_) => Messages::from_result(
-				id,
-				ListTasksResult {
-					next_cursor: None,
-					tasks: vec![],
-					total: None,
-				},
-			),
+			ClientRequest::ListTasksRequest(_) => Messages::from_result(id, ListTasksResult::new(vec![])),
 			ClientRequest::GetTaskInfoRequest(_) => Messages::from_result(
 				id,
 				GetTaskResult {
@@ -635,7 +665,7 @@ impl Handler {
 			},
 			ClientRequest::CancelTaskRequest(_) => Messages::empty(),
 			ClientRequest::ReadResourceRequest(_) => {
-				Messages::from_result(id, ReadResourceResult { contents: vec![] })
+				Messages::from_result(id, ReadResourceResult::new(vec![]))
 			},
 			ClientRequest::PingRequest(_)
 			| ClientRequest::CustomRequest(_)
@@ -657,15 +687,9 @@ impl Handler {
 				let serialized_content = serde_json::to_string(&res)
 					.map_err(|e| anyhow::anyhow!("Failed to serialize tool response: {}", e))?;
 
-				Messages::from_result(
-					id,
-					CallToolResult {
-						content: vec![Content::text(serialized_content)],
-						structured_content: Some(res),
-						is_error: None,
-						meta: None,
-					},
-				)
+				let mut result = CallToolResult::success(vec![Content::text(serialized_content)]);
+				result.structured_content = Some(res);
+				Messages::from_result(id, result)
 			},
 			ClientRequest::ListToolsRequest(_) => Messages::from_result(
 				id,

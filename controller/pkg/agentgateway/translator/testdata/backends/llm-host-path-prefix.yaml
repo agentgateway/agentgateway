@@ -1,0 +1,55 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openai-host-path-prefix
+  namespace: default
+spec:
+  ai:
+    provider:
+      openai:
+        model: "gpt-4o-mini"
+      host: custom.example.com
+      port: 443
+      pathPrefix: /api/v2
+  policies:
+    auth:
+      passthrough: {}
+---
+# Output
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - hostOverride:
+              host: custom.example.com
+              port: 443
+            name: backend
+            openai:
+              model: gpt-4o-mini
+            pathPrefix: /api/v2
+      inlinePolicies:
+      - auth:
+          passthrough: {}
+      key: default/openai-host-path-prefix
+      name:
+        name: openai-host-path-prefix
+        namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: openai-host-path-prefix
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

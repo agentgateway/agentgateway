@@ -24,10 +24,6 @@ var (
 // This file contains helper functions that generate helm values in the format needed
 // by the deployer.
 
-var ComponentLogLevelEmptyError = func(key string, value string) error {
-	return fmt.Errorf("an empty key or value was provided in componentLogLevels: key=%s, value=%s", key, value)
-}
-
 // Extract the listener ports from a Gateway and corresponding listener sets. These will be used to populate:
 // 1. the ports exposed on the envoy container
 // 2. the ports exposed on the proxy service
@@ -48,7 +44,7 @@ func GetPortsValues(gw *collections.GatewayForDeployer, noListenersDummyPort int
 
 	if len(listenerPorts) == 0 && noListenersDummyPort != 0 {
 		port := noListenersDummyPort
-		portName := GenerateListenerNameFromPort(gwv1.PortNumber(port))
+		portName := GenerateListenerNameFromPort(port)
 		gwPorts = AppendPortValue(gwPorts, port, portName)
 	}
 

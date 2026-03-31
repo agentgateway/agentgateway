@@ -9,7 +9,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/common"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
-	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 )
 
 // JwksStore is a top-level abstraction that relies on jwksCache and jwksFetcher to
@@ -34,7 +34,7 @@ type JwksStore struct {
 	l               sync.Mutex
 }
 
-func BuildJwksStore(ctx context.Context, cli apiclient.Client, commonCols *collections.CommonCollections, jwksChanges <-chan JwksSource, storePrefix, deploymentNamespace string) *JwksStore {
+func BuildJwksStore(cli apiclient.Client, krtOpts krtutil.KrtOptions, jwksChanges <-chan JwksSource, storePrefix, deploymentNamespace string) *JwksStore {
 	logger.Info("creating jwks store")
 
 	jwksCache := NewJwksCache()
@@ -43,7 +43,7 @@ func BuildJwksStore(ctx context.Context, cli apiclient.Client, commonCols *colle
 		jwksCache:       jwksCache,
 		jwksChanges:     jwksChanges,
 		jwksFetcher:     NewJwksFetcher(jwksCache),
-		configMapSyncer: NewConfigMapSyncer(cli, storePrefix, deploymentNamespace, commonCols.KrtOpts),
+		configMapSyncer: NewConfigMapSyncer(cli, storePrefix, deploymentNamespace, krtOpts),
 		cmNameToJwks:    make(map[string]string),
 	}
 	BuildJwksConfigMapNamespacedNameFunc(storePrefix, deploymentNamespace)

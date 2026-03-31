@@ -88,6 +88,8 @@ message Route {
   string key = 1;
   // Key for the listener this is a part of.
   string listener_key = 2;
+  // Service this route targets (set when parentRef is a Service).
+  istio.workload.NamespacedHostname service_key = 9;
   // User facing name for this resource
   RouteName name = 3;
 
@@ -102,6 +104,8 @@ message TCPRoute {
   string key = 1;
   // Key for the listener this is a part of.
   string listener_key = 2;
+  // Service this route targets (set when parentRef is a Service).
+  istio.workload.NamespacedHostname service_key = 9;
   // User facing name for this resource
   RouteName name = 3;
 
@@ -491,6 +495,12 @@ message FrontendPolicySpec {
     // TCP keepalive configuration
     KeepaliveConfig keepalives = 1;
   }
+
+  message NetworkAuthorization {
+    repeated string allow = 1;
+    repeated string deny = 2;
+    repeated string require = 3;
+  }
   // Logging configuration policy
   message Logging {
     // CEL expression to filter out logs. If unset, all logs are considered.
@@ -579,6 +589,7 @@ message FrontendPolicySpec {
     HTTP http = 3;
     Logging logging = 4;
     Tracing tracing = 5;
+    NetworkAuthorization network_authorization = 6;
   }
 }
 
@@ -664,6 +675,7 @@ message TrafficPolicySpec {
   message RBAC {
     repeated string allow = 1;
     repeated string deny = 2;
+    repeated string require = 3;
   }
   message JWTProvider {
     // JWT issuer that must match the 'iss' claim
@@ -683,6 +695,11 @@ message TrafficPolicySpec {
   }
   // JWT authentication configuration
   message JWT {
+    message MCP {
+      BackendPolicySpec.McpAuthentication.McpIDP provider = 1;
+      BackendPolicySpec.McpAuthentication.ResourceMetadata resource_metadata = 2;
+    }
+
     // Validation mode for JWT authentication
     enum Mode {
       // Default mode - if a token exists, validate it
@@ -696,6 +713,7 @@ message TrafficPolicySpec {
     // How the JWT validation should behave
     Mode mode = 1;
     repeated JWTProvider providers = 2;
+    MCP mcp = 3;
   }
 
   // Basic authentication configuration using htpasswd file
@@ -1074,6 +1092,7 @@ message BackendPolicySpec {
   message McpAuthorization {
     repeated string allow = 1;
     repeated string deny = 2;
+    repeated string require = 3;
   }
 
   message McpAuthentication {
@@ -1181,6 +1200,7 @@ message AIBackend {
     string name = 1;
     HostOverride host_override = 2;
     optional string path_override = 3;
+    optional string path_prefix = 12;
     oneof provider {
       OpenAI openai = 4;
       Gemini gemini = 5;

@@ -17,10 +17,9 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
-	pkgdeployer "github.com/agentgateway/agentgateway/controller/pkg/deployer"
-	internaldeployer "github.com/agentgateway/agentgateway/controller/pkg/kgateway/deployer"
-	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
+	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/envutils"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
@@ -29,14 +28,14 @@ const testSessionKey = "00112233445566778899aabbccddeeff00112233445566778899aabb
 
 type HelmTestCase struct {
 	Name   string
-	Inputs *pkgdeployer.Inputs
+	Inputs *deployer.Inputs
 	// InputFile is just the name of the manifest omitting the file extension suffix
 	InputFile string
 	// Validate is an optional function to run additional validation on the output YAML
 	Validate func(t *testing.T, outputYaml string)
 	// HelmValuesGeneratorOverride is an optional function to modify deployer inputs before rendering.
 	// This is useful for tests that need special configuration like TLS.
-	HelmValuesGeneratorOverride func(inputs *pkgdeployer.Inputs) pkgdeployer.HelmValuesGenerator
+	HelmValuesGeneratorOverride func(inputs *deployer.Inputs) deployer.HelmValuesGenerator
 }
 
 type DeployerTester struct {
@@ -111,7 +110,7 @@ func VerifyAllYAMLFilesReferenced(t *testing.T, testDataDir string, testCases []
 	require.Empty(t, unreferencedGolden, "Found golden output files in %s without corresponding test cases: %v", testDataDir, unreferencedGolden)
 }
 
-// ExtractCommonObjs will return a collection containing only objects necessary for collections.CommonCollections,
+// ExtractCommonObjs will return a collection containing only objects necessary for AgwCollections,
 // so we don't add unknown objects to avoid logging from krttest package re: objects not consumed
 func ExtractCommonObjs(t *testing.T, objs []client.Object) ([]client.Object, *gwv1.Gateway) {
 	var commonObjs []client.Object
@@ -171,13 +170,13 @@ func (dt DeployerTester) RunHelmChartTest(
 		t.Log("No Gateway found in test files, failing...")
 		t.FailNow()
 	}
-	commonCols := NewCommonCols(t)
-	inputs := DefaultDeployerInputs(dt, commonCols)
+	agwCols := NewAgwCols(t)
+	inputs := DefaultDeployerInputs(dt, agwCols)
 	if tt.Inputs != nil {
 		inputs = tt.Inputs
 	}
 
-	gwParams := internaldeployer.NewGatewayParameters(
+	gwParams := deployer.NewGatewayParameters(
 		fakeClient,
 		inputs,
 	)
@@ -187,7 +186,7 @@ func (dt DeployerTester) RunHelmChartTest(
 	if tt.HelmValuesGeneratorOverride != nil {
 		gwParams.WithHelmValuesGeneratorOverride(tt.HelmValuesGeneratorOverride(inputs))
 	}
-	deployer, err := internaldeployer.NewGatewayDeployer(
+	deployer, err := deployer.NewGatewayDeployer(
 		dt.AgwControllerName,
 		dt.AgwClassName,
 		scheme,
@@ -253,11 +252,10 @@ func objectsToYAML(objs []client.Object) ([]byte, error) {
 	return result, nil
 }
 
-func DefaultDeployerInputs(dt DeployerTester, commonCols *collections.CommonCollections) *pkgdeployer.Inputs {
-	return &pkgdeployer.Inputs{
-		Dev:               false,
-		CommonCollections: commonCols,
-		ControlPlane: pkgdeployer.ControlPlaneInfo{
+func DefaultDeployerInputs(dt DeployerTester, agwCols *plugins.AgwCollections) *deployer.Inputs {
+	return &deployer.Inputs{
+		AgwCollections: agwCols,
+		ControlPlane: deployer.ControlPlaneInfo{
 			XdsHost:    "xds.cluster.local",
 			AgwXdsPort: 9978,
 		},

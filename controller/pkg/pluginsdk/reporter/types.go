@@ -2,7 +2,6 @@ package reporter
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
@@ -54,19 +53,11 @@ type RouteCondition struct {
 
 type Reporter interface {
 	Gateway(gateway *gwv1.Gateway) GatewayReporter
-	ListenerSet(listenerSet client.Object) ListenerSetReporter
 	Route(obj metav1.Object) RouteReporter
 }
 
 type GatewayReporter interface {
 	Listener(listener *gwv1.Listener) ListenerReporter
-	ListenerName(listenerName string) ListenerReporter
-	SetCondition(condition GatewayCondition)
-}
-
-type ListenerSetReporter interface {
-	Listener(listener *gwv1.Listener) ListenerReporter
-	ListenerName(listenerName string) ListenerReporter
 	SetCondition(condition GatewayCondition)
 }
 

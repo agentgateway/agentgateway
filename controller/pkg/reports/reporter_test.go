@@ -12,9 +12,9 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 const fakeCondition = "kgateway.dev/SomeCondition"
@@ -463,24 +463,24 @@ func TestBuildRouteStatus(t *testing.T) {
 
 				switch r1 := tt.route1.(type) {
 				case *gwv1.HTTPRoute:
-					r1.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener1.Name))
+					r1.Spec.ParentRefs[0].SectionName = ptr.To(tt.listener1.Name)
 				case *gwv1a2.TCPRoute:
-					r1.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener1.Name))
+					r1.Spec.ParentRefs[0].SectionName = ptr.To(tt.listener1.Name)
 				case *gwv1.TLSRoute:
-					r1.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener1.Name))
+					r1.Spec.ParentRefs[0].SectionName = ptr.To(tt.listener1.Name)
 				case *gwv1.GRPCRoute:
-					r1.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener1.Name))
+					r1.Spec.ParentRefs[0].SectionName = ptr.To(tt.listener1.Name)
 				}
 
 				switch r2 := tt.route2.(type) {
 				case *gwv1.HTTPRoute:
-					r2.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener2.Name))
+					r2.Spec.ParentRefs[0].SectionName = ptr.To(tt.listener2.Name)
 				case *gwv1a2.TCPRoute:
-					r2.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener2.Name))
+					r2.Spec.ParentRefs[0].SectionName = ptr.To(tt.listener2.Name)
 				case *gwv1.TLSRoute:
-					r2.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener2.Name))
+					r2.Spec.ParentRefs[0].SectionName = ptr.To(tt.listener2.Name)
 				case *gwv1.GRPCRoute:
-					r2.Spec.ParentRefs[0].SectionName = ptr.To(gwv1.SectionName(tt.listener2.Name))
+					r2.Spec.ParentRefs[0].SectionName = ptr.To(tt.listener2.Name)
 				}
 
 				rm := reports.NewReportMap()

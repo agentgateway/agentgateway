@@ -15,7 +15,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/agentgatewaysyncer"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
 )
 
 func TestReferences(t *testing.T) {
@@ -66,7 +66,7 @@ func TestBackends(t *testing.T) {
 			return a.ResourceName()
 		})
 		a := ri.Outputs.Addresses.List()
-		a = slices.SortBy(a, func(a agentgatewaysyncer.Address) string {
+		a = slices.SortBy(a, func(a syncer.Address) string {
 			return a.ResourceName()
 		})
 		res := []any{}

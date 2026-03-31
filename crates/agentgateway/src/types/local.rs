@@ -21,14 +21,14 @@ use crate::mcp::McpAuthorization;
 use crate::store::LocalWorkload;
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendPolicy, BackendReference,
-	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch, Listener,
-	ListenerKey, ListenerName, ListenerProtocol, ListenerSet, ListenerTarget, LocalMcpAuthentication,
-	McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
-	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteMatch,
-	RouteName, RouteSet, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
-	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig, TrafficPolicy,
-	TunnelProtocol, TypedResourceName,
+	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch,
+	JwtAuthentication, Listener, ListenerKey, ListenerName, ListenerProtocol, ListenerSet,
+	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpTarget, McpTargetName,
+	McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType, ResourceName,
+	Route, RouteBackendReference, RouteMatch, RouteName, RouteSet, ServerTLSConfig, SimpleBackend,
+	SimpleBackendReference, SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec,
+	TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TracingConfig,
+	TrafficPolicy, TunnelProtocol, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
@@ -37,6 +37,7 @@ use ::http::Uri;
 use agent_core::prelude::Strng;
 use anyhow::{Error, anyhow, bail};
 use bytes::Bytes;
+use frozen_collections::Len;
 use itertools::Itertools;
 use macro_rules_attribute::apply;
 use secrecy::SecretString;
@@ -386,6 +387,9 @@ pub struct LocalLLMParams {
 	/// Override the upstream path for this provider.
 	#[serde(default)]
 	path_override: Option<Strng>,
+	/// Override the default base path prefix for this provider.
+	#[serde(default)]
+	path_prefix: Option<Strng>,
 	/// Whether to tokenize the request before forwarding it upstream.
 	#[serde(default)]
 	tokenize: bool,
@@ -598,8 +602,12 @@ pub struct LocalAIProviders {
 pub struct LocalNamedAIProvider {
 	pub name: Strng,
 	pub provider: AIProvider,
+	/// Override the upstream host for this provider.
 	pub host_override: Option<Target>,
+	/// Override the upstream path for this provider.
 	pub path_override: Option<Strng>,
+	/// Override the default base path prefix for this provider.
+	pub path_prefix: Option<Strng>,
 	/// Whether to tokenize on the request flow. This enables us to do more accurate rate limits,
 	/// since we know (part of) the cost of the request upfront.
 	/// This comes with the cost of an expensive operation.
@@ -633,6 +641,7 @@ impl LocalAIBackend {
 						provider: p.provider,
 						host_override: p.host_override,
 						path_override: p.path_override,
+						path_prefix: p.path_prefix,
 						tokenize: p.tokenize,
 						inline_policies: policies,
 					},
@@ -1226,6 +1235,9 @@ struct LocalFrontendPolicies {
 	/// Settings for handling incoming TCP connections.
 	#[serde(default)]
 	pub tcp: Option<frontend::TCP>,
+	/// CEL authorization for downstream network connections.
+	#[serde(default)]
+	pub network_authorization: Option<frontend::NetworkAuthorization>,
 	/// Settings for request access logs.
 	#[serde(default, alias = "logging")]
 	pub access_log: Option<frontend::LoggingPolicy>,
@@ -1575,6 +1587,7 @@ json(request.body).model
 
 	let model_list_route = Route {
 		key: strng::new("llm:admin:model-list"),
+		service_key: None,
 		name: RouteName {
 			name: strng::new("admin:model-list"),
 			namespace: strng::new("internal"),
@@ -1659,6 +1672,7 @@ json(request.body).model
 			provider,
 			host_override: p.host_override,
 			path_override: p.path_override,
+			path_prefix: p.path_prefix,
 			tokenize: p.tokenize,
 			inline_policies: pols,
 		};
@@ -1752,6 +1766,7 @@ json(request.body).model
 
 		let model_route = Route {
 			key: route_key.clone(),
+			service_key: None,
 			name: RouteName {
 				name: strng::format!("model:{}", model_config.name),
 				namespace: strng::new("internal"),
@@ -1900,6 +1915,7 @@ async fn convert_mcp_config(
 	let mut routes = RouteSet::default();
 	let route = Route {
 		key: strng::new("mcp:default"),
+		service_key: None,
 		name: RouteName {
 			name: strng::new("default"),
 			namespace: strng::new("internal"),
@@ -2151,6 +2167,7 @@ pub async fn convert_route(
 	}
 	let route = Route {
 		key,
+		service_key: None,
 		name: RouteName {
 			name: route_name,
 			namespace,
@@ -2190,6 +2207,7 @@ async fn split_frontend_policies(
 		http,
 		tls,
 		tcp,
+		network_authorization,
 		access_log,
 		tracing,
 	} = pol;
@@ -2201,6 +2219,12 @@ async fn split_frontend_policies(
 	}
 	if let Some(p) = tcp {
 		add(FrontendPolicy::TCP(p), "tcp");
+	}
+	if let Some(p) = network_authorization {
+		add(
+			FrontendPolicy::NetworkAuthorization(p),
+			"networkAuthorization",
+		);
 	}
 	if let Some(mut p) = access_log {
 		p.init_access_log_policy();
@@ -2290,10 +2314,11 @@ pub async fn split_policies(
 		backend_policies.push(BackendPolicy::McpAuthorization(p))
 	}
 	if let Some(p) = mcp_authentication {
-		// Translate local MCP authn into runtime authn with a ready JWT validator.
 		let authn: McpAuthentication = p.translate(client.clone()).await?;
-		backend_policies.push(BackendPolicy::McpAuthentication(authn));
-		// Do NOT inject a separate route-level JwtAuth; MCP router handles validation using jwt_validator.
+		route_policies.push(TrafficPolicy::JwtAuth(JwtAuthentication {
+			jwt: authn.jwt_validator.as_ref().clone(),
+			mcp: Some(authn),
+		}));
 	}
 	if let Some(p) = a2a {
 		backend_policies.push(BackendPolicy::A2a(p))
@@ -2314,7 +2339,10 @@ pub async fn split_policies(
 		route_policies.push(TrafficPolicy::AI(Arc::new(p)))
 	}
 	if let Some(p) = jwt_auth {
-		route_policies.push(TrafficPolicy::JwtAuth(p.try_into(client.clone()).await?));
+		route_policies.push(TrafficPolicy::JwtAuth(JwtAuthentication {
+			jwt: p.try_into(client.clone()).await?,
+			mcp: None,
+		}));
 	}
 	if let Some(p) = basic_auth {
 		route_policies.push(TrafficPolicy::BasicAuth(p.try_into()?));
@@ -2416,6 +2444,7 @@ async fn convert_tcp_route(
 	}
 	let route = TCPRoute {
 		key,
+		service_key: None,
 		name: RouteName {
 			name: route_name,
 			namespace,

@@ -161,13 +161,6 @@ type Settings struct {
 	// is deprecated in v2.1 and will not be supported in v2.2.
 	EnableInferExt bool `split_words:"true"`
 
-	// DefaultImageRegistry is the default image registry to use for the agentgateway image.
-	DefaultImageRegistry string `split_words:"true" default:"cr.agentgateway.dev"`
-	// DefaultImageTag is the default image tag to use for the agentgateway image.
-	DefaultImageTag string `split_words:"true" default:""`
-	// DefaultImagePullPolicy is the default image pull policy to use for the agentgateway image.
-	DefaultImagePullPolicy string `split_words:"true" default:"IfNotPresent"`
-
 	// ProxyImageRegistry is the default image registry to use for the proxy image.
 	ProxyImageRegistry string `split_words:"true" default:"cr.agentgateway.dev"`
 	// ProxyImageRepository is the default image repository to use for the proxy image.

@@ -8,23 +8,34 @@ info:
     type: adaptive
   output_config:
     effort: high
+  output_format: markdown
   messages:
     - role: user
-      content: Give one concise insight about distributed consensus.
+      content:
+        - type: text
+          text: Give one concise insight about distributed consensus.
+          cache_control:
+            type: ephemeral
+            scope: turn
 ---
 {
   "messages": [
     {
       "role": "user",
-      "content": "Give one concise insight about distributed consensus."
+      "content": [
+        {
+          "type": "text",
+          "text": "Give one concise insight about distributed consensus.",
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        }
+      ]
     }
   ],
   "anthropic_version": "vertex-2023-10-16",
   "max_tokens": 1024,
   "thinking": {
     "type": "adaptive"
-  },
-  "output_config": {
-    "effort": "high"
   }
 }

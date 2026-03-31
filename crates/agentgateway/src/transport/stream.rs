@@ -553,9 +553,12 @@ impl Extension {
 		}
 	}
 
-	pub fn copy<T: Send + Clone + Sync + 'static>(&self, ext: &mut http::Extensions) {
+	pub fn copy<T: Send + Clone + Sync + 'static>(&self, ext: &mut http::Extensions) -> Option<&T> {
 		if let Some(got) = self.get::<T>() {
 			ext.insert(got.clone());
+			Some(got)
+		} else {
+			None
 		}
 	}
 }
