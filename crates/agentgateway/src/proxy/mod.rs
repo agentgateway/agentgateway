@@ -162,7 +162,7 @@ pub enum ProxyError {
 	BackendAuthenticationFailed(anyhow::Error),
 	#[error("parsing body: {0}")]
 	Body(http::Error),
-	#[error("upstream call failed: {0}")]
+	#[error("upstream call failed: {0:?}")]
 	UpstreamCallFailed(HyperError),
 	#[error("upstream call timeout")]
 	UpstreamCallTimeout,

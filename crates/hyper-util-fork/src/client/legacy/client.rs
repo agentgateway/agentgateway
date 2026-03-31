@@ -1455,12 +1455,16 @@ impl fmt::Debug for Builder {
 
 impl fmt::Debug for Error {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let mut f = f.debug_tuple("hyper_util::client::legacy::Error");
-		f.field(&self.kind);
 		if let Some(ref cause) = self.source {
-			f.field(cause);
+			if let Some(he) = cause.downcast_ref::<hyper::Error>() {
+				if let Some(src) = he.source() {
+					return write!(f, "{:?}: {}: {}", self.kind, cause, src);
+				}
+			}
+			write!(f, "{:?}: {}", self.kind, cause)
+		} else {
+			write!(f, "{:?}", self.kind)
 		}
-		f.finish()
 	}
 }
 
