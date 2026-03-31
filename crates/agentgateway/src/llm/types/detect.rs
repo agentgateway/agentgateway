@@ -178,24 +178,15 @@ mod lookups {
 		&["usage", "completion_tokens"],
 	];
 	pub const USAGE_TOTAL_TOKENS: [&[&str]; 1] = [&["usage", "total_tokens"]];
-	pub const INPUT_IMAGE_TOKENS: [&[&str]; 1] = [
-		&["usage", "input_tokens_details", "image_tokens"],
-	];
-	pub const INPUT_TEXT_TOKENS: [&[&str]; 1] = [
-		&["usage", "input_tokens_details", "text_tokens"],
-	];
-	pub const INPUT_AUDIO_TOKENS: [&[&str]; 1] = [
-		&["usage", "prompt_tokens_details", "audio_tokens"],
-	];
-	pub const OUTPUT_IMAGE_TOKENS: [&[&str]; 1] = [
-		&["usage", "output_tokens_details", "image_tokens"],
-	];
-	pub const OUTPUT_TEXT_TOKENS: [&[&str]; 1] = [
-		&["usage", "output_tokens_details", "text_tokens"],
-	];
-	pub const OUTPUT_AUDIO_TOKENS: [&[&str]; 1] = [
-		&["usage", "completion_tokens_details", "audio_tokens"],
-	];
+	pub const INPUT_IMAGE_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "image_tokens"]];
+	pub const INPUT_TEXT_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "text_tokens"]];
+	pub const INPUT_AUDIO_TOKENS: [&[&str]; 1] =
+		[&["usage", "prompt_tokens_details", "audio_tokens"]];
+	pub const OUTPUT_IMAGE_TOKENS: [&[&str]; 1] =
+		[&["usage", "output_tokens_details", "image_tokens"]];
+	pub const OUTPUT_TEXT_TOKENS: [&[&str]; 1] = [&["usage", "output_tokens_details", "text_tokens"]];
+	pub const OUTPUT_AUDIO_TOKENS: [&[&str]; 1] =
+		[&["usage", "completion_tokens_details", "audio_tokens"]];
 	pub const REASONING: [&[&str]; 3] = [
 		// Responses
 		&["usage", "output_tokens_details", "reasoning_tokens"],
@@ -313,12 +304,10 @@ pub fn passthrough_stream(
 	mut log: AmendOnDrop,
 	resp: crate::http::Response,
 ) -> crate::http::Response {
-	dbg!("STAMY");
 	let buffer_limit = crate::http::response_buffer_limit(&resp);
 	resp.map(|b| {
 		parse::sse::permissive_json_passthrough::<StreamResponse>(b, buffer_limit, move |f| match f {
 			Some(Ok(f)) => {
-				dbg!(&f);
 				let input_tokens = f.set_if(
 					&log,
 					lookups::USAGE_INPUT_TOKENS,
@@ -331,37 +320,37 @@ pub fn passthrough_stream(
 					|v| v.as_u64(),
 					|l, v| l.response.output_tokens = Some(v),
 				);
-				let input_image_tokens = f.set_if(
+				let _input_image_tokens = f.set_if(
 					&log,
 					lookups::INPUT_IMAGE_TOKENS,
 					|v| v.as_u64(),
 					|l, v| l.response.input_image_tokens = Some(v),
 				);
-				let input_text_tokens = f.set_if(
+				let _input_text_tokens = f.set_if(
 					&log,
 					lookups::INPUT_TEXT_TOKENS,
 					|v| v.as_u64(),
 					|l, v| l.response.input_text_tokens = Some(v),
 				);
-				let input_audio_tokens = f.set_if(
+				let _input_audio_tokens = f.set_if(
 					&log,
 					lookups::INPUT_AUDIO_TOKENS,
 					|v| v.as_u64(),
 					|l, v| l.response.input_audio_tokens = Some(v),
 				);
-				let output_image_tokens = f.set_if(
+				let _output_image_tokens = f.set_if(
 					&log,
 					lookups::OUTPUT_IMAGE_TOKENS,
 					|v| v.as_u64(),
 					|l, v| l.response.output_image_tokens = Some(v),
 				);
-				let output_text_tokens = f.set_if(
+				let _output_text_tokens = f.set_if(
 					&log,
 					lookups::OUTPUT_TEXT_TOKENS,
 					|v| v.as_u64(),
 					|l, v| l.response.output_text_tokens = Some(v),
 				);
-				let output_audio_tokens = f.set_if(
+				let _output_audio_tokens = f.set_if(
 					&log,
 					lookups::OUTPUT_AUDIO_TOKENS,
 					|v| v.as_u64(),
@@ -373,25 +362,25 @@ pub fn passthrough_stream(
 					|v| v.as_u64(),
 					|l, v| l.response.total_tokens = Some(v),
 				);
-				let reasoning_tokens = f.set_if(
+				let _reasoning_tokens = f.set_if(
 					&log,
 					lookups::REASONING,
 					|v| v.as_u64(),
 					|l, v| l.response.reasoning_tokens = Some(v),
 				);
-				let cache_creation_input_tokens = f.set_if(
+				let _cache_creation_input_tokens = f.set_if(
 					&log,
 					lookups::CACHE_CREATION_INPUT_TOKENS,
 					|v| v.as_u64(),
 					|l, v| l.response.cache_creation_input_tokens = Some(v),
 				);
-				let cached_input_tokens = f.set_if(
+				let _cached_input_tokens = f.set_if(
 					&log,
 					lookups::CACHED_INPUT_TOKENS,
 					|v| v.as_u64(),
 					|l, v| l.response.cached_input_tokens = Some(v),
 				);
-				let provider_model = f.set_if(
+				let _provider_model = f.set_if(
 					&log,
 					lookups::MODEL,
 					|v| v.as_str(),
@@ -408,20 +397,7 @@ pub fn passthrough_stream(
 				{
 					log.non_atomic_mutate(|l| l.response.total_tokens = Some(input + output));
 				}
-				if input_tokens.is_some()
-					|| input_image_tokens.is_some()
-					|| input_text_tokens.is_some()
-					|| input_audio_tokens.is_some()
-					|| output_tokens.is_some()
-					|| output_image_tokens.is_some()
-					|| output_text_tokens.is_some()
-					|| output_audio_tokens.is_some()
-					|| total_tokens.is_some()
-					|| reasoning_tokens.is_some()
-					|| cache_creation_input_tokens.is_some()
-					|| cached_input_tokens.is_some()
-					|| provider_model.is_some()
-				{
+				if input_tokens.is_some() || output_tokens.is_some() || total_tokens.is_some() {
 					log.report_rate_limit();
 				}
 			},

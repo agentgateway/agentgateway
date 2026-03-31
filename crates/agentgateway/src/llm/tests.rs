@@ -425,8 +425,8 @@ mod response {
 		&[("stream", ALL_RESPONSES), ("stream-image", ALL_RESPONSES)];
 
 	const DETECT_RESPONSES: &[(&str, &[&str])] = &[
-		// ("non-json", &[COMPLETIONS_TO_DETECT]),
-		// ("broken-sse", &[COMPLETIONS_TO_DETECT]),
+		("non-json", &[COMPLETIONS_TO_DETECT]),
+		("broken-sse", &[COMPLETIONS_TO_DETECT]),
 		("stream-image-generation", &[COMPLETIONS_TO_DETECT]),
 	];
 
@@ -518,8 +518,6 @@ mod response {
 	async fn test_streaming_response_for_provider(provider: &str, test: &str) {
 		let (p, r) = build_provider_request(provider);
 		let test_fn = async |i: Response, log: AsyncLog<llm::LLMInfo>| {
-			tracing::error!("howardjohn: STREAM");
-			eprintln!("STREAM");
 			p.process_streaming(r, LLMResponsePolicies::default(), log, false, i)
 				.await
 		};

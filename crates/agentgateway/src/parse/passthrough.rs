@@ -173,16 +173,13 @@ where
 				};
 				match decode {
 					Ok(Some(decoded_item)) => {
-						eprintln!("decode!");
 						(handler)(decoded_item);
 					},
 					Ok(None) => {
-						eprintln!("no decode");
 						// Nothing more to decode!
 						return Ok(());
 					},
 					Err(e) => {
-						eprintln!("got error:");
 						return Err(http::Error::new(e));
 					},
 				}
@@ -206,8 +203,6 @@ where
 				Some(Ok(frame)) => {
 					if let Some(data) = frame.data_ref() {
 						this.decode_buffer.extend_from_slice(data);
-						eprintln!("buffer {}", this.decode_buffer.len());
-						eprintln!("buffer {}", String::from_utf8_lossy(this.decode_buffer));
 					}
 				},
 				None => {
