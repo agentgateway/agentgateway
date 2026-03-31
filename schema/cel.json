@@ -323,6 +323,7 @@
           "minimum": 0
         },
         "serviceTier": {
+          "description": "The service tier the provider served the request under.",
           "type": [
             "string",
             "null"

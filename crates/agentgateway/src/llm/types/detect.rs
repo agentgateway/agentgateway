@@ -350,10 +350,12 @@ pub fn passthrough_stream(
 	mut log: AmendOnDrop,
 	resp: crate::http::Response,
 ) -> crate::http::Response {
+	dbg!("STAMY");
 	let buffer_limit = crate::http::response_buffer_limit(&resp);
 	resp.map(|b| {
 		parse::sse::permissive_json_passthrough::<StreamResponse>(b, buffer_limit, move |f| match f {
 			Some(Ok(f)) => {
+				dbg!(&f);
 				let input_tokens = f.set_if(
 					&log,
 					lookups::USAGE_INPUT_TOKENS,

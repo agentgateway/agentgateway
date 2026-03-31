@@ -221,6 +221,7 @@ pub mod from_messages {
 					.unwrap_or(0),
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
+				service_tier: None,
 			},
 			input_audio_tokens: usage.as_ref().and_then(|u| {
 				u.prompt_tokens_details
@@ -476,6 +477,7 @@ pub mod from_messages {
 										output_tokens: 0,
 										cache_creation_input_tokens: None,
 										cache_read_input_tokens: None,
+										service_tier: None,
 									},
 									input_audio_tokens: None,
 									output_audio_tokens: None,
@@ -833,6 +835,13 @@ pub mod from_messages {
 			})
 			.collect_vec();
 
+		// "Function tools with reasoning_effort are not supported for gpt-5.4
+		let reasoning_effort = if !tools.is_empty() && model.starts_with("gpt-5.4") {
+			None
+		} else {
+			reasoning_effort
+		};
+
 		let mut parallel_tool_calls = None;
 		let tool_choice = tool_choice.map(|choice| match choice {
 			messages::ToolChoice::Auto {
@@ -955,7 +964,7 @@ pub fn passthrough_stream(
 							seen_provider = true;
 							log.non_atomic_mutate(|r| {
 								r.response.provider_model = Some(strng::new(&f.model));
-								r.response.service_tier = f.service_tier.as_ref().and_then(types::serialize_str);
+								r.response.service_tier = f.service_tier.as_deref().map(Into::into);
 							});
 						}
 						if let Some(u) = f.usage {

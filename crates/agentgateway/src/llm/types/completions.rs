@@ -417,7 +417,7 @@ pub mod typed {
 		ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
 		ChatCompletionTools as Tool, FinishReason, FunctionCall, FunctionCallStream, FunctionName,
 		FunctionObject, FunctionType, ImageUrl, PredictionContent, ReasoningEffort, ResponseFormat,
-		ResponseFormatJsonSchema, ResponseModalities as ChatCompletionModalities, Role, ServiceTier,
+		ResponseFormatJsonSchema, ResponseModalities as ChatCompletionModalities, Role,
 		StopConfiguration as Stop, ToolChoiceOptions, WebSearchOptions,
 	};
 	use serde::{Deserialize, Serialize};
@@ -435,7 +435,7 @@ pub mod typed {
 		pub model: String,
 		/// The service tier used for processing the request. This field is only included if the `service_tier` parameter is specified in the request.
 		#[serde(skip_serializing_if = "Option::is_none")]
-		pub service_tier: Option<ServiceTier>,
+		pub service_tier: Option<String>,
 		/// This fingerprint represents the backend configuration that the model runs with.
 		///
 		/// Can be used in conjunction with the `seed` request parameter to understand when backend changes have been made that might impact determinism.
@@ -501,7 +501,7 @@ pub mod typed {
 		/// The model to generate the completion.
 		pub model: String,
 		/// The service tier used for processing the request. This field is only included if the `service_tier` parameter is specified in the request.
-		pub service_tier: Option<ServiceTier>,
+		pub service_tier: Option<String>,
 		/// This fingerprint represents the backend configuration that the model runs with.
 		/// Can be used in conjunction with the `seed` request parameter to understand when backend changes have been made that might impact determinism.
 		pub system_fingerprint: Option<String>,
@@ -734,7 +734,7 @@ pub mod typed {
 		///
 		/// When this parameter is set, the response body will include the `service_tier` utilized.
 		#[serde(skip_serializing_if = "Option::is_none")]
-		pub service_tier: Option<ServiceTier>,
+		pub service_tier: Option<String>,
 
 		/// Up to 4 sequences where the API will stop generating further tokens.
 		#[serde(skip_serializing_if = "Option::is_none")]

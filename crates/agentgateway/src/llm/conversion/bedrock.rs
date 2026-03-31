@@ -1375,6 +1375,7 @@ pub mod from_messages {
 								output_tokens: 0,
 								cache_creation_input_tokens: None,
 								cache_read_input_tokens: None,
+								service_tier: None,
 							},
 							input_audio_tokens: None,
 							output_audio_tokens: None,
@@ -3003,12 +3004,14 @@ impl ConverseResponseAdapter {
 				output_tokens: u.output_tokens,
 				cache_creation_input_tokens: u.cache_write_input_tokens,
 				cache_read_input_tokens: u.cache_read_input_tokens,
+				service_tier: None,
 			})
 			.unwrap_or(messagest::Usage {
 				input_tokens: 0,
 				output_tokens: 0,
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
+				service_tier: None,
 			});
 
 		Ok(messagest::MessagesResponse {

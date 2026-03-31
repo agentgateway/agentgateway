@@ -1,0 +1,18 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/detect/stream-image-generation
+---
+event: image_generation.completed
+data: {"created_at":123,"type":"image_generation.completed","b64_json":"i","background":"opaque","output_format":"png","quality":"high","sequence_number":0,"size":"1024x1024","usage":{"input_tokens":12,"input_tokens_details":{"image_tokens":0,"text_tokens":12},"output_tokens":4493,"output_tokens_details":{"image_tokens":4160,"text_tokens":333},"total_tokens":4505}}
+
+
+
+{
+  "input_tokens": 12,
+  "input_image_tokens": 0,
+  "input_text_tokens": 12,
+  "output_tokens": 4493,
+  "output_image_tokens": 4160,
+  "output_text_tokens": 333,
+  "total_tokens": 4505
+}

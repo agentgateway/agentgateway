@@ -80,10 +80,6 @@ pub struct Usage {
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct UsageOutputDetails {
 	pub reasoning_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub image_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub text_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -91,10 +87,6 @@ pub struct UsageOutputDetails {
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct UsageInputDetails {
 	pub cached_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub image_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub text_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -403,25 +395,15 @@ impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
-			input_image_tokens: self
-				.usage
-				.as_ref()
-				.and_then(|u| u.input_tokens_details.as_ref().and_then(|d| d.image_tokens)),
-			input_text_tokens: self
-				.usage
-				.as_ref()
-				.and_then(|u| u.input_tokens_details.as_ref().and_then(|d| d.text_tokens)),
+			input_image_tokens: None,
+			input_text_tokens: None,
 			input_audio_tokens: None,
 			output_tokens: self.usage.as_ref().map(|u| u.output_tokens),
-			output_image_tokens: self.usage.as_ref().and_then(|u| {
-				u.output_tokens_details
-					.as_ref()
-					.and_then(|d| d.image_tokens)
-			}),
-			output_text_tokens: self
-				.usage
-				.as_ref()
-				.and_then(|u| u.output_tokens_details.as_ref().and_then(|d| d.text_tokens)),
+			// Note: responses supports image generation, but it does not report image generation as tokens.
+			// Instead there is a cost based on the image paramaters (https://developers.openai.com/api/docs/guides/image-generation?api=image#calculating-costs)
+			// which we do not currently emit.
+			output_image_tokens: None,
+			output_text_tokens: None,
 			output_audio_tokens: None,
 			count_tokens: None,
 			total_tokens: self

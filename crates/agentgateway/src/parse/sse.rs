@@ -34,7 +34,9 @@ pub fn permissive_json_passthrough<F: DeserializeOwned>(
 ) -> http::Body {
 	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
 
+	eprintln!("permissive_json_passthrough is deprecated. Use json_passthrough instead.");
 	crate::parse::passthrough::full_passthrough_parser(b, decoder, move |o| {
+		eprintln!("got d");
 		let Some(data) = unwrap_sse_data(o) else {
 			return;
 		};

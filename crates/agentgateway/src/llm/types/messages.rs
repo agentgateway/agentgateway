@@ -107,6 +107,8 @@ pub struct Usage {
 	pub cache_creation_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cache_read_input_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub service_tier: Option<String>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -372,7 +374,7 @@ impl ResponseType for Response {
 			reasoning_tokens: None,
 			cache_creation_input_tokens: self.usage.cache_creation_input_tokens,
 			cached_input_tokens: self.usage.cache_read_input_tokens,
-			service_tier: None,
+			service_tier: self.usage.service_tier.as_deref().map(Into::into),
 			completion: if include_completion_in_log {
 				Some(
 					self
@@ -926,7 +928,7 @@ pub mod typed {
 	}
 
 	/// Billing and rate-limit usage.
-	#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+	#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 	pub struct Usage {
 		/// The number of input tokens which were used.
 		pub input_tokens: usize,
@@ -941,6 +943,10 @@ pub mod typed {
 		/// The number of input tokens read from the cache.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_read_input_tokens: Option<usize>,
+
+		/// The service tier used to serve the request.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub service_tier: Option<String>,
 	}
 
 	/// Tool definition
@@ -1005,7 +1011,7 @@ pub mod typed {
 				reasoning_tokens: None,
 				cache_creation_input_tokens: self.usage.cache_creation_input_tokens.map(|i| i as u64),
 				cached_input_tokens: self.usage.cache_read_input_tokens.map(|i| i as u64),
-				service_tier: None,
+				service_tier: self.usage.service_tier.as_deref().map(Into::into),
 				provider_model: Some(agent_core::strng::new(&self.model)),
 				count_tokens: None,
 				completion: if include_completion_in_log {

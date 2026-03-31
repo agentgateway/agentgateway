@@ -837,6 +837,7 @@ pub struct LLMContext {
 	#[dynamic(rename = "totalTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub total_tokens: Option<u64>,
+	/// The service tier the provider served the request under.
 	#[dynamic(rename = "serviceTier")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub service_tier: Option<Strng>,

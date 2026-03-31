@@ -46,6 +46,7 @@ info:
     "total_tokens": 36,
     "cache_creation_input_tokens": 13,
     "cached_input_tokens": 12,
+    "service_tier": "standard",
     "provider_model": "claude-haiku-4-5-20251001"
   }
 }

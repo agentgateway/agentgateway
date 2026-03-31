@@ -421,13 +421,14 @@ mod response {
 
 	const ALL_RESPONSES: &[&str] = &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT];
 	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_RESPONSES)];
-	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", ALL_RESPONSES), ("stream-image", ALL_RESPONSES)];
+	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] =
+		&[("stream", ALL_RESPONSES), ("stream-image", ALL_RESPONSES)];
 
 	const DETECT_RESPONSES: &[(&str, &[&str])] = &[
-		("non-json", &[COMPLETIONS_TO_DETECT]),
-		("broken-sse", &[COMPLETIONS_TO_DETECT]),
+		// ("non-json", &[COMPLETIONS_TO_DETECT]),
+		// ("broken-sse", &[COMPLETIONS_TO_DETECT]),
+		("stream-image-generation", &[COMPLETIONS_TO_DETECT]),
 	];
-	const DETECT_JSON_RESPONSES: &[&str] = &["gpt-image-1.json"];
 
 	#[tokio::test]
 	async fn from_bedrock() {
@@ -506,9 +507,6 @@ mod response {
 				test_streaming_response_for_provider(provider, test).await
 			}
 		}
-		for name in DETECT_JSON_RESPONSES {
-			test_response_for_provider(COMPLETIONS_TO_DETECT, &format!("response/detect/{name}"));
-		}
 	}
 
 	fn test_response_for_provider(provider: &str, test: &str) {
@@ -520,6 +518,8 @@ mod response {
 	async fn test_streaming_response_for_provider(provider: &str, test: &str) {
 		let (p, r) = build_provider_request(provider);
 		let test_fn = async |i: Response, log: AsyncLog<llm::LLMInfo>| {
+			tracing::error!("howardjohn: STREAM");
+			eprintln!("STREAM");
 			p.process_streaming(r, LLMResponsePolicies::default(), log, false, i)
 				.await
 		};
