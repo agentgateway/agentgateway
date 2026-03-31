@@ -2127,3 +2127,152 @@ async fn test_runtime_fanout_fail_open_all_fail() {
 		res.err()
 	);
 }
+
+#[tokio::test]
+async fn mcp_local_ratelimit() {
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind(basic_route(mock.addr)));
+
+	// Attach local rate limit policy
+	// MCP protocol overhead: initialize + notification + SSE GET = 3 requests
+	// Allow 5 total: overhead (3) + tool calls (2), then rate limit the 6th
+	t.attach_route_policy(serde_json::json!({
+		"localRateLimit": [{
+			"maxTokens": 5,
+			"tokensPerFill": 1,
+			"fillInterval": "10s",
+			"type": "requests"
+		}]
+	}))
+	.await;
+
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = mcp_streamable_client(io).await;
+
+	// First two calls should succeed
+	let result1 = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo")
+				.with_arguments(serde_json::json!({"n": 1}).as_object().cloned().unwrap()),
+		)
+		.await;
+	assert!(result1.is_ok(), "First request should succeed");
+
+	let result2 = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo")
+				.with_arguments(serde_json::json!({"n": 2}).as_object().cloned().unwrap()),
+		)
+		.await;
+	assert!(result2.is_ok(), "Second request should succeed");
+
+	// Third call should be rate limited
+	let result3 = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo")
+				.with_arguments(serde_json::json!({"n": 3}).as_object().cloned().unwrap()),
+		)
+		.await;
+	assert!(result3.is_err(), "Third request should be rate limited");
+}
+
+#[tokio::test]
+async fn mcp_extauth_deny() {
+	use protos::envoy::service::auth::v3::authorization_server::{
+		Authorization, AuthorizationServer,
+	};
+	use protos::envoy::service::auth::v3::{CheckRequest, CheckResponse, DeniedHttpResponse};
+	use protos::envoy::service::common::v3::{HttpStatus, StatusCode};
+
+	// Mock ext_authz server that denies all requests
+	struct DenyAllAuthz;
+
+	#[tonic::async_trait]
+	impl Authorization for DenyAllAuthz {
+		async fn check(
+			&self,
+			_request: tonic::Request<CheckRequest>,
+		) -> Result<tonic::Response<CheckResponse>, tonic::Status> {
+			Ok(tonic::Response::new(CheckResponse {
+				// Status code 7 = PERMISSION_DENIED
+				status: Some(protos::envoy::service::common::v3::Status {
+					code: 7,
+					message: "denied".to_string(),
+					details: vec![],
+				}),
+				http_response: Some(
+					protos::envoy::service::auth::v3::check_response::HttpResponse::DeniedResponse(
+						DeniedHttpResponse {
+							status: Some(HttpStatus {
+								code: StatusCode::Forbidden as i32,
+							}),
+							headers: vec![],
+							body: "denied by mock ext_authz".to_string(),
+						},
+					),
+				),
+				dynamic_metadata: None,
+			}))
+		}
+	}
+
+	// Start the mock gRPC server
+	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let authz_addr = listener.local_addr().unwrap();
+
+	tokio::spawn(async move {
+		let server = tonic::transport::Server::builder()
+			.add_service(AuthorizationServer::new(DenyAllAuthz))
+			.serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(listener));
+		let _ = server.await;
+	});
+
+	// Small delay to ensure server is ready
+	tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind(basic_route(mock.addr)));
+
+	// Attach extAuthz policy pointing to our mock server
+	t.attach_route_policy(serde_json::json!({
+		"extAuthz": {
+			"host": authz_addr.to_string(),
+			"protocol": {
+				"grpc": {}
+			}
+		}
+	}))
+	.await;
+
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	// Client should fail to initialize due to ext_authz denial
+	let result = try_mcp_streamable_client(io).await;
+	assert!(
+		result.is_err(),
+		"Client initialization should be denied by ext_authz"
+	);
+}
+
+async fn try_mcp_streamable_client(
+	s: SocketAddr,
+) -> Result<RunningService<RoleClient, InitializeRequestParams>, rmcp::service::ClientInitializeError>
+{
+	use rmcp::ServiceExt;
+	use rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
+	use rmcp::transport::StreamableHttpClientTransport;
+	let transport =
+		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
+	let client_info = ClientInfo::new(
+		ClientCapabilities::default(),
+		Implementation::new("test client".to_string(), "0.0.1".to_string()),
+	);
+
+	client_info.serve(transport).await
+}
