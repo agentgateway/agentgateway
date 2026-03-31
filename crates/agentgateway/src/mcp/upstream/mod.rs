@@ -21,6 +21,7 @@ use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::{mergestream, upstream};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::transport::BufferLimit;
 use crate::types::agent::McpTargetSpec;
 use crate::*;
 
@@ -28,6 +29,7 @@ use crate::*;
 pub struct IncomingRequestContext {
 	headers: http::HeaderMap,
 	claims: Option<Claims>,
+	buffer_limit: Option<BufferLimit>,
 }
 
 impl IncomingRequestContext {
@@ -36,13 +38,16 @@ impl IncomingRequestContext {
 		Self {
 			headers: http::HeaderMap::new(),
 			claims: None,
+			buffer_limit: None,
 		}
 	}
 	pub fn new(parts: &::http::request::Parts) -> Self {
 		let claims = parts.extensions.get::<Claims>().cloned();
+		let buffer_limit = parts.extensions.get::<BufferLimit>().cloned();
 		Self {
 			headers: parts.headers.clone(),
 			claims,
+			buffer_limit,
 		}
 	}
 	pub fn apply(&self, req: &mut http::Request) {
@@ -57,6 +62,9 @@ impl IncomingRequestContext {
 		}
 		if let Some(claims) = self.claims.as_ref() {
 			req.extensions_mut().insert(claims.clone());
+		}
+		if let Some(buffer_limit) = self.buffer_limit.as_ref() {
+			req.extensions_mut().insert(buffer_limit.clone());
 		}
 	}
 }
