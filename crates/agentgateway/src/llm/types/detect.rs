@@ -178,6 +178,61 @@ mod lookups {
 		&["usage", "completion_tokens"],
 	];
 	pub const USAGE_TOTAL_TOKENS: [&[&str]; 1] = [&["usage", "total_tokens"]];
+	pub const INPUT_IMAGE_TOKENS: [&[&str]; 4] = [
+		&["usage", "input_tokens_details", "image_tokens"],
+		&["response", "usage", "input_tokens_details", "image_tokens"],
+		&["usage", "prompt_tokens_details", "image_tokens"],
+		&["response", "usage", "prompt_tokens_details", "image_tokens"],
+	];
+	pub const INPUT_TEXT_TOKENS: [&[&str]; 4] = [
+		&["usage", "input_tokens_details", "text_tokens"],
+		&["response", "usage", "input_tokens_details", "text_tokens"],
+		&["usage", "prompt_tokens_details", "text_tokens"],
+		&["response", "usage", "prompt_tokens_details", "text_tokens"],
+	];
+	pub const INPUT_AUDIO_TOKENS: [&[&str]; 4] = [
+		&["usage", "prompt_tokens_details", "audio_tokens"],
+		&["response", "usage", "prompt_tokens_details", "audio_tokens"],
+		&["usage", "input_tokens_details", "audio_tokens"],
+		&["response", "usage", "input_tokens_details", "audio_tokens"],
+	];
+	pub const OUTPUT_IMAGE_TOKENS: [&[&str]; 6] = [
+		&["usage", "output_tokens_details", "image_tokens"],
+		&["response", "usage", "output_tokens_details", "image_tokens"],
+		&["usage", "output_token_details", "image_tokens"],
+		&["response", "usage", "output_token_details", "image_tokens"],
+		&["usage", "completion_tokens_details", "image_tokens"],
+		&[
+			"response",
+			"usage",
+			"completion_tokens_details",
+			"image_tokens",
+		],
+	];
+	pub const OUTPUT_TEXT_TOKENS: [&[&str]; 6] = [
+		&["usage", "output_tokens_details", "text_tokens"],
+		&["response", "usage", "output_tokens_details", "text_tokens"],
+		&["usage", "output_token_details", "text_tokens"],
+		&["response", "usage", "output_token_details", "text_tokens"],
+		&["usage", "completion_tokens_details", "text_tokens"],
+		&[
+			"response",
+			"usage",
+			"completion_tokens_details",
+			"text_tokens",
+		],
+	];
+	pub const OUTPUT_AUDIO_TOKENS: [&[&str]; 4] = [
+		&["usage", "completion_tokens_details", "audio_tokens"],
+		&[
+			"response",
+			"usage",
+			"completion_tokens_details",
+			"audio_tokens",
+		],
+		&["usage", "output_tokens_details", "audio_tokens"],
+		&["response", "usage", "output_tokens_details", "audio_tokens"],
+	];
 	pub const REASONING: [&[&str]; 3] = [
 		// Responses
 		&["usage", "output_tokens_details", "reasoning_tokens"],
@@ -202,6 +257,13 @@ mod lookups {
 		// Completions
 		&["usage", "prompt_tokens_details", "cached_tokens"],
 	];
+	pub const SERVICE_TIER: [&[&str]; 3] = [
+		// Completions
+		&["service_tier"],
+		&["response", "service_tier"],
+		// Messages
+		&["usage", "service_tier"],
+	];
 }
 
 impl<'de> Deserialize<'de> for Response {
@@ -219,12 +281,21 @@ impl ResponseType for Response {
 		crate::llm::LLMResponse {
 			count_tokens: None, // We never tokenize these, so always empty
 			input_tokens,
+			input_image_tokens: self.lookup(lookups::INPUT_IMAGE_TOKENS, |v| v.as_u64()),
+			input_text_tokens: self.lookup(lookups::INPUT_TEXT_TOKENS, |v| v.as_u64()),
+			input_audio_tokens: self.lookup(lookups::INPUT_AUDIO_TOKENS, |v| v.as_u64()),
 			output_tokens,
+			output_image_tokens: self.lookup(lookups::OUTPUT_IMAGE_TOKENS, |v| v.as_u64()),
+			output_text_tokens: self.lookup(lookups::OUTPUT_TEXT_TOKENS, |v| v.as_u64()),
+			output_audio_tokens: self.lookup(lookups::OUTPUT_AUDIO_TOKENS, |v| v.as_u64()),
 			total_tokens: total_tokens.or_else(|| Some(input_tokens? + output_tokens?)),
 			reasoning_tokens: self.lookup(lookups::REASONING, |v| v.as_u64()),
 			cache_creation_input_tokens: self
 				.lookup(lookups::CACHE_CREATION_INPUT_TOKENS, |v| v.as_u64()),
 			cached_input_tokens: self.lookup(lookups::CACHED_INPUT_TOKENS, |v| v.as_u64()),
+			service_tier: self
+				.lookup(lookups::SERVICE_TIER, |v| v.as_str())
+				.map(Into::into),
 			provider_model: self.lookup(lookups::MODEL, |v| v.as_str()).map(Into::into),
 			completion: None,
 			// TODO: we could probably derive this
@@ -295,6 +366,42 @@ pub fn passthrough_stream(
 					|v| v.as_u64(),
 					|l, v| l.response.output_tokens = Some(v),
 				);
+				let input_image_tokens = f.set_if(
+					&log,
+					lookups::INPUT_IMAGE_TOKENS,
+					|v| v.as_u64(),
+					|l, v| l.response.input_image_tokens = Some(v),
+				);
+				let input_text_tokens = f.set_if(
+					&log,
+					lookups::INPUT_TEXT_TOKENS,
+					|v| v.as_u64(),
+					|l, v| l.response.input_text_tokens = Some(v),
+				);
+				let input_audio_tokens = f.set_if(
+					&log,
+					lookups::INPUT_AUDIO_TOKENS,
+					|v| v.as_u64(),
+					|l, v| l.response.input_audio_tokens = Some(v),
+				);
+				let output_image_tokens = f.set_if(
+					&log,
+					lookups::OUTPUT_IMAGE_TOKENS,
+					|v| v.as_u64(),
+					|l, v| l.response.output_image_tokens = Some(v),
+				);
+				let output_text_tokens = f.set_if(
+					&log,
+					lookups::OUTPUT_TEXT_TOKENS,
+					|v| v.as_u64(),
+					|l, v| l.response.output_text_tokens = Some(v),
+				);
+				let output_audio_tokens = f.set_if(
+					&log,
+					lookups::OUTPUT_AUDIO_TOKENS,
+					|v| v.as_u64(),
+					|l, v| l.response.output_audio_tokens = Some(v),
+				);
 				let total_tokens = f.set_if(
 					&log,
 					lookups::USAGE_TOTAL_TOKENS,
@@ -325,13 +432,25 @@ pub fn passthrough_stream(
 					|v| v.as_str(),
 					|l, v| l.response.provider_model = Some(v.into()),
 				);
+				f.set_if(
+					&log,
+					lookups::SERVICE_TIER,
+					|v| v.as_str(),
+					|l, v| l.response.service_tier = Some(v.into()),
+				);
 				if total_tokens.is_none()
 					&& let (Some(input), Some(output)) = (input_tokens, output_tokens)
 				{
 					log.non_atomic_mutate(|l| l.response.total_tokens = Some(input + output));
 				}
 				if input_tokens.is_some()
+					|| input_image_tokens.is_some()
+					|| input_text_tokens.is_some()
+					|| input_audio_tokens.is_some()
 					|| output_tokens.is_some()
+					|| output_image_tokens.is_some()
+					|| output_text_tokens.is_some()
+					|| output_audio_tokens.is_some()
 					|| total_tokens.is_some()
 					|| reasoning_tokens.is_some()
 					|| cache_creation_input_tokens.is_some()

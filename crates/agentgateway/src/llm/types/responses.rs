@@ -56,6 +56,8 @@ pub struct Response {
 	pub output: Vec<OutputItem>,
 	pub model: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
+	pub service_tier: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub usage: Option<Usage>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -78,6 +80,10 @@ pub struct Usage {
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct UsageOutputDetails {
 	pub reasoning_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub image_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub text_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -85,6 +91,10 @@ pub struct UsageOutputDetails {
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct UsageInputDetails {
 	pub cached_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub image_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub text_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -393,7 +403,26 @@ impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
+			input_image_tokens: self
+				.usage
+				.as_ref()
+				.and_then(|u| u.input_tokens_details.as_ref().and_then(|d| d.image_tokens)),
+			input_text_tokens: self
+				.usage
+				.as_ref()
+				.and_then(|u| u.input_tokens_details.as_ref().and_then(|d| d.text_tokens)),
+			input_audio_tokens: None,
 			output_tokens: self.usage.as_ref().map(|u| u.output_tokens),
+			output_image_tokens: self.usage.as_ref().and_then(|u| {
+				u.output_tokens_details
+					.as_ref()
+					.and_then(|d| d.image_tokens)
+			}),
+			output_text_tokens: self
+				.usage
+				.as_ref()
+				.and_then(|u| u.output_tokens_details.as_ref().and_then(|d| d.text_tokens)),
+			output_audio_tokens: None,
 			count_tokens: None,
 			total_tokens: self
 				.usage
@@ -410,6 +439,7 @@ impl ResponseType for Response {
 					.and_then(|d| d.cached_tokens)
 			}),
 			cache_creation_input_tokens: None,
+			service_tier: self.service_tier.as_deref().map(Into::into),
 			provider_model: Some(strng::new(&self.model)),
 			completion: if include_completion_in_log {
 				Some(

@@ -833,6 +833,8 @@ pub mod from_completions {
 								cache_creation_input_tokens: usage.cache_write_input_tokens.map(|i| i as u64),
 								prompt_tokens_details: usage.cache_read_input_tokens.map(|i| UsagePromptDetails {
 									cached_tokens: Some(i as u64),
+									audio_tokens: None,
+									rest: Default::default(),
 								}),
 								// TODO: can we get reasoning tokens?
 								completion_tokens_details: None,
@@ -1374,6 +1376,8 @@ pub mod from_messages {
 								cache_creation_input_tokens: None,
 								cache_read_input_tokens: None,
 							},
+							input_audio_tokens: None,
+							output_audio_tokens: None,
 						},
 					};
 					let (event_name, event_data) = event.into_sse_tuple();
@@ -2796,6 +2800,8 @@ impl ConverseResponseAdapter {
 					.cache_read_input_tokens
 					.map(|i| UsagePromptDetails {
 						cached_tokens: Some(i as u64),
+						audio_tokens: None,
+						rest: Default::default(),
 					}),
 				cache_creation_input_tokens: token_usage.cache_write_input_tokens.map(|i| i as u64),
 			})
@@ -3014,6 +3020,8 @@ impl ConverseResponseAdapter {
 			stop_reason: Some(from_messages::translate_stop_reason(self.stop_reason)),
 			stop_sequence: None,
 			usage,
+			input_audio_tokens: None,
+			output_audio_tokens: None,
 		})
 	}
 }

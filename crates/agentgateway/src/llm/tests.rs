@@ -406,6 +406,7 @@ mod response {
 	];
 	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", ALL_COMPLETIONS),
+		("audio", ALL_COMPLETIONS),
 		("openrouter_reasoning", ALL_COMPLETIONS),
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", ALL_COMPLETIONS)];
@@ -420,12 +421,13 @@ mod response {
 
 	const ALL_RESPONSES: &[&str] = &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT];
 	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_RESPONSES)];
-	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", ALL_RESPONSES)];
+	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", ALL_RESPONSES), ("stream-image", ALL_RESPONSES)];
 
 	const DETECT_RESPONSES: &[(&str, &[&str])] = &[
 		("non-json", &[COMPLETIONS_TO_DETECT]),
 		("broken-sse", &[COMPLETIONS_TO_DETECT]),
 	];
+	const DETECT_JSON_RESPONSES: &[&str] = &["gpt-image-1.json"];
 
 	#[tokio::test]
 	async fn from_bedrock() {
@@ -503,6 +505,9 @@ mod response {
 				test_response_for_provider(provider, test);
 				test_streaming_response_for_provider(provider, test).await
 			}
+		}
+		for name in DETECT_JSON_RESPONSES {
+			test_response_for_provider(COMPLETIONS_TO_DETECT, &format!("response/detect/{name}"));
 		}
 	}
 

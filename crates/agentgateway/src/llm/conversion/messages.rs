@@ -474,6 +474,8 @@ pub mod from_completions {
 				.cache_read_input_tokens
 				.map(|i| UsagePromptDetails {
 					cached_tokens: Some(i as u64),
+					audio_tokens: None,
+					rest: Default::default(),
 				}),
 			cache_creation_input_tokens: resp.usage.cache_creation_input_tokens.map(|i| i as u64),
 
@@ -676,6 +678,8 @@ pub mod from_completions {
 								cache_read_input_tokens: usage.cache_read_input_tokens.map(|i| i as u64),
 								prompt_tokens_details: usage.cache_read_input_tokens.map(|i| UsagePromptDetails {
 									cached_tokens: Some(i as u64),
+									audio_tokens: None,
+									rest: Default::default(),
 								}),
 								cache_creation_input_tokens: usage.cache_creation_input_tokens.map(|i| i as u64),
 

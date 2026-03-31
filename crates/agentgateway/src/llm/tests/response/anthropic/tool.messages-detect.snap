@@ -59,6 +59,7 @@ info:
     "total_tokens": 606,
     "cache_creation_input_tokens": 1,
     "cached_input_tokens": 2,
+    "service_tier": "standard",
     "provider_model": "claude-opus-4-6"
   }
 }

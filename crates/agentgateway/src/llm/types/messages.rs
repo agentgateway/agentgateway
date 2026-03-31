@@ -83,6 +83,10 @@ pub struct Response {
 	pub stop_sequence: Option<String>,
 	pub usage: Usage,
 	pub content: Vec<Content>,
+	#[serde(skip)]
+	pub input_audio_tokens: Option<u64>,
+	#[serde(skip)]
+	pub output_audio_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -355,13 +359,20 @@ impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
 		LLMResponse {
 			input_tokens: Some(self.usage.input_tokens),
+			input_image_tokens: None,
+			input_text_tokens: None,
+			input_audio_tokens: self.input_audio_tokens,
 			output_tokens: Some(self.usage.output_tokens),
+			output_image_tokens: None,
+			output_text_tokens: None,
+			output_audio_tokens: self.output_audio_tokens,
 			total_tokens: Some(self.usage.output_tokens + self.usage.input_tokens),
 			provider_model: Some(strng::new(&self.model)),
 			count_tokens: None,
 			reasoning_tokens: None,
 			cache_creation_input_tokens: self.usage.cache_creation_input_tokens,
 			cached_input_tokens: self.usage.cache_read_input_tokens,
+			service_tier: None,
 			completion: if include_completion_in_log {
 				Some(
 					self
@@ -768,6 +779,12 @@ pub mod typed {
 		///
 		/// For example, output_tokens will be non-zero, even for an empty string response from Claude.
 		pub usage: Usage,
+
+		// Internal fields not shown to user but used for our internal accounting.
+		#[serde(skip)]
+		pub input_audio_tokens: Option<usize>,
+		#[serde(skip)]
+		pub output_audio_tokens: Option<usize>,
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug)]
@@ -977,11 +994,18 @@ pub mod typed {
 		fn to_llm_response(&self, include_completion_in_log: bool) -> crate::llm::LLMResponse {
 			crate::llm::LLMResponse {
 				input_tokens: Some(self.usage.input_tokens as u64),
+				input_image_tokens: None,
+				input_text_tokens: None,
+				input_audio_tokens: self.input_audio_tokens.map(|i| i as u64),
 				output_tokens: Some(self.usage.output_tokens as u64),
+				output_image_tokens: None,
+				output_text_tokens: None,
+				output_audio_tokens: self.output_audio_tokens.map(|i| i as u64),
 				total_tokens: Some((self.usage.input_tokens + self.usage.output_tokens) as u64),
 				reasoning_tokens: None,
 				cache_creation_input_tokens: self.usage.cache_creation_input_tokens.map(|i| i as u64),
 				cached_input_tokens: self.usage.cache_read_input_tokens.map(|i| i as u64),
+				service_tier: None,
 				provider_model: Some(agent_core::strng::new(&self.model)),
 				count_tokens: None,
 				completion: if include_completion_in_log {

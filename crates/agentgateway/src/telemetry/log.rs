@@ -1017,10 +1017,40 @@ impl Drop for DropOnLog {
 			),
 			("gen_ai.usage.input_tokens", input_tokens.map(Into::into)),
 			(
+				"gen_ai.usage.cache_creation.input_tokens",
+				llm_response
+					.as_ref()
+					.and_then(|l| l.cache_creation_input_tokens)
+					.map(Into::into),
+			),
+			(
+				"gen_ai.usage.cache_read.input_tokens",
+				llm_response
+					.as_ref()
+					.and_then(|l| l.cached_input_tokens)
+					.map(Into::into),
+			),
+			(
 				"gen_ai.usage.output_tokens",
 				llm_response
 					.as_ref()
 					.and_then(|l| l.output_tokens)
+					.map(Into::into),
+			),
+			// Not part of official semconv
+			(
+				"gen_ai.usage.output_image_tokens",
+				llm_response
+					.as_ref()
+					.and_then(|l| l.output_image_tokens)
+					.map(Into::into),
+			),
+			// Not part of official semconv
+			(
+				"gen_ai.usage.output_audio_tokens",
+				llm_response
+					.as_ref()
+					.and_then(|l| l.output_audio_tokens)
 					.map(Into::into),
 			),
 			(

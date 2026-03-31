@@ -42,6 +42,9 @@ binds:
                     "*": passthrough
                     /v1/chat/completions: completions
                     /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
                     /v1/messages: messages
                     /v1/responses: responses
                     /v1/responses/compact: detect
@@ -70,6 +73,9 @@ binds:
                     "*": passthrough
                     /v1/chat/completions: completions
                     /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
                     /v1/messages: messages
                     /v1/responses: responses
                     /v1/responses/compact: detect
@@ -95,6 +101,9 @@ binds:
                     "*": passthrough
                     /v1/chat/completions: completions
                     /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
                     /v1/messages: messages
                     /v1/responses: responses
                     /v1/responses/compact: detect
@@ -120,6 +129,9 @@ binds:
                     "*": passthrough
                     /v1/chat/completions: completions
                     /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
                     /v1/messages: messages
                     /v1/responses: responses
                     /v1/responses/compact: detect

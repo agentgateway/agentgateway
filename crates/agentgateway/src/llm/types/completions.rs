@@ -61,6 +61,8 @@ pub struct StreamOptions {
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Response {
 	pub model: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub service_tier: Option<String>,
 	pub usage: Option<Usage>,
 	/// A list of chat completion choices. Can be more than one if `n` is greater than 1.
 	#[serde(default)]
@@ -89,6 +91,8 @@ pub struct ResponseMessage {
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct UsageCompletionDetails {
 	pub reasoning_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub audio_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -97,6 +101,8 @@ pub struct UsageCompletionDetails {
 pub struct UsagePromptDetails {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cached_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub audio_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -123,9 +129,26 @@ impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
+			input_image_tokens: None,
+			input_text_tokens: None,
+			input_audio_tokens: self.usage.as_ref().and_then(|u| {
+				u.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.audio_tokens)
+			}),
+
 			output_tokens: self.usage.as_ref().map(|u| u.completion_tokens as u64),
+			output_image_tokens: None,
+			output_text_tokens: None,
+			output_audio_tokens: self.usage.as_ref().and_then(|u| {
+				u.completion_tokens_details
+					.as_ref()
+					.and_then(|d| d.audio_tokens)
+			}),
+
 			total_tokens: self.usage.as_ref().map(|u| u.total_tokens as u64),
 			count_tokens: None,
+
 			reasoning_tokens: self.usage.as_ref().and_then(|u| {
 				u.completion_tokens_details
 					.as_ref()
@@ -137,6 +160,7 @@ impl ResponseType for Response {
 					.and_then(|d| d.cached_tokens)
 			}),
 			cache_creation_input_tokens: None,
+			service_tier: self.service_tier.as_deref().map(Into::into),
 			provider_model: Some(strng::new(&self.model)),
 			completion: if include_completion_in_log {
 				Some(
@@ -426,11 +450,19 @@ pub mod typed {
 	#[derive(Debug, Deserialize, Clone, Serialize)]
 	pub struct UsageCompletionDetails {
 		pub reasoning_tokens: Option<u64>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub audio_tokens: Option<u64>,
+		#[serde(flatten, default)]
+		pub rest: serde_json::Value,
 	}
 
 	#[derive(Debug, Deserialize, Clone, Serialize)]
 	pub struct UsagePromptDetails {
 		pub cached_tokens: Option<u64>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub audio_tokens: Option<u64>,
+		#[serde(flatten, default)]
+		pub rest: serde_json::Value,
 	}
 
 	// Forked typed from OpenAI to include custom cache token details other providers use.

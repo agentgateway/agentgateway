@@ -222,6 +222,18 @@ pub mod from_messages {
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
 			},
+			input_audio_tokens: usage.as_ref().and_then(|u| {
+				u.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.audio_tokens)
+					.map(|t| t as usize)
+			}),
+			output_audio_tokens: usage.as_ref().and_then(|u| {
+				u.completion_tokens_details
+					.as_ref()
+					.and_then(|d| d.audio_tokens)
+					.map(|t| t as usize)
+			}),
 			content,
 		})
 	}
@@ -465,6 +477,8 @@ pub mod from_messages {
 										cache_creation_input_tokens: None,
 										cache_read_input_tokens: None,
 									},
+									input_audio_tokens: None,
+									output_audio_tokens: None,
 								},
 							},
 						);
@@ -939,12 +953,23 @@ pub fn passthrough_stream(
 						}
 						if !seen_provider {
 							seen_provider = true;
-							log.non_atomic_mutate(|r| r.response.provider_model = Some(strng::new(&f.model)));
+							log.non_atomic_mutate(|r| {
+								r.response.provider_model = Some(strng::new(&f.model));
+								r.response.service_tier = f.service_tier.as_ref().and_then(types::serialize_str);
+							});
 						}
 						if let Some(u) = f.usage {
 							log.non_atomic_mutate(|r| {
 								r.response.input_tokens = Some(u.prompt_tokens as u64);
+								r.response.input_audio_tokens = u
+									.prompt_tokens_details
+									.as_ref()
+									.and_then(|d| d.audio_tokens);
 								r.response.output_tokens = Some(u.completion_tokens as u64);
+								r.response.output_audio_tokens = u
+									.completion_tokens_details
+									.as_ref()
+									.and_then(|d| d.audio_tokens);
 								r.response.total_tokens = Some(u.total_tokens as u64);
 								r.response.cached_input_tokens = u
 									.prompt_tokens_details

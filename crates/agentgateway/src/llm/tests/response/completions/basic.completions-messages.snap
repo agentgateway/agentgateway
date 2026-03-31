@@ -51,7 +51,9 @@ info:
   },
   "parsed": {
     "input_tokens": 17,
+    "input_audio_tokens": 0,
     "output_tokens": 23,
+    "output_audio_tokens": 0,
     "total_tokens": 40,
     "provider_model": "gpt-3.5-turbo-0125"
   }
