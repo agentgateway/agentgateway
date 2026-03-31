@@ -1597,8 +1597,18 @@ export interface MCPLocalBackendPolicies {
 export interface LocalNamedAIProvider {
   name: string;
   provider: AIProvider;
+  /**
+   * Override the upstream host for this provider.
+   */
   hostOverride?: string | null;
+  /**
+   * Override the upstream path for this provider.
+   */
   pathOverride?: string | null;
+  /**
+   * Override the default base path prefix for this provider.
+   */
+  pathPrefix?: string | null;
   /**
    * Whether to tokenize on the request flow. This enables us to do more accurate rate limits,
    * since we know (part of) the cost of the request upfront.
@@ -1704,6 +1714,10 @@ export interface LocalFrontendPolicies {
    * Settings for handling incoming TCP connections.
    */
   tcp?: TCP2 | null;
+  /**
+   * CEL authorization for downstream network connections.
+   */
+  networkAuthorization?: RuleSet | null;
   /**
    * Settings for request access logs.
    */
@@ -1893,6 +1907,10 @@ export interface LocalLLMParams {
    * Override the upstream path for this provider.
    */
   pathOverride?: string | null;
+  /**
+   * Override the default base path prefix for this provider.
+   */
+  pathPrefix?: string | null;
   /**
    * Whether to tokenize the request before forwarding it upstream.
    */

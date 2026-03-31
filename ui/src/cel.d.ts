@@ -200,7 +200,7 @@ export interface ExecutorSerde {
     };
   } | null;
   /**
-   * `llm_request` contains the raw LLM request before processing. This is only present *during* LLM policies;
+   * `llmRequest` contains the raw LLM request before processing. This is only present *during* LLM policies;
    * policies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests.
    */
   llmRequest?: {
@@ -254,50 +254,65 @@ export interface ExecutorSerde {
   } | null;
   /**
    * `mcp` contains attributes about the MCP request.
+   * Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.
+   * Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.
    */
-  mcp?:
-    | (
-        | {
-            tool: {
-              /**
-               * The target of the resource
-               */
-              target?: string;
-              /**
-               * The name of the resource
-               */
-              name?: string;
-              [k: string]: unknown;
-            };
-          }
-        | {
-            prompt: {
-              /**
-               * The target of the resource
-               */
-              target?: string;
-              /**
-               * The name of the resource
-               */
-              name?: string;
-              [k: string]: unknown;
-            };
-          }
-        | {
-            resource: {
-              /**
-               * The target of the resource
-               */
-              target?: string;
-              /**
-               * The name of the resource
-               */
-              name?: string;
-              [k: string]: unknown;
-            };
-          }
-      )
-    | null;
+  mcp?: {
+    methodName?: string | null;
+    sessionId?: string | null;
+    tool?: {
+      /**
+       * The target handling the tool call after multiplexing resolution.
+       */
+      target: string;
+      /**
+       * The resolved tool name sent to the upstream target.
+       */
+      name: string;
+      /**
+       * The JSON arguments passed to the tool call.
+       */
+      arguments?: {
+        [k: string]: unknown;
+      } | null;
+      /**
+       * The terminal tool result payload, if available.
+       */
+      result?: {
+        [k: string]: unknown;
+      };
+      /**
+       * The terminal JSON-RPC error payload, if available.
+       */
+      error?: {
+        [k: string]: unknown;
+      };
+      [k: string]: unknown;
+    } | null;
+    prompt?: {
+      /**
+       * The target of the resource
+       */
+      target?: string;
+      /**
+       * The name of the resource
+       */
+      name?: string;
+      [k: string]: unknown;
+    } | null;
+    resource?: {
+      /**
+       * The target of the resource
+       */
+      target?: string;
+      /**
+       * The name of the resource
+       */
+      name?: string;
+      [k: string]: unknown;
+    } | null;
+    [k: string]: unknown;
+  } | null;
   /**
    * `backend` contains information about the backend being used.
    */
