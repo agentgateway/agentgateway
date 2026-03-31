@@ -109,3 +109,56 @@ make generate-schema
 - **Emotion CSS** for customizing antd styles
 - **Custom CSS variables** for theme (colors, spacing)
 - **CSS flex layout** for layouts
+
+## 🧪 Testing
+E2E testing is provided through Playwright.  First run the app via the compiled binary in a terminal session via:
+```
+agentgateway -f ui/tests/fixtures/e2e-config.yaml
+```
+
+Then open another terminal session, cd to the `ui/` directory and use the following scripts to run tests.
+
+By default, the tests will run against the `agentgateway` binary on port 15000.  You can also run the tests against the UI dev server by setting the 
+`BASE_URL` environment variable
+
+```
+yarn playwright test # default: run tests against agentgateway binary (port 15000)
+BASE_URL=http://localhost:3000 yarn playwright tests # run tests against UI dev server (port 3000)
+```
+
+You can also use these shortcuts to run e2e tests from the CLI:
+```
+yarn test:e2e # runs `yarn playwright test` against agentgatway binary on port 15000
+yarn test:e2e:dev # runs `yarn playwright test` against UI dev server on port 3000
+```
+
+### Playwright test scripts
+
+Run all tests via command line
+```
+yarn playwright test # headless
+yarn playwright test --headed # headed with popup browser
+```
+
+Run all tests via interactive UI interface
+```
+yarn playwright test --ui
+```
+
+Run individual test by name
+```
+yarn playwright test -g "Name of the test"
+```
+
+Show HTML test run report:
+```
+yarn playwright show-report
+```
+
+Run codegen (useful for writing e2e tests)
+```
+yarn playwright codegen
+```
+
+### Testing configuration
+e2e tests can be further configured by adjusting the `playwright.config.ts` file

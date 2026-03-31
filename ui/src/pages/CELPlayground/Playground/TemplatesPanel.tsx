@@ -34,7 +34,11 @@ export const TemplatesPanel = ({
     <Card title="Expression Templates">
       <TemplateList>
         {templates.map((template, index) => (
-          <TemplateItem key={index} onClick={() => onLoadTemplate(template)}>
+          <TemplateItem 
+            data-testid={template.name.replace(/[\s_]+/g, '-').toLowerCase()} 
+            key={index} 
+            onClick={() => onLoadTemplate(template)}
+          >
             <div style={{ fontWeight: 600, marginBottom: 4 }}>
               {template.name}
             </div>

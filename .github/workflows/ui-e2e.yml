@@ -1,0 +1,132 @@
+name: UI E2E Tests
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+  ARTIFACT_RETENTION_DAYS: 60
+
+jobs:
+  ui-lint-and-build:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: "yarn"
+          cache-dependency-path: ui/yarn.lock
+      - name: Install, Lint, and Build UI
+        run: |
+          yarn install --immutable
+          yarn run lint
+          yarn run build
+        env:
+          BASE_PATH: /ui/
+      - name: Upload UI build
+        uses: actions/upload-artifact@v6
+        with:
+          name: ui-build-output
+          path: ui/out/
+          retention-days: 1
+
+  build-proxy:
+    needs: [ui-lint-and-build]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          rustflags: "" # empty string to use rustflags from .cargo/config.toml
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # TODO: re-enable controller-e2e cache once we merge to main
+          # shared-key: "controller-e2e"
+          shared-key: "ui-e2e"
+          save-if: true
+      - name: Download UI Build
+        uses: actions/download-artifact@v8
+        with:
+          name: ui-build-output
+          path: ui/out/
+      - name: Build proxy
+        run: cargo build --release --features ui
+      - name: Upload proxy binary
+        uses: actions/upload-artifact@v6
+        with:
+          name: agentgateway-binary
+          path: target/release/agentgateway
+          retention-days: 1
+
+  ui-e2e:
+    needs: [build-proxy]
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: "yarn"
+          cache-dependency-path: ui/yarn.lock
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Install Playwright dependencies
+        run: yarn playwright install --with-deps
+      - name: Download proxy binary
+        uses: actions/download-artifact@v8
+        with:
+          name: agentgateway-binary
+          path: .
+      - name: Start agentgateway binary
+        run: |
+          # make agentgateway executable
+          chmod +x ../agentgateway
+
+          # copy over test config file 
+          cp tests/fixtures/e2e-config.yaml ../e2e-test-config.yaml
+
+          # start binary with health check (2 secs / 30 attempts)
+          ../agentgateway -f ../e2e-test-config.yaml &
+          for i in $(seq 1 30); do
+            if curl -s http://127.0.0.1:15000/ui > /dev/null 2>&1; then
+              echo "Gateway is ready"
+              break
+            fi
+            echo "Waiting for gateway... ($i/30)"
+            sleep 2
+          done
+      - name: Run Playwright tests
+        run: yarn playwright test
+      - name: Upload test videos
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-videos
+          path: ui/test-results
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-report
+          path: ui/playwright-report/
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+      - name: Clean up artifacts
+        if: always()
+        uses: geekyeggo/delete-artifact@v6
+        with:
+          name: |
+            agentgateway-binary
+            ui-build-output

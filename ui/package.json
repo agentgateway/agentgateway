@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "tsc --noEmit -p tsconfig.app.json && oxlint",
     "preview": "vite preview",
-    "generate-schema": "node scripts/generate-schema.mjs"
+    "generate-schema": "node scripts/generate-schema.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:dev": "BASE_URL=http://localhost:3000 playwright test"
   },
   "dependencies": {
     "@a2a-js/sdk": "^0.3.10",
@@ -39,6 +41,7 @@
     "uuid": "^11.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/js-yaml": "^4",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.14",

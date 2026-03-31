@@ -1,0 +1,18 @@
+binds:
+  - port: 3002
+    listeners:
+      - routes:
+          - backends:
+              - mcp:
+                  targets:
+                    - name: test-target
+                      sse:
+                        host: localhost:9999
+            policies:
+              cors:
+                allowOrigins:
+                  - "*"
+                allowHeaders:
+                  - content-type
+mcp:
+  targets: []

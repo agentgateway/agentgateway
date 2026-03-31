@@ -695,7 +695,6 @@ function buildMCPTargetPolicyTitle(
 ): ReactNode {
   const mcpBase = basePath.endsWith("/mcp") ? basePath : `${basePath}/mcp`;
   const policyPath = `${mcpBase}/target/${targetIndex}/policy/${policyType}`;
-  const targetPath = `${mcpBase}/target/${targetIndex}`;
   const displayName = getPolicyLabel(policyType);
 
   const menuItems: MenuProps["items"] = [
@@ -1850,6 +1849,18 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
     [modal],
   );
 
+  /** Ensure one or more tree keys are expanded (used after adding child items) */
+  const ensureExpanded = useCallback((...keys: Key[]) => {
+    setExpandedKeys((prev) => {
+      const set = new Set(prev);
+      let changed = false;
+      for (const k of keys) {
+        if (!set.has(k)) { set.add(k); changed = true; }
+      }
+      return changed ? Array.from(set) : prev;
+    });
+  }, []);
+
   const handleDeleteBind = useCallback(
     async (port: number, parentPath: string) => {
       try {
@@ -1960,7 +1971,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
         );
       }
     },
-    [basePath, mutate, navigate],
+    [basePath, mutate, navigate, ensureExpanded],
   );
 
   // Handler for adding a new route to a listener
@@ -2035,7 +2046,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
         toast.error(getErrorMessage(e, "Failed to create route"));
       }
     },
-    [basePath, hierarchy.binds, mutate, navigate],
+    [basePath, hierarchy.binds, mutate, navigate, ensureExpanded],
   );
 
   // Handler for adding a new backend to a route
@@ -2124,7 +2135,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
         );
       }
     },
-    [basePath, hierarchy.binds, mutate, navigate],
+    [basePath, hierarchy.binds, mutate, navigate, ensureExpanded],
   );
 
   // Handler for adding a specific policy type to a route
@@ -2204,7 +2215,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
         toast.error(getErrorMessage(e, "Failed to create policy"));
       }
     },
-    [basePath, hierarchy.binds, mutate, navigate],
+    [basePath, hierarchy.binds, mutate, navigate, ensureExpanded],
   );
 
   // Handler for deleting a specific policy type from a route
@@ -2325,7 +2336,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Failed to create model"));
     }
-  }, [basePath, hierarchy.llm?.models.length, mutate, navigate]);
+  }, [basePath, hierarchy.llm?.models.length, mutate, navigate, ensureExpanded]);
 
   const handleDeleteModel = useCallback(
     async (modelIndex: number) => {
@@ -2379,7 +2390,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Failed to create target"));
     }
-  }, [basePath, hierarchy.mcp?.targets.length, mutate, navigate]);
+  }, [basePath, hierarchy.mcp?.targets.length, mutate, navigate, ensureExpanded]);
 
   const handleDeleteMCPTarget = useCallback(
     async (targetIndex: number) => {
@@ -2408,7 +2419,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
         toast.error(getErrorMessage(e, "Failed to add policy"));
       }
     },
-    [basePath, mutate, navigate],
+    [basePath, mutate, navigate, ensureExpanded],
   );
 
   const handleDeleteMCPTargetPolicy = useCallback(
@@ -2459,7 +2470,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Failed to add policy"));
     }
-  }, [basePath, hierarchy.llm, mutate, navigate]);
+  }, [basePath, hierarchy.llm, mutate, navigate, ensureExpanded]);
 
   const handleDeleteLLMPolicy = useCallback(async (policyType: string, _parentPath: string) => {
     try {
@@ -2504,7 +2515,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Failed to add policy"));
     }
-  }, [basePath, hierarchy.mcp, mutate, navigate]);
+  }, [basePath, hierarchy.mcp, mutate, navigate, ensureExpanded]);
 
   const handleDeleteMCPPolicy = useCallback(async (policyType: string, _parentPath: string) => {
     try {
@@ -2612,18 +2623,6 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
   const [expandedKeys, setExpandedKeys] = useState<Key[]>(() =>
     getAllKeys(treeData),
   );
-
-  /** Ensure one or more tree keys are expanded (used after adding child items) */
-  const ensureExpanded = useCallback((...keys: Key[]) => {
-    setExpandedKeys((prev) => {
-      const set = new Set(prev);
-      let changed = false;
-      for (const k of keys) {
-        if (!set.has(k)) { set.add(k); changed = true; }
-      }
-      return changed ? Array.from(set) : prev;
-    });
-  }, []);
 
   const selectedKeys = useMemo(() => {
     const key = urlToSelectedKey(location.pathname, basePath);

@@ -253,6 +253,7 @@ export const DashboardPage = () => {
             <SectionCard onClick={() => navigate(section.path)}>
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 16 }}
+                data-testid={`${section.title.toLowerCase()}`}
               >
                 {/* Header */}
                 <div

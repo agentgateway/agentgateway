@@ -1,7 +1,7 @@
 import styled from "@emotion/styled";
 import { Button, Card, Input, Spin, Tag, Typography } from "antd";
 import { Brain, Send } from "lucide-react";
-import { RefObject } from "react";
+import type { RefObject } from "react";
 import ReactMarkdown from "react-markdown";
 import { PROVIDER_COLORS } from "./constants";
 import type { Message, PlaygroundModel } from "./types";
@@ -113,7 +113,7 @@ interface ChatPanelProps {
   sending: boolean;
   error: string | null;
   prompt: string;
-  chatEndRef: RefObject<HTMLDivElement>;
+  chatEndRef: RefObject<HTMLDivElement | null>;
   onPromptChange: (value: string) => void;
   onSend: () => void;
 }

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useConfig } from "../../../api";
 import { extractModels } from "./extractModels";
 import type { Message, PlaygroundModel } from "./types";
@@ -13,7 +13,11 @@ export function usePlayground() {
   const [error, setError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const models: PlaygroundModel[] = config ? extractModels(config) : [];
+  const models: PlaygroundModel[] = useMemo(() => 
+    config ? extractModels(config) : [], 
+    [config]
+  );
+
   const selectedModel = models.find((m) => m.label === selectedLabel) ?? null;
   /** The model name actually sent in the request body */
   const effectiveModel =
