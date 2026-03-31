@@ -2037,7 +2037,7 @@ pub enum TrafficPolicy {
 	RemoteRateLimit(remoteratelimit::RemoteRateLimit),
 	ExtAuthz(ext_authz::ExtAuthz),
 	ExtProc(ext_proc::ExtProc),
-	JwtAuth(crate::http::jwt::Jwt),
+	JwtAuth(JwtAuthentication),
 	BasicAuth(crate::http::basicauth::BasicAuthentication),
 	APIKey(crate::http::apikey::APIKeyAuthentication),
 	Transformation(crate::http::transformation_cel::Transformation),
@@ -2125,6 +2125,49 @@ impl ResourceMetadata {
 		}
 
 		Value::Object(map)
+	}
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JwtAuthentication {
+	#[serde(flatten)]
+	pub jwt: crate::http::jwt::Jwt,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub mcp: Option<McpAuthentication>,
+}
+
+impl JwtAuthentication {
+	pub async fn apply(
+		&self,
+		client: &crate::proxy::httpproxy::PolicyClient,
+		log: Option<&mut crate::telemetry::log::RequestLog>,
+		req: &mut crate::http::Request,
+	) -> Result<(), crate::proxy::ProxyResponse> {
+		if let Some(auth) = &self.mcp {
+			if !crate::mcp::auth::is_well_known_endpoint(req.uri().path()) {
+				self.jwt.apply(log, req).await.map_err(|e| {
+					crate::proxy::ProxyResponse::from(crate::mcp::auth::create_auth_required_response(
+						crate::proxy::ProxyError::JwtAuthenticationFailure(e),
+						req,
+						auth,
+					))
+				})?;
+			}
+
+			if let Some(resp) = crate::mcp::auth::handle_mcp_request(req, auth, client).await? {
+				return Err(crate::proxy::ProxyResponse::DirectResponse(Box::new(resp)));
+			}
+			return Ok(());
+		}
+
+		self
+			.jwt
+			.apply(log, req)
+			.await
+			.map_err(crate::proxy::ProxyError::JwtAuthenticationFailure)
+			.map_err(crate::proxy::ProxyResponse::from)?;
+		Ok(())
 	}
 }
 

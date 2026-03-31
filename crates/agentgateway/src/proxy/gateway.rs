@@ -14,26 +14,25 @@ use http::StatusCode;
 use hyper_util::rt::TokioIo;
 use hyper_util::server::conn::auto;
 use rand::RngExt;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpStream;
 use tokio::sync::watch;
 use tokio::task::{AbortHandle, JoinSet};
 use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, event, info, info_span, warn};
 
-use agent_core::strng;
-
 use crate::proxy::ProxyError;
-use crate::store::{Event, FrontendPolices};
+use crate::store::{BindEvent, BindListeners, FrontendPolices};
 use crate::telemetry::metrics::TCPLabels;
 use crate::transport::BufferLimit;
 use crate::transport::stream::{
 	Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
 };
 use crate::types::agent::{
-	Bind, BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
+	BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
 };
 use crate::types::frontend;
 use crate::{ProxyInputs, client};
+use agent_core::strng;
 
 #[cfg(test)]
 #[path = "gateway_test.rs"]
@@ -138,37 +137,41 @@ impl Gateway {
 		let drain = self.drain.clone();
 		let subdrain = self.drain.clone();
 		let mut js = JoinSet::new();
-		let (initial_binds, mut binds) = {
-			let binds = self.pi.stores.read_binds();
-			(binds.all(), binds.subscribe())
+		let mut binds = {
+			let mut binds = self.pi.stores.binds.write();
+			binds.subscribe()
 		};
-		let mut active: HashMap<SocketAddr, AbortHandle> = HashMap::new();
-		let mut handle_bind = |js: &mut JoinSet<anyhow::Result<()>>, b: Event<Arc<Bind>>| {
-			let b = match b {
-				Event::Add(b) => b,
-				Event::Remove(to_remove) => {
-					if let Some(h) = active.remove(&to_remove.address) {
+		let mut active: HashMap<BindKey, AbortHandle> = HashMap::new();
+		let mut handle_bind = |js: &mut JoinSet<anyhow::Result<()>>, b: BindEvent| {
+			let (bind_key, bind, listeners) = match b {
+				BindEvent::Add(bind, listeners) => (bind.key.clone(), bind, listeners),
+				BindEvent::Remove(bind_key) => {
+					if let Some(h) = active.remove(&bind_key) {
 						h.abort();
 					}
 					return;
 				},
 			};
-			if active.contains_key(&b.address) {
-				debug!("bind already exists");
-				return;
+			if let Some(h) = active.remove(&bind_key) {
+				h.abort();
 			}
 
-			debug!("add bind {}", b.address);
-			if self.pi.cfg.threading_mode == crate::ThreadingMode::ThreadPerCore {
-				let core_ids = core_affinity::get_core_ids().unwrap();
-				let _ = core_ids
-					.into_iter()
-					.map(|id| {
+			debug!("add bind {}", bind.address);
+			match listeners {
+				BindListeners::Single(listener) => {
+					let task = js.spawn(
+						Self::run_bind(self.pi.clone(), subdrain.clone(), Arc::new(bind), listener)
+							.in_current_span(),
+					);
+					active.insert(bind_key, task);
+				},
+				BindListeners::PerCore(listeners) => {
+					for (core_id, listener) in listeners {
 						let subdrain = subdrain.clone();
 						let pi = self.pi.clone();
-						let b = b.clone();
+						let bind = bind.clone();
 						std::thread::spawn(move || {
-							let res = core_affinity::set_for_current(id);
+							let res = core_affinity::set_for_current(core_id);
 							if !res {
 								panic!("failed to set current CPU")
 							}
@@ -177,33 +180,20 @@ impl Gateway {
 								.build()
 								.unwrap()
 								.block_on(async {
-									let _ = Self::run_bind(pi.clone(), subdrain.clone(), b.clone())
+									let _ = Self::run_bind(pi, subdrain, Arc::new(bind), listener)
 										.in_current_span()
 										.await;
 								})
-						})
-					})
-					.collect::<Vec<_>>();
-			} else {
-				let task =
-					js.spawn(Self::run_bind(self.pi.clone(), subdrain.clone(), b.clone()).in_current_span());
-				active.insert(b.address, task);
+						});
+					}
+				},
 			}
 		};
-		for bind in initial_binds {
-			handle_bind(&mut js, Event::Add(bind))
-		}
-
 		let wait = drain.wait_for_drain();
 		tokio::pin!(wait);
 		loop {
 			tokio::select! {
 				Some(res) = binds.next() => {
-					let Ok(res) = res else {
-						// TODO: move to unbuffered
-						warn!("lagged on bind update");
-						continue;
-					};
 					handle_bind(&mut js, res);
 				}
 				Some(res) = js.join_next() => {
@@ -224,14 +214,15 @@ impl Gateway {
 	pub(super) async fn run_bind(
 		pi: Arc<ProxyInputs>,
 		drain: DrainWatcher,
-		b: Arc<Bind>,
+		bind: Arc<crate::types::agent::Bind>,
+		listener: std::net::TcpListener,
 	) -> anyhow::Result<()> {
 		let min_deadline = pi.cfg.termination_min_deadline;
 		let max_deadline = pi.cfg.termination_max_deadline;
-		let name = b.key.clone();
-		let bind_protocol = b.protocol;
-		let tunnel_protocol = b.tunnel_protocol;
-		let (pi, listener) = if pi.cfg.threading_mode == crate::ThreadingMode::ThreadPerCore {
+		let name = bind.key.clone();
+		let bind_protocol = bind.protocol;
+		let tunnel_protocol = bind.tunnel_protocol;
+		let pi = if pi.cfg.threading_mode == crate::ThreadingMode::ThreadPerCore {
 			let mut pi = Arc::unwrap_or_clone(pi);
 			let client = client::Client::new(
 				&pi.cfg.dns,
@@ -240,23 +231,11 @@ impl Gateway {
 				Some(pi.metrics.clone()),
 			);
 			pi.upstream = client;
-			let pi = Arc::new(pi);
-			let builder = if b.address.is_ipv4() {
-				socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::STREAM, None)?
-			} else {
-				socket2::Socket::new(socket2::Domain::IPV6, socket2::Type::STREAM, None)?
-			};
-			#[cfg(target_family = "unix")]
-			builder.set_reuse_port(true)?;
-			builder.bind(&b.address.into())?;
-			builder.listen(1024)?;
-			let listener: std::net::TcpListener = builder.into();
-			listener.set_nonblocking(true)?;
-			let listener = tokio::net::TcpListener::from_std(listener)?;
-			(pi, listener)
+			Arc::new(pi)
 		} else {
-			(pi, TcpListener::bind(b.address).await?)
+			pi
 		};
+		let listener = tokio::net::TcpListener::from_std(listener)?;
 		info!(bind = name.as_str(), "started bind");
 		let component = format!("bind {name}");
 
@@ -1100,33 +1079,42 @@ impl Gateway {
 			drain_tx: None,
 		};
 
+		// Look up the real HBONE listener for policy resolution (gateway/listener-targeted
+		// policies require the listener's name to match).
+		let listener = pi
+			.stores
+			.read_binds()
+			.bind(&bind_name)
+			.and_then(|b| {
+				b.listeners
+					.inner
+					.values()
+					.find(|l| matches!(l.protocol, ListenerProtocol::HBONE))
+					.cloned()
+			})
+			.or_else(|| {
+				// Synthetic fallback so route selection works via VIP lookup.
+				// We may eventually elide the need to generate an HBONE listener at all.
+				Some(Arc::new(Listener {
+					key: Default::default(),
+					name: crate::types::agent::ListenerName {
+						gateway_name: pi.cfg.xds.gateway.clone(),
+						gateway_namespace: pi.cfg.xds.namespace.clone(),
+						listener_name: strng::EMPTY,
+						listener_set: None,
+					},
+					hostname: Default::default(),
+					protocol: ListenerProtocol::HBONE,
+					tcp_routes: Default::default(),
+					routes: Default::default(),
+				}))
+			});
+
 		let socket = Socket::from_hbone(ext, socket_addr, con);
 		if is_http {
-			let _ = Self::proxy(bind_name, pi, None, socket, policies.clone(), drain).await;
+			let _ = Self::proxy(bind_name, pi, listener, socket, policies.clone(), drain).await;
 		} else {
-			// TCP: create a synthetic HBONE listener for the TCP proxy path
-			let listener = Arc::new(Listener {
-				key: Default::default(),
-				name: crate::types::agent::ListenerName {
-					gateway_name: strng::EMPTY,
-					gateway_namespace: strng::EMPTY,
-					listener_name: strng::literal!("_waypoint-tcp"),
-					listener_set: None,
-				},
-				hostname: Default::default(),
-				protocol: ListenerProtocol::HBONE,
-				tcp_routes: Default::default(),
-				routes: Default::default(),
-			});
-			Self::proxy_tcp(
-				bind_name,
-				pi,
-				Some(listener),
-				socket,
-				policies.clone(),
-				drain,
-			)
-			.await;
+			Self::proxy_tcp(bind_name, pi, listener, socket, policies.clone(), drain).await;
 		}
 	}
 

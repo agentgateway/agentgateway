@@ -84,7 +84,7 @@ futures = "0.3"
 futures-channel = "0.3"
 futures-core = "0.3"
 futures-util = "0.3"
-google-cloud-auth = { version = "1.7", default-features = false, features = [
+google-cloud-auth = { version = "1.8", default-features = false, features = [
     "idtoken",
     # They use AWS-LC which is what we want so its fine. If they changed we would need to switch
     # To installing a global default which is annoying so prefer to do it this way.
@@ -106,7 +106,7 @@ hyper-util = { version = "0.1", features = ["full"] }
 hyper-util-fork = { path = "crates/hyper-util-fork" }
 include_dir = "0.7"
 indexmap = { version = "2.13", features = ["serde"] }
-insta = { version = "1.46", features = ["json", "redactions", "filters", "yaml"] }
+insta = { version = "1.47", features = ["json", "redactions", "filters", "yaml"] }
 ipnet = { version = "2.12", features = ["serde"] }
 itertools = "0.14"
 jsonwebtoken = { version = "10.3", features = ["aws_lc_rs"] }
@@ -114,7 +114,7 @@ lazy_static = "1.5"
 libc = "0.2"
 notify = "8.2"
 notify-debouncer-full = "0.7"
-md-5 = "0.10"
+md-5 = "0.11"
 num_cpus = "1.17"
 once_cell = "1.21"
 openapiv3 = "2.2"
@@ -170,8 +170,8 @@ serde-untagged = "0.1"
 serde_json_path_to_error = "0.1"
 serde_regex = "1.1"
 serde_yaml = "0.9"
-sha1 = "0.10"
-sha2 = "0.10"
+sha1 = "0.11"
+sha2 = "0.11"
 shellexpand = "3.1"
 socket2 = "0.6"
 split-iter = "0.1"
@@ -204,7 +204,7 @@ tracing-subscriber = { version = "0.3", features = [
     "json",
 ] }
 url = "2.5"
-uuid = { version = "1.22", features = ["v4"] }
+uuid = { version = "1.23", features = ["v4"] }
 wiremock = { version = "0.6", features = ["tls"] }
 x509-parser = { version = "0.18", default-features = false, features = ["verify-aws"] }
 which = "8.0"
@@ -236,7 +236,7 @@ async-compression = { version = "0.4", features = [
     "tokio",
 ] }
 core_affinity = "0.8"
-frozen-collections = "0.8"
+frozen-collections = "0.9"
 heck = "0.5"
 macro_rules_attribute = "0.2"
 

@@ -80,6 +80,7 @@ info:
       }
     ],
     "model": "gpt-4o-2024-08-06",
+    "service_tier": "default",
     "usage": {
       "input_tokens": 10,
       "output_tokens": 10,
@@ -114,7 +115,6 @@ info:
       "summary": null
     },
     "safety_identifier": null,
-    "service_tier": "default",
     "store": true,
     "temperature": 1.0,
     "text": {
@@ -137,6 +137,7 @@ info:
     "total_tokens": 20,
     "reasoning_tokens": 0,
     "cached_input_tokens": 0,
+    "service_tier": "default",
     "provider_model": "gpt-4o-2024-08-06"
   }
 }

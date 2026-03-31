@@ -788,6 +788,20 @@ pub struct LLMContext {
 	#[dynamic(rename = "inputTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub input_tokens: Option<u64>,
+	/// The number of image tokens in the input/prompt.
+	#[dynamic(rename = "inputImageTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub input_image_tokens: Option<u64>,
+	/// The number of text tokens in the input/prompt.
+	/// Note: this field is only set in multi-modal calls where the total token count is split out by
+	/// text/image/audio; for standard all-text calls, this is unset.
+	#[dynamic(rename = "inputTextTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub input_text_tokens: Option<u64>,
+	/// The number of audio tokens in the input/prompt.
+	#[dynamic(rename = "inputAudioTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub input_audio_tokens: Option<u64>,
 	/// The number of tokens in the input/prompt read from cache (savings)
 	#[dynamic(rename = "cachedInputTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -801,6 +815,20 @@ pub struct LLMContext {
 	#[dynamic(rename = "outputTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub output_tokens: Option<u64>,
+	/// The number of image tokens in the output/completion.
+	#[dynamic(rename = "outputImageTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_image_tokens: Option<u64>,
+	/// The number of text tokens in the output/completion.
+	#[dynamic(rename = "outputTextTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_text_tokens: Option<u64>,
+	/// The number of audio tokens in the output/completion.
+	/// Note: this field is only set in multi-modal calls where the total token count is split out by
+	/// text/image/audio; for standard all-text calls, this is unset.
+	#[dynamic(rename = "outputAudioTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_audio_tokens: Option<u64>,
 	/// The number of reasoning tokens in the output/completion.
 	#[dynamic(rename = "reasoningTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -809,6 +837,10 @@ pub struct LLMContext {
 	#[dynamic(rename = "totalTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub total_tokens: Option<u64>,
+	/// The service tier the provider served the request under.
+	#[dynamic(rename = "serviceTier")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub service_tier: Option<Strng>,
 	// For now, not exposed to CEL; only used to piggy-back this field for metrics.
 	#[serde(skip)]
 	#[dynamic(skip)]
@@ -833,12 +865,19 @@ impl From<llm::LLMInfo> for LLMContext {
 		let resp = value.response;
 		let mut base = LLMContext {
 			output_tokens: resp.output_tokens,
+			output_image_tokens: resp.output_image_tokens,
+			output_text_tokens: resp.output_text_tokens,
+			output_audio_tokens: resp.output_audio_tokens,
 			count_tokens: resp.count_tokens,
 			total_tokens: resp.total_tokens,
 			first_token: resp.first_token,
 			reasoning_tokens: resp.reasoning_tokens,
+			input_image_tokens: resp.input_image_tokens,
+			input_text_tokens: resp.input_text_tokens,
+			input_audio_tokens: resp.input_audio_tokens,
 			cached_input_tokens: resp.cached_input_tokens,
 			cache_creation_input_tokens: resp.cache_creation_input_tokens,
+			service_tier: resp.service_tier.clone(),
 			response_model: resp.provider_model.clone(),
 			// Not always set
 			completion: resp.completion.clone(),
@@ -875,11 +914,18 @@ impl From<llm::LLMRequest> for LLMContext {
 			count_tokens: None,
 			response_model: None,
 			output_tokens: None,
+			output_image_tokens: None,
+			output_text_tokens: None,
+			output_audio_tokens: None,
 			total_tokens: None,
 			completion: None,
 			reasoning_tokens: None,
+			input_image_tokens: None,
+			input_text_tokens: None,
+			input_audio_tokens: None,
 			cached_input_tokens: None,
 			cache_creation_input_tokens: None,
+			service_tier: None,
 		}
 	}
 }
@@ -1446,11 +1492,18 @@ pub fn full_example_executor() -> ExecutorSerde {
 			response_model: Some("gpt-4-turbo".into()),
 			provider: "fake-ai".into(),
 			input_tokens: Some(100),
+			input_image_tokens: Some(60),
+			input_text_tokens: Some(40),
+			input_audio_tokens: Some(5),
 			cached_input_tokens: Some(20),
 			cache_creation_input_tokens: Some(10),
 			output_tokens: Some(50),
+			output_image_tokens: Some(30),
+			output_text_tokens: Some(20),
+			output_audio_tokens: Some(3),
 			reasoning_tokens: Some(30),
 			total_tokens: Some(150),
+			service_tier: Some("default".into()),
 			first_token: None,
 			count_tokens: Some(10),
 

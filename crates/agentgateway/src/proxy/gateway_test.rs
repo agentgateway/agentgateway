@@ -291,6 +291,32 @@ async fn cors_preflight_bypasses_basic_auth() {
 	assert_eq!(res.hdr("access-control-allow-origin"), "http://example.com");
 }
 
+#[tokio::test]
+async fn mcp_authentication_runs_in_route_policy_path() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_route_policy(json!({
+			"mcpAuthentication": {
+				"issuer": "https://example.com",
+				"audiences": ["test-aud"],
+				"jwks": "{\"keys\":[{\"use\":\"sig\",\"kty\":\"EC\",\"kid\":\"XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI\",\"crv\":\"P-256\",\"alg\":\"ES256\",\"x\":\"XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo\",\"y\":\"g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE\"}]}",
+				"resourceMetadata": {
+					"mcpResourceUri": "mcp://test"
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request(
+		io,
+		Method::GET,
+		"http://lo/.well-known/oauth-protected-resource/mcp",
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("content-type"), "application/json");
+}
+
 /// Verifies that a CORS preflight (OPTIONS) request returns 200 even when
 /// authorization rules would reject the request, because CORS runs before
 /// authorization.

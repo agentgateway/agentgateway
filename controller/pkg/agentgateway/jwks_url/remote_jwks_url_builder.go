@@ -13,9 +13,9 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/pkg/kgateway/wellknown"
 	krtpkg "github.com/agentgateway/agentgateway/controller/pkg/utils/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 type JwksUrlBuilder interface {
@@ -191,7 +191,7 @@ func GetTLSConfig(
 		certPool := x509.NewCertPool()
 		for _, ref := range btls.CACertificateRefs {
 			nn := types.NamespacedName{
-				Name:      string(ref.Name),
+				Name:      ref.Name,
 				Namespace: namespace,
 			}
 			cfgmap := krt.FetchOne(krtctx, cfgmaps, krt.FilterObjectName(nn))

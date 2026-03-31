@@ -1,0 +1,48 @@
+event: response.created
+data: {"type":"response.created","response":{"id":"resp_062bc30e2ee47b4c0069cbe41e31188190aff11955555346a5","object":"response","created_at":1774969886,"status":"in_progress","background":false,"completed_at":null,"error":null,"frequency_penalty":0.0,"incomplete_details":null,"instructions":null,"max_output_tokens":null,"max_tool_calls":null,"model":"gpt-5-2025-08-07","output":[],"parallel_tool_calls":true,"presence_penalty":0.0,"previous_response_id":null,"prompt_cache_key":null,"prompt_cache_retention":null,"reasoning":{"effort":"medium","summary":null},"safety_identifier":null,"service_tier":"auto","store":true,"temperature":1.0,"text":{"format":{"type":"text"},"verbosity":"medium"},"tool_choice":"auto","tools":[{"type":"image_generation","background":"auto","model":"gpt-image-1","moderation":"auto","n":1,"output_compression":100,"output_format":"png","quality":"auto","size":"auto"}],"top_logprobs":0,"top_p":1.0,"truncation":"disabled","usage":null,"user":null,"metadata":{}},"sequence_number":0}
+
+event: response.in_progress
+data: {"type":"response.in_progress","response":{"id":"resp_062bc30e2ee47b4c0069cbe41e31188190aff11955555346a5","object":"response","created_at":1774969886,"status":"in_progress","background":false,"completed_at":null,"error":null,"frequency_penalty":0.0,"incomplete_details":null,"instructions":null,"max_output_tokens":null,"max_tool_calls":null,"model":"gpt-5-2025-08-07","output":[],"parallel_tool_calls":true,"presence_penalty":0.0,"previous_response_id":null,"prompt_cache_key":null,"prompt_cache_retention":null,"reasoning":{"effort":"medium","summary":null},"safety_identifier":null,"service_tier":"auto","store":true,"temperature":1.0,"text":{"format":{"type":"text"},"verbosity":"medium"},"tool_choice":"auto","tools":[{"type":"image_generation","background":"auto","model":"gpt-image-1","moderation":"auto","n":1,"output_compression":100,"output_format":"png","quality":"auto","size":"auto"}],"top_logprobs":0,"top_p":1.0,"truncation":"disabled","usage":null,"user":null,"metadata":{}},"sequence_number":1}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","item":{"id":"rs_062bc30e2ee47b4c0069cbe41ee4348190a0a693a17fd5c3bb","type":"reasoning","summary":[]},"output_index":0,"sequence_number":2}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","item":{"id":"rs_062bc30e2ee47b4c0069cbe41ee4348190a0a693a17fd5c3bb","type":"reasoning","summary":[]},"output_index":0,"sequence_number":3}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","item":{"id":"ig_062bc30e2ee47b4c0069cbe42d60848190b958fbcd59659f71","type":"image_generation_call","status":"in_progress"},"output_index":1,"sequence_number":4}
+
+event: response.image_generation_call.in_progress
+data: {"type":"response.image_generation_call.in_progress","item_id":"ig_062bc30e2ee47b4c0069cbe42d60848190b958fbcd59659f71","output_index":1,"sequence_number":5}
+
+event: response.image_generation_call.generating
+data: {"type":"response.image_generation_call.generating","item_id":"ig_062bc30e2ee47b4c0069cbe42d60848190b958fbcd59659f71","output_index":1,"sequence_number":6}
+
+event: keepalive
+data: {"type":"keepalive","sequence_number":7}
+
+event: response.image_generation_call.partial_image
+data: {"type":"response.image_generation_call.partial_image","background":"opaque","item_id":"ig_062bc30e2ee47b4c0069cbe42d60848190b958fbcd59659f71","output_format":"png","output_index":1,"partial_image_b64":"i","partial_image_index":0,"quality":"high","sequence_number":8,"size":"1024x1536"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","item":{"id":"ig_062bc30e2ee47b4c0069cbe42d60848190b958fbcd59659f71","type":"image_generation_call","status":"generating","action":"generate","background":"opaque","output_format":"png","quality":"high","result":"i","revised_prompt":"Create a high-resolution, cute digital illustration of a gray tabby cat hugging an otter. The cat has classic tabby markings (M on the forehead, soft gray stripes) and a sweet, content expression. The otter is wearing a cozy orange scarf wrapped around its neck. They’re in a warm, affectionate pose with the cat’s paws around the otter. Use soft, warm lighting and a simple pastel background for a wholesome, heartwarming vibe. Clean lines, soft shading, and vibrant yet gentle colors.","size":"1024x1536"},"output_index":1,"sequence_number":9}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","item":{"id":"msg_062bc30e2ee47b4c0069cbe4642f448190b58bbdfedbe4aa41","type":"message","status":"in_progress","content":[],"role":"assistant"},"output_index":2,"sequence_number":10}
+
+event: response.content_part.added
+data: {"type":"response.content_part.added","content_index":0,"item_id":"msg_062bc30e2ee47b4c0069cbe4642f448190b58bbdfedbe4aa41","output_index":2,"part":{"type":"output_text","annotations":[],"logprobs":[],"text":""},"sequence_number":11}
+
+event: response.output_text.done
+data: {"type":"response.output_text.done","content_index":0,"item_id":"msg_062bc30e2ee47b4c0069cbe4642f448190b58bbdfedbe4aa41","logprobs":[],"output_index":2,"sequence_number":12,"text":""}
+
+event: response.content_part.done
+data: {"type":"response.content_part.done","content_index":0,"item_id":"msg_062bc30e2ee47b4c0069cbe4642f448190b58bbdfedbe4aa41","output_index":2,"part":{"type":"output_text","annotations":[],"logprobs":[],"text":""},"sequence_number":13}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","item":{"id":"msg_062bc30e2ee47b4c0069cbe4642f448190b58bbdfedbe4aa41","type":"message","status":"completed","content":[{"type":"output_text","annotations":[],"logprobs":[],"text":""}],"role":"assistant"},"output_index":2,"sequence_number":14}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_062bc30e2ee47b4c0069cbe41e31188190aff11955555346a5","object":"response","created_at":1774969886,"status":"completed","background":false,"completed_at":1774969956,"error":null,"frequency_penalty":0.0,"incomplete_details":null,"instructions":null,"max_output_tokens":null,"max_tool_calls":null,"model":"gpt-5-2025-08-07","output":[{"id":"rs_062bc30e2ee47b4c0069cbe41ee4348190a0a693a17fd5c3bb","type":"reasoning","summary":[]},{"id":"ig_062bc30e2ee47b4c0069cbe42d60848190b958fbcd59659f71","type":"image_generation_call","status":"generating","action":"generate","background":"opaque","output_format":"png","quality":"high","result":"iVBORw0KGgoAAAANSUhEUgAABAAAAAYACAIAAABn4K39AADryWNhQlgAAOvJanVtYgAAAB5qdW1kYzJwYQARABCAAACqADibcQNjMnBhAAAANzRqdW1iAAAAR2p1bWRjMm1hABEAEIAAAKoAOJtxA3VybjpjMnBhOjNiM2MxYjZhLThkZTctNDc4NC1hYjczLTc0MGUxYjRlZDlkMAAAAAHwanVtYgAAAClqdW1kYzJhcwARABCAAACqADibcQNjMnBhLmFzc2VydGlvbnMAAAAA/Gp1bWIAAABBanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5hY3Rpb25zLnYyAAAAABhjMnNoLjFj4NmU52zUvdtvhyjNngAAALNjYm9yoWdhY3Rpb25zgqNmYWN0aW9ubGMycGEuY3JlYXRlZG1zb2Z0d2FyZUFnZW50oWRuYW1lZkdQVC00b3FkaWdpdGFsU291cmNlVHlwZXhGaHR0cDovL2N2LmlwdGMub3JnL25ld3Njb2Rlcy9kaWdpdGFsc291cmNldHlwZS90cmFpbmVkQWxnb3JpdGhtaWNNZWRpYaFmYWN0aW9ubmMycGEuY29udmVydGVkAAAAw2p1bWIAAABAanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5oYXNoLmRhdGEAAAAAGGMyc2jUI7MAl9yOwt9D++Q+g7K7AAAAe2Nib3KlamV4Y2x1c2lvbnOBomVzdGFydBghZmxlbmd0aBk3ZmRuYW1lbmp1bWJmIG1hbmlmZXN0Y2FsZ2ZzaGEyNTZkaGFzaFggidJ65CbguXAk+1Lqu7ZkWetoCpg7tg7TShwJWbsND1pjcGFkSAAAAAAAAAAAAAAB/mp1bWIAAAAnanVtZGMyY2wAEQAQgAAAqgA4m3EDYzJwYS5jbGFpbS52MgAAAAHPY2JvcqdqaW5zdGFuY2VJRHgseG1wOmlpZDo4NGQxM2M0Yy02MmY2LTQ1ZDgtYjZjYy1m","revised_prompt":"Create a high-resolution, cute digital illustration of a gray tabby cat hugging an otter. The cat has classic tabby markings (M on the forehead, soft gray stripes) and a sweet, content expression. The otter is wearing a cozy orange scarf wrapped around its neck. They’re in a warm, affectionate pose with the cat’s paws around the otter. Use soft, warm lighting and a simple pastel background for a wholesome, heartwarming vibe. Clean lines, soft shading, and vibrant yet gentle colors.","size":"1024x1536"},{"id":"msg_062bc30e2ee47b4c0069cbe4642f448190b58bbdfedbe4aa41","type":"message","status":"completed","content":[{"type":"output_text","annotations":[],"logprobs":[],"text":""}],"role":"assistant"}],"parallel_tool_calls":true,"presence_penalty":0.0,"previous_response_id":null,"prompt_cache_key":null,"prompt_cache_retention":null,"reasoning":{"effort":"medium","summary":null},"safety_identifier":null,"service_tier":"default","store":true,"temperature":1.0,"text":{"format":{"type":"text"},"verbosity":"medium"},"tool_choice":"auto","tools":[{"type":"image_generation","background":"auto","model":"gpt-image-1","moderation":"auto","n":1,"output_compression":100,"output_format":"png","quality":"auto","size":"auto"}],"top_logprobs":0,"top_p":1.0,"truncation":"disabled","usage":{"input_tokens":1755,"input_tokens_details":{"cached_tokens":0},"output_tokens":1314,"output_tokens_details":{"reasoning_tokens":1152},"total_tokens":3069},"user":null,"metadata":{}},"sequence_number":15}
+

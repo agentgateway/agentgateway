@@ -33,11 +33,18 @@
 |`llm.responseModel`|string|The model that actually served the LLM response.|
 |`llm.provider`|string|The provider of the LLM.|
 |`llm.inputTokens`|integer|The number of tokens in the input/prompt.|
+|`llm.inputImageTokens`|integer|The number of image tokens in the input/prompt.|
+|`llm.inputTextTokens`|integer|The number of text tokens in the input/prompt.<br>Note: this field is only set in multi-modal calls where the total token count is split out by<br>text/image/audio; for standard all-text calls, this is unset.|
+|`llm.inputAudioTokens`|integer|The number of audio tokens in the input/prompt.|
 |`llm.cachedInputTokens`|integer|The number of tokens in the input/prompt read from cache (savings)|
 |`llm.cacheCreationInputTokens`|integer|Tokens written to cache (costs)<br>Not present with OpenAI|
 |`llm.outputTokens`|integer|The number of tokens in the output/completion.|
+|`llm.outputImageTokens`|integer|The number of image tokens in the output/completion.|
+|`llm.outputTextTokens`|integer|The number of text tokens in the output/completion.|
+|`llm.outputAudioTokens`|integer|The number of audio tokens in the output/completion.<br>Note: this field is only set in multi-modal calls where the total token count is split out by<br>text/image/audio; for standard all-text calls, this is unset.|
 |`llm.reasoningTokens`|integer|The number of reasoning tokens in the output/completion.|
 |`llm.totalTokens`|integer|The total number of tokens for the request.|
+|`llm.serviceTier`|string|The service tier the provider served the request under.|
 |`llm.countTokens`|integer|The number of tokens in the request, when using the token counting endpoint<br>These are not counted as 'input tokens' since they do not consume input tokens.|
 |`llm.prompt`|[]object|The prompt sent to the LLM. Warning: accessing this has some performance impacts for large prompts.|
 |`llm.prompt[].role`|string||

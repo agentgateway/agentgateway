@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use ::http::header::{HeaderName, HeaderValue};
@@ -15,6 +16,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{debug, warn};
 
+use crate::client::ResolvedDestination;
+use crate::http::sessionpersistence;
 use crate::mcp::mergestream;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
@@ -594,6 +597,20 @@ impl Handler {
 			prefix,
 			http_client,
 			tools,
+		}
+	}
+
+	pub fn get_session_state(&self) -> sessionpersistence::MCPSession {
+		sessionpersistence::MCPSession {
+			target_name: Some(self.http_client.target_name().to_string()),
+			session: None,
+			backend: self.http_client.pinned_backend(),
+		}
+	}
+
+	pub fn set_session_id(&self, _: Option<&str>, pinned: Option<SocketAddr>) {
+		if let Some(pinned) = pinned {
+			self.http_client.pin_backend(ResolvedDestination(pinned));
 		}
 	}
 

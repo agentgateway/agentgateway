@@ -820,6 +820,13 @@ impl Drop for DropOnLog {
 			// Report our non-customized metrics
 			if !is_tcp {
 				log.metrics.requests.get_or_create(&http_labels).inc();
+				if let Some(retry_count) = log.retry_attempt {
+					log
+						.metrics
+						.retries
+						.get_or_create(&http_labels)
+						.inc_by(retry_count as u64);
+				}
 			}
 			return;
 		}
@@ -860,6 +867,14 @@ impl Drop for DropOnLog {
 			.request_duration
 			.get_or_create(&http_labels)
 			.observe(duration.as_secs_f64());
+
+		if let Some(retry_count) = log.retry_attempt {
+			log
+				.metrics
+				.retries
+				.get_or_create(&http_labels)
+				.inc_by(retry_count as u64);
+		}
 
 		Self::add_llm_metrics(
 			&log,
@@ -1002,10 +1017,40 @@ impl Drop for DropOnLog {
 			),
 			("gen_ai.usage.input_tokens", input_tokens.map(Into::into)),
 			(
+				"gen_ai.usage.cache_creation.input_tokens",
+				llm_response
+					.as_ref()
+					.and_then(|l| l.cache_creation_input_tokens)
+					.map(Into::into),
+			),
+			(
+				"gen_ai.usage.cache_read.input_tokens",
+				llm_response
+					.as_ref()
+					.and_then(|l| l.cached_input_tokens)
+					.map(Into::into),
+			),
+			(
 				"gen_ai.usage.output_tokens",
 				llm_response
 					.as_ref()
 					.and_then(|l| l.output_tokens)
+					.map(Into::into),
+			),
+			// Not part of official semconv
+			(
+				"gen_ai.usage.output_image_tokens",
+				llm_response
+					.as_ref()
+					.and_then(|l| l.output_image_tokens)
+					.map(Into::into),
+			),
+			// Not part of official semconv
+			(
+				"gen_ai.usage.output_audio_tokens",
+				llm_response
+					.as_ref()
+					.and_then(|l| l.output_audio_tokens)
 					.map(Into::into),
 			),
 			(

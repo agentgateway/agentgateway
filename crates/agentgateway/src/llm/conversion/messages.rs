@@ -474,6 +474,8 @@ pub mod from_completions {
 				.cache_read_input_tokens
 				.map(|i| UsagePromptDetails {
 					cached_tokens: Some(i as u64),
+					audio_tokens: None,
+					rest: Default::default(),
 				}),
 			cache_creation_input_tokens: resp.usage.cache_creation_input_tokens.map(|i| i as u64),
 
@@ -488,7 +490,7 @@ pub mod from_completions {
 			model: resp.model,
 			choices,
 			usage: Some(usage),
-			service_tier: None,
+			service_tier: resp.usage.service_tier,
 			system_fingerprint: None,
 		}
 	}
@@ -514,6 +516,7 @@ pub mod from_completions {
 	pub fn translate_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Body {
 		let mut message_id = None;
 		let mut model = String::new();
+		let mut service_tier = None;
 		let created = chrono::Utc::now().timestamp() as u32;
 		// let mut finish_reason = None;
 		let mut saw_token = false;
@@ -532,7 +535,7 @@ pub mod from_completions {
 						model: model.clone(),
 						object: "chat.completion.chunk".to_string(),
 						system_fingerprint: None,
-						service_tier: None,
+						service_tier: service_tier.clone(),
 						created,
 						choices,
 						usage,
@@ -546,6 +549,7 @@ pub mod from_completions {
 					messages::MessagesStreamEvent::MessageStart { message } => {
 						message_id = Some(message.id);
 						model = message.model.clone();
+						service_tier = message.usage.service_tier.clone();
 						log.non_atomic_mutate(|r| {
 							r.response.output_tokens = Some(message.usage.output_tokens as u64);
 							r.response.input_tokens = Some(message.usage.input_tokens as u64);
@@ -553,6 +557,7 @@ pub mod from_completions {
 								message.usage.cache_read_input_tokens.map(|i| i as u64);
 							r.response.cache_creation_input_tokens =
 								message.usage.cache_creation_input_tokens.map(|i| i as u64);
+							r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
 							r.response.provider_model = Some(strng::new(&message.model))
 						});
 						// no need to respond with anything yet
@@ -676,6 +681,8 @@ pub mod from_completions {
 								cache_read_input_tokens: usage.cache_read_input_tokens.map(|i| i as u64),
 								prompt_tokens_details: usage.cache_read_input_tokens.map(|i| UsagePromptDetails {
 									cached_tokens: Some(i as u64),
+									audio_tokens: None,
+									rest: Default::default(),
 								}),
 								cache_creation_input_tokens: usage.cache_creation_input_tokens.map(|i| i as u64),
 
@@ -723,6 +730,7 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Bod
 					r.response.cached_input_tokens = message.usage.cache_read_input_tokens.map(|i| i as u64);
 					r.response.cache_creation_input_tokens =
 						message.usage.cache_creation_input_tokens.map(|i| i as u64);
+					r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
 					r.response.provider_model = Some(strng::new(&message.model))
 				});
 			},

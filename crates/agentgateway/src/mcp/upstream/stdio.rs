@@ -133,18 +133,22 @@ impl Process {
 							break;
 						}
 					},
-					Some(msg) = proc.receive() => {
+					msg = proc.receive() => {
 						match msg {
-							JsonRpcMessage::Response(res) => {
+							Some(JsonRpcMessage::Response(res)) => {
 								let req_id = res.id.clone();
 								if let Some(sender) = pending_requests_clone.lock().unwrap().remove(&req_id) {
 									let _ = sender.send(ServerJsonRpcMessage::Response(res));
 								}
 							},
-							other => {
+							Some(other) => {
 								if let Some(sender) = event_stream_send.load().as_ref() {
 									let _ = sender.send(other).await;
 								}
+							},
+							None => {
+								terminal_err = Some(UpstreamError::StdioShutdown);
+								break;
 							}
 						}
 					},

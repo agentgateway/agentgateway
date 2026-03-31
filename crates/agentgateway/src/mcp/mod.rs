@@ -1,4 +1,4 @@
-mod auth;
+pub(crate) mod auth;
 mod handler;
 mod mergestream;
 mod rbac;

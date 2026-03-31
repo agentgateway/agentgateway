@@ -14,7 +14,7 @@ use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{McpAuthentication, McpIDP};
 
-pub(super) fn is_well_known_endpoint(path: &str) -> bool {
+pub(crate) fn is_well_known_endpoint(path: &str) -> bool {
 	path.starts_with("/.well-known/oauth-protected-resource")
 		|| path.starts_with("/.well-known/oauth-authorization-server")
 }
@@ -48,7 +48,7 @@ pub(super) async fn apply_token_validation(
 	Ok(())
 }
 
-pub(super) async fn enforce_authentication(
+pub(crate) async fn enforce_authentication(
 	req: &mut Request,
 	auth: &McpAuthentication,
 	client: &PolicyClient,
@@ -58,6 +58,14 @@ pub(super) async fn enforce_authentication(
 		apply_token_validation(req, auth).await?;
 	}
 
+	handle_mcp_request(req, auth, client).await
+}
+
+pub(crate) async fn handle_mcp_request(
+	req: &mut Request,
+	auth: &McpAuthentication,
+	client: &PolicyClient,
+) -> Result<Option<Response>, ProxyError> {
 	match req.uri().path() {
 		// TODO: indicate this is a DirectResponse
 		path if path.ends_with("client-registration") => Ok(Some(
@@ -88,7 +96,7 @@ pub(super) async fn enforce_authentication(
 	}
 }
 
-pub(super) fn create_auth_required_response(
+pub(crate) fn create_auth_required_response(
 	inner: ProxyError,
 	req: &Request,
 	auth: &McpAuthentication,

@@ -56,6 +56,8 @@ pub struct Response {
 	pub output: Vec<OutputItem>,
 	pub model: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
+	pub service_tier: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub usage: Option<Usage>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -393,7 +395,16 @@ impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
+			input_image_tokens: None,
+			input_text_tokens: None,
+			input_audio_tokens: None,
 			output_tokens: self.usage.as_ref().map(|u| u.output_tokens),
+			// Note: responses supports image generation, but it does not report image generation as tokens.
+			// Instead there is a cost based on the image paramaters (https://developers.openai.com/api/docs/guides/image-generation?api=image#calculating-costs)
+			// which we do not currently emit.
+			output_image_tokens: None,
+			output_text_tokens: None,
+			output_audio_tokens: None,
 			count_tokens: None,
 			total_tokens: self
 				.usage
@@ -410,6 +421,7 @@ impl ResponseType for Response {
 					.and_then(|d| d.cached_tokens)
 			}),
 			cache_creation_input_tokens: None,
+			service_tier: self.service_tier.as_deref().map(Into::into),
 			provider_model: Some(strng::new(&self.model)),
 			completion: if include_completion_in_log {
 				Some(

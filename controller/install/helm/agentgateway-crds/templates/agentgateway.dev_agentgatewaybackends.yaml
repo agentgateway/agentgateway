@@ -6773,6 +6773,23 @@ spec:
                             in-cluster `Service` resources, it is recommended to use `selector`
                             instead.
                           properties:
+                            backendRef:
+                              description: |-
+                                `backendRef` references a namespace-local `Service` resource by name.
+                                When set, this replaces `host` only; `port`, `path`, and `protocol`
+                                remain configured on this target.
+                              properties:
+                                name:
+                                  default: ""
+                                  description: |-
+                                    Name of the referent.
+                                    This field is effectively required, but due to backwards compatibility is
+                                    allowed to be empty. Instances of this type with an empty value here are
+                                    almost certainly wrong.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
                             host:
                               description: Host is the hostname or IP address of the
                                 MCP target.
@@ -6793,6 +6810,8 @@ spec:
                                 Policies may also be set in `AgentgatewayPolicy`, or in the top-level
                                 `AgentgatewayBackend`. Policies are merged on a field-level basis, with
                                 order: `AgentgatewayPolicy` < `AgentgatewayBackend` < `AgentgatewayBackend` MCP (this field).
+                                This field may only be used with host-based static targets, not
+                                `backendRef`.
                               properties:
                                 auth:
                                   description: '`auth` defines settings for managing
@@ -7777,9 +7796,15 @@ spec:
                               - SSE
                               type: string
                           required:
-                          - host
                           - port
                           type: object
+                          x-kubernetes-validations:
+                          - message: mcp target policies may not be used with backendRef
+                            rule: '!has(self.backendRef) || !has(self.policies)'
+                          - message: exactly one of the fields in [host backendRef]
+                              must be set
+                            rule: '[has(self.host),has(self.backendRef)].filter(x,x==true).size()
+                              == 1'
                       required:
                       - name
                       type: object

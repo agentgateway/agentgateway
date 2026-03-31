@@ -160,6 +160,7 @@ pub mod from_messages {
 			choices,
 			model,
 			usage,
+			service_tier,
 			..
 		} = resp;
 		// Anthropic only supports one choice
@@ -221,7 +222,20 @@ pub mod from_messages {
 					.unwrap_or(0),
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
+				service_tier,
 			},
+			input_audio_tokens: usage.as_ref().and_then(|u| {
+				u.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.audio_tokens)
+					.map(|t| t as usize)
+			}),
+			output_audio_tokens: usage.as_ref().and_then(|u| {
+				u.completion_tokens_details
+					.as_ref()
+					.and_then(|d| d.audio_tokens)
+					.map(|t| t as usize)
+			}),
 			content,
 		})
 	}
@@ -464,7 +478,10 @@ pub mod from_messages {
 										output_tokens: 0,
 										cache_creation_input_tokens: None,
 										cache_read_input_tokens: None,
+										service_tier: None,
 									},
+									input_audio_tokens: None,
+									output_audio_tokens: None,
 								},
 							},
 						);
@@ -819,6 +836,13 @@ pub mod from_messages {
 			})
 			.collect_vec();
 
+		// "Function tools with reasoning_effort are not supported for gpt-5.4
+		let reasoning_effort = if !tools.is_empty() && model.starts_with("gpt-5.4") {
+			None
+		} else {
+			reasoning_effort
+		};
+
 		let mut parallel_tool_calls = None;
 		let tool_choice = tool_choice.map(|choice| match choice {
 			messages::ToolChoice::Auto {
@@ -939,12 +963,23 @@ pub fn passthrough_stream(
 						}
 						if !seen_provider {
 							seen_provider = true;
-							log.non_atomic_mutate(|r| r.response.provider_model = Some(strng::new(&f.model)));
+							log.non_atomic_mutate(|r| {
+								r.response.provider_model = Some(strng::new(&f.model));
+								r.response.service_tier = f.service_tier.as_deref().map(Into::into);
+							});
 						}
 						if let Some(u) = f.usage {
 							log.non_atomic_mutate(|r| {
 								r.response.input_tokens = Some(u.prompt_tokens as u64);
+								r.response.input_audio_tokens = u
+									.prompt_tokens_details
+									.as_ref()
+									.and_then(|d| d.audio_tokens);
 								r.response.output_tokens = Some(u.completion_tokens as u64);
+								r.response.output_audio_tokens = u
+									.completion_tokens_details
+									.as_ref()
+									.and_then(|d| d.audio_tokens);
 								r.response.total_tokens = Some(u.total_tokens as u64);
 								r.response.cached_input_tokens = u
 									.prompt_tokens_details

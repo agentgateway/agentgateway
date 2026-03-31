@@ -406,6 +406,7 @@ mod response {
 	];
 	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", ALL_COMPLETIONS),
+		("audio", ALL_COMPLETIONS),
 		("openrouter_reasoning", ALL_COMPLETIONS),
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", ALL_COMPLETIONS)];
@@ -420,11 +421,13 @@ mod response {
 
 	const ALL_RESPONSES: &[&str] = &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT];
 	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_RESPONSES)];
-	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", ALL_RESPONSES)];
+	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] =
+		&[("stream", ALL_RESPONSES), ("stream-image", ALL_RESPONSES)];
 
 	const DETECT_RESPONSES: &[(&str, &[&str])] = &[
 		("non-json", &[COMPLETIONS_TO_DETECT]),
 		("broken-sse", &[COMPLETIONS_TO_DETECT]),
+		("stream-image-generation", &[COMPLETIONS_TO_DETECT]),
 	];
 
 	#[tokio::test]
