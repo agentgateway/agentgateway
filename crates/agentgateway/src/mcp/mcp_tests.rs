@@ -2254,9 +2254,11 @@ async fn mcp_extauth_deny() {
 
 	// Client should fail to initialize due to ext_authz denial
 	let result = try_mcp_streamable_client(io).await;
+	let err = result.expect_err("Client initialization should be denied by ext_authz");
+	let err_msg = err.to_string();
 	assert!(
-		result.is_err(),
-		"Client initialization should be denied by ext_authz"
+		err_msg.contains("403") && err_msg.contains("denied by mock ext_authz"),
+		"Expected 403 denial from ext_authz, got: {err_msg}"
 	);
 }
 
