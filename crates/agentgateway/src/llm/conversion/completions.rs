@@ -160,6 +160,7 @@ pub mod from_messages {
 			choices,
 			model,
 			usage,
+			service_tier,
 			..
 		} = resp;
 		// Anthropic only supports one choice
@@ -221,7 +222,7 @@ pub mod from_messages {
 					.unwrap_or(0),
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
-				service_tier: None,
+				service_tier,
 			},
 			input_audio_tokens: usage.as_ref().and_then(|u| {
 				u.prompt_tokens_details

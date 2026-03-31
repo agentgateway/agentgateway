@@ -178,60 +178,23 @@ mod lookups {
 		&["usage", "completion_tokens"],
 	];
 	pub const USAGE_TOTAL_TOKENS: [&[&str]; 1] = [&["usage", "total_tokens"]];
-	pub const INPUT_IMAGE_TOKENS: [&[&str]; 4] = [
+	pub const INPUT_IMAGE_TOKENS: [&[&str]; 1] = [
 		&["usage", "input_tokens_details", "image_tokens"],
-		&["response", "usage", "input_tokens_details", "image_tokens"],
-		&["usage", "prompt_tokens_details", "image_tokens"],
-		&["response", "usage", "prompt_tokens_details", "image_tokens"],
 	];
-	pub const INPUT_TEXT_TOKENS: [&[&str]; 4] = [
+	pub const INPUT_TEXT_TOKENS: [&[&str]; 1] = [
 		&["usage", "input_tokens_details", "text_tokens"],
-		&["response", "usage", "input_tokens_details", "text_tokens"],
-		&["usage", "prompt_tokens_details", "text_tokens"],
-		&["response", "usage", "prompt_tokens_details", "text_tokens"],
 	];
-	pub const INPUT_AUDIO_TOKENS: [&[&str]; 4] = [
+	pub const INPUT_AUDIO_TOKENS: [&[&str]; 1] = [
 		&["usage", "prompt_tokens_details", "audio_tokens"],
-		&["response", "usage", "prompt_tokens_details", "audio_tokens"],
-		&["usage", "input_tokens_details", "audio_tokens"],
-		&["response", "usage", "input_tokens_details", "audio_tokens"],
 	];
-	pub const OUTPUT_IMAGE_TOKENS: [&[&str]; 6] = [
+	pub const OUTPUT_IMAGE_TOKENS: [&[&str]; 1] = [
 		&["usage", "output_tokens_details", "image_tokens"],
-		&["response", "usage", "output_tokens_details", "image_tokens"],
-		&["usage", "output_token_details", "image_tokens"],
-		&["response", "usage", "output_token_details", "image_tokens"],
-		&["usage", "completion_tokens_details", "image_tokens"],
-		&[
-			"response",
-			"usage",
-			"completion_tokens_details",
-			"image_tokens",
-		],
 	];
-	pub const OUTPUT_TEXT_TOKENS: [&[&str]; 6] = [
+	pub const OUTPUT_TEXT_TOKENS: [&[&str]; 1] = [
 		&["usage", "output_tokens_details", "text_tokens"],
-		&["response", "usage", "output_tokens_details", "text_tokens"],
-		&["usage", "output_token_details", "text_tokens"],
-		&["response", "usage", "output_token_details", "text_tokens"],
-		&["usage", "completion_tokens_details", "text_tokens"],
-		&[
-			"response",
-			"usage",
-			"completion_tokens_details",
-			"text_tokens",
-		],
 	];
-	pub const OUTPUT_AUDIO_TOKENS: [&[&str]; 4] = [
+	pub const OUTPUT_AUDIO_TOKENS: [&[&str]; 1] = [
 		&["usage", "completion_tokens_details", "audio_tokens"],
-		&[
-			"response",
-			"usage",
-			"completion_tokens_details",
-			"audio_tokens",
-		],
-		&["usage", "output_tokens_details", "audio_tokens"],
-		&["response", "usage", "output_tokens_details", "audio_tokens"],
 	];
 	pub const REASONING: [&[&str]; 3] = [
 		// Responses

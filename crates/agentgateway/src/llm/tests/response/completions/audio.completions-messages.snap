@@ -51,7 +51,8 @@ info:
     "stop_sequence": null,
     "usage": {
       "input_tokens": 320,
-      "output_tokens": 180
+      "output_tokens": 180,
+      "service_tier": "default"
     }
   },
   "parsed": {
@@ -60,6 +61,7 @@ info:
     "output_tokens": 180,
     "output_audio_tokens": 90,
     "total_tokens": 500,
+    "service_tier": "default",
     "provider_model": "gpt-4o-audio-preview"
   }
 }
