@@ -2230,8 +2230,13 @@ async fn mcp_extauth_deny() {
 		let _ = server.await;
 	});
 
-	// Small delay to ensure server is ready
-	tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+	// Wait for server to be ready (probe until connection succeeds)
+	for _ in 0..50 {
+		if tokio::net::TcpStream::connect(authz_addr).await.is_ok() {
+			break;
+		}
+		tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+	}
 
 	let mock = mock_streamable_http_server(true).await;
 	let mut t = setup_proxy_test("{}")
@@ -2320,8 +2325,13 @@ async fn mcp_remote_ratelimit_deny() {
 		let _ = server.await;
 	});
 
-	// Small delay to ensure server is ready
-	tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+	// Wait for server to be ready (probe until connection succeeds)
+	for _ in 0..50 {
+		if tokio::net::TcpStream::connect(ratelimit_addr).await.is_ok() {
+			break;
+		}
+		tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+	}
 
 	let mock = mock_streamable_http_server(true).await;
 	let mut t = setup_proxy_test("{}")
