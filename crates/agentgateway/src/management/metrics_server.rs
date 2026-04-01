@@ -85,7 +85,7 @@ enum ContentType {
 impl From<ContentType> for &str {
 	fn from(c: ContentType) -> Self {
 		match c {
-			ContentType::PlainText => "text/plain; charset=utf-8",
+			ContentType::PlainText => "text/plain;charset=utf-8",
 			ContentType::OpenMetrics => "application/openmetrics-text;charset=utf-8;version=1.0.0",
 			ContentType::Protobuf => {
 				"application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;version=1.0.0"
@@ -94,7 +94,7 @@ impl From<ContentType> for &str {
 	}
 }
 
-fn content_type_from_media_type(m: &MediaType) -> Option<ContentType> {
+fn content_type_from_media_type(m: MediaType) -> Option<ContentType> {
 	let ty_str: &str = m.ty.as_str();
 	if ty_str == mediatype::names::TEXT.as_str() && m.subty == mediatype::names::PLAIN.as_str() {
 		return Some(ContentType::PlainText);
@@ -108,7 +108,7 @@ fn content_type_from_media_type(m: &MediaType) -> Option<ContentType> {
 	}
 }
 
-const AVAILABLE_MEDIA_TYPES: [MediaType; 5] = [
+const AVAILABLE_MEDIA_TYPES: [MediaType<'static>; 5] = [
 	MediaType::new(
 		mediatype::names::APPLICATION,
 		mediatype::Name::new_unchecked("vnd.google.protobuf"),
@@ -136,7 +136,17 @@ fn content_type<T>(req: &Request<T>) -> ContentType {
 		Err(_) => return ContentType::default(),
 	};
 	accept
-		.negotiate(&AVAILABLE_MEDIA_TYPES)
+        // Using this call ensures quality parameters are handled correctly.
+        // We don't use Accept::negotiate, because extra parameters are not
+        // enforced and create mismatch conditions that require creating more
+        // mappings in AVAILABLE_MEDIA_TYPES for every case.
+		.media_types()
+		.map(mediatype::MediaTypeBuf::essence)
+		.find(|mediatype| {
+			AVAILABLE_MEDIA_TYPES
+				.iter()
+				.any(|available| mediatype == available)
+		})
 		.and_then(content_type_from_media_type)
 		.unwrap_or_default()
 }
@@ -147,13 +157,24 @@ mod test {
 		let plain_text_req = http::Request::new("I want some plain text");
 		assert_eq!(
 			Into::<&str>::into(super::content_type(&plain_text_req)),
-			"text/plain; charset=utf-8"
+			"text/plain;charset=utf-8"
 		);
 
 		let openmetrics_req = http::Request::builder()
 			.header("X-Custom-Beep", "boop")
 			.header("Accept", "application/json")
 			.header("Accept", "application/openmetrics-text; other stuff")
+			.body("Invalid header defaulting to text/plain")
+			.unwrap();
+		assert_eq!(
+			Into::<&str>::into(super::content_type(&openmetrics_req)),
+			"text/plain;charset=utf-8"
+		);
+
+		let openmetrics_req = http::Request::builder()
+			.header("X-Custom-Beep", "boop")
+			.header("Accept", "application/json")
+			.header("Accept", "application/openmetrics-text;version=1.0.0")
 			.body("I would like openmetrics")
 			.unwrap();
 		assert_eq!(
@@ -178,7 +199,7 @@ mod test {
 		// asking for something we don't support, fall back to plaintext
 		assert_eq!(
 			Into::<&str>::into(super::content_type(&unsupported_req_accept)),
-			"text/plain; charset=utf-8"
+			"text/plain;charset=utf-8"
 		)
 	}
 }
