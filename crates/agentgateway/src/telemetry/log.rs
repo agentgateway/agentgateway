@@ -816,41 +816,30 @@ impl Drop for DropOnLog {
 			);
 			rh.finish_request(health, duration, eviction_duration, restore_health);
 		}
-		if !maybe_enable_log && !enable_trace && !enable_custom_metrics {
-			// Report our non-customized metrics
-			if !is_tcp {
-				log.metrics.requests.get_or_create(&http_labels).inc();
-				if let Some(retry_count) = log.retry_attempt {
-					log
-						.metrics
-						.retries
-						.get_or_create(&http_labels)
-						.inc_by(retry_count as u64);
-				}
-			}
-			return;
-		}
-		let Some(cel_exec) = cel_exec else {
-			tracing::warn!("failed to build CEL context");
-			return;
-		};
+		if maybe_enable_log || enable_trace || enable_custom_metrics {
+			let Some(cel_exec_ref) = cel_exec.as_ref() else {
+				tracing::warn!("failed to build CEL context");
+				return;
+			};
 
-		let custom_metric_fields = CustomField::new(
-			// For metrics, keep empty values which will become 'unknown'
-			cel_exec
-				.eval_keep_empty(&cel_exec.metric_fields.add, true)
-				.into_iter()
-				.map(|(k, v)| {
-					(
-						strng::new(k),
-						v.and_then(|v| match v {
-							Value::String(s) => Some(strng::new(s)),
-							_ => None,
-						}),
-					)
-				}),
-		);
-		http_labels.custom = custom_metric_fields.clone();
+			let custom_metric_fields = CustomField::new(
+				// For metrics, keep empty values which will become 'unknown'
+				cel_exec_ref
+					.eval_keep_empty(&cel_exec_ref.metric_fields.add, true)
+					.into_iter()
+					.map(|(k, v)| {
+						(
+							strng::new(k),
+							v.and_then(|v| match v {
+								Value::String(s) => Some(strng::new(s)),
+								_ => None,
+							}),
+						)
+					}),
+			);
+			http_labels.custom = custom_metric_fields;
+		}
+
 		if !is_tcp {
 			log.metrics.requests.get_or_create(&http_labels).inc();
 		}
@@ -882,7 +871,7 @@ impl Drop for DropOnLog {
 			end_time,
 			duration,
 			llm_response.as_ref(),
-			&custom_metric_fields,
+			&http_labels.custom,
 		);
 		if let Some(mcp) = &mcp
 			&& mcp.method_name.is_some()
@@ -898,10 +887,14 @@ impl Drop for DropOnLog {
 					resource: mcp.resource_name().map(RichStrng::from).into(),
 
 					route: route_identifier.clone(),
-					custom: custom_metric_fields.clone(),
+					custom: http_labels.custom.clone(),
 				})
 				.inc();
 		}
+
+		let Some(cel_exec) = cel_exec else {
+			return;
+		};
 
 		let enable_logs = maybe_enable_log && cel_exec.eval_filter();
 		if !enable_logs && !enable_trace {
