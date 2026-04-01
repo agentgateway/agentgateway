@@ -2278,3 +2278,80 @@ async fn try_mcp_streamable_client(
 
 	client_info.serve(transport).await
 }
+
+#[tokio::test]
+async fn mcp_remote_ratelimit_deny() {
+	use protos::envoy::service::ratelimit::v3::rate_limit_service_server::{
+		RateLimitService, RateLimitServiceServer,
+	};
+	use protos::envoy::service::ratelimit::v3::{
+		RateLimitRequest, RateLimitResponse, rate_limit_response::Code,
+	};
+
+	// Mock rate limit server that always returns OVER_LIMIT
+	struct DenyAllRateLimit;
+
+	#[tonic::async_trait]
+	impl RateLimitService for DenyAllRateLimit {
+		async fn should_rate_limit(
+			&self,
+			_request: tonic::Request<RateLimitRequest>,
+		) -> Result<tonic::Response<RateLimitResponse>, tonic::Status> {
+			Ok(tonic::Response::new(RateLimitResponse {
+				overall_code: Code::OverLimit as i32,
+				statuses: vec![],
+				response_headers_to_add: vec![],
+				request_headers_to_add: vec![],
+				raw_body: b"rate limit exceeded by mock".to_vec(),
+				dynamic_metadata: None,
+				quota: None,
+			}))
+		}
+	}
+
+	// Start the mock gRPC server
+	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let ratelimit_addr = listener.local_addr().unwrap();
+
+	tokio::spawn(async move {
+		let server = tonic::transport::Server::builder()
+			.add_service(RateLimitServiceServer::new(DenyAllRateLimit))
+			.serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(listener));
+		let _ = server.await;
+	});
+
+	// Small delay to ensure server is ready
+	tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind(basic_route(mock.addr)));
+
+	// Attach remoteRateLimit policy pointing to our mock server
+	t.attach_route_policy(serde_json::json!({
+		"remoteRateLimit": {
+			"host": ratelimit_addr.to_string(),
+			"domain": "test",
+			"descriptors": [{
+				"entries": [
+					{"key": "generic_key", "value": "\"test\""}
+				],
+				"type": "requests"
+			}]
+		}
+	}))
+	.await;
+
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	// Client should fail to initialize due to rate limit denial
+	let result = try_mcp_streamable_client(io).await;
+	let err = result.expect_err("Client initialization should be rate limited");
+	let err_msg = err.to_string();
+	assert!(
+		err_msg.contains("429") && err_msg.contains("rate limit exceeded by mock"),
+		"Expected 429 rate limit from remote service, got: {err_msg}"
+	);
+}
