@@ -52,6 +52,7 @@ use telemetry::{metrics, trc};
 use crate::control::{AuthSource, RootCert};
 use crate::telemetry::trc::Protocol;
 use crate::types::agent::{ListenerTarget, PolicyTargetRef};
+use crate::types::local;
 
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -493,6 +494,15 @@ impl Config {
 			gateway_namespace: self.xds.namespace.as_ref(),
 			listener_name: None,
 		}
+	}
+	pub fn as_policy_context(
+		&self,
+		policy_key: impl std::fmt::Display,
+	) -> Option<local::AttachedPolicyContext> {
+		Some(local::AttachedPolicyContext {
+			oidc_policy_id: crate::http::oidc::PolicyId::policy(&policy_key),
+			oidc_cookie_encoder: self.oidc_cookie_encoder.as_ref(),
+		})
 	}
 }
 

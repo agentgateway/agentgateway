@@ -1419,10 +1419,7 @@ async fn convert(
 		let res = split_policies(
 			client.clone(),
 			p.policy,
-			Some(AttachedPolicyContext {
-				oidc_policy_id: crate::http::oidc::PolicyId::policy(&policy_key),
-				oidc_cookie_encoder: config.oidc_cookie_encoder.as_ref(),
-			}),
+			config.as_policy_context(&policy_key),
 		)
 		.await?;
 		if (res.route_policies.len() + res.backend_policies.len()) != 1 {
@@ -1636,10 +1633,7 @@ async fn convert_llm_config(
 		let gateway_policies = split_policies(
 			client.clone(),
 			gateway.into(),
-			Some(AttachedPolicyContext {
-				oidc_policy_id: crate::http::oidc::PolicyId::policy("listener/llm"),
-				oidc_cookie_encoder: config.oidc_cookie_encoder.as_ref(),
-			}),
+			config.as_policy_context("listener/llm"),
 		)
 		.await?;
 		(
@@ -2039,15 +2033,7 @@ async fn convert_mcp_config(
 	let route_key = strng::new("mcp:default");
 
 	let resolved_policies = if let Some(pol) = policies {
-		split_policies(
-			client.clone(),
-			pol,
-			Some(AttachedPolicyContext {
-				oidc_policy_id: crate::http::oidc::PolicyId::route(&route_key),
-				oidc_cookie_encoder: config.oidc_cookie_encoder.as_ref(),
-			}),
-		)
-		.await?
+		split_policies(client.clone(), pol, config.as_policy_context(&route_key)).await?
 	} else {
 		ResolvedPolicies::default()
 	};
@@ -2231,10 +2217,7 @@ async fn convert_listener(
 		let pols = split_policies(
 			client.clone(),
 			pol.into(),
-			Some(AttachedPolicyContext {
-				oidc_policy_id: crate::http::oidc::PolicyId::policy(listener_policy_id),
-				oidc_cookie_encoder: config.oidc_cookie_encoder.as_ref(),
-			}),
+			config.as_policy_context(listener_policy_id),
 		)
 		.await?;
 		let target = PolicyTarget::Gateway(name.clone().into());
@@ -2353,9 +2336,9 @@ pub(crate) struct ResolvedPolicies {
 	pub(crate) route_policies: Vec<TrafficPolicy>,
 }
 
-pub(crate) struct AttachedPolicyContext<'a> {
-	pub(crate) oidc_policy_id: crate::http::oidc::PolicyId,
-	pub(crate) oidc_cookie_encoder: Option<&'a crate::http::sessionpersistence::Encoder>,
+pub struct AttachedPolicyContext<'a> {
+	pub oidc_policy_id: crate::http::oidc::PolicyId,
+	pub oidc_cookie_encoder: Option<&'a crate::http::sessionpersistence::Encoder>,
 }
 
 async fn split_frontend_policies(

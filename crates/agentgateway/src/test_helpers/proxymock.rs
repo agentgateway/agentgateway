@@ -38,7 +38,7 @@ use crate::types::agent::{
 	BindProtocol, Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget, McpTargetSpec,
 	PathMatch, PolicyPhase, PolicyTarget, ResourceName, Route, RouteBackendReference, RouteMatch,
 	RouteName, RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy, TrafficPolicy,
+	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy,
 };
 use crate::types::local;
 use crate::types::local::LocalNamedAIProvider;
@@ -566,30 +566,19 @@ impl TestBind {
 			.insert_route(route, LISTENER_KEY);
 	}
 	pub async fn attach_route_policy(&mut self, p: serde_json::Value) {
-		let oidc_key = strng::format!("pol/{}", self.policies + 1);
+		let oidc_key = strng::format!("oidc/{}", self.policies + 1);
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
 		let pols = local::split_policies(
 			self.pi.upstream.clone(),
 			pol,
-			Some(local::AttachedPolicyContext {
-				oidc_policy_id: crate::http::oidc::PolicyId::policy(&oidc_key),
-				oidc_cookie_encoder: self.pi.cfg.oidc_cookie_encoder.as_ref(),
-			}),
+			self.pi.cfg.as_policy_context(oidc_key),
 		)
 		.await
 		.unwrap();
 		assert!(pols.backend_policies.is_empty());
-		let (oidc_policies, route_policies): (Vec<_>, Vec<_>) = pols
-			.route_policies
-			.into_iter()
-			.partition(|policy| matches!(policy, TrafficPolicy::Oidc(_)));
-		for v in oidc_policies.into_iter().chain(route_policies) {
+		for v in pols.route_policies {
 			self.policies += 1;
-			let key = if matches!(v, TrafficPolicy::Oidc(_)) {
-				oidc_key.clone()
-			} else {
-				strng::format!("pol/{}", self.policies)
-			};
+			let key = strng::format!("pol/{}", self.policies);
 			self.with_policy(TargetedPolicy {
 				key,
 				name: None,
@@ -609,25 +598,14 @@ impl TestBind {
 		let pols = local::split_policies(
 			self.pi.upstream.clone(),
 			pol,
-			Some(local::AttachedPolicyContext {
-				oidc_policy_id: crate::http::oidc::PolicyId::policy(&oidc_key),
-				oidc_cookie_encoder: self.pi.cfg.oidc_cookie_encoder.as_ref(),
-			}),
+			self.pi.cfg.as_policy_context(&oidc_key),
 		)
 		.await
 		.unwrap();
 		assert!(pols.backend_policies.is_empty());
-		let (oidc_policies, gateway_policies): (Vec<_>, Vec<_>) = pols
-			.route_policies
-			.into_iter()
-			.partition(|policy| matches!(policy, TrafficPolicy::Oidc(_)));
-		for v in oidc_policies.into_iter().chain(gateway_policies) {
+		for v in pols.route_policies {
 			self.policies += 1;
-			let key = if matches!(v, TrafficPolicy::Oidc(_)) {
-				oidc_key.clone()
-			} else {
-				strng::format!("pol/{}", self.policies)
-			};
+			let key = strng::format!("pol/{}", self.policies);
 			self.with_policy(TargetedPolicy {
 				key,
 				name: None,

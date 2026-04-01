@@ -44,9 +44,8 @@ pub(crate) fn iter_request_cookies(
 		.filter_map(|value| value.to_str().ok())
 		.flat_map(|header_value| {
 			cookie::Cookie::split_parse(header_value.to_owned())
-				.filter_map(|cookie: Result<cookie::Cookie<'_>, _>| cookie.ok())
+				.filter_map(Result::ok)
 				.map(cookie::Cookie::into_owned)
-				.collect::<Vec<_>>()
 		})
 }
 
