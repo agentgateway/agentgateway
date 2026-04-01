@@ -136,10 +136,10 @@ fn content_type<T>(req: &Request<T>) -> ContentType {
 		Err(_) => return ContentType::default(),
 	};
 	accept
-        // Using this call ensures quality parameters are handled correctly.
-        // We don't use Accept::negotiate, because extra parameters are not
-        // enforced and create mismatch conditions that require creating more
-        // mappings in AVAILABLE_MEDIA_TYPES for every case.
+		// Using this call ensures quality parameters are handled correctly.
+		// We don't use Accept::negotiate, because extra parameters are not
+		// enforced and create mismatch conditions that require creating more
+		// mappings in AVAILABLE_MEDIA_TYPES for every case.
 		.media_types()
 		.map(mediatype::MediaTypeBuf::essence)
 		.find(|mediatype| {
