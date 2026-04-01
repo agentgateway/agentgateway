@@ -1634,6 +1634,7 @@ async fn test_hostname_resolution_logic() {
 		}),
 		load_balancer: None,
 		ip_families: None,
+		health: None,
 	};
 
 	stores.insert_service_internal(service);
@@ -1682,6 +1683,7 @@ async fn test_hostname_resolution_logic() {
 		waypoint: None,
 		load_balancer: None,
 		ip_families: None,
+		health: None,
 	};
 	stores.insert_service_internal(service_no_vips);
 

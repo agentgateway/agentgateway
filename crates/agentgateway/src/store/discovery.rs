@@ -242,6 +242,10 @@ pub struct ServiceStore {
 }
 
 impl ServiceStore {
+	pub fn services(&self) -> impl Iterator<Item = &Arc<Service>> {
+		self.by_host.values().flat_map(|v| v.iter())
+	}
+
 	fn insert_endpoint_for_services(
 		&mut self,
 		workload: &Arc<Workload>,
