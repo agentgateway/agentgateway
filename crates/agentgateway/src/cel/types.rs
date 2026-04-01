@@ -312,13 +312,13 @@ impl<'a> Executor<'a> {
 	}
 	pub fn new_tcp_logger(
 		source_context: Option<&'a SourceContext>,
-		end_time: Option<&'a RequestTime>,
+		end_time: &'a RequestTime,
 	) -> Self {
 		let mut this = Self::new_empty();
 		// For TCP connections, set the source context directly
 		this.source = ExtensionOrDirect::Direct(source_context);
 		if let Some(f) = this.request.as_mut() {
-			f.end_time = end_time;
+			f.end_time = Some(end_time);
 		}
 		this
 	}
