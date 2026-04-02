@@ -221,16 +221,6 @@ type BackendEviction struct {
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
-type BackendWithMCP struct {
-	BackendSimple `json:",inline"`
-
-	// `mcp` specifies settings for MCP workloads. This is only applicable when
-	// connecting to a `Backend` of type `mcp`.
-	// +optional
-	MCP *BackendMCP `json:"mcp,omitempty"`
-}
-
-// +kubebuilder:validation:AtLeastOneFieldSet
 type BackendWithAI struct {
 	BackendSimple `json:",inline"`
 
@@ -251,6 +241,10 @@ type BackendFull struct {
 
 	// `mcp` specifies settings for MCP workloads. This is only applicable when
 	// connecting to a `Backend` of type `mcp`.
+	//
+	// Deprecated: prefer to use traffic policy `jwtAuthentication.mcp`, which ensures authentication runs before
+	// other policies such as transformation and rate limiting.
+	//
 	// +optional
 	MCP *BackendMCP `json:"mcp,omitempty"`
 }

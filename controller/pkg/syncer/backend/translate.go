@@ -381,19 +381,6 @@ func TranslateBackendPolicies(
 	return plugins.TranslateInlineBackendPolicy(ctx, namespace, policies)
 }
 
-func TranslateMCPBackendPolicies(
-	ctx plugins.PolicyCtx,
-	namespace string, policies *agentgateway.BackendWithMCP,
-) ([]*api.BackendPolicySpec, error) {
-	if policies == nil {
-		return nil, nil
-	}
-	return TranslateBackendPolicies(ctx, namespace, &agentgateway.BackendFull{
-		BackendSimple: policies.BackendSimple,
-		MCP:           policies.MCP,
-	})
-}
-
 func translateAIBackendPolicies(
 	ctx plugins.PolicyCtx,
 	namespace string, policies *agentgateway.BackendWithAI,
