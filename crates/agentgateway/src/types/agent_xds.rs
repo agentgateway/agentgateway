@@ -539,21 +539,18 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
 							},
 							Some(azure_explicit_config::CredentialSource::ManagedIdentityCredential(mic)) => {
 								auth::AzureAuthCredentialSource::ManagedIdentity {
-									user_assigned_identity: mic.user_assigned_identity.map(|uami| {
-										uami
-											.id
-											.map(|id| match id {
-												user_assigned_identity::Id::ClientId(c) => {
-													auth::AzureUserAssignedIdentity::ClientId(c)
-												},
-												user_assigned_identity::Id::ObjectId(o) => {
-													auth::AzureUserAssignedIdentity::ObjectId(o)
-												},
-												user_assigned_identity::Id::ResourceId(r) => {
-													auth::AzureUserAssignedIdentity::ResourceId(r)
-												},
-											})
-											.expect("one of clientId, objectId, or resourceId must be set")
+									user_assigned_identity: mic.user_assigned_identity.and_then(|uami| {
+										uami.id.map(|id| match id {
+											user_assigned_identity::Id::ClientId(c) => {
+												auth::AzureUserAssignedIdentity::ClientId(c)
+											},
+											user_assigned_identity::Id::ObjectId(o) => {
+												auth::AzureUserAssignedIdentity::ObjectId(o)
+											},
+											user_assigned_identity::Id::ResourceId(r) => {
+												auth::AzureUserAssignedIdentity::ResourceId(r)
+											},
+										})
 									}),
 								}
 							},
@@ -744,11 +741,9 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 			.collect::<Vec<_>>();
 		let name = s.name.as_ref().ok_or(ProtoError::MissingRequiredField)?;
 		let backend = match &s.kind {
-			Some(proto::agent::backend::Kind::Static(s)) => Backend::Opaque(
-				name.into(),
-				Target::try_from((s.host.as_str(), s.port as u16))
-					.map_err(|e| ProtoError::Generic(e.to_string()))?,
-			),
+			Some(proto::agent::backend::Kind::Static(s)) => {
+				Backend::Opaque(name.into(), Target::from((s.host.as_str(), s.port as u16)))
+			},
 			Some(proto::agent::backend::Kind::Dynamic(_)) => Backend::Dynamic(name.into(), ()),
 			Some(proto::agent::backend::Kind::Aws(a)) => {
 				let aws_config = match &a.service {
@@ -846,11 +841,7 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 							host_override: provider_config
 								.r#host_override
 								.as_ref()
-								.map(|o| {
-									Target::try_from((o.host.as_str(), o.port as u16))
-										.map_err(|e| ProtoError::Generic(e.to_string()))
-								})
-								.transpose()?,
+								.map(|o| Target::from((o.host.as_str(), o.port as u16))),
 							path_override: provider_config.path_override.as_ref().map(strng::new),
 							path_prefix: provider_config.path_prefix.as_ref().map(strng::new),
 							inline_policies: pols,
@@ -1265,7 +1256,7 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 		use crate::types::proto::agent::traffic_policy_spec as tps;
 		Ok(match &spec.kind {
 			Some(tps::Kind::Timeout(t)) => TrafficPolicy::Timeout(http::timeout::Policy {
-				request_timeout: t.request.as_ref().map(|d| (*d).into()).transpose()?,
+				request_timeout: t.request.as_ref().map(|d| (*d).try_into()).transpose()?,
 				backend_request_timeout: t
 					.backend_request
 					.as_ref()

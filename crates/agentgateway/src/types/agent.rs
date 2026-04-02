@@ -2305,13 +2305,11 @@ impl serde::Serialize for Target {
 	}
 }
 
-impl TryFrom<(&str, u16)> for Target {
-	type Error = anyhow::Error;
-
-	fn try_from((host, port): (&str, u16)) -> Result<Self, Self::Error> {
+impl From<(&str, u16)> for Target {
+	fn from((host, port): (&str, u16)) -> Self {
 		match host.parse::<IpAddr>() {
-			Ok(target) => Ok(Target::Address(SocketAddr::new(target, port))),
-			Err(_) => Ok(Target::Hostname(host.into(), port)),
+			Ok(target) => Target::Address(SocketAddr::new(target, port)),
+			Err(_) => Target::Hostname(host.into(), port),
 		}
 	}
 }
@@ -2328,7 +2326,7 @@ impl TryFrom<&str> for Target {
 			anyhow::bail!("invalid host:port: {hostport}");
 		};
 		let port: u16 = port.parse()?;
-		(host, port).try_into()
+		Ok((host, port).into())
 	}
 }
 

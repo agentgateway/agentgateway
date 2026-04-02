@@ -1414,7 +1414,7 @@ async fn make_backend_call(
 					Some(s) if *s == Scheme::HTTPS => 443,
 					_ => 80,
 				});
-			let target = Target::try_from((host, port)).map_err(ProxyError::Processing)?;
+			let target = Target::from((host, port));
 			BackendCall {
 				target,
 				http_version_override: None,

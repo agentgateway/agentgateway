@@ -412,8 +412,7 @@ impl Client {
 		} else {
 			ApplicationTransport::Plaintext.into()
 		};
-		let target = Target::try_from((host, port))
-			.map_err(|e| ProxyError::ProcessingString(format!("failed to parse host: {e}")))?;
+		let target = Target::from((host, port));
 		self
 			.call(Call {
 				req,

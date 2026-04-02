@@ -846,7 +846,7 @@ impl McpBackendHost {
 		let McpBackendHost { host, port, path } = self;
 		Ok(match (host, port, path) {
 			(host, Some(port), Some(path)) => {
-				let b = Target::try_from((host.as_str(), *port))?;
+				let b = Target::from((host.as_str(), *port));
 				(b, path.clone(), false)
 			},
 			(host, None, None) => {
@@ -865,7 +865,7 @@ impl McpBackendHost {
 					},
 				};
 
-				let b = Target::try_from((host, port))?;
+				let b = Target::from((host, port));
 				(b, path.to_string(), scheme == &http::Scheme::HTTPS)
 			},
 			_ => {
