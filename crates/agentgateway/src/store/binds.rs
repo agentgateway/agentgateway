@@ -713,7 +713,7 @@ impl Store {
 		let gateway_rules =
 			gateway.and_then(|t| self.policies_by_target.get(&t.as_gateway_target_ref()));
 
-		// RouteRule > Route > SubBackend > Backend > Service > Gateway
+		// RouteRule > Route > SubBackend > Backend/Service > Gateway
 		// Most specific (route context) to least specific (gateway-wide default)
 		let rules = route_rule_rules
 			.iter()

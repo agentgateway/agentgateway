@@ -688,6 +688,32 @@ impl TestBind {
 			});
 		}
 	}
+	pub async fn attach_service_policy(&mut self, p: serde_json::Value) {
+		let oidc_key = strng::format!("oidc/{}", self.policies + 1);
+		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
+		let pols = local::split_policies(
+			self.pi.upstream.clone(),
+			pol,
+			self.pi.cfg.as_policy_context(oidc_key),
+		)
+		.await
+		.unwrap();
+		assert!(pols.backend_policies.is_empty());
+		for v in pols.route_policies {
+			self.policies += 1;
+			let key = strng::format!("pol/{}", self.policies);
+			self.with_policy(TargetedPolicy {
+				key,
+				name: None,
+				target: PolicyTarget::Backend(BackendTarget::Service {
+					hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+					namespace: strng::literal!("default"),
+					port: None,
+				}),
+				policy: (v, PolicyPhase::Route).into(),
+			});
+		}
+	}
 	pub async fn attach_frontend_policy(&mut self, p: serde_json::Value) {
 		let cfg = serde_json::json!({
 			"frontendPolicies": p,
