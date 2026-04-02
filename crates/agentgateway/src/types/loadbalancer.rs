@@ -310,7 +310,8 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 					.active
 					.iter()
 					.chain(group.rejected.iter())
-					.filter_map(|(key, info)| f(info.endpoint.as_ref()).then(|| key.clone()))
+					.filter(|(_, info)| f(info.endpoint.as_ref()))
+					.map(|(key, _)| key.clone())
 					.collect_vec()
 			})
 			.collect_vec();
