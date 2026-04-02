@@ -6,7 +6,7 @@
 
 use std::error::Error as StdError;
 use std::fmt;
-use std::future::Future;
+use std::future::{poll_fn, Future};
 use std::pin::Pin;
 use std::task::{self, Poll};
 use std::time::Duration;
@@ -22,7 +22,6 @@ use tracing::{debug, trace, warn};
 
 use super::connect::{Alpn, Connect, Connected, Connection};
 use super::pool::{self, Ver};
-use crate::common::future::poll_fn;
 use crate::common::{lazy as hyper_lazy, timer, Exec, Lazy, SyncWrapper};
 
 type BoxSendFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
@@ -675,26 +674,6 @@ where
 	}
 }
 
-impl<C, B> tower_service::Service<Request<B>> for &'_ Client<C, B>
-where
-	C: Connect + Clone + Send + Sync + 'static,
-	B: Body + Send + 'static + Unpin,
-	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
-{
-	type Response = Response<hyper::body::Incoming>;
-	type Error = Error;
-	type Future = ResponseFuture;
-
-	fn poll_ready(&mut self, _: &mut task::Context<'_>) -> Poll<Result<(), Self::Error>> {
-		Poll::Ready(Ok(()))
-	}
-
-	fn call(&mut self, req: Request<B>) -> Self::Future {
-		self.request(req)
-	}
-}
-
 impl<C: Clone, B, PK: pool::Key> Clone for Client<C, B, PK> {
 	fn clone(&self) -> Client<C, B, PK> {
 		Client {
@@ -777,10 +756,6 @@ impl<B> PoolClient<B> {
 		}
 	}
 
-	fn is_poisoned(&self) -> bool {
-		self.conn_info.poisoned.poisoned()
-	}
-
 	fn is_ready(&self) -> bool {
 		match self.tx {
 			PoolTx::Http1(ref tx) => tx.is_ready(),
@@ -809,7 +784,7 @@ where
 	B: Send + 'static,
 {
 	fn is_open(&self) -> bool {
-		!self.is_poisoned() && self.is_ready()
+		self.is_ready()
 	}
 
 	fn reserve(self) -> pool::Reservation<Self> {
@@ -1410,19 +1385,9 @@ impl Builder {
 		self
 	}
 
-	/// Combine the configuration of this builder with a connector to create a `Client`.
-	pub fn build<C, B>(&self, connector: C) -> Client<C, B, DefaultPoolKey>
-	where
-		C: Connect + Clone,
-		B: Body + Send,
-		B::Data: Send,
-	{
-		self.build_with_pool_key::<C, B, DefaultPoolKey>(connector)
-	}
-
 	/// Combine the configuration of this builder with a connector to create a `Client`, with a custom pooling key.
 	/// A function to extract the pool key from the request is required.
-	pub fn build_with_pool_key<C, B, PK>(&self, connector: C) -> Client<C, B, PK>
+	pub fn build<C, B, PK>(&self, connector: C) -> Client<C, B, PK>
 	where
 		C: Connect + Clone,
 		B: Body + Send,

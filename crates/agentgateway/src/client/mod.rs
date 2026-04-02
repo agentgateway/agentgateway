@@ -389,7 +389,7 @@ impl Client {
 			backend_config: Arc::new(backend_config),
 			metrics,
 		};
-		let client = b.build_with_pool_key(connector.clone());
+		let client = b.build(connector.clone());
 		Client { client, connector }
 	}
 
