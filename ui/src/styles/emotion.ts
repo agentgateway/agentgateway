@@ -169,28 +169,6 @@ export const truncate = css`
   white-space: nowrap;
 `;
 
-// Scrollbar styling
-export const scrollbar = css`
-  &::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: var(--color-bg-container);
-    border-radius: var(--border-radius-sm);
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: var(--color-border-base);
-    border-radius: var(--border-radius-sm);
-
-    &:hover {
-      background: var(--color-text-tertiary);
-    }
-  }
-`;
-
 // Full height/width utilities
 export const fullWidth = css`
   width: 100%;

@@ -36,6 +36,9 @@
   --color-border-secondary: #f0f0f0;
   --color-border-split: rgba(5, 5, 5, 0.06);
 
+  /* Scrollbar Colors */
+  --color-scrollbar: #979797;
+
   /* Link Colors */
   --color-link: #1677ff;
   --color-link-hover: #4096ff;
@@ -146,6 +149,9 @@
   --color-border-base: #424242;
   --color-border-secondary: #303030;
   --color-border-split: rgba(253, 253, 253, 0.12);
+
+  /* Scrollbar Colors */
+  --color-scrollbar: #424242;
 }
 
 /* Responsive Breakpoints */

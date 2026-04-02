@@ -138,28 +138,59 @@ pre code {
 }
 
 /* Scrollbar styling */
-::-webkit-scrollbar {
+* {
+  scrollbar-color: var(--color-scrollbar) var(--color-bg-layout);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
-::-webkit-scrollbar-track {
-  background: var(--color-bg-container);
+*::-webkit-scrollbar-track {
+  background: var(--color-bg-layout);
 }
 
-::-webkit-scrollbar-thumb {
-  background: var(--color-border-base);
-  border-radius: var(--border-radius-sm);
+*::-webkit-scrollbar-thumb {
+  background: var(--color-bg-layout);
+  border-radius: var(--border-radius-lg);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-tertiary);
+/* PatternFly LogViewer overrides */
+.pf-v6-c-log-viewer__scroll-container,
+.pf-v6-c-log-viewer__scroll-container > div {
+  scrollbar-color: var(--color-scrollbar) var(--color-bg-layout);
+  scrollbar-width: thin;
 }
 
-/* Selection */
-::selection {
-  background: var(--color-primary);
-  color: var(--color-text-inverse);
+.pf-v6-c-log-viewer__scroll-container::-webkit-scrollbar,
+.pf-v6-c-log-viewer__scroll-container > div::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.pf-v6-c-log-viewer__scroll-container::-webkit-scrollbar-track,
+.pf-v6-c-log-viewer__scroll-container > div::-webkit-scrollbar-track {
+  background: var(--color-bg-layout);
+}
+
+.pf-v6-c-log-viewer__scroll-container::-webkit-scrollbar-thumb,
+.pf-v6-c-log-viewer__scroll-container > div::-webkit-scrollbar-thumb {
+  background: var(--color-scrollbar);
+  border-radius: var(--border-radius-lg);
+}
+
+/* checkbox - light mode */
+.pf-v6-c-check__input { 
+  accent-color: var(--color-primary) !important;
+  color-scheme: light;
+}
+
+/* checkbox - dark mode */
+[data-theme="dark"] .pf-v6-c-check__input { 
+  accent-color: var(--color-primary) !important;
+  color-scheme: dark;
 }
 
 /* Focus outline — keyboard only */

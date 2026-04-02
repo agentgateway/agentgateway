@@ -19,6 +19,8 @@
     "@emotion/styled": "^11.13.5",
     "@modelcontextprotocol/sdk": "^1.25.3",
     "@monaco-editor/react": "^4.7.0",
+    "@patternfly/react-core": "^6.4.1",
+    "@patternfly/react-log-viewer": "^6.3.0",
     "@rjsf/antd": "^5.22.2",
     "@rjsf/core": "^5.22.2",
     "@rjsf/utils": "^5.22.2",
