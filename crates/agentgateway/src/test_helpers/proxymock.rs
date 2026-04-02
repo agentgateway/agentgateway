@@ -416,8 +416,7 @@ impl TestBind {
 	pub fn with_waypoint_service(self, backend_addr: SocketAddr) -> Self {
 		use crate::store::LocalWorkload;
 		use crate::types::discovery::{
-			GatewayAddress, NetworkAddress, Service, Workload,
-			gatewayaddress::Destination,
+			GatewayAddress, NetworkAddress, Service, Workload, gatewayaddress::Destination,
 		};
 		let svc = Service {
 			name: strng::literal!("my-svc"),
@@ -429,12 +428,10 @@ impl TestBind {
 			}],
 			ports: std::collections::HashMap::from([(80, backend_addr.port())]),
 			waypoint: Some(GatewayAddress {
-				destination: Destination::Hostname(
-					crate::types::discovery::NamespacedHostname {
-						namespace: strng::literal!("default"),
-						hostname: strng::literal!("default.default.svc.cluster.local"),
-					},
-				),
+				destination: Destination::Hostname(crate::types::discovery::NamespacedHostname {
+					namespace: strng::literal!("default"),
+					hostname: strng::literal!("default.default.svc.cluster.local"),
+				}),
 				hbone_mtls_port: 15008,
 			}),
 			..Default::default()
@@ -452,7 +449,8 @@ impl TestBind {
 				std::collections::HashMap::from([(80, backend_addr.port())]),
 			)]),
 		};
-		self.pi
+		self
+			.pi
 			.stores
 			.discovery
 			.sync_local(vec![svc], vec![wl], Default::default())
