@@ -122,6 +122,22 @@ async fn immediate_response_request() {
 }
 
 #[tokio::test]
+async fn immediate_response_request_body_is_deferred_to_response() {
+	let mock = simple_mock().await;
+	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
+		mock,
+		ext_proc::FailureMode::FailClosed,
+		ExtProcMock::new(ImmediateResponseRequestBodyExtProc::default),
+		"{}",
+	)
+	.await;
+	let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
+	assert_eq!(res.status(), 403);
+	let body = read_body_raw(res.into_body()).await;
+	assert_eq!(body.as_ref(), b"Access denied");
+}
+
+#[tokio::test]
 async fn immediate_response_response() {
 	let mock = simple_mock().await;
 	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
@@ -154,6 +170,22 @@ async fn failure_fail_closed() {
 }
 
 #[tokio::test]
+async fn failure_fail_open_body() {
+	let mock = simple_mock().await;
+	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
+		mock,
+		ext_proc::FailureMode::FailOpen,
+		ExtProcMock::new(FailureExtProcResponse::default),
+		"{}",
+	)
+	.await;
+
+	// If we have a body, we should NOT fail open
+	let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
+	assert_eq!(res.status(), 500);
+}
+
+#[tokio::test]
 async fn failure_fail_open() {
 	let mock = simple_mock().await;
 	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
@@ -163,10 +195,9 @@ async fn failure_fail_open() {
 		"{}",
 	)
 	.await;
-	let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
+
+	let res = send_request(io, Method::POST, "http://lo").await;
 	assert_eq!(res.status(), 200);
-	let body = read_body(res.into_body()).await;
-	assert_eq!(body.body.as_ref(), b"request");
 }
 
 pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
@@ -389,6 +420,45 @@ impl Handler for ImmediateResponseExtProc {
 }
 
 #[derive(Debug, Default)]
+struct ImmediateResponseRequestBodyExtProc {
+	sent: bool,
+}
+
+#[async_trait::async_trait]
+impl Handler for ImmediateResponseRequestBodyExtProc {
+	async fn handle_request_headers(
+		&mut self,
+		_: &HttpHeaders,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let _ = sender.send(request_header_response(None)).await;
+		Ok(())
+	}
+
+	async fn handle_request_body(
+		&mut self,
+		_: &proto::HttpBody,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		if !self.sent {
+			self.sent = true;
+			let _ = sender
+				.send(immediate_response(proto::ImmediateResponse {
+					status: Some(proto::HttpStatus {
+						code: proto::StatusCode::Forbidden as i32,
+					}),
+					body: "Access denied".to_string(),
+					headers: None,
+					grpc_status: None,
+					details: "".to_string(),
+				}))
+				.await;
+		}
+		Ok(())
+	}
+}
+
+#[derive(Debug, Default)]
 struct ImmediateResponseExtProcResponse {
 	sent_req_body: bool,
 }
@@ -471,7 +541,7 @@ fn test_default_append_action_overwrite() {
 		}],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 1);
@@ -507,7 +577,7 @@ fn test_append_if_exists_or_add() {
 		],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 2);
@@ -545,7 +615,7 @@ fn test_add_if_absent() {
 		],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 1);
@@ -582,7 +652,7 @@ fn test_overwrite_if_exists_or_add() {
 		],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 1);
@@ -619,7 +689,7 @@ fn test_overwrite_if_exists() {
 		],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 1);
@@ -638,7 +708,7 @@ fn test_remove_headers() {
 		set_headers: vec![],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	assert!(headers.get("to-remove").is_none());
 	assert_eq!(headers.get("keep").unwrap(), "value");
@@ -665,7 +735,7 @@ fn test_apply_header_mutations_request() {
 		}],
 	});
 
-	super::apply_header_mutations_request(&mut req, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_request(&mut req, mutation.as_ref());
 
 	let headers = req.headers();
 	assert!(headers.get("to-remove").is_none());
@@ -726,7 +796,7 @@ fn test_apply_pseudo_headers_request_with_raw_value() {
 		],
 	});
 
-	super::apply_header_mutations_request(&mut req, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_request(&mut req, mutation.as_ref());
 
 	// Verify pseudo-headers were applied
 	assert_eq!(req.method(), "POST");
@@ -767,7 +837,7 @@ fn test_apply_pseudo_headers_request_with_value_field() {
 		],
 	});
 
-	super::apply_header_mutations_request(&mut req, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_request(&mut req, mutation.as_ref());
 
 	// Verify pseudo-headers from value field were applied
 	assert_eq!(req.method(), "PUT");
@@ -795,7 +865,7 @@ fn test_pseudo_headers_request_raw_value_precedence() {
 		}],
 	});
 
-	super::apply_header_mutations_request(&mut req, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_request(&mut req, mutation.as_ref());
 
 	// raw_value should take precedence
 	assert_eq!(req.method(), "DELETE");
@@ -822,7 +892,7 @@ fn test_apply_header_mutations_response() {
 		}],
 	});
 
-	super::apply_header_mutations_response(&mut resp, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_response(&mut resp, mutation.as_ref());
 
 	let headers = resp.headers();
 	assert!(headers.get("to-remove").is_none());
@@ -854,7 +924,7 @@ fn test_apply_pseudo_headers_response_with_raw_value() {
 		}],
 	});
 
-	super::apply_header_mutations_response(&mut resp, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_response(&mut resp, mutation.as_ref());
 
 	// Verify :status pseudo-header was applied
 	assert_eq!(resp.status(), 404);
@@ -882,7 +952,7 @@ fn test_apply_pseudo_headers_response_with_value_field() {
 		}],
 	});
 
-	super::apply_header_mutations_response(&mut resp, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_response(&mut resp, mutation.as_ref());
 
 	// Verify :status pseudo-header from value field was applied
 	assert_eq!(resp.status(), 201);
@@ -908,7 +978,7 @@ fn test_pseudo_headers_response_raw_value_precedence() {
 		}],
 	});
 
-	super::apply_header_mutations_response(&mut resp, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_response(&mut resp, mutation.as_ref());
 
 	// raw_value should take precedence
 	assert_eq!(resp.status(), 403);
@@ -956,7 +1026,7 @@ fn test_apply_mixed_headers_and_pseudo_headers_request() {
 		],
 	});
 
-	super::apply_header_mutations_request(&mut req, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_request(&mut req, mutation.as_ref());
 
 	// Verify pseudo-header was applied
 	assert_eq!(req.method(), "POST");
@@ -1006,7 +1076,7 @@ fn test_apply_mixed_headers_and_pseudo_headers_response() {
 		],
 	});
 
-	super::apply_header_mutations_response(&mut resp, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_response(&mut resp, mutation.as_ref());
 
 	// Verify pseudo-header was applied
 	assert_eq!(resp.status(), 201);
@@ -1044,7 +1114,7 @@ fn test_deprecated_append_true() {
 		],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 2);
@@ -1071,7 +1141,7 @@ fn test_deprecated_append_false() {
 		}],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 1);
@@ -1107,7 +1177,7 @@ fn test_value_field_instead_of_raw_value() {
 		],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 2);
@@ -1133,7 +1203,7 @@ fn test_raw_value_takes_precedence_over_value() {
 		}],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	assert_eq!(headers.get("test").unwrap(), "raw-value-wins");
 }
@@ -1156,7 +1226,7 @@ fn test_append_action_priority_over_deprecated_append() {
 		}],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 1);
@@ -1276,8 +1346,8 @@ mod extract_dynamic_metadata_tests {
 	use prost_wkt_types::value::Kind;
 	use prost_wkt_types::{Struct, Value};
 
+	use super::super::extract_dynamic_metadata;
 	use super::*;
-	use crate::http::ext_proc::ExtProcInstance;
 
 	#[test]
 	fn test_extract_creates_extension() {
@@ -1295,7 +1365,7 @@ mod extract_dynamic_metadata_tests {
 			.body(Body::empty())
 			.unwrap();
 
-		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata).unwrap();
+		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
 		let extracted = req
 			.extensions()
@@ -1330,7 +1400,7 @@ mod extract_dynamic_metadata_tests {
 			)]
 			.into(),
 		};
-		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata).unwrap();
+		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
 		let extracted = req
 			.extensions()
@@ -1370,7 +1440,7 @@ mod extract_dynamic_metadata_tests {
 			)]
 			.into(),
 		};
-		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata).unwrap();
+		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
 		let extracted = req
 			.extensions()
@@ -1384,21 +1454,6 @@ mod extract_dynamic_metadata_tests {
 	}
 
 	#[test]
-	fn test_extract_none_request_ok() {
-		let metadata = Struct {
-			fields: [(
-				"key".to_string(),
-				Value {
-					kind: Some(Kind::StringValue("value".to_string())),
-				},
-			)]
-			.into(),
-		};
-		let result = ExtProcInstance::extract_dynamic_metadata(None, &metadata);
-		assert!(result.is_ok());
-	}
-
-	#[test]
 	fn test_extract_empty_metadata_no_extension() {
 		let metadata = Struct {
 			fields: HashMap::new(),
@@ -1408,7 +1463,7 @@ mod extract_dynamic_metadata_tests {
 			.body(Body::empty())
 			.unwrap();
 
-		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata).unwrap();
+		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
 		assert!(
 			req
@@ -1449,7 +1504,7 @@ mod extract_dynamic_metadata_tests {
 			.body(Body::empty())
 			.unwrap();
 
-		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata).unwrap();
+		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
 		let extracted = req
 			.extensions()
@@ -1484,7 +1539,7 @@ mod extract_dynamic_metadata_tests {
 			)]
 			.into(),
 		};
-		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata1).unwrap();
+		extract_dynamic_metadata(&mut req, &metadata1).unwrap();
 
 		let metadata2 = Struct {
 			fields: [(
@@ -1495,7 +1550,7 @@ mod extract_dynamic_metadata_tests {
 			)]
 			.into(),
 		};
-		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata2).unwrap();
+		extract_dynamic_metadata(&mut req, &metadata2).unwrap();
 
 		let extracted = req
 			.extensions()

@@ -1,12 +1,6 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
-use tokio_stream;
-use tonic::{Request, Response as TonicResponse, Status, Streaming};
-
 use crate::http::ext_proc::proto::external_processor_server::{
 	ExternalProcessor, ExternalProcessorServer,
 };
@@ -15,6 +9,12 @@ use crate::http::ext_proc::proto::{
 	processing_request, processing_response,
 };
 use crate::*;
+use async_trait::async_trait;
+use protos::envoy::service::ext_proc::v3::{BodyMutation, body_mutation};
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+use tokio_stream;
+use tonic::{Request, Response as TonicResponse, Status, Streaming};
 
 pub fn request_header_response(cr: Option<CommonResponse>) -> Result<ProcessingResponse, Status> {
 	Ok(ProcessingResponse {
@@ -99,10 +99,22 @@ pub trait Handler {
 
 	async fn handle_request_body(
 		&mut self,
-		_body: &proto::HttpBody,
+		b: &proto::HttpBody,
 		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
 	) -> Result<(), Status> {
-		let _ = sender.send(request_body_response(None)).await;
+		let _ = sender
+			.send(request_body_response(Some(CommonResponse {
+				body_mutation: Some(BodyMutation {
+					mutation: Some(body_mutation::Mutation::StreamedResponse(
+						proto::StreamedBodyResponse {
+							body: b.body.clone(),
+							end_of_stream: b.end_of_stream,
+						},
+					)),
+				}),
+				..Default::default()
+			})))
+			.await;
 		Ok(())
 	}
 
@@ -117,10 +129,22 @@ pub trait Handler {
 
 	async fn handle_response_body(
 		&mut self,
-		_body: &proto::HttpBody,
+		b: &proto::HttpBody,
 		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
 	) -> Result<(), Status> {
-		let _ = sender.send(response_body_response(None)).await;
+		let _ = sender
+			.send(response_body_response(Some(CommonResponse {
+				body_mutation: Some(BodyMutation {
+					mutation: Some(body_mutation::Mutation::StreamedResponse(
+						proto::StreamedBodyResponse {
+							body: b.body.clone(),
+							end_of_stream: b.end_of_stream,
+						},
+					)),
+				}),
+				..Default::default()
+			})))
+			.await;
 		Ok(())
 	}
 
