@@ -891,6 +891,39 @@ impl Drop for DropOnLog {
 				None
 			}
 		});
+		let backend_name = log
+			.backend_info
+			.as_ref()
+			.map(|info| info.backend_name.clone());
+		let backend_service_hostname = log
+			.backend_info
+			.as_ref()
+			.and_then(|info| info.service_hostname.clone());
+		let backend_service_canonical_port = log
+			.backend_info
+			.as_ref()
+			.and_then(|info| info.service_canonical_port)
+			.map(i64::from);
+		let backend_service_available_ports = log
+			.backend_info
+			.as_ref()
+			.and_then(BackendInfo::service_available_ports_display);
+		let inference_pool_canonical_port = log
+			.backend_info
+			.as_ref()
+			.filter(|info| info.is_inference_pool_backend())
+			.and_then(|info| info.service_canonical_port)
+			.map(i64::from);
+		let inference_pool_target_ports = log
+			.backend_info
+			.as_ref()
+			.filter(|info| info.is_inference_pool_backend())
+			.and_then(BackendInfo::service_available_ports_display);
+		let inference_pool_final_endpoint = log
+			.backend_info
+			.as_ref()
+			.filter(|info| info.is_inference_pool_backend())
+			.and(log.endpoint.as_ref());
 
 		let mut kv = vec![
 			("gateway", route_identifier.gateway.as_deref().map(display)),
@@ -903,6 +936,19 @@ impl Drop for DropOnLog {
 				route_identifier.route_rule.as_deref().map(display),
 			),
 			("route", route_identifier.route.as_deref().map(display)),
+			("backend.name", backend_name.as_ref().map(display)),
+			(
+				"backend.service.hostname",
+				backend_service_hostname.as_ref().map(display),
+			),
+			(
+				"backend.service.canonical_port",
+				backend_service_canonical_port.map(Into::into),
+			),
+			(
+				"backend.service.ports",
+				backend_service_available_ports.as_ref().map(display),
+			),
 			("endpoint", log.endpoint.display()),
 			("src.addr", Some(display(&log.tcp_info.peer_addr))),
 			("http.method", log.method.display()),
@@ -948,6 +994,18 @@ impl Drop for DropOnLog {
 			(
 				"inferencepool.selected_endpoint",
 				log.inference_pool.display(),
+			),
+			(
+				"inferencepool.final_endpoint",
+				inference_pool_final_endpoint.map(display),
+			),
+			(
+				"inferencepool.canonical_port",
+				inference_pool_canonical_port.map(Into::into),
+			),
+			(
+				"inferencepool.target_ports",
+				inference_pool_target_ports.as_ref().map(display),
 			),
 			// OpenTelemetry Gen AI Semantic Conventions v1.40.0
 			(
