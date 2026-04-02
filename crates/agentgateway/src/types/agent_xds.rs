@@ -12,8 +12,7 @@ use super::agent::*;
 use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{HeaderOrPseudo, Scheme, auth, authorization, health};
-use crate::mcp::FailureMode;
-use crate::mcp::McpAuthorization;
+use crate::mcp::{FailureMode, McpAuthorization};
 use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::ProtoError;
@@ -135,7 +134,7 @@ impl TryFrom<&proto::agent::RouteBackend> for RouteBackendReference {
 	type Error = ProtoError;
 
 	fn try_from(s: &proto::agent::RouteBackend) -> Result<Self, Self::Error> {
-		let backend = resolve_reference(s.backend.as_ref())?;
+		let backend = resolve_reference(s.backend.as_ref());
 		let inline_policies = s
 			.backend_policies
 			.iter()
@@ -152,12 +151,8 @@ impl TryFrom<&proto::agent::RouteBackend> for RouteBackendReference {
 	}
 }
 
-impl TryFrom<&proto::agent::backend_policy_spec::McpAuthorization> for McpAuthorization {
-	type Error = ProtoError;
-
-	fn try_from(
-		rbac: &proto::agent::backend_policy_spec::McpAuthorization,
-	) -> Result<Self, Self::Error> {
+impl From<&proto::agent::backend_policy_spec::McpAuthorization> for McpAuthorization {
+	fn from(rbac: &proto::agent::backend_policy_spec::McpAuthorization) -> Self {
 		let mut allow_exprs = Vec::new();
 		// We do NOT want to NACK invalid CEL expressions. Instead, we ensure they always evaluate to errors.
 		for allow_rule in &rbac.allow {
@@ -178,9 +173,7 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthorization> for McpAuthor
 		}
 
 		let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
-		Ok(McpAuthorization::new(authorization::RuleSet::new(
-			policy_set,
-		)))
+		McpAuthorization::new(authorization::RuleSet::new(policy_set))
 	}
 }
 
@@ -500,7 +493,8 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
 	type Error = ProtoError;
 
 	fn try_from(s: proto::agent::BackendAuthPolicy) -> Result<Self, Self::Error> {
-		use proto::agent::gcp;
+		use proto::agent::azure_managed_identity_credential::user_assigned_identity;
+		use proto::agent::{azure_explicit_config, gcp};
 		Ok(match s.kind {
 			Some(proto::agent::backend_auth_policy::Kind::Passthrough(_)) => BackendAuth::Passthrough {},
 			Some(proto::agent::backend_auth_policy::Kind::Key(k)) => BackendAuth::Key(k.secret.into()),
@@ -536,48 +530,51 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
 				let azure_auth = match a.kind {
 					Some(proto::agent::azure::Kind::ExplicitConfig(config)) => {
 						let src = match config.credential_source {
-                            Some(proto::agent::azure_explicit_config::CredentialSource::ClientSecret(cs)) => {
-                                crate::http::auth::AzureAuthCredentialSource::ClientSecret {
-                                    tenant_id: cs.tenant_id,
-                                    client_id: cs.client_id,
-                                    client_secret: cs.client_secret.into(),
-                                }
-                            }
-                            Some(proto::agent::azure_explicit_config::CredentialSource::ManagedIdentityCredential(mic)) => {
-                                crate::http::auth::AzureAuthCredentialSource::ManagedIdentity {
-                                    user_assigned_identity: mic.user_assigned_identity.map(|uami| {
-                                        uami.id.map(|id| match id {
-                                            proto::agent::azure_managed_identity_credential::user_assigned_identity::Id::ClientId(c) => {
-                                                crate::http::auth::AzureUserAssignedIdentity::ClientId(c)
-                                            }
-                                            proto::agent::azure_managed_identity_credential::user_assigned_identity::Id::ObjectId(o) => {
-                                                crate::http::auth::AzureUserAssignedIdentity::ObjectId(o)
-                                            }
-                                            proto::agent::azure_managed_identity_credential::user_assigned_identity::Id::ResourceId(r) => {
-                                                crate::http::auth::AzureUserAssignedIdentity::ResourceId(r)
-                                            }
-                                        }).expect("one of clientId, objectId, or resourceId must be set")
-                                    })
-                                }
-                            }
-                            Some(proto::agent::azure_explicit_config::CredentialSource::WorkloadIdentityCredential(_)) => {
-                                crate::http::auth::AzureAuthCredentialSource::WorkloadIdentity {}
-                            }
-                            None => {
-                                return Err(ProtoError::MissingRequiredField);
-                            }
-                        };
-						crate::http::auth::AzureAuth::ExplicitConfig {
+							Some(azure_explicit_config::CredentialSource::ClientSecret(cs)) => {
+								auth::AzureAuthCredentialSource::ClientSecret {
+									tenant_id: cs.tenant_id,
+									client_id: cs.client_id,
+									client_secret: cs.client_secret.into(),
+								}
+							},
+							Some(azure_explicit_config::CredentialSource::ManagedIdentityCredential(mic)) => {
+								auth::AzureAuthCredentialSource::ManagedIdentity {
+									user_assigned_identity: mic.user_assigned_identity.map(|uami| {
+										uami
+											.id
+											.map(|id| match id {
+												user_assigned_identity::Id::ClientId(c) => {
+													auth::AzureUserAssignedIdentity::ClientId(c)
+												},
+												user_assigned_identity::Id::ObjectId(o) => {
+													auth::AzureUserAssignedIdentity::ObjectId(o)
+												},
+												user_assigned_identity::Id::ResourceId(r) => {
+													auth::AzureUserAssignedIdentity::ResourceId(r)
+												},
+											})
+											.expect("one of clientId, objectId, or resourceId must be set")
+									}),
+								}
+							},
+							Some(azure_explicit_config::CredentialSource::WorkloadIdentityCredential(_)) => {
+								auth::AzureAuthCredentialSource::WorkloadIdentity {}
+							},
+							None => {
+								return Err(ProtoError::MissingRequiredField);
+							},
+						};
+						auth::AzureAuth::ExplicitConfig {
 							credential_source: src,
 							cached_cred: Default::default(),
 						}
 					},
 					Some(proto::agent::azure::Kind::DeveloperImplicit(_)) => {
-						crate::http::auth::AzureAuth::DeveloperImplicit {
+						auth::AzureAuth::DeveloperImplicit {
 							cached_cred: Default::default(),
 						}
 					},
-					Some(proto::agent::azure::Kind::Implicit(_)) => crate::http::auth::AzureAuth::Implicit {
+					Some(proto::agent::azure::Kind::Implicit(_)) => auth::AzureAuth::Implicit {
 						cached_cred: Default::default(),
 					},
 					None => return Err(ProtoError::MissingRequiredField),
@@ -690,14 +687,12 @@ impl TCPRoute {
 			backends: s
 				.backends
 				.iter()
-				.map(|b| -> Result<TCPRouteBackendReference, ProtoError> {
-					Ok(TCPRouteBackendReference {
-						weight: b.weight as usize,
-						backend: resolve_simple_reference(b.backend.as_ref())?,
-						inline_policies: Vec::new(),
-					})
+				.map(|b| TCPRouteBackendReference {
+					weight: b.weight as usize,
+					backend: resolve_simple_reference(b.backend.as_ref()),
+					inline_policies: Vec::new(),
 				})
-				.collect::<Result<Vec<_>, _>>()?,
+				.collect::<Vec<_>>(),
 		};
 		Ok((r, strng::new(&s.listener_key)))
 	}
@@ -915,7 +910,7 @@ impl TryFrom<&proto::agent::McpTarget> for McpTarget {
 
 	fn try_from(s: &proto::agent::McpTarget) -> Result<Self, Self::Error> {
 		let proto = proto::agent::mcp_target::Protocol::try_from(s.protocol)?;
-		let backend = resolve_simple_reference(s.backend.as_ref())?;
+		let backend = resolve_simple_reference(s.backend.as_ref());
 
 		Ok(Self {
 			name: strng::new(&s.name),
@@ -1003,10 +998,8 @@ fn default_as_none<T: Default + PartialEq>(i: T) -> Option<T> {
 	}
 }
 
-impl TryFrom<&proto::agent::traffic_policy_spec::Rbac> for Authorization {
-	type Error = ProtoError;
-
-	fn try_from(rbac: &proto::agent::traffic_policy_spec::Rbac) -> Result<Self, Self::Error> {
+impl From<&proto::agent::traffic_policy_spec::Rbac> for Authorization {
+	fn from(rbac: &proto::agent::traffic_policy_spec::Rbac) -> Self {
 		// Convert allow rules
 		let mut allow_exprs = Vec::new();
 		for allow_rule in &rbac.allow {
@@ -1028,7 +1021,7 @@ impl TryFrom<&proto::agent::traffic_policy_spec::Rbac> for Authorization {
 
 		// Create PolicySet using the same pattern as in de_policies function
 		let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
-		Ok(Authorization(authorization::RuleSet::new(policy_set)))
+		Authorization(authorization::RuleSet::new(policy_set))
 	}
 }
 
@@ -1040,7 +1033,7 @@ impl TryFrom<&proto::agent::traffic_policy_spec::TransformationPolicy> for Trans
 	) -> Result<Self, Self::Error> {
 		fn convert_transform(
 			t: &Option<proto::agent::traffic_policy_spec::transformation_policy::Transform>,
-		) -> Result<LocalTransform, ProtoError> {
+		) -> LocalTransform {
 			let mut add = Vec::new();
 			let mut set = Vec::new();
 			let mut remove = Vec::new();
@@ -1065,17 +1058,17 @@ impl TryFrom<&proto::agent::traffic_policy_spec::TransformationPolicy> for Trans
 				}
 			}
 
-			Ok(LocalTransform {
+			LocalTransform {
 				add,
 				set,
 				remove,
 				body,
 				metadata,
-			})
+			}
 		}
 
-		let request = Some(convert_transform(&spec.request)?);
-		let response = Some(convert_transform(&spec.response)?);
+		let request = Some(convert_transform(&spec.request));
+		let response = Some(convert_transform(&spec.response));
 		let config = LocalTransformationConfig { request, response };
 		Transformation::try_from_local_config(config, false)
 			.map_err(|e| ProtoError::Generic(e.to_string()))
@@ -1096,7 +1089,7 @@ impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 					bps::inference_routing::FailureMode::FailOpen => http::ext_proc::FailureMode::FailOpen,
 				};
 				BackendPolicy::InferenceRouting(http::ext_proc::InferenceRouting {
-					target: Arc::new(resolve_simple_reference(ir.endpoint_picker.as_ref())?),
+					target: Arc::new(resolve_simple_reference(ir.endpoint_picker.as_ref())),
 					failure_mode,
 				})
 			},
@@ -1119,12 +1112,11 @@ impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 				keepalives: btcp
 					.keepalive
 					.as_ref()
-					.map(types::agent::KeepaliveConfig::try_from)
-					.transpose()?
+					.map(types::agent::KeepaliveConfig::from)
 					.unwrap_or_default(),
 			}),
 			Some(bps::Kind::BackendTunnel(bt)) => BackendPolicy::Tunnel(backend::Tunnel {
-				proxy: Arc::new(resolve_simple_reference(bt.proxy.as_ref())?),
+				proxy: Arc::new(resolve_simple_reference(bt.proxy.as_ref())),
 			}),
 			Some(bps::Kind::BackendTls(btls)) => {
 				let mode = bps::backend_tls::VerificationMode::try_from(btls.verification)?;
@@ -1150,7 +1142,7 @@ impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 				BackendPolicy::BackendAuth(BackendAuth::try_from(auth.clone())?)
 			},
 			Some(bps::Kind::McpAuthorization(rbac)) => {
-				BackendPolicy::McpAuthorization(McpAuthorization::try_from(rbac)?)
+				BackendPolicy::McpAuthorization(McpAuthorization::from(rbac))
 			},
 			Some(bps::Kind::McpAuthentication(ma)) => {
 				BackendPolicy::McpAuthentication(McpAuthentication::try_from(ma)?)
@@ -1218,25 +1210,20 @@ impl TryFrom<&proto::agent::BackendPolicySpec> for BackendPolicy {
 				let mirrors = m
 					.mirrors
 					.iter()
-					.map(|m| {
-						let backend = resolve_simple_reference(m.backend.as_ref())?;
-						Ok::<_, ProtoError>(http::filters::RequestMirror {
-							backend,
-							percentage: m.percentage / 100.0,
-						})
+					.map(|m| http::filters::RequestMirror {
+						backend: resolve_simple_reference(m.backend.as_ref()),
+						percentage: m.percentage / 100.0,
 					})
-					.collect::<Result<Vec<_>, _>>()?;
+					.collect::<Vec<_>>();
 				BackendPolicy::RequestMirror(mirrors)
 			},
-			Some(bps::Kind::Health(h)) => BackendPolicy::Health(convert_health(h)?),
+			Some(bps::Kind::Health(h)) => BackendPolicy::Health(convert_health(h)),
 			None => return Err(ProtoError::MissingRequiredField),
 		})
 	}
 }
 
-fn convert_health(
-	h: &proto::agent::backend_policy_spec::Health,
-) -> Result<health::Policy, ProtoError> {
+fn convert_health(h: &proto::agent::backend_policy_spec::Health) -> health::Policy {
 	let unhealthy_expression = if h.unhealthy_condition.is_empty() {
 		None
 	} else {
@@ -1250,10 +1237,10 @@ fn convert_health(
 		consecutive_failures: ev.consecutive_failures,
 		health_threshold: ev.health_threshold,
 	});
-	Ok(health::Policy {
+	health::Policy {
 		unhealthy_expression,
 		eviction,
-	})
+	}
 }
 
 impl TryFrom<&proto::agent::TrafficPolicySpec> for PhasedTrafficPolicy {
@@ -1278,7 +1265,7 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 		use crate::types::proto::agent::traffic_policy_spec as tps;
 		Ok(match &spec.kind {
 			Some(tps::Kind::Timeout(t)) => TrafficPolicy::Timeout(http::timeout::Policy {
-				request_timeout: t.request.as_ref().map(|d| (*d).try_into()).transpose()?,
+				request_timeout: t.request.as_ref().map(|d| (*d).into()).transpose()?,
 				backend_request_timeout: t
 					.backend_request
 					.as_ref()
@@ -1322,7 +1309,7 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 			},
 			Some(tps::Kind::ExtAuthz(ea)) => {
 				use proto::agent::traffic_policy_spec::external_auth;
-				let target = resolve_simple_reference(ea.target.as_ref())?;
+				let target = resolve_simple_reference(ea.target.as_ref());
 				let failure_mode = match external_auth::FailureMode::try_from(ea.failure_mode) {
 					Ok(external_auth::FailureMode::Allow) => http::ext_authz::FailureMode::Allow,
 					Ok(external_auth::FailureMode::Deny) => http::ext_authz::FailureMode::Deny,
@@ -1422,7 +1409,7 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				})
 			},
 			Some(tps::Kind::Authorization(rbac)) => {
-				TrafficPolicy::Authorization(Authorization::try_from(rbac)?)
+				TrafficPolicy::Authorization(Authorization::from(rbac))
 			},
 			Some(tps::Kind::Jwt(jwt)) => {
 				let mode = match tps::jwt::Mode::try_from(jwt.mode)
@@ -1533,7 +1520,7 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 						},
 					)
 					.collect::<Result<Vec<_>, _>>()?;
-				let target = resolve_simple_reference(rrl.target.as_ref())?;
+				let target = resolve_simple_reference(rrl.target.as_ref());
 				if matches!(target, SimpleBackendReference::Invalid) {
 					return Err(ProtoError::Generic(
 						"remote_rate_limit: target must be set".into(),
@@ -1561,7 +1548,7 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				TrafficPolicy::Csrf(crate::http::csrf::Csrf::new(additional_origins))
 			},
 			Some(tps::Kind::ExtProc(ep)) => {
-				let target = resolve_simple_reference(ep.target.as_ref())?;
+				let target = resolve_simple_reference(ep.target.as_ref());
 				let failure_mode = match tps::ext_proc::FailureMode::try_from(ep.failure_mode) {
 					Ok(tps::ext_proc::FailureMode::FailOpen) => http::ext_proc::FailureMode::FailOpen,
 					_ => http::ext_proc::FailureMode::FailClosed,
@@ -1682,14 +1669,11 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 				let mirrors = m
 					.mirrors
 					.iter()
-					.map(|m| {
-						let backend = resolve_simple_reference(m.backend.as_ref())?;
-						Ok::<_, ProtoError>(http::filters::RequestMirror {
-							backend,
-							percentage: m.percentage / 100.0,
-						})
+					.map(|m| http::filters::RequestMirror {
+						backend: resolve_simple_reference(m.backend.as_ref()),
+						percentage: m.percentage / 100.0,
 					})
-					.collect::<Result<Vec<_>, _>>()?;
+					.collect::<Vec<_>>();
 				TrafficPolicy::RequestMirror(mirrors)
 			},
 			Some(tps::Kind::DirectResponse(dr)) => {
@@ -1835,8 +1819,7 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 				keepalives: t
 					.keepalives
 					.as_ref()
-					.map(types::agent::KeepaliveConfig::try_from)
-					.transpose()?
+					.map(types::agent::KeepaliveConfig::from)
 					.unwrap_or_default(),
 			}),
 			Some(fps::Kind::NetworkAuthorization(rbac)) => {
@@ -1885,7 +1868,7 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 					.otlp_access_log
 					.as_ref()
 					.map(|oal| -> Result<frontend::OtlpLoggingConfig, ProtoError> {
-						let provider_backend = resolve_simple_reference(oal.provider_backend.as_ref())?;
+						let provider_backend = resolve_simple_reference(oal.provider_backend.as_ref());
 						let policies = oal
 							.inline_policies
 							.iter()
@@ -1922,7 +1905,7 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 			},
 			Some(fps::Kind::Tracing(t)) => {
 				// Convert protobuf to TracingConfig
-				let tracing_config = types::agent::TracingConfig::try_from(t)?;
+				let tracing_config = types::agent::TracingConfig::from(t);
 
 				// Prepare LoggingFields with the CEL attributes from TracingConfig
 				let logging_fields = Arc::new(crate::telemetry::log::LoggingFields {
@@ -1941,11 +1924,9 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 	}
 }
 
-impl TryFrom<&proto::agent::frontend_policy_spec::Tracing> for types::agent::TracingConfig {
-	type Error = ProtoError;
-
-	fn try_from(t: &proto::agent::frontend_policy_spec::Tracing) -> Result<Self, Self::Error> {
-		let provider_backend = resolve_simple_reference(t.provider_backend.as_ref())?;
+impl From<&proto::agent::frontend_policy_spec::Tracing> for types::agent::TracingConfig {
+	fn from(t: &proto::agent::frontend_policy_spec::Tracing) -> Self {
+		let provider_backend = resolve_simple_reference(t.provider_backend.as_ref());
 
 		let attributes: OrderedStringMap<Arc<cel::Expression>> = t
 			.attributes
@@ -1987,7 +1968,7 @@ impl TryFrom<&proto::agent::frontend_policy_spec::Tracing> for types::agent::Tra
 				_ => types::agent::TracingProtocol::Http,
 			};
 
-		Ok(types::agent::TracingConfig {
+		types::agent::TracingConfig {
 			provider_backend,
 			// Not supported inline from xDS
 			policies: Vec::new(),
@@ -1998,15 +1979,13 @@ impl TryFrom<&proto::agent::frontend_policy_spec::Tracing> for types::agent::Tra
 			client_sampling,
 			path,
 			protocol,
-		})
+		}
 	}
 }
 
-impl TryFrom<&proto::agent::KeepaliveConfig> for KeepaliveConfig {
-	type Error = ProtoError;
-
-	fn try_from(k: &proto::agent::KeepaliveConfig) -> Result<Self, Self::Error> {
-		Ok(KeepaliveConfig {
+impl From<&proto::agent::KeepaliveConfig> for KeepaliveConfig {
+	fn from(k: &proto::agent::KeepaliveConfig) -> Self {
+		KeepaliveConfig {
 			enabled: true,
 			time: k
 				.time
@@ -2019,7 +1998,7 @@ impl TryFrom<&proto::agent::KeepaliveConfig> for KeepaliveConfig {
 			retries: k
 				.retries
 				.unwrap_or_else(types::agent::defaults::keepalive_retries),
-		})
+		}
 	}
 }
 
@@ -2126,11 +2105,11 @@ impl From<&proto::agent::ListenerName> for ListenerName {
 
 fn resolve_simple_reference(
 	target: Option<&proto::agent::BackendReference>,
-) -> Result<SimpleBackendReference, ProtoError> {
+) -> SimpleBackendReference {
 	let Some(target) = target else {
-		return Ok(SimpleBackendReference::Invalid);
+		return SimpleBackendReference::Invalid;
 	};
-	Ok(match target.kind.as_ref() {
+	match target.kind.as_ref() {
 		None => SimpleBackendReference::Invalid,
 		Some(proto::agent::backend_reference::Kind::Service(svc)) => {
 			let ns = NamespacedHostname {
@@ -2145,7 +2124,7 @@ fn resolve_simple_reference(
 		Some(proto::agent::backend_reference::Kind::Backend(name)) => {
 			SimpleBackendReference::Backend(name.into())
 		},
-	})
+	}
 }
 
 fn convert_message(
@@ -2180,7 +2159,7 @@ fn convert_prompt_caching(
 fn convert_webhook(
 	w: &proto::agent::backend_policy_spec::ai::Webhook,
 ) -> Result<llm::policy::Webhook, ProtoError> {
-	let target = resolve_simple_reference(w.backend.as_ref())?;
+	let target = resolve_simple_reference(w.backend.as_ref());
 
 	let forward_header_matches = convert_header_match(&w.forward_header_matches)?;
 
@@ -2251,13 +2230,11 @@ fn convert_regex_rules(
 	llm::policy::RegexRules { action, rules }
 }
 
-fn resolve_reference(
-	target: Option<&proto::agent::BackendReference>,
-) -> Result<BackendReference, ProtoError> {
+fn resolve_reference(target: Option<&proto::agent::BackendReference>) -> BackendReference {
 	let Some(target) = target else {
-		return Ok(BackendReference::Invalid);
+		return BackendReference::Invalid;
 	};
-	Ok(match target.kind.as_ref() {
+	match target.kind.as_ref() {
 		None => BackendReference::Invalid,
 		Some(proto::agent::backend_reference::Kind::Service(svc)) => {
 			let ns = NamespacedHostname {
@@ -2272,7 +2249,7 @@ fn resolve_reference(
 		Some(proto::agent::backend_reference::Kind::Backend(name)) => {
 			BackendReference::Backend(name.into())
 		},
-	})
+	}
 }
 
 fn convert_header_match(h: &[proto::agent::HeaderMatch]) -> Result<Vec<HeaderMatch>, ProtoError> {
