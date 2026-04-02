@@ -620,6 +620,7 @@ impl HTTPProxy {
 
 		let route_path = RoutePath {
 			route: &selected_route.name,
+			service: selected_route.service_key.as_ref(),
 			listener: &selected_listener.name,
 		};
 

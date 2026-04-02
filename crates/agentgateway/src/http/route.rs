@@ -159,7 +159,7 @@ pub fn select_best_route(
 			// No service-keyed routes: fall through to hostname matching with default route
 			let default_route = Route {
 				key: strng::literal!("_waypoint-default"),
-				service_key: None,
+				service_key: Some(svc.namespaced_hostname()),
 				name: RouteName {
 					name: strng::literal!("_waypoint-default"),
 					namespace: svc.namespace.clone(),
