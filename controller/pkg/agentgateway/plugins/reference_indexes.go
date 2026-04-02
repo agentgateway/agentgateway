@@ -156,7 +156,14 @@ func DefaultRouteBackend(krtctx krt.HandlerContext, agw *AgwCollections, default
 				Namespace: ns,
 			},
 		}
-		ref.Port = uint32(svc.Spec.TargetPorts[0].Number) //nolint:gosec // G115: validated 1-65535
+		backendPort, err := utils.InferencePoolBackendPort(svc)
+		if err != nil {
+			return ref, &BackendReferenceError{
+				Reason:  BackendReferenceErrorReasonUnsupportedValue,
+				Message: err.Error(),
+			}
+		}
+		ref.Port = backendPort
 	case wellknown.ServiceGVK.GroupKind():
 		if strings.Contains(string(name), ".") {
 			return ref, &BackendReferenceError{
