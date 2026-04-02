@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport as McpSseTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StreamableHTTPClientTransport as McpStreamableTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import {
   ClientRequest as McpClientRequest,
   Result as McpResult,
@@ -19,7 +20,15 @@ import {
 } from "@a2a-js/sdk/client";
 import type { AgentSkill, Task, Message, MessageSendParams, AgentCard } from "@a2a-js/sdk";
 import { useServer } from "@/lib/server-context";
-import { Bind, Listener, Route, Backend, ListenerProtocol } from "@/lib/types";
+import {
+  Bind,
+  Listener,
+  Route,
+  Backend,
+  ListenerProtocol,
+  McpBackend,
+  McpStatefulMode,
+} from "@/lib/types";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -127,6 +136,36 @@ interface UiState {
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
 
+const getRouteBackendType = (route: RouteInfo): "mcp" | "a2a" | "http" => {
+  if (route.route.policies?.a2a) {
+    return "a2a";
+  }
+
+  if (!route.route.backends || route.route.backends.length === 0) return "http";
+
+  const backend = route.route.backends[0];
+  if (backend.mcp) return "mcp";
+  return "http";
+};
+
+const getRouteMcpBackend = (route: RouteInfo): McpBackend | null => {
+  return route.route.backends?.find((backend) => backend.mcp)?.mcp || null;
+};
+
+const isStatelessMcpRoute = (route: RouteInfo): boolean => {
+  return getRouteMcpBackend(route)?.statefulMode === McpStatefulMode.STATELESS;
+};
+
+const getMcpTransportUrl = (route: RouteInfo): string => {
+  const transportPath = isStatelessMcpRoute(route) ? "mcp" : "sse";
+  const baseEndpoint = route.endpoint.endsWith("/") ? route.endpoint : `${route.endpoint}/`;
+  return new URL(transportPath, baseEndpoint).toString();
+};
+
+const getDisplayedConnectionEndpoint = (route: RouteInfo): string => {
+  return getRouteBackendType(route) === "mcp" ? getMcpTransportUrl(route) : route.endpoint;
+};
+
 export default function PlaygroundPage() {
   const { binds } = useServer();
   const [routes, setRoutes] = useState<RouteInfo[]>([]);
@@ -183,20 +222,6 @@ export default function PlaygroundPage() {
     isLoadingCapabilities: false,
   });
 
-  // Determine backend type of selected route
-  const getRouteBackendType = (route: RouteInfo): "mcp" | "a2a" | "http" => {
-    // Check if route has A2A policy first - this takes precedence
-    if (route.route.policies?.a2a) {
-      return "a2a";
-    }
-
-    if (!route.route.backends || route.route.backends.length === 0) return "http";
-
-    const backend = route.route.backends[0]; // Use first backend to determine type
-    if (backend.mcp) return "mcp";
-    return "http"; // AI, Host, Service, etc.
-  };
-
   const updateRequestFromRoute = useCallback((routeInfo: RouteInfo) => {
     let initialPath = "/";
 
@@ -229,7 +254,7 @@ export default function PlaygroundPage() {
     setConnectionState((prev) => ({
       ...prev,
       connectionType: backendType,
-      selectedEndpoint: routeInfo.endpoint,
+      selectedEndpoint: getDisplayedConnectionEndpoint(routeInfo),
       selectedListenerName: routeInfo.listener.name || null,
       selectedListenerProtocol: routeInfo.listener.protocol,
     }));
@@ -446,46 +471,60 @@ export default function PlaygroundPage() {
       if (backendType === "mcp") {
         setConnectionState((prev) => ({ ...prev, connectionType: "mcp" }));
 
-        // TODO: Support acting as a stateless client
         const client = new McpClient(
           { name: "agentgateway-dashboard", version: "0.1.0" },
           { capabilities: {} }
         );
 
-        const headers: Record<string, string> = {
-          Accept: "text/event-stream",
-          "Cache-Control": "no-cache",
-          "mcp-protocol-version": "2024-11-05",
-        };
-
-        // Only add auth header if token is provided and not empty
+        const isStatelessRoute = isStatelessMcpRoute(selectedRoute);
+        const mcpUrl = getMcpTransportUrl(selectedRoute);
+        const authHeaders: Record<string, string> = {};
         if (connectionState.authToken && connectionState.authToken.trim()) {
-          headers["Authorization"] = `Bearer ${connectionState.authToken}`;
+          authHeaders["Authorization"] = `Bearer ${connectionState.authToken}`;
         }
 
-        const sseUrl = selectedRoute.endpoint.endsWith("/")
-          ? `${selectedRoute.endpoint}sse`
-          : `${selectedRoute.endpoint}/sse`;
-        const transport = new McpSseTransport(new URL(sseUrl), {
-          eventSourceInit: {
-            fetch: (url, init) => {
-              return fetch(url, {
-                ...init,
-                headers: headers as HeadersInit,
-              });
-            },
-          },
-          requestInit: {
-            headers: headers as HeadersInit,
-            credentials: "omit",
-            mode: "cors",
-          },
-        });
+        const transport = isStatelessRoute
+          ? new McpStreamableTransport(new URL(mcpUrl), {
+              requestInit: {
+                headers: authHeaders as HeadersInit,
+                credentials: "omit",
+                mode: "cors",
+              },
+              fetch: (url, init) =>
+                fetch(url, {
+                  ...init,
+                  credentials: "omit",
+                  mode: "cors",
+                }),
+            })
+          : new McpSseTransport(new URL(mcpUrl), {
+              eventSourceInit: {
+                fetch: (url, init) => {
+                  return fetch(url, {
+                    ...init,
+                    headers: {
+                      Accept: "text/event-stream",
+                      "Cache-Control": "no-cache",
+                      "mcp-protocol-version": "2024-11-05",
+                      ...authHeaders,
+                    } as HeadersInit,
+                  });
+                },
+              },
+              requestInit: {
+                headers: {
+                  "mcp-protocol-version": "2024-11-05",
+                  ...authHeaders,
+                } as HeadersInit,
+                credentials: "omit",
+                mode: "cors",
+              },
+            });
 
         await client.connect(transport);
         setMcpState((prev) => ({ ...prev, client }));
         setConnectionState((prev) => ({ ...prev, isConnected: true }));
-        toast.success("Connected to MCP endpoint");
+        toast.success(`Connected to MCP ${isStatelessRoute ? "stateless" : "stateful"} endpoint`);
 
         setUiState((prev) => ({ ...prev, isLoadingCapabilities: true }));
         const listToolsRequest: McpClientRequest = { method: "tools/list", params: {} };
@@ -581,6 +620,10 @@ export default function PlaygroundPage() {
         error instanceof McpError || error instanceof Error
           ? error.message
           : "Unknown connection error";
+      const connectionUrl =
+        selectedRoute && getRouteBackendType(selectedRoute) === "mcp"
+          ? getMcpTransportUrl(selectedRoute)
+          : selectedRoute?.endpoint || "unknown";
 
       // Enhanced error detection and messaging
       if (errorMessage.includes("401") || error?.code === 401) {
@@ -594,9 +637,7 @@ export default function PlaygroundPage() {
         errorMessage.includes("404") ||
         error?.code === 404
       ) {
-        toast.error(
-          `❌ Not Found (404): Endpoint '${selectedRoute?.endpoint || "unknown"}' not found`
-        );
+        toast.error(`❌ Not Found (404): Endpoint '${connectionUrl}' not found`);
       } else if (
         errorMessage.includes("Failed to fetch") ||
         errorMessage.includes("NetworkError") ||
@@ -608,11 +649,11 @@ export default function PlaygroundPage() {
         detailedMessage += "• CORS: Server needs 'Access-Control-Allow-Origin' header\n";
         detailedMessage += "• Network: Server may be down or unreachable\n";
         detailedMessage += "• Headers: Missing required headers (Accept, mcp-protocol-version)\n";
-        detailedMessage += `• URL: Check if '${selectedRoute?.endpoint || "unknown"}/sse' is correct\n`;
+        detailedMessage += `• URL: Check if '${connectionUrl}' is correct\n`;
         detailedMessage += "• Config: Verify agentgateway is running with correct config";
 
         console.error("CORS/Network error details:", {
-          url: `${selectedRoute?.endpoint || "unknown"}/sse`,
+          url: connectionUrl,
           headers: error?.headers,
           mode: "cors",
           credentials: "omit",
@@ -1385,6 +1426,14 @@ export default function PlaygroundPage() {
                         {connectionState.connectionType?.toUpperCase()}
                       </Badge>
                     </div>
+                    {connectionState.connectionType === "mcp" && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Session Mode:</span>
+                        <Badge variant="outline" className="text-xs">
+                          {isStatelessMcpRoute(selectedRoute) ? "STATELESS" : "STATEFUL"}
+                        </Badge>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2">
                       <Label htmlFor="auth-token" className="text-sm">
                         Bearer Token (Optional):
