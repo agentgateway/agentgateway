@@ -491,6 +491,11 @@ pub struct Service {
 
 	#[serde(default, skip_serializing_if = "is_default")]
 	pub ip_families: Option<IpFamily>,
+
+	/// When true, ingress gateways should send traffic destined for this service
+	/// through the service's waypoint proxy.
+	#[serde(default, skip_serializing_if = "is_default")]
+	pub ingress_use_waypoint: bool,
 }
 
 impl Service {
@@ -887,6 +892,7 @@ impl TryFrom<&XdsService> for Service {
 			waypoint,
 			load_balancer: lb,
 			ip_families,
+			ingress_use_waypoint: s.ingress_use_waypoint,
 		};
 		Ok(svc)
 	}
