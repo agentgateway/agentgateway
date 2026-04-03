@@ -42,9 +42,21 @@ pub trait Poolable: Unpin + Send + Sized + 'static {
 	fn can_share(&self) -> bool;
 }
 
-pub trait Key: Eq + Hash + Clone + Debug + Unpin + Send + Sync + 'static {}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ExpectedCapacity {
+	// Always HTTP1: only a single concurrent request is allowed.
+	Http1,
+	// Always HTTP2: multiple concurrent requests are allowed.
+	Http2,
+	// HTTP/1 or HTTP/2, depending on the connection (ALPN)
+	Auto,
+}
 
-impl<T> Key for T where T: Eq + Hash + Clone + Debug + Unpin + Send + Sync + 'static {}
+pub trait Key: Eq + Hash + Clone + Debug + Unpin + Send + Sync + 'static {
+	fn expected_capacity(&self) -> ExpectedCapacity;
+}
+
+// impl<T> Key for T where T: Eq + Hash + Clone + Debug + Unpin + Send + Sync + 'static {}
 
 /// A marker to identify what version a pooled connection is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -923,12 +935,18 @@ mod tests {
 	use std::task::{self, Poll};
 	use std::time::Duration;
 
-	use super::{Connecting, H2Acquire, Key, Pool, Poolable, Reservation, Ver, WeakOpt};
+	use super::{Connecting, ExpectedCapacity, H2Acquire, Key, Pool, Poolable, Reservation, Ver, WeakOpt};
 	use crate::common::timer;
 	use crate::rt::{TokioExecutor, TokioTimer};
 
 	#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 	struct KeyImpl(http::uri::Scheme, http::uri::Authority);
+
+	impl Key for KeyImpl {
+		fn expected_capacity(&self) -> ExpectedCapacity {
+			ExpectedCapacity::Http1
+		}
+	}
 
 	type KeyTuple = (http::uri::Scheme, http::uri::Authority);
 

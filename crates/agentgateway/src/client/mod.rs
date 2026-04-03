@@ -21,6 +21,7 @@ use axum_core::BoxError;
 use http_body::Frame;
 use hyper_util_fork::rt::TokioIo;
 use tracing::event;
+use hyper_util_fork::client::legacy::pool::ExpectedCapacity;
 
 #[derive(Clone)]
 pub struct Client {
@@ -155,6 +156,23 @@ impl From<Option<VersionedBackendTLS>> for Transport {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct PoolKey(Target, SocketAddr, Transport, ::http::Version);
+
+impl hyper_util_fork::client::legacy::pool::Key for PoolKey {
+	fn expected_capacity(&self) -> ExpectedCapacity {
+		match self.2.application() {
+			ApplicationTransport::Plaintext => {
+				if self.3 == ::http::Version::HTTP_11 {
+					ExpectedCapacity::Http2
+				} else {
+					ExpectedCapacity::Http1
+				}
+			}
+			ApplicationTransport::Tls(_) => {
+				ExpectedCapacity::Auto
+			}
+		}
+	}
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct ResolvedDestination(pub SocketAddr);
