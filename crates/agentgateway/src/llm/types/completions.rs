@@ -174,7 +174,6 @@ impl ResponseType for Response {
 				None
 			},
 			first_token: Default::default(),
-			..Default::default()
 		}
 	}
 
