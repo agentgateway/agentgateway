@@ -25,7 +25,7 @@ use hyper_util_fork::client::legacy::pool::ExpectedCapacity;
 
 #[derive(Clone)]
 pub struct Client {
-	client: hyper_util_fork::client::legacy::Client<Connector, http::Body, PoolKey>,
+	client: hyper_util_fork::client::legacy::Client<Connector, PoolKey>,
 	connector: Connector,
 }
 
@@ -167,8 +167,20 @@ impl hyper_util_fork::client::legacy::pool::Key for PoolKey {
 					ExpectedCapacity::Http1
 				}
 			}
-			ApplicationTransport::Tls(_) => {
-				ExpectedCapacity::Auto
+			ApplicationTransport::Tls(c) => {
+				let mut h2 = false;
+				let mut h1 = false;
+				for alpn in &c.config.alpn_protocols {
+					if alpn == b"h2" { h2 = true}
+					if alpn == b"http/1.1" { h1 = true}
+				}
+				if h1 && !h2 {
+					ExpectedCapacity::Http1
+				} else if h2 && !h1 {
+					ExpectedCapacity::Http2
+				} else {
+					ExpectedCapacity::Auto
+				}
 			}
 		}
 	}
@@ -395,7 +407,7 @@ impl Client {
 	) -> Client {
 		let resolver = dns::CachedResolver::new(cfg.resolver_cfg.clone(), cfg.resolver_opts.clone());
 		let mut b =
-			::hyper_util_fork::client::legacy::Client::builder(::hyper_util::rt::TokioExecutor::new());
+			::hyper_util_fork::client::legacy::Client::<_, PoolKey>::builder(::hyper_util::rt::TokioExecutor::new());
 		b.pool_timer(hyper_util::rt::tokio::TokioTimer::new());
 		b.pool_idle_timeout(backend_config.pool_idle_timeout);
 		b.timer(hyper_util::rt::tokio::TokioTimer::new());

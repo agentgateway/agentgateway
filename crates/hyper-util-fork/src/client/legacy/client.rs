@@ -7,6 +7,7 @@
 use std::error::Error as StdError;
 use std::fmt;
 use std::future::{poll_fn, Future};
+use std::ops::DerefMut;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -23,7 +24,10 @@ use hyper::{Method, Request, Response, Uri, Version};
 use tracing::{debug, trace, warn};
 
 use super::connect::{Alpn, Connect, Connected, Connection};
-use super::pool::{self, Ver};
+use super::pool::{
+	self, CheckoutResult, H2Load, HttpConnection, Key, ReservedHttp1Connection,
+	ReservedHttp2Connection,
+};
 use crate::common::{lazy as hyper_lazy, timer, Exec, Lazy, SyncWrapper};
 
 type BoxSendFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
@@ -33,12 +37,12 @@ const H2_WAITERS_PER_CONNECTION_ESTIMATE: usize = 5;
 ///
 /// `Client` is cheap to clone and cloning is the recommended way to share a `Client`. The
 /// underlying connection pool will be reused.
-pub struct Client<C, B, PK: pool::Key = DefaultPoolKey> {
+pub struct Client<C, PK: Key> {
 	connector: C,
 	exec: Exec,
 	h1_builder: hyper::client::conn::http1::Builder,
 	h2_builder: hyper::client::conn::http2::Builder<Exec>,
-	pool: pool::Pool<PoolClient<B>, PK>,
+	pool: pool::Pool<PK>,
 }
 
 /// Client errors
@@ -74,9 +78,6 @@ macro_rules! e {
 	};
 }
 
-// We might change this... :shrug:
-type DefaultPoolKey = (http::uri::Scheme, http::uri::Authority);
-
 #[allow(clippy::large_enum_variant)]
 enum TrySendError<B> {
 	Retryable {
@@ -100,7 +101,7 @@ pub struct ResponseFuture {
 
 // ===== impl Client =====
 
-impl Client<(), ()> {
+impl<PK: Key> Client<(), PK> {
 	/// Create a builder to configure a new `Client`.
 	///
 	/// # Example
@@ -130,53 +131,11 @@ impl Client<(), ()> {
 	}
 }
 
-impl<C, B, PK> Client<C, B, PK>
+impl<C, PK> Client<C, PK>
 where
 	C: Connect + Clone + Send + Sync + 'static,
-	B: Body + Send + 'static + Unpin,
-	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
 	PK: pool::Key,
 {
-	/// Send a `GET` request to the supplied `Uri`.
-	///
-	/// # Note
-	///
-	/// This requires that the `Body` type have a `Default` implementation.
-	/// It *should* return an "empty" version of itself, such that
-	/// `Body::is_end_stream` is `true`.
-	///
-	/// # Example
-	///
-	/// ```ignore
-	/// # #[cfg(feature = "tokio")]
-	/// # fn run () {
-	/// use hyper::Uri;
-	/// use hyper_util::client::legacy::Client;
-	/// use hyper_util::rt::TokioExecutor;
-	/// use bytes::Bytes;
-	/// use http_body_util::Full;
-	///
-	/// let client: Client<_, Full<Bytes>> = Client::builder(TokioExecutor::new()).build_http();
-	///
-	/// let future = client.get(Uri::from_static("http://httpbin.org/ip"));
-	/// # }
-	/// # fn main() {}
-	/// ```
-	pub fn get(&self, uri: Uri) -> ResponseFuture
-	where
-		B: Default,
-	{
-		let body = B::default();
-		if !body.is_end_stream() {
-			warn!("default Body used for get() does not return true for is_end_stream");
-		}
-
-		let mut req = Request::new(body);
-		*req.uri_mut() = uri;
-		self.request(req)
-	}
-
 	/// Send a constructed `Request` using this `Client`.
 	///
 	/// # Example
@@ -202,13 +161,13 @@ where
 	/// # }
 	/// # fn main() {}
 	/// ```
-	pub fn request(&self, req: Request<B>) -> ResponseFuture {
+	pub fn request(&self, req: Request<axum_core::body::Body>) -> ResponseFuture {
 		ResponseFuture::new(self.clone().send_request(req))
 	}
 
 	async fn send_request(
 		self,
-		mut req: Request<B>,
+		mut req: Request<axum_core::body::Body>,
 	) -> Result<Response<hyper::body::Incoming>, Error> {
 		// We may change URI so clone it to keep the original
 		let uri = req.uri().clone();
@@ -241,9 +200,10 @@ where
 
 	async fn try_send_request(
 		&self,
-		req: Request<B>,
-	) -> Result<Response<hyper::body::Incoming>, TrySendError<B>> {
+		req: Request<axum_core::body::Body>,
+	) -> Result<Response<hyper::body::Incoming>, TrySendError<axum_core::body::Body>> {
 		let (parts, body) = req.into_parts();
+
 		let mut pooled = self
 			.connection_for(&parts)
 			.await
@@ -277,7 +237,7 @@ where
 			// CONNECT always sends authority-form, so check it first...
 			if req.method() == Method::CONNECT {
 				authority_form(req.uri_mut());
-			} else if pooled.conn_info.is_proxied {
+			} else if pooled.conn_info().is_proxied {
 				absolute_form(req.uri_mut());
 			} else {
 				origin_form(req.uri_mut());
@@ -286,81 +246,56 @@ where
 			authority_form(req.uri_mut());
 		}
 
-		if pooled.is_http2() {
-			if let Err(err) = poll_fn(|cx| pooled.poll_ready(cx)).await {
-				return Err(TrySendError::Retryable {
-					connection_reused: pooled.is_reused() || pooled.is_http2(),
-					error: e!(Canceled, err).with_connect_info(pooled.conn_info.clone()),
-					req,
-				});
-			}
-		}
-
 		let mut res = match pooled.try_send_request(req).await {
 			Ok(res) => res,
 			Err(mut err) => {
 				// TODO: Drop?
-				pooled.release_h2_stream_slot();
+				// pooled.release_h2_stream_slot();
 				return if let Some(req) = err.take_message() {
 					Err(TrySendError::Retryable {
 						connection_reused: pooled.is_reused() || pooled.is_http2(),
-						error: e!(Canceled, err.into_error()).with_connect_info(pooled.conn_info.clone()),
+						error: e!(Canceled, err.into_error()).with_connect_info(pooled.conn_info().clone()),
 						req,
 					})
 				} else {
 					Err(TrySendError::Nope(
-						e!(SendRequest, err.into_error()).with_connect_info(pooled.conn_info.clone()),
+						e!(SendRequest, err.into_error()).with_connect_info(pooled.conn_info().clone()),
 					))
 				};
 			},
 		};
 
 		// If the Connector included 'extra' info, add to Response...
-		if let Some(extra) = &pooled.conn_info.extra {
+		if let Some(extra) = &pooled.conn_info().extra {
 			extra.set(res.extensions_mut());
 		}
 
-		if let Some(guard) = pooled.take_h2_stream_guard() {
-			res.extensions_mut().insert(guard);
-		}
-
-		// If pooled is HTTP/2, we can toss this reference immediately.
-		//
-		// when pooled is dropped, it will try to insert back into the
-		// pool. To delay that, spawn a future that completes once the
-		// sender is ready again.
-		//
-		// This *should* only be once the related `Connection` has polled
-		// for a new request to start.
-		//
-		// It won't be ready if there is a body to stream.
-		if pooled.is_http2() || !pooled.is_pool_enabled() || pooled.is_ready() {
-			drop(pooled);
-		} else if !res.body().is_end_stream() {
-			// let (delayed_tx, delayed_rx) = oneshot::channel::<()>();
-			// res.body_mut().delayed_eof(delayed_rx);
-			let on_idle = poll_fn(move |cx| pooled.poll_ready(cx)).map(move |_| {
-				// At this point, `pooled` is dropped, and had a chance
-				// to insert into the pool (if conn was idle)
-				// drop(delayed_tx);
-			});
-
-			self.exec.execute(on_idle);
+		if pooled.is_http2() {
+			// TODO(john): we need to drop the Send but make it decrement only when the request ends.
+			// if let Some(guard) = pooled.take_h2_stream_guard() {
+			// 	res.extensions_mut().insert(guard);
+			// }
 		} else {
-			// There's no body to delay, but the connection isn't
-			// ready yet. Only re-insert when it's ready
-			let on_idle = poll_fn(move |cx| pooled.poll_ready(cx)).map(|_| ());
+			// when pooled is dropped, it will try to insert back into the
+			// pool. To delay that, spawn a future that completes once the
+			// sender is ready again.
+			//
+			// This *should* only be once the related `Connection` has polled
+			// for a new request to start.
+			let on_idle = poll_fn(move |cx| {
+				let HttpConnection::Http1(h1) = pooled.deref_mut() else {
+					panic!("asserted http1 above")
+				};
+				h1.tx.poll_ready(cx)
+			})
+			.map(move |_| ());
 
 			self.exec.execute(on_idle);
 		}
-
 		Ok(res)
 	}
 
-	async fn connection_for(
-		&self,
-		dst: &http::request::Parts,
-	) -> Result<pool::Pooled<PoolClient<B>, PK>, Error> {
+	async fn connection_for(&self, dst: &http::request::Parts) -> Result<pool::Pooled<PK>, Error> {
 		loop {
 			match self.one_connection_for(dst).await {
 				Ok(pooled) => return Ok(pooled),
@@ -379,358 +314,175 @@ where
 	async fn one_connection_for(
 		&self,
 		dst: &http::request::Parts,
-	) -> Result<pool::Pooled<PoolClient<B>, PK>, ClientConnectError> {
+	) -> Result<pool::Pooled<PK>, ClientConnectError> {
 		// Return a single connection if pooling is not enabled
-
 		let Some(pool_key) = dst.extensions.get::<PK>() else {
 			return Err(ClientConnectError::Normal(e!(NoPoolKey)));
 		};
-		if !self.pool.is_enabled() {
-			return self
-				.connect_to(dst, pool_key)
-				.await
-				.map_err(ClientConnectError::Normal);
-		}
 
-		if dst.version == Version::HTTP_2 {
-			return match self
-				.pool
-				.h2_acquire(pool_key.clone(), H2_WAITERS_PER_CONNECTION_ESTIMATE)
-			{
-				pool::H2Acquire::Pooled(pooled) => Ok(pooled),
-				pool::H2Acquire::Checkout(checkout) => checkout.await.map_err(|err| {
-					if err.is_canceled() {
-						ClientConnectError::CheckoutIsClosed(err)
-					} else {
-						ClientConnectError::Normal(e!(Connect, err))
-					}
-				}),
-				pool::H2Acquire::Connecting(connecting) => {
-					match self
-						.connect_to_with_lock(dst, pool_key, Some(connecting))
-						.await
-					{
-						Ok(pooled) => Ok(pooled),
-						Err(err) if err.is_canceled() => {
-							self
-								.pool
-								.checkout(pool_key.clone())
-								.await
-								.map_err(|checkout_err| {
-									if checkout_err.is_canceled() {
-										ClientConnectError::CheckoutIsClosed(checkout_err)
-									} else {
-										ClientConnectError::Normal(e!(Connect, checkout_err))
-									}
-								})
-						},
-						Err(err) => Err(ClientConnectError::Normal(err)),
-					}
-				},
-			};
-		}
-
-		// This actually races 2 different futures to try to get a ready
-		// connection the fastest, and to reduce connection churn.
-		//
-		// - If the pool has an idle connection waiting, that's used
-		//   immediately.
-		// - Otherwise, the Connector is asked to start connecting to
-		//   the destination Uri.
-		// - Meanwhile, the pool Checkout is watching to see if any other
-		//   request finishes and tries to insert an idle connection.
-		// - If a new connection is started, but the Checkout wins after
-		//   (an idle connection became available first), the started
-		//   connection future is spawned into the runtime to complete,
-		//   and then be inserted into the pool as an idle connection.
-		let checkout = self.pool.checkout(pool_key.clone());
-		let connect = self.connect_to(dst, pool_key);
-		// The order of the `select` is depended on below...
-
-		match future::select(checkout, connect).await {
-			// Checkout won, connect future may have been started or not.
-			//
-			// If it has, let it finish and insert back into the pool,
-			// so as to not waste the socket...
-			Either::Left((Ok(checked_out), connecting)) => {
-				// This depends on the `select` above having the correct
-				// order, such that if the checkout future were ready
-				// immediately, the connect future will never have been
-				// started.
-				//
-				// If it *wasn't* ready yet, then the connect future will
-				// have been started...
-				if connecting.started() {
-					let bg = connecting
-						.map_err(|err| {
-							trace!("background connect error: {}", err);
-						})
-						.map(|_pooled| {
-							// dropping here should just place it in
-							// the Pool for us...
-						});
-					// An execute error here isn't important, we're just trying
-					// to prevent a waste of a socket...
-					self.exec.execute(bg);
+		let checkout_result = self.pool.checkout_or_register_waker(pool_key.clone());
+		match checkout_result {
+			CheckoutResult::Checkout(pooled) => return Ok(pooled),
+			CheckoutResult::Wait(wait) => {
+				if wait.should_connect {
+					let client = self.clone();
+					let ver = dst.version.clone();
+					let pk = pool_key.clone();
+					self.exec.execute(async move {
+						let res = client
+							.connect_to(ver, pk)
+							.await
+							.map_err(ClientConnectError::Normal);
+						// TODO
+					});
 				}
-				Ok(checked_out)
-			},
-			// Connect won, checkout can just be dropped.
-			Either::Right((Ok(connected), _checkout)) => Ok(connected),
-			// Either checkout or connect could get canceled:
-			//
-			// 1. Connect is canceled if this is HTTP/2 and there is
-			//    an outstanding HTTP/2 connecting task.
-			// 2. Checkout is canceled if the pool cannot deliver an
-			//    idle connection reliably.
-			//
-			// In both cases, we should just wait for the other future.
-			Either::Left((Err(err), connecting)) => {
-				if err.is_canceled() {
-					connecting.await.map_err(ClientConnectError::Normal)
-				} else {
-					Err(ClientConnectError::Normal(e!(Connect, err)))
-				}
-			},
-			Either::Right((Err(err), checkout)) => {
-				if err.is_canceled() {
-					checkout.await.map_err(ClientConnectError::CheckoutIsClosed)
-				} else {
-					Err(ClientConnectError::Normal(err))
-				}
+				let conn = wait.waiter.await;
+				todo!()
 			},
 		}
 	}
 
-	fn connect_to(
+	async fn connect_to(
 		&self,
-		dst: &http::request::Parts,
-		pk: &PK,
-	) -> impl Lazy<Output = Result<pool::Pooled<PoolClient<B>, PK>, Error>> + Send + Unpin + use<C, B, PK>
-	{
-		self.connect_to_with_lock(dst, pk, None)
-	}
-
-	fn connect_to_with_lock(
-		&self,
-		dst: &http::request::Parts,
-		pk: &PK,
-		existing_connecting: Option<pool::Connecting<PoolClient<B>, PK>>,
-	) -> impl Lazy<Output = Result<pool::Pooled<PoolClient<B>, PK>, Error>> + Send + Unpin + use<C, B, PK>
-	{
+		version: Version,
+		pk: PK,
+	) -> Result<pool::HttpConnection, Error> {
 		let executor = self.exec.clone();
-		let pool = self.pool.clone();
-		let h1_builder = self.h1_builder.clone();
-		let h2_builder = self.h2_builder.clone();
-		// let ver = self.config.ver;
-		let ver = if dst.version == Version::HTTP_2 {
-			Ver::Http2
+		let is_ver_h2 = if version == Version::HTTP_2 {
+			// Explicitly HTTP2
+			true
 		} else {
-			Ver::Auto
+			// Auto
+			false
 		};
-		let is_ver_h2 = ver == Ver::Http2;
 		let connector = self.connector.clone();
 		// TODO: it would be nice to just pass pk directly, but the tower::Service makes this tricky to make
 		// it generic.
 		let mut ext = http::Extensions::new();
-		let pkc = pk.clone();
-		ext.insert(pkc);
-		let pkc = pk.clone();
-		hyper_lazy(move || {
-			let connecting = match existing_connecting {
-				Some(lock) => lock,
-				// Try to take a "connecting lock".
-				//
-				// If the pool_key is for HTTP/2, and there is already a
-				// connection being established, then this can't take a
-				// second lock. The "connect_to" future is Canceled.
-				None => match pool.connecting(pkc, ver, H2_WAITERS_PER_CONNECTION_ESTIMATE) {
-					Some(lock) => lock,
-					None => {
-						let canceled = e!(Canceled);
-						// TODO
-						// crate::Error::new_canceled().with("HTTP/2 connection in progress");
-						return Either::Right(future::err(canceled));
-					},
+		ext.insert(pk);
+
+		let io = connector
+			.connect(super::connect::sealed::Internal, ext)
+			.map_err(|src| e!(Connect, src))
+			.await?;
+		// TODO: true-up our estimate
+		let connected = io.connected();
+		let is_h2 = (is_ver_h2 && connected.alpn == Alpn::None) || connected.alpn == Alpn::H2;
+
+		let cx = if is_h2 {
+			let (mut tx, conn) = self.h2_builder.handshake(io).await.map_err(Error::tx)?;
+
+			// TODO: this needs to actually check within the execution.
+			let cur_max = conn.current_max_send_streams();
+			trace!("http2 handshake complete, spawning background dispatcher task");
+			executor.execute(
+				conn
+					.map_err(|e| debug!("client connection error: {}", e))
+					.map(|_| ()),
+			);
+
+			// Wait for 'conn' to ready up before we
+			// declare this tx as usable
+			tx.ready().await.map_err(Error::tx)?;
+			pool::HttpConnection::Http2(ReservedHttp2Connection {
+				info: connected,
+				tx,
+				// Important: we do NOT reserve the stream slot here yet; we are only establishing a connection
+				// not attaching any requests to it yet.
+				load: Arc::new(H2Load::new(cur_max)),
+			})
+		} else {
+			// Perform the HTTP/1.1 handshake on the provided I/O stream.
+			// Uses the h1_builder to establish a connection, returning a sender (tx) for requests
+			// and a connection task (conn) that manages the connection lifecycle.
+			let (mut tx, conn) = self
+				.h1_builder
+				.handshake(io)
+				.await
+				.map_err(crate::client::legacy::client::Error::tx)?;
+			// This indicates the connection is established and ready for request processing.
+			trace!("http1 handshake complete, spawning background dispatcher task");
+			// Create a oneshot channel to communicate errors from the connection task.
+			// err_tx sends errors from the connection task, and err_rx receives them
+			// to correlate connection failures with request readiness errors.
+			let (err_tx, err_rx) = tokio::sync::oneshot::channel();
+			// Spawn the connection task in the background using the executor.
+			// The task manages the HTTP/1.1 connection, including upgrades (e.g., WebSocket).
+			// Errors are sent via err_tx to ensure they can be checked if the sender (tx) fails.
+			executor.execute(
+				conn
+					.with_upgrades()
+					.map_err(|e| {
+						// Log the connection error at debug level for diagnostic purposes.
+						debug!("client connection error: {:?}", e);
+						// Log that the error is being sent to the error channel.
+						trace!("sending connection error to error channel");
+						// Send the error via the oneshot channel, ignoring send failures
+						// (e.g., if the receiver is dropped, which is handled later).
+						let _ = err_tx.send(e);
+					})
+					.map(|_| ()),
+			);
+			// Readiness indicates the sender (tx) can accept a request without blocking.
+			trace!("waiting for connection to be ready");
+			// Check if the sender is ready to accept a request.
+			// This ensures the connection is fully established before proceeding.
+			// aka:
+			// Wait for 'conn' to ready up before we
+			// declare this tx as usable
+			match tx.ready().await {
+				// If ready, the connection is usable for sending requests.
+				Ok(_) => {
+					// Log that the connection is ready for use.
+					trace!("connection is ready");
+					// Drop the error receiver, as it’s no longer needed since the sender is ready.
+					// This prevents waiting for errors that won’t occur in a successful case.
+					drop(err_rx);
+					pool::HttpConnection::Http1(ReservedHttp1Connection {
+						info: connected,
+						tx,
+					})
 				},
-			};
-			Either::Left(
-				connector
-					.connect(super::connect::sealed::Internal, ext)
-					.map_err(|src| e!(Connect, src))
-					.and_then(move |io| {
-						let connected = io.connected();
-						// If ALPN is h2 and we aren't http2_only already,
-						// then we need to convert our pool checkout into
-						// a single HTTP2 one.
-						let connecting = if connected.alpn == Alpn::H2 && !is_ver_h2 {
-							match connecting.alpn_h2(&pool, H2_WAITERS_PER_CONNECTION_ESTIMATE) {
-								Some(lock) => {
-									trace!("ALPN negotiated h2, updating pool");
-									lock
-								},
-								None => {
-									// Another connection has already upgraded,
-									// the pool checkout should finish up for us.
-									let canceled = e!(Canceled, "ALPN upgraded to HTTP/2");
-									return Either::Right(future::err(canceled));
-								},
-							}
-						} else {
-							connecting
-						};
-
-						let is_h2 = (is_ver_h2 && connected.alpn == Alpn::None) || connected.alpn == Alpn::H2;
-
-						Either::Left(Box::pin(async move {
-							let tx = if is_h2 {
-								{
-									let (mut tx, mut conn) = h2_builder.handshake(io).await.map_err(Error::tx)?;
-									let load = Arc::new(H2Load::new(conn.current_max_send_streams()));
-									let conn_load = Arc::clone(&load);
-
-									trace!("http2 handshake complete, spawning background dispatcher task");
-									executor.execute(
-										poll_fn(move |cx| {
-											let poll = Pin::new(&mut conn).poll(cx);
-											conn_load.set_max_streams(conn.current_max_send_streams());
-											poll
-										})
-										.map_err(|e| debug!("client connection error: {}", e))
-										.map(|_| ()),
-									);
-
-									// Wait for 'conn' to ready up before we
-									// declare this tx as usable
-									tx.ready().await.map_err(Error::tx)?;
-									PoolTx::Http2 { tx, load }
-								}
-							} else {
-								{
-									// Perform the HTTP/1.1 handshake on the provided I/O stream.
-									// Uses the h1_builder to establish a connection, returning a sender (tx) for requests
-									// and a connection task (conn) that manages the connection lifecycle.
-									let (mut tx, conn) = h1_builder
-										.handshake(io)
-										.await
-										.map_err(crate::client::legacy::client::Error::tx)?;
-
-									// Log that the HTTP/1.1 handshake has completed successfully.
-									// This indicates the connection is established and ready for request processing.
-									trace!("http1 handshake complete, spawning background dispatcher task");
-									// Create a oneshot channel to communicate errors from the connection task.
-									// err_tx sends errors from the connection task, and err_rx receives them
-									// to correlate connection failures with request readiness errors.
-									let (err_tx, err_rx) = tokio::sync::oneshot::channel();
-									// Spawn the connection task in the background using the executor.
-									// The task manages the HTTP/1.1 connection, including upgrades (e.g., WebSocket).
-									// Errors are sent via err_tx to ensure they can be checked if the sender (tx) fails.
-									executor.execute(
-										conn
-											.with_upgrades()
-											.map_err(|e| {
-												// Log the connection error at debug level for diagnostic purposes.
-												debug!("client connection error: {:?}", e);
-												// Log that the error is being sent to the error channel.
-												trace!("sending connection error to error channel");
-												// Send the error via the oneshot channel, ignoring send failures
-												// (e.g., if the receiver is dropped, which is handled later).
-												let _ = err_tx.send(e);
-											})
-											.map(|_| ()),
-									);
-									// Log that the client is waiting for the connection to be ready.
-									// Readiness indicates the sender (tx) can accept a request without blocking.
-									trace!("waiting for connection to be ready");
-									// Check if the sender is ready to accept a request.
-									// This ensures the connection is fully established before proceeding.
-									// aka:
-									// Wait for 'conn' to ready up before we
-									// declare this tx as usable
-									match tx.ready().await {
-										// If ready, the connection is usable for sending requests.
-										Ok(_) => {
-											// Log that the connection is ready for use.
-											trace!("connection is ready");
-											// Drop the error receiver, as it’s no longer needed since the sender is ready.
-											// This prevents waiting for errors that won’t occur in a successful case.
-											drop(err_rx);
-											// Wrap the sender in PoolTx::Http1 for use in the connection pool.
-											PoolTx::Http1(tx)
-										},
-										// If the sender fails with a closed channel error, check for a specific connection error.
-										// This distinguishes between a vague ChannelClosed error and an actual connection failure.
-										Err(e) if e.is_closed() => {
-											// Log that the channel is closed, indicating a potential connection issue.
-											trace!("connection channel closed, checking for connection error");
-											// Check the oneshot channel for a specific error from the connection task.
-											match err_rx.await {
-												// If an error was received, it’s a specific connection failure.
-												Ok(err) => {
-													// Log the specific connection error for diagnostics.
-													trace!("received connection error: {:?}", err);
-													// Return the error wrapped in Error::tx to propagate it.
-													return Err(crate::client::legacy::client::Error::tx(err));
-												},
-												// If the error channel is closed, no specific error was sent.
-												// Fall back to the vague ChannelClosed error.
-												Err(_) => {
-													// Log that the error channel is closed, indicating no specific error.
-													trace!("error channel closed, returning the vague ChannelClosed error");
-													// Return the original error wrapped in Error::tx.
-													return Err(crate::client::legacy::client::Error::tx(e));
-												},
-											}
-										},
-										// For other errors (e.g., timeout, I/O issues), propagate them directly.
-										// These are not ChannelClosed errors and don’t require error channel checks.
-										Err(e) => {
-											// Log the specific readiness failure for diagnostics.
-											trace!("connection readiness failed: {:?}", e);
-											// Return the error wrapped in Error::tx to propagate it.
-											return Err(crate::client::legacy::client::Error::tx(e));
-										},
-									}
-								}
-							};
-
-							Ok(pool.pooled(
-								connecting,
-								PoolClient {
-									conn_info: connected,
-									tx,
-									h2_slot_reserved: false,
-								},
-							))
-						}))
-					}),
-			)
-		})
+				// If the sender fails with a closed channel error, check for a specific connection error.
+				// This distinguishes between a vague ChannelClosed error and an actual connection failure.
+				Err(e) if e.is_closed() => {
+					// Log that the channel is closed, indicating a potential connection issue.
+					trace!("connection channel closed, checking for connection error");
+					// Check the oneshot channel for a specific error from the connection task.
+					match err_rx.await {
+						// If an error was received, it’s a specific connection failure.
+						Ok(err) => {
+							// Log the specific connection error for diagnostics.
+							trace!("received connection error: {:?}", err);
+							// Return the error wrapped in Error::tx to propagate it.
+							return Err(Error::tx(err));
+						},
+						// If the error channel is closed, no specific error was sent.
+						// Fall back to the vague ChannelClosed error.
+						Err(_) => {
+							// Log that the error channel is closed, indicating no specific error.
+							trace!("error channel closed, returning the vague ChannelClosed error");
+							// Return the original error wrapped in Error::tx.
+							return Err(Error::tx(e));
+						},
+					}
+				},
+				// For other errors (e.g., timeout, I/O issues), propagate them directly.
+				// These are not ChannelClosed errors and don’t require error channel checks.
+				Err(e) => {
+					// Log the specific readiness failure for diagnostics.
+					trace!("connection readiness failed: {:?}", e);
+					// Return the error wrapped in Error::tx to propagate it.
+					return Err(Error::tx(e));
+				},
+			}
+		};
+		Ok(cx)
 	}
 }
 
-impl<C, B> tower_service::Service<Request<B>> for Client<C, B>
-where
-	C: Connect + Clone + Send + Sync + 'static,
-	B: Body + Send + 'static + Unpin,
-	B::Data: Send,
-	B::Error: Into<Box<dyn StdError + Send + Sync>>,
-{
-	type Response = Response<hyper::body::Incoming>;
-	type Error = Error;
-	type Future = ResponseFuture;
-
-	fn poll_ready(&mut self, _: &mut task::Context<'_>) -> Poll<Result<(), Self::Error>> {
-		Poll::Ready(Ok(()))
-	}
-
-	fn call(&mut self, req: Request<B>) -> Self::Future {
-		self.request(req)
-	}
-}
-
-impl<C: Clone, B, PK: pool::Key> Clone for Client<C, B, PK> {
-	fn clone(&self) -> Client<C, B, PK> {
+impl<C: Clone, PK: pool::Key> Clone for Client<C, PK> {
+	fn clone(&self) -> Client<C, PK> {
 		Client {
 			exec: self.exec.clone(),
 			h1_builder: self.h1_builder.clone(),
@@ -741,7 +493,7 @@ impl<C: Clone, B, PK: pool::Key> Clone for Client<C, B, PK> {
 	}
 }
 
-impl<C, B> fmt::Debug for Client<C, B> {
+impl<C, PK: Key> fmt::Debug for Client<C, PK> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("Client").finish()
 	}
@@ -774,16 +526,6 @@ impl Future for ResponseFuture {
 	}
 }
 
-// ===== impl PoolClient =====
-
-// FIXME: allow() required due to `impl Trait` leaking types to this lint
-#[allow(missing_debug_implementations)]
-struct PoolClient<B> {
-	conn_info: Connected,
-	tx: PoolTx<B>,
-	h2_slot_reserved: bool,
-}
-
 enum PoolTx<B> {
 	Http1(hyper::client::conn::http1::SendRequest<B>),
 	Http2 {
@@ -792,183 +534,20 @@ enum PoolTx<B> {
 	},
 }
 
-struct H2Load {
-	active_streams: AtomicUsize,
-	max_streams: AtomicUsize,
-}
-
-impl H2Load {
-	fn new(max_streams: usize) -> Self {
-		Self {
-			active_streams: AtomicUsize::new(0),
-			max_streams: AtomicUsize::new(max_streams.max(1)),
-		}
-	}
-
-	fn set_max_streams(&self, max_streams: usize) {
-		self
-			.max_streams
-			.store(max_streams.max(1), Ordering::Release);
-	}
-
-	fn try_reserve_stream_slot(&self) -> bool {
-		self
-			.active_streams
-			.fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
-				let max = self.max_streams.load(Ordering::Acquire);
-				if active < max {
-					Some(active + 1)
-				} else {
-					None
-				}
-			})
-			.is_ok()
-	}
-
-	fn release_stream_slot(&self) {
-		let prev = self.active_streams.fetch_sub(1, Ordering::AcqRel);
-		debug_assert!(prev > 0, "active_streams must be > 0 before release");
-	}
-}
-
-#[derive(Clone)]
-struct H2StreamGuard {
-	load: Arc<H2Load>,
-	released: bool,
-}
-
-impl Drop for H2StreamGuard {
-	fn drop(&mut self) {
-		if !self.released {
-			self.released = true;
-			self.load.release_stream_slot();
-		}
-	}
-}
-
-impl<B> PoolClient<B> {
-	fn poll_ready(
-		&mut self,
-		#[allow(unused_variables)] cx: &mut task::Context<'_>,
-	) -> Poll<Result<(), Error>> {
-		match self.tx {
-			PoolTx::Http1(ref mut tx) => tx.poll_ready(cx).map_err(Error::closed),
-			PoolTx::Http2 { ref mut tx, .. } => tx.poll_ready(cx).map_err(Error::closed),
-		}
-	}
-
-	fn is_http1(&self) -> bool {
-		!self.is_http2()
-	}
-
-	fn is_http2(&self) -> bool {
-		match self.tx {
-			PoolTx::Http1(_) => false,
-			PoolTx::Http2 { .. } => true,
-		}
-	}
-
-	fn is_ready(&self) -> bool {
-		match self.tx {
-			PoolTx::Http1(ref tx) => tx.is_ready(),
-			// HTTP/2 readiness for pooled reuse is tracked via stream-slot accounting.
-			// A cloned SendRequest may report not-ready even though the shared
-			// connection is still reusable, so don't gate pool checkout on tx.is_ready().
-			PoolTx::Http2 { .. } => true,
-		}
-	}
-
-	fn take_h2_stream_guard(&mut self) -> Option<H2StreamGuard> {
-		if !self.h2_slot_reserved {
-			return None;
-		}
-
-		self.h2_slot_reserved = false;
-		match &self.tx {
-			PoolTx::Http2 { load, .. } => Some(H2StreamGuard {
-				load: Arc::clone(load),
-				released: false,
-			}),
-			PoolTx::Http1(_) => None,
-		}
-	}
-
-	fn release_h2_stream_slot(&mut self) {
-		if !self.h2_slot_reserved {
-			return;
-		}
-
-		self.h2_slot_reserved = false;
-		if let PoolTx::Http2 { load, .. } = &self.tx {
-			load.release_stream_slot();
-		}
-	}
-}
-
-impl<B: Body + 'static> PoolClient<B> {
-	fn try_send_request(
-		&mut self,
-		req: Request<B>,
-	) -> impl Future<Output = Result<Response<hyper::body::Incoming>, ConnTrySendError<Request<B>>>> + use<B>
-	where
-		B: Send,
-	{
-		match self.tx {
-			PoolTx::Http1(ref mut tx) => Either::Left(tx.try_send_request(req)),
-			PoolTx::Http2 { ref mut tx, .. } => Either::Right(tx.try_send_request(req)),
-		}
-	}
-}
-
-impl<B> pool::Poolable for PoolClient<B>
-where
-	B: Send + 'static,
-{
-	fn is_open(&self) -> bool {
-		match self.tx {
-			PoolTx::Http1(ref tx) => tx.is_ready(),
-			// Capacity is transient, but closed senders must be evicted.
-			PoolTx::Http2 { ref tx, .. } => !tx.is_closed(),
-		}
-	}
-
-	fn reserve(self) -> pool::Reservation<Self> {
-		match self.tx {
-			PoolTx::Http1(tx) => pool::Reservation::Unique(PoolClient {
-				conn_info: self.conn_info,
-				tx: PoolTx::Http1(tx),
-				h2_slot_reserved: false,
-			}),
-			PoolTx::Http2 { tx, load } => {
-				if !load.try_reserve_stream_slot() {
-					return pool::Reservation::Unavailable(PoolClient {
-						conn_info: self.conn_info,
-						tx: PoolTx::Http2 { tx, load },
-						h2_slot_reserved: false,
-					});
-				}
-				let pooled = PoolClient {
-					conn_info: self.conn_info.clone(),
-					tx: PoolTx::Http2 {
-						tx: tx.clone(),
-						load: load.clone(),
-					},
-					h2_slot_reserved: false,
-				};
-				let checked_out = PoolClient {
-					conn_info: self.conn_info,
-					tx: PoolTx::Http2 { tx, load },
-					h2_slot_reserved: true,
-				};
-				pool::Reservation::Shared(pooled, checked_out)
-			},
-		}
-	}
-
-	fn can_share(&self) -> bool {
-		self.is_http2()
-	}
-}
+// #[derive(Clone)]
+// struct H2StreamGuard {
+// 	load: Arc<H2Load>,
+// 	released: bool,
+// }
+//
+// impl Drop for H2StreamGuard {
+// 	fn drop(&mut self) {
+// 		if !self.released {
+// 			self.released = true;
+// 			self.load.release_stream_slot();
+// 		}
+// 	}
+// }
 
 enum ClientConnectError {
 	Normal(Error),
@@ -1487,21 +1066,19 @@ impl Builder {
 
 	/// Combine the configuration of this builder with a connector to create a `Client`, with a custom pooling key.
 	/// A function to extract the pool key from the request is required.
-	pub fn build<C, B, PK>(&self, connector: C) -> Client<C, B, PK>
+	pub fn build<C, PK>(&self, connector: C) -> Client<C, PK>
 	where
 		C: Connect + Clone,
-		B: Body + Send,
-		B::Data: Send,
 		PK: pool::Key,
 	{
 		let exec = self.exec.clone();
-		let timer = self.pool_timer.clone();
+		let timer = self.pool_timer.clone().expect("pool_timer must be set");
 		Client {
 			exec: exec.clone(),
 			h1_builder: self.h1_builder.clone(),
 			h2_builder: self.h2_builder.clone(),
 			connector,
-			pool: pool::Pool::<_, PK>::new(self.pool_config, exec, timer),
+			pool: pool::Pool::<PK>::new(self.pool_config, exec, timer),
 		}
 	}
 }

@@ -3036,14 +3036,17 @@ dependencies = [
 name = "hyper-util-fork"
 version = "0.1.14"
 dependencies = [
+ "axum-core",
  "bytes",
  "divan",
  "futures-channel",
  "futures-core",
  "futures-util",
+ "hashbrown 0.16.1",
  "http 1.4.0",
  "http-body-util",
  "hyper",
+ "parking_lot",
  "pin-project-lite",
  "pprof",
  "tokio",

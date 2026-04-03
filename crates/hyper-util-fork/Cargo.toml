@@ -27,6 +27,9 @@ pin-project-lite.workspace = true
 tracing = { workspace = true, features = ["std"] }
 tokio = { workspace = true }
 tower-service = { workspace = true }
+parking_lot = "0.12.5"
+hashbrown = "0.16.1"
+axum-core = "0.5.6"
 
 [dev-dependencies]
 hyper = { workspace = true, features = ["full"] }
