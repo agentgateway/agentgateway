@@ -2252,7 +2252,12 @@ pub mod from_responses {
 							next_output_index += 1;
 							tool_calls.insert(
 								start.content_block_index,
-								(tool_call_item_id.clone(), tu.name.clone(), String::new(), output_index),
+								(
+									tool_call_item_id.clone(),
+									tu.name.clone(),
+									String::new(),
+									output_index,
+								),
 							);
 
 							sequence_number += 1;
@@ -2365,6 +2370,7 @@ pub mod from_responses {
 				},
 				bedrock::ConverseStreamOutput::ContentBlockStop(stop) => {
 					let mut events: Vec<(&'static str, ResponseStreamEvent)> = Vec::new();
+					let was_tracked = seen_blocks.remove(&stop.content_block_index);
 
 					if let Some((item_id, name, buffer, output_index)) =
 						tool_calls.remove(&stop.content_block_index)
@@ -2395,7 +2401,7 @@ pub mod from_responses {
 								}),
 							});
 						events.push(("event", item_done_event));
-					} else if seen_blocks.remove(&stop.content_block_index) {
+					} else if was_tracked {
 						sequence_number += 1;
 						let part_done_event =
 							ResponseStreamEvent::ResponseContentPartDone(ResponseContentPartDoneEvent {
