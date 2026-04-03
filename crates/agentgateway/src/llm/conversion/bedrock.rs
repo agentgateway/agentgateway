@@ -2170,8 +2170,12 @@ pub mod from_responses {
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
 
-		// Track tool calls for streaming: (index -> (item_id, name, json_buffer))
-		let mut tool_calls: HashMap<i32, (String, String, String)> = HashMap::new();
+		// Track tool calls for streaming: (content_block_index -> (item_id, name, json_buffer, output_index))
+		// output_index is the stable position of this tool call in the response output array.
+		let mut tool_calls: HashMap<i32, (String, String, String, u32)> = HashMap::new();
+
+		// Message item is always output_index 0; tool call items get sequential indices from 1.
+		let mut next_output_index: u32 = 1;
 
 		// Track sequence numbers and item IDs
 		let mut sequence_number: u64 = 0;
@@ -2244,16 +2248,18 @@ pub mod from_responses {
 					match start.start {
 						Some(bedrock::ContentBlockStart::ToolUse(tu)) => {
 							let tool_call_item_id = format!("call_{:016x}", rand::rng().random::<u64>());
+							let output_index = next_output_index;
+							next_output_index += 1;
 							tool_calls.insert(
 								start.content_block_index,
-								(tool_call_item_id.clone(), tu.name.clone(), String::new()),
+								(tool_call_item_id.clone(), tu.name.clone(), String::new(), output_index),
 							);
 
 							sequence_number += 1;
 							let item_added_event =
 								ResponseStreamEvent::ResponseOutputItemAdded(ResponseOutputItemAddedEvent {
 									sequence_number,
-									output_index: start.content_block_index as u32,
+									output_index,
 									item: OutputItem::FunctionCall(FunctionToolCall {
 										arguments: String::new(),
 										call_id: tool_call_item_id.clone(),
@@ -2271,7 +2277,7 @@ pub mod from_responses {
 								ResponseStreamEvent::ResponseContentPartAdded(ResponseContentPartAddedEvent {
 									sequence_number,
 									item_id: message_item_id.clone(),
-									output_index: start.content_block_index as u32,
+									output_index: 0,
 									content_index: 0,
 									part: make_output_part(String::new()),
 								});
@@ -2298,7 +2304,7 @@ pub mod from_responses {
 									ResponseStreamEvent::ResponseOutputTextDelta(ResponseTextDeltaEvent {
 										sequence_number,
 										item_id: message_item_id.clone(),
-										output_index: delta.content_block_index as u32,
+										output_index: 0,
 										content_index: 0,
 										delta: text,
 										logprobs: None,
@@ -2312,7 +2318,7 @@ pub mod from_responses {
 										ResponseStreamEvent::ResponseOutputTextDelta(ResponseTextDeltaEvent {
 											sequence_number,
 											item_id: message_item_id.clone(),
-											output_index: delta.content_block_index as u32,
+											output_index: 0,
 											content_index: 0,
 											delta: t,
 											logprobs: None,
@@ -2325,7 +2331,7 @@ pub mod from_responses {
 										ResponseStreamEvent::ResponseOutputTextDelta(ResponseTextDeltaEvent {
 											sequence_number,
 											item_id: message_item_id.clone(),
-											output_index: delta.content_block_index as u32,
+											output_index: 0,
 											content_index: 0,
 											delta: "[REDACTED]".to_string(),
 											logprobs: None,
@@ -2335,7 +2341,7 @@ pub mod from_responses {
 								_ => {},
 							},
 							bedrock::ContentBlockDelta::ToolUse(tu) => {
-								if let Some((item_id, _name, buffer)) =
+								if let Some((item_id, _name, buffer, output_index)) =
 									tool_calls.get_mut(&delta.content_block_index)
 								{
 									buffer.push_str(&tu.input);
@@ -2345,7 +2351,7 @@ pub mod from_responses {
 										ResponseFunctionCallArgumentsDeltaEvent {
 											sequence_number,
 											item_id: item_id.clone(),
-											output_index: delta.content_block_index as u32,
+											output_index: *output_index,
 											delta: tu.input,
 										},
 									);
@@ -2360,14 +2366,16 @@ pub mod from_responses {
 				bedrock::ConverseStreamOutput::ContentBlockStop(stop) => {
 					let mut events: Vec<(&'static str, ResponseStreamEvent)> = Vec::new();
 
-					if let Some((item_id, name, buffer)) = tool_calls.remove(&stop.content_block_index) {
+					if let Some((item_id, name, buffer, output_index)) =
+						tool_calls.remove(&stop.content_block_index)
+					{
 						sequence_number += 1;
 						let args_done_event = ResponseStreamEvent::ResponseFunctionCallArgumentsDone(
 							ResponseFunctionCallArgumentsDoneEvent {
 								name: Some(name.clone()),
 								sequence_number,
 								item_id: item_id.clone(),
-								output_index: stop.content_block_index as u32,
+								output_index,
 								arguments: buffer.clone(),
 							},
 						);
@@ -2377,7 +2385,7 @@ pub mod from_responses {
 						let item_done_event =
 							ResponseStreamEvent::ResponseOutputItemDone(ResponseOutputItemDoneEvent {
 								sequence_number,
-								output_index: stop.content_block_index as u32,
+								output_index,
 								item: OutputItem::FunctionCall(FunctionToolCall {
 									arguments: buffer,
 									call_id: item_id.clone(),
@@ -2393,7 +2401,7 @@ pub mod from_responses {
 							ResponseStreamEvent::ResponseContentPartDone(ResponseContentPartDoneEvent {
 								sequence_number,
 								item_id: message_item_id.clone(),
-								output_index: stop.content_block_index as u32,
+								output_index: 0,
 								content_index: 0,
 								part: make_output_part(String::new()),
 							});
