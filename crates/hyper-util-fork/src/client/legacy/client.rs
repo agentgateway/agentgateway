@@ -375,17 +375,9 @@ where
 		&self,
 		dst: &http::request::Parts,
 	) -> Result<pool::Pooled<PoolClient<B>, PK>, ClientConnectError> {
-		// Return a single connection if pooling is not enabled
-
 		let Some(pool_key) = dst.extensions.get::<PK>() else {
 			return Err(ClientConnectError::Normal(e!(NoPoolKey)));
 		};
-		if !self.pool.is_enabled() {
-			return self
-				.connect_to(dst, pool_key)
-				.await
-				.map_err(ClientConnectError::Normal);
-		}
 
 		// This actually races 2 different futures to try to get a ready
 		// connection the fastest, and to reduce connection churn.
