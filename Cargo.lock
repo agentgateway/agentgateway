@@ -3049,6 +3049,7 @@ dependencies = [
  "tokio",
  "tower-service",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

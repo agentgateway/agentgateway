@@ -36,6 +36,7 @@ divan.workspace = true
 pprof.workspace = true
 futures-util = { workspace = true, features = ["alloc"] }
 tokio = { workspace = true, features = ["macros", "test-util", "signal", "rt-multi-thread"] }
+tracing-subscriber.workspace = true
 
 [features]
 default = []

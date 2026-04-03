@@ -182,61 +182,54 @@ impl<T: Poolable, K: Key> Pool<T, K> {
 			});
 		};
 
-		let mut checkout_value = None;
-		let mut checkout_waiter = None;
-		{
-			let mut inner = enabled.lock().unwrap();
-			let now = inner.now();
-			let expiration = Expiration::new(inner.timeout);
-			let (entry, empty) = inner
-				.idle
-				.get_mut(&key)
-				.map(|list| {
-					let entry = {
-						let popper = IdlePopper { key: &key, list };
-						popper.pop(&expiration, now)
-					};
-					(entry, list.is_empty())
-				})
-				.unwrap_or((None, true));
-			if empty {
-				inner.idle.remove(&key);
-			}
-
-			if let Some(entry) = entry {
-				checkout_value = Some(entry.value);
-			} else {
-				let connecting_count = *inner.connecting.get(&key).unwrap_or(&0);
-				let waiters = inner.waiters.get(&key).map(|ws| ws.len()).unwrap_or(0);
-				let idle_count = inner.idle.get(&key).map(Vec::len).unwrap_or(0);
-				let max_waiters =
-					h2_estimated_max_waiters.saturating_mul(connecting_count.saturating_add(idle_count));
-				if connecting_count > 0 && waiters < max_waiters {
-					let (tx, rx) = oneshot::channel();
-					inner
-						.waiters
-						.entry(key.clone())
-						.or_insert_with(VecDeque::new)
-						.push_back(tx);
-					checkout_waiter = Some(rx);
-				} else {
-					*inner.connecting.entry(key.clone()).or_insert(0) += 1;
-					return H2Acquire::Connecting(Connecting {
-						key,
-						pool: WeakOpt::downgrade(enabled),
-					});
-				}
-			}
-		}
-
-		if let Some(value) = checkout_value {
-			H2Acquire::Pooled(self.reuse(&key, value))
-		} else {
-			H2Acquire::Checkout(Checkout {
-				key,
-				pool: self.clone(),
-				waiter: checkout_waiter,
+		let mut inner = enabled.lock().unwrap();
+		let now = inner.now();
+		let expiration = Expiration::new(inner.timeout);
+		let (entry, empty) = inner
+			.idle
+			.get_mut(&key)
+			.map(|list| {
+				let entry = {
+					let popper = IdlePopper { key: &key, list };
+					popper.pop(&expiration, now)
+				};
+				(entry, list.is_empty())
 			})
+			.unwrap_or((None, true));
+		if empty {
+			inner.idle.remove(&key);
+		}
+tracing::error!("howardjohn: h2 KEY {key:?}");
+		if let Some(entry) = entry {
+			tracing::error!("howardjohn: h2 connection POOL");
+			H2Acquire::Pooled(self.reuse(&key, entry.value))
+		} else {
+			let connecting_count = *inner.connecting.get(&key).unwrap_or(&0);
+			let waiters = inner.waiters.get(&key).map(|ws| ws.len()).unwrap_or(0);
+			let idle_count = inner.idle.get(&key).map(Vec::len).unwrap_or(0);
+			let max_waiters =
+				h2_estimated_max_waiters.saturating_mul(connecting_count.saturating_add(idle_count));
+			if connecting_count > 0 && waiters < max_waiters {
+				tracing::error!("howardjohn: h2 connection WAIT current={connecting_count} idle={idle_count} waiters={waiters} max={max_waiters}");
+				let (tx, rx) = oneshot::channel();
+				inner
+					.waiters
+					.entry(key.clone())
+					.or_insert_with(VecDeque::new)
+					.push_back(tx);
+				H2Acquire::Checkout(Checkout {
+					key,
+					pool: self.clone(),
+					waiter: Some(rx),
+				})
+			} else {
+				tracing::error!("howardjohn: h2 connection CONNECT current={connecting_count} idle={idle_count} waiters={waiters}");
+				*inner.connecting.entry(key.clone()).or_insert(0) += 1;
+				H2Acquire::Connecting(Connecting {
+					key,
+					pool: WeakOpt::downgrade(enabled),
+				})
+			}
 		}
 	}
 
@@ -259,9 +252,11 @@ impl<T: Poolable, K: Key> Pool<T, K> {
 					let waiters = inner.waiters.get(&key).map(|ws| ws.len()).unwrap_or(0);
 					let max_waiters = h2_estimated_max_waiters.saturating_mul(connecting_count);
 					if waiters < max_waiters {
-						error!(
+						trace!(
 							"HTTP/2 joining existing connecting task for {:?} (waiters={}, connecting={})",
-							key, waiters, connecting_count,
+							key,
+							waiters,
+							connecting_count,
 						);
 						return None;
 					}
@@ -500,6 +495,7 @@ impl<T: Poolable, K: Key> PoolInner<T, K> {
 
 		debug_assert!(*count > 0, "pool.connecting count must be > 0");
 		*count = count.saturating_sub(1);
+		tracing::error!("howardjohn: connected! drop count to {count}");
 		let remaining = *count;
 		if *count == 0 {
 			self.connecting.remove(key);
@@ -932,7 +928,7 @@ mod tests {
 	use std::task::{self, Poll};
 	use std::time::Duration;
 
-	use super::{Connecting, Key, Pool, Poolable, Reservation, Ver, WeakOpt};
+	use super::{Connecting, H2Acquire, Key, Pool, Poolable, Reservation, Ver, WeakOpt};
 	use crate::common::timer;
 	use crate::rt::{TokioExecutor, TokioTimer};
 
@@ -977,6 +973,73 @@ mod tests {
 
 			let to_return = self.clone();
 			Reservation::Shared(self, to_return)
+		}
+
+		fn can_share(&self) -> bool {
+			true
+		}
+	}
+
+	#[derive(Clone, Debug)]
+	struct ReservingH2Conn {
+		id: i32,
+		max_streams: usize,
+		current_streams: Arc<std::sync::atomic::AtomicUsize>,
+		closed: Arc<AtomicBool>,
+	}
+
+	impl ReservingH2Conn {
+		fn new(id: i32, max_streams: usize) -> Self {
+			Self {
+				id,
+				max_streams,
+				current_streams: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+				closed: Arc::new(AtomicBool::new(false)),
+			}
+		}
+
+		fn current_streams(&self) -> usize {
+			self
+				.current_streams
+				.load(std::sync::atomic::Ordering::Relaxed)
+		}
+
+		fn release_stream(&self) {
+			let prev = self
+				.current_streams
+				.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+			assert!(prev > 0, "must have an active stream to release");
+		}
+
+		fn try_reserve_stream(&self) -> bool {
+			self
+				.current_streams
+				.fetch_update(
+					std::sync::atomic::Ordering::SeqCst,
+					std::sync::atomic::Ordering::Relaxed,
+					|current| {
+						if current >= self.max_streams {
+							None
+						} else {
+							Some(current + 1)
+						}
+					},
+				)
+				.is_ok()
+		}
+	}
+
+	impl Poolable for ReservingH2Conn {
+		fn is_open(&self) -> bool {
+			!self.closed.load(Ordering::Relaxed)
+		}
+
+		fn reserve(self) -> Reservation<Self> {
+			if !self.try_reserve_stream() {
+				return Reservation::Unavailable(self);
+			}
+
+			Reservation::Shared(self.clone(), self)
 		}
 
 		fn can_share(&self) -> bool {
@@ -1276,6 +1339,41 @@ mod tests {
 		assert_eq!(pooled.id, 2);
 	}
 
+	#[tokio::test]
+	async fn test_h2_overestimated_waiters_wake_when_capacity_returns() {
+		let pool = pool_no_timer::<ReservingH2Conn, KeyImpl>();
+		let key = host_key("foo");
+		let conn = ReservingH2Conn::new(1, 1);
+
+		let connecting = match pool.h2_acquire(key.clone(), 100) {
+			H2Acquire::Connecting(connecting) => connecting,
+			_ => panic!("expected connecting"),
+		};
+		let mut waiter1: Pin<Box<_>> = Box::pin(match pool.h2_acquire(key.clone(), 100) {
+			H2Acquire::Checkout(checkout) => checkout,
+			_ => panic!("expected checkout"),
+		});
+		let _waiter2 = match pool.h2_acquire(key.clone(), 100) {
+			H2Acquire::Checkout(checkout) => checkout,
+			_ => panic!("expected checkout"),
+		};
+
+		let _pooled = pool.pooled(connecting, conn.clone());
+		assert_eq!(conn.current_streams(), 1);
+		assert_eq!(pool.locked().waiters.get(&key).unwrap().len(), 2);
+		assert!(futures_util::poll!(&mut waiter1).is_pending());
+
+		conn.release_stream();
+		assert_eq!(conn.current_streams(), 0);
+
+		let poll_after_release = futures_util::poll!(&mut waiter1);
+		assert!(
+			matches!(poll_after_release, Poll::Ready(Ok(_))),
+			"parked waiter should wake once H2 stream capacity returns, got {:?}",
+			poll_after_release,
+		);
+	}
+
 	// ===== HTTP/2 Max Streams Tests =====
 
 	/// Mock HTTP/2 connection with configurable max streams and stream tracking
@@ -1302,38 +1400,28 @@ mod tests {
 		}
 
 		fn current_streams(&self) -> usize {
-			self
-				.current_streams
-				.load(std::sync::atomic::Ordering::Relaxed)
+			self.current_streams.load(Ordering::Relaxed)
+		}
+
+		fn has_capacity(&self) -> bool {
+			self.current_streams() < self.max_streams
 		}
 
 		fn increment_streams(&self) -> bool {
-			loop {
-				let current = self
-					.current_streams
-					.load(std::sync::atomic::Ordering::Relaxed);
-				if current >= self.max_streams {
-					return false;
-				}
-				if self
-					.current_streams
-					.compare_exchange(
-						current,
-						current + 1,
-						std::sync::atomic::Ordering::SeqCst,
-						std::sync::atomic::Ordering::Relaxed,
-					)
-					.is_ok()
-				{
-					return true;
-				}
-			}
+			self
+				.current_streams
+				.fetch_update(Ordering::SeqCst, Ordering::Relaxed, |current| {
+					if current >= self.max_streams {
+						None
+					} else {
+						Some(current + 1)
+					}
+				})
+				.is_ok()
 		}
 
 		fn decrement_streams(&self) {
-			self
-				.current_streams
-				.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+			self.current_streams.fetch_sub(1, Ordering::SeqCst);
 		}
 	}
 
@@ -1348,11 +1436,14 @@ mod tests {
 	impl Poolable for H2Connection {
 		fn is_open(&self) -> bool {
 			!self.closed.load(std::sync::atomic::Ordering::Relaxed)
-				&& self.current_streams() < self.max_streams
 		}
 
 		fn reserve(self) -> Reservation<Self> {
-			// HTTP/2 connections are shared
+			if !self.has_capacity() {
+				return Reservation::Unavailable(self);
+			}
+
+			// HTTP/2 connections are shared while they still have stream capacity.
 			Reservation::Shared(self.clone(), self)
 		}
 
@@ -1362,11 +1453,11 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_h2_single_stream_connection() {
-		// Test that a connection with max_streams=1 behaves like HTTP/1
+	async fn test_h2_single_stream_connection_stays_unavailable_while_in_flight() {
+		// Test that a max_streams=1 connection cannot be reused while its only
+		// stream is still in flight.
 		let pool = pool_no_timer();
 		let key = host_key("h2-host");
-		let conn = H2Connection::new(1, 1);
 
 		// Get a proper connecting lock for HTTP/2
 		let connecting = pool
@@ -1374,17 +1465,15 @@ mod tests {
 			.expect("should get connecting lock");
 
 		// Put connection in pool
-		let pooled = pool.pooled(connecting, conn.clone());
+		let pooled = pool.pooled(connecting, H2Connection::new(1, 1));
 
 		// Simulate taking a stream
 		assert!(pooled.increment_streams());
 		assert_eq!(pooled.current_streams(), 1);
 
-		// Connection should be full (not open)
-		assert!(!pooled.is_open());
-
-		// Return to pool - should not be available since it's full
-		drop(pooled);
+		// Connection should be full, while still remaining open/alive.
+		assert!(pooled.is_open());
+		assert!(!pooled.has_capacity());
 
 		// Try to checkout - should pend since connection is full
 		let checkout = pool.checkout(key.clone());
@@ -1409,8 +1498,9 @@ mod tests {
 		let pooled1 = pool.pooled(connecting, conn.clone());
 		assert!(pooled1.increment_streams());
 
-		// Connection should still be open (1 < 3)
+		// Connection should still be open and have spare capacity.
 		assert!(pooled1.is_open());
+		assert!(pooled1.has_capacity());
 		drop(pooled1);
 
 		// Should be able to checkout the same connection
@@ -1424,6 +1514,7 @@ mod tests {
 
 		// Still has capacity
 		assert!(pooled2.is_open());
+		assert!(pooled2.has_capacity());
 		drop(pooled2);
 
 		// Third stream
@@ -1435,8 +1526,18 @@ mod tests {
 		assert!(pooled3.increment_streams());
 		assert_eq!(pooled3.current_streams(), 3);
 
-		// Now full
-		assert!(!pooled3.is_open());
+		// Now full, but still open.
+		assert!(pooled3.is_open());
+		assert!(!pooled3.has_capacity());
+
+		// Try to checkout - should pend since connection is full
+		let checkout = pool.checkout(key.clone());
+		let mut checkout_boxed = Box::pin(checkout);
+		let poll_result = futures_util::poll!(&mut checkout_boxed);
+		assert!(
+			poll_result.is_pending(),
+			"checkout should pend when connection is full"
+		);
 	}
 
 	#[tokio::test]
@@ -1457,8 +1558,9 @@ mod tests {
 			.expect("should get same connection");
 		assert!(pooled2.increment_streams());
 
-		// Connection should be full
-		assert!(!pooled2.is_open());
+		// Connection should be full, but still open.
+		assert!(pooled2.is_open());
+		assert!(!pooled2.has_capacity());
 		assert_eq!(pooled2.current_streams(), 2);
 
 		// Release one stream
@@ -1466,6 +1568,7 @@ mod tests {
 
 		// Connection should be available again
 		assert!(pooled2.is_open());
+		assert!(pooled2.has_capacity());
 		assert_eq!(pooled2.current_streams(), 1);
 	}
 
@@ -1491,21 +1594,19 @@ mod tests {
 		assert_eq!(pooled2.id, 1);
 		assert!(pooled2.increment_streams());
 
-		// conn1 is now full
-		assert!(!pooled2.is_open());
+		// conn1 is now full, but still open.
+		assert!(pooled2.is_open());
+		assert!(!pooled2.has_capacity());
 		assert_eq!(pooled2.current_streams(), 2);
 
 		// Next checkout should allow a new connection since conn1 is full
-		// For now, this will block because we haven't implemented multi-connection support
-		// TODO: This test should pass after implementation
-
-		// Uncomment after implementation:
-		// let connecting2 = pool.connecting(key.clone(), Ver::Http2)
-		//     .expect("should allow second connection when first is full");
-		// let conn2 = H2Connection::new(2, 2);
-		// let pooled3 = pool.pooled(connecting2, conn2.clone());
-		// assert_eq!(pooled3.id, 2);
-		// assert!(pooled3.increment_streams());
+		let connecting2 = pool
+			.connecting(key.clone(), Ver::Http2, 100)
+			.expect("should allow second connection when first is full");
+		let conn2 = H2Connection::new(2, 2);
+		let pooled3 = pool.pooled(connecting2, conn2.clone());
+		assert_eq!(pooled3.id, 2);
+		assert!(pooled3.increment_streams());
 	}
 
 	#[tokio::test]
@@ -1516,7 +1617,7 @@ mod tests {
 
 		// Create two connections, both with capacity
 		let conn1 = H2Connection::new(1, 5);
-		let _conn2 = H2Connection::new(2, 5);
+		let conn2 = H2Connection::new(2, 5);
 
 		let connecting1 = pool
 			.connecting(key.clone(), Ver::Http2, 100)
@@ -1525,19 +1626,19 @@ mod tests {
 		assert!(pooled1.increment_streams());
 		drop(pooled1);
 
-		// Currently, trying to get a second connecting lock will fail
-		// because HTTP/2 is singleton. This test documents future behavior.
-		// TODO: Enable after implementation
-
-		// let connecting2 = pool.connecting(key.clone(), Ver::Http2)
-		//     .expect("should allow second connection");
-		// let pooled2 = pool.pooled(connecting2, conn2.clone());
-		// assert!(pooled2.increment_streams());
-		// drop(pooled2);
+		let connecting2 = pool
+			.connecting(key.clone(), Ver::Http2, 100)
+			.expect("should allow second connection");
+		let pooled2 = pool.pooled(connecting2, conn2.clone());
+		assert!(pooled2.increment_streams());
+		drop(pooled2);
 
 		// Next checkout should get conn2 (most recently used/inserted)
-		// let pooled3 = pool.checkout(key.clone()).await.expect("should get connection");
-		// assert_eq!(pooled3.id, 2, "should select most recently used connection");
+		let pooled3 = pool
+			.checkout(key.clone())
+			.await
+			.expect("should get connection");
+		assert_eq!(pooled3.id, 2, "should select most recently used connection");
 	}
 
 	#[tokio::test]
@@ -1594,13 +1695,15 @@ mod tests {
 		);
 		assert_eq!(pooled.current_streams(), 100);
 
-		// Connection should not be open
-		assert!(!pooled.is_open());
+		// Connection should be full, but still open.
+		assert!(pooled.is_open());
+		assert!(!pooled.has_capacity());
 
 		// Decrement one
 		pooled.decrement_streams();
 		assert_eq!(pooled.current_streams(), 99);
 		assert!(pooled.is_open());
+		assert!(pooled.has_capacity());
 
 		// Should accept another stream now
 		assert!(pooled.increment_streams());

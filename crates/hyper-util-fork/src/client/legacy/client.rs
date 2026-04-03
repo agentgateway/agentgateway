@@ -27,7 +27,7 @@ use super::pool::{self, Ver};
 use crate::common::{lazy as hyper_lazy, timer, Exec, Lazy, SyncWrapper};
 
 type BoxSendFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
-const H2_ESTIMATED_MAX_STREAMS: usize = 20;
+const H2_WAITERS_PER_CONNECTION_ESTIMATE: usize = 5;
 
 /// A Client to make outgoing HTTP requests.
 ///
@@ -264,9 +264,9 @@ where
 				let hostname = uri.host().expect("authority implies host");
 				if let Some(port) = get_non_default_port(&uri) {
 					let mut s = String::with_capacity(hostname.len() + port.as_str().len() + 1);
-						s.push_str(hostname);
-						s.push(':');
-						s.push_str(port.as_str());
+					s.push_str(hostname);
+					s.push(':');
+					s.push_str(port.as_str());
 					HeaderValue::from_maybe_shared(hyper::body::Bytes::from(s))
 				} else {
 					HeaderValue::from_str(hostname)
@@ -395,7 +395,7 @@ where
 		if dst.version == Version::HTTP_2 {
 			return match self
 				.pool
-				.h2_acquire(pool_key.clone(), H2_ESTIMATED_MAX_STREAMS)
+				.h2_acquire(pool_key.clone(), H2_WAITERS_PER_CONNECTION_ESTIMATE)
 			{
 				pool::H2Acquire::Pooled(pooled) => Ok(pooled),
 				pool::H2Acquire::Checkout(checkout) => checkout.await.map_err(|err| {
@@ -530,7 +530,7 @@ where
 			// If the pool_key is for HTTP/2, and there is already a
 			// connection being established, then this can't take a
 			// second lock. The "connect_to" future is Canceled.
-			let connecting = match pool.connecting(pkc, ver, H2_ESTIMATED_MAX_STREAMS) {
+			let connecting = match pool.connecting(pkc, ver, H2_WAITERS_PER_CONNECTION_ESTIMATE) {
 				Some(lock) => lock,
 				None => {
 					let canceled = e!(Canceled);
@@ -549,7 +549,7 @@ where
 						// then we need to convert our pool checkout into
 						// a single HTTP2 one.
 						let connecting = if connected.alpn == Alpn::H2 && !is_ver_h2 {
-							match connecting.alpn_h2(&pool, H2_ESTIMATED_MAX_STREAMS) {
+							match connecting.alpn_h2(&pool, H2_WAITERS_PER_CONNECTION_ESTIMATE) {
 								Some(lock) => {
 									trace!("ALPN negotiated h2, updating pool");
 									lock
@@ -570,22 +570,25 @@ where
 						Either::Left(Box::pin(async move {
 							let tx = if is_h2 {
 								{
-									let (mut tx, conn) = h2_builder.handshake(io).await.map_err(Error::tx)?;
+									let (mut tx, mut conn) = h2_builder.handshake(io).await.map_err(Error::tx)?;
+									let load = Arc::new(H2Load::new(conn.current_max_send_streams()));
+									let conn_load = Arc::clone(&load);
 
 									trace!("http2 handshake complete, spawning background dispatcher task");
 									executor.execute(
-										conn
-											.map_err(|e| debug!("client connection error: {}", e))
-											.map(|_| ()),
+										poll_fn(move |cx| {
+											let poll = Pin::new(&mut conn).poll(cx);
+											conn_load.set_max_streams(conn.current_max_send_streams());
+											poll
+										})
+										.map_err(|e| debug!("client connection error: {}", e))
+										.map(|_| ()),
 									);
 
 									// Wait for 'conn' to ready up before we
 									// declare this tx as usable
 									tx.ready().await.map_err(Error::tx)?;
-									PoolTx::Http2 {
-										tx,
-										load: Arc::new(H2Load::new(H2_ESTIMATED_MAX_STREAMS)),
-									}
+									PoolTx::Http2 { tx, load }
 								}
 							} else {
 								{
@@ -785,6 +788,12 @@ impl H2Load {
 			active_streams: AtomicUsize::new(0),
 			max_streams: AtomicUsize::new(max_streams.max(1)),
 		}
+	}
+
+	fn set_max_streams(&self, max_streams: usize) {
+		self
+			.max_streams
+			.store(max_streams.max(1), Ordering::Release);
 	}
 
 	fn try_reserve_stream_slot(&self) -> bool {

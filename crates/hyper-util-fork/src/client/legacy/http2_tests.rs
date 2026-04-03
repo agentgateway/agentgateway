@@ -2,11 +2,15 @@ use std::convert::Infallible;
 use std::future::Future;
 use std::io;
 use std::pin::Pin;
+use std::sync::Once;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
+use crate::client::legacy::connect::{Connected, Connection};
+use crate::client::legacy::Client;
+use crate::rt::{TokioExecutor, TokioIo};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Empty, Full};
 use hyper::body::Incoming;
@@ -14,11 +18,10 @@ use hyper::server::conn::http1;
 use hyper::server::conn::http2;
 use hyper::service::service_fn;
 use hyper::{Request, Response, StatusCode, Uri, Version};
-use hyper_util_fork::client::legacy::connect::{Connected, Connection};
-use hyper_util_fork::client::legacy::Client;
-use hyper_util_fork::rt::{TokioExecutor, TokioIo};
 use tokio::io::{AsyncRead, AsyncWrite, DuplexStream, ReadBuf};
 use tower_service::Service;
+use tracing::info;
+use tracing_subscriber::EnvFilter;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 struct TestPoolKey(&'static str);
@@ -152,6 +155,7 @@ impl Service<http::Extensions> for CountingConnector {
 			match proto {
 				TestProto::H2 => {
 					let _ = http2::Builder::new(TokioExecutor::new())
+						.max_concurrent_streams(10)
 						.serve_connection(TokioIo::new(TestIo::new(server, proto)), service)
 						.await;
 				},
@@ -186,18 +190,22 @@ fn test_client(
 	connector: CountingConnector,
 ) -> Client<CountingConnector, Empty<Bytes>, TestPoolKey> {
 	let mut builder = Client::builder(TokioExecutor::new());
-	builder.pool_timer(hyper_util_fork::rt::tokio::TokioTimer::new());
-	builder.timer(hyper_util_fork::rt::tokio::TokioTimer::new());
-	builder.build_with_pool_key(connector)
+	builder.pool_timer(crate::rt::tokio::TokioTimer::new());
+	builder.timer(crate::rt::tokio::TokioTimer::new());
+	builder.build(connector)
 }
 
-fn test_client_auto(
-	connector: CountingConnector,
-) -> Client<CountingConnector, Empty<Bytes>, TestPoolKey> {
-	let mut builder = Client::builder(TokioExecutor::new());
-	builder.pool_timer(hyper_util_fork::rt::tokio::TokioTimer::new());
-	builder.timer(hyper_util_fork::rt::tokio::TokioTimer::new());
-	builder.build_with_pool_key(connector)
+fn init_test_tracing() {
+	static INIT: Once = Once::new();
+
+	INIT.call_once(|| {
+		let filter = EnvFilter::try_from_default_env()
+			.unwrap_or_else(|_| EnvFilter::new("hyper_util_fork=trace"));
+		let _ = tracing_subscriber::fmt()
+			.with_test_writer()
+			.with_env_filter(filter)
+			.try_init();
+	});
 }
 
 fn request(path_and_query: &str) -> Request<Empty<Bytes>> {
@@ -320,6 +328,8 @@ async fn http2_blackbox_completes_burst_without_retry_spin() {
 
 #[tokio::test]
 async fn http2_blackbox_does_not_churn_new_connections_under_21_client_load() {
+	init_test_tracing();
+
 	let connector = CountingConnector::default();
 	let client = test_client(connector.clone());
 
@@ -341,9 +351,14 @@ async fn http2_blackbox_does_not_churn_new_connections_under_21_client_load() {
 	tokio::time::timeout(Duration::from_secs(10), warmup)
 		.await
 		.expect("warmup burst should complete");
+	info!(
+		connections = connector.connection_count(),
+		requests = connector.request_count(),
+		"warmup burst complete"
+	);
 	assert_eq!(connector.connection_count(), 2);
 
-	for _ in 0..3 {
+	for round in 0..3 {
 		let mut tasks = Vec::new();
 		for _ in 0..21 {
 			let c = client.clone();
@@ -357,6 +372,12 @@ async fn http2_blackbox_does_not_churn_new_connections_under_21_client_load() {
 				StatusCode::OK
 			);
 		}
+		info!(
+			round,
+			connections = connector.connection_count(),
+			requests = connector.request_count(),
+			"steady-state load round complete"
+		);
 	}
 
 	assert_eq!(
@@ -395,7 +416,7 @@ async fn http2_blackbox_scales_above_two_connections_for_large_burst() {
 #[tokio::test]
 async fn http2_blackbox_allows_alpn_downgrade_to_http1_in_auto_mode() {
 	let connector = CountingConnector::with_h1_alpn();
-	let client = test_client_auto(connector.clone());
+	let client = test_client(connector.clone());
 
 	assert_eq!(send_request(&client, "/").await, StatusCode::OK);
 	assert_eq!(connector.connection_count(), 1);
