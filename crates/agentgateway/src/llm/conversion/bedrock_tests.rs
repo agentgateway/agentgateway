@@ -1225,3 +1225,4 @@ fn test_embeddings_error_translation() {
 	assert_eq!(error_resp["error"]["type"], "invalid_request_error");
 	assert_eq!(error_resp["error"]["message"], "Model not found");
 }
+

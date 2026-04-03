@@ -382,7 +382,8 @@ mod response {
 		BEDROCK_TO_RESPONSES,
 	];
 	const BEDROCK_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_BEDROCK), ("tool", ALL_BEDROCK)];
-	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_BEDROCK)];
+	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] =
+		&[("basic", ALL_BEDROCK), ("tool", ALL_BEDROCK)];
 
 	const ALL_ANTHROPIC: &[&str] = &[
 		MESSAGES_TO_MESSAGES,
