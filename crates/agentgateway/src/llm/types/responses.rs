@@ -660,7 +660,9 @@ mod tests {
 		}]);
 
 		let passthrough: Value = serde_json::from_slice(&request.to_openai().unwrap()).unwrap();
-		let items = passthrough["input"].as_array().expect("input should be an array");
+		let items = passthrough["input"]
+			.as_array()
+			.expect("input should be an array");
 		assert_eq!(items.len(), 2);
 		assert_eq!(items[0]["role"], "system");
 		assert_eq!(items[0]["content"][0]["text"], "You are helpful.");
