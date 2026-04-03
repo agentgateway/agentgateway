@@ -13,6 +13,7 @@ use crate::types::discovery::{Endpoint, Service, Workload};
 use crate::*;
 
 type EndpointKey = Strng;
+type SelectedEndpoint = (EndpointKey, Arc<Endpoint>, Arc<EndpointInfo>, Arc<Workload>);
 
 #[derive(Debug, Clone, Serialize)]
 pub struct EndpointWithInfo<T> {
@@ -58,6 +59,20 @@ pub struct EndpointSet<T> {
 fn contains_target_port(ep: &Endpoint, wanted_target: u16) -> bool {
 	ep.port.values().any(|tp| *tp == wanted_target)
 }
+
+fn endpoint_candidate(
+	workloads: &store::WorkloadStore,
+	key: &EndpointKey,
+	endpoint: &Arc<Endpoint>,
+	info: &Arc<EndpointInfo>,
+) -> Option<SelectedEndpoint> {
+	let Some(workload) = workloads.find_uid(&endpoint.workload_uid) else {
+		debug!("failed to fetch workload for {}", endpoint.workload_uid);
+		return None;
+	};
+	Some((key.clone(), endpoint.clone(), info.clone(), workload))
+}
+
 impl EndpointSet<Endpoint> {
 	pub fn insert(&self, ep: Endpoint) {
 		// Currently, buckets are not supported
@@ -84,17 +99,14 @@ impl EndpointSet<Endpoint> {
 				.index()
 				.iter()
 				.find_map(|(key, EndpointWithInfo { endpoint, info })| {
-					let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
-						debug!("failed to fetch workload for {}", endpoint.workload_uid);
-						return None;
-					};
+					let (key, endpoint, info, wl) = endpoint_candidate(workloads, key, endpoint, info)?;
 					if !wl.workload_ips.contains(&o.ip()) {
 						return None;
 					}
-					if !contains_target_port(endpoint, o.port()) {
+					if !contains_target_port(endpoint.as_ref(), o.port()) {
 						return None;
 					}
-					Some((key.clone(), endpoint.clone(), info, wl))
+					Some((key, endpoint, info, wl))
 				})
 		} else {
 			let index = iter.index();
@@ -110,10 +122,7 @@ impl EndpointSet<Endpoint> {
 				.filter_map(|idx| {
 					let (key, EndpointWithInfo { endpoint, info }) =
 						index.get_index(idx).expect("index already checked");
-					let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
-						debug!("failed to fetch workload for {}", endpoint.workload_uid);
-						return None;
-					};
+					let (key, endpoint, info, wl) = endpoint_candidate(workloads, key, endpoint, info)?;
 					if target_port.unwrap_or_default() == 0 && !endpoint.port.contains_key(&svc_port) {
 						// Filter workload out, it doesn't have a matching port
 						// This is not great, since if we have a lot of partial endpoints we hit bad cases.
@@ -124,7 +133,7 @@ impl EndpointSet<Endpoint> {
 						);
 						return None;
 					}
-					Some((key.clone(), endpoint.clone(), info, wl))
+					Some((key, endpoint, info, wl))
 				})
 				.max_by(|(_, _, a, _), (_, _, b, _)| a.score().total_cmp(&b.score()));
 			if let Some(best) = best {
@@ -134,10 +143,7 @@ impl EndpointSet<Endpoint> {
 				index
 					.iter()
 					.filter_map(|(key, EndpointWithInfo { endpoint, info })| {
-						let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
-							debug!("failed to fetch workload for {}", endpoint.workload_uid);
-							return None;
-						};
+						let (key, endpoint, info, wl) = endpoint_candidate(workloads, key, endpoint, info)?;
 						if target_port.unwrap_or_default() == 0 && !endpoint.port.contains_key(&svc_port) {
 							// Filter workload out, it doesn't have a matching port
 							trace!(
@@ -146,13 +152,14 @@ impl EndpointSet<Endpoint> {
 							);
 							return None;
 						}
-						Some((key.clone(), endpoint.clone(), info, wl))
+						Some((key, endpoint, info, wl))
 					})
 					.max_by(|(_, _, a, _), (_, _, b, _)| a.score().total_cmp(&b.score()))
 			}
 		};
 		let (key, ep, ep_info, wl) = selected?;
-		let handle = svc.endpoints.start_request(key, ep_info);
+		// Preserve the concrete endpoint key so multiple targets on the same workload remain distinct.
+		let handle = svc.endpoints.start_request(key, &ep_info);
 		Some((ep, handle, wl))
 	}
 }
@@ -722,6 +729,9 @@ mod tests {
 			waypoint: None,
 			load_balancer: None,
 			ip_families: None,
+			inference_pool: Some(crate::types::discovery::InferencePoolServiceConfig {
+				canonical_port: 8000,
+			}),
 		}
 	}
 

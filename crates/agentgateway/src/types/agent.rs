@@ -2538,6 +2538,7 @@ mod tests {
 			waypoint: None,
 			load_balancer: None,
 			ip_families: None,
+			inference_pool: None,
 		});
 
 		let backend = Backend::Service(svc, 8080);
