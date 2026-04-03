@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use futures_channel::oneshot;
 use futures_core::ready;
 use hyper::rt::{Sleep, Timer as _};
-use tracing::{debug, error, trace};
+use tracing::{debug, trace};
 
 use crate::common::exec;
 use crate::common::exec::Exec;
@@ -199,9 +199,7 @@ impl<T: Poolable, K: Key> Pool<T, K> {
 		if empty {
 			inner.idle.remove(&key);
 		}
-tracing::error!("howardjohn: h2 KEY {key:?}");
 		if let Some(entry) = entry {
-			tracing::error!("howardjohn: h2 connection POOL");
 			H2Acquire::Pooled(self.reuse(&key, entry.value))
 		} else {
 			let connecting_count = *inner.connecting.get(&key).unwrap_or(&0);
@@ -210,7 +208,6 @@ tracing::error!("howardjohn: h2 KEY {key:?}");
 			let max_waiters =
 				h2_estimated_max_waiters.saturating_mul(connecting_count.saturating_add(idle_count));
 			if connecting_count > 0 && waiters < max_waiters {
-				tracing::error!("howardjohn: h2 connection WAIT current={connecting_count} idle={idle_count} waiters={waiters} max={max_waiters}");
 				let (tx, rx) = oneshot::channel();
 				inner
 					.waiters
@@ -223,7 +220,6 @@ tracing::error!("howardjohn: h2 KEY {key:?}");
 					waiter: Some(rx),
 				})
 			} else {
-				tracing::error!("howardjohn: h2 connection CONNECT current={connecting_count} idle={idle_count} waiters={waiters}");
 				*inner.connecting.entry(key.clone()).or_insert(0) += 1;
 				H2Acquire::Connecting(Connecting {
 					key,
@@ -495,7 +491,6 @@ impl<T: Poolable, K: Key> PoolInner<T, K> {
 
 		debug_assert!(*count > 0, "pool.connecting count must be > 0");
 		*count = count.saturating_sub(1);
-		tracing::error!("howardjohn: connected! drop count to {count}");
 		let remaining = *count;
 		if *count == 0 {
 			self.connecting.remove(key);

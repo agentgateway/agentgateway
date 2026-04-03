@@ -2,9 +2,9 @@ use std::convert::Infallible;
 use std::future::Future;
 use std::io;
 use std::pin::Pin;
-use std::sync::Once;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::Once;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
@@ -199,8 +199,8 @@ fn init_test_tracing() {
 	static INIT: Once = Once::new();
 
 	INIT.call_once(|| {
-		let filter = EnvFilter::try_from_default_env()
-			.unwrap_or_else(|_| EnvFilter::new("hyper_util_fork=trace"));
+		let filter =
+			EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("hyper_util_fork=trace"));
 		let _ = tracing_subscriber::fmt()
 			.with_test_writer()
 			.with_env_filter(filter)

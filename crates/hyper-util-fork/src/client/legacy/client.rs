@@ -406,8 +406,10 @@ where
 					}
 				}),
 				pool::H2Acquire::Connecting(connecting) => {
-					drop(connecting);
-					match self.connect_to(dst, pool_key).await {
+					match self
+						.connect_to_with_lock(dst, pool_key, Some(connecting))
+						.await
+					{
 						Ok(pooled) => Ok(pooled),
 						Err(err) if err.is_canceled() => {
 							self
@@ -506,6 +508,16 @@ where
 		pk: &PK,
 	) -> impl Lazy<Output = Result<pool::Pooled<PoolClient<B>, PK>, Error>> + Send + Unpin + use<C, B, PK>
 	{
+		self.connect_to_with_lock(dst, pk, None)
+	}
+
+	fn connect_to_with_lock(
+		&self,
+		dst: &http::request::Parts,
+		pk: &PK,
+		existing_connecting: Option<pool::Connecting<PoolClient<B>, PK>>,
+	) -> impl Lazy<Output = Result<pool::Pooled<PoolClient<B>, PK>, Error>> + Send + Unpin + use<C, B, PK>
+	{
 		let executor = self.exec.clone();
 		let pool = self.pool.clone();
 		let h1_builder = self.h1_builder.clone();
@@ -525,18 +537,21 @@ where
 		ext.insert(pkc);
 		let pkc = pk.clone();
 		hyper_lazy(move || {
-			// Try to take a "connecting lock".
-			//
-			// If the pool_key is for HTTP/2, and there is already a
-			// connection being established, then this can't take a
-			// second lock. The "connect_to" future is Canceled.
-			let connecting = match pool.connecting(pkc, ver, H2_WAITERS_PER_CONNECTION_ESTIMATE) {
+			let connecting = match existing_connecting {
 				Some(lock) => lock,
-				None => {
-					let canceled = e!(Canceled);
-					// TODO
-					// crate::Error::new_canceled().with("HTTP/2 connection in progress");
-					return Either::Right(future::err(canceled));
+				// Try to take a "connecting lock".
+				//
+				// If the pool_key is for HTTP/2, and there is already a
+				// connection being established, then this can't take a
+				// second lock. The "connect_to" future is Canceled.
+				None => match pool.connecting(pkc, ver, H2_WAITERS_PER_CONNECTION_ESTIMATE) {
+					Some(lock) => lock,
+					None => {
+						let canceled = e!(Canceled);
+						// TODO
+						// crate::Error::new_canceled().with("HTTP/2 connection in progress");
+						return Either::Right(future::err(canceled));
+					},
 				},
 			};
 			Either::Left(
