@@ -399,9 +399,6 @@ impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
-			input_image_tokens: None,
-			input_text_tokens: None,
-			input_audio_tokens: None,
 			output_tokens: self.usage.as_ref().map(|u| u.output_tokens),
 			// Note: responses supports image generation, but it does not report image generation as tokens.
 			// Instead there is a cost based on the image parameters (https://platform.openai.com/docs/guides/image-generation#calculating-costs)
