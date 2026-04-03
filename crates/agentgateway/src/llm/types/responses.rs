@@ -203,6 +203,7 @@ impl From<SimpleChatCompletionMessage> for InputItem {
 				r#type: Default::default(),
 				role: Role::Assistant,
 				content: EasyInputContent::Text(msg.content.to_string()),
+				phase: None,
 			}),
 			"system" => InputItem::from(InputMessage {
 				content: vec![InputContent::InputText(InputTextContent {

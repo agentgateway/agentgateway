@@ -2231,6 +2231,7 @@ pub mod from_responses {
 								content: Vec::new(),
 								id: message_item_id.clone(),
 								role: AssistantRole::Assistant,
+								phase: None,
 								status: OutputStatus::InProgress,
 							}),
 						});
@@ -2257,6 +2258,7 @@ pub mod from_responses {
 									item: OutputItem::FunctionCall(FunctionToolCall {
 										arguments: String::new(),
 										call_id: tool_call_item_id.clone(),
+										namespace: None,
 										name: tu.name,
 										id: Some(tool_call_item_id),
 										status: Some(OutputStatus::InProgress),
@@ -2381,6 +2383,7 @@ pub mod from_responses {
 								item: OutputItem::FunctionCall(FunctionToolCall {
 									arguments: buffer,
 									call_id: item_id.clone(),
+									namespace: None,
 									name,
 									id: Some(item_id),
 									status: Some(OutputStatus::Completed),
@@ -2430,6 +2433,7 @@ pub mod from_responses {
 								content: Vec::new(),
 								id: message_item_id.clone(),
 								role: AssistantRole::Assistant,
+								phase: None,
 								status: OutputStatus::Completed,
 							}),
 						});
@@ -2865,6 +2869,7 @@ impl ConverseResponseAdapter {
 						responsest::FunctionToolCall {
 							arguments: arguments_str,
 							call_id: tool_use.tool_use_id.clone(),
+							namespace: None,
 							name: tool_use.name.clone(),
 							id: Some(tool_use.tool_use_id.clone()),
 							status: Some(responsest::OutputStatus::Completed),
@@ -2883,6 +2888,7 @@ impl ConverseResponseAdapter {
 			outputs.push(responsest::OutputItem::Message(responsest::OutputMessage {
 				id: format!("msg_{:016x}", rand::rng().random::<u64>()),
 				role: responsest::AssistantRole::Assistant,
+				phase: None,
 				content: text_parts,
 				status: responsest::OutputStatus::Completed,
 			}));
