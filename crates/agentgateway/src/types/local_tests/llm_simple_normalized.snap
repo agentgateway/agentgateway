@@ -301,9 +301,10 @@ backends:
                   endpoint:
                     name: gpt-7-max
                     provider:
-                      azureOpenAI:
+                      azure:
                         model: gpt-3.5-turbo
-                        host: my-azure-openai-endpoint.openai.azure.com
+                        resourceName: my-azure-openai-endpoint
+                        resourceType: openAI
                         apiVersion: v1
                     hostOverride: ~
                     pathOverride: ~

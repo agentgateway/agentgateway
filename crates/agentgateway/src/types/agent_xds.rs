@@ -814,9 +814,12 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 								})
 							},
 							Some(proto::agent::ai_backend::provider::Provider::Azureopenai(azureopenai)) => {
-								AIProvider::AzureOpenAI(llm::azureopenai::Provider {
+								let (resource_name, resource_type) =
+									llm::azure::Provider::parse_host(&azureopenai.host);
+								AIProvider::Azure(llm::azure::Provider {
 									model: azureopenai.model.as_deref().map(strng::new),
-									host: strng::new(&azureopenai.host),
+									resource_name,
+									resource_type,
 									api_version: azureopenai.api_version.as_deref().map(strng::new),
 									cached_cred: Default::default(),
 								})

@@ -4634,12 +4634,12 @@
         {
           "type": "object",
           "properties": {
-            "azureOpenAI": {
+            "azure": {
               "$ref": "#/$defs/Provider6"
             }
           },
           "required": [
-            "azureOpenAI"
+            "azure"
           ],
           "additionalProperties": false
         }
@@ -4742,8 +4742,13 @@
             "null"
           ]
         },
-        "host": {
+        "resourceName": {
+          "description": "The Azure resource name used to construct the endpoint host.",
           "type": "string"
+        },
+        "resourceType": {
+          "description": "The type of Azure endpoint. Determines the host suffix.",
+          "$ref": "#/$defs/AzureResourceType"
         },
         "apiVersion": {
           "type": [
@@ -4754,7 +4759,23 @@
       },
       "additionalProperties": false,
       "required": [
-        "host"
+        "resourceName",
+        "resourceType"
+      ]
+    },
+    "AzureResourceType": {
+      "description": "The type of Azure endpoint to connect to.",
+      "oneOf": [
+        {
+          "description": "Azure OpenAI Service endpoint: `{resourceName}.openai.azure.com`",
+          "type": "string",
+          "const": "openAI"
+        },
+        {
+          "description": "Azure AI Foundry endpoint: `{resourceName}.cognitiveservices.azure.com`",
+          "type": "string",
+          "const": "foundry"
+        }
       ]
     },
     "LocalBackendPolicies": {
@@ -6161,11 +6182,22 @@
             "null"
           ]
         },
-        "azureHost": {
-          "description": "For Azure: the host of the deployment",
+        "azureResourceName": {
+          "description": "For Azure: the resource name of the deployment",
           "type": [
             "string",
             "null"
+          ]
+        },
+        "azureResourceType": {
+          "description": "For Azure: the type of Azure endpoint (openAI or foundry)",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AzureResourceType"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "azureApiVersion": {
@@ -6218,7 +6250,7 @@
         "vertex",
         "anthropic",
         "bedrock",
-        "azureOpenAI"
+        "azure"
       ]
     },
     "LLMRouteMatch": {

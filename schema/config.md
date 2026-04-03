@@ -1322,7 +1322,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.failureMode`|string|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.|
 |`binds[].listeners[].routes[].backends[].ai`|object||
 |`binds[].listeners[].routes[].backends[].ai.name`|string||
-|`binds[].listeners[].routes[].backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, or azureOpenAI may be set.|
+|`binds[].listeners[].routes[].backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, or azure may be set.|
 |`binds[].listeners[].routes[].backends[].ai.provider.openAI`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.openAI.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.gemini`|object||
@@ -1338,10 +1338,11 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock.guardrailIdentifier`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock.guardrailVersion`|string||
-|`binds[].listeners[].routes[].backends[].ai.provider.azureOpenAI`|object||
-|`binds[].listeners[].routes[].backends[].ai.provider.azureOpenAI.model`|string||
-|`binds[].listeners[].routes[].backends[].ai.provider.azureOpenAI.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.provider.azureOpenAI.apiVersion`|string||
+|`binds[].listeners[].routes[].backends[].ai.provider.azure`|object||
+|`binds[].listeners[].routes[].backends[].ai.provider.azure.model`|string||
+|`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
+|`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceType`|string|The type of Azure endpoint. Determines the host suffix.|
+|`binds[].listeners[].routes[].backends[].ai.provider.azure.apiVersion`|string||
 |`binds[].listeners[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -2019,7 +2020,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].name`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, or azureOpenAI may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, or azure may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.gemini`|object||
@@ -2035,10 +2036,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailIdentifier`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailVersion`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azureOpenAI`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azureOpenAI.model`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azureOpenAI.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azureOpenAI.apiVersion`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.model`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|string|The type of Azure endpoint. Determines the host suffix.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.apiVersion`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -5764,7 +5766,8 @@
 |`llm.models[].params.awsRegion`|string||
 |`llm.models[].params.vertexRegion`|string||
 |`llm.models[].params.vertexProject`|string||
-|`llm.models[].params.azureHost`|string|For Azure: the host of the deployment|
+|`llm.models[].params.azureResourceName`|string|For Azure: the resource name of the deployment|
+|`llm.models[].params.azureResourceType`|string|For Azure: the type of Azure endpoint (openAI or foundry)|
 |`llm.models[].params.azureApiVersion`|string|For Azure: the API version to use|
 |`llm.models[].params.hostOverride`|string|Override the upstream host for this provider.|
 |`llm.models[].params.pathOverride`|string|Override the upstream path for this provider.|
