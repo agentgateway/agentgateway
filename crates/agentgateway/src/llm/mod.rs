@@ -251,6 +251,8 @@ pub struct LLMResponse {
 	pub cache_creation_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cached_input_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub service_tier: Option<Strng>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub service_tier: Option<Strng>,

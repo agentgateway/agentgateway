@@ -254,6 +254,7 @@ impl ResponseType for Response {
 			completion: None,
 			// TODO: we could probably derive this
 			first_token: None,
+			..Default::default()
 		}
 	}
 

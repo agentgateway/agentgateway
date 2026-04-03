@@ -66,6 +66,7 @@ impl<IO> Parser<IO> {
 							.as_ref()
 							.and_then(|d| d.cached_tokens)
 							.map(|x| x as u64),
+						..Default::default()
 					}
 				});
 			}

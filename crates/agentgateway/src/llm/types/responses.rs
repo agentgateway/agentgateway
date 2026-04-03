@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use self::typed::{
-	EasyInputContent, EasyInputMessage, InputContent, InputItem, InputMessage, InputParam as Input,
-	InputRole, InputTextContent, Item, MessageItem, OutputItem, OutputMessageContent as Content,
-	OutputTextContent as OutputText, Role,
+	EasyInputContent, EasyInputMessage, InputContent, InputItem, InputMessage, InputRole,
+	InputTextContent, OutputItem, OutputMessageContent as Content, OutputTextContent as OutputText,
+	Role,
 };
 use super::*;
 use crate::llm::{
@@ -11,10 +12,73 @@ use crate::llm::{
 	conversion,
 };
 
+/// Raw Responses API input — preserves the wire format for passthrough fidelity.
+/// Typed deserialization would reject unknown item shapes (e.g. assistant history).
+#[derive(Debug, Deserialize, Clone, Serialize)]
+#[serde(untagged)]
+pub enum RequestInput {
+	Text(String),
+	Items(Vec<RawInputItem>),
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize, PartialEq)]
+#[serde(transparent)]
+pub struct RawInputItem(Value);
+
+impl RawInputItem {
+	fn from_typed(item: InputItem) -> Self {
+		Self(serde_json::to_value(item).expect("responses input item should serialize"))
+	}
+
+	fn from_user_text(text: String) -> Self {
+		Self::from_typed(InputItem::from(InputMessage {
+			content: vec![InputContent::InputText(InputTextContent { text })],
+			role: InputRole::User,
+			status: None,
+		}))
+	}
+
+	fn from_simple_message(msg: SimpleChatCompletionMessage) -> Self {
+		Self::from_typed(InputItem::from(msg))
+	}
+
+	fn as_simple_message(&self) -> Option<SimpleChatCompletionMessage> {
+		let role = self.0.get("role")?.as_str()?;
+		let role = match role {
+			"user" => strng::literal!("user"),
+			"assistant" => strng::literal!("assistant"),
+			"system" => strng::literal!("system"),
+			"developer" => strng::literal!("developer"),
+			_ => return None,
+		};
+
+		let content = match self.0.get("content")? {
+			Value::String(text) => strng::new(text),
+			Value::Array(parts) => {
+				let text = parts
+					.iter()
+					.filter_map(|part| {
+						let part_type = part.get("type")?.as_str()?;
+						match part_type {
+							"input_text" | "output_text" => part.get("text")?.as_str(),
+							_ => None,
+						}
+					})
+					.collect::<Vec<_>>()
+					.join("\n");
+				strng::new(&text)
+			},
+			_ => return None,
+		};
+
+		Some(SimpleChatCompletionMessage { role, content })
+	}
+}
+
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Request {
 	// Required field for prompt enrichment/guards
-	pub input: Input,
+	pub input: RequestInput,
 
 	// Fields we actually read for routing/telemetry
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -230,16 +294,10 @@ impl From<SimpleChatCompletionMessage> for InputItem {
 }
 
 impl Request {
-	fn take_input_as_items(&mut self) -> Vec<InputItem> {
-		match std::mem::replace(&mut self.input, Input::Items(Vec::new())) {
-			Input::Text(text) => {
-				vec![InputItem::from(InputMessage {
-					content: vec![InputContent::InputText(InputTextContent { text })],
-					role: InputRole::User,
-					status: None,
-				})]
-			},
-			Input::Items(items) => items,
+	fn take_input_as_items(&mut self) -> Vec<RawInputItem> {
+		match std::mem::replace(&mut self.input, RequestInput::Items(Vec::new())) {
+			RequestInput::Text(text) => vec![RawInputItem::from_user_text(text)],
+			RequestInput::Items(items) => items,
 		}
 	}
 }
@@ -251,15 +309,18 @@ impl RequestType for Request {
 
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
 		let mut items = self.take_input_as_items();
-		let prepend_items: Vec<InputItem> = prompts.into_iter().map(Into::into).collect();
+		let prepend_items: Vec<RawInputItem> = prompts
+			.into_iter()
+			.map(RawInputItem::from_simple_message)
+			.collect();
 		items.splice(0..0, prepend_items);
-		self.input = Input::Items(items);
+		self.input = RequestInput::Items(items);
 	}
 
 	fn append_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
 		let mut items = self.take_input_as_items();
-		items.extend(prompts.into_iter().map(Into::into));
-		self.input = Input::Items(items);
+		items.extend(prompts.into_iter().map(RawInputItem::from_simple_message));
+		self.input = RequestInput::Items(items);
 	}
 
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
@@ -293,83 +354,26 @@ impl RequestType for Request {
 
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage> {
 		match &self.input {
-			Input::Text(text) => {
+			RequestInput::Text(text) => {
 				vec![SimpleChatCompletionMessage {
 					role: strng::literal!("user"),
 					content: strng::new(text),
 				}]
 			},
-			Input::Items(items) => items
+			RequestInput::Items(items) => items
 				.iter()
-				.filter_map(|item| match item {
-					InputItem::EasyMessage(msg) => {
-						let content = match &msg.content {
-							EasyInputContent::Text(text) => strng::new(text),
-							EasyInputContent::ContentList(parts) => {
-								let text = parts
-									.iter()
-									.filter_map(|part| match part {
-										InputContent::InputText(input_text) => Some(input_text.text.as_str()),
-										_ => None,
-									})
-									.collect::<Vec<_>>()
-									.join("\n");
-								strng::new(&text)
-							},
-						};
-
-						let role = match msg.role {
-							Role::User => strng::literal!("user"),
-							Role::Assistant => strng::literal!("assistant"),
-							Role::System => strng::literal!("system"),
-							Role::Developer => strng::literal!("developer"),
-						};
-
-						Some(SimpleChatCompletionMessage { role, content })
-					},
-					InputItem::Item(Item::Message(MessageItem::Input(msg))) => {
-						let text = msg
-							.content
-							.iter()
-							.filter_map(|part| match part {
-								InputContent::InputText(input_text) => Some(input_text.text.as_str()),
-								_ => None,
-							})
-							.collect::<Vec<_>>()
-							.join("\n");
-						let role = match msg.role {
-							InputRole::User => strng::literal!("user"),
-							InputRole::System => strng::literal!("system"),
-							InputRole::Developer => strng::literal!("developer"),
-						};
-						Some(SimpleChatCompletionMessage {
-							role,
-							content: strng::new(&text),
-						})
-					},
-					InputItem::Item(Item::Message(MessageItem::Output(msg))) => {
-						let text = msg
-							.content
-							.iter()
-							.filter_map(|part| match part {
-								Content::OutputText(output_text) => Some(output_text.text.as_str()),
-								_ => None,
-							})
-							.collect::<Vec<_>>()
-							.join("\n");
-						Some(SimpleChatCompletionMessage {
-							role: strng::literal!("assistant"),
-							content: strng::new(&text),
-						})
-					},
-					_ => None,
-				})
+				.filter_map(RawInputItem::as_simple_message)
 				.collect(),
 		}
 	}
 
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
-		self.input = Input::Items(messages.into_iter().map(Into::into).collect());
+		self.input = RequestInput::Items(
+			messages
+				.into_iter()
+				.map(RawInputItem::from_simple_message)
+				.collect(),
+		);
 	}
 
 	fn to_openai(&self) -> Result<Vec<u8>, AIError> {
@@ -400,11 +404,8 @@ impl ResponseType for Response {
 			input_audio_tokens: None,
 			output_tokens: self.usage.as_ref().map(|u| u.output_tokens),
 			// Note: responses supports image generation, but it does not report image generation as tokens.
-			// Instead there is a cost based on the image paramaters (https://developers.openai.com/api/docs/guides/image-generation?api=image#calculating-costs)
+			// Instead there is a cost based on the image parameters (https://platform.openai.com/docs/guides/image-generation#calculating-costs)
 			// which we do not currently emit.
-			output_image_tokens: None,
-			output_text_tokens: None,
-			output_audio_tokens: None,
 			count_tokens: None,
 			total_tokens: self
 				.usage
@@ -443,7 +444,7 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
-			first_token: Default::default(),
+			..Default::default()
 		}
 	}
 
@@ -569,5 +570,124 @@ pub mod typed {
 		/// Emitted when an error occurs.
 		#[serde(rename = "error")]
 		ResponseError(openai_responses::ResponseErrorEvent),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use serde_json::json;
+
+	use super::*;
+
+	#[test]
+	fn request_accepts_assistant_history_items_with_output_text() {
+		let request: Request = serde_json::from_value(json!({
+			"input": [
+				{
+					"type": "message",
+					"role": "assistant",
+					"phase": "final_answer",
+					"content": [
+						{
+							"type": "output_text",
+							"text": "Receiving input normally."
+						}
+					]
+				},
+				{
+					"type": "message",
+					"role": "user",
+					"content": [
+						{
+							"type": "input_text",
+							"text": "testing again"
+						}
+					]
+				}
+			],
+			"model": "gpt-5.4"
+		}))
+		.expect("assistant history request should deserialize");
+
+		let messages = request.get_messages();
+		assert_eq!(messages.len(), 2);
+		assert_eq!(messages[0].role.as_str(), "assistant");
+		assert_eq!(messages[0].content.as_str(), "Receiving input normally.");
+		assert_eq!(messages[1].role.as_str(), "user");
+		assert_eq!(messages[1].content.as_str(), "testing again");
+	}
+
+	#[test]
+	fn request_passthrough_preserves_raw_input_items() {
+		let input = json!([
+			{
+				"type": "message",
+				"role": "assistant",
+				"phase": "final_answer",
+				"content": [
+					{
+						"type": "output_text",
+						"text": "Receiving input normally."
+					},
+					{
+						"type": "refusal",
+						"text": "ignored by message extraction, preserved on passthrough"
+					}
+				]
+			}
+		]);
+		let request: Request = serde_json::from_value(json!({
+			"input": input.clone(),
+			"model": "gpt-5.4"
+		}))
+		.expect("request should deserialize");
+
+		let passthrough: Value = serde_json::from_slice(&request.to_openai().unwrap()).unwrap();
+		assert_eq!(passthrough["input"], input);
+	}
+
+	#[test]
+	fn text_input_prepend_becomes_user_item_in_passthrough() {
+		let mut request: Request = serde_json::from_value(json!({
+			"input": "hello",
+			"model": "gpt-5.4"
+		}))
+		.expect("text input request should deserialize");
+
+		request.prepend_prompts(vec![SimpleChatCompletionMessage {
+			role: strng::literal!("system"),
+			content: strng::literal!("You are helpful."),
+		}]);
+
+		let passthrough: Value = serde_json::from_slice(&request.to_openai().unwrap()).unwrap();
+		let items = passthrough["input"].as_array().expect("input should be an array");
+		assert_eq!(items.len(), 2);
+		assert_eq!(items[0]["role"], "system");
+		assert_eq!(items[0]["content"][0]["text"], "You are helpful.");
+		assert_eq!(items[1]["role"], "user");
+		assert_eq!(items[1]["content"][0]["text"], "hello");
+	}
+
+	#[test]
+	fn response_service_tier_propagates_to_llm_response() {
+		let response: Response = serde_json::from_value(json!({
+			"id": "resp_001",
+			"object": "response",
+			"created_at": 0,
+			"status": "completed",
+			"model": "gpt-5.4",
+			"service_tier": "flex",
+			"output": [],
+			"usage": {
+				"input_tokens": 10,
+				"output_tokens": 5
+			}
+		}))
+		.expect("response should deserialize");
+
+		let llm = response.to_llm_response(false);
+		assert_eq!(llm.service_tier.as_deref(), Some("flex"));
+		assert_eq!(llm.input_tokens, Some(10));
+		assert_eq!(llm.output_tokens, Some(5));
 	}
 }
