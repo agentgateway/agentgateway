@@ -521,6 +521,31 @@
             "null"
           ],
           "default": null
+        },
+        "workload": {
+          "description": "The workload identity of the downstream connection, resolved from the\nworkload discovery store by source IP. Available when the source pod is\nknown to the controller's workload discovery store.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "name": {
+              "description": "The pod name of the source workload.",
+              "type": "string",
+              "default": ""
+            },
+            "namespace": {
+              "description": "The namespace of the source workload.",
+              "type": "string",
+              "default": ""
+            },
+            "serviceAccount": {
+              "description": "The service account of the source workload.",
+              "type": "string",
+              "default": ""
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

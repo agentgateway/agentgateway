@@ -71,6 +71,10 @@
 |`source.issuer`|string|The issuer from the downstream certificate, if available.|
 |`source.subject`|string|The subject from the downstream certificate, if available.|
 |`source.subjectCn`|string|The CN of the subject from the downstream certificate, if available.|
+|`source.workload`|object|The workload identity of the downstream connection, resolved from the<br>workload discovery store by source IP. Available when the source pod is<br>known to the controller's workload discovery store.|
+|`source.workload.name`|string|The pod name of the source workload.|
+|`source.workload.namespace`|string|The namespace of the source workload.|
+|`source.workload.serviceAccount`|string|The service account of the source workload.|
 |`mcp`|object|`mcp` contains attributes about the MCP request.<br>Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.<br>Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.|
 |`mcp.methodName`|string||
 |`mcp.sessionId`|string||
