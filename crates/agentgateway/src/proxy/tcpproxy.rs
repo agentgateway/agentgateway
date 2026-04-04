@@ -37,20 +37,11 @@ impl TCPProxy {
 			.ext::<TCPConnectionInfo>()
 			.expect("tcp connection must be set");
 		let tls = connection.ext::<TLSConnectionInfo>();
-		let workload = {
-			let discovery = self.inputs.stores.read_discovery();
-			discovery
-				.workloads
-				.find_address(&crate::types::discovery::NetworkAddress {
-					network: self.inputs.cfg.network.clone(),
-					address: tcp.peer_addr.ip(),
-				})
-				.map(|w| crate::cel::WorkloadContext {
-					name: w.name.to_string(),
-					namespace: w.namespace.to_string(),
-					service_account: w.service_account.to_string(),
-				})
-		};
+		let workload = crate::cel::WorkloadContext::from_stores(
+			&self.inputs.stores,
+			&self.inputs.cfg.network,
+			tcp.peer_addr.ip(),
+		);
 		let src = SourceContext {
 			address: tcp.peer_addr.ip(),
 			port: tcp.peer_addr.port(),

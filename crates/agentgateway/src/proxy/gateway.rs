@@ -642,20 +642,11 @@ impl Gateway {
 			.get_or_create(&transport_labels)
 			.inc();
 
-		let workload = {
-			let discovery = inputs.stores.read_discovery();
-			discovery
-				.workloads
-				.find_address(&crate::types::discovery::NetworkAddress {
-					network: inputs.cfg.network.clone(),
-					address: tcp.peer_addr.ip(),
-				})
-				.map(|w| crate::cel::WorkloadContext {
-					name: w.name.to_string(),
-					namespace: w.namespace.to_string(),
-					service_account: w.service_account.to_string(),
-				})
-		};
+		let workload = crate::cel::WorkloadContext::from_stores(
+			&inputs.stores,
+			&inputs.cfg.network,
+			tcp.peer_addr.ip(),
+		);
 		let src = crate::cel::SourceContext {
 			address: tcp.peer_addr.ip(),
 			port: tcp.peer_addr.port(),

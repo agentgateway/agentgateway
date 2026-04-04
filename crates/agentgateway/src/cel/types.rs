@@ -122,13 +122,35 @@ pub struct SourceContext {
 pub struct WorkloadContext {
 	/// The pod name of the source workload.
 	#[serde(default)]
-	pub name: String,
+	pub name: Strng,
 	/// The namespace of the source workload.
 	#[serde(default)]
-	pub namespace: String,
+	pub namespace: Strng,
 	/// The service account of the source workload.
 	#[serde(default)]
-	pub service_account: String,
+	pub service_account: Strng,
+}
+
+impl WorkloadContext {
+	/// Resolve the source workload from the discovery store by IP address.
+	pub fn from_stores(
+		stores: &crate::Stores,
+		network: &Strng,
+		addr: IpAddr,
+	) -> Option<WorkloadContext> {
+		let discovery = stores.read_discovery();
+		discovery
+			.workloads
+			.find_address(&crate::types::discovery::NetworkAddress {
+				network: network.clone(),
+				address: addr,
+			})
+			.map(|w| WorkloadContext {
+				name: w.name.clone(),
+				namespace: w.namespace.clone(),
+				service_account: w.service_account.clone(),
+			})
+	}
 }
 fn none_if_empty<'de, D>(deserializer: D) -> Result<Option<TlsInfo>, D::Error>
 where
@@ -1487,7 +1509,11 @@ pub fn full_example_executor() -> ExecutorSerde {
 				subject: Default::default(),
 				subject_cn: Some("cn".into()),
 			}),
-			workload: None,
+			workload: Some(WorkloadContext {
+				name: "pod-1".into(),
+				namespace: "ns-1".into(),
+				service_account: "sa-1".into(),
+			}),
 		}),
 		jwt: Some(jwt::Claims {
 			inner: serde_json::Map::from_iter(vec![

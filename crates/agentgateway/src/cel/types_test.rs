@@ -281,3 +281,33 @@ fn test_extension_or_direct_serialization() {
 	let json_none = serde_json::to_value(&ext_or_direct_none).expect("failed to serialize");
 	assert!(json_none.is_null());
 }
+
+#[test]
+fn test_source_workload_cel_fields() {
+	use super::*;
+	use serde_json::json;
+
+	// Build an ExecutorSerde with workload context populated.
+	let exec_serde: ExecutorSerde = serde_json::from_value(json!({
+		"source": {
+			"address": "10.0.0.1",
+			"port": 12345,
+			"workload": {
+				"name": "agent-a",
+				"namespace": "agents",
+				"serviceAccount": "agent-a-sa"
+			}
+		}
+	}))
+	.expect("deserialize");
+	let exec = exec_serde.as_executor();
+
+	let eval = |expr_str: &str| -> serde_json::Value {
+		let expr = Expression::new_strict(expr_str).expect("compile");
+		exec.eval(&expr).expect("eval").json().expect("json")
+	};
+
+	assert_eq!(eval("source.workload.name"), json!("agent-a"));
+	assert_eq!(eval("source.workload.namespace"), json!("agents"));
+	assert_eq!(eval("source.workload.serviceAccount"), json!("agent-a-sa"));
+}
