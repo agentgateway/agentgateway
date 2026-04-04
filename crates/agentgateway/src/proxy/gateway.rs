@@ -642,10 +642,25 @@ impl Gateway {
 			.get_or_create(&transport_labels)
 			.inc();
 
+		let workload = {
+			let discovery = inputs.stores.read_discovery();
+			discovery
+				.workloads
+				.find_address(&crate::types::discovery::NetworkAddress {
+					network: inputs.cfg.network.clone(),
+					address: tcp.peer_addr.ip(),
+				})
+				.map(|w| crate::cel::WorkloadContext {
+					name: w.name.to_string(),
+					namespace: w.namespace.to_string(),
+					service_account: w.service_account.to_string(),
+				})
+		};
 		let src = crate::cel::SourceContext {
 			address: tcp.peer_addr.ip(),
 			port: tcp.peer_addr.port(),
 			tls: tls.and_then(|t| t.src_identity.clone()),
+			workload,
 		};
 		if let Some(network_authorization) = policies.network_authorization.as_ref()
 			&& let Err(e) = network_authorization.apply(&src)

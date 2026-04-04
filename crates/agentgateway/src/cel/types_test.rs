@@ -31,6 +31,7 @@ fn build_test_request() -> crate::http::Request {
 		address: "127.0.0.1".parse().unwrap(),
 		port: 54321,
 		tls: None,
+		workload: None,
 	};
 	req.extensions_mut().insert(source);
 
@@ -268,6 +269,7 @@ fn test_extension_or_direct_serialization() {
 		address: "192.168.1.1".parse().unwrap(),
 		port: 8080,
 		tls: None,
+		workload: None,
 	};
 	let ext_or_direct: ExtensionOrDirect<SourceContext> = ExtensionOrDirect::Direct(Some(&value));
 	let json = serde_json::to_value(&ext_or_direct).expect("failed to serialize");

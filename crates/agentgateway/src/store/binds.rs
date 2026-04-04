@@ -1712,6 +1712,7 @@ mod tests {
 					address: "10.1.2.3".parse().unwrap(),
 					port: 12345,
 					tls: None,
+					workload: None,
 				})
 				.is_ok()
 		);
@@ -1721,6 +1722,7 @@ mod tests {
 					address: "192.168.1.2".parse().unwrap(),
 					port: 12345,
 					tls: None,
+					workload: None,
 				})
 				.is_ok()
 		);
@@ -1730,6 +1732,7 @@ mod tests {
 					address: "172.16.0.1".parse().unwrap(),
 					port: 12345,
 					tls: None,
+					workload: None,
 				})
 				.is_err()
 		);

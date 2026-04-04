@@ -109,6 +109,26 @@ pub struct SourceContext {
 	#[serde(flatten, default, deserialize_with = "none_if_empty")]
 	#[dynamic(flatten)]
 	pub tls: Option<crate::transport::tls::TlsInfo>,
+	/// The workload identity of the downstream connection, resolved from the
+	/// workload discovery store by source IP. Available when the source pod is
+	/// known to the mesh.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub workload: Option<WorkloadContext>,
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+/// The workload identity of the downstream connection, resolved from the source IP.
+pub struct WorkloadContext {
+	/// The pod name of the source workload.
+	#[serde(default)]
+	pub name: String,
+	/// The namespace of the source workload.
+	#[serde(default)]
+	pub namespace: String,
+	/// The service account of the source workload.
+	#[serde(default)]
+	pub service_account: String,
 }
 fn none_if_empty<'de, D>(deserializer: D) -> Result<Option<TlsInfo>, D::Error>
 where
@@ -1467,6 +1487,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 				subject: Default::default(),
 				subject_cn: Some("cn".into()),
 			}),
+			workload: None,
 		}),
 		jwt: Some(jwt::Claims {
 			inner: serde_json::Map::from_iter(vec![

@@ -185,6 +185,7 @@ fn test_network_authorization_allows_source_cidr() {
 		address: IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)),
 		port: 15000,
 		tls: None,
+		workload: None,
 	};
 
 	assert_matches!(network_authz.apply(&source), Ok(()));
@@ -203,6 +204,7 @@ fn test_network_authorization_deny_takes_precedence() {
 		address: IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)),
 		port: 15000,
 		tls: None,
+		workload: None,
 	};
 
 	assert_matches!(network_authz.apply(&source), Err(_));
