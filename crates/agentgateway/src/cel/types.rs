@@ -111,7 +111,7 @@ pub struct SourceContext {
 	pub tls: Option<crate::transport::tls::TlsInfo>,
 	/// The workload identity of the downstream connection, resolved from the
 	/// workload discovery store by source IP. Available when the source pod is
-	/// known to the mesh.
+	/// known to the controller's workload discovery store.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub workload: Option<WorkloadContext>,
 }
