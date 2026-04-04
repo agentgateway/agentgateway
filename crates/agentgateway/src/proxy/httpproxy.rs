@@ -1445,6 +1445,57 @@ async fn make_backend_call(
 				.await;
 			return res.map_err(ProxyResponse::from);
 		},
+		Backend::Pool(_, pool) => {
+			let dest = if pool.stateful {
+				let header_name = pool.session_header();
+				let session_val = req
+					.headers()
+					.get(header_name)
+					.and_then(|v| v.to_str().ok())
+					.map(|s| s.to_string());
+				if let Some(ref key) = session_val {
+					let pinned = pool.pinned_sessions.lock().unwrap().get(key).copied();
+					pinned
+				} else {
+					None
+				}
+			} else {
+				None
+			};
+
+			let target_addr = if let Some(addr) = dest {
+				addr
+			} else {
+				let (ep, handle) = pool
+					.select_endpoint()
+					.ok_or(ProxyResponse::from(ProxyError::NoHealthyEndpoints))?;
+				log.add(move |l| l.request_handle = Some(handle));
+				let addr = std::net::SocketAddr::from((ep.address, pool.port));
+
+				// Pin for future requests if stateful
+				if pool.stateful {
+					if let Some(key) = req
+						.headers()
+						.get(pool.session_header())
+						.and_then(|v| v.to_str().ok())
+					{
+						pool.pinned_sessions
+							.lock()
+							.unwrap()
+							.insert(key.to_string(), addr);
+					}
+				}
+				addr
+			};
+
+			BackendCall {
+				target: Target::Address(target_addr),
+				http_version_override: None,
+				transport_override: None,
+				network_gateway: None,
+				backend_policies: policies,
+			}
+		},
 		Backend::Invalid => return Err(ProxyResponse::from(ProxyError::BackendDoesNotExist)),
 	};
 

@@ -137,6 +137,7 @@ message Backend {
     MCPBackend mcp = 5;
     DynamicForwardProxy dynamic = 6;
     AwsBackend aws = 8;
+    PoolBackend pool = 9;
   }
   repeated BackendPolicySpec inline_policies = 7;
 }
@@ -1255,6 +1256,29 @@ message MCPTarget {
   BackendReference backend = 2;
   string path = 3;
   Protocol protocol = 4;
+}
+
+// PoolBackend routes to a set of pod endpoints discovered by label selector.
+// Supports optional session-aware routing where requests are pinned to a
+// specific pod for the duration of a session.
+message PoolBackend {
+  // Endpoints in the pool, populated by the controller from pod discovery.
+  repeated PoolEndpoint endpoints = 1;
+  // Port on the pod to connect to.
+  uint32 port = 2;
+  // Whether to pin sessions to a specific endpoint.
+  bool stateful = 3;
+  // Header name used to extract the session key for pinning.
+  // When stateful=true, requests with the same header value are routed to
+  // the same endpoint. If empty, defaults to "x-session-id".
+  string session_key = 4;
+}
+
+message PoolEndpoint {
+  // Pod IP address.
+  string address = 1;
+  // Pod name (for logging/identity).
+  string name = 2;
 }
 
 message BackendReference {

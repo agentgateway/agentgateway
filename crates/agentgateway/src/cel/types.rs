@@ -158,6 +158,8 @@ pub enum BackendType {
 	Dynamic,
 	#[dynamic(rename = "service")]
 	Service,
+	#[dynamic(rename = "pool")]
+	Pool,
 	#[dynamic(rename = "unknown")]
 	#[default]
 	Unknown,

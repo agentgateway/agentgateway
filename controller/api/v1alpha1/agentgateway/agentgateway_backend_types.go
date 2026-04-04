@@ -52,7 +52,7 @@ type AgentgatewayBackendList struct {
 	Items           []AgentgatewayBackend `json:"items"`
 }
 
-// +kubebuilder:validation:ExactlyOneOf=ai;static;dynamicForwardProxy;mcp;aws
+// +kubebuilder:validation:ExactlyOneOf=ai;static;dynamicForwardProxy;mcp;aws;pool
 // +kubebuilder:validation:XValidation:rule="has(self.policies) && has(self.policies.ai) ? has(self.ai) : true",message="AI policies require AI backend"
 // +kubebuilder:validation:XValidation:rule="has(self.policies) && has(self.policies.mcp) ? has(self.mcp) : true",message="MCP policies require MCP backend"
 type AgentgatewayBackendSpec struct {
@@ -80,6 +80,13 @@ type AgentgatewayBackendSpec struct {
 	// +optional
 	Aws *AwsBackend `json:"aws,omitempty"`
 
+	// pool represents a pool of pods selected by label, with optional
+	// session-aware routing. Pods are discovered via the workload discovery
+	// store, bypassing Service/DNS resolution. This is the routing counterpart
+	// to warm pool patterns like agent-sandbox's SandboxWarmPool.
+	// +optional
+	Pool *PoolBackend `json:"pool,omitempty"`
+
 	// policies controls policies for communicating with this backend. Policies may also be set in AgentgatewayPolicy;
 	// policies are merged on a field-level basis, with policies on the Backend (this field) taking precedence.
 	// +optional
@@ -105,6 +112,36 @@ type AwsAgentCoreBackend struct {
 	// qualifier optionally specifies the alias or version qualifier.
 	// +optional
 	Qualifier *string `json:"qualifier,omitempty"`
+}
+
+// PoolBackend configures a pool of pods selected by label with optional
+// session-aware routing. Pods are discovered via the workload discovery store
+// (not through Service/DNS), making this suitable for warm pool patterns where
+// a set of pre-warmed pods are available to be claimed by sessions.
+type PoolBackend struct {
+	// selector selects pods by label. All pods matching this selector are
+	// considered part of the pool.
+	// +required
+	Selector metav1.LabelSelector `json:"selector"`
+
+	// port on the selected pods to route traffic to.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +required
+	Port int32 `json:"port"`
+
+	// sessionRouting configures session behavior for requests.
+	// When Stateful, the first request in a session pins to a specific pod
+	// and all subsequent requests with the same session key route to that pod.
+	// Defaults to Stateless if not set.
+	// +optional
+	SessionRouting SessionRouting `json:"sessionRouting,omitempty"`
+
+	// sessionKey is the HTTP header name used to determine session affinity.
+	// When sessionRouting is Stateful, requests with the same value of this
+	// header are pinned to the same pod. Defaults to "x-session-id" if unset.
+	// +optional
+	SessionKey *string `json:"sessionKey,omitempty"`
 }
 
 type StaticBackend struct {

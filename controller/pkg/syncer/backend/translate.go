@@ -153,6 +153,13 @@ func BuildAgwBackend(
 		}
 		return be, errors.Join(errs...)
 	}
+	if b := backend.Spec.Pool; b != nil {
+		be, err := TranslatePoolBackend(ctx, backend, b, pols)
+		if err != nil {
+			return nil, errors.Join(append(errs, err)...)
+		}
+		return []*api.Backend{be}, errors.Join(errs...)
+	}
 	return nil, errors.Join(append(errs, errors.New("unknown backend"))...)
 }
 

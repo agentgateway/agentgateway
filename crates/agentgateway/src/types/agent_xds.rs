@@ -885,6 +885,42 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 					},
 				},
 			),
+			Some(proto::agent::backend::Kind::Pool(p)) => {
+				if p.endpoints.is_empty() {
+					return Err(ProtoError::Generic(
+						"pool backend must have at least one endpoint".to_string(),
+					));
+				}
+				let pool_endpoints: Vec<(agent_core::strng::Strng, PoolEndpoint)> = p
+					.endpoints
+					.iter()
+					.map(|ep| {
+						let addr: std::net::IpAddr = ep.address.parse().map_err(|e| {
+							ProtoError::Generic(format!("invalid pool endpoint address: {e}"))
+						})?;
+						Ok((
+							agent_core::strng::new(&ep.name),
+							PoolEndpoint {
+								address: addr,
+								name: agent_core::strng::new(&ep.name),
+							},
+						))
+					})
+					.collect::<Result<Vec<_>, ProtoError>>()?;
+				let es = crate::types::loadbalancer::EndpointSet::new(vec![pool_endpoints]);
+				Backend::Pool(
+					name.into(),
+					PoolBackend {
+						endpoints: es,
+						port: p.port as u16,
+						stateful: p.stateful,
+						session_key: agent_core::strng::new(&p.session_key),
+						pinned_sessions: std::sync::Arc::new(std::sync::Mutex::new(
+							std::collections::HashMap::new(),
+						)),
+					},
+				)
+			},
 			None => {
 				return Err(ProtoError::Generic("unknown backend".to_string()));
 			},

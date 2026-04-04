@@ -8,6 +8,7 @@ use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::anyhow;
+use rand::RngExt;
 use hashbrown::Equivalent;
 use heck::ToSnakeCase;
 use itertools::Itertools;
@@ -935,6 +936,8 @@ pub enum Backend {
 	Aws(ResourceName, crate::aws::AwsBackendConfig),
 	#[serde(serialize_with = "serialize_backend_tuple")]
 	Dynamic(ResourceName, ()),
+	#[serde(rename = "pool", serialize_with = "serialize_backend_tuple")]
+	Pool(ResourceName, PoolBackend),
 	Invalid,
 }
 
@@ -1112,7 +1115,8 @@ impl Backend {
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
 			| Backend::Aws(name, _)
-			| Backend::Dynamic(name, _) => BackendTarget::Backend {
+			| Backend::Dynamic(name, _)
+		| Backend::Pool(name, _) => BackendTarget::Backend {
 				name: name.name.clone(),
 				namespace: name.namespace.clone(),
 				section: None,
@@ -1132,7 +1136,8 @@ impl Backend {
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
 			| Backend::Aws(name, _)
-			| Backend::Dynamic(name, _) => BackendTargetRef::Backend {
+			| Backend::Dynamic(name, _)
+		| Backend::Pool(name, _) => BackendTargetRef::Backend {
 				name: name.name.as_ref(),
 				namespace: name.namespace.as_ref(),
 				section: None,
@@ -1148,7 +1153,8 @@ impl Backend {
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
 			| Backend::Aws(name, _)
-			| Backend::Dynamic(name, _) => {
+			| Backend::Dynamic(name, _)
+			| Backend::Pool(name, _) => {
 				let mut s = String::with_capacity(name.namespace.len() + name.name.len() + 1);
 				s.push_str(&name.namespace);
 				s.push('/');
@@ -1167,6 +1173,7 @@ impl Backend {
 			Backend::AI(_, _) => cel::BackendType::AI,
 			Backend::Aws(_, _) => cel::BackendType::Unknown,
 			Backend::Dynamic(_, _) => cel::BackendType::Dynamic,
+			Backend::Pool(_, _) => cel::BackendType::Pool,
 			Backend::Invalid => cel::BackendType::Unknown,
 		}
 	}
@@ -1213,6 +1220,64 @@ impl McpBackend {
 			.find(|target| target.name.as_str() == name)
 			.cloned()
 	}
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PoolBackend {
+	/// Endpoints in the pool with P2C load balancing.
+	pub endpoints: crate::types::loadbalancer::EndpointSet<PoolEndpoint>,
+	/// Port on the pod to connect to.
+	pub port: u16,
+	/// Whether to pin sessions to a specific endpoint.
+	pub stateful: bool,
+	/// Header name used for session key extraction. Defaults to "x-session-id".
+	pub session_key: Strng,
+	/// Session-to-endpoint pinning map. Only used when stateful=true.
+	#[serde(skip)]
+	pub pinned_sessions: Arc<std::sync::Mutex<std::collections::HashMap<String, std::net::SocketAddr>>>,
+}
+
+impl PoolBackend {
+	/// P2C endpoint selection — picks the best of two random endpoints.
+	pub fn select_endpoint(&self) -> Option<(Arc<PoolEndpoint>, crate::types::loadbalancer::ActiveHandle)> {
+		use crate::types::loadbalancer::EndpointWithInfo;
+		let iter = self.endpoints.iter();
+		let index = iter.index();
+		if index.is_empty() {
+			return None;
+		}
+		let a = rand::rng().random_range(0..index.len());
+		let b = rand::rng().random_range(0..index.len());
+		let best = [a, b]
+			.into_iter()
+			.map(|idx| {
+				let (_, EndpointWithInfo { endpoint, info }) =
+					index.get_index(idx).expect("index already checked");
+				(endpoint.clone(), info)
+			})
+			.max_by(|(_, a), (_, b)| a.score().total_cmp(&b.score()));
+		let (ep, ep_info) = best?;
+		let handle = self.endpoints.start_request(ep.name.clone(), ep_info);
+		Some((ep, handle))
+	}
+
+	/// Returns the session header name, defaulting to "x-session-id".
+	pub fn session_header(&self) -> &str {
+		if self.session_key.is_empty() {
+			"x-session-id"
+		} else {
+			self.session_key.as_str()
+		}
+	}
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PoolEndpoint {
+	/// Pod IP address.
+	pub address: std::net::IpAddr,
+	/// Pod name (for logging and as the endpoint key).
+	pub name: Strng,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
