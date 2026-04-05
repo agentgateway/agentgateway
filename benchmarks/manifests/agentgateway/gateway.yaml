@@ -1,0 +1,16 @@
+# The Gateway resource causes the agentgateway controller to provision a data plane
+# Deployment and Service named 'benchmark-gateway' in this namespace.
+#
+# inference-perf will target:
+#   http://benchmark-gateway.inference-benchmark.svc.cluster.local:8080
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: benchmark-gateway
+  namespace: inference-benchmark
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: http
+      port: 8080
+      protocol: HTTP

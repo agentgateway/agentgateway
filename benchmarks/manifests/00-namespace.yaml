@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: inference-benchmark
+  labels:
+    # Allows agentgateway controller to discover resources in this namespace
+    agentgateway.dev/managed: "true"
