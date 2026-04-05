@@ -218,7 +218,7 @@ pub mod from_messages {
 					.unwrap_or(0),
 				output_tokens: usage
 					.as_ref()
-					.map(|u| u.completion_tokens as usize)
+					.map(|u| u.completion_tokens_or_inferred() as usize)
 					.unwrap_or(0),
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
@@ -409,7 +409,12 @@ pub mod from_messages {
 
 			let (input_tokens, output_tokens) = usage
 				.as_ref()
-				.map(|u| (u.prompt_tokens as usize, u.completion_tokens as usize))
+				.map(|u| {
+					(
+						u.prompt_tokens as usize,
+						u.completion_tokens_or_inferred() as usize,
+					)
+				})
 				.unwrap_or((0, 0));
 
 			push_event(
@@ -433,7 +438,7 @@ pub mod from_messages {
 			if let Some(usage) = usage {
 				log.non_atomic_mutate(|r| {
 					r.response.input_tokens = Some(usage.prompt_tokens as u64);
-					r.response.output_tokens = Some(usage.completion_tokens as u64);
+					r.response.output_tokens = Some(usage.completion_tokens_or_inferred() as u64);
 					r.response.total_tokens = Some(usage.total_tokens as u64);
 				});
 			}
@@ -975,7 +980,7 @@ pub fn passthrough_stream(
 									.prompt_tokens_details
 									.as_ref()
 									.and_then(|d| d.audio_tokens);
-								r.response.output_tokens = Some(u.completion_tokens as u64);
+								r.response.output_tokens = Some(u.completion_tokens_or_inferred() as u64);
 								r.response.output_audio_tokens = u
 									.completion_tokens_details
 									.as_ref()

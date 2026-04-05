@@ -153,7 +153,10 @@ impl ResponseType for Response {
 					.and_then(|d| d.audio_tokens)
 			}),
 
-			output_tokens: self.usage.as_ref().map(|u| u.completion_tokens_or_inferred() as u64),
+			output_tokens: self
+				.usage
+				.as_ref()
+				.map(|u| u.completion_tokens_or_inferred() as u64),
 			output_image_tokens: None,
 			output_text_tokens: None,
 			output_audio_tokens: self.usage.as_ref().and_then(|u| {
@@ -505,6 +508,18 @@ pub mod typed {
 		/// Tokens written to cache (costs)
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_creation_input_tokens: Option<u64>,
+	}
+
+	impl Usage {
+		pub fn completion_tokens_or_inferred(&self) -> u32 {
+			if self.completion_tokens > 0 {
+				return self.completion_tokens;
+			}
+			if self.total_tokens > self.prompt_tokens {
+				return self.total_tokens - self.prompt_tokens;
+			}
+			0
+		}
 	}
 
 	#[derive(Debug, Deserialize, Clone, Serialize)]

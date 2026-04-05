@@ -1098,3 +1098,25 @@ fn usage_completion_tokens_explicit_value_preserved() {
 	};
 	assert_eq!(usage.completion_tokens_or_inferred(), 20);
 }
+
+#[test]
+fn streaming_usage_completion_tokens_inferred_from_total_minus_prompt() {
+	let usage = types::completions::typed::Usage {
+		prompt_tokens: 10,
+		completion_tokens: 0,
+		total_tokens: 25,
+		..Default::default()
+	};
+	assert_eq!(usage.completion_tokens_or_inferred(), 15);
+}
+
+#[test]
+fn streaming_usage_completion_tokens_explicit_value_preserved() {
+	let usage = types::completions::typed::Usage {
+		prompt_tokens: 10,
+		completion_tokens: 20,
+		total_tokens: 30,
+		..Default::default()
+	};
+	assert_eq!(usage.completion_tokens_or_inferred(), 20);
+}
