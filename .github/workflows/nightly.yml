@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   prepare:
+    if: github.repository == 'agentgateway/agentgateway'
     runs-on: ubuntu-24.04
     outputs:
       has_commits: ${{ steps.check.outputs.has_commits }}
