@@ -129,6 +129,18 @@ pub struct Usage {
 	pub rest: serde_json::Value,
 }
 
+impl Usage {
+	pub fn completion_tokens_or_inferred(&self) -> u32 {
+		if self.completion_tokens > 0 {
+			return self.completion_tokens;
+		}
+		if self.total_tokens > self.prompt_tokens {
+			return self.total_tokens - self.prompt_tokens;
+		}
+		0
+	}
+}
+
 impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
 		LLMResponse {
@@ -141,7 +153,7 @@ impl ResponseType for Response {
 					.and_then(|d| d.audio_tokens)
 			}),
 
-			output_tokens: self.usage.as_ref().map(|u| u.completion_tokens as u64),
+			output_tokens: self.usage.as_ref().map(|u| u.completion_tokens_or_inferred() as u64),
 			output_image_tokens: None,
 			output_text_tokens: None,
 			output_audio_tokens: self.usage.as_ref().and_then(|u| {
