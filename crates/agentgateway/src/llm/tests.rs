@@ -1054,3 +1054,25 @@ fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 	assert_eq!(req.uri().path(), "/v1/custom/chat/completions");
 	assert_eq!(req.uri().query(), Some("trace=repro"));
 }
+
+#[test]
+fn completions_response_missing_message_and_usage_fields() {
+	// Gemini's OpenAI-compat endpoint can omit `message` from choices and
+	// `completion_tokens` from usage. Verify deserialization succeeds with defaults.
+	let json = r#"{
+		"id": "1",
+		"object": "chat.completion",
+		"created": 0,
+		"model": "google/gemini-2.5-flash",
+		"choices": [{"index": 0, "finish_reason": "length"}],
+		"usage": {"prompt_tokens": 5, "total_tokens": 12}
+	}"#;
+	let resp: types::completions::Response = serde_json::from_str(json).unwrap();
+	assert_eq!(resp.choices.len(), 1);
+	assert_eq!(resp.choices[0].message.content, None);
+	assert_eq!(resp.choices[0].message.role, None);
+	let usage = resp.usage.unwrap();
+	assert_eq!(usage.prompt_tokens, 5);
+	assert_eq!(usage.completion_tokens, 0);
+	assert_eq!(usage.total_tokens, 12);
+}
