@@ -453,8 +453,9 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			fakeClient := fake.NewClient(t, tester.GetObjects(t, tt, scheme, dir, crdDir)...)
-			tester.RunHelmChartTest(t, tt, scheme, dir, crdDir, fakeClient)
+			objs := tester.GetObjects(t, tt, scheme, dir, crdDir)
+			fakeClient := fake.NewClient(t, objs...)
+			tester.RunHelmChartTest(t, tt, scheme, dir, fakeClient, objs)
 		})
 	}
 }
