@@ -24,10 +24,7 @@ use hyper::{Method, Request, Response, Uri, Version};
 use tracing::{debug, trace, warn};
 
 use super::connect::{Alpn, Connect, Connected, Connection};
-use super::pool::{
-	self, CheckoutResult, H2Load, HttpConnection, Key, ReservedHttp1Connection,
-	ReservedHttp2Connection,
-};
+use super::pool::{self, CheckoutResult, ClientConnectError, H2Load, HttpConnection, Key, ReservedHttp1Connection, ReservedHttp2Connection};
 use crate::common::{Exec, Lazy, SyncWrapper, lazy as hyper_lazy, timer};
 
 type BoxSendFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
@@ -339,13 +336,11 @@ where
 					self.exec.execute(async move {
 						let res = client
 							.connect_to(ver, pk)
-							.await
-							.map_err(ClientConnectError::Normal);
+							.await;
 						match res {
 							Ok(hc) => client.pool.insert_new_connection(sc, hc),
 							Err(err) => {
-								// TODO(john)
-								panic!("TODO: handle error")
+								client.pool.insert_new_connection_error(sc, err);
 							},
 						}
 						// TODO
@@ -354,12 +349,13 @@ where
 					trace!(result = "wait", "pooled request");
 				}
 				let Ok(conn) = wait.waiter.await else {
-					return Err(ClientConnectError::Normal(e!(
-						Connect,
-						pool::Error::CheckoutNoLongerWanted
-					)));
+					warn!("john: not sure when this can happen");
+					panic!("TODO: assert that this can't happen, or fix it.");
+					// return Err(ClientConnectError::Normal(e!(
+					// 	Canceled,
+					// )));
 				};
-				Ok(conn)
+				conn
 			},
 		}
 	}
@@ -550,26 +546,6 @@ enum PoolTx<B> {
 		tx: hyper::client::conn::http2::SendRequest<B>,
 		load: Arc<H2Load>,
 	},
-}
-
-// #[derive(Clone)]
-// struct H2StreamGuard {
-// 	load: Arc<H2Load>,
-// 	released: bool,
-// }
-//
-// impl Drop for H2StreamGuard {
-// 	fn drop(&mut self) {
-// 		if !self.released {
-// 			self.released = true;
-// 			self.load.release_stream_slot();
-// 		}
-// 	}
-// }
-
-enum ClientConnectError {
-	Normal(Error),
-	CheckoutIsClosed(pool::Error),
 }
 
 fn origin_form(uri: &mut Uri) {
