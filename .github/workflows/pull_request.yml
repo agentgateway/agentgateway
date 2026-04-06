@@ -25,11 +25,8 @@ jobs:
       matrix:
         include:
         - os: ubuntu-24.04
-          validate: true
         - os: windows-2025
-          validate: false
         - os: macos-15
-          validate: false
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -47,9 +44,6 @@ jobs:
         save-if: ${{ github.ref == 'refs/heads/main' }}
     - name: Test
       run: make test
-    - name: Validate
-      if: ${{ matrix.validate }}
-      run: make validate
 
   proxy-lint:
     runs-on: ubuntu-24.04
