@@ -2,14 +2,13 @@ use hashbrown::hash_map::EntryRef;
 use hashbrown::HashMap;
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 use std::collections::VecDeque;
-use std::convert::Infallible;
 use std::error::Error as StdError;
 use std::fmt::{self, Debug, Formatter};
 use std::future::Future;
 use std::hash::Hash;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 use std::task::{self, Poll};
 use std::time::{Duration, Instant};
@@ -20,7 +19,6 @@ use crate::common::exec;
 use crate::common::exec::Exec;
 use crate::common::timer::Timer;
 use futures_channel::oneshot;
-use futures_channel::oneshot::Receiver;
 use futures_core::ready;
 use futures_util::future::Either;
 use http::{Request, Response};
@@ -37,10 +35,7 @@ pub struct Pool<K: Key> {
 
 pub struct PoolSettings {
 	max_idle_per_host: usize,
-	// A oneshot channel is used to allow the interval to be notified when
-	// the Pool completely drops. That way, the interval can cancel immediately.
-	#[allow(dead_code)]
-	idle_interval_ref: Option<oneshot::Sender<Infallible>>,
+	idle_interval_spawned: AtomicBool,
 	exec: Exec,
 	timer: Timer,
 	timeout: Option<Duration>,
@@ -423,7 +418,7 @@ impl<K: Key> HostPool<K> {
 			};
 			if let Err(Err(ClientConnectError::Normal(e))) = res {
 				err = Some(e);
-				continue
+				continue;
 			}
 
 			break;
@@ -498,42 +493,17 @@ impl<K: Key> Pool<K> {
 		let exec = Exec::new(executor);
 		let timer = Timer::new(timer);
 
-		let (tx, rx) = oneshot::channel();
-		let mut p = Pool {
+		Pool {
 			hosts: Arc::new(Mutex::new(HashMap::new())),
 			settings: Arc::new(PoolSettings {
-				idle_interval_ref: Some(tx),
+				idle_interval_spawned: AtomicBool::new(false),
 				max_idle_per_host: config.max_idle_per_host,
 				exec,
 				timer,
 				timeout: config.idle_timeout,
 				expected_http2_capacity: config.expected_http2_capacity,
 			}),
-		};
-
-		p.spawn_idle_interval(rx);
-		p
-	}
-
-	fn spawn_idle_interval(&mut self, rx: Receiver<Infallible>) {
-		let dur = if let Some(dur) = self.settings.timeout {
-			dur
-		} else {
-			return;
-		};
-		let timer = self.settings.timer.clone();
-
-		let interval = IdleTask {
-			timer: timer.clone(),
-			duration: dur,
-			deadline: Instant::now(),
-			fut: timer.sleep_until(Instant::now()), // ready at first tick
-			pool: Arc::downgrade(&self.hosts),
-			settings: self.settings.clone(),
-			pool_drop_notifier: rx,
-		};
-
-		self.settings.exec.execute(interval);
+		}
 	}
 }
 
@@ -631,6 +601,30 @@ impl<K: Key> Pool<K> {
 		);
 	}
 
+	fn ensure_idle_interval(
+		pool: &Arc<Mutex<HashMap<K, HostPool<K>>>>,
+		settings: &Arc<PoolSettings>,
+	) {
+		let Some(duration) = settings.timeout else {
+			return;
+		};
+		if settings.idle_interval_spawned.swap(true, Ordering::AcqRel) {
+			return;
+		}
+
+		let timer = settings.timer.clone();
+		let interval = IdleTask {
+			timer: timer.clone(),
+			duration,
+			deadline: Instant::now(),
+			fut: timer.sleep_until(Instant::now()), // ready at first tick
+			pool: Arc::downgrade(pool),
+			settings: settings.clone(),
+		};
+
+		settings.exec.execute(interval);
+	}
+
 	fn send_connection(
 		reason: &str,
 		key: K,
@@ -657,7 +651,7 @@ impl<K: Key> Pool<K> {
 			let pooled = Pooled {
 				value: Some((key.clone(), raw_conn)),
 				is_reused: false,
-				pool: Arc::downgrade(&pool),
+				pool: Arc::downgrade(pool),
 				settings: settings.clone(),
 			};
 			let (this, next) = pooled.maybe_clone();
@@ -688,6 +682,7 @@ impl<K: Key> Pool<K> {
 			if sent == 0
 				&& let Some(c) = conn
 			{
+				Self::ensure_idle_interval(pool, settings);
 				let now = settings.timer.now();
 				host.push_idle_with_cap(settings.max_idle_per_host, key, c, now);
 			}
@@ -1038,11 +1033,6 @@ pin_project_lite::pin_project! {
 		fut: Pin<Box<dyn Sleep>>,
 		pool: Weak<Mutex<HashMap<K, HostPool<K>>>>,
 		settings: Arc<PoolSettings>,
-		// This allows the IdleTask to be notified as soon as the entire
-		// Pool is fully dropped, and shutdown. This channel is never sent on,
-		// but Err(Canceled) will be received when the Pool is dropped.
-		#[pin]
-		pool_drop_notifier: oneshot::Receiver<Infallible>,
 	}
 }
 
@@ -1052,15 +1042,6 @@ impl<K: Key> Future for IdleTask<K> {
 	fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
 		let mut this = self.project();
 		loop {
-			match this.pool_drop_notifier.as_mut().poll(cx) {
-				Poll::Ready(Ok(n)) => match n {},
-				Poll::Pending => (),
-				Poll::Ready(Err(_canceled)) => {
-					trace!("pool closed, canceling idle interval");
-					return Poll::Ready(());
-				},
-			}
-
 			ready!(Pin::new(&mut this.fut).poll(cx));
 			// Set this task to run after the next deadline
 			// If the poll missed the deadline by a lot, set the deadline
@@ -1073,10 +1054,11 @@ impl<K: Key> Future for IdleTask<K> {
 
 			if let Some(inner) = this.pool.upgrade() {
 				let mut l = inner.lock();
-				// trace!("idle interval checking for expired");
-				Pool::clear_expired(&this.settings, &mut l);
+				trace!("idle interval checking for expired");
+				Pool::clear_expired(this.settings, &mut l);
 				continue;
 			}
+			trace!("pool closed, canceling idle interval");
 			return Poll::Ready(());
 		}
 	}
@@ -1461,8 +1443,8 @@ mod tests {
 		let pooled2 = w2.await.expect("waiter should receive inserted connection");
 		drop(pooled1);
 		drop(pooled2);
-		let c1 = must_checkout(&pool, key.clone());
-		let c2 = must_checkout(&pool, key.clone());
+		let _ = must_checkout(&pool, key.clone());
+		let _ = must_checkout(&pool, key.clone());
 	}
 
 	#[tokio::test]
@@ -1480,7 +1462,7 @@ mod tests {
 		// This should get the pooled2 idle conn
 		let _c1 = must_checkout(&pool, key.clone());
 		// Should get a new one requested
-		let (sc2, w2) = must_want_new_connection(&pool, key.clone());
+		let _ = must_want_new_connection(&pool, key.clone());
 	}
 
 	#[tokio::test]
@@ -1492,7 +1474,7 @@ mod tests {
 		pool.insert_new_connection(sc1, mock_http1_connection().await);
 		drop(w1);
 		// We should be able to checkout the connection since w1 didn't want it
-		let w2 = must_checkout(&pool, key.clone());
+		let _ = must_checkout(&pool, key.clone());
 	}
 
 	#[tokio::test]
@@ -1520,9 +1502,9 @@ mod tests {
 		pool.insert_new_connection(sc2, mock_http1_connection().await);
 		drop(w1);
 		// w2 should get its connection
-		let pooled2 = w2.await.expect("waiter should receive inserted connection");
+		let _ = w2.await.expect("waiter should receive inserted connection");
 		// We should be able to checkout the connection since w1 didn't want it
-		let w3 = must_checkout(&pool, key.clone());
+		let _ = must_checkout(&pool, key.clone());
 	}
 
 	#[tokio::test]
@@ -1531,7 +1513,7 @@ mod tests {
 		let key = host_key("foo");
 		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
 		drop(sc1);
-		let pooled1 = w1.await.expect("waiter should receive connection");
+		let _pooled1 = w1.await.expect("waiter should receive connection");
 	}
 	#[tokio::test]
 	async fn test_pool_return_idle_with_only_cancelled_waiters_keeps_connection_reusable() {
@@ -1558,13 +1540,16 @@ mod tests {
 		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
 
 		pool.insert_new_connection(sc1, mock_http1_connection().await);
-		let pooled1 = w1.await.expect("waiter should receive inserted connection").unwrap();
+		let pooled1 = w1
+			.await
+			.expect("waiter should receive inserted connection")
+			.unwrap();
 
 		// Fully cancelled the connection
 		let (sc2, w2) = must_want_new_connection(&pool, key.clone());
 		drop(sc2);
 		drop(w2);
-		let (sc3, w3) = must_want_new_connection(&pool, key.clone());
+		let (_sc3, w3) = must_want_new_connection(&pool, key.clone());
 
 		let mut w3 = Box::pin(w3);
 		assert!(
@@ -1604,13 +1589,19 @@ mod tests {
 		pool.insert_new_connection(sc1, mock_http1_connection().await);
 		let pooled1 = w1
 			.await
-			.expect("first waiter should receive first connection").unwrap();
+			.expect("first waiter should receive first connection")
+			.unwrap();
 		pool.insert_new_connection(sc2, mock_http1_connection().await);
-		let pooled2 = w2
+		let _pooled2 = w2
 			.await
-			.expect("second waiter should receive second connection").unwrap();
+			.expect("second waiter should receive second connection")
+			.unwrap();
 		drop(sc3);
-		assert_matches!(w3.await.expect("third waiter should receive third connection"), Err(ClientConnectError::CheckoutIsClosed(_)));
+		assert_matches!(
+			w3.await
+				.expect("third waiter should receive third connection"),
+			Err(ClientConnectError::CheckoutIsClosed(_))
+		);
 		drop(pooled1);
 
 		let _ = must_checkout(&pool, key.clone());
@@ -1624,7 +1615,7 @@ mod tests {
 		let (sc_a, w_a) = must_want_new_connection(&pool, key_a.clone());
 		pool.insert_new_connection(sc_a, mock_http1_connection().await);
 		drop(w_a);
-		let (_sc_b, w_b) = must_want_new_connection(&pool, key_b.clone());
+		let (_sc_b, _w_b) = must_want_new_connection(&pool, key_b.clone());
 	}
 
 	#[tokio::test]
@@ -1656,7 +1647,7 @@ mod tests {
 			.expect("first waiter should receive h2 connection")
 			.unwrap();
 		assert!(pooled1.is_http2());
-		let pooled2 = w2
+		let _pooled2 = w2
 			.await
 			.expect("second waiter should receive shared h2 connection");
 
@@ -1685,9 +1676,9 @@ mod tests {
 
 		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
 		let pooled1 = w1.await.expect("get h2");
-		let pooled2 = w2.await.expect("get h2");
+		let _pooled2 = w2.await.expect("get h2");
 		drop(pooled1);
-		let w2 = must_checkout(&pool, key.clone());
+		let _w2 = must_checkout(&pool, key.clone());
 
 		// At capacity, should need a new connection
 		let (_sc3, _w3) = must_want_new_connection(&pool, key.clone());
@@ -1702,12 +1693,16 @@ mod tests {
 
 		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
 		let pooled1 = w1.await.expect("get h2");
-		let pooled2 = w2.await.expect("get h2");
+		let _pooled2 = w2.await.expect("get h2");
 
 		let (sc3, w3) = must_want_new_connection(&pool, key.clone());
 		drop(sc3);
 
-		assert_matches!(w3.await.expect("third waiter should receive third connection"), Err(ClientConnectError::CheckoutIsClosed(_)));
+		assert_matches!(
+			w3.await
+				.expect("third waiter should receive third connection"),
+			Err(ClientConnectError::CheckoutIsClosed(_))
+		);
 
 		drop(pooled1);
 
@@ -1723,8 +1718,8 @@ mod tests {
 		// sc1 was supposed to open a connection for w1 and w2 but it dropped...
 		drop(sc1);
 
-		let pooled1 = w1.await.expect("get h2");
-		let pooled2 = w2.await.expect("get h2");
+		let _pooled1 = w1.await.expect("get h2");
+		let _pooled2 = w2.await.expect("get h2");
 	}
 
 	#[tokio::test]
@@ -1737,10 +1732,10 @@ mod tests {
 		let (sc3, w3) = must_want_new_connection(&pool, key.clone());
 
 		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
-		let pooled1 = w1.await.expect("get h2");
-		let pooled2 = w2.await.expect("get h2");
+		let _pooled1 = w1.await.expect("get h2");
+		let _pooled2 = w2.await.expect("get h2");
 		pool.insert_new_connection(sc3, mock_http2_connection(2).await);
-		let pooled3 = w3.await.expect("get h2");
+		let _pooled3 = w3.await.expect("get h2");
 		// connection 2 has room
 		let _ = must_checkout(&pool, key.clone());
 	}
@@ -1844,13 +1839,13 @@ mod tests {
 		let pool = pool_with_expected_h2_capacity(2);
 		let key = host_key_h2("foo");
 		let (sc, w) = must_want_new_connection(&pool, key.clone());
-		let (w2) = must_wait_for_existing_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
 		let (conn, control) = mock_http2_connection_with_control(2).await;
 
 		pool.insert_new_connection(sc, conn);
 		let pooled = w.await.expect("waiter should receive inserted connection");
 		drop(pooled);
-		let pooled = w2.await.expect("waiter should receive inserted connection");
+		let _pooled = w2.await.expect("waiter should receive inserted connection");
 
 		control.close().await;
 

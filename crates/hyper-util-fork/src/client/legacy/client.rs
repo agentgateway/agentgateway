@@ -326,7 +326,7 @@ where
 				if let Some(sc) = wait.should_connect {
 					trace!(result = "connect", "pooled request");
 					let client = self.clone();
-					let ver = dst.version.clone();
+					let ver = dst.version;
 					let pk = pool_key.clone();
 					self.exec.execute(async move {
 						let res = client
