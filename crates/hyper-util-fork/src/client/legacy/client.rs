@@ -322,22 +322,39 @@ where
 
 		let checkout_result = self.pool.checkout_or_register_waker(pool_key.clone());
 		match checkout_result {
-			CheckoutResult::Checkout(pooled) => return Ok(pooled),
+			CheckoutResult::Checkout(pooled) => Ok(pooled),
 			CheckoutResult::Wait(wait) => {
+				// If we should connect, do so.
+				// Note: we wait for any connection, not necesarily this one. This ensures fairness:
+				// Request 1 may spin up Conn 1 while request 2 spins up Conn 2.
+				// If conn 2 establishes first, request 1 will take wihile request 2 will take conn 1.
 				if wait.should_connect {
 					let client = self.clone();
 					let ver = dst.version.clone();
 					let pk = pool_key.clone();
 					self.exec.execute(async move {
+						let pkc = pool_key.clone();
 						let res = client
 							.connect_to(ver, pk)
 							.await
 							.map_err(ClientConnectError::Normal);
+						match res {
+							Ok(hc) => {
+								client.pool.insert_new_connection(pkc, hc)
+							}
+							Err(err) => {
+								// TODO(john)
+								panic!("TODO: handle error")
+							}
+						}
+						client.pool
 						// TODO
 					});
 				}
-				let conn = wait.waiter.await;
-				todo!()
+				let Ok(conn) = wait.waiter.await else {
+					return Err(ClientConnectError::Normal(e!(Connect, pool::Error::CheckoutNoLongerWanted)))
+				};
+				Ok(conn)
 			},
 		}
 	}

@@ -23,11 +23,11 @@ use futures_core::ready;
 use futures_util::future::Either;
 use http::{Request, Response};
 use hyper::rt::{Sleep, Timer as _};
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 #[derive(Clone)]
 pub struct Pool<K: Key> {
-	hosts: Arc<Mutex<HashMap<K, HostPool>>>,
+	hosts: Arc<Mutex<HashMap<K, HostPool<K>>>>,
 	settings: Arc<PoolSettings>,
 }
 
@@ -42,7 +42,7 @@ pub struct PoolSettings {
 }
 
 impl<K: Key> Pool<K> {
-	pub fn lock_hosts<'a>(hosts: &'a Mutex<HashMap<K, HostPool>>, k: &K) -> MappedMutexGuard<'a, HostPool> {
+	pub fn lock_hosts<'a>(hosts: &'a Mutex<HashMap<K, HostPool<K>>>, k: &K) -> MappedMutexGuard<'a, HostPool<K>> {
 		MutexGuard::map(hosts.lock(), |l| {
 			match l.entry_ref(k) {
 				EntryRef::Occupied(entry) => entry.into_mut(),
@@ -53,7 +53,7 @@ impl<K: Key> Pool<K> {
 			}
 		})
 	}
-	pub fn host(&self, k: &K) -> MappedMutexGuard<'_, HostPool> {
+	pub fn host(&self, k: &K) -> MappedMutexGuard<'_, HostPool<K>> {
 		Pool::<K>::lock_hosts(&self.hosts, k)
 	}
 }
@@ -99,13 +99,16 @@ impl H2Pool {
 		// Push to the front of the queue; it will be the next connection to get used.
 		self.0.push_front(c)
 	}
-	fn maybe_insert_new(&mut self, conn: HttpConnection) -> HttpConnection {
+	/// maybe_insert_new inserts the connection as an active one (if it is HTTP2).
+	fn maybe_insert_new(&mut self, conn: HttpConnection, reserve: bool) -> HttpConnection {
 		if let HttpConnection::Http2(h) = conn {
 			self.0.push_front(h.clone());
-			debug_assert!(
-				h.load.try_reserve_stream_slot() == CapacityReservationResult::ReservedButNotFilled,
-				"a new stream should always be able to be reserved"
-			);
+			if reserve {
+				debug_assert!(
+					h.load.try_reserve_stream_slot() == CapacityReservationResult::ReservedButNotFilled,
+					"a new stream should always be able to be reserved"
+				);
+			}
 			HttpConnection::Http2(ReservedHttp2Connection {
 				info: h.info,
 				tx: h.tx,
@@ -153,6 +156,12 @@ pub enum HttpConnection {
 }
 
 impl HttpConnection {
+	pub fn capacity(&self) -> usize {
+		match self {
+			HttpConnection::Http1(_) => 1,
+			HttpConnection::Http2(h) => h.load.remaining_capacity()
+		}
+	}
 	pub fn try_send_request(
 		&mut self,
 		req: Request<axum_core::body::Body>,
@@ -209,6 +218,9 @@ impl H2Load {
 		}
 	}
 
+	fn remaining_capacity(&self) -> usize {
+		self.max_streams.load(Ordering::Acquire) - self.active_streams.load(Ordering::Acquire)
+	}
 	fn set_max_streams(&self, max_streams: usize) {
 		self
 			.max_streams
@@ -247,7 +259,7 @@ impl H2Load {
 }
 
 // HostPool stores information for a single host.
-struct HostPool {
+struct HostPool<K: Key> {
 	// The number of currently establishing connections
 	connecting: usize,
 	// The expected number of requests the `connecting` connections are estimated to handle.
@@ -271,11 +283,11 @@ struct HostPool {
 	// this list is checked for any parked Checkouts, and tries to notify
 	// them that the Conn could be used instead of waiting for a brand new
 	// connection.
-	waiters: VecDeque<oneshot::Sender<HttpConnection>>,
+	waiters: VecDeque<oneshot::Sender<Pooled<K>>>,
 }
 
-impl HostPool {
-	fn new(capacity: ExpectedCapacity) -> HostPool {
+impl<K: Key> HostPool<K> {
+	fn new(capacity: ExpectedCapacity) -> HostPool<K> {
 		Self {
 			connecting: 0,
 			expected_connecting_capacity: 0,
@@ -338,10 +350,10 @@ impl<K: Key> Pool<K> {
 // 	Connect(bool)
 // }
 
-pub(crate) struct WaitForConnection<K> {
+pub(crate) struct WaitForConnection<K: Key> {
 	pub should_connect: bool,
 	key: K,
-	pub waiter: oneshot::Receiver<HttpConnection>,
+	pub waiter: oneshot::Receiver<Pooled<K>>,
 }
 
 pub(crate) enum CheckoutResult<K: Key> {
@@ -350,6 +362,39 @@ pub(crate) enum CheckoutResult<K: Key> {
 }
 
 impl<K: Key> Pool<K> {
+	pub fn insert_new_connection(&self, key: K, conn: HttpConnection) {
+		let mut host = self.host(&key);
+		let mut capacity = conn.capacity();
+		let conn = host.active_h2.maybe_insert_new(conn, false);
+		let mut p = Some(Pooled {
+			value: Some((key, conn)),
+			is_reused: false,
+			pool: Arc::downgrade(&self.hosts),
+		});
+		// First, send to any waiters...
+		while capacity > 0 && let Some(pv) = p && let Some(tx) = host.waiters.pop_front() {
+			let (this, next) = pv.maybe_clone();
+			p = next;
+			capacity -= 1;
+			if tx.is_canceled() {
+				trace!("insert new; removing canceled waiter for {:?}", this.as_ref().map(|p| p.0));
+				continue;
+			}
+			match tx.send(this) {
+				Ok(()) => {
+
+				},
+				Err(e) => {
+					// If this was HTTP/2, we have 2 fungible copies and its fine to drop `next`.
+					// If its HTTP/1.1, however, this is the only copy so we must return it back
+					p = Some(e)
+				}
+			}
+		}
+		// Nobody is waiting but we got a connection..as
+		// TODO
+		warn!("dropping connection on the floor")
+	}
 	pub fn checkout_or_register_waker(&self, key: K) -> CheckoutResult<K> {
 		let mut host = self.host(&key);
 		// First attempt: find any active H2 streams with available capacity and attach to that.
@@ -375,7 +420,7 @@ impl<K: Key> Pool<K> {
 				let c = got.value;
 				// For HTTP2, as they are shared, we keep active connections tracked.
 				// Otherwise, there is no need and we just return is as Owned.
-				let c = host.active_h2.maybe_insert_new(c);
+				let c = host.active_h2.maybe_insert_new(c, true);
 				let p = Pooled {
 					value: Some((key, c)),
 					is_reused: false,
@@ -526,12 +571,30 @@ impl<T: Poolable, K: Key> PoolInner<T, K> {
 pub struct Pooled<K: Key> {
 	value: Option<(K, HttpConnection)>,
 	is_reused: bool,
-	pool: Weak<Mutex<HashMap<K, HostPool>>>,
+	pool: Weak<Mutex<HashMap<K, HostPool<K>>>>,
 }
 
 impl<K: Key> Pooled<K> {}
 
 impl<K: Key> Pooled<K> {
+	fn maybe_clone(self) -> (Self, Option<Self>) {
+		match self.value.as_ref() {
+			Some((_, HttpConnection::Http1(h))) => {
+				// HTTP/1.1 cannot be cloned
+				(self, None)
+			} ,
+			Some((k, HttpConnection::Http2(h))) => {
+				// HTTP/2 can be cloned
+				let cpy = Some(Self {
+					value: Some((k.clone(), HttpConnection::Http2(h.clone()))),
+					is_reused: true,
+					pool: self.pool.clone(),
+				});
+				(self, cpy)
+			}
+			None => (self, None),
+		}
+	}
 	pub fn is_reused(&self) -> bool {
 		self.is_reused
 	}
