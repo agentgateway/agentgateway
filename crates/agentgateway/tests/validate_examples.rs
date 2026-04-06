@@ -13,7 +13,6 @@ use std::sync::OnceLock;
 use agentgateway::types::agent::ListenerTarget;
 use agentgateway::types::local::NormalizedLocalConfig;
 use agentgateway::{BackendConfig, client};
-use rstest::rstest;
 
 // ---------------------------------------------------------------------------
 // Test infrastructure
@@ -31,15 +30,19 @@ const TEST_OIDC_COOKIE_SECRET: &str =
 /// that directory.
 static SETUP: OnceLock<()> = OnceLock::new();
 
-fn setup() {
-	SETUP.get_or_init(|| {
-		let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-		// CARGO_MANIFEST_DIR = crates/agentgateway  →  ../.. = workspace root
-		let workspace_root = manifest_dir
+fn workspace_root() -> &'static Path {
+	static WORKSPACE_ROOT: OnceLock<std::path::PathBuf> = OnceLock::new();
+	WORKSPACE_ROOT.get_or_init(|| {
+		Path::new(env!("CARGO_MANIFEST_DIR"))
 			.join("../..")
 			.canonicalize()
-			.expect("workspace root should be resolvable");
-		std::env::set_current_dir(&workspace_root)
+			.expect("workspace root should be resolvable")
+	})
+}
+
+fn setup() {
+	SETUP.get_or_init(|| {
+		std::env::set_current_dir(workspace_root())
 			.expect("should be able to set cwd to workspace root");
 	});
 }
@@ -61,10 +64,9 @@ fn test_client(config: &agentgateway::Config) -> client::Client {
 	client::Client::new(&config.dns, None, BackendConfig::default(), None)
 }
 
-async fn validate_example(path: &str) {
+async fn validate_example(path: &str) -> Result<(), String> {
 	setup();
-	let yaml = std::fs::read_to_string(path)
-		.unwrap_or_else(|e| panic!("failed to read {path}: {e}"));
+	let yaml = std::fs::read_to_string(path).map_err(|e| format!("failed to read {path}: {e}"))?;
 	let config = test_config();
 	let client = test_client(&config);
 	NormalizedLocalConfig::from(
@@ -78,7 +80,8 @@ async fn validate_example(path: &str) {
 		&yaml,
 	)
 	.await
-	.unwrap_or_else(|e| panic!("validation failed for {path}: {e}"));
+	.map(|_| ())
+	.map_err(|e| format!("validation failed for {path}: {e}"))
 }
 
 /// Returns true when the external Keycloak instance (and the companion auth_server.py)
@@ -89,42 +92,77 @@ fn keycloak_available() -> bool {
 		.unwrap_or(false)
 }
 
-// ---------------------------------------------------------------------------
-// Tests that work without any external services
-// ---------------------------------------------------------------------------
+fn example_configs() -> Vec<String> {
+	fn walk(dir: &Path, configs: &mut Vec<String>) {
+		let mut entries = std::fs::read_dir(dir)
+			.unwrap_or_else(|e| panic!("failed to read {}: {e}", dir.display()))
+			.collect::<Result<Vec<_>, _>>()
+			.unwrap_or_else(|e| panic!("failed to list {}: {e}", dir.display()));
+		entries.sort_by_key(|entry| entry.path());
 
-#[rstest]
-#[case("examples/a2a/config.yaml")]
-#[case("examples/ai-prompt-guard/config.yaml")]
-#[case("examples/authorization/config.yaml")]
-#[case("examples/aws-agentcore/config.yaml")]
-#[case("examples/basic/config.yaml")]
-#[case("examples/http/config.yaml")]
-#[case("examples/multiplex/config.yaml")]
-#[case("examples/oauth2-proxy/config.yaml")]
-#[case("examples/openapi/config.yaml")]
-#[case("examples/prompt-enrichment/config.yaml")]
-#[case("examples/ratelimiting/global/config.yaml")]
-#[case("examples/ratelimiting/local/config.yaml")]
-#[case("examples/tailscale-auth/config.yaml")]
-#[case("examples/telemetry/config.yaml")]
-#[case("examples/tls/config.yaml")]
-#[tokio::test]
-async fn test_validate_example(#[case] path: &str) {
-	validate_example(path).await;
+		for entry in entries {
+			let path = entry.path();
+			if path.is_dir() {
+				walk(&path, configs);
+			} else if path.file_name().is_some_and(|name| name == "config.yaml") {
+				configs.push(path.to_string_lossy().replace('\\', "/"));
+			}
+		}
+	}
+
+	let mut configs = Vec::new();
+	walk(&workspace_root().join("examples"), &mut configs);
+	assert!(
+		!configs.is_empty(),
+		"expected at least one examples/**/config.yaml file"
+	);
+	configs
+		.into_iter()
+		.map(|path| {
+			Path::new(&path)
+				.strip_prefix(workspace_root())
+				.unwrap_or_else(|_| panic!("{path} should live under the workspace root"))
+				.to_string_lossy()
+				.replace('\\', "/")
+		})
+		.collect()
 }
 
-// ---------------------------------------------------------------------------
-// Tests that require an external Keycloak instance
-// ---------------------------------------------------------------------------
+fn example_name(path: &str) -> String {
+	let parent = Path::new(path)
+		.parent()
+		.unwrap_or_else(|| panic!("{path} should have a parent folder"));
+	parent
+		.strip_prefix("examples")
+		.unwrap_or(parent)
+		.to_string_lossy()
+		.into_owned()
+}
 
-#[rstest]
-#[case("examples/mcp-authentication/config.yaml")]
-#[case("examples/oidc/config.yaml")]
+fn example_requires_keycloak(path: &str) -> bool {
+	let yaml = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("failed to read {path}: {e}"));
+	yaml.contains("http://localhost:7080/realms/") || yaml.contains("http://localhost:9000")
+}
+
 #[tokio::test]
-async fn test_validate_example_with_keycloak(#[case] path: &str) {
-	if !keycloak_available() {
-		return;
+async fn test_validate_examples() {
+	setup();
+	let mut failures = Vec::new();
+
+	for path in dbg!(example_configs()) {
+		let name = example_name(&path);
+		if example_requires_keycloak(&path) && !keycloak_available() {
+			continue;
+		}
+
+		if let Err(err) = validate_example(&path).await {
+			failures.push(format!("{name} ({path}): {err}"));
+		}
 	}
-	validate_example(path).await;
+
+	assert!(
+		failures.is_empty(),
+		"example validation failed for:\n{}",
+		failures.join("\n")
+	);
 }
