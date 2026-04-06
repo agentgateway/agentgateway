@@ -507,9 +507,21 @@ impl<K: Key> Pool<K> {
 			}
 		}
 		trace!(fulfilled=%sent, "sent new connection");
-		// Nobody is waiting but we got a connection..
 		if sent == 0 {
-			warn!("dropping connection on the floor")
+			trace!("nobody wanted new connection; inserting as idle");
+			let now = self.settings.timer.now();
+			if sent == 0
+				&& let Some(c) = conn
+			{
+				// TODO max_idle_per_host
+				debug!("pooling idle connection for {:?}", key);
+				host.idle.push(Idle {
+					value: c,
+					idle_at: now,
+				});
+				// TODO
+				// self.spawn_idle_interval(__pool_ref);
+			}
 		}
 		// TODO(john): insert as idle insert
 	}
@@ -974,9 +986,9 @@ mod tests {
 
 		INIT.call_once(|| {
 			let _ = tracing_subscriber::fmt()
-				.with_test_writer()
-				.with_env_filter(EnvFilter::new("hyper_util_fork=trace"))
-				.try_init();
+			.with_test_writer()
+			.with_env_filter(EnvFilter::new("hyper_util_fork=trace"))
+			.try_init();
 		});
 	}
 
@@ -997,7 +1009,22 @@ mod tests {
 		pool
 	}
 
-	fn must_want_new_connection(pool: &Pool<KeyImpl>, key: KeyImpl) -> (ShouldConnect<KeyImpl>, Receiver<Pooled<KeyImpl>>) {
+	fn pool_with_idle_timeout<K: Key>(idle_timeout: Duration) -> Pool<K> {
+		let pool = Pool::new(
+			super::Config {
+				idle_timeout: Some(idle_timeout),
+				max_idle_per_host: usize::MAX,
+			},
+			TokioExecutor::new(),
+			MockTimer::default(),
+		);
+		pool
+	}
+
+	fn must_want_new_connection(
+		pool: &Pool<KeyImpl>,
+		key: KeyImpl,
+	) -> (ShouldConnect<KeyImpl>, Receiver<Pooled<KeyImpl>>) {
 		let checkout_result = pool.checkout_or_register_waker(key.clone());
 		assert_matches!(
 			checkout_result,
@@ -1006,6 +1033,21 @@ mod tests {
 				waiter,
 				..
 			}) => (sc, waiter)
+		)
+	}
+
+	fn must_wait_for_existing_connection(
+		pool: &Pool<KeyImpl>,
+		key: KeyImpl,
+	) -> Receiver<Pooled<KeyImpl>> {
+		let checkout_result = pool.checkout_or_register_waker(key.clone());
+		assert_matches!(
+			checkout_result,
+			CheckoutResult::Wait(WaitForConnection {
+				should_connect: None,
+				waiter,
+				..
+			}) => waiter
 		)
 	}
 
@@ -1018,34 +1060,57 @@ mod tests {
 	}
 
 	async fn mock_http1_connection() -> HttpConnection {
+		mock_http1_connection_with_control().await.0
+	}
+
+	struct MockHttp1Control {
+		server_task: tokio::task::JoinHandle<()>,
+		conn_task: tokio::task::JoinHandle<()>,
+	}
+
+	impl MockHttp1Control {
+		async fn close(self) {
+			self.server_task.abort();
+			self.conn_task.abort();
+			tokio::task::yield_now().await;
+		}
+	}
+
+	async fn mock_http1_connection_with_control() -> (HttpConnection, MockHttp1Control) {
 		let (client, server) = tokio::io::duplex(8192);
-		tokio::spawn(async move {
+		let server_task = tokio::spawn(async move {
 			let service = service_fn(|_req: Request<Incoming>| async move {
 				Ok::<_, std::convert::Infallible>(
 					Response::builder()
-						.status(200)
-						.body(Full::new(Bytes::from_static(b"ok")))
-						.expect("response body"),
+					.status(200)
+					.body(Full::new(Bytes::from_static(b"ok")))
+					.expect("response body"),
 				)
 			});
 			let _ = http1::Builder::new()
-				.serve_connection(TokioIo::new(server), service)
-				.await;
+			.serve_connection(TokioIo::new(server), service)
+			.await;
 		});
 
 		let (mut tx, conn) = hyper::client::conn::http1::Builder::new()
-			.handshake(TokioIo::new(client))
-			.await
-			.expect("client handshake");
-		tokio::spawn(async move {
+		.handshake(TokioIo::new(client))
+		.await
+		.expect("client handshake");
+		let conn_task = tokio::spawn(async move {
 			let _ = conn.await;
 		});
 		tx.ready().await.expect("client sender ready");
 
-		HttpConnection::Http1(ReservedHttp1Connection {
-			info: Connected::new(),
-			tx,
-		})
+		(
+			HttpConnection::Http1(ReservedHttp1Connection {
+				info: Connected::new(),
+				tx,
+			}),
+			MockHttp1Control {
+				server_task,
+				conn_task,
+			},
+		)
 	}
 
 	#[tokio::test]
@@ -1088,8 +1153,8 @@ mod tests {
 
 		pool.insert_new_connection(sc, mock_http1_connection().await);
 		let pooled = waiter
-			.await
-			.expect("waiter should receive inserted connection");
+		.await
+		.expect("waiter should receive inserted connection");
 		drop(pooled);
 
 		tokio::time::sleep(Duration::from_millis(10)).await;
@@ -1150,6 +1215,19 @@ mod tests {
 		// We should be able to checkout the connection since w1 didn't want it
 		let w2 = must_checkout(&pool, key.clone());
 	}
+
+	#[tokio::test]
+	async fn test_pool_cancelled_waiter_with_insert_drop_first() {
+		let pool = pool();
+		let key = host_key("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		// Simulate this task cancelling before the connection is inserted.
+		drop(w1);
+		pool.insert_new_connection(sc1, mock_http1_connection().await);
+		// We should be able to checkout the connection since w1 didn't want it
+		let _ = must_checkout(&pool, key.clone());
+	}
+
 	#[tokio::test]
 	async fn test_pool_cancelled_waiter_with_insert_race() {
 		let pool = pool();
@@ -1168,595 +1246,141 @@ mod tests {
 		let w3 = must_checkout(&pool, key.clone());
 	}
 
-
-	/*
 	#[tokio::test]
-	async fn test_pool_checkout_removes_expired() {
-		let pool = pool_no_timer();
+	async fn test_pool_return_idle_with_only_cancelled_waiters_keeps_connection_reusable() {
+		let pool = pool();
 		let key = host_key("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
 
-		pool.pooled(c(key.clone()), Uniq(41));
-		pool.pooled(c(key.clone()), Uniq(5));
-		pool.pooled(c(key.clone()), Uniq(99));
+		pool.insert_new_connection(sc1, mock_http1_connection().await);
+		let pooled1 = w1.await.expect("waiter should receive inserted connection");
 
-		assert_eq!(
-			pool.locked().idle.get(&key).map(|entries| entries.len()),
-			Some(3)
-		);
-		let to = pool.locked().timeout.unwrap();
-		tokio::time::sleep(to).await;
+		let (sc2, w2) = must_want_new_connection(&pool, key.clone());
+		drop(sc2);
+		drop(w2);
 
-		let mut checkout = pool.checkout(key.clone());
-		let poll_once = PollOnce(&mut checkout);
-		// checkout.await should clean out the expired
-		poll_once.await;
-		assert!(!pool.locked().idle.contains_key(&key));
-	}
-
-	#[test]
-	fn test_pool_max_idle_per_host() {
-		let pool = pool_max_idle_no_timer(2);
-		let key = host_key("foo");
-
-		pool.pooled(c(key.clone()), Uniq(41));
-		pool.pooled(c(key.clone()), Uniq(5));
-		pool.pooled(c(key.clone()), Uniq(99));
-
-		// pooled and dropped 3, max_idle should only allow 2
-		assert_eq!(
-			pool.locked().idle.get(&key).map(|entries| entries.len()),
-			Some(2)
-		);
-	}
-
-	#[tokio::test]
-	async fn test_pool_timer_removes_expired() {
-		let pool = Pool::new(
-			super::Config {
-				idle_timeout: Some(Duration::from_millis(10)),
-				max_idle_per_host: usize::MAX,
-			},
-			TokioExecutor::new(),
-			Some(TokioTimer::new()),
-		);
-
-		let key = host_key("foo");
-
-		pool.pooled(c(key.clone()), Uniq(41));
-		pool.pooled(c(key.clone()), Uniq(5));
-		pool.pooled(c(key.clone()), Uniq(99));
-
-		assert_eq!(
-			pool.locked().idle.get(&key).map(|entries| entries.len()),
-			Some(3)
-		);
-
-		// Let the timer tick passed the expiration...
-		tokio::time::sleep(Duration::from_millis(30)).await;
-		// Yield so the Interval can reap...
-		tokio::task::yield_now().await;
-
-		assert!(!pool.locked().idle.contains_key(&key));
-	}
-
-	#[tokio::test]
-	async fn test_pool_checkout_task_unparked() {
-		use futures_util::FutureExt;
-		use futures_util::future::join;
-
-		let pool = pool_no_timer();
-		let key = host_key("foo");
-		let pooled = pool.pooled(c(key.clone()), Uniq(41));
-
-		let checkout = join(pool.checkout(key), async {
-			// the checkout future will park first,
-			// and then this lazy future will be polled, which will insert
-			// the pooled back into the pool
-			//
-			// this test makes sure that doing so will unpark the checkout
-			drop(pooled);
-		})
-		.map(|(entry, _)| entry);
-
-		assert_eq!(*checkout.await.unwrap(), Uniq(41));
-	}
-
-	#[tokio::test]
-	async fn test_pool_checkout_drop_cleans_up_waiters() {
-		let pool = pool_no_timer::<Uniq<i32>, KeyImpl>();
-		let key = host_key("foo");
-
-		let mut checkout1 = pool.checkout(key.clone());
-		let mut checkout2 = pool.checkout(key.clone());
-
-		let poll_once1 = PollOnce(&mut checkout1);
-		let poll_once2 = PollOnce(&mut checkout2);
-
-		// first poll needed to get into Pool's parked
-		poll_once1.await;
-		assert_eq!(pool.locked().waiters.get(&key).unwrap().len(), 1);
-		poll_once2.await;
-		assert_eq!(pool.locked().waiters.get(&key).unwrap().len(), 2);
-
-		// on drop, clean up Pool
-		drop(checkout1);
-		assert_eq!(pool.locked().waiters.get(&key).unwrap().len(), 1);
-
-		drop(checkout2);
-		assert!(!pool.locked().waiters.contains_key(&key));
-	}
-
-	#[derive(Debug)]
-	struct CanClose {
-		#[allow(unused)]
-		val: i32,
-		closed: bool,
-	}
-
-	impl Poolable for CanClose {
-		fn is_open(&self) -> bool {
-			!self.closed
-		}
-
-		fn reserve(self) -> Reservation<Self> {
-			Reservation::Unique(self)
-		}
-
-		fn can_share(&self) -> bool {
-			false
-		}
-	}
-
-	#[test]
-	fn pooled_drop_if_closed_doesnt_reinsert() {
-		let pool = pool_no_timer();
-		let key = host_key("foo");
-		pool.pooled(
-			c(key.clone()),
-			CanClose {
-				val: 57,
-				closed: true,
-			},
-		);
-
-		assert!(!pool.locked().idle.contains_key(&key));
-	}
-
-	#[test]
-	fn test_pool_allows_multiple_http2_idle_connections() {
-		let pool = pool_no_timer::<SharedConn, KeyImpl>();
-		let key = host_key("foo");
-
-		let connecting1 = pool
-			.connecting(key.clone(), Ver::Http2, 100)
-			.expect("must create connecting lock");
-		pool.pooled(
-			connecting1,
-			SharedConn {
-				id: 1,
-				available: Arc::new(AtomicBool::new(true)),
-			},
-		);
-		let connecting2 = pool
-			.connecting(key.clone(), Ver::Http2, 100)
-			.expect("must create connecting lock");
-		pool.pooled(
-			connecting2,
-			SharedConn {
-				id: 2,
-				available: Arc::new(AtomicBool::new(true)),
-			},
-		);
-
-		assert_eq!(
-			pool.locked().idle.get(&key).map(|entries| entries.len()),
-			Some(2)
-		);
-	}
-
-	#[tokio::test]
-	async fn test_pool_checkout_skips_unavailable_shared_connection() {
-		let pool = pool_no_timer::<SharedConn, KeyImpl>();
-		let key = host_key("foo");
-		let unavailable = Arc::new(AtomicBool::new(true));
-
-		let connecting1 = pool
-			.connecting(key.clone(), Ver::Http2, 100)
-			.expect("must create connecting lock");
-		pool.pooled(
-			connecting1,
-			SharedConn {
-				id: 2,
-				available: Arc::new(AtomicBool::new(true)),
-			},
-		);
-		let connecting2 = pool
-			.connecting(key.clone(), Ver::Http2, 100)
-			.expect("must create connecting lock");
-		pool.pooled(
-			connecting2,
-			SharedConn {
-				id: 1,
-				available: unavailable.clone(),
-			},
-		);
-
-		unavailable.store(false, Ordering::Release);
-
-		let pooled = pool.checkout(key).await.expect("checkout should succeed");
-		assert_eq!(pooled.id, 2);
-	}
-
-	#[tokio::test]
-	async fn test_h2_overestimated_waiters_wake_when_capacity_returns() {
-		let pool = pool_no_timer::<ReservingH2Conn, KeyImpl>();
-		let key = host_key("foo");
-		let conn = ReservingH2Conn::new(1, 1);
-
-		let connecting = match pool.h2_acquire(key.clone(), 100) {
-			H2Acquire::Connecting(connecting) => connecting,
-			_ => panic!("expected connecting"),
-		};
-		let mut waiter1: Pin<Box<_>> = Box::pin(match pool.h2_acquire(key.clone(), 100) {
-			H2Acquire::Checkout(checkout) => checkout,
-			_ => panic!("expected checkout"),
-		});
-		let _waiter2 = match pool.h2_acquire(key.clone(), 100) {
-			H2Acquire::Checkout(checkout) => checkout,
-			_ => panic!("expected checkout"),
-		};
-
-		let _pooled = pool.pooled(connecting, conn.clone());
-		assert_eq!(conn.current_streams(), 1);
-		assert_eq!(pool.locked().waiters.get(&key).unwrap().len(), 2);
-		assert!(futures_util::poll!(&mut waiter1).is_pending());
-
-		conn.release_stream();
-		assert_eq!(conn.current_streams(), 0);
-
-		let poll_after_release = futures_util::poll!(&mut waiter1);
-		assert!(
-			matches!(poll_after_release, Poll::Ready(Ok(_))),
-			"parked waiter should wake once H2 stream capacity returns, got {:?}",
-			poll_after_release,
-		);
-	}
-
-	// ===== HTTP/2 Max Streams Tests =====
-
-	/// Mock HTTP/2 connection with configurable max streams and stream tracking
-	#[derive(Debug, Clone)]
-	struct H2Connection {
-		id: u64,
-		max_streams: usize,
-		current_streams: Arc<std::sync::atomic::AtomicUsize>,
-		closed: Arc<std::sync::atomic::AtomicBool>,
-	}
-
-	impl H2Connection {
-		fn new(id: u64, max_streams: usize) -> Self {
-			Self {
-				id,
-				max_streams,
-				current_streams: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
-				closed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-			}
-		}
-
-		fn close(&self) {
-			self.closed.store(true, std::sync::atomic::Ordering::SeqCst);
-		}
-
-		fn current_streams(&self) -> usize {
-			self.current_streams.load(Ordering::Relaxed)
-		}
-
-		fn has_capacity(&self) -> bool {
-			self.current_streams() < self.max_streams
-		}
-
-		fn increment_streams(&self) -> bool {
-			self
-				.current_streams
-				.fetch_update(Ordering::SeqCst, Ordering::Relaxed, |current| {
-					if current >= self.max_streams {
-						None
-					} else {
-						Some(current + 1)
-					}
-				})
-				.is_ok()
-		}
-
-		fn decrement_streams(&self) {
-			self.current_streams.fetch_sub(1, Ordering::SeqCst);
-		}
-	}
-
-	impl PartialEq for H2Connection {
-		fn eq(&self, other: &Self) -> bool {
-			self.id == other.id
-		}
-	}
-
-	impl Eq for H2Connection {}
-
-	impl Poolable for H2Connection {
-		fn is_open(&self) -> bool {
-			!self.closed.load(std::sync::atomic::Ordering::Relaxed)
-		}
-
-		fn reserve(self) -> Reservation<Self> {
-			if !self.has_capacity() {
-				return Reservation::Unavailable(self);
-			}
-
-			// HTTP/2 connections are shared while they still have stream capacity.
-			Reservation::Shared(self.clone(), self)
-		}
-
-		fn can_share(&self) -> bool {
-			true
-		}
-	}
-
-	#[tokio::test]
-	async fn test_h2_single_stream_connection_stays_unavailable_while_in_flight() {
-		// Test that a max_streams=1 connection cannot be reused while its only
-		// stream is still in flight.
-		let pool = pool_no_timer();
-		let key = host_key("h2-host");
-
-		// Get a proper connecting lock for HTTP/2
-		let connecting = pool
-			.connecting(key.clone(), Ver::Http2, 100)
-			.expect("should get connecting lock");
-
-		// Put connection in pool
-		let pooled = pool.pooled(connecting, H2Connection::new(1, 1));
-
-		// Simulate taking a stream
-		assert!(pooled.increment_streams());
-		assert_eq!(pooled.current_streams(), 1);
-
-		// Connection should be full, while still remaining open/alive.
-		assert!(pooled.is_open());
-		assert!(!pooled.has_capacity());
-
-		// Try to checkout - should pend since connection is full
-		let checkout = pool.checkout(key.clone());
-		let mut checkout_boxed = Box::pin(checkout);
-		let poll_result = futures_util::poll!(&mut checkout_boxed);
-		assert!(
-			poll_result.is_pending(),
-			"checkout should pend when connection is full"
-		);
-	}
-
-	#[tokio::test]
-	async fn test_h2_multiple_streams_single_connection() {
-		// Test that a connection with max_streams=3 can handle multiple concurrent streams
-		let pool = pool_no_timer();
-		let key = host_key("h2-host");
-		let conn = H2Connection::new(1, 3);
-
-		let connecting = pool
-			.connecting(key.clone(), Ver::Http2, 100)
-			.expect("should get connecting lock");
-		let pooled1 = pool.pooled(connecting, conn.clone());
-		assert!(pooled1.increment_streams());
-
-		// Connection should still be open and have spare capacity.
-		assert!(pooled1.is_open());
-		assert!(pooled1.has_capacity());
 		drop(pooled1);
 
-		// Should be able to checkout the same connection
-		let pooled2 = pool
-			.checkout(key.clone())
-			.await
-			.expect("should reuse connection");
-		assert_eq!(pooled2.id, 1);
-		assert!(pooled2.increment_streams());
-		assert_eq!(pooled2.current_streams(), 2);
+		let _pooled2 = must_checkout(&pool, key.clone());
+	}
 
-		// Still has capacity
-		assert!(pooled2.is_open());
-		assert!(pooled2.has_capacity());
-		drop(pooled2);
+	#[tokio::test]
+	async fn test_pool_return_idle_skips_cancelled_waiter_then_wakes_live_waiter() {
+		let pool = pool();
+		let key = host_key("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
 
-		// Third stream
-		let pooled3 = pool
-			.checkout(key.clone())
-			.await
-			.expect("should reuse connection");
-		assert_eq!(pooled3.id, 1);
-		assert!(pooled3.increment_streams());
-		assert_eq!(pooled3.current_streams(), 3);
+		pool.insert_new_connection(sc1, mock_http1_connection().await);
+		let pooled1 = w1.await.expect("waiter should receive inserted connection");
 
-		// Now full, but still open.
-		assert!(pooled3.is_open());
-		assert!(!pooled3.has_capacity());
+		let (sc2, w2) = must_want_new_connection(&pool, key.clone());
+		drop(sc2);
+		drop(w2);
+		let (sc3, w3) = must_want_new_connection(&pool, key.clone());
+		drop(sc3);
 
-		// Try to checkout - should pend since connection is full
-		let checkout = pool.checkout(key.clone());
-		let mut checkout_boxed = Box::pin(checkout);
-		let poll_result = futures_util::poll!(&mut checkout_boxed);
+		let mut w3 = Box::pin(w3);
 		assert!(
-			poll_result.is_pending(),
-			"checkout should pend when connection is full"
+			futures_util::poll!(&mut w3).is_pending(),
+			"live waiter should still be pending"
 		);
-	}
-
-	#[tokio::test]
-	async fn test_h2_stream_release_makes_connection_available() {
-		// Test that decrementing streams makes a full connection available again
-		let pool = pool_no_timer();
-		let key = host_key("h2-host");
-		let conn = H2Connection::new(1, 2);
-
-		let connecting = pool
-			.connecting(key.clone(), Ver::Http2, 100)
-			.expect("should get connecting lock");
-		let pooled1 = pool.pooled(connecting, conn.clone());
-		assert!(pooled1.increment_streams());
-		let pooled2 = pool
-			.checkout(key.clone())
-			.await
-			.expect("should get same connection");
-		assert!(pooled2.increment_streams());
-
-		// Connection should be full, but still open.
-		assert!(pooled2.is_open());
-		assert!(!pooled2.has_capacity());
-		assert_eq!(pooled2.current_streams(), 2);
-
-		// Release one stream
-		pooled1.decrement_streams();
-
-		// Connection should be available again
-		assert!(pooled2.is_open());
-		assert!(pooled2.has_capacity());
-		assert_eq!(pooled2.current_streams(), 1);
-	}
-
-	#[tokio::test]
-	async fn test_h2_multiple_connections_when_full() {
-		// Test that a second connection is established when the first is full
-		// This is the core behavior we're implementing
-		let pool = pool_no_timer();
-		let key = host_key("h2-host");
-
-		// First connection with max_streams=2
-		let conn1 = H2Connection::new(1, 2);
-		let connecting1 = pool
-			.connecting(key.clone(), Ver::Http2, 100)
-			.expect("should get connecting lock");
-		let pooled1 = pool.pooled(connecting1, conn1.clone());
-		assert!(pooled1.increment_streams());
-
-		let pooled2 = pool
-			.checkout(key.clone())
-			.await
-			.expect("should reuse conn1");
-		assert_eq!(pooled2.id, 1);
-		assert!(pooled2.increment_streams());
-
-		// conn1 is now full, but still open.
-		assert!(pooled2.is_open());
-		assert!(!pooled2.has_capacity());
-		assert_eq!(pooled2.current_streams(), 2);
-
-		// Next checkout should allow a new connection since conn1 is full
-		let connecting2 = pool
-			.connecting(key.clone(), Ver::Http2, 100)
-			.expect("should allow second connection when first is full");
-		let conn2 = H2Connection::new(2, 2);
-		let pooled3 = pool.pooled(connecting2, conn2.clone());
-		assert_eq!(pooled3.id, 2);
-		assert!(pooled3.increment_streams());
-	}
-
-	#[tokio::test]
-	async fn test_h2_lifo_connection_selection() {
-		// Test that most-recently-used connection is selected (LIFO/stack behavior)
-		let pool = pool_no_timer();
-		let key = host_key("h2-host");
-
-		// Create two connections, both with capacity
-		let conn1 = H2Connection::new(1, 5);
-		let conn2 = H2Connection::new(2, 5);
-
-		let connecting1 = pool
-			.connecting(key.clone(), Ver::Http2, 100)
-			.expect("should get connecting lock");
-		let pooled1 = pool.pooled(connecting1, conn1.clone());
-		assert!(pooled1.increment_streams());
 		drop(pooled1);
 
-		let connecting2 = pool
-			.connecting(key.clone(), Ver::Http2, 100)
-			.expect("should allow second connection");
-		let pooled2 = pool.pooled(connecting2, conn2.clone());
-		assert!(pooled2.increment_streams());
-		drop(pooled2);
-
-		// Next checkout should get conn2 (most recently used/inserted)
-		let pooled3 = pool
-			.checkout(key.clone())
-			.await
-			.expect("should get connection");
-		assert_eq!(pooled3.id, 2, "should select most recently used connection");
+		let _pooled3 = w3
+		.await
+		.expect("live waiter should receive returned connection");
 	}
 
 	#[tokio::test]
-	async fn test_h2_closed_connection_not_reused() {
-		// Test that closed connections are not returned from the pool
-		let pool = pool_no_timer();
-		let key = host_key("h2-host");
-		let conn = H2Connection::new(1, 5);
+	async fn test_pool_checkout_skips_expired_idle_connection() {
+		let pool = pool_with_idle_timeout(Duration::from_millis(5));
+		let key = host_key("foo");
+		let (sc, w) = must_want_new_connection(&pool, key.clone());
 
-		let connecting = pool
-			.connecting(key.clone(), Ver::Http2, 100)
-			.expect("should get connecting lock");
-		let pooled = pool.pooled(connecting, conn.clone());
-
-		// Close the connection
-		pooled.close();
+		pool.insert_new_connection(sc, mock_http1_connection().await);
+		let pooled = w.await.expect("waiter should receive inserted connection");
 		drop(pooled);
 
-		// Checkout should not get the closed connection
-		let checkout = pool.checkout(key.clone());
-		let mut checkout_boxed = Box::pin(checkout);
-		let poll_result = futures_util::poll!(&mut checkout_boxed);
-		assert!(
-			poll_result.is_pending(),
-			"should not return closed connection"
-		);
+		tokio::time::sleep(Duration::from_millis(8)).await;
+
+		let (_sc2, _w2) = must_want_new_connection(&pool, key.clone());
 	}
 
 	#[tokio::test]
-	async fn test_h2_stream_count_boundary_conditions() {
-		// Test edge cases around stream counting
-		let pool = pool_no_timer();
-		let key = host_key("h2-host");
-		let conn = H2Connection::new(1, 100);
+	async fn test_pool_waiter_fairness_with_staggered_inserts_and_return() {
+		let pool = pool();
+		let key = host_key("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let (sc2, w2) = must_want_new_connection(&pool, key.clone());
+		let (sc3, w3) = must_want_new_connection(&pool, key.clone());
 
-		let connecting = pool
-			.connecting(key.clone(), Ver::Http2, 100)
-			.expect("should get connecting lock");
-		let pooled = pool.pooled(connecting, conn.clone());
+		pool.insert_new_connection(sc1, mock_http1_connection().await);
+		let pooled1 = w1
+		.await
+		.expect("first waiter should receive first connection");
+		pool.insert_new_connection(sc2, mock_http1_connection().await);
+		let pooled2 = w2
+		.await
+		.expect("second waiter should receive second connection");
+		drop(sc3);
 
-		// Fill up to max_streams
-		for i in 0..100 {
-			assert!(
-				pooled.increment_streams(),
-				"should accept stream {} of 100",
-				i + 1
-			);
-		}
-
-		// Should reject 101st stream
+		let mut w3 = Box::pin(w3);
 		assert!(
-			!pooled.increment_streams(),
-			"should reject stream beyond max"
+			futures_util::poll!(&mut w3).is_pending(),
+			"third waiter should still be pending"
 		);
-		assert_eq!(pooled.current_streams(), 100);
+		drop(pooled1);
 
-		// Connection should be full, but still open.
-		assert!(pooled.is_open());
-		assert!(!pooled.has_capacity());
-
-		// Decrement one
-		pooled.decrement_streams();
-		assert_eq!(pooled.current_streams(), 99);
-		assert!(pooled.is_open());
-		assert!(pooled.has_capacity());
-
-		// Should accept another stream now
-		assert!(pooled.increment_streams());
-		assert_eq!(pooled.current_streams(), 100);
+		let _pooled3 = w3
+		.await
+		.expect("third waiter should be satisfied by a returned connection");
+		drop(pooled2);
 	}
 
-	 */
+	#[tokio::test]
+	async fn test_pool_host_isolation() {
+		let pool = pool();
+		let key_a = host_key("foo");
+		let key_b = host_key("bar");
+		let (sc_a, w_a) = must_want_new_connection(&pool, key_a.clone());
+		pool.insert_new_connection(sc_a, mock_http1_connection().await);
+		drop(w_a);
+		let (_sc_b, w_b) = must_want_new_connection(&pool, key_b.clone());
+	}
+
+	#[tokio::test]
+	async fn test_pool_closed_http1_connection_not_reused_after_return() {
+		let pool = pool();
+		let key = host_key("foo");
+		let (sc, w) = must_want_new_connection(&pool, key.clone());
+		let (conn, control) = mock_http1_connection_with_control().await;
+
+		pool.insert_new_connection(sc, conn);
+		let pooled = w.await.expect("waiter should receive inserted connection");
+		drop(pooled);
+
+		control.close().await;
+
+		let (_sc2, _w2) = must_want_new_connection(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	#[ignore]
+	async fn test_pool_max_idle_per_host_for_http1_connections() {
+		let pool = pool_max_idle(2);
+		let key = host_key("foo");
+
+		for _ in 0..3 {
+			let (sc, w) = must_want_new_connection(&pool, key.clone());
+			pool.insert_new_connection(sc, mock_http1_connection().await);
+			let pooled = w.await.expect("waiter should receive inserted connection");
+			drop(pooled);
+		}
+
+		assert_eq!(
+			pool.host(&key).idle.len(),
+			2,
+			"max_idle_per_host should cap idle HTTP/1 connections"
+		);
+	}
 }
