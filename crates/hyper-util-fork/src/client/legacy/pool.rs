@@ -42,15 +42,15 @@ pub struct PoolSettings {
 }
 
 impl<K: Key> Pool<K> {
-	pub fn lock_hosts<'a>(hosts: &'a Mutex<HashMap<K, HostPool<K>>>, k: &K) -> MappedMutexGuard<'a, HostPool<K>> {
-		MutexGuard::map(hosts.lock(), |l| {
-			match l.entry_ref(k) {
-				EntryRef::Occupied(entry) => entry.into_mut(),
-				EntryRef::Vacant(entry) => entry.insert_with_key(
-					k.clone(),
-					HostPool::new(k.expected_capacity()),
-				),
-			}
+	pub fn lock_hosts<'a>(
+		hosts: &'a Mutex<HashMap<K, HostPool<K>>>,
+		k: &K,
+	) -> MappedMutexGuard<'a, HostPool<K>> {
+		MutexGuard::map(hosts.lock(), |l| match l.entry_ref(k) {
+			EntryRef::Occupied(entry) => entry.into_mut(),
+			EntryRef::Vacant(entry) => {
+				entry.insert_with_key(k.clone(), HostPool::new(k.expected_capacity()))
+			},
 		})
 	}
 	pub fn host(&self, k: &K) -> MappedMutexGuard<'_, HostPool<K>> {
@@ -72,6 +72,7 @@ pub trait Key: Eq + Hash + Clone + Debug + Unpin + Send + Sync + 'static {
 	fn expected_capacity(&self) -> ExpectedCapacity;
 }
 
+#[derive(Debug)]
 enum CapacityCache {
 	// Based on the request properties, what we expect the capacity will be
 	Guess(ExpectedCapacity),
@@ -123,8 +124,7 @@ impl H2Pool {
 		match h.load.try_reserve_stream_slot() {
 			CapacityReservationResult::NoCapacity => None,
 			CapacityReservationResult::ReservedAndFilled => {
-				let ret =
-				Some(ReservedHttp2Connection {
+				let ret = Some(ReservedHttp2Connection {
 					info: h.info.clone(),
 					tx: h.tx.clone(),
 					load: h.load.clone(),
@@ -159,7 +159,7 @@ impl HttpConnection {
 	pub fn capacity(&self) -> usize {
 		match self {
 			HttpConnection::Http1(_) => 1,
-			HttpConnection::Http2(h) => h.load.remaining_capacity()
+			HttpConnection::Http2(h) => h.load.remaining_capacity(),
 		}
 	}
 	pub fn try_send_request(
@@ -172,8 +172,8 @@ impl HttpConnection {
 		>,
 	> {
 		match self {
-			HttpConnection::Http1(ref mut h) => Either::Left(h.tx.try_send_request(req)),
-			HttpConnection::Http2(ref mut h) => Either::Right(h.tx.try_send_request(req)),
+			HttpConnection::Http1(h) => Either::Left(h.tx.try_send_request(req)),
+			HttpConnection::Http2(h) => Either::Right(h.tx.try_send_request(req)),
 		}
 	}
 	pub fn conn_info(&self) -> &Connected {
@@ -232,11 +232,7 @@ impl H2Load {
 		let prev = self
 			.active_streams
 			.fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
-				if active < max {
-					Some(active + 1)
-				} else {
-					None
-				}
+				if active < max { Some(active + 1) } else { None }
 			});
 
 		match prev {
@@ -365,35 +361,50 @@ impl<K: Key> Pool<K> {
 	pub fn insert_new_connection(&self, key: K, conn: HttpConnection) {
 		let mut host = self.host(&key);
 		let mut capacity = conn.capacity();
+		host.connecting -= 1;
+		host.expected_connecting_capacity -= capacity;
+		trace!(?key, ?host.connecting, %host.expected_connecting_capacity, "inserting new connection");
+		let mut sent = 0;
 		let conn = host.active_h2.maybe_insert_new(conn, false);
 		let mut p = Some(Pooled {
 			value: Some((key, conn)),
 			is_reused: false,
 			pool: Arc::downgrade(&self.hosts),
 		});
+		trace!(waiters=%host.waiters.len(), "insert new");
 		// First, send to any waiters...
-		while capacity > 0 && let Some(pv) = p && let Some(tx) = host.waiters.pop_front() {
+		while capacity > 0
+			&& let Some(pv) = p
+			&& let Some(tx) = host.waiters.pop_front()
+		{
 			let (this, next) = pv.maybe_clone();
 			p = next;
 			capacity -= 1;
 			if tx.is_canceled() {
-				trace!("insert new; removing canceled waiter for {:?}", this.as_ref().map(|p| p.0));
+				trace!(
+					"insert new; removing canceled waiter for {:?}",
+					this.value.as_ref().map(|v| &v.0)
+				);
 				continue;
 			}
 			match tx.send(this) {
 				Ok(()) => {
-
+					sent += 1;
 				},
 				Err(e) => {
+					trace!("send failed");
 					// If this was HTTP/2, we have 2 fungible copies and its fine to drop `next`.
 					// If its HTTP/1.1, however, this is the only copy so we must return it back
 					p = Some(e)
-				}
+				},
 			}
 		}
+		trace!(fulfilled=%sent, "howardjohn: sent new connection");
 		// Nobody is waiting but we got a connection..as
 		// TODO
-		warn!("dropping connection on the floor")
+		if sent == 0 {
+			warn!("dropping connection on the floor")
+		}
 	}
 	pub fn checkout_or_register_waker(&self, key: K) -> CheckoutResult<K> {
 		let mut host = self.host(&key);
@@ -439,7 +450,7 @@ impl<K: Key> Pool<K> {
 			// We need more capacity! Start a connection
 			// We will assume the caller is actually going to do this
 			host.connecting += 1;
-			host.expected_connecting_capacity = host.per_connection_capacity_cache.expected_capacity();
+			host.expected_connecting_capacity += host.per_connection_capacity_cache.expected_capacity();
 		}
 		trace!(%should_connect, "no active or idle connections available");
 		let (tx, mut rx) = oneshot::channel();
@@ -582,7 +593,7 @@ impl<K: Key> Pooled<K> {
 			Some((_, HttpConnection::Http1(h))) => {
 				// HTTP/1.1 cannot be cloned
 				(self, None)
-			} ,
+			},
 			Some((k, HttpConnection::Http2(h))) => {
 				// HTTP/2 can be cloned
 				let cpy = Some(Self {
@@ -591,7 +602,7 @@ impl<K: Key> Pooled<K> {
 					pool: self.pool.clone(),
 				});
 				(self, cpy)
-			}
+			},
 			None => (self, None),
 		}
 	}
@@ -634,6 +645,7 @@ impl<K: Key> Drop for Pooled<K> {
 	fn drop(&mut self) {
 		if let Some((k, value)) = self.value.take() {
 			if !value.is_open() {
+				trace!("connection already closed; skip idle pool insertion");
 				// If we *already* know the connection is done here,
 				// it shouldn't be re-inserted back into the pool.
 				return;
@@ -641,10 +653,13 @@ impl<K: Key> Drop for Pooled<K> {
 
 			if let Some(pool) = self.pool.upgrade() {
 				let mut hosts = Pool::lock_hosts(&pool, &k);
+				trace!(key=?k, "returning connection to pool");
 				hosts.return_connection(value);
 			} else {
 				trace!("pool dropped, dropping pooled ({:?})", k);
 			}
+		} else {
+			trace!("pooled already dropped");
 		}
 	}
 }
@@ -773,14 +788,12 @@ mod tests {
 	use std::future::Future;
 	use std::hash::Hash;
 	use std::pin::Pin;
-	use std::sync::atomic::{AtomicBool, Ordering};
 	use std::sync::Arc;
+	use std::sync::atomic::{AtomicBool, Ordering};
 	use std::task::{self, Poll};
 	use std::time::Duration;
 
-	use super::{
-	ExpectedCapacity, Key, Pool,  WeakOpt,
-	};
+	use super::{ExpectedCapacity, Key, Pool, WeakOpt};
 	use crate::common::timer;
 	use crate::rt::{TokioExecutor, TokioTimer};
 
@@ -1051,8 +1064,8 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_pool_checkout_task_unparked() {
-		use futures_util::future::join;
 		use futures_util::FutureExt;
+		use futures_util::future::join;
 
 		let pool = pool_no_timer();
 		let key = host_key("foo");

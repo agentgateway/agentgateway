@@ -162,9 +162,9 @@ impl hyper_util_fork::client::legacy::pool::Key for PoolKey {
 		match self.2.application() {
 			ApplicationTransport::Plaintext => {
 				if self.3 == ::http::Version::HTTP_11 {
-					ExpectedCapacity::Http2
-				} else {
 					ExpectedCapacity::Http1
+				} else {
+					ExpectedCapacity::Http2
 				}
 			}
 			ApplicationTransport::Tls(c) => {
@@ -230,7 +230,7 @@ impl Connector {
 		transport: Transport,
 		http: bool,
 	) -> Result<Socket, http::Error> {
-		tracing::error!("howardjohn: start connect");
+		// tracing::error!("howardjohn: start connect");
 		let connect_start = std::time::Instant::now();
 		let transport_name = transport.name();
 		let tls = match transport.application() {
@@ -334,7 +334,7 @@ impl Connector {
 		);
 
 		socket.with_logging(LoggingMode::Upstream);
-		tracing::error!("howardjohn: done connect");
+		// tracing::error!("howardjohn: done connect");
 		Ok(socket)
 	}
 

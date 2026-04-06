@@ -6,11 +6,11 @@
 
 use std::error::Error as StdError;
 use std::fmt;
-use std::future::{poll_fn, Future};
+use std::future::{Future, poll_fn};
 use std::ops::DerefMut;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::task::{self, Poll};
 use std::time::Duration;
 
@@ -18,7 +18,7 @@ use futures_util::future::{self, Either, FutureExt, TryFutureExt};
 use http::uri::Scheme;
 use hyper::body::Body;
 use hyper::client::conn::TrySendError as ConnTrySendError;
-use hyper::header::{HeaderValue, HOST};
+use hyper::header::{HOST, HeaderValue};
 use hyper::rt::Timer;
 use hyper::{Method, Request, Response, Uri, Version};
 use tracing::{debug, trace, warn};
@@ -28,7 +28,7 @@ use super::pool::{
 	self, CheckoutResult, H2Load, HttpConnection, Key, ReservedHttp1Connection,
 	ReservedHttp2Connection,
 };
-use crate::common::{lazy as hyper_lazy, timer, Exec, Lazy, SyncWrapper};
+use crate::common::{Exec, Lazy, SyncWrapper, lazy as hyper_lazy, timer};
 
 type BoxSendFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 const H2_WAITERS_PER_CONNECTION_ESTIMATE: usize = 5;
@@ -276,6 +276,7 @@ where
 			// 	res.extensions_mut().insert(guard);
 			// }
 		} else {
+			tracing::error!("howardjohn: start insert thing");
 			// when pooled is dropped, it will try to insert back into the
 			// pool. To delay that, spawn a future that completes once the
 			// sender is ready again.
@@ -286,7 +287,7 @@ where
 				let HttpConnection::Http1(h1) = pooled.deref_mut() else {
 					panic!("asserted http1 above")
 				};
-				h1.tx.poll_ready(cx)
+				dbg!(h1.tx.poll_ready(cx))
 			})
 			.map(move |_| ());
 
@@ -322,48 +323,50 @@ where
 
 		let checkout_result = self.pool.checkout_or_register_waker(pool_key.clone());
 		match checkout_result {
-			CheckoutResult::Checkout(pooled) => Ok(pooled),
+			CheckoutResult::Checkout(pooled) => {
+				trace!(result = "checkout", "pooled request");
+				Ok(pooled)
+			},
 			CheckoutResult::Wait(wait) => {
 				// If we should connect, do so.
 				// Note: we wait for any connection, not necesarily this one. This ensures fairness:
 				// Request 1 may spin up Conn 1 while request 2 spins up Conn 2.
 				// If conn 2 establishes first, request 1 will take wihile request 2 will take conn 1.
 				if wait.should_connect {
+					trace!(result = "connect", "pooled request");
 					let client = self.clone();
 					let ver = dst.version.clone();
 					let pk = pool_key.clone();
+					let pkc = pool_key.clone();
 					self.exec.execute(async move {
-						let pkc = pool_key.clone();
 						let res = client
 							.connect_to(ver, pk)
 							.await
 							.map_err(ClientConnectError::Normal);
 						match res {
-							Ok(hc) => {
-								client.pool.insert_new_connection(pkc, hc)
-							}
+							Ok(hc) => client.pool.insert_new_connection(pkc, hc),
 							Err(err) => {
 								// TODO(john)
 								panic!("TODO: handle error")
-							}
+							},
 						}
-						client.pool
 						// TODO
 					});
+				} else {
+					trace!(result = "wait", "pooled request");
 				}
 				let Ok(conn) = wait.waiter.await else {
-					return Err(ClientConnectError::Normal(e!(Connect, pool::Error::CheckoutNoLongerWanted)))
+					return Err(ClientConnectError::Normal(e!(
+						Connect,
+						pool::Error::CheckoutNoLongerWanted
+					)));
 				};
 				Ok(conn)
 			},
 		}
 	}
 
-	async fn connect_to(
-		&self,
-		version: Version,
-		pk: PK,
-	) -> Result<pool::HttpConnection, Error> {
+	async fn connect_to(&self, version: Version, pk: PK) -> Result<pool::HttpConnection, Error> {
 		let executor = self.exec.clone();
 		let is_ver_h2 = if version == Version::HTTP_2 {
 			// Explicitly HTTP2
