@@ -679,6 +679,7 @@ impl Builder {
 			pool_config: pool::Config {
 				idle_timeout: Some(Duration::from_secs(90)),
 				max_idle_per_host: usize::MAX,
+				expected_http2_capacity: pool::DEFAULT_EXPECTED_HTTP2_CAPACITY,
 			},
 			pool_timer: None,
 		}

@@ -25,6 +25,8 @@ use http::{Request, Response, Uri};
 use hyper::rt::{Sleep, Timer as _};
 use tracing::{debug, trace, warn};
 
+pub const DEFAULT_EXPECTED_HTTP2_CAPACITY: usize = 100;
+
 #[derive(Clone)]
 pub struct Pool<K: Key> {
 	hosts: Arc<Mutex<HashMap<K, HostPool<K>>>>,
@@ -39,6 +41,7 @@ pub struct PoolSettings {
 	exec: Exec,
 	timer: Timer,
 	timeout: Option<Duration>,
+	expected_http2_capacity: usize,
 }
 
 impl<K: Key> Pool<K> {
@@ -81,10 +84,10 @@ enum CapacityCache {
 }
 
 impl CapacityCache {
-	fn expected_capacity(&self) -> usize {
+	fn expected_capacity(&self, expected_http2_capacity: usize) -> usize {
 		match self {
 			CapacityCache::Guess(ExpectedCapacity::Http1) => 1,
-			CapacityCache::Guess(ExpectedCapacity::Http2) => 100,
+			CapacityCache::Guess(ExpectedCapacity::Http2) => expected_http2_capacity,
 			// Currently, we are pessimistically assuming that the connection will be HTTP/1.1
 			CapacityCache::Guess(ExpectedCapacity::Auto) => 1,
 			CapacityCache::Cached(exact) => *exact,
@@ -103,7 +106,7 @@ impl H2Pool {
 	/// maybe_insert_new inserts the connection as an active one (if it is HTTP2).
 	fn maybe_insert_new(&mut self, conn: HttpConnection, reserve: bool) -> HttpConnection {
 		if let HttpConnection::Http2(h) = conn {
-			self.0.push_front(h.clone());
+			self.0.push_front(h.clone_without_load_incremented());
 			if reserve {
 				debug_assert!(
 					h.load.try_reserve_stream_slot() == CapacityReservationResult::ReservedButNotFilled,
@@ -120,28 +123,39 @@ impl H2Pool {
 		}
 	}
 	fn reserve(&mut self) -> Option<ReservedHttp2Connection> {
-		let h = self.0.front()?;
-		match h.load.try_reserve_stream_slot() {
-			CapacityReservationResult::NoCapacity => None,
-			CapacityReservationResult::ReservedAndFilled => {
-				let ret = Some(ReservedHttp2Connection {
-					info: h.info.clone(),
-					tx: h.tx.clone(),
-					load: h.load.clone(),
-				});
-				// Move the connection to the back of the queue.
-				self.0.swap_remove_back(0);
-				ret
-			},
-			CapacityReservationResult::ReservedButNotFilled => {
-				// Keep the connection at the front.
-				Some(ReservedHttp2Connection {
-					info: h.info.clone(),
-					tx: h.tx.clone(),
-					load: h.load.clone(),
-				})
-			},
+		while let Some(h) = self.0.front() {
+			if !h.tx.is_ready() {
+				// Connection is dead... remove it.
+				let _ = self.0.pop_front();
+				debug!("removing dead http2 connection");
+				continue;
+			}
+			match h.load.try_reserve_stream_slot() {
+				CapacityReservationResult::NoCapacity => {
+					// We know the front is the one that was most recently returned, thus must be available
+					return None;
+				},
+				CapacityReservationResult::ReservedAndFilled => {
+					let ret = Some(ReservedHttp2Connection {
+						info: h.info.clone(),
+						tx: h.tx.clone(),
+						load: h.load.clone(),
+					});
+					// Move the connection to the back of the queue.
+					self.0.swap_remove_back(0);
+					return ret;
+				},
+				CapacityReservationResult::ReservedButNotFilled => {
+					// Keep the connection at the front.
+					return Some(ReservedHttp2Connection {
+						info: h.info.clone(),
+						tx: h.tx.clone(),
+						load: h.load.clone(),
+					});
+				},
+			}
 		}
+		None
 	}
 }
 
@@ -190,11 +204,27 @@ impl HttpConnection {
 	}
 }
 
-#[derive(Clone)]
 pub(crate) struct ReservedHttp2Connection {
 	pub(crate) info: Connected,
 	pub(crate) tx: hyper::client::conn::http2::SendRequest<axum_core::body::Body>,
 	pub(crate) load: Arc<H2Load>,
+}
+
+impl ReservedHttp2Connection {
+	fn clone_increment_load(&self) -> Option<Self> {
+		if self.load.try_reserve_stream_slot() == CapacityReservationResult::NoCapacity {
+			None
+		} else {
+			Some(self.clone_without_load_incremented())
+		}
+	}
+	fn clone_without_load_incremented(&self) -> Self {
+		Self {
+			info: self.info.clone(),
+			tx: self.tx.clone(),
+			load: self.load.clone(),
+		}
+	}
 }
 
 #[derive(Debug)]
@@ -386,6 +416,7 @@ struct WeakOpt<T>(Option<Weak<T>>);
 pub struct Config {
 	pub idle_timeout: Option<Duration>,
 	pub max_idle_per_host: usize,
+	pub expected_http2_capacity: usize,
 }
 
 impl<K: Key> Pool<K> {
@@ -405,6 +436,7 @@ impl<K: Key> Pool<K> {
 				exec,
 				timer,
 				timeout: config.idle_timeout,
+				expected_http2_capacity: config.expected_http2_capacity,
 			}),
 		}
 	}
@@ -570,7 +602,9 @@ impl<K: Key> Pool<K> {
 		let should_connect = if pending <= waiters {
 			// We need more capacity! Start a connection
 			// We will assume the caller is actually going to do this
-			let expected = host.per_connection_capacity_cache.expected_capacity();
+			let expected = host
+				.per_connection_capacity_cache
+				.expected_capacity(self.settings.expected_http2_capacity);
 			host.connecting += 1;
 			host.expected_connecting_capacity += expected;
 			Some(ShouldConnect {
@@ -734,9 +768,9 @@ impl<K: Key> Pooled<K> {
 				(self, None)
 			},
 			Some((k, HttpConnection::Http2(h))) => {
-				// HTTP/2 can be cloned
-				let cpy = Some(Self {
-					value: Some((k.clone(), HttpConnection::Http2(h.clone()))),
+				// HTTP/2 can be cloned unless its at-capacity.
+				let cpy = h.clone_increment_load().map(|c| Self {
+					value: Some((k.clone(), HttpConnection::Http2(c))),
 					is_reused: true,
 					pool: self.pool.clone(),
 					settings: self.settings.clone(),
@@ -921,7 +955,7 @@ mod tests {
 	use http_body_util::Full;
 	use hyper::body::Incoming;
 	use hyper::rt::Sleep;
-	use hyper::server::conn::http1;
+	use hyper::server::conn::{http1, http2};
 	use hyper::service::service_fn;
 	use hyper::{Request, Response};
 	use std::fmt::Debug;
@@ -936,16 +970,28 @@ mod tests {
 	use tracing_subscriber::EnvFilter;
 
 	#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-	struct KeyImpl(http::uri::Scheme, http::uri::Authority);
+	struct KeyImpl(http::uri::Scheme, http::uri::Authority, ExpectedCapacity);
 
 	impl Key for KeyImpl {
 		fn expected_capacity(&self) -> ExpectedCapacity {
-			ExpectedCapacity::Http1
+			self.2
 		}
 	}
 
 	fn host_key(s: &str) -> KeyImpl {
-		KeyImpl(http::uri::Scheme::HTTP, s.parse().expect("host key"))
+		KeyImpl(
+			http::uri::Scheme::HTTP,
+			s.parse().expect("host key"),
+			ExpectedCapacity::Http1,
+		)
+	}
+
+	fn host_key_h2(s: &str) -> KeyImpl {
+		KeyImpl(
+			http::uri::Scheme::HTTP,
+			s.parse().expect("host key"),
+			ExpectedCapacity::Http2,
+		)
 	}
 
 	#[derive(Clone, Debug, Default)]
@@ -986,9 +1032,9 @@ mod tests {
 
 		INIT.call_once(|| {
 			let _ = tracing_subscriber::fmt()
-			.with_test_writer()
-			.with_env_filter(EnvFilter::new("hyper_util_fork=trace"))
-			.try_init();
+				.with_test_writer()
+				.with_env_filter(EnvFilter::new("hyper_util_fork=trace"))
+				.try_init();
 		});
 	}
 
@@ -1002,6 +1048,7 @@ mod tests {
 			super::Config {
 				idle_timeout: Some(Duration::from_millis(100)),
 				max_idle_per_host: max_idle,
+				expected_http2_capacity: DEFAULT_EXPECTED_HTTP2_CAPACITY,
 			},
 			TokioExecutor::new(),
 			MockTimer::default(),
@@ -1010,15 +1057,37 @@ mod tests {
 	}
 
 	fn pool_with_idle_timeout<K: Key>(idle_timeout: Duration) -> Pool<K> {
+		init_test_tracing();
 		let pool = Pool::new(
 			super::Config {
 				idle_timeout: Some(idle_timeout),
 				max_idle_per_host: usize::MAX,
+				expected_http2_capacity: DEFAULT_EXPECTED_HTTP2_CAPACITY,
 			},
 			TokioExecutor::new(),
 			MockTimer::default(),
 		);
 		pool
+	}
+
+	fn pool_with_expected_h2_capacity_idle<K: Key>(
+		expected_http2_capacity: usize,
+		idle: Duration,
+	) -> Pool<K> {
+		init_test_tracing();
+		let pool = Pool::new(
+			super::Config {
+				idle_timeout: Some(idle),
+				max_idle_per_host: usize::MAX,
+				expected_http2_capacity,
+			},
+			TokioExecutor::new(),
+			MockTimer::default(),
+		);
+		pool
+	}
+	fn pool_with_expected_h2_capacity<K: Key>(expected_http2_capacity: usize) -> Pool<K> {
+		pool_with_expected_h2_capacity_idle(expected_http2_capacity, Duration::from_secs(10))
 	}
 
 	fn must_want_new_connection(
@@ -1082,20 +1151,20 @@ mod tests {
 			let service = service_fn(|_req: Request<Incoming>| async move {
 				Ok::<_, std::convert::Infallible>(
 					Response::builder()
-					.status(200)
-					.body(Full::new(Bytes::from_static(b"ok")))
-					.expect("response body"),
+						.status(200)
+						.body(Full::new(Bytes::from_static(b"ok")))
+						.expect("response body"),
 				)
 			});
 			let _ = http1::Builder::new()
-			.serve_connection(TokioIo::new(server), service)
-			.await;
+				.serve_connection(TokioIo::new(server), service)
+				.await;
 		});
 
 		let (mut tx, conn) = hyper::client::conn::http1::Builder::new()
-		.handshake(TokioIo::new(client))
-		.await
-		.expect("client handshake");
+			.handshake(TokioIo::new(client))
+			.await
+			.expect("client handshake");
 		let conn_task = tokio::spawn(async move {
 			let _ = conn.await;
 		});
@@ -1107,6 +1176,64 @@ mod tests {
 				tx,
 			}),
 			MockHttp1Control {
+				server_task,
+				conn_task,
+			},
+		)
+	}
+
+	async fn mock_http2_connection(max_streams: usize) -> HttpConnection {
+		mock_http2_connection_with_control(max_streams).await.0
+	}
+
+	struct MockHttp2Control {
+		server_task: tokio::task::JoinHandle<()>,
+		conn_task: tokio::task::JoinHandle<()>,
+	}
+
+	impl MockHttp2Control {
+		async fn close(self) {
+			self.server_task.abort();
+			self.conn_task.abort();
+			tokio::task::yield_now().await;
+		}
+	}
+
+	async fn mock_http2_connection_with_control(
+		max_streams: usize,
+	) -> (HttpConnection, MockHttp2Control) {
+		let (client, server) = tokio::io::duplex(8192);
+		let server_task = tokio::spawn(async move {
+			let service = service_fn(|_req: Request<Incoming>| async move {
+				Ok::<_, std::convert::Infallible>(
+					Response::builder()
+						.status(200)
+						.body(Full::new(Bytes::from_static(b"ok")))
+						.expect("response body"),
+				)
+			});
+			let _ = http2::Builder::new(TokioExecutor::new())
+				.max_concurrent_streams(max_streams as u32)
+				.serve_connection(TokioIo::new(server), service)
+				.await;
+		});
+
+		let (mut tx, conn) = hyper::client::conn::http2::Builder::new(TokioExecutor::new())
+			.handshake(TokioIo::new(client))
+			.await
+			.expect("client h2 handshake");
+		let conn_task = tokio::spawn(async move {
+			let _ = conn.await;
+		});
+		tx.ready().await.expect("client h2 sender ready");
+
+		(
+			HttpConnection::Http2(ReservedHttp2Connection {
+				info: Connected::new(),
+				tx,
+				load: Arc::new(H2Load::new(max_streams)),
+			}),
+			MockHttp2Control {
 				server_task,
 				conn_task,
 			},
@@ -1153,8 +1280,8 @@ mod tests {
 
 		pool.insert_new_connection(sc, mock_http1_connection().await);
 		let pooled = waiter
-		.await
-		.expect("waiter should receive inserted connection");
+			.await
+			.expect("waiter should receive inserted connection");
 		drop(pooled);
 
 		tokio::time::sleep(Duration::from_millis(10)).await;
@@ -1287,8 +1414,8 @@ mod tests {
 		drop(pooled1);
 
 		let _pooled3 = w3
-		.await
-		.expect("live waiter should receive returned connection");
+			.await
+			.expect("live waiter should receive returned connection");
 	}
 
 	#[tokio::test]
@@ -1316,12 +1443,12 @@ mod tests {
 
 		pool.insert_new_connection(sc1, mock_http1_connection().await);
 		let pooled1 = w1
-		.await
-		.expect("first waiter should receive first connection");
+			.await
+			.expect("first waiter should receive first connection");
 		pool.insert_new_connection(sc2, mock_http1_connection().await);
 		let pooled2 = w2
-		.await
-		.expect("second waiter should receive second connection");
+			.await
+			.expect("second waiter should receive second connection");
 		drop(sc3);
 
 		let mut w3 = Box::pin(w3);
@@ -1332,8 +1459,8 @@ mod tests {
 		drop(pooled1);
 
 		let _pooled3 = w3
-		.await
-		.expect("third waiter should be satisfied by a returned connection");
+			.await
+			.expect("third waiter should be satisfied by a returned connection");
 		drop(pooled2);
 	}
 
@@ -1358,6 +1485,161 @@ mod tests {
 		pool.insert_new_connection(sc, conn);
 		let pooled = w.await.expect("waiter should receive inserted connection");
 		drop(pooled);
+
+		control.close().await;
+
+		let (_sc2, _w2) = must_want_new_connection(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_h2() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+
+		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
+		let pooled1 = w1.await.expect("first waiter should receive h2 connection");
+		assert!(pooled1.is_http2());
+		let pooled2 = w2
+			.await
+			.expect("second waiter should receive shared h2 connection");
+
+		// At capacity, should need a new connection
+		let (_sc3, _w3) = must_want_new_connection(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_h2_reuse() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+
+		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
+		let pooled1 = w1.await.expect("get h2");
+		drop(pooled1);
+		let _ = must_checkout(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_h2_reuse_many() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+
+		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
+		let pooled1 = w1.await.expect("get h2");
+		let pooled2 = w2.await.expect("get h2");
+		drop(pooled1);
+		let w2 = must_checkout(&pool, key.clone());
+
+		// At capacity, should need a new connection
+		let (_sc3, _w3) = must_want_new_connection(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	#[ignore]
+	async fn test_h2_returned_capacity_wakes_parked_waiter() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+
+		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
+		let pooled1 = w1.await.expect("get h2");
+		let pooled2 = w2.await.expect("get h2");
+
+		let (sc3, w3) = must_want_new_connection(&pool, key.clone());
+		drop(sc3);
+
+		let mut w3 = Box::pin(w3);
+		assert!(
+			futures_util::poll!(&mut w3).is_pending(),
+			"waiter should start parked while h2 connection is full"
+		);
+
+		drop(pooled1);
+
+		assert!(
+			matches!(futures_util::poll!(&mut w3), Poll::Ready(Ok(_))),
+			"returning h2 capacity should wake the parked waiter"
+		);
+
+		drop(pooled2);
+	}
+
+	#[tokio::test]
+	#[ignore]
+	async fn test_h2_reuse_cancel() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+		// sc1 was supposed to open a connection for w1 and w2 but it dropped...
+		drop(sc1);
+
+		let pooled1 = w1.await.expect("get h2");
+		let pooled2 = w2.await.expect("get h2");
+	}
+
+	#[tokio::test]
+	async fn test_h2_many_concurrent_connections() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+		// We can ask for multiple concurrent requests
+		let (sc3, w3) = must_want_new_connection(&pool, key.clone());
+
+		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
+		let pooled1 = w1.await.expect("get h2");
+		let pooled2 = w2.await.expect("get h2");
+		pool.insert_new_connection(sc3, mock_http2_connection(2).await);
+		let pooled3 = w3.await.expect("get h2");
+		// connection 2 has room
+		let _ = must_checkout(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_h2_checkout_idle() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
+		let pooled1 = w1.await.expect("get h2");
+		drop(pooled1);
+
+		let _ = must_checkout(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	#[ignore]
+	async fn test_h2_checkout_idle_expired() {
+		let pool = pool_with_expected_h2_capacity_idle(2, Duration::from_millis(5));
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
+		let pooled1 = w1.await.expect("get h2");
+		drop(pooled1);
+
+		tokio::time::sleep(Duration::from_millis(80)).await;
+
+		let _ = must_want_new_connection(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_pool_closed_http2_connection_not_reused() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc, w) = must_want_new_connection(&pool, key.clone());
+		let (w2) = must_wait_for_existing_connection(&pool, key.clone());
+		let (conn, control) = mock_http2_connection_with_control(2).await;
+
+		pool.insert_new_connection(sc, conn);
+		let pooled = w.await.expect("waiter should receive inserted connection");
+		drop(pooled);
+		let pooled = w2.await.expect("waiter should receive inserted connection");
 
 		control.close().await;
 
