@@ -293,19 +293,77 @@ impl<K: Key> HostPool<K> {
 			waiters: Default::default(),
 		}
 	}
-	fn return_connection(&mut self, value: HttpConnection) {
+	fn return_connection(&mut self, settings: Arc<PoolSettings>, pool: Arc<Mutex<HashMap<K, HostPool<K>>>>, k: K, value: HttpConnection) {
 		match value {
-			HttpConnection::Http1(h) => {},
+			HttpConnection::Http1(h) => {
+				self.return_idle(settings, pool, k, HttpConnection::Http1(h))
+			},
 			HttpConnection::Http2(h) => {
 				let remaining = h.load.release_stream_slot();
 				if remaining == 0 {
-					// push to idle
+					self.return_idle(settings, pool, k, HttpConnection::Http2(h))
 				} else {
 					self.active_h2.return_active(h);
 				}
 			},
 		}
-		// TODO put back in the pool
+	}
+	pub fn return_idle(&mut self,  settings: Arc<PoolSettings>, pool: Arc<Mutex<HashMap<K, HostPool<K>>>>, key: K, conn: HttpConnection) {
+		let mut p = Some(Pooled {
+			value: Some((key, conn)),
+			is_reused: false,
+			pool: Arc::downgrade(&pool),
+			settings: settings.clone(),
+		});
+		trace!(waiters=%self.waiters.len(), "return idle");
+		let mut capacity = 1;
+		let mut sent = 0;
+		// First, send to any waiters...
+		while capacity > 0
+			&& p.is_some()
+			&& let Some(tx) = self.waiters.pop_front()
+		{
+			let Some(pv) = p else {
+				panic!("verified above")
+			};
+			let (this, next) = pv.maybe_clone();
+			p = next;
+			capacity -= 1;
+			if tx.is_canceled() {
+				trace!(
+					"insert new; removing canceled waiter for {:?}",
+					this.value.as_ref().map(|v| &v.0)
+				);
+				continue;
+			}
+			match tx.send(this) {
+				Ok(()) => {
+					sent += 1;
+				},
+				Err(e) => {
+					trace!("send failed");
+					// If this was HTTP/2, we have 2 fungible copies and its fine to drop `next`.
+					// If its HTTP/1.1, however, this is the only copy so we must return it back
+					p = Some(e)
+				},
+			}
+		}
+		trace!(fulfilled=%sent, "sent idle connection");
+		// Nobody is waiting but we got a connection..as
+		let now = settings.timer.now();
+		if sent == 0
+			&& let Some(mut pv) = p
+		&&  let Some((k, c)) = pv.value.take()
+		{
+			// TODO max_idle_per_host
+			debug!("pooling idle connection for {:?}", k);
+			self.idle.push(Idle {
+				value: c,
+				idle_at: now
+			});
+			// TODO
+			// self.spawn_idle_interval(__pool_ref);
+		}
 	}
 }
 
@@ -365,46 +423,48 @@ impl<K: Key> Pool<K> {
 		host.expected_connecting_capacity -= capacity;
 		trace!(?key, ?host.connecting, %host.expected_connecting_capacity, "inserting new connection");
 		let mut sent = 0;
-		let conn = host.active_h2.maybe_insert_new(conn, false);
-		let mut p = Some(Pooled {
-			value: Some((key, conn)),
-			is_reused: false,
-			pool: Arc::downgrade(&self.hosts),
-		});
+		let mut conn = Some(host.active_h2.maybe_insert_new(conn, false));
 		trace!(waiters=%host.waiters.len(), "insert new");
 		// First, send to any waiters...
-		while capacity > 0
-			&& let Some(pv) = p
-			&& let Some(tx) = host.waiters.pop_front()
-		{
-			let (this, next) = pv.maybe_clone();
-			p = next;
-			capacity -= 1;
+		while capacity > 0 {
+			let Some(tx) = host.waiters.pop_front() else {
+				break;
+			};
 			if tx.is_canceled() {
-				trace!(
-					"insert new; removing canceled waiter for {:?}",
-					this.value.as_ref().map(|v| &v.0)
-				);
+				trace!("insert new; removing canceled waiter for {:?}", key);
 				continue;
 			}
+
+			let Some(raw_conn) = conn.take() else {
+				break;
+			};
+			let pooled = Pooled {
+				value: Some((key.clone(), raw_conn)),
+				is_reused: false,
+				pool: Arc::downgrade(&self.hosts),
+				settings: self.settings.clone(),
+			};
+			let (this, next) = pooled.maybe_clone();
+			conn = next.and_then(|mut pooled| pooled.value.take().map(|(_, c)| c));
+			capacity -= 1;
 			match tx.send(this) {
 				Ok(()) => {
 					sent += 1;
 				},
-				Err(e) => {
+				Err(mut e) => {
 					trace!("send failed");
-					// If this was HTTP/2, we have 2 fungible copies and its fine to drop `next`.
-					// If its HTTP/1.1, however, this is the only copy so we must return it back
-					p = Some(e)
+					// Recover the connection without dropping the pooled wrapper
+					// while the host lock is still held.
+					conn = e.value.take().map(|(_, c)| c);
 				},
 			}
 		}
-		trace!(fulfilled=%sent, "howardjohn: sent new connection");
-		// Nobody is waiting but we got a connection..as
-		// TODO
+		trace!(fulfilled=%sent, "sent new connection");
+		// Nobody is waiting but we got a connection..
 		if sent == 0 {
 			warn!("dropping connection on the floor")
 		}
+		// TODO(john): insert as idle insert
 	}
 	pub fn checkout_or_register_waker(&self, key: K) -> CheckoutResult<K> {
 		let mut host = self.host(&key);
@@ -415,6 +475,7 @@ impl<K: Key> Pool<K> {
 				value: Some((key, HttpConnection::Http2(reserved))),
 				is_reused: true,
 				pool: Arc::downgrade(&self.hosts),
+				settings: self.settings.clone(),
 			};
 			return CheckoutResult::Checkout(p);
 		}
@@ -436,6 +497,7 @@ impl<K: Key> Pool<K> {
 					value: Some((key, c)),
 					is_reused: false,
 					pool: Arc::downgrade(&self.hosts),
+					settings: self.settings.clone(),
 				};
 				return CheckoutResult::Checkout(p);
 			}
@@ -583,6 +645,7 @@ pub struct Pooled<K: Key> {
 	value: Option<(K, HttpConnection)>,
 	is_reused: bool,
 	pool: Weak<Mutex<HashMap<K, HostPool<K>>>>,
+	settings: Arc<PoolSettings>,
 }
 
 impl<K: Key> Pooled<K> {}
@@ -600,6 +663,7 @@ impl<K: Key> Pooled<K> {
 					value: Some((k.clone(), HttpConnection::Http2(h.clone()))),
 					is_reused: true,
 					pool: self.pool.clone(),
+					settings: self.settings.clone(),
 				});
 				(self, cpy)
 			},
@@ -654,12 +718,10 @@ impl<K: Key> Drop for Pooled<K> {
 			if let Some(pool) = self.pool.upgrade() {
 				let mut hosts = Pool::lock_hosts(&pool, &k);
 				trace!(key=?k, "returning connection to pool");
-				hosts.return_connection(value);
+				hosts.return_connection(self.settings.clone(), pool.clone(), k, value);
 			} else {
 				trace!("pool dropped, dropping pooled ({:?})", k);
 			}
-		} else {
-			trace!("pooled already dropped");
 		}
 	}
 }

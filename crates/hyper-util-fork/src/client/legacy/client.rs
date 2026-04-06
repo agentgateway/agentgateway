@@ -276,7 +276,6 @@ where
 			// 	res.extensions_mut().insert(guard);
 			// }
 		} else {
-			tracing::error!("howardjohn: start insert thing");
 			// when pooled is dropped, it will try to insert back into the
 			// pool. To delay that, spawn a future that completes once the
 			// sender is ready again.
@@ -287,7 +286,7 @@ where
 				let HttpConnection::Http1(h1) = pooled.deref_mut() else {
 					panic!("asserted http1 above")
 				};
-				dbg!(h1.tx.poll_ready(cx))
+				h1.tx.poll_ready(cx)
 			})
 			.map(move |_| ());
 
