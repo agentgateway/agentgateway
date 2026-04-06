@@ -422,13 +422,21 @@ impl<K: Key> HostPool<K> {
 		if sent == 0
 			&& let Some(c) = conn
 		{
-			// TODO max_idle_per_host
-			debug!("pooling idle connection for {:?}", key);
-			self.idle.push(Idle {
-				value: c,
-				idle_at: now,
-			});
+			self.push_idle_with_cap(settings.max_idle_per_host, key, c, now);
 		}
+	}
+
+	fn push_idle_with_cap(&mut self, max_idle_per_host: usize, key: K, value: HttpConnection, idle_at: Instant) {
+		if max_idle_per_host == 0 {
+			debug!("dropping idle connection for {:?}; max_idle_per_host=0", key);
+			return;
+		}
+		if self.idle.len() >= max_idle_per_host {
+			debug!("evicting oldest idle connection for {:?}; max_idle_per_host reached", key);
+			let _ = self.idle.remove(0);
+		}
+		debug!("pooling idle connection for {:?}", key);
+		self.idle.push(Idle { value, idle_at });
 	}
 }
 
@@ -594,12 +602,7 @@ impl<K: Key> Pool<K> {
 			if sent == 0
 				&& let Some(c) = conn
 			{
-				// TODO max_idle_per_host
-				debug!("pooling idle connection for {:?}", key);
-				host.idle.push(Idle {
-					value: c,
-					idle_at: now,
-				});
+				host.push_idle_with_cap(self.settings.max_idle_per_host, key, c, now);
 				// TODO
 				// self.spawn_idle_interval(__pool_ref);
 			}
@@ -1155,7 +1158,8 @@ mod tests {
 				should_connect: Some(sc),
 				waiter,
 				..
-			}) => (sc, waiter)
+			}) => (sc, waiter),
+			"wanted new connection, but didn't get one."
 		)
 	}
 
@@ -1700,17 +1704,25 @@ mod tests {
 	}
 
 	#[tokio::test]
-	#[ignore]
 	async fn test_pool_max_idle_per_host_for_http1_connections() {
 		let pool = pool_max_idle(2);
 		let key = host_key("foo");
 
-		for _ in 0..3 {
-			let (sc, w) = must_want_new_connection(&pool, key.clone());
-			pool.insert_new_connection(sc, mock_http1_connection().await);
-			let pooled = w.await.expect("waiter should receive inserted connection");
-			drop(pooled);
-		}
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let (sc2, w2) = must_want_new_connection(&pool, key.clone());
+		let (sc3, w3) = must_want_new_connection(&pool, key.clone());
+
+		pool.insert_new_connection(sc1, mock_http1_connection().await);
+		pool.insert_new_connection(sc2, mock_http1_connection().await);
+		pool.insert_new_connection(sc3, mock_http1_connection().await);
+
+		let pooled1 = w1.await.expect("waiter should receive inserted connection");
+		let pooled2 = w2.await.expect("waiter should receive inserted connection");
+		let pooled3 = w3.await.expect("waiter should receive inserted connection");
+
+		drop(pooled1);
+		drop(pooled2);
+		drop(pooled3);
 
 		assert_eq!(
 			pool.host(&key).idle.len(),
