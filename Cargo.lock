@@ -3036,6 +3036,7 @@ dependencies = [
 name = "hyper-util-fork"
 version = "0.1.14"
 dependencies = [
+ "assert_matches",
  "axum-core",
  "bytes",
  "divan",

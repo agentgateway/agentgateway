@@ -32,6 +32,7 @@ hashbrown = "0.16.1"
 axum-core = "0.5.6"
 
 [dev-dependencies]
+assert_matches.workspace = true
 hyper = { workspace = true, features = ["full"] }
 bytes.workspace = true
 http-body-util.workspace = true

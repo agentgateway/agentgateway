@@ -331,19 +331,18 @@ where
 				// Note: we wait for any connection, not necesarily this one. This ensures fairness:
 				// Request 1 may spin up Conn 1 while request 2 spins up Conn 2.
 				// If conn 2 establishes first, request 1 will take wihile request 2 will take conn 1.
-				if wait.should_connect {
+				if let Some(sc) = wait.should_connect {
 					trace!(result = "connect", "pooled request");
 					let client = self.clone();
 					let ver = dst.version.clone();
 					let pk = pool_key.clone();
-					let pkc = pool_key.clone();
 					self.exec.execute(async move {
 						let res = client
 							.connect_to(ver, pk)
 							.await
 							.map_err(ClientConnectError::Normal);
 						match res {
-							Ok(hc) => client.pool.insert_new_connection(pkc, hc),
+							Ok(hc) => client.pool.insert_new_connection(sc, hc),
 							Err(err) => {
 								// TODO(john)
 								panic!("TODO: handle error")
