@@ -1,10 +1,10 @@
-use hashbrown::HashMap;
 use hashbrown::hash_map::EntryRef;
+use hashbrown::HashMap;
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 use std::collections::VecDeque;
 use std::convert::Infallible;
 use std::error::Error as StdError;
-use std::fmt::{self, Debug, Formatter, Pointer};
+use std::fmt::{self, Debug, Formatter};
 use std::future::Future;
 use std::hash::Hash;
 use std::ops::{Deref, DerefMut};
@@ -15,7 +15,7 @@ use std::task::{self, Poll};
 use std::time::{Duration, Instant};
 
 use crate::client::legacy::connect::Connected;
-use crate::client::legacy::{Client, pool};
+use crate::client::legacy::pool;
 use crate::common::exec;
 use crate::common::exec::Exec;
 use crate::common::timer::Timer;
@@ -23,7 +23,7 @@ use futures_channel::oneshot;
 use futures_channel::oneshot::Receiver;
 use futures_core::ready;
 use futures_util::future::Either;
-use http::{Request, Response, Uri};
+use http::{Request, Response};
 use hyper::rt::{Sleep, Timer as _};
 use tracing::{debug, trace, warn};
 
@@ -39,6 +39,7 @@ pub struct PoolSettings {
 	max_idle_per_host: usize,
 	// A oneshot channel is used to allow the interval to be notified when
 	// the Pool completely drops. That way, the interval can cancel immediately.
+	#[allow(dead_code)]
 	idle_interval_ref: Option<oneshot::Sender<Infallible>>,
 	exec: Exec,
 	timer: Timer,
@@ -72,7 +73,7 @@ impl<K: Key> Pool<K> {
 			// TODO(john): on last eviction, drop from hosts
 		}
 	}
-	pub fn lock_hosts<'a>(
+	fn lock_hosts<'a>(
 		hosts: &'a Mutex<HashMap<K, HostPool<K>>>,
 		k: &K,
 	) -> MappedMutexGuard<'a, HostPool<K>> {
@@ -83,7 +84,7 @@ impl<K: Key> Pool<K> {
 			},
 		})
 	}
-	pub fn host(&self, k: &K) -> MappedMutexGuard<'_, HostPool<K>> {
+	fn host(&self, k: &K) -> MappedMutexGuard<'_, HostPool<K>> {
 		Pool::<K>::lock_hosts(&self.hosts, k)
 	}
 }
@@ -107,6 +108,7 @@ enum CapacityCache {
 	// Based on the request properties, what we expect the capacity will be
 	Guess(ExpectedCapacity),
 	// Based on historical requests, what we expect the capacity will be.
+	#[allow(dead_code)]
 	Cached(usize),
 }
 
@@ -216,7 +218,7 @@ pub(crate) struct ReservedHttp1Connection {
 	pub(crate) tx: hyper::client::conn::http1::SendRequest<axum_core::body::Body>,
 }
 
-pub enum HttpConnection {
+pub(crate) enum HttpConnection {
 	Http1(ReservedHttp1Connection),
 	Http2(ReservedHttp2Connection),
 }
@@ -307,12 +309,6 @@ impl H2Load {
 	fn remaining_capacity(&self) -> usize {
 		self.max_streams.load(Ordering::Acquire) - self.active_streams.load(Ordering::Acquire)
 	}
-	fn set_max_streams(&self, max_streams: usize) {
-		self
-			.max_streams
-			.store(max_streams.max(1), Ordering::Release);
-	}
-
 	fn try_reserve_stream_slot(&self) -> CapacityReservationResult {
 		let max = self.max_streams.load(Ordering::Acquire);
 		let prev = self
@@ -442,12 +438,10 @@ impl<K: Key> HostPool<K> {
 				trace!("insert new error; removing canceled waiter for {:?}", key);
 				continue;
 			}
-			tx.send(Err(ClientConnectError::CheckoutIsClosed(
+			let _ = tx.send(Err(ClientConnectError::CheckoutIsClosed(
 				pool::Error::WaitingOnSharedFailedConnection,
 			)));
-			break;
 		}
-		// TODO: we need to trigger new connections..
 	}
 	pub fn return_idle(
 		&mut self,
@@ -487,10 +481,6 @@ impl<K: Key> HostPool<K> {
 		self.idle.push(Idle { value, idle_at });
 	}
 }
-
-// This is because `Weak::new()` *allocates* space for `T`, even if it
-// doesn't need it!
-struct WeakOpt<T>(Option<Weak<T>>);
 
 #[derive(Clone, Copy, Debug)]
 pub struct Config {
@@ -561,7 +551,7 @@ struct ShouldConnectInner<K: Key> {
 }
 
 #[derive(Debug)]
-pub struct ShouldConnect<K: Key> {
+pub(crate) struct ShouldConnect<K: Key> {
 	inner: Option<ShouldConnectInner<K>>,
 }
 
@@ -584,7 +574,7 @@ pub(crate) enum CheckoutResult<K: Key> {
 }
 
 impl<K: Key> Pool<K> {
-	pub fn insert_new_connection_error(
+	pub(crate) fn insert_new_connection_error(
 		&self,
 		mut should_connect: ShouldConnect<K>,
 		err: crate::client::legacy::Error,
@@ -600,7 +590,11 @@ impl<K: Key> Pool<K> {
 		let mut host = self.host(&key);
 		host.forget_pending_connection(key, expected_capacity, Some(err))
 	}
-	pub fn insert_new_connection(&self, mut should_connect: ShouldConnect<K>, conn: HttpConnection) {
+	pub(crate) fn insert_new_connection(
+		&self,
+		mut should_connect: ShouldConnect<K>,
+		conn: HttpConnection,
+	) {
 		let ShouldConnectInner {
 			expected_capacity,
 			key,
@@ -611,7 +605,7 @@ impl<K: Key> Pool<K> {
 			.expect("insert_new_connection requires an active should_connect token");
 		let mut host = self.host(&key);
 		// Do not drop again as we explicitly inserted
-		let mut capacity = conn.capacity();
+		let capacity = conn.capacity();
 		if capacity != expected_capacity {
 			warn!(
 				"TODO: handle capacity mismatch: expected {} but got {} ",
@@ -700,7 +694,7 @@ impl<K: Key> Pool<K> {
 		}
 	}
 
-	pub fn checkout_or_register_waker(&self, key: K) -> CheckoutResult<K> {
+	pub(crate) fn checkout_or_register_waker(&self, key: K) -> CheckoutResult<K> {
 		let mut host = self.host(&key);
 		// First attempt: find any active H2 streams with available capacity and attach to that.
 		if let Some(reserved) = host.active_h2.reserve() {
@@ -761,7 +755,7 @@ impl<K: Key> Pool<K> {
 			None
 		};
 		trace!(should_connect=%should_connect.is_some(), "no active or idle connections available");
-		let (tx, mut rx) = oneshot::channel();
+		let (tx, rx) = oneshot::channel();
 		host.waiters.push_back(tx);
 		CheckoutResult::Wait(WaitForConnection {
 			waiter: rx,
@@ -885,7 +879,7 @@ impl<T: Poolable, K: Key> PoolInner<T, K> {
 */
 
 /// A wrapped poolable value that tries to reinsert to the Pool on Drop.
-pub struct Pooled<K: Key> {
+pub(crate) struct Pooled<K: Key> {
 	value: Option<(K, HttpConnection)>,
 	is_reused: bool,
 	pool: Weak<Mutex<HashMap<K, HostPool<K>>>>,
@@ -906,7 +900,7 @@ impl<K: Key> Pooled<K> {}
 impl<K: Key> Pooled<K> {
 	fn maybe_clone(self) -> (Self, Option<(Self, bool)>) {
 		match self.value.as_ref() {
-			Some((_, HttpConnection::Http1(h))) => {
+			Some((_, HttpConnection::Http1(_h))) => {
 				// HTTP/1.1 cannot be cloned
 				(self, None)
 			},
@@ -997,18 +991,6 @@ pub enum Error {
 	CheckedOutClosedValue,
 	WaitingOnSharedFailedConnection,
 	ConnectionDroppedWithoutCompletion,
-}
-
-impl Error {
-	pub(super) fn is_canceled(&self) -> bool {
-		matches!(
-			self,
-			Error::CheckedOutClosedValue
-				| Error::CheckoutNoLongerWanted
-				| Error::WaitingOnSharedFailedConnection
-				| Error::ConnectionDroppedWithoutCompletion
-		)
-	}
 }
 
 impl fmt::Display for Error {
@@ -1103,14 +1085,12 @@ impl<K: Key> Future for IdleTask<K> {
 #[cfg(all(test, not(miri)))]
 mod tests {
 	use super::*;
-	use super::{ExpectedCapacity, Key, Pool, WeakOpt};
+	use super::{ExpectedCapacity, Key, Pool};
 	use crate::client::legacy::connect::Connected;
-	use crate::common::timer;
 	use crate::rt::{TokioExecutor, TokioIo};
 	use assert_matches::assert_matches;
 	use bytes::Bytes;
 	use futures_channel::oneshot::Receiver;
-	use futures_util::FutureExt;
 	use http_body_util::Full;
 	use hyper::body::Incoming;
 	use hyper::rt::Sleep;
@@ -1123,7 +1103,6 @@ mod tests {
 	use std::pin::Pin;
 	use std::sync::Arc;
 	use std::sync::Once;
-	use std::sync::atomic::{AtomicBool, Ordering};
 	use std::task::{self, Poll};
 	use std::time::{Duration, Instant};
 	use tracing_subscriber::EnvFilter;
@@ -1784,25 +1763,19 @@ mod tests {
 			.expect("second waiter should receive first h2 connection");
 
 		// Make the older connection open again before inserting the newer one fully busy.
-		tracing::error!("howardjohn: st1: {:?}", pool.host(&key).active_h2);
 		drop(pooled1);
-		tracing::error!("howardjohn: st2: {:?}", pool.host(&key).active_h2);
 
 		pool.insert_new_connection(sc2, mock_http2_connection(2).await);
-		tracing::error!("howardjohn: st3: {:?}", pool.host(&key).active_h2);
 		let pooled3 = w3
 			.await
 			.expect("third waiter should receive second h2 connection");
-		tracing::error!("howardjohn: st4: {:?}", pool.host(&key).active_h2);
 		let pooled4 = w4
 			.await
 			.expect("fourth waiter should receive second h2 connection");
-		tracing::error!("howardjohn: st5: {:?}", pool.host(&key).active_h2);
 
 		// There is still spare capacity on the older connection, so this should reuse it
 		// instead of asking for a third connection.
 		assert_eq!(2, pool.host(&key).active_h2.0.len());
-		tracing::error!("howardjohn: CHECK");
 		let _ = must_checkout(&pool, key.clone());
 
 		assert_eq!(2, pool.host(&key).active_h2.0.len());

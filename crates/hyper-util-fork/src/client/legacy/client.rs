@@ -10,14 +10,11 @@ use std::future::{Future, poll_fn};
 use std::ops::DerefMut;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::task::{self, Poll};
 use std::time::Duration;
 
-use futures_util::future::{self, Either, FutureExt, TryFutureExt};
+use futures_util::future::{FutureExt, TryFutureExt};
 use http::uri::Scheme;
-use hyper::body::Body;
-use hyper::client::conn::TrySendError as ConnTrySendError;
 use hyper::header::{HOST, HeaderValue};
 use hyper::rt::Timer;
 use hyper::{Method, Request, Response, Uri, Version};
@@ -25,10 +22,9 @@ use tracing::{debug, trace, warn};
 
 use super::connect::{Alpn, Connect, Connected, Connection};
 use super::pool::{self, CheckoutResult, ClientConnectError, H2Load, HttpConnection, Key, ReservedHttp1Connection, ReservedHttp2Connection};
-use crate::common::{Exec, Lazy, SyncWrapper, lazy as hyper_lazy, timer};
+use crate::common::{Exec, SyncWrapper, timer};
 
 type BoxSendFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
-const H2_WAITERS_PER_CONNECTION_ESTIMATE: usize = 5;
 
 /// A Client to make outgoing HTTP requests.
 ///
@@ -52,7 +48,6 @@ pub struct Error {
 #[derive(Debug)]
 enum ErrorKind {
 	Canceled,
-	ChannelClosed,
 	Connect,
 	SendRequest,
 	NoPoolKey,
@@ -538,14 +533,6 @@ impl Future for ResponseFuture {
 	fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
 		self.inner.get_mut().as_mut().poll(cx)
 	}
-}
-
-enum PoolTx<B> {
-	Http1(hyper::client::conn::http1::SendRequest<B>),
-	Http2 {
-		tx: hyper::client::conn::http2::SendRequest<B>,
-		load: Arc<H2Load>,
-	},
 }
 
 fn origin_form(uri: &mut Uri) {
@@ -1120,11 +1107,6 @@ impl StdError for Error {
 }
 
 impl Error {
-	/// Returns true if this was an error from `Connect`.
-	pub fn is_connect(&self) -> bool {
-		matches!(self.kind, ErrorKind::Connect)
-	}
-
 	/// Returns the info of the client connection on which this error occurred.
 	pub fn connect_info(&self) -> Option<&Connected> {
 		self.connect_info.as_ref()
@@ -1136,15 +1118,8 @@ impl Error {
 			..self
 		}
 	}
-	fn is_canceled(&self) -> bool {
-		matches!(self.kind, ErrorKind::Canceled)
-	}
 
 	fn tx(src: hyper::Error) -> Self {
 		e!(SendRequest, src)
-	}
-
-	fn closed(src: hyper::Error) -> Self {
-		e!(ChannelClosed, src)
 	}
 }

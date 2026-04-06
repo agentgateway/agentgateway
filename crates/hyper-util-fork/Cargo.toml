@@ -44,7 +44,3 @@ tracing-subscriber.workspace = true
 
 [features]
 default = []
-
-[[bench]]
-name = "pooling_client"
-harness = false
