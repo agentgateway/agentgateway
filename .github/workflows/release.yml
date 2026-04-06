@@ -82,7 +82,7 @@ jobs:
           - platform: linux/amd64
             os: ubuntu-24.04
           - platform: linux/arm64
-            os: ubuntu-24.04-arm
+            os: blacksmith-4vcpu-ubuntu-2404-arm
     env:
       VERSION: ${{ needs.setup.outputs.version }}
     steps:
@@ -207,7 +207,7 @@ jobs:
           - platform: linux/amd64
             os: ubuntu-24.04
           - platform: linux/arm64
-            os: ubuntu-24.04-arm
+            os: blacksmith-4vcpu-ubuntu-2404-arm
     env:
       VERSION: ${{ needs.setup.outputs.version }}
     steps:
@@ -335,7 +335,7 @@ jobs:
             os: ubuntu-24.04
             goarch: amd64
           - platform: linux/arm64
-            os: ubuntu-24.04-arm
+            os: blacksmith-4vcpu-ubuntu-2404-arm
             goarch: arm64
     defaults:
       run:
@@ -518,7 +518,7 @@ jobs:
             # Performance is horrendous on musl without jemalloc
             features: jemalloc
           - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-musl
+            target: blacksmith-4vcpu-ubuntu-2404-arm
             # TODO: arm64 build fails with jemalloc for some reason? https://github.com/tikv/jemallocator/issues/146
             features: default
           - os: macos-26
@@ -574,7 +574,7 @@ jobs:
     - push-controller-image
     - push-helm-charts
     - build
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
     env:
