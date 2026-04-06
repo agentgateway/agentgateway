@@ -19,6 +19,7 @@ use crate::common::exec;
 use crate::common::exec::Exec;
 use crate::common::timer::Timer;
 use futures_channel::oneshot;
+use futures_channel::oneshot::Receiver;
 use futures_core::ready;
 use futures_util::future::Either;
 use http::{Request, Response, Uri};
@@ -45,6 +46,31 @@ pub struct PoolSettings {
 }
 
 impl<K: Key> Pool<K> {
+	/// This should *only* be called by the IdleTask
+	fn clear_expired(settings: &PoolSettings, hosts: &mut HashMap<K, HostPool<K>>) {
+		let dur = settings.timeout.expect("interval assumes timeout");
+
+		let now = settings.timer.now();
+
+		for (key, host) in hosts.iter_mut() {
+			host.idle.retain(|entry| {
+				if !entry.value.is_open() {
+					trace!("idle interval evicting closed for {:?}", key);
+					return false;
+				}
+
+				// Avoid `Instant::sub` to avoid issues like rust-lang/rust#86470.
+				if now.saturating_duration_since(entry.idle_at) > dur {
+					trace!("idle interval evicting expired for {:?}", key);
+					return false;
+				}
+
+				// Otherwise, keep this value...
+				true
+			});
+			// TODO(john): on last eviction, drop from hosts
+		}
+	}
 	pub fn lock_hosts<'a>(
 		hosts: &'a Mutex<HashMap<K, HostPool<K>>>,
 		k: &K,
@@ -402,8 +428,6 @@ impl<K: Key> HostPool<K> {
 				value: c,
 				idle_at: now,
 			});
-			// TODO
-			// self.spawn_idle_interval(__pool_ref);
 		}
 	}
 }
@@ -428,17 +452,42 @@ impl<K: Key> Pool<K> {
 		let exec = Exec::new(executor);
 		let timer = Timer::new(timer);
 
-		Pool {
+		let (tx, rx) = oneshot::channel();
+		let mut p = Pool {
 			hosts: Arc::new(Mutex::new(HashMap::new())),
 			settings: Arc::new(PoolSettings {
-				idle_interval_ref: None,
+				idle_interval_ref: Some(tx),
 				max_idle_per_host: config.max_idle_per_host,
 				exec,
 				timer,
 				timeout: config.idle_timeout,
 				expected_http2_capacity: config.expected_http2_capacity,
 			}),
-		}
+		};
+
+		p.spawn_idle_interval(rx);
+		p
+	}
+
+	fn spawn_idle_interval(&mut self, rx: Receiver<Infallible>) {
+		let dur = if let Some(dur) = self.settings.timeout {
+			dur
+		} else {
+			return;
+		};
+		let timer = self.settings.timer.clone();
+
+		let interval = IdleTask {
+			timer: timer.clone(),
+			duration: dur,
+			deadline: Instant::now(),
+			fut: timer.sleep_until(Instant::now()), // ready at first tick
+			pool: Arc::downgrade(&self.hosts),
+			settings: self.settings.clone(),
+			pool_drop_notifier: rx,
+		};
+
+		self.settings.exec.execute(interval);
 	}
 }
 
@@ -887,23 +936,23 @@ impl Expiration {
 	}
 }
 
-/*
 pin_project_lite::pin_project! {
-		struct IdleTask<T, K: Key> {
-				timer: Timer,
-				duration: Duration,
-				deadline: Instant,
-				fut: Pin<Box<dyn Sleep>>,
-				pool: WeakOpt<Mutex<PoolInner<T, K>>>,
-				// This allows the IdleTask to be notified as soon as the entire
-				// Pool is fully dropped, and shutdown. This channel is never sent on,
-				// but Err(Canceled) will be received when the Pool is dropped.
-				#[pin]
-				pool_drop_notifier: oneshot::Receiver<Infallible>,
-		}
+	struct IdleTask<K: Key> {
+		timer: Timer,
+		duration: Duration,
+		deadline: Instant,
+		fut: Pin<Box<dyn Sleep>>,
+		pool: Weak<Mutex<HashMap<K, HostPool<K>>>>,
+		settings: Arc<PoolSettings>,
+		// This allows the IdleTask to be notified as soon as the entire
+		// Pool is fully dropped, and shutdown. This channel is never sent on,
+		// but Err(Canceled) will be received when the Pool is dropped.
+		#[pin]
+		pool_drop_notifier: oneshot::Receiver<Infallible>,
+	}
 }
 
-impl<T: Poolable + 'static, K: Key> Future for IdleTask<T, K> {
+impl<K: Key> Future for IdleTask<K> {
 	type Output = ();
 
 	fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
@@ -929,17 +978,15 @@ impl<T: Poolable + 'static, K: Key> Future for IdleTask<T, K> {
 			*this.fut = this.timer.sleep_until(*this.deadline);
 
 			if let Some(inner) = this.pool.upgrade() {
-				if let Ok(mut inner) = inner.lock() {
-					trace!("idle interval checking for expired");
-					inner.clear_expired();
-					continue;
-				}
+				let mut l = inner.lock();
+				trace!("idle interval checking for expired");
+				Pool::clear_expired(&this.settings, &mut l);
+				continue;
 			}
 			return Poll::Ready(());
 		}
 	}
 }
-*/
 
 #[cfg(all(test, not(miri)))]
 mod tests {
@@ -1000,12 +1047,19 @@ mod tests {
 	}
 
 	#[derive(Debug)]
-	struct ReadySleep;
+	struct ReadySleep {
+		polled: bool,
+	}
 
 	impl Future for ReadySleep {
 		type Output = ();
 
-		fn poll(self: Pin<&mut Self>, _cx: &mut task::Context<'_>) -> Poll<Self::Output> {
+		fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
+			if !self.polled {
+				self.polled = true;
+				cx.waker().wake_by_ref();
+				return Poll::Pending;
+			}
 			Poll::Ready(())
 		}
 	}
@@ -1019,7 +1073,7 @@ mod tests {
 
 		fn sleep_until(&self, deadline: Instant) -> Pin<Box<dyn Sleep>> {
 			*self.next_now.lock() = Some(deadline + Duration::from_millis(1));
-			Box::pin(ReadySleep)
+			Box::pin(ReadySleep { polled: false })
 		}
 
 		fn now(&self) -> Instant {
@@ -1272,7 +1326,6 @@ mod tests {
 	}
 
 	#[tokio::test]
-	#[ignore]
 	async fn test_pool_idle_interval_evicts_before_checkout_timeout() {
 		let pool = pool();
 		let key = host_key("foo");
