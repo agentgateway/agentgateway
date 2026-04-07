@@ -523,29 +523,39 @@
           "default": null
         },
         "workload": {
-          "description": "The workload identity of the downstream connection, resolved from the\nworkload discovery store by source IP. Available when the source pod is\nknown to the controller's workload discovery store.",
+          "description": "The workload context of the downstream connection, resolved from the\nworkload discovery store by source IP. Available when the source pod is\nknown to the controller's workload discovery store.\n\nFields are nested under `unverified` to signal that they are derived\nfrom the source IP (not cryptographically authenticated). Policy\nauthors should prefer `source.identity.*` for trust-sensitive checks.",
           "type": [
             "object",
             "null"
           ],
           "properties": {
-            "name": {
-              "description": "The pod name of the source workload.",
-              "type": "string",
-              "default": ""
-            },
-            "namespace": {
-              "description": "The namespace of the source workload.",
-              "type": "string",
-              "default": ""
-            },
-            "serviceAccount": {
-              "description": "The service account of the source workload.",
-              "type": "string",
-              "default": ""
+            "unverified": {
+              "description": "Unverified workload metadata resolved from the source IP.",
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "The pod name of the source workload.",
+                  "type": "string",
+                  "default": ""
+                },
+                "namespace": {
+                  "description": "The namespace of the source workload.",
+                  "type": "string",
+                  "default": ""
+                },
+                "serviceAccount": {
+                  "description": "The service account of the source workload.",
+                  "type": "string",
+                  "default": ""
+                }
+              },
+              "additionalProperties": false
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "required": [
+            "unverified"
+          ]
         }
       },
       "additionalProperties": false
