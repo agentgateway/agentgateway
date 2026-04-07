@@ -80,6 +80,23 @@ Agentgateway has a built-in UI for you to explore agentgateway connecting agent-
   <img alt="agentgateway UI" src="img/UI-homepage.png">
 </div>
 
+## Sponsors
+
+<table>
+  <tr>
+    <td align="center" width="33.3%">
+      <a href="https://blacksmith.sh/">
+        <picture>
+          <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/agentgateway/agentgateway/main/img/blacksmith-light.svg">
+          <img src="https://raw.githubusercontent.com/agentgateway/agentgateway/main/img/blacksmith.svg" alt="Blacksmith" height="28">
+        </picture>
+      </a>
+    </td>
+  </tr>
+</table>
+
+Thank you to our sponsors for helping to fund the development of agentgateway!
+
 ## Contributing
 
 For instructions on how to contribute to the agentgateway project, see the [CONTRIBUTION.md](CONTRIBUTION.md) file.
