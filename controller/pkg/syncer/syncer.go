@@ -12,7 +12,6 @@ import (
 	"istio.io/istio/pkg/cluster"
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/network"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/util/sets"
@@ -601,16 +600,12 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 		ClusterID:       clusterId,
 	}, opts)
 	builder := ambient.Builder{
-		DomainSuffix:      kubeutils.GetClusterDomainName(),
-		ClusterID:         clusterId,
-		NetworkGateways:   Networks.NetworkGateways,
-		GatewaysByNetwork: Networks.GatewaysByNetwork,
+		DomainSuffix: kubeutils.GetClusterDomainName(),
+		ClusterID:    clusterId,
+		Networks:     Networks,
 		Flags: ambient.FeatureFlags{
 			EnableK8SServiceSelectWorkloadEntries: true,
 			EnableMtlsTransportProtocol:           true,
-		},
-		Network: func(ctx krt.HandlerContext) network.ID {
-			return ""
 		},
 	}
 
