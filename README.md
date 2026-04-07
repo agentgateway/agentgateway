@@ -88,7 +88,7 @@ Agentgateway has a built-in UI for you to explore agentgateway connecting agent-
       <a href="https://blacksmith.sh/">
         <picture>
           <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/agentgateway/agentgateway/main/img/blacksmith-light.svg">
-          <img src="https://raw.githubusercontent.com/agentgateway/agentgateway/main/img/blacksmith.svg" alt="Blacksmith" height="28">
+          <img src="https://raw.githubusercontent.com/agentgateway/agentgateway/main/img/blacksmith.svg" alt="Blacksmith" height="48">
         </picture>
       </a>
     </td>
