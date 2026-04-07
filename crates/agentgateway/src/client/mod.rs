@@ -17,8 +17,6 @@ use crate::types::agent::Target;
 use crate::*;
 use ::http::HeaderValue;
 use ::http::uri::{Authority, Scheme};
-use axum_core::BoxError;
-use http_body::Frame;
 use hyper_util_fork::rt::TokioIo;
 use tracing::event;
 use hyper_util_fork::client::legacy::pool::ExpectedCapacity;
@@ -230,7 +228,7 @@ impl Connector {
 		transport: Transport,
 		http: bool,
 	) -> Result<Socket, http::Error> {
-		// tracing::error!("howardjohn: start connect");
+		tracing::error!("howardjohn: start connect");
 		let connect_start = std::time::Instant::now();
 		let transport_name = transport.name();
 		let tls = match transport.application() {
@@ -601,7 +599,7 @@ impl Client {
 
 			duration = dur,
 		);
-		let mut resp = resp?.map(BodyLog::wrap);
+		let mut resp = resp?;
 
 		event!(
 			target: "upstream response",
@@ -616,51 +614,5 @@ impl Client {
 			.insert(transport::BufferLimit::new(buffer_limit));
 		resp.extensions_mut().insert(ResolvedDestination(dest));
 		Ok(resp)
-	}
-}
-
-/// BodyLog wraps a body with logging on errors. These otherwise get masked by hyper.
-#[must_use]
-#[derive(Debug)]
-struct BodyLog<B>(B);
-
-impl<B> BodyLog<B> {
-	pub fn wrap(body: B) -> http::Body
-	where
-		B: http_body::Body<Data = Bytes> + Unpin + Send + 'static,
-		B::Error: Into<BoxError> + Debug,
-	{
-		http::Body::new(BodyLog(body))
-	}
-}
-
-impl<B> http_body::Body for BodyLog<B>
-where
-	B: http_body::Body + Unpin,
-	<B as http_body::Body>::Error: std::fmt::Debug,
-{
-	type Data = B::Data;
-	type Error = B::Error;
-
-	#[inline]
-	fn poll_frame(
-		mut self: Pin<&mut Self>,
-		cx: &mut Context<'_>,
-	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-		let res = ready!(Pin::new(&mut self.0).poll_frame(cx));
-		if let Some(Err(err)) = &res {
-			debug!("warning: error from body stream: {err:?}")
-		};
-		Poll::Ready(res)
-	}
-
-	#[inline]
-	fn size_hint(&self) -> http_body::SizeHint {
-		self.0.size_hint()
-	}
-
-	#[inline]
-	fn is_end_stream(&self) -> bool {
-		self.0.is_end_stream()
 	}
 }

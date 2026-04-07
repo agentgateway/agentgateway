@@ -6,22 +6,27 @@
 
 use std::error::Error as StdError;
 use std::fmt;
+use std::fmt::Debug;
 use std::future::{Future, poll_fn};
 use std::ops::DerefMut;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{self, Poll};
+use std::task::{self, ready, Context, Poll};
 use std::time::Duration;
-
+use axum_core::BoxError;
 use futures_util::future::{FutureExt, TryFutureExt};
 use http::uri::Scheme;
+use hyper::body::{Body, Bytes, Frame, SizeHint};
 use hyper::header::{HOST, HeaderValue};
 use hyper::rt::Timer;
 use hyper::{Method, Request, Response, Uri, Version};
 use tracing::{debug, trace, warn};
 
 use super::connect::{Alpn, Connect, Connected, Connection};
-use super::pool::{self, CheckoutResult, ClientConnectError, H2Load, HttpConnection, Key, ReservedHttp1Connection, ReservedHttp2Connection};
+use super::pool::{
+	self, CheckoutResult, ClientConnectError, H2Load, HttpConnection, Key, ReservedHttp1Connection,
+	ReservedHttp2Connection,
+};
 use crate::common::{Exec, SyncWrapper, timer};
 
 type BoxSendFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
@@ -51,6 +56,7 @@ enum ErrorKind {
 	Connect,
 	SendRequest,
 	NoPoolKey,
+	WaitCanceled,
 }
 
 macro_rules! e {
@@ -87,7 +93,7 @@ enum TrySendError<B> {
 pub struct ResponseFuture {
 	#[allow(clippy::type_complexity)]
 	inner: SyncWrapper<
-		Pin<Box<dyn Future<Output = Result<Response<hyper::body::Incoming>, Error>> + Send>>,
+		Pin<Box<dyn Future<Output = Result<Response<axum_core::body::Body>, Error>> + Send>>,
 	>,
 }
 
@@ -160,7 +166,7 @@ where
 	async fn send_request(
 		self,
 		mut req: Request<axum_core::body::Body>,
-	) -> Result<Response<hyper::body::Incoming>, Error> {
+	) -> Result<Response<axum_core::body::Body>, Error> {
 		// We may change URI so clone it to keep the original
 		let uri = req.uri().clone();
 
@@ -193,7 +199,7 @@ where
 	async fn try_send_request(
 		&self,
 		req: Request<axum_core::body::Body>,
-	) -> Result<Response<hyper::body::Incoming>, TrySendError<axum_core::body::Body>> {
+	) -> Result<Response<axum_core::body::Body>, TrySendError<axum_core::body::Body>> {
 		let (parts, body) = req.into_parts();
 
 		let mut pooled = self
@@ -241,8 +247,6 @@ where
 		let mut res = match pooled.try_send_request(req).await {
 			Ok(res) => res,
 			Err(mut err) => {
-				// TODO: Drop?
-				// pooled.release_h2_stream_slot();
 				return if let Some(req) = err.take_message() {
 					Err(TrySendError::Retryable {
 						connection_reused: pooled.is_reused() || pooled.is_http2(),
@@ -262,11 +266,15 @@ where
 			extra.set(res.extensions_mut());
 		}
 
-		if pooled.is_http2() {
-			// TODO(john): we need to drop the Send but make it decrement only when the request ends.
-			// if let Some(guard) = pooled.take_h2_stream_guard() {
-			// 	res.extensions_mut().insert(guard);
-			// }
+		let res = if pooled.is_http2() {
+			let guard = pooled.into_guard();
+			// Insert the guard into the response extensions... AND the body
+			// This ensures that its not dropped until both are done.
+			// Inserting into the response is a guard against the body being dropped before the stream is complete.
+			// This is still possible to drop both the response and the body, but less likely; if it does occur,
+			// the impact is that we attempt to send on a stream that is full, which will block until it has capacity.
+			res.extensions_mut().insert(guard.clone());
+			res.map(|b| BodyLog::wrap(b, Some(guard)))
 		} else {
 			// when pooled is dropped, it will try to insert back into the
 			// pool. To delay that, spawn a future that completes once the
@@ -283,7 +291,9 @@ where
 			.map(move |_| ());
 
 			self.exec.execute(on_idle);
-		}
+
+			res.map(|b| BodyLog::wrap(b, None::<()>))
+		};
 		Ok(res)
 	}
 
@@ -329,26 +339,20 @@ where
 					let ver = dst.version;
 					let pk = pool_key.clone();
 					self.exec.execute(async move {
-						let res = client
-							.connect_to(ver, pk)
-							.await;
+						let res = client.connect_to(ver, pk).await;
 						match res {
 							Ok(hc) => client.pool.insert_new_connection(sc, hc),
 							Err(err) => {
 								client.pool.insert_new_connection_error(sc, err);
 							},
 						}
-						// TODO
 					});
 				} else {
 					trace!(result = "wait", "pooled request");
 				}
 				let Ok(conn) = wait.waiter.await else {
-					warn!("john: not sure when this can happen");
-					panic!("TODO: assert that this can't happen, or fix it.");
-					// return Err(ClientConnectError::Normal(e!(
-					// 	Canceled,
-					// )));
+					// This should never happen
+					return Err(ClientConnectError::Normal(e!(WaitCanceled)));
 				};
 				conn
 			},
@@ -515,7 +519,7 @@ impl<C, PK: Key> fmt::Debug for Client<C, PK> {
 impl ResponseFuture {
 	fn new<F>(value: F) -> Self
 	where
-		F: Future<Output = Result<Response<hyper::body::Incoming>, Error>> + Send + 'static,
+		F: Future<Output = Result<Response<axum_core::body::Body>, Error>> + Send + 'static,
 	{
 		Self {
 			inner: SyncWrapper::new(Box::pin(value)),
@@ -530,7 +534,7 @@ impl fmt::Debug for ResponseFuture {
 }
 
 impl Future for ResponseFuture {
-	type Output = Result<Response<hyper::body::Incoming>, Error>;
+	type Output = Result<Response<axum_core::body::Body>, Error>;
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
 		self.inner.get_mut().as_mut().poll(cx)
@@ -600,6 +604,62 @@ fn is_schema_secure(uri: &Uri) -> bool {
 		.map(|scheme_str| matches!(scheme_str, "wss" | "https"))
 		.unwrap_or_default()
 }
+
+
+pin_project_lite::pin_project! {
+	/// BodyLog wraps a body with logging on errors. These otherwise get masked by hyper.
+	/// Additionally, it can keep-alive some data (T) to RAII
+	#[must_use]
+	#[derive(Debug)]
+	struct BodyLog<B, T> {
+		#[pin]
+		body: B,
+		keep_alive: Option<T>,
+	}
+}
+
+impl<B, T> BodyLog<B, T> {
+	pub fn wrap(body: B, keep_alive: Option<T>) -> axum_core::body::Body
+	where
+	T: Send + 'static,
+	B: Body<Data = Bytes> + Unpin + Send + 'static,
+	B::Error: Into<BoxError> + Debug,
+	{
+		axum_core::body::Body::new(BodyLog { body, keep_alive })
+	}
+}
+
+impl<B, T> Body for BodyLog<B, T>
+where
+B: Body + Unpin,
+<B as Body>::Error: std::fmt::Debug,
+{
+	type Data = B::Data;
+	type Error = B::Error;
+
+	#[inline]
+	fn poll_frame(
+		mut self: Pin<&mut Self>,
+		cx: &mut Context<'_>,
+	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+		let res = ready!(self.as_mut().project().body.poll_frame(cx));
+		if let Some(Err(err)) = &res {
+			debug!("warning: error from body stream: {err:?}")
+		};
+		Poll::Ready(res)
+	}
+
+	#[inline]
+	fn is_end_stream(&self) -> bool {
+		self.body.is_end_stream()
+	}
+
+	#[inline]
+	fn size_hint(&self) -> SizeHint {
+		self.body.size_hint()
+	}
+}
+
 
 /// A builder to configure a new [`Client`](Client).
 ///

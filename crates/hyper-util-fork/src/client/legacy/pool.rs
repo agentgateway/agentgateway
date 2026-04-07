@@ -49,7 +49,7 @@ impl<K: Key> Pool<K> {
 
 		let now = settings.timer.now();
 
-		for (key, host) in hosts.iter_mut() {
+		hosts.retain(|key, host| {
 			host.idle.retain(|entry| {
 				if !entry.value.is_open() {
 					trace!("idle interval evicting closed for {:?}", key);
@@ -65,8 +65,12 @@ impl<K: Key> Pool<K> {
 				// Otherwise, keep this value...
 				true
 			});
-			// TODO(john): on last eviction, drop from hosts
-		}
+			let empty = host.idle.is_empty()
+				&& host.active_h2.0.is_empty()
+				&& host.connecting == 0
+				&& host.waiters.is_empty();
+			!empty
+		});
 	}
 	fn lock_hosts<'a>(
 		hosts: &'a Mutex<HashMap<K, HostPool<K>>>,
@@ -255,6 +259,9 @@ impl HttpConnection {
 	}
 }
 
+#[derive(Debug, Clone)]
+pub struct H2CapacityGuard(#[allow(dead_code)] Arc<H2Load>);
+
 pub(crate) struct ReservedHttp2Connection {
 	pub(crate) info: Connected,
 	pub(crate) tx: hyper::client::conn::http2::SendRequest<axum_core::body::Body>,
@@ -384,7 +391,6 @@ impl<K: Key> HostPool<K> {
 			HttpConnection::Http1(h) => self.return_idle(settings, pool, k, HttpConnection::Http1(h)),
 			HttpConnection::Http2(h) => {
 				let (remaining, was_at_max) = h.load.release_stream_slot();
-				tracing::error!("howardjohn: {:?}", self.active_h2);
 				if remaining == 0 {
 					self.active_h2.remove(&h);
 					self.return_idle(settings, pool, k, HttpConnection::Http2(h))
@@ -435,7 +441,7 @@ impl<K: Key> HostPool<K> {
 			}
 		}
 
-		for _ in 0..to_notify {
+		while to_notify > 0 {
 			let Some(tx) = self.waiters.pop_front() else {
 				break;
 			};
@@ -443,6 +449,7 @@ impl<K: Key> HostPool<K> {
 				trace!("insert new error; removing canceled waiter for {:?}", key);
 				continue;
 			}
+			to_notify -= 1;
 			let e = if for_under_capacity_new_connection {
 				pool::Error::ConnectionLowCapacity
 			} else {
@@ -590,7 +597,6 @@ impl<K: Key> Pool<K> {
 		// Do not drop again as we explicitly inserted
 		let capacity = conn.capacity();
 		host.connecting -= 1;
-		tracing::error!("howardjohn: {} vs {}", capacity, expected_capacity);
 		// Min of capacity and expected to handle the over-capacity case.
 		// For under capacity, we handle it below in forget_pending_connection
 		host.expected_connecting_capacity -= std::cmp::min(capacity, expected_capacity);
@@ -671,7 +677,7 @@ impl<K: Key> Pool<K> {
 			};
 			let pooled = Pooled {
 				value: Some((key.clone(), raw_conn)),
-				is_reused: false,
+				is_reused: reason == "idle",
 				pool: Arc::downgrade(pool),
 				settings: settings.clone(),
 			};
@@ -698,15 +704,13 @@ impl<K: Key> Pool<K> {
 			}
 		}
 		trace!(fulfilled=%sent, "sent {reason} connection");
-		if sent == 0 {
+		if sent == 0
+			&& let Some(c) = conn
+		{
 			trace!("nobody wanted {reason} connection; inserting as idle");
-			if sent == 0
-				&& let Some(c) = conn
-			{
-				Self::ensure_idle_interval(pool, settings);
-				let now = settings.timer.now();
-				host.push_idle_with_cap(settings.max_idle_per_host, key, c, now);
-			}
+			Self::ensure_idle_interval(pool, settings);
+			let now = settings.timer.now();
+			host.push_idle_with_cap(settings.max_idle_per_host, key, c, now);
 		}
 	}
 
@@ -813,87 +817,6 @@ impl<'a, K: Debug> IdlePopper<'a, K> {
 	}
 }
 
-/*
-impl<T: Poolable, K: Key> PoolInner<T, K> {
-	fn spawn_idle_interval(&mut self, pool_ref: &Arc<Mutex<PoolInner<T, K>>>) {
-		if self.idle_interval_ref.is_some() {
-			return;
-		}
-		let dur = if let Some(dur) = self.timeout {
-			dur
-		} else {
-			return;
-		};
-		let timer = if let Some(timer) = self.timer.clone() {
-			timer
-		} else {
-			return;
-		};
-		let (tx, rx) = oneshot::channel();
-		self.idle_interval_ref = Some(tx);
-
-		let interval = IdleTask {
-			timer: timer.clone(),
-			duration: dur,
-			deadline: Instant::now(),
-			fut: timer.sleep_until(Instant::now()), // ready at first tick
-			pool: WeakOpt::downgrade(pool_ref),
-			pool_drop_notifier: rx,
-		};
-
-		self.exec.execute(interval);
-	}
-}
-
-impl<T, K: Eq + Hash> PoolInner<T, K> {
-	/// Any `FutureResponse`s that were created will have made a `Checkout`,
-	/// and possibly inserted into the pool that it is waiting for an idle
-	/// connection. If a user ever dropped that future, we need to clean out
-	/// those parked senders.
-	fn clean_waiters(&mut self, key: &K) {
-		let mut remove_waiters = false;
-		if let Some(waiters) = self.waiters.get_mut(key) {
-			waiters.retain(|tx| !tx.is_canceled());
-			remove_waiters = waiters.is_empty();
-		}
-		if remove_waiters {
-			self.waiters.remove(key);
-		}
-	}
-}
-
-impl<T: Poolable, K: Key> PoolInner<T, K> {
-	/// This should *only* be called by the IdleTask
-	fn clear_expired(&mut self) {
-		let dur = self.timeout.expect("interval assumes timeout");
-
-		let now = self.now();
-		// self.last_idle_check_at = now;
-
-		self.idle.retain(|key, values| {
-			values.retain(|entry| {
-				if !entry.value.is_open() {
-					trace!("idle interval evicting closed for {:?}", key);
-					return false;
-				}
-
-				// Avoid `Instant::sub` to avoid issues like rust-lang/rust#86470.
-				if now.saturating_duration_since(entry.idle_at) > dur {
-					trace!("idle interval evicting expired for {:?}", key);
-					return false;
-				}
-
-				// Otherwise, keep this value...
-				true
-			});
-
-			// returning false evicts this key/val
-			!values.is_empty()
-		});
-	}
-}
-*/
-
 /// A wrapped poolable value that tries to reinsert to the Pool on Drop.
 pub(crate) struct Pooled<K: Key> {
 	value: Option<(K, HttpConnection)>,
@@ -914,6 +837,12 @@ impl<K: Key> Debug for Pooled<K> {
 impl<K: Key> Pooled<K> {}
 
 impl<K: Key> Pooled<K> {
+	pub(crate) fn into_guard(mut self) -> H2CapacityGuard {
+		let HttpConnection::Http2(h2) = self.value.take().expect("not dropped").1 else {
+			panic!("into_guard requires an HTTP2 connection")
+		};
+		H2CapacityGuard(h2.load)
+	}
 	fn maybe_clone(self) -> (Self, Option<(Self, bool)>) {
 		match self.value.as_ref() {
 			Some((_, HttpConnection::Http1(_h))) => {
@@ -1927,7 +1856,7 @@ mod tests {
 				pool::Error::ConnectionLowCapacity
 			))
 		);
-		let (sc1, w1)  = must_want_new_connection(&pool, key.clone());
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
 		// We learned from last time that we expect HTTP/1.1
 		let (sc2, w2) = must_want_new_connection(&pool, key.clone());
 		// Insert with capacity 1 (i.e. this was HTTP/1.1).
