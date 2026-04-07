@@ -77,7 +77,7 @@ impl Provider {
 	pub fn get_host(&self) -> Strng {
 		match &self.resource_type {
 			AzureResourceType::OpenAI => {
-				strng::format!("{}-resource.openai.azure.com", self.resource_name)
+				strng::format!("{}.openai.azure.com", self.resource_name)
 			},
 			AzureResourceType::Foundry => {
 				strng::format!("{}-resource.services.ai.azure.com", self.resource_name)
