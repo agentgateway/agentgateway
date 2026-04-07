@@ -121,7 +121,7 @@ fn example_configs() -> Vec<String> {
 		.map(|path| {
 			path
 				.strip_prefix(workspace_root())
-				.unwrap_or_else(|_| panic!("{path} should live under the workspace root"))
+				.unwrap_or_else(|_| panic!("{} should live under the workspace root", path.display()))
 				.to_string_lossy()
 				.replace('\\', "/")
 		})
