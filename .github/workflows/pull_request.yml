@@ -25,9 +25,13 @@ jobs:
       matrix:
         include:
         - os: ubuntu-24.04
+          name: "Proxy Test"
         - os: windows-2025
+          name: "Proxy Test (Windows)"
         - os: macos-15
+          name: "Proxy Test (Mac)"
     runs-on: ${{ matrix.os }}
+    name: ${{ matrix.name }}
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
     - name: Install Rust

@@ -53,7 +53,7 @@ case "${1:-}" in
         exit 1
       fi
     done
-    docker logs -f keycloak
+    docker logs keycloak
     ;;
   stop)
     pkill -f "examples/mcp-authentication/auth_server.py" 2>/dev/null || true
