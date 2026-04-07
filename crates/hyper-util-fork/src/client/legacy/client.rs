@@ -382,7 +382,9 @@ where
 			let (mut tx, conn) = self.h2_builder.handshake(io).await.map_err(Error::tx)?;
 
 			// TODO: this needs to actually check within the execution.
-			let cur_max = conn.current_max_send_streams();
+			// Currently we do not allow exceeding the expected capacity (though it can be less than)
+			let expected = self.pool.settings.expected_http2_capacity;
+			let cur_max = std::cmp::min(conn.current_max_send_streams(), expected);
 			trace!("http2 handshake complete, spawning background dispatcher task");
 			executor.execute(
 				conn

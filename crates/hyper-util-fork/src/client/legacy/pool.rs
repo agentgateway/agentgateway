@@ -30,7 +30,7 @@ pub const DEFAULT_EXPECTED_HTTP2_CAPACITY: usize = 100;
 #[derive(Clone)]
 pub struct Pool<K: Key> {
 	hosts: Arc<Mutex<HashMap<K, HostPool<K>>>>,
-	settings: Arc<PoolSettings>,
+	pub settings: Arc<PoolSettings>,
 }
 
 pub struct PoolSettings {
@@ -39,7 +39,7 @@ pub struct PoolSettings {
 	exec: Exec,
 	timer: Timer,
 	timeout: Option<Duration>,
-	expected_http2_capacity: usize,
+	pub expected_http2_capacity: usize,
 }
 
 impl<K: Key> Pool<K> {
@@ -590,7 +590,10 @@ impl<K: Key> Pool<K> {
 		// Do not drop again as we explicitly inserted
 		let capacity = conn.capacity();
 		host.connecting -= 1;
-		host.expected_connecting_capacity -= capacity;
+		tracing::error!("howardjohn: {} vs {}", capacity, expected_capacity);
+		// Min of capacity and expected to handle the over-capacity case.
+		// For under capacity, we handle it below in forget_pending_connection
+		host.expected_connecting_capacity -= std::cmp::min(capacity, expected_capacity);
 		trace!(?key, ?host.connecting, %host.expected_connecting_capacity, "inserting new connection");
 
 		let conn = host.active_h2.maybe_insert_new(conn, false);
@@ -1765,6 +1768,22 @@ mod tests {
 		pool.insert_new_connection(sc3, mock_http2_connection(2).await);
 		let _pooled3 = w3.await.expect("get h2");
 		// connection 2 has room
+		let _ = must_checkout(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_h2_over_capacity() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+
+		// We expected 4 but it got more capacity
+		pool.insert_new_connection(sc1, mock_http2_connection(4).await);
+		let _pooled1 = w1.await.expect("get h2");
+		let _pooled2 = w2.await.expect("get h2");
+		// Since we had more capacity, we should be able to checkout.
+		// NOTE: client.rs does not follow this pattern and caps the capacity to the expected size.
 		let _ = must_checkout(&pool, key.clone());
 	}
 
