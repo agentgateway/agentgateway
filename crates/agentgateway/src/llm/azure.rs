@@ -11,7 +11,9 @@ pub enum AzureResourceType {
 	/// Azure OpenAI Service endpoint: `{resourceName}.openai.azure.com`
 	#[serde(alias = "azureOpenAI")]
 	OpenAI,
-	/// Azure AI Foundry endpoint: `{resourceName}.cognitiveservices.azure.com`
+	/// Azure AI Foundry (project) endpoint: `{resourceName}.services.ai.azure.com`
+	/// Requires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`
+	#[serde(alias = "aiServices")]
 	Foundry,
 }
 
@@ -25,6 +27,11 @@ pub struct Provider {
 	pub resource_type: AzureResourceType,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub api_version: Option<Strng>,
+	/// The Foundry project name, required when `resource_type` is `Foundry`.
+	/// Used to construct paths: `/api/projects/{project_name}/openai/v1/...`.
+	/// This is distinct from `resource_name` which is used for the host.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub project_name: Option<Strng>,
 	/// Per-provider credential cache, shared across requests via Arc.
 	#[serde(skip)]
 	#[cfg_attr(feature = "schema", schemars(skip))]
@@ -44,6 +51,13 @@ impl Provider {
 		} else {
 			strng::literal!("chat/completions")
 		};
+
+		// Foundry uses the project path prefix, no api-version needed.
+		if matches!(self.resource_type, AzureResourceType::Foundry) {
+			let project = self.project_name.as_deref().unwrap_or(self.resource_name.as_str());
+			return strng::format!("/api/projects/{project}/openai/v1/{t}");
+		}
+
 		let api_version = self.api_version();
 		if api_version == "v1" {
 			strng::format!("/openai/v1/{t}")
@@ -63,10 +77,10 @@ impl Provider {
 	pub fn get_host(&self) -> Strng {
 		match &self.resource_type {
 			AzureResourceType::OpenAI => {
-				strng::format!("{}.openai.azure.com", self.resource_name)
+				strng::format!("{}-resource.openai.azure.com", self.resource_name)
 			},
 			AzureResourceType::Foundry => {
-				strng::format!("{}.cognitiveservices.azure.com", self.resource_name)
+				strng::format!("{}-resource.services.ai.azure.com", self.resource_name)
 			},
 		}
 	}
@@ -76,7 +90,7 @@ impl Provider {
 	pub fn parse_host(host: &str) -> (Strng, AzureResourceType) {
 		if let Some(name) = host.strip_suffix(".openai.azure.com") {
 			(strng::new(name), AzureResourceType::OpenAI)
-		} else if let Some(name) = host.strip_suffix(".cognitiveservices.azure.com") {
+		} else if let Some(name) = host.strip_suffix(".services.ai.azure.com") {
 			(strng::new(name), AzureResourceType::Foundry)
 		} else {
 			// Fallback: treat the whole host as the resource name with OpenAI type

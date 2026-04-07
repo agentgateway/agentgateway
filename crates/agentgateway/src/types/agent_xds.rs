@@ -821,6 +821,7 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 									resource_name,
 									resource_type,
 									api_version: azureopenai.api_version.as_deref().map(strng::new),
+									project_name: azureopenai.project_name.as_deref().map(strng::new),
 									cached_cred: Default::default(),
 								})
 							},

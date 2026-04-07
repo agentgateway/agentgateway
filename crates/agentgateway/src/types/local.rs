@@ -383,6 +383,8 @@ pub struct LocalLLMParams {
 	azure_resource_type: Option<crate::llm::azure::AzureResourceType>,
 	/// For Azure: the API version to use
 	azure_api_version: Option<Strng>,
+	/// For Azure: the Foundry project name (required for foundry resource type)
+	azure_project_name: Option<Strng>,
 	/// Override the upstream host for this provider.
 	#[serde(default)]
 	host_override: Option<Target>,
@@ -1772,6 +1774,7 @@ json(request.body).model
 					.azure_resource_type
 					.context("azure requires azureResourceType")?,
 				api_version: p.azure_api_version,
+				project_name: p.azure_project_name,
 				cached_cred: Default::default(),
 			}),
 		};

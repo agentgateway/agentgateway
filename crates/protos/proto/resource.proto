@@ -1194,6 +1194,7 @@ message AIBackend {
     optional string model = 1;
     string host = 2;
     optional string api_version = 3;
+    optional string project_name = 4;
   }
 
   message Provider {
