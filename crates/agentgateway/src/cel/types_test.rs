@@ -310,6 +310,12 @@ fn test_source_workload_cel_fields() {
 	};
 
 	assert_eq!(eval("source.workload.unverified.name"), json!("agent-a"));
-	assert_eq!(eval("source.workload.unverified.namespace"), json!("agents"));
-	assert_eq!(eval("source.workload.unverified.serviceAccount"), json!("agent-a-sa"));
+	assert_eq!(
+		eval("source.workload.unverified.namespace"),
+		json!("agents")
+	);
+	assert_eq!(
+		eval("source.workload.unverified.serviceAccount"),
+		json!("agent-a-sa")
+	);
 }
