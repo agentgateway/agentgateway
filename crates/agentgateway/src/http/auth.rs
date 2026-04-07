@@ -757,19 +757,17 @@ mod azure {
 					// See: https://github.com/agentgateway/agentgateway/issues/900
 					let options = azure_identity::ManagedIdentityCredentialOptions {
 						user_assigned_id: user_assigned_identity.as_ref().map(|uami| match uami {
-							AzureUserAssignedIdentity::ClientId(cid) => {
-								UserAssignedId::ClientId(cid.to_string())
-							},
-							AzureUserAssignedIdentity::ObjectId(oid) => {
-								UserAssignedId::ObjectId(oid.to_string())
-							},
+							AzureUserAssignedIdentity::ClientId(cid) => UserAssignedId::ClientId(cid.to_string()),
+							AzureUserAssignedIdentity::ObjectId(oid) => UserAssignedId::ObjectId(oid.to_string()),
 							AzureUserAssignedIdentity::ResourceId(rid) => {
 								UserAssignedId::ResourceId(rid.to_string())
 							},
 						}),
 						client_options,
 					};
-					Ok(azure_identity::ManagedIdentityCredential::new(Some(options))?)
+					Ok(azure_identity::ManagedIdentityCredential::new(Some(
+						options,
+					))?)
 				},
 				AzureAuthCredentialSource::WorkloadIdentity {} => {
 					Ok(azure_identity::WorkloadIdentityCredential::new(Some(
