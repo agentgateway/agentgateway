@@ -614,6 +614,7 @@ impl<K: Key> Pool<K> {
 				expected_capacity, capacity
 			);
 			let excess = expected_capacity - capacity;
+			host.per_connection_capacity_cache = CapacityCache::Cached(capacity);
 			host.forget_pending_connection(key, excess, None, true);
 		}
 	}
