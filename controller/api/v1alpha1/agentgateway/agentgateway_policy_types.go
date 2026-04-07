@@ -35,7 +35,7 @@ type AgentgatewayPolicy struct {
 
 	// status defines the current state of AgentgatewayPolicy.
 	// +optional
-	Status gwv1.PolicyStatus `json:"status,omitempty"`
+	Status gwv1.PolicyStatus `json:"status,omitzero"`
 	// TODO: embed this into a typed Status field when
 	// https://github.com/kubernetes/kubernetes/issues/131533 is resolved
 }

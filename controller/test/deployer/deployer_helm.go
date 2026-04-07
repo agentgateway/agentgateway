@@ -139,7 +139,6 @@ func (dt DeployerTester) GetObjects(
 	tt HelmTestCase,
 	scheme *runtime.Scheme,
 	dir string,
-	crdDir string,
 ) []client.Object {
 	filePath := filepath.Join(dir, "testdata/", tt.InputFile)
 	inputFile := filePath + ".yaml"

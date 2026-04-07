@@ -35,7 +35,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/version"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
-	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
 func mockVersion(t *testing.T) {
@@ -447,13 +446,12 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 
 	dir := fsutils.MustGetThisDir()
 	scheme := schemes.GatewayScheme()
-	crdDir := filepath.Join(testutils.ControllerRootDirectory(), testutils.AgwCRDPath)
 
 	VerifyAllYAMLFilesReferenced(t, filepath.Join(dir, "testdata"), tests)
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			objs := tester.GetObjects(t, tt, scheme, dir, crdDir)
+			objs := tester.GetObjects(t, tt, scheme, dir)
 			fakeClient := fake.NewClient(t, objs...)
 			tester.RunHelmChartTest(t, tt, scheme, dir, fakeClient, objs)
 		})
