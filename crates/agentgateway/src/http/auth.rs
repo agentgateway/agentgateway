@@ -237,7 +237,7 @@ pub async fn apply_backend_auth(
 			// We handle this in 'apply_late_backend_auth' since it must come at the end (due to request signing)!
 		},
 		BackendAuth::Azure(azure_auth) => {
-			let token = azure::get_token(&backend_info.inputs.upstream, azure_auth)
+			let token = azure::get_token(&backend_info.inputs.upstream, azure_auth, &backend_info.call_target)
 				.await
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 			req.headers_mut().insert(http::header::AUTHORIZATION, token);
@@ -596,6 +596,7 @@ mod azure {
 	use crate::http::auth::{AzureAuth, AzureAuthCredentialSource, AzureUserAssignedIdentity};
 
 	const SCOPES: &[&str] = &["https://cognitiveservices.azure.com/.default"];
+	const FOUNDRY_SCOPES: &[&str] = &["https://ai.azure.com/.default"];
 
 	/// A credential chain that mirrors the Azure Go SDK's DefaultAzureCredential.
 	///
@@ -933,6 +934,7 @@ mod azure {
 	pub async fn get_token(
 		client: &client::Client,
 		auth: &AzureAuth,
+		target: &crate::types::agent::Target,
 	) -> anyhow::Result<http::HeaderValue> {
 		let cache = match auth {
 			AzureAuth::Implicit { cached_cred, .. } => &cached_cred.0,
@@ -943,10 +945,17 @@ mod azure {
 			.get_or_try_init(|| build_credential(client, auth))
 			.await?
 			.clone();
-		let token = cred.get_token(SCOPES, None).await?;
+		// Foundry endpoints (.services.ai.azure.com) require the ai.azure.com scope
+		let is_foundry = matches!(target, crate::types::agent::Target::Hostname(h, _) if h.ends_with(".services.ai.azure.com"));
+		let scopes = if is_foundry {
+			FOUNDRY_SCOPES
+		} else {
+			SCOPES
+		};
+		let token = cred.get_token(scopes, None).await?;
 		let mut hv = http::HeaderValue::from_str(&format!("Bearer {}", token.token.secret()))?;
 		hv.set_sensitive(true);
-		trace!("attached Azure token");
+		trace!("attached Azure token (scope: {})", scopes[0]);
 		Ok(hv)
 	}
 }
