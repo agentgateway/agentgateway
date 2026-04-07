@@ -4,15 +4,6 @@
 //! For now, to enable people to use hyper 1.0 quicker, this `Client` exists
 //! in much the same way it did in hyper 0.14.
 
-use std::error::Error as StdError;
-use std::fmt;
-use std::fmt::Debug;
-use std::future::{Future, poll_fn};
-use std::ops::DerefMut;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{self, ready, Context, Poll};
-use std::time::Duration;
 use axum_core::BoxError;
 use futures_util::future::{FutureExt, TryFutureExt};
 use http::uri::Scheme;
@@ -20,6 +11,15 @@ use hyper::body::{Body, Bytes, Frame, SizeHint};
 use hyper::header::{HOST, HeaderValue};
 use hyper::rt::Timer;
 use hyper::{Method, Request, Response, Uri, Version};
+use std::error::Error as StdError;
+use std::fmt;
+use std::fmt::Debug;
+use std::future::{Future, poll_fn};
+use std::ops::DerefMut;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{self, Context, Poll, ready};
+use std::time::Duration;
 use tracing::{debug, trace, warn};
 
 use super::connect::{Alpn, Connect, Connected, Connection};
@@ -414,7 +414,7 @@ where
 				.h1_builder
 				.handshake(io)
 				.await
-				.map_err(crate::client::legacy::client::Error::tx)?;
+				.map_err(crate::Error::tx)?;
 			// This indicates the connection is established and ready for request processing.
 			trace!("http1 handshake complete, spawning background dispatcher task");
 			// Create a oneshot channel to communicate errors from the connection task.
@@ -605,7 +605,6 @@ fn is_schema_secure(uri: &Uri) -> bool {
 		.unwrap_or_default()
 }
 
-
 pin_project_lite::pin_project! {
 	/// BodyLog wraps a body with logging on errors. These otherwise get masked by hyper.
 	/// Additionally, it can keep-alive some data (T) to RAII
@@ -621,9 +620,9 @@ pin_project_lite::pin_project! {
 impl<B, T> BodyLog<B, T> {
 	pub fn wrap(body: B, keep_alive: Option<T>) -> axum_core::body::Body
 	where
-	T: Send + 'static,
-	B: Body<Data = Bytes> + Unpin + Send + 'static,
-	B::Error: Into<BoxError> + Debug,
+		T: Send + 'static,
+		B: Body<Data = Bytes> + Unpin + Send + 'static,
+		B::Error: Into<BoxError> + Debug,
 	{
 		axum_core::body::Body::new(BodyLog { body, keep_alive })
 	}
@@ -631,8 +630,8 @@ impl<B, T> BodyLog<B, T> {
 
 impl<B, T> Body for BodyLog<B, T>
 where
-B: Body + Unpin,
-<B as Body>::Error: std::fmt::Debug,
+	B: Body + Unpin,
+	<B as Body>::Error: std::fmt::Debug,
 {
 	type Data = B::Data;
 	type Error = B::Error;
@@ -659,7 +658,6 @@ B: Body + Unpin,
 		self.body.size_hint()
 	}
 }
-
 
 /// A builder to configure a new [`Client`](Client).
 ///
@@ -1140,10 +1138,10 @@ impl fmt::Debug for Builder {
 impl fmt::Debug for Error {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		if let Some(ref cause) = self.source {
-			if let Some(he) = cause.downcast_ref::<hyper::Error>() {
-				if let Some(src) = he.source() {
-					return write!(f, "{:?}: {}: {}", self.kind, cause, src);
-				}
+			if let Some(he) = cause.downcast_ref::<hyper::Error>()
+				&& let Some(src) = he.source()
+			{
+				return write!(f, "{:?}: {}: {}", self.kind, cause, src);
 			}
 			write!(f, "{:?}: {}", self.kind, cause)
 		} else {

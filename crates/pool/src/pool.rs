@@ -13,11 +13,11 @@ use std::sync::{Arc, Weak};
 use std::task::{self, Poll};
 use std::time::{Duration, Instant};
 
-use crate::client::legacy::connect::Connected;
-use crate::client::legacy::pool;
 use crate::common::exec;
 use crate::common::exec::Exec;
 use crate::common::timer::Timer;
+use crate::connect::Connected;
+use crate::pool;
 use futures_channel::oneshot;
 use futures_core::ready;
 use futures_util::future::Either;
@@ -162,7 +162,7 @@ impl H2Pool {
 		self.0.remove(pos)
 	}
 	fn mark_active_by_load(&mut self, c: &Arc<H2Load>) {
-		if let Some(v) = self.remove_by_load(&c) {
+		if let Some(v) = self.remove_by_load(c) {
 			// Push to the front of the queue; it will be the next connection to get used.
 			self.0.push_front(v);
 		}
@@ -440,7 +440,7 @@ impl<K: Key> HostPool<K> {
 		&mut self,
 		key: K,
 		capacity: usize,
-		mut err: Option<crate::client::legacy::Error>,
+		mut err: Option<crate::Error>,
 		for_under_capacity_new_connection: bool,
 	) {
 		if !for_under_capacity_new_connection {
@@ -603,7 +603,7 @@ impl<K: Key> Pool<K> {
 	pub(crate) fn insert_new_connection_error(
 		&self,
 		mut should_connect: ShouldConnect<K>,
-		err: crate::client::legacy::Error,
+		err: crate::Error,
 	) {
 		let ShouldConnectInner {
 			expected_capacity,
@@ -1029,8 +1029,8 @@ impl Expiration {
 
 #[derive(Debug)]
 pub(crate) enum ClientConnectError {
-	Normal(crate::client::legacy::Error),
-	CheckoutIsClosed(pool::Error),
+	Normal(crate::Error),
+	CheckoutIsClosed(Error),
 }
 
 pin_project_lite::pin_project! {
@@ -1076,7 +1076,7 @@ impl<K: Key> Future for IdleTask<K> {
 mod tests {
 	use super::*;
 	use super::{ExpectedCapacity, Key, Pool};
-	use crate::client::legacy::connect::Connected;
+	use crate::connect::Connected;
 	use crate::rt::{TokioExecutor, TokioIo};
 	use assert_matches::assert_matches;
 	use bytes::Bytes;
@@ -1176,7 +1176,7 @@ mod tests {
 		INIT.call_once(|| {
 			let _ = tracing_subscriber::fmt()
 				.with_test_writer()
-				.with_env_filter(EnvFilter::new("hyper_util_fork=trace"))
+				.with_env_filter(EnvFilter::new("agent_pool=trace"))
 				.try_init();
 		});
 	}

@@ -17,13 +17,13 @@ use crate::types::agent::Target;
 use crate::*;
 use ::http::HeaderValue;
 use ::http::uri::{Authority, Scheme};
-use hyper_util_fork::rt::TokioIo;
+use agent_pool::pool::ExpectedCapacity;
+use agent_pool::rt::TokioIo;
 use tracing::event;
-use hyper_util_fork::client::legacy::pool::ExpectedCapacity;
 
 #[derive(Clone)]
 pub struct Client {
-	client: hyper_util_fork::client::legacy::Client<Connector, PoolKey>,
+	client: agent_pool::Client<Connector, PoolKey>,
 	connector: Connector,
 }
 
@@ -155,7 +155,7 @@ impl From<Option<VersionedBackendTLS>> for Transport {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct PoolKey(Target, SocketAddr, Transport, ::http::Version);
 
-impl hyper_util_fork::client::legacy::pool::Key for PoolKey {
+impl agent_pool::pool::Key for PoolKey {
 	fn expected_capacity(&self) -> ExpectedCapacity {
 		match self.2.application() {
 			ApplicationTransport::Plaintext => {
@@ -164,13 +164,17 @@ impl hyper_util_fork::client::legacy::pool::Key for PoolKey {
 				} else {
 					ExpectedCapacity::Http2
 				}
-			}
+			},
 			ApplicationTransport::Tls(c) => {
 				let mut h2 = false;
 				let mut h1 = false;
 				for alpn in &c.config.alpn_protocols {
-					if alpn == b"h2" { h2 = true}
-					if alpn == b"http/1.1" { h1 = true}
+					if alpn == b"h2" {
+						h2 = true
+					}
+					if alpn == b"http/1.1" {
+						h1 = true
+					}
 				}
 				if h1 && !h2 {
 					ExpectedCapacity::Http1
@@ -179,7 +183,7 @@ impl hyper_util_fork::client::legacy::pool::Key for PoolKey {
 				} else {
 					ExpectedCapacity::Auto
 				}
-			}
+			},
 		}
 	}
 }
@@ -404,8 +408,7 @@ impl Client {
 		metrics: Option<Arc<crate::metrics::Metrics>>,
 	) -> Client {
 		let resolver = dns::CachedResolver::new(cfg.resolver_cfg.clone(), cfg.resolver_opts.clone());
-		let mut b =
-			::hyper_util_fork::client::legacy::Client::<_, PoolKey>::builder(::hyper_util::rt::TokioExecutor::new());
+		let mut b = agent_pool::Client::<_, PoolKey>::builder(::hyper_util::rt::TokioExecutor::new());
 		b.pool_timer(hyper_util::rt::tokio::TokioTimer::new());
 		b.pool_idle_timeout(backend_config.pool_idle_timeout);
 		b.timer(hyper_util::rt::tokio::TokioTimer::new());
