@@ -37,6 +37,22 @@ fn resource_name(default_target_name: Option<&String>, target: &str, name: &str)
 	}
 }
 
+fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -> String {
+	if default_target_name.is_none() {
+		// Transform URI to service+scheme:// format for multiplexing
+		// e.g., "http://example.com" becomes "service+http://example.com"
+		if let Some(scheme_end) = uri.find("://") {
+			let (scheme, rest) = uri.split_at(scheme_end);
+			format!("{target}+{scheme}{rest}")
+		} else {
+			// URI must have a scheme - if not, return as-is and let validation handle it
+			uri.to_string()
+		}
+	} else {
+		uri.to_string()
+	}
+}
+
 #[derive(Debug, Clone)]
 pub struct Relay {
 	upstreams: Arc<upstream::UpstreamGroup>,
@@ -276,6 +292,7 @@ impl Relay {
 	}
 	pub fn merge_resources(&self, cel: CelExecWrapper) -> Box<MergeFn> {
 		let policies = self.policies.clone();
+		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams| {
 			let resources = streams
 				.into_iter()
@@ -295,8 +312,11 @@ impl Relay {
 								&cel,
 							)
 						})
-						// TODO(https://github.com/agentgateway/agentgateway/issues/404) map this to the service name,
-						// if we add support for multiple services.
+						// Prefix URI with service name when multiplexing to avoid conflicts
+						.map(|mut r| {
+							r.uri = resource_uri(default_target_name.as_ref(), server_name.as_str(), &r.uri);
+							r
+						})
 						.collect_vec()
 				})
 				.collect_vec();
@@ -492,8 +512,11 @@ impl Relay {
 		upstream_instructions: Vec<(String, String)>,
 	) -> ServerInfo {
 		let capabilities = if multiplexing {
-			// These are not supported when multiplexing.
-			ServerCapabilities::builder().enable_tools().build()
+			// Resources are now supported with multiplexing using proper URI prefixing
+			ServerCapabilities::builder()
+				.enable_tools()
+				.enable_resources()
+				.build()
 		} else {
 			ServerCapabilities::builder()
 				.enable_tools()

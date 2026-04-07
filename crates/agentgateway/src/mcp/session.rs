@@ -250,18 +250,10 @@ impl Session {
 							.await
 					},
 					ClientRequest::ListResourcesRequest(_) => {
-						if !self.relay.is_multiplexing() {
-							self
-								.relay
-								.send_fanout(r, ctx, self.relay.merge_resources(cel))
-								.await
-						} else {
-							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-							// Find a mapping of URL
-							Err(UpstreamError::InvalidMethodWithMultiplexing(
-								r.request.method().to_string(),
-							))
-						}
+						self
+							.relay
+							.send_fanout(r, ctx, self.relay.merge_resources(cel))
+							.await
 					},
 					ClientRequest::ListResourceTemplatesRequest(_) => {
 						if !self.relay.is_multiplexing() {
