@@ -13,6 +13,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
@@ -275,43 +276,33 @@ func (p ReferenceIndex) LookupGatewaysForTarget(ctx krt.HandlerContext, object u
 		return sets.New(object.NamespacedName)
 	case wellknown.HTTPRouteGVK.Kind, wellknown.GRPCRouteGVK.Kind, wellknown.TCPRouteGVK.Kind, wellknown.TLSRouteGVK.Kind:
 		gateways := sets.New[types.NamespacedName]()
-		if a := krt.FetchOne(ctx, p.attachments, krt.FilterKey(object.String())); a != nil {
-			for _, ancestor := range a.Objects {
-				gateways.Insert(ancestor.Gateway)
-			}
+		for _, ancestor := range krtutil.FetchIndexObjects(ctx, p.attachments, object) {
+			gateways.Insert(ancestor.Gateway)
 		}
 		return gateways
 	default:
 		gateways := sets.New[types.NamespacedName]()
-		if a := krt.FetchOne(ctx, p.Ancestors, krt.FilterKey(object.String())); a != nil {
-			for _, ancestor := range a.Objects {
-				gateways.Insert(ancestor.Gateway)
-			}
+		for _, ancestor := range krtutil.FetchIndexObjects(ctx, p.Ancestors, object) {
+			gateways.Insert(ancestor.Gateway)
 		}
 		return gateways
 	}
 }
 
 func (p ReferenceIndex) LookupGatewaysForBackend(ctx krt.HandlerContext, object utils.TypedNamespacedName) sets.Set[types.NamespacedName] {
-	return p.lookupGatewaysForBackend(ctx, object, map[string]struct{}{})
+	return p.lookupGatewaysForBackend(ctx, object, sets.New[utils.TypedNamespacedName]())
 }
 
-func (p ReferenceIndex) lookupGatewaysForBackend(ctx krt.HandlerContext, object utils.TypedNamespacedName, seen map[string]struct{}) sets.Set[types.NamespacedName] {
-	key := object.String()
-	if _, ok := seen[key]; ok {
+func (p ReferenceIndex) lookupGatewaysForBackend(ctx krt.HandlerContext, object utils.TypedNamespacedName, seen sets.Set[utils.TypedNamespacedName]) sets.Set[types.NamespacedName] {
+	if seen.InsertContains(object) {
 		return sets.New[types.NamespacedName]()
 	}
-	seen[key] = struct{}{}
 
 	base := p.LookupGatewaysForTarget(ctx, object)
 	if p.PolicyAttachments == nil {
 		return base
 	}
-	attachment := krt.FetchOne(ctx, p.PolicyAttachments, krt.FilterKey(key))
-	if attachment == nil {
-		return base
-	}
-	for _, pref := range attachment.Objects {
+	for _, pref := range krtutil.FetchIndexObjects(ctx, p.PolicyAttachments, object) {
 		base = base.Union(p.lookupGatewaysForBackend(ctx, pref.Target, seen))
 	}
 	return base

@@ -258,18 +258,18 @@ func (s *Syncer) buildFinalListenerSetStatus(
 				counts[r.ListenerName]++
 			}
 			for idx, l := range i.Obj.Spec.Listeners {
-				gatewayListener := krt.FetchOne(ctx, gatewayIndex, krt.FilterKey(utils.SectionedNamespacedName{
+				gatewayListeners := krtutil.FetchIndexObjects(ctx, gatewayIndex, utils.SectionedNamespacedName{
 					NamespacedName: types.NamespacedName{
 						Namespace: i.Obj.Namespace,
 						Name:      i.Obj.Name,
 					},
 					SectionName: l.Name,
-				}.String()))
-				if len(gatewayListener.Objects) == 0 {
+				})
+				if len(gatewayListeners) == 0 {
 					continue
 				}
 
-				obj := gatewayListener.Objects[0]
+				obj := gatewayListeners[0]
 				if !obj.Valid {
 					invalidListenerCount++
 				} else {
