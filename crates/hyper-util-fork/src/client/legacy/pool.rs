@@ -1,5 +1,5 @@
-use hashbrown::hash_map::EntryRef;
 use hashbrown::HashMap;
+use hashbrown::hash_map::EntryRef;
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 use std::collections::VecDeque;
 use std::error::Error as StdError;
@@ -23,7 +23,7 @@ use futures_core::ready;
 use futures_util::future::Either;
 use http::{Request, Response};
 use hyper::rt::{Sleep, Timer as _};
-use tracing::{debug, trace, warn};
+use tracing::{debug, trace};
 
 pub const DEFAULT_EXPECTED_HTTP2_CAPACITY: usize = 100;
 
@@ -112,8 +112,10 @@ impl CapacityCache {
 		match self {
 			CapacityCache::Guess(ExpectedCapacity::Http1) => 1,
 			CapacityCache::Guess(ExpectedCapacity::Http2) => expected_http2_capacity,
-			// Currently, we are pessimistically assuming that the connection will be HTTP/1.1
-			CapacityCache::Guess(ExpectedCapacity::Auto) => 1,
+			// Assume we are going to get HTTP2; this ensures we don't flood with connections for HTTP/1.1
+			// If we don't get it, we will just try again with the new expected value cached.
+			// TODO: actually implement the cache part.
+			CapacityCache::Guess(ExpectedCapacity::Auto) => expected_http2_capacity,
 			CapacityCache::Cached(exact) => *exact,
 		}
 	}
@@ -397,35 +399,43 @@ impl<K: Key> HostPool<K> {
 		key: K,
 		capacity: usize,
 		mut err: Option<crate::client::legacy::Error>,
+		for_under_capacity_new_connection: bool,
 	) {
-		self.connecting -= 1;
+		if !for_under_capacity_new_connection {
+			// for_under_capacity_new_connection means we got a connection, it just was too small
+			self.connecting -= 1;
+		}
 		self.expected_connecting_capacity -= capacity;
 
-		loop {
-			let Some(tx) = self.waiters.pop_front() else {
-				break;
-			};
-			if tx.is_canceled() {
-				trace!("insert new error; removing canceled waiter for {:?}", key);
-				continue;
-			}
-			let res = if let Some(e) = err.take() {
-				tx.send(Err(ClientConnectError::Normal(e)))
-			} else {
-				tx.send(Err(ClientConnectError::CheckoutIsClosed(
-					pool::Error::ConnectionDroppedWithoutCompletion,
-				)))
-			};
-			if let Err(Err(ClientConnectError::Normal(e))) = res {
-				err = Some(e);
-				continue;
-			}
+		let mut to_notify = capacity;
+		if !for_under_capacity_new_connection {
+			to_notify -= 1;
+			// For the first, notify with the original error. The rest get an error to just retry.
+			loop {
+				let Some(tx) = self.waiters.pop_front() else {
+					break;
+				};
+				if tx.is_canceled() {
+					trace!("insert new error; removing canceled waiter for {:?}", key);
+					continue;
+				}
+				let res = if let Some(e) = err.take() {
+					tx.send(Err(ClientConnectError::Normal(e)))
+				} else {
+					tx.send(Err(ClientConnectError::CheckoutIsClosed(
+						pool::Error::ConnectionDroppedWithoutCompletion,
+					)))
+				};
+				if let Err(Err(ClientConnectError::Normal(e))) = res {
+					err = Some(e);
+					continue;
+				}
 
-			break;
+				break;
+			}
 		}
 
-		// Skip 1, handled above
-		for _ in 1..capacity {
+		for _ in 0..to_notify {
 			let Some(tx) = self.waiters.pop_front() else {
 				break;
 			};
@@ -433,9 +443,12 @@ impl<K: Key> HostPool<K> {
 				trace!("insert new error; removing canceled waiter for {:?}", key);
 				continue;
 			}
-			let _ = tx.send(Err(ClientConnectError::CheckoutIsClosed(
-				pool::Error::WaitingOnSharedFailedConnection,
-			)));
+			let e = if for_under_capacity_new_connection {
+				pool::Error::ConnectionLowCapacity
+			} else {
+				pool::Error::WaitingOnSharedFailedConnection
+			};
+			let _ = tx.send(Err(ClientConnectError::CheckoutIsClosed(e)));
 		}
 	}
 	pub fn return_idle(
@@ -532,7 +545,7 @@ impl<K: Key> Drop for ShouldConnect<K> {
 		};
 		if let Some(pool) = inner.pool.upgrade() {
 			let mut hosts = Pool::lock_hosts(&pool, &inner.key);
-			hosts.forget_pending_connection(inner.key, inner.expected_capacity, None);
+			hosts.forget_pending_connection(inner.key, inner.expected_capacity, None, false);
 		}
 	}
 }
@@ -558,7 +571,7 @@ impl<K: Key> Pool<K> {
 			.take()
 			.expect("insert_new_connection requires an active should_connect token");
 		let mut host = self.host(&key);
-		host.forget_pending_connection(key, expected_capacity, Some(err))
+		host.forget_pending_connection(key, expected_capacity, Some(err), false)
 	}
 	pub(crate) fn insert_new_connection(
 		&self,
@@ -576,13 +589,6 @@ impl<K: Key> Pool<K> {
 		let mut host = self.host(&key);
 		// Do not drop again as we explicitly inserted
 		let capacity = conn.capacity();
-		if capacity != expected_capacity {
-			warn!(
-				"TODO: handle capacity mismatch: expected {} but got {} ",
-				expected_capacity, capacity
-			);
-			panic!("TODO");
-		}
 		host.connecting -= 1;
 		host.expected_connecting_capacity -= capacity;
 		trace!(?key, ?host.connecting, %host.expected_connecting_capacity, "inserting new connection");
@@ -592,13 +598,24 @@ impl<K: Key> Pool<K> {
 		// First, send to any waiters...
 		Pool::send_connection(
 			"new",
-			key,
+			key.clone(),
 			capacity,
 			&mut host,
 			&self.hosts,
 			&self.settings,
 			conn,
 		);
+
+		// If we had expected this to have more capacity, we need to notify any waiters that its not going to
+		// arrive...
+		if capacity < expected_capacity {
+			trace!(
+				"handle capacity mismatch: expected {} but got {} ",
+				expected_capacity, capacity
+			);
+			let excess = expected_capacity - capacity;
+			host.forget_pending_connection(key, excess, None, true);
+		}
 	}
 
 	fn ensure_idle_interval(
@@ -986,6 +1003,7 @@ pub enum Error {
 	CheckedOutClosedValue,
 	WaitingOnSharedFailedConnection,
 	ConnectionDroppedWithoutCompletion,
+	ConnectionLowCapacity,
 }
 
 impl fmt::Display for Error {
@@ -997,6 +1015,7 @@ impl fmt::Display for Error {
 			Error::CheckoutNoLongerWanted => "request was canceled",
 			Error::WaitingOnSharedFailedConnection => "shared wait failed",
 			Error::ConnectionDroppedWithoutCompletion => "connection dropped without completion",
+			Error::ConnectionLowCapacity => "connection didn't have enough capacity",
 		})
 	}
 }
@@ -1111,6 +1130,14 @@ mod tests {
 			http::uri::Scheme::HTTP,
 			s.parse().expect("host key"),
 			ExpectedCapacity::Http2,
+		)
+	}
+
+	fn host_key_auto(s: &str) -> KeyImpl {
+		KeyImpl(
+			http::uri::Scheme::HTTP,
+			s.parse().expect("host key"),
+			ExpectedCapacity::Auto,
 		)
 	}
 
@@ -1832,6 +1859,63 @@ mod tests {
 		tokio::time::sleep(Duration::from_millis(80)).await;
 
 		let _ = must_want_new_connection(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_auto_http2() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_auto("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		// Insert with capacity 2 (i.e. this was HTTP2).
+		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
+		let _pooled1 = w1.await.expect("get h2").unwrap();
+		let _w2 = must_checkout(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_auto_http1() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_auto("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+		// Insert with capacity 1 (i.e. this was HTTP/1.1).
+		pool.insert_new_connection(sc1, mock_http2_connection(1).await);
+		let _pooled1 = w1.await.expect("get h2").unwrap();
+
+		assert_matches!(
+			w2.await.expect("get"),
+			Err(ClientConnectError::CheckoutIsClosed(
+				pool::Error::ConnectionLowCapacity
+			))
+		);
+		let _ = must_want_new_connection(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_auto_http1_caches() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_auto("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+		// Insert with capacity 1 (i.e. this was HTTP/1.1).
+		pool.insert_new_connection(sc1, mock_http2_connection(1).await);
+		let _pooled1 = w1.await.expect("get h2").unwrap();
+
+		assert_matches!(
+			w2.await.expect("get"),
+			Err(ClientConnectError::CheckoutIsClosed(
+				pool::Error::ConnectionLowCapacity
+			))
+		);
+		let (sc1, w1)  = must_want_new_connection(&pool, key.clone());
+		// We learned from last time that we expect HTTP/1.1
+		let (sc2, w2) = must_want_new_connection(&pool, key.clone());
+		// Insert with capacity 1 (i.e. this was HTTP/1.1).
+		pool.insert_new_connection(sc1, mock_http2_connection(1).await);
+		pool.insert_new_connection(sc2, mock_http2_connection(1).await);
+		// This time, we should get success since we cached
+		let _pooled1 = w1.await.expect("get h2").unwrap();
+		let _pooled2 = w2.await.expect("get h2").unwrap();
 	}
 
 	#[tokio::test]
