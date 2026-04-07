@@ -135,8 +135,8 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 	for _, target := range policy.Spec.TargetRefs {
 		gk := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
 
-		policyTarget, targetExists := references.PolicyTarget(ctx, policy.Namespace, target.Name, gk, target.SectionName)
-		if policyTarget == nil {
+		policyTargets, targetExists := references.PolicyTarget(ctx, policy.Namespace, target.Name, gk, target.SectionName)
+		if len(policyTargets) == 0 {
 			// This should be impossible, verified by CEL validation
 			logger.Warn("unsupported target kind", "kind", target.Kind, "policy", policy.Name)
 			continue
@@ -147,13 +147,15 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 			Kind:           gk.Kind,
 		}).UnsortedList()
 
-		translatedPolicies := clonePoliciesForTarget(baseTranslatedPolicies, policyTarget)
-		for _, translatedPolicy := range translatedPolicies {
-			for _, gatewayTarget := range gatewayTargets {
-				agwPolicies = append(agwPolicies, AgwPolicy{
-					Gateway: ptr.Of(gatewayTarget),
-					Policy:  translatedPolicy,
-				})
+		for _, policyTarget := range policyTargets {
+			translatedPolicies := clonePoliciesForTarget(baseTranslatedPolicies, policyTarget)
+			for _, translatedPolicy := range translatedPolicies {
+				for _, gatewayTarget := range gatewayTargets {
+					agwPolicies = append(agwPolicies, AgwPolicy{
+						Gateway: ptr.Of(gatewayTarget),
+						Policy:  translatedPolicy,
+					})
+				}
 			}
 		}
 
