@@ -17,9 +17,11 @@ use crate::mcp::McpAuthorization;
 use crate::mcp::handler::Relay;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::test_helpers::extauthmock::{ExtAuthMock, deny_response};
 use crate::test_helpers::proxymock::{
 	BIND_KEY, TestBind, basic_named_route, basic_route, setup_proxy_test, simple_bind,
 };
+use crate::test_helpers::ratelimitmock::{RateLimitMock, over_limit_response};
 use crate::types::agent::{BackendPolicy, FrontendPolicy, PolicyTarget, TargetedPolicy};
 use crate::*;
 
@@ -2181,62 +2183,22 @@ async fn mcp_local_ratelimit() {
 
 #[tokio::test]
 async fn mcp_extauth_deny() {
-	use protos::envoy::service::auth::v3::authorization_server::{
-		Authorization, AuthorizationServer,
-	};
-	use protos::envoy::service::auth::v3::{CheckRequest, CheckResponse, DeniedHttpResponse};
-	use protos::envoy::service::common::v3::{HttpStatus, StatusCode};
-
-	// Mock ext_authz server that denies all requests
 	struct DenyAllAuthz;
 
-	#[tonic::async_trait]
-	impl Authorization for DenyAllAuthz {
+	#[async_trait::async_trait]
+	impl crate::test_helpers::extauthmock::Handler for DenyAllAuthz {
 		async fn check(
-			&self,
-			_request: tonic::Request<CheckRequest>,
-		) -> Result<tonic::Response<CheckResponse>, tonic::Status> {
-			Ok(tonic::Response::new(CheckResponse {
-				// Status code 7 = PERMISSION_DENIED
-				status: Some(protos::envoy::service::common::v3::Status {
-					code: 7,
-					message: "denied".to_string(),
-					details: vec![],
-				}),
-				http_response: Some(
-					protos::envoy::service::auth::v3::check_response::HttpResponse::DeniedResponse(
-						DeniedHttpResponse {
-							status: Some(HttpStatus {
-								code: StatusCode::Forbidden as i32,
-							}),
-							headers: vec![],
-							body: "denied by mock ext_authz".to_string(),
-						},
-					),
-				),
-				dynamic_metadata: None,
-			}))
+			&mut self,
+			_request: &crate::http::ext_authz::proto::CheckRequest,
+		) -> Result<crate::http::ext_authz::proto::CheckResponse, tonic::Status> {
+			deny_response(
+				crate::http::ext_authz::proto::StatusCode::Forbidden,
+				"denied by mock ext_authz",
+			)
 		}
 	}
 
-	// Start the mock gRPC server
-	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-	let authz_addr = listener.local_addr().unwrap();
-
-	tokio::spawn(async move {
-		let server = tonic::transport::Server::builder()
-			.add_service(AuthorizationServer::new(DenyAllAuthz))
-			.serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(listener));
-		let _ = server.await;
-	});
-
-	// Wait for server to be ready (probe until connection succeeds)
-	for _ in 0..50 {
-		if tokio::net::TcpStream::connect(authz_addr).await.is_ok() {
-			break;
-		}
-		tokio::time::sleep(std::time::Duration::from_millis(1)).await;
-	}
+	let authz = ExtAuthMock::new(|| DenyAllAuthz).spawn().await;
 
 	let mock = mock_streamable_http_server(true).await;
 	let mut t = setup_proxy_test("{}")
@@ -2247,7 +2209,7 @@ async fn mcp_extauth_deny() {
 	// Attach extAuthz policy pointing to our mock server
 	t.attach_route_policy(serde_json::json!({
 		"extAuthz": {
-			"host": authz_addr.to_string(),
+			"host": authz.address.to_string(),
 			"protocol": {
 				"grpc": {}
 			}
@@ -2286,52 +2248,19 @@ async fn try_mcp_streamable_client(
 
 #[tokio::test]
 async fn mcp_remote_ratelimit_deny() {
-	use protos::envoy::service::ratelimit::v3::rate_limit_service_server::{
-		RateLimitService, RateLimitServiceServer,
-	};
-	use protos::envoy::service::ratelimit::v3::{
-		RateLimitRequest, RateLimitResponse, rate_limit_response::Code,
-	};
-
-	// Mock rate limit server that always returns OVER_LIMIT
 	struct DenyAllRateLimit;
 
-	#[tonic::async_trait]
-	impl RateLimitService for DenyAllRateLimit {
+	#[async_trait::async_trait]
+	impl crate::test_helpers::ratelimitmock::Handler for DenyAllRateLimit {
 		async fn should_rate_limit(
-			&self,
-			_request: tonic::Request<RateLimitRequest>,
-		) -> Result<tonic::Response<RateLimitResponse>, tonic::Status> {
-			Ok(tonic::Response::new(RateLimitResponse {
-				overall_code: Code::OverLimit as i32,
-				statuses: vec![],
-				response_headers_to_add: vec![],
-				request_headers_to_add: vec![],
-				raw_body: b"rate limit exceeded by mock".to_vec(),
-				dynamic_metadata: None,
-				quota: None,
-			}))
+			&mut self,
+			_request: &crate::http::remoteratelimit::proto::RateLimitRequest,
+		) -> Result<crate::http::remoteratelimit::proto::RateLimitResponse, tonic::Status> {
+			over_limit_response(b"rate limit exceeded by mock".to_vec())
 		}
 	}
 
-	// Start the mock gRPC server
-	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-	let ratelimit_addr = listener.local_addr().unwrap();
-
-	tokio::spawn(async move {
-		let server = tonic::transport::Server::builder()
-			.add_service(RateLimitServiceServer::new(DenyAllRateLimit))
-			.serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(listener));
-		let _ = server.await;
-	});
-
-	// Wait for server to be ready (probe until connection succeeds)
-	for _ in 0..50 {
-		if tokio::net::TcpStream::connect(ratelimit_addr).await.is_ok() {
-			break;
-		}
-		tokio::time::sleep(std::time::Duration::from_millis(1)).await;
-	}
+	let ratelimit = RateLimitMock::new(|| DenyAllRateLimit).spawn().await;
 
 	let mock = mock_streamable_http_server(true).await;
 	let mut t = setup_proxy_test("{}")
@@ -2342,7 +2271,7 @@ async fn mcp_remote_ratelimit_deny() {
 	// Attach remoteRateLimit policy pointing to our mock server
 	t.attach_route_policy(serde_json::json!({
 		"remoteRateLimit": {
-			"host": ratelimit_addr.to_string(),
+			"host": ratelimit.address.to_string(),
 			"domain": "test",
 			"descriptors": [{
 				"entries": [

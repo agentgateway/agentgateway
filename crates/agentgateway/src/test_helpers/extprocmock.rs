@@ -1,18 +1,16 @@
-use std::net::SocketAddr;
-use std::sync::Arc;
-
 use crate::http::ext_proc::proto::external_processor_server::{
 	ExternalProcessor, ExternalProcessorServer,
 };
 use crate::http::ext_proc::proto::{
-	self, CommonResponse, HttpHeaders, HttpTrailers, ProcessingRequest, ProcessingResponse,
-	processing_request, processing_response,
+	self, processing_request, processing_response, CommonResponse, HttpHeaders, HttpTrailers,
+	ProcessingRequest, ProcessingResponse,
 };
+use crate::test_helpers::common::MockInstance;
 use crate::*;
 use async_trait::async_trait;
-use protos::envoy::service::ext_proc::v3::{BodyMutation, body_mutation};
+use protos::envoy::service::ext_proc::v3::{body_mutation, BodyMutation};
+use std::sync::Arc;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 use tokio_stream;
 use tonic::{Request, Response as TonicResponse, Status, Streaming};
 
@@ -170,17 +168,6 @@ pub struct ExtProcMock<T> {
 	handler: Arc<dyn Fn() -> T + Send + Sync + 'static>,
 }
 
-pub struct ExtProcMockInstance {
-	pub address: SocketAddr,
-	handle: JoinHandle<()>,
-}
-
-impl Drop for ExtProcMockInstance {
-	fn drop(&mut self) {
-		self.handle.abort();
-	}
-}
-
 impl<T> Clone for ExtProcMock<T> {
 	fn clone(&self) -> Self {
 		Self {
@@ -200,33 +187,9 @@ where
 		}
 	}
 
-	pub async fn spawn(&self) -> ExtProcMockInstance {
-		use hyper::server::conn::http2;
-		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-
-		let addr = listener.local_addr().unwrap();
-		let s: ExtProcMock<T> = self.clone();
-		let srv = ExternalProcessorServer::new(s);
-		let task = tokio::spawn(async move {
-			while let Ok((socket, _)) = listener.accept().await {
-				let srv = srv.clone();
-				tokio::spawn(async move {
-					if let Err(err) = http2::Builder::new(::hyper_util::rt::TokioExecutor::new())
-						.serve_connection(
-							hyper_util::rt::TokioIo::new(socket),
-							super::hyper_tower::TowerToHyperService::new(srv),
-						)
-						.await
-					{
-						error!("Error serving connection: {:?}", err);
-					}
-				});
-			}
-		});
-		ExtProcMockInstance {
-			address: addr,
-			handle: task,
-		}
+	pub async fn spawn(&self) -> MockInstance {
+		let srv = ExternalProcessorServer::new(self.clone());
+		super::common::spawn_service(srv).await
 	}
 }
 

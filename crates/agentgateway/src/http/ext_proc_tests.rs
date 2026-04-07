@@ -17,9 +17,10 @@ use crate::http::ext_proc::proto::{
 };
 use crate::http::ext_proc::{ExtProcDynamicMetadata, proto};
 use crate::http::{Body, ext_proc};
+use crate::test_helpers::MockInstance;
 use crate::test_helpers::extprocmock::{
-	ExtProcMock, ExtProcMockInstance, Handler, immediate_response, request_body_response,
-	request_header_response, response_body_response, response_header_response,
+	ExtProcMock, Handler, immediate_response, request_body_response, request_header_response,
+	response_body_response, response_header_response,
 };
 use crate::test_helpers::proxymock::*;
 use crate::*;
@@ -207,7 +208,7 @@ pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
 	config: &str,
 ) -> (
 	MockServer,
-	ExtProcMockInstance,
+	MockInstance,
 	TestBind,
 	Client<MemoryConnector, Body>,
 ) {
@@ -224,7 +225,7 @@ pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
 	response_attributes: Option<HashMap<String, Arc<Expression>>>,
 ) -> (
 	MockServer,
-	ExtProcMockInstance,
+	MockInstance,
 	TestBind,
 	Client<MemoryConnector, Body>,
 ) {
