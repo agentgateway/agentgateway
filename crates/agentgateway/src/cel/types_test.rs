@@ -293,9 +293,11 @@ fn test_source_workload_cel_fields() {
 			"address": "10.0.0.1",
 			"port": 12345,
 			"workload": {
-				"name": "agent-a",
-				"namespace": "agents",
-				"serviceAccount": "agent-a-sa"
+				"unverified": {
+					"name": "agent-a",
+					"namespace": "agents",
+					"serviceAccount": "agent-a-sa"
+				}
 			}
 		}
 	}))
@@ -307,7 +309,7 @@ fn test_source_workload_cel_fields() {
 		exec.eval(&expr).expect("eval").json().expect("json")
 	};
 
-	assert_eq!(eval("source.workload.name"), json!("agent-a"));
-	assert_eq!(eval("source.workload.namespace"), json!("agents"));
-	assert_eq!(eval("source.workload.serviceAccount"), json!("agent-a-sa"));
+	assert_eq!(eval("source.workload.unverified.name"), json!("agent-a"));
+	assert_eq!(eval("source.workload.unverified.namespace"), json!("agents"));
+	assert_eq!(eval("source.workload.unverified.serviceAccount"), json!("agent-a-sa"));
 }
