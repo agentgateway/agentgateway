@@ -480,14 +480,12 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	})
 	ancestorCollection := ancestorsIndex.AsCollection(append(krtopts.ToOptions("AncestorBackend"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 
-	// First, make the policies with access to the route-level attachment references.
 	referenceIndex := plugins.BuildReferenceIndex(ancestorCollection, routeAttachmentsIndex, referenceTypes)
-	agwPolicies, policyReferences, policyStatuses := AgwPolicyCollection(s.agwPlugins, referenceIndex, krtopts)
-	for _, col := range policyStatuses {
-		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
-	}
 
-	// Next, build backend references.
+	// Phase 1: Collect policy references (e.g. ext_proc backendRefs) BEFORE building
+	// policies. This ensures BackendTLSPolicy can look up gateways for backends that
+	// are only reachable via PolicyAttachments (like ext_proc processor Services).
+	policyReferences := CollectPolicyReferences(s.agwPlugins, referenceIndex, krtopts)
 	backendPolicyReferences := AgwBackendReferencesCollection(s.agwPlugins, krtopts)
 	joinedPolicyReferences := krt.JoinCollection([]krt.Collection[*plugins.PolicyAttachment]{policyReferences, backendPolicyReferences}, krtopts.ToOptions("JoinPolicyAttachment")...)
 	policyReferencesIndex := krt.NewIndex(joinedPolicyReferences, "policyReferences", func(o *plugins.PolicyAttachment) []utils.TypedNamespacedName {
@@ -496,7 +494,13 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	policyReferencesIndexCollection := policyReferencesIndex.AsCollection(append(krtopts.ToOptions("PolicyReferencesIndex"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 	referenceIndex = referenceIndex.WithPolicyAttachments(policyReferencesIndexCollection)
 
-	// Finally, build the backend collection with backend+route references
+	// Phase 2: Build policies with the fully-populated reference index.
+	agwPolicies, policyStatuses := BuildPolicies(s.agwPlugins, referenceIndex, krtopts)
+	for _, col := range policyStatuses {
+		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
+	}
+
+	// Build the backend collection with backend+route references
 	agwBackends, agwBackendStatus := AgwBackendCollection(s.agwPlugins, referenceIndex, krtopts)
 	for _, col := range agwBackendStatus {
 		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
