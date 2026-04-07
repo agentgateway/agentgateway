@@ -33,6 +33,7 @@ pub struct Pool<K: Key> {
 	pub settings: Arc<PoolSettings>,
 }
 
+#[derive(Debug)]
 pub struct PoolSettings {
 	max_idle_per_host: usize,
 	idle_interval_spawned: AtomicBool,
@@ -146,6 +147,13 @@ impl H2Pool {
 			self.0.push_back(old)
 		}
 	}
+	pub fn remove_by_load(&mut self, rc: &Arc<H2Load>) -> Option<ReservedHttp2Connection> {
+		let pos = self
+			.0
+			.iter()
+			.position(|entry| Arc::ptr_eq(&entry.load, rc))?;
+		self.0.remove(pos)
+	}
 	pub fn remove(&mut self, rc: &ReservedHttp2Connection) -> Option<ReservedHttp2Connection> {
 		let pos = self
 			.0
@@ -153,10 +161,16 @@ impl H2Pool {
 			.position(|entry| Arc::ptr_eq(&entry.load, &rc.load))?;
 		self.0.remove(pos)
 	}
+	fn mark_active_by_load(&mut self, c: &Arc<H2Load>) {
+		if let Some(v) = self.remove_by_load(&c) {
+			// Push to the front of the queue; it will be the next connection to get used.
+			self.0.push_front(v);
+		}
+	}
 	fn mark_active(&mut self, c: ReservedHttp2Connection) {
 		self.remove(&c);
 		// Push to the front of the queue; it will be the next connection to get used.
-		self.0.push_front(c)
+		self.0.push_front(c);
 	}
 	/// maybe_insert_new inserts the connection as an active one (if it is HTTP2).
 	fn maybe_insert_new(&mut self, conn: HttpConnection, reserve: bool) -> HttpConnection {
@@ -197,7 +211,9 @@ impl H2Pool {
 						load: h.load.clone(),
 					});
 					// Move the connection to the back of the queue.
-					self.0.swap_remove_back(0);
+					if let Some(v) = self.0.pop_front() {
+						self.0.push_back(v);
+					}
 					return ret;
 				},
 				CapacityReservationResult::ReservedButNotFilled => {
@@ -259,8 +275,12 @@ impl HttpConnection {
 	}
 }
 
-#[derive(Debug, Clone)]
-pub struct H2CapacityGuard(#[allow(dead_code)] Arc<H2Load>);
+#[derive(Debug)]
+pub struct H2CapacityGuard<K: Key> {
+	value: Option<(K, Arc<H2Load>)>,
+	pool: Weak<Mutex<HashMap<K, HostPool<K>>>>,
+	settings: Arc<PoolSettings>,
+}
 
 pub(crate) struct ReservedHttp2Connection {
 	pub(crate) info: Connected,
@@ -378,6 +398,22 @@ impl<K: Key> HostPool<K> {
 			idle: Vec::new(),
 			active_h2: H2Pool::default(),
 			waiters: Default::default(),
+		}
+	}
+	fn return_h2_stream(
+		&mut self,
+		settings: Arc<PoolSettings>,
+		pool: Arc<Mutex<HashMap<K, HostPool<K>>>>,
+		k: K,
+		load: Arc<H2Load>,
+	) {
+		let (remaining, was_at_max) = load.release_stream_slot();
+		if remaining == 0 {
+			if let Some(v) = self.active_h2.remove_by_load(&load) {
+				self.return_idle(settings, pool, k, HttpConnection::Http2(v))
+			} else if was_at_max {
+				self.active_h2.mark_active_by_load(&load);
+			}
 		}
 	}
 	fn return_connection(
@@ -837,11 +873,17 @@ impl<K: Key> Debug for Pooled<K> {
 impl<K: Key> Pooled<K> {}
 
 impl<K: Key> Pooled<K> {
-	pub(crate) fn into_guard(mut self) -> H2CapacityGuard {
-		let HttpConnection::Http2(h2) = self.value.take().expect("not dropped").1 else {
-			panic!("into_guard requires an HTTP2 connection")
-		};
-		H2CapacityGuard(h2.load)
+	pub(crate) fn into_guard(mut self) -> H2CapacityGuard<K> {
+		H2CapacityGuard {
+			value: self.value.take().map(|(k, v)| {
+				let HttpConnection::Http2(h2) = v else {
+					panic!("into_guard must be used on http2")
+				};
+				(k, h2.load)
+			}),
+			pool: self.pool.clone(),
+			settings: self.settings.clone(),
+		}
 	}
 	fn maybe_clone(self) -> (Self, Option<(Self, bool)>) {
 		match self.value.as_ref() {
@@ -916,6 +958,20 @@ impl<K: Key> Drop for Pooled<K> {
 				let mut hosts = Pool::lock_hosts(&pool, &k);
 				trace!(key=?k, "returning connection to pool");
 				hosts.return_connection(self.settings.clone(), pool.clone(), k, value);
+			} else {
+				trace!("pool dropped, dropping pooled ({:?})", k);
+			}
+		}
+	}
+}
+
+impl<K: Key> Drop for H2CapacityGuard<K> {
+	fn drop(&mut self) {
+		if let Some((k, v)) = self.value.take() {
+			if let Some(pool) = self.pool.upgrade() {
+				let mut hosts = Pool::lock_hosts(&pool, &k);
+				trace!(key=?k, "returning connection to pool");
+				hosts.return_h2_stream(self.settings.clone(), pool.clone(), k, v);
 			} else {
 				trace!("pool dropped, dropping pooled ({:?})", k);
 			}

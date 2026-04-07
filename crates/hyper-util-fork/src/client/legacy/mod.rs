@@ -5,6 +5,3 @@ pub mod connect;
 // Publicly available, but just for legacy purposes. A better pool will be
 // designed.
 pub mod pool;
-
-#[cfg(test)]
-mod http2_tests;

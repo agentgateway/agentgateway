@@ -273,7 +273,7 @@ where
 			// Inserting into the response is a guard against the body being dropped before the stream is complete.
 			// This is still possible to drop both the response and the body, but less likely; if it does occur,
 			// the impact is that we attempt to send on a stream that is full, which will block until it has capacity.
-			res.extensions_mut().insert(guard.clone());
+			// res.extensions_mut().insert(guard.clone());
 			res.map(|b| BodyLog::wrap(b, Some(guard)))
 		} else {
 			// when pooled is dropped, it will try to insert back into the
