@@ -303,7 +303,11 @@ func (p ReferenceIndex) lookupGatewaysForBackend(ctx krt.HandlerContext, object 
 	if p.PolicyAttachments == nil {
 		return base
 	}
-	for _, pref := range krt.FetchOne(ctx, p.PolicyAttachments, krt.FilterKey(key)).Objects {
+	attachment := krt.FetchOne(ctx, p.PolicyAttachments, krt.FilterKey(key))
+	if attachment == nil {
+		return base
+	}
+	for _, pref := range attachment.Objects {
 		base = base.Union(p.lookupGatewaysForBackend(ctx, pref.Target, seen))
 	}
 	return base
