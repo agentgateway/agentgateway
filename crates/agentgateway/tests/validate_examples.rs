@@ -93,7 +93,7 @@ fn keycloak_available() -> bool {
 }
 
 fn example_configs() -> Vec<String> {
-	fn walk(dir: &Path, configs: &mut Vec<String>) {
+	fn walk(dir: &Path, configs: &mut Vec<std::path::PathBuf>) {
 		let mut entries = std::fs::read_dir(dir)
 			.unwrap_or_else(|e| panic!("failed to read {}: {e}", dir.display()))
 			.collect::<Result<Vec<_>, _>>()
@@ -105,7 +105,7 @@ fn example_configs() -> Vec<String> {
 			if path.is_dir() {
 				walk(&path, configs);
 			} else if path.file_name().is_some_and(|name| name == "config.yaml") {
-				configs.push(path.to_string_lossy().replace('\\', "/"));
+				configs.push(path);
 			}
 		}
 	}
@@ -119,7 +119,7 @@ fn example_configs() -> Vec<String> {
 	configs
 		.into_iter()
 		.map(|path| {
-			Path::new(&path)
+			path
 				.strip_prefix(workspace_root())
 				.unwrap_or_else(|_| panic!("{path} should live under the workspace root"))
 				.to_string_lossy()
