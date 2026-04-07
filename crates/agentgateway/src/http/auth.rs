@@ -237,9 +237,13 @@ pub async fn apply_backend_auth(
 			// We handle this in 'apply_late_backend_auth' since it must come at the end (due to request signing)!
 		},
 		BackendAuth::Azure(azure_auth) => {
-			let token = azure::get_token(&backend_info.inputs.upstream, azure_auth, &backend_info.call_target)
-				.await
-				.map_err(ProxyError::BackendAuthenticationFailed)?;
+			let token = azure::get_token(
+				&backend_info.inputs.upstream,
+				azure_auth,
+				&backend_info.call_target,
+			)
+			.await
+			.map_err(ProxyError::BackendAuthenticationFailed)?;
 			req.headers_mut().insert(http::header::AUTHORIZATION, token);
 		},
 	}
@@ -947,11 +951,7 @@ mod azure {
 			.clone();
 		// Foundry endpoints (.services.ai.azure.com) require the ai.azure.com scope
 		let is_foundry = matches!(target, crate::types::agent::Target::Hostname(h, _) if h.ends_with(".services.ai.azure.com"));
-		let scopes = if is_foundry {
-			FOUNDRY_SCOPES
-		} else {
-			SCOPES
-		};
+		let scopes = if is_foundry { FOUNDRY_SCOPES } else { SCOPES };
 		let token = cred.get_token(scopes, None).await?;
 		let mut hv = http::HeaderValue::from_str(&format!("Bearer {}", token.token.secret()))?;
 		hv.set_sensitive(true);

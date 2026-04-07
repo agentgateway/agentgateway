@@ -54,7 +54,10 @@ impl Provider {
 
 		// Foundry uses the project path prefix, no api-version needed.
 		if matches!(self.resource_type, AzureResourceType::Foundry) {
-			let project = self.project_name.as_deref().unwrap_or(self.resource_name.as_str());
+			let project = self
+				.project_name
+				.as_deref()
+				.unwrap_or(self.resource_name.as_str());
 			return strng::format!("/api/projects/{project}/openai/v1/{t}");
 		}
 
