@@ -142,7 +142,7 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 			continue
 		}
 
-		gatewayTargets := references.LookupGatewaysForTarget(ctx, utils.TypedNamespacedName{
+		gatewayTargets := references.LookupGatewaysForBackend(ctx, utils.TypedNamespacedName{
 			NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: string(target.Name)},
 			Kind:           gk.Kind,
 		}).UnsortedList()
@@ -302,7 +302,7 @@ func resolvePolicyAncestorRefs(
 		NamespacedName: types.NamespacedName{Namespace: policyNamespace, Name: string(targetName)},
 		Kind:           targetGK.Kind,
 	}
-	gatewayTargets := references.LookupGatewaysForTarget(ctx, object).UnsortedList()
+	gatewayTargets := references.LookupGatewaysForBackend(ctx, object).UnsortedList()
 	if len(gatewayTargets) == 0 {
 		return nil, fmt.Sprintf("Policy is not attached: %s %s/%s is not attached to any Gateway", targetGK.Kind, policyNamespace, targetName)
 	}

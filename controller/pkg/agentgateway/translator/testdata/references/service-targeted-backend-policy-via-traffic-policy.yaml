@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: processor
+  namespace: default
+spec:
+  selector:
+    app: processor
+  ports:
+    - protocol: TCP
+      port: 9002
+      targetPort: 9002
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: client-tls
+  namespace: default
+type: kubernetes.io/tls
+data:
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJiakNDQVJPZ0F3SUJBZ0lVTFpDLzFkMEhpMlRFUGk5MUtwamVZbzgzZ1pBd0NnWUlLb1pJemowRUF3SXcKRERFS01BZ0dBMVVFQXd3QllUQWVGdzB5TlRFeE1qVXlNRFE0TURLYUZ3MHlOVEV4TWpZeU1EUTRNREphTUF3eApDakFJQmdOVkJBTU1BV0V3V1RBVEJnY3Foa2pPUFFJQkJnZ3Foa2pPUFFNQkJ3TkNBQVIvc1UybWRnbkhab2Z6CmR0b0tRZm5FMWdrVE9HY2JJaWFUeDdXUGpZcXF1c1p5ZWYybTBpbkgrcnJVRFBJY2tTRlQ5dnlzRVJFVTBKcGMKL3JTZmVVOG9vMU13VVRBZEJnTlZIUTRFRmdRVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dId1lEVlIwagpCQmd3Rm9BVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dEd1lEVlIwVEFRSC9CQVV3QXdFQi96QUtCZ2dxCmhrak9QUVFEQWdOSkFEQkdBaUVBcW9ISTVENUt2VFR4YVVubW1mc0Nzem1vazZWR0dsZ3hpVm5HVmpKNHJ5VUMKSVFENExVcTRZMjVPbG4zQnNlbE1nT0M5VWNFS3dLRGlOTDZlMkc4S09EcU0wZz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+  tls.key: LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSUxRblhESm5qZFRianhhV2NKQkJOK0FDVjh3UDRxR3RZdVA0VjdZSXdJdGRvQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFZjdGTnBuWUp4MmFIODNiYUNrSDV4TllKRXpobkd5SW1rOGUxajQyS3Fyckdjbm45cHRJcAp4L3E2MUF6eUhKRWhVL2I4ckJFUkZOQ2FYUDYwbjNsUEtBPT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo=
+---
+# ext-proc policy targets Gateway, with backendRef to processor Service
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ext-proc
+  namespace: default
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  traffic:
+    phase: PreRouting
+    extProc:
+      backendRef:
+        name: processor
+        port: 9002
+---
+# backend TLS policy targets the processor Service (not the Gateway)
+# This should still be associated with the gateway via the ext-proc policy's backendRef
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: processor-backend-tls
+  namespace: default
+spec:
+  targetRefs:
+    - kind: Service
+      name: processor
+      group: ""
+  backend:
+    tls:
+      mtlsCertificateRef:
+        - name: client-tls
+      sni: processor.default.svc.cluster.local
