@@ -622,7 +622,6 @@ fn parse_headers(prefix: &str) -> Result<Vec<(String, String)>, anyhow::Error> {
 		match stripped_key {
 			Some(stripped_key) => {
 				// attempt to parse the stripped key
-				// http::header::HeaderName, http::HeaderValue
 				let metadata_key = http::header::HeaderName::from_str(stripped_key)
 					.map_err(|_| anyhow::anyhow!("invalid header key: {}", key))?;
 				// attempt to parse the value
