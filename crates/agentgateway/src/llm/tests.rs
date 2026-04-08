@@ -408,6 +408,8 @@ mod response {
 		("basic", ALL_COMPLETIONS),
 		("audio", ALL_COMPLETIONS),
 		("openrouter_reasoning", ALL_COMPLETIONS),
+		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
+		("gemini_with_completion_tokens", ALL_COMPLETIONS),
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", ALL_COMPLETIONS)];
 
@@ -1075,48 +1077,4 @@ fn completions_response_missing_message_and_usage_fields() {
 	assert_eq!(usage.prompt_tokens, 5);
 	assert_eq!(usage.completion_tokens, 0);
 	assert_eq!(usage.total_tokens, 12);
-}
-
-#[test]
-fn usage_completion_tokens_inferred_from_total_minus_prompt() {
-	let usage = types::completions::Usage {
-		prompt_tokens: 10,
-		completion_tokens: 0,
-		total_tokens: 25,
-		..Default::default()
-	};
-	assert_eq!(usage.completion_tokens_or_inferred(), 15);
-}
-
-#[test]
-fn usage_completion_tokens_explicit_value_preserved() {
-	let usage = types::completions::Usage {
-		prompt_tokens: 10,
-		completion_tokens: 20,
-		total_tokens: 30,
-		..Default::default()
-	};
-	assert_eq!(usage.completion_tokens_or_inferred(), 20);
-}
-
-#[test]
-fn streaming_usage_completion_tokens_inferred_from_total_minus_prompt() {
-	let usage = types::completions::typed::Usage {
-		prompt_tokens: 10,
-		completion_tokens: 0,
-		total_tokens: 25,
-		..Default::default()
-	};
-	assert_eq!(usage.completion_tokens_or_inferred(), 15);
-}
-
-#[test]
-fn streaming_usage_completion_tokens_explicit_value_preserved() {
-	let usage = types::completions::typed::Usage {
-		prompt_tokens: 10,
-		completion_tokens: 20,
-		total_tokens: 30,
-		..Default::default()
-	};
-	assert_eq!(usage.completion_tokens_or_inferred(), 20);
 }

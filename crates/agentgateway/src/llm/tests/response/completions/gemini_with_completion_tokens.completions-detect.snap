@@ -1,0 +1,48 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/completions/gemini_with_completion_tokens.json
+info:
+  model: gemini-2.5-flash
+  usage:
+    prompt_tokens: 7
+    completion_tokens: 12
+    total_tokens: 402
+  choices:
+    - message:
+        content: "Hello! I'm functioning perfectly and ready to assist.\n\n"
+        role: assistant
+      finish_reason: length
+      index: 0
+  created: 1775595257
+  id: 9W7VaabzK7KPjMcPnYGiuAU
+  object: chat.completion
+---
+{
+  "response": {
+    "model": "gemini-2.5-flash",
+    "usage": {
+      "prompt_tokens": 7,
+      "completion_tokens": 12,
+      "total_tokens": 402
+    },
+    "choices": [
+      {
+        "message": {
+          "content": "Hello! I'm functioning perfectly and ready to assist.\n\n",
+          "role": "assistant"
+        },
+        "finish_reason": "length",
+        "index": 0
+      }
+    ],
+    "created": "[date]",
+    "id": "[id]",
+    "object": "chat.completion"
+  },
+  "parsed": {
+    "input_tokens": 7,
+    "output_tokens": 12,
+    "total_tokens": 402,
+    "provider_model": "gemini-2.5-flash"
+  }
+}
