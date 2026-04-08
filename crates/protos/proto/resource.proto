@@ -621,6 +621,8 @@ message TrafficPolicySpec {
     message Descriptor {
       repeated Entry entries = 1;
       Type type = 2;
+      optional string cost = 3; // CEL expr
+      optional string limit_override = 4; // CEL expr returning {unit, requestsPerUnit}
     }
     message Entry {
       string key = 1;

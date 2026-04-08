@@ -1688,6 +1688,7 @@ async fn make_backend_call(
 				policy_client.clone(),
 				llm_request,
 				llm_response_policies,
+				log.as_ref().expect("must be set").request_snapshot.as_ref(),
 				llm_response_log.expect("must be set"),
 				include_completion_in_log,
 				resp,

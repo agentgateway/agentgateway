@@ -36,6 +36,8 @@ mod conversion;
 pub mod policy;
 mod types;
 
+use crate::cel::{Executor, LLMContext, RequestSnapshot};
+use crate::store;
 pub use types::SimpleChatCompletionMessage;
 
 #[cfg(test)]
@@ -871,6 +873,7 @@ impl AIProvider {
 		client: PolicyClient,
 		req: LLMRequest,
 		rate_limit: LLMResponsePolicies,
+		req_snapshot: Option<&RequestSnapshot>,
 		log: AsyncLog<llm::LLMInfo>,
 		include_completion_in_log: bool,
 		resp: Response,
@@ -976,9 +979,13 @@ impl AIProvider {
 		let resp = Response::from_parts(parts, body);
 
 		let llm_info = LLMInfo::new(req, llm_resp);
-		// In the initial request, we subtracted the approximate request tokens.
-		// Now we should have the real request tokens and the response tokens
-		amend_tokens(rate_limit, &llm_info);
+		if !rate_limit.local_rate_limit.is_empty() || rate_limit.remote_rate_limit.is_some() {
+			let llm_context = LLMContext::from(llm_info.clone());
+			let exec = cel::Executor::new_llm_rate_limit(req_snapshot, &resp, &llm_context);
+			// In the initial request, we subtracted the approximate request tokens.
+			// Now we should have the real request tokens and the response tokens
+			amend_tokens(rate_limit, &llm_info, exec);
+		}
 		log.store(Some(llm_info));
 		Ok(resp)
 	}
@@ -1483,7 +1490,7 @@ pub enum AIError {
 	JoinError(#[from] tokio::task::JoinError),
 }
 
-fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo) {
+fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo, exec: Executor) {
 	let input_mismatch = match (
 		llm_resp.request.input_tokens,
 		llm_resp.response.input_tokens,
@@ -1502,7 +1509,7 @@ fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo) {
 		lrl.amend_tokens(tokens_to_remove)
 	}
 	if let Some(rrl) = rate_limit.remote_rate_limit {
-		rrl.amend_tokens(tokens_to_remove)
+		rrl.amend_tokens(tokens_to_remove, &exec)
 	}
 }
 
@@ -1523,7 +1530,13 @@ impl AmendOnDrop {
 	}
 	pub fn report_rate_limit(&mut self) {
 		if let Some(pol) = self.pol.take() {
-			self.log.non_atomic_mutate(|r| amend_tokens(pol, r));
+			if !pol.local_rate_limit.is_empty() || pol.remote_rate_limit.is_some() {
+				self.log.non_atomic_mutate(|r| {
+					let ctx = LLMContext::from(r.clone());
+					let exec = cel::Executor::new_llm_rate_limit_streaming(&ctx);
+					amend_tokens(pol, r, exec)
+				});
+			}
 		}
 	}
 }

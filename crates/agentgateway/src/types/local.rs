@@ -1001,6 +1001,12 @@ struct LocalLLMPolicy {
 	/// Authorization policies for HTTP access.
 	#[serde(default)]
 	authorization: Option<Authorization>,
+	/// Rate limit incoming requests. State is kept local.
+	#[serde(default)]
+	local_rate_limit: Vec<crate::http::localratelimit::RateLimit>,
+	/// Rate limit incoming requests. State is managed by a remote server.
+	#[serde(default)]
+	remote_rate_limit: Option<crate::http::remoteratelimit::RemoteRateLimit>,
 }
 
 #[apply(schema_de!)]
@@ -1620,11 +1626,15 @@ async fn convert_llm_config(
 		let LocalLLMPolicy {
 			gateway,
 			authorization,
+			local_rate_limit,
+			remote_rate_limit,
 		} = pol;
-		let authorization_policies = split_policies(
+		let route_policies = split_policies(
 			client.clone(),
 			FilterOrPolicy {
 				authorization,
+				local_rate_limit,
+				remote_rate_limit,
 				..Default::default()
 			},
 			None,
@@ -1638,7 +1648,7 @@ async fn convert_llm_config(
 		.await?;
 		(
 			gateway_policies.route_policies,
-			authorization_policies.route_policies,
+			route_policies.route_policies,
 		)
 	} else {
 		(vec![], vec![])

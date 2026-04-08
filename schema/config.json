@@ -3230,6 +3230,28 @@
         "type": {
           "$ref": "#/$defs/RateLimitType",
           "default": "requests"
+        },
+        "cost": {
+          "description": "cost determines the optional expression to determine the cost of the request.\nIf unset, type `requests` defaults to `1`, and type `tokens` defaults to `total_tokens`.\nIf the expression fails to evaluate, the descriptor is skipped.\nCosts are evaluated upon request completion.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limitOverride": {
+          "description": "limitOverride determines the optional expression to determine the limit of the request.\nThis tells the remote server what limit to apply to the request.\nNote: this does not specify the *cost* of the request, which is done by the `cost` field.\nThe expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:\n`{\"unit\":\"second\",\"requestsPerUnit\":100}`.\nValid units: second, minute, hour, day, month, year\nIf the expression fails to evaluate, the descriptor is skipped.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -6327,6 +6349,26 @@
           "anyOf": [
             {
               "$ref": "#/$defs/Authorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "localRateLimit": {
+          "description": "Rate limit incoming requests. State is kept local.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RateLimitSpec"
+          },
+          "default": []
+        },
+        "remoteRateLimit": {
+          "description": "Rate limit incoming requests. State is managed by a remote server.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RemoteRateLimit"
             },
             {
               "type": "null"

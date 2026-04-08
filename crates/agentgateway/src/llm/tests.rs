@@ -981,6 +981,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 			client,
 			req,
 			LLMResponsePolicies::default(),
+			None,
 			AsyncLog::default(),
 			false,
 			resp,

@@ -1,4 +1,4 @@
-use crate::cel::Expression;
+use crate::cel::{Executor, Expression};
 use crate::http::envoy_proto_common;
 use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::localratelimit::RateLimitType;
@@ -11,6 +11,7 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{BackendPolicy, SimpleBackendReference};
 use crate::*;
 use ::http::{HeaderMap, StatusCode};
+use itertools::Itertools;
 
 #[cfg(test)]
 #[path = "remoteratelimit_tests.rs"]
@@ -81,6 +82,27 @@ pub struct DescriptorEntry {
 	#[serde(default)]
 	#[serde(rename = "type")]
 	pub limit_type: RateLimitType,
+	/// cost determines the optional expression to determine the cost of the request.
+	/// If unset, type `requests` defaults to `1`, and type `tokens` defaults to `total_tokens`.
+	/// If the expression fails to evaluate, the descriptor is skipped.
+	/// Costs are evaluated upon request completion.
+	pub cost: Option<Arc<cel::Expression>>,
+	/// limitOverride determines the optional expression to determine the limit of the request.
+	/// This tells the remote server what limit to apply to the request.
+	/// Note: this does not specify the *cost* of the request, which is done by the `cost` field.
+	/// The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:
+	/// `{"unit":"second","requestsPerUnit":100}`.
+	/// Valid units: second, minute, hour, day, month, year
+	/// If the expression fails to evaluate, the descriptor is skipped.
+	pub limit_override: Option<Arc<cel::Expression>>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DescriptorLimitOverride {
+	unit: String,
+	#[serde(alias = "requests_per_unit")]
+	requests_per_unit: u32,
 }
 
 #[derive(serde::Deserialize)]
@@ -108,21 +130,32 @@ pub struct LLMResponseAmend {
 	base: RemoteRateLimit,
 	client: PolicyClient,
 	request: proto::RateLimitRequest,
+	descriptor_costs: Vec<Option<Arc<Expression>>>,
 }
 
 impl LLMResponseAmend {
-	pub fn amend_tokens(mut self, tokens: i64) {
-		// We cannot currently do negative amendments, so if its negative just skip
-		// The input is not the cost, but the delta, so if we get -5 we should have a cost of 5
-		let Ok(tokens) = (tokens).try_into() else {
-			return;
-		};
-		self
-			.request
-			.descriptors
-			.iter_mut()
-			.for_each(|d| d.hits_addend = Some(tokens));
-		// Ignore the response
+	pub fn amend_tokens(mut self, default_tokens: i64, exec: &Executor) {
+		let mut index = 0;
+		self.request.descriptors.retain_mut(|d| {
+			let cost = self.descriptor_costs[index].as_ref();
+			d.hits_addend = if let Some(cost) = cost {
+				// if there is a cost expression, run it.
+				let Some(cost) = exec.eval(cost).ok().and_then(|v| v.as_unsigned().ok()) else {
+					// Failed to evaluate: skip descriptor
+					return false;
+				};
+				Some(cost as u64)
+			} else {
+				// We cannot currently do negative amendments, so if its negative just skip
+				// The input is not the cost, but the delta, so if we get -5 we should have a cost of 5
+				let Ok(tokens) = (default_tokens).try_into() else {
+					return false;
+				};
+				Some(tokens)
+			};
+			index += 1;
+			true
+		});
 		tokio::task::spawn(async move {
 			let _ = self.base.check_internal(self.client, self.request).await;
 		});
@@ -141,9 +174,10 @@ impl RemoteRateLimit {
 		&self,
 		req: &http::Request,
 		limit_type: RateLimitType,
-		cost: Option<u64>,
-	) -> Option<RateLimitRequest> {
+		default_cost: Option<u64>,
+	) -> Option<(RateLimitRequest, Vec<Option<Arc<cel::Expression>>>)> {
 		let mut descriptors = Vec::with_capacity(self.descriptors.0.len());
+		let exec = cel::Executor::new_request(req);
 		let candidate_count = self
 			.descriptors
 			.0
@@ -152,16 +186,17 @@ impl RemoteRateLimit {
 			.count();
 		trace!(
 			"ratelimit build_request start: domain={}, type={:?}, cost={:?}, candidates={}",
-			self.domain, limit_type, cost, candidate_count
+			self.domain, limit_type, default_cost, candidate_count
 		);
 
+		let mut descriptor_costs = vec![];
 		for desc_entry in self
 			.descriptors
 			.0
 			.iter()
 			.filter(|e| e.limit_type == limit_type)
 		{
-			if let Some(rl_entries) = Self::eval_descriptor(req, &desc_entry.entries) {
+			if let Some(rl_entries) = Self::eval_descriptor(&exec, &desc_entry.entries) {
 				// Rate limit servers require each descriptor to have at least one entry.
 				if rl_entries.is_empty() {
 					trace!(
@@ -181,22 +216,48 @@ impl RemoteRateLimit {
 					limit_type,
 					kv_pairs.join(", ")
 				);
+				let hits_addend = if desc_entry.cost.is_some() && limit_type == RateLimitType::Tokens {
+					// Skip sending anything on the target request side; the cost computation is specified to be on the response (amend) side
+					Some(0)
+				} else {
+					match eval_cost(&exec, desc_entry.cost.as_deref(), default_cost) {
+						Ok(hits_addend) => hits_addend,
+						Err(e) => {
+							trace!(
+								"ratelimit cost evaluation failed for domain={}, type={:?}, expr={:?}, error={}",
+								self.domain, limit_type, desc_entry.cost, e
+							);
+							continue;
+						},
+					}
+				};
+
+				let limit = match Self::eval_limit_override(&exec, desc_entry.limit_override.as_deref()) {
+					Ok(limit) => limit,
+					Err(e) => {
+						trace!(
+							"ratelimit limit override evaluation failed for domain={}, type={:?}, expr={:?}, error={}",
+							self.domain, limit_type, desc_entry.limit_override, e
+						);
+						continue;
+					},
+				};
 				descriptors.push(RateLimitDescriptor {
 					entries: rl_entries,
-					limit: None,
-					hits_addend: cost,
+					limit,
+					hits_addend,
 				});
+				descriptor_costs.push(desc_entry.cost.clone());
 			} else {
-				let attempted: Vec<String> = desc_entry
-					.entries
-					.iter()
-					.map(|d| format!("{}={:?}", d.0, d.1))
-					.collect();
 				trace!(
 					"ratelimit descriptor evaluation failed for domain={}, type={:?}, skipping descriptor: {}",
 					self.domain,
 					limit_type,
-					attempted.join(", ")
+					desc_entry
+						.entries
+						.iter()
+						.map(|d| format!("{}={:?}", d.0, d.1))
+						.join(", ")
 				);
 			}
 		}
@@ -216,18 +277,21 @@ impl RemoteRateLimit {
 			descriptors.len()
 		);
 
-		Some(proto::RateLimitRequest {
-			domain: self.domain.clone(),
-			descriptors,
-			// Ignored; we always set the per-descriptor one which allows distinguishing empty vs 0
-			hits_addend: 0,
-		})
+		Some((
+			proto::RateLimitRequest {
+				domain: self.domain.clone(),
+				descriptors,
+				// Ignored; we always set the per-descriptor one which allows distinguishing empty vs 0
+				hits_addend: 0,
+			},
+			descriptor_costs,
+		))
 	}
 	pub async fn check_llm(
 		&self,
 		client: PolicyClient,
 		req: &mut Request,
-		cost: u64,
+		default_cost: u64,
 	) -> Result<(PolicyResponse, Option<LLMResponseAmend>), ProxyError> {
 		if !self
 			.descriptors
@@ -242,7 +306,13 @@ impl RemoteRateLimit {
 			);
 			return Ok((PolicyResponse::default(), None));
 		}
-		let Some(request) = self.build_request(req, RateLimitType::Tokens, Some(cost)) else {
+		// We usually don't have any information at this point.
+		// If they have an explicit `cost` expression, it is specified to be on output; send only a '0' cost here.
+		// If they have tokenization enabled, we have an explicit cost to send, so we can send it.
+		// Else send '0'.
+		let Some((request, descriptor_costs)) =
+			self.build_request(req, RateLimitType::Tokens, Some(default_cost))
+		else {
 			return Ok((PolicyResponse::default(), None));
 		};
 		let cr = self.check_internal(client.clone(), request.clone()).await;
@@ -250,6 +320,7 @@ impl RemoteRateLimit {
 			base: self.clone(),
 			client,
 			request,
+			descriptor_costs,
 		};
 
 		match cr {
@@ -283,7 +354,7 @@ impl RemoteRateLimit {
 			);
 			return Ok(PolicyResponse::default());
 		}
-		let Some(request) = self.build_request(req, RateLimitType::Requests, None) else {
+		let Some((request, _)) = self.build_request(req, RateLimitType::Requests, None) else {
 			return Ok(PolicyResponse::default());
 		};
 		match self.check_internal(client, request).await {
@@ -304,23 +375,22 @@ impl RemoteRateLimit {
 		request: proto::RateLimitRequest,
 	) -> Result<proto::RateLimitResponse, ProxyError> {
 		trace!("connecting to {:?}", self.target);
-		let descriptor_summaries: Vec<String> = request
-			.descriptors
-			.iter()
-			.map(|d| {
-				let kvs: Vec<String> = d
-					.entries
-					.iter()
-					.map(|e| format!("{}={}", e.key, e.value))
-					.collect();
-				format!("[hits_addend={:?}; {}]", d.hits_addend, kvs.join(", "))
-			})
-			.collect();
 		trace!(
 			"ratelimit request summary (domain: {}): descriptors={} {}",
 			request.domain,
 			request.descriptors.len(),
-			descriptor_summaries.join(" | ")
+			request
+				.descriptors
+				.iter()
+				.map(|d| {
+					let kvs: Vec<String> = d
+						.entries
+						.iter()
+						.map(|e| format!("{}={}", e.key, e.value))
+						.collect();
+					format!("[hits_addend={:?}; {}]", d.hits_addend, kvs.join(", "))
+				})
+				.join(" | ")
 		);
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
@@ -373,9 +443,36 @@ impl RemoteRateLimit {
 		Ok(res)
 	}
 
-	fn eval_descriptor(req: &Request, entries: &Vec<Descriptor>) -> Option<Vec<Entry>> {
+	fn eval_limit_override(
+		exec: &cel::Executor<'_>,
+		limit_override: Option<&Expression>,
+	) -> anyhow::Result<Option<proto::rate_limit_descriptor::RateLimitOverride>> {
+		let Some(expr) = limit_override else {
+			return Ok(None);
+		};
+
+		let raw = exec
+			.eval(expr)?
+			.json()
+			.map_err(|_| cel::Error::JsonConvert)?;
+		let override_config: DescriptorLimitOverride = serde_json::from_value(raw)?;
+		let unit = match override_config.unit.to_ascii_lowercase().as_str() {
+			"second" => proto::RateLimitUnit::Second,
+			"minute" => proto::RateLimitUnit::Minute,
+			"hour" => proto::RateLimitUnit::Hour,
+			"day" => proto::RateLimitUnit::Day,
+			"month" => proto::RateLimitUnit::Month,
+			"year" => proto::RateLimitUnit::Year,
+			unit => anyhow::bail!("invalid limit override unit: {unit}"),
+		};
+		Ok(Some(proto::rate_limit_descriptor::RateLimitOverride {
+			requests_per_unit: override_config.requests_per_unit,
+			unit: unit as i32,
+		}))
+	}
+
+	fn eval_descriptor(exec: &cel::Executor<'_>, entries: &Vec<Descriptor>) -> Option<Vec<Entry>> {
 		let mut rl_entries = Vec::with_capacity(entries.len());
-		let exec = cel::Executor::new_request(req);
 		for Descriptor(k, lookup) in entries {
 			// We drop the entire set if we cannot eval one; emit trace to aid debugging
 			match exec.eval(lookup) {
@@ -406,16 +503,29 @@ impl RemoteRateLimit {
 	}
 
 	pub fn expressions(&self) -> impl Iterator<Item = &Expression> {
-		self
-			.descriptors
-			.0
-			.iter()
-			.flat_map(|v| v.entries.iter().map(|v| &v.1))
+		self.descriptors.0.iter().flat_map(|v| {
+			v.entries
+				.iter()
+				.map(|entry| &entry.1)
+				.chain(v.cost.iter().map(|expr| expr.as_ref()))
+				.chain(v.limit_override.iter().map(|expr| expr.as_ref()))
+		})
 	}
 }
 
 fn process_headers(hm: &mut HeaderMap, headers: Vec<proto::HeaderValue>) {
 	for h in headers {
 		let _ = envoy_proto_common::apply_header_value(hm, &h);
+	}
+}
+
+fn eval_cost(
+	exec: &cel::Executor<'_>,
+	cost: Option<&Expression>,
+	default_cost: Option<u64>,
+) -> anyhow::Result<Option<u64>> {
+	match cost {
+		Some(expr) => Ok(Some(exec.eval(expr)?.as_unsigned()?.try_into()?)),
+		None => Ok(default_cost),
 	}
 }
