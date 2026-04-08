@@ -331,13 +331,27 @@ impl CaClient {
 	pub fn new(client: client::Client, config: Config) -> Result<Self, Error> {
 		let (state_tx, state_rx) = watch::channel(CertificateState::NotReady);
 
+		let headers: Vec<(http::header::HeaderName, http::HeaderValue)> = config
+			.ca_headers
+			.iter()
+			.map(|(k, v)| {
+				Ok((
+					http::header::HeaderName::from_str(k)
+						.map_err(|e| Error::CaClientCreation(Arc::new(anyhow::Error::new(e))))?,
+					http::HeaderValue::from_str(v)
+						.map_err(|e| Error::CaClientCreation(Arc::new(anyhow::Error::new(e))))?,
+				))
+			})
+			.collect::<Result<_, Error>>()?;
+
 		// Start the fetcher task
 		let fetcher_handle = tokio::spawn({
 			let config = config.clone();
 			let state_tx = state_tx.clone();
+			let headers = headers.clone();
 
 			async move {
-				Self::run_fetcher(client, config, state_tx).await;
+				Self::run_fetcher(client, config, state_tx, headers).await;
 			}
 		});
 
@@ -378,11 +392,14 @@ impl CaClient {
 		client: client::Client,
 		config: Config,
 		state_tx: watch::Sender<CertificateState>,
+		headers: Vec<(http::header::HeaderName, http::HeaderValue)>,
 	) {
 		let mut interval = tokio::time::interval(Duration::from_secs(30)); // Check every 30 seconds
 
 		// Start with an immediate fetch
-		if let Err(e) = Self::fetch_and_update_certificate(client.clone(), &config, &state_tx).await {
+		if let Err(e) =
+			Self::fetch_and_update_certificate(client.clone(), &config, &state_tx, headers.clone()).await
+		{
 			error!("Initial certificate fetch failed: {:?}", e);
 			let _ = state_tx.send(CertificateState::Error(e));
 		}
@@ -405,7 +422,14 @@ impl CaClient {
 			if should_renew {
 				info!("Renewing certificate for identity: {}", config.identity);
 
-				match Self::fetch_and_update_certificate(client.clone(), &config, &state_tx).await {
+				match Self::fetch_and_update_certificate(
+					client.clone(),
+					&config,
+					&state_tx,
+					headers.clone(),
+				)
+				.await
+				{
 					Ok(_) => {
 						info!(
 							"Successfully renewed certificate for identity: {}",
@@ -428,26 +452,16 @@ impl CaClient {
 		client: client::Client,
 		config: &Config,
 		state_tx: &watch::Sender<CertificateState>,
+		headers: Vec<(http::header::HeaderName, http::HeaderValue)>,
 	) -> Result<(), Error> {
 		info!("Fetching certificate for identity: {}", config.identity);
-
-		let headers: Result<Vec<(http::header::HeaderName, http::HeaderValue)>, anyhow::Error> = config
-			.ca_headers
-			.iter()
-			.map(|(k, v)| {
-				Ok((
-					http::header::HeaderName::from_str(k)?,
-					http::HeaderValue::from_str(v)?,
-				))
-			})
-			.collect();
 
 		let svc = control::grpc_connector(
 			client,
 			config.address.clone(),
 			config.auth.clone(),
 			config.ca_cert.clone(),
-			headers.unwrap(),
+			headers.clone(),
 		)
 		.await
 		.map_err(|e| Error::CaClientCreation(Arc::new(e)))?;

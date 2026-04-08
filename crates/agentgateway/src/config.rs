@@ -191,7 +191,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 
 			auth,
 			ca_cert: ca_root_cert,
-			ca_headers: ca_headers.unwrap(),
+			ca_headers: ca_headers?,
 		})
 	} else {
 		None
@@ -689,10 +689,7 @@ mod parse_headers_tests {
 
 		let headers = parse_headers("TEST_PARSE_HEADERS_").expect("header parsing should succeed");
 
-		assert!(headers.contains(&(
-			"x-test-header".to_string(),
-			"header-value".to_string(),
-		)));
+		assert!(headers.contains(&("x-test-header".to_string(), "header-value".to_string())));
 	}
 
 	#[test]
@@ -702,7 +699,11 @@ mod parse_headers_tests {
 
 		let err = parse_headers("TEST_PARSE_HEADERS_").expect_err("invalid header key should fail");
 
-		assert!(err.to_string().contains("invalid header key: TEST_PARSE_HEADERS_Bad@Header"));
+		assert!(
+			err
+				.to_string()
+				.contains("invalid header key: TEST_PARSE_HEADERS_Bad@Header")
+		);
 	}
 
 	#[test]
@@ -710,8 +711,7 @@ mod parse_headers_tests {
 		let _guard = ENV_LOCK.lock().expect("env mutex poisoned");
 		let _header = TempEnvVar::set("TEST_PARSE_HEADERS_X-Test-Header", "bad\nvalue");
 
-		let err =
-			parse_headers("TEST_PARSE_HEADERS_").expect_err("invalid header value should fail");
+		let err = parse_headers("TEST_PARSE_HEADERS_").expect_err("invalid header value should fail");
 
 		assert!(err.to_string().contains("invalid header value: bad\nvalue"));
 	}
