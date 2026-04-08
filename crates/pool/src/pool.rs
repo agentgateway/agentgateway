@@ -487,7 +487,7 @@ impl<K: Key> HostPool<K> {
 
 		let mut to_notify = capacity;
 		if !for_under_capacity_new_connection {
-			to_notify -= 1;
+			to_notify = to_notify.saturating_sub(1);
 			// For the first, notify with the original error. The rest get an error to just retry.
 			loop {
 				let Some(tx) = self.waiters.pop_front() else {
@@ -497,6 +497,8 @@ impl<K: Key> HostPool<K> {
 					trace!("insert new error; removing canceled waiter for {:?}", key);
 					continue;
 				}
+				#[cfg(test)]
+				Pool::<K>::run_forget_pending_test_hook();
 				let res = if let Some(e) = err.take() {
 					tx.send(Err(ClientConnectError::Normal(e)))
 				} else {
@@ -645,6 +647,22 @@ impl<K: Key> Pool<K> {
 	#[cfg(test)]
 	fn run_send_connection_test_hook() {
 		let mut hook = Self::send_connection_test_hook().lock();
+		if let Some(hook_fn) = hook.as_mut()
+			&& !hook_fn()
+		{
+			*hook = None;
+		}
+	}
+
+	#[cfg(test)]
+	fn forget_pending_test_hook() -> &'static Mutex<Option<Box<dyn FnMut() -> bool + Send>>> {
+		static HOOK: Mutex<Option<Box<dyn FnMut() -> bool + Send>>> = Mutex::new(None);
+		&HOOK
+	}
+
+	#[cfg(test)]
+	fn run_forget_pending_test_hook() {
+		let mut hook = Self::forget_pending_test_hook().lock();
 		if let Some(hook_fn) = hook.as_mut()
 			&& !hook_fn()
 		{
@@ -1285,6 +1303,14 @@ mod tests {
 		TEST_LOCK.lock()
 	}
 
+	fn install_forget_pending_test_hook(f: impl FnMut() -> bool + Send + 'static) {
+		*Pool::<KeyImpl>::forget_pending_test_hook().lock() = Some(Box::new(f));
+	}
+
+	fn clear_forget_pending_test_hook() {
+		*Pool::<KeyImpl>::forget_pending_test_hook().lock() = None;
+	}
+
 	fn assert_h2_queue_invariants(pool: &Pool<KeyImpl>, key: &KeyImpl, context: &str) {
 		let host = pool.host(key);
 		let mut active_ids = HashSet::new();
@@ -1586,6 +1612,18 @@ mod tests {
 		let pool = pool();
 		let key = host_key("foo");
 		let _ = must_want_new_connection(&pool, key);
+	}
+
+	#[tokio::test]
+	async fn test_zero_expected_http2_capacity_should_not_panic_when_connect_is_dropped() {
+		// This test is really dumb but whatever, I suppose we shouldn't panic here
+		let pool = pool_with_expected_h2_capacity::<KeyImpl>(0);
+		let key = host_key_h2("foo");
+		let (sc1, _w1) = must_want_new_connection(&pool, key.clone());
+
+		// Dropping the connect token should cleanly fail the waiter, even if the
+		// configured expected HTTP/2 capacity is zero.
+		drop(sc1);
 	}
 
 	#[tokio::test]
@@ -2206,6 +2244,21 @@ mod tests {
 		tracing::error!("howardjohn: {:#?}", pool.hosts);
 
 		let _pooled3 = w3.await.expect("get").unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_h2_checkout_closed() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, _w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+
+		drop(sc1);
+
+		assert_matches!(
+			w2.await,
+			Ok(Err(ClientConnectError::CheckoutIsClosed(_)))
+		);
 	}
 
 	#[tokio::test]
