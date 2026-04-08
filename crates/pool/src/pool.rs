@@ -1194,7 +1194,6 @@ mod tests {
 	use std::sync::Once;
 	use std::task::{self, Poll};
 	use std::time::{Duration, Instant};
-	use tracing::info;
 	use tracing_subscriber::EnvFilter;
 
 	#[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1387,104 +1386,6 @@ mod tests {
 			"{context}: available h2 capacity hidden behind a full front entry for {key:?}: {:?}",
 			host.active_h2
 		);
-	}
-
-	#[derive(Clone, Debug)]
-	struct XorShift64(u64);
-
-	impl XorShift64 {
-		fn new(seed: u64) -> Self {
-			Self(seed.max(1))
-		}
-
-		fn next_u64(&mut self) -> u64 {
-			let mut x = self.0;
-			x ^= x << 13;
-			x ^= x >> 7;
-			x ^= x << 17;
-			self.0 = x;
-			x
-		}
-
-		fn choose(&mut self, upper_exclusive: usize) -> usize {
-			debug_assert!(upper_exclusive > 0);
-			(self.next_u64() as usize) % upper_exclusive
-		}
-
-		fn coinflip(&mut self) -> bool {
-			self.next_u64() & 1 == 0
-		}
-	}
-
-	async fn run_h2_cancelled_waiter_race_variant(seed: u64) {
-		let _guard = lock_send_connection_test_hook();
-		clear_send_connection_test_hook();
-
-		let mut rng = XorShift64::new(seed);
-		let pool = pool_with_expected_h2_capacity(2);
-		let key = host_key_h2("foo");
-
-		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
-		let w2 = must_wait_for_existing_connection(&pool, key.clone());
-		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
-
-		let pooled1 = w1
-			.await
-			.expect("first waiter should receive first h2 connection")
-			.unwrap();
-		let pooled2 = w2
-			.await
-			.expect("second waiter should receive first h2 connection")
-			.unwrap();
-
-		let mut held_pooled = Vec::new();
-		let mut held_guards = Vec::new();
-		for pooled in [pooled1, pooled2] {
-			if rng.coinflip() {
-				held_guards.push(pooled.into_guard());
-			} else {
-				held_pooled.push(pooled);
-			}
-		}
-
-		let extra_cancelled = rng.choose(3);
-		for _ in 0..extra_cancelled {
-			let extra = must_wait_for_existing_connection(&pool, key.clone());
-			drop(extra);
-		}
-
-		let (sc2, w3) = must_want_new_connection(&pool, key.clone());
-		let w4 = must_wait_for_existing_connection(&pool, key.clone());
-		let mut calls = 0;
-		let mut w4 = Some(w4);
-		install_send_connection_test_hook(move || {
-			calls += 1;
-			if calls == 2 {
-				drop(w4.take());
-				false
-			} else {
-				true
-			}
-		});
-
-		pool.insert_new_connection(sc2, mock_http2_connection(2).await);
-		let pooled3 = w3
-			.await
-			.expect("first waiter should receive second h2 connection")
-			.unwrap();
-		if rng.coinflip() {
-			held_guards.push(pooled3.into_guard());
-		} else {
-			held_pooled.push(pooled3);
-		}
-
-		let context = format!("seed={seed}");
-		assert_h2_queue_invariants(&pool, &key, &context);
-		let _ = must_checkout(&pool, key.clone());
-
-		clear_send_connection_test_hook();
-		drop(held_pooled);
-		drop(held_guards);
 	}
 
 	fn must_want_new_connection(
@@ -2058,7 +1959,9 @@ mod tests {
 		drop(sc2);
 		drop(pooled2);
 		// Should get cancelled from sc2 dropping
-		w4.await.expect("waiter should receive h2 connection").expect_err("should fail");
+		w4.await
+			.expect("waiter should receive h2 connection")
+			.expect_err("should fail");
 	}
 
 	#[tokio::test]
@@ -2399,15 +2302,6 @@ mod tests {
 		drop(sc1);
 
 		assert_matches!(w2.await, Ok(Err(ClientConnectError::CheckoutIsClosed(_))));
-	}
-
-	#[tokio::test]
-	#[ignore]
-	async fn search_h2_cancelled_waiter_race_variants() {
-		for seed in 1..=32_u64 {
-			info!("running h2 canceled-waiter race seed={seed}");
-			run_h2_cancelled_waiter_race_variant(seed).await;
-		}
 	}
 
 	#[tokio::test]
