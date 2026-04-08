@@ -575,4 +575,3 @@ pub mod typed {
 		ResponseError(openai_responses::ResponseErrorEvent),
 	}
 }
-

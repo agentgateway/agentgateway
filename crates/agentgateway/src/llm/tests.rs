@@ -888,10 +888,7 @@ fn test_prompt_enrichment() {
 fn test_get_messages() {
 	use crate::llm::types::RequestType;
 
-	fn extract_messages<R: RequestType + DeserializeOwned>(
-		fixture: &str,
-		provider: &str,
-	) {
+	fn extract_messages<R: RequestType + DeserializeOwned>(fixture: &str, provider: &str) {
 		let path = fixture_path(fixture);
 		let input_str = fs::read_to_string(&path).expect("Failed to read input file");
 		let raw: Value = serde_json::from_str(&input_str).expect("Failed to parse input json");
