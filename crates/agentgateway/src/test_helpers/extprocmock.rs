@@ -2,13 +2,13 @@ use crate::http::ext_proc::proto::external_processor_server::{
 	ExternalProcessor, ExternalProcessorServer,
 };
 use crate::http::ext_proc::proto::{
-	self, processing_request, processing_response, CommonResponse, HttpHeaders, HttpTrailers,
-	ProcessingRequest, ProcessingResponse,
+	self, CommonResponse, HttpHeaders, HttpTrailers, ProcessingRequest, ProcessingResponse,
+	processing_request, processing_response,
 };
 use crate::test_helpers::common::MockInstance;
 use crate::*;
 use async_trait::async_trait;
-use protos::envoy::service::ext_proc::v3::{body_mutation, BodyMutation};
+use protos::envoy::service::ext_proc::v3::{BodyMutation, body_mutation};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream;
