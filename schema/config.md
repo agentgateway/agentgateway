@@ -191,20 +191,6 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.add`|object||
@@ -266,13 +252,6 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service`|object||
@@ -291,20 +270,6 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -366,13 +331,6 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -391,20 +349,6 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.add`|object||
@@ -466,13 +410,6 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -518,20 +455,6 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -593,13 +516,6 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -618,20 +534,6 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.add`|object||
@@ -693,13 +595,6 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -798,20 +693,6 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.transformations.request.add`|object||
@@ -873,13 +754,6 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendTunnel.proxy.service`|object||
@@ -952,20 +826,6 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].policies.extAuthz.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].policies.extAuthz.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.transformations.request.add`|object||
@@ -1027,13 +887,6 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].policies.extAuthz.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].policies.extAuthz.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].policies.extAuthz.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendTunnel.proxy.service`|object||
@@ -1073,20 +926,6 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.extProc.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].policies.extProc.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].policies.extProc.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].policies.extProc.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.extProc.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].policies.extProc.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].policies.extProc.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].policies.extProc.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].policies.extProc.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].policies.extProc.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].policies.extProc.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].policies.extProc.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].policies.extProc.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].policies.extProc.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].policies.extProc.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].policies.extProc.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.transformations.request.add`|object||
@@ -1148,13 +987,6 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].policies.extProc.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].policies.extProc.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].policies.extProc.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].policies.extProc.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].policies.extProc.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].policies.extProc.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].policies.extProc.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].policies.extProc.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendTunnel.proxy.service`|object||
@@ -1226,20 +1058,6 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.transformations.request.add`|object||
@@ -1301,13 +1119,6 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.service`|object||
@@ -1355,20 +1166,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.transformations.request.add`|object||
@@ -1430,13 +1227,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.proxy.service`|object||
@@ -1478,20 +1268,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.add`|object||
@@ -1553,13 +1329,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service`|object||
@@ -1578,20 +1347,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -1653,13 +1408,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -1678,20 +1426,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.add`|object||
@@ -1753,13 +1487,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -1805,20 +1532,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -1880,13 +1593,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -1905,20 +1611,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.add`|object||
@@ -1980,13 +1672,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -2055,20 +1740,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.transformations.request.add`|object||
@@ -2130,13 +1801,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.service`|object||
@@ -2178,20 +1842,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.add`|object||
@@ -2253,13 +1903,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service`|object||
@@ -2278,20 +1921,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -2353,13 +1982,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -2378,20 +2000,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.add`|object||
@@ -2453,13 +2061,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -2505,20 +2106,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -2580,13 +2167,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -2605,20 +2185,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.add`|object||
@@ -2680,13 +2246,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -2731,20 +2290,6 @@
 |`binds[].listeners[].routes[].backends[].policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].policies.transformations.request.add`|object||
@@ -2806,13 +2351,6 @@
 |`binds[].listeners[].routes[].backends[].policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.proxy.service`|object||
@@ -2854,20 +2392,6 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.add`|object||
@@ -2929,13 +2453,6 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service`|object||
@@ -2954,20 +2471,6 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -3029,13 +2532,6 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -3054,20 +2550,6 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.add`|object||
@@ -3129,13 +2611,6 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -3181,20 +2656,6 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -3256,13 +2717,6 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -3281,20 +2735,6 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.add`|object||
@@ -3356,13 +2796,6 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -3487,20 +2920,6 @@
 |`binds[].listeners[].policies.extAuthz.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].policies.extAuthz.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].policies.extAuthz.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].policies.extAuthz.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].policies.extAuthz.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].policies.extAuthz.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].policies.extAuthz.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].policies.extAuthz.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].policies.extAuthz.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].policies.extAuthz.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].policies.extAuthz.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].policies.extAuthz.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].policies.extAuthz.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].policies.extAuthz.policies.requestRedirect.path`|object||
-|`binds[].listeners[].policies.extAuthz.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].policies.extAuthz.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].policies.extAuthz.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].policies.extAuthz.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].policies.extAuthz.policies.transformations.request`|object||
 |`binds[].listeners[].policies.extAuthz.policies.transformations.request.add`|object||
@@ -3562,13 +2981,6 @@
 |`binds[].listeners[].policies.extAuthz.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].policies.extAuthz.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].policies.extAuthz.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].policies.extAuthz.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].policies.extAuthz.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].policies.extAuthz.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].policies.extAuthz.policies.health.eviction.duration`|string||
-|`binds[].listeners[].policies.extAuthz.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].policies.extAuthz.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].policies.extAuthz.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].policies.extAuthz.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].policies.extAuthz.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].policies.extAuthz.policies.backendTunnel.proxy.service`|object||
@@ -3608,20 +3020,6 @@
 |`binds[].listeners[].policies.extProc.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].policies.extProc.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].policies.extProc.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].policies.extProc.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].policies.extProc.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].policies.extProc.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].policies.extProc.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].policies.extProc.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].policies.extProc.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].policies.extProc.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].policies.extProc.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].policies.extProc.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].policies.extProc.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].policies.extProc.policies.requestRedirect.path`|object||
-|`binds[].listeners[].policies.extProc.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].policies.extProc.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].policies.extProc.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].policies.extProc.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].policies.extProc.policies.transformations.request`|object||
 |`binds[].listeners[].policies.extProc.policies.transformations.request.add`|object||
@@ -3683,13 +3081,6 @@
 |`binds[].listeners[].policies.extProc.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].policies.extProc.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].policies.extProc.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].policies.extProc.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].policies.extProc.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].policies.extProc.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].policies.extProc.policies.health.eviction.duration`|string||
-|`binds[].listeners[].policies.extProc.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].policies.extProc.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].policies.extProc.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].policies.extProc.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].policies.extProc.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].policies.extProc.policies.backendTunnel.proxy.service`|object||
@@ -3768,20 +3159,6 @@
 |`frontendPolicies.accessLog.otlp.policies.requestHeaderModifier.add`|object||
 |`frontendPolicies.accessLog.otlp.policies.requestHeaderModifier.set`|object||
 |`frontendPolicies.accessLog.otlp.policies.requestHeaderModifier.remove`|[]string||
-|`frontendPolicies.accessLog.otlp.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`frontendPolicies.accessLog.otlp.policies.responseHeaderModifier.add`|object||
-|`frontendPolicies.accessLog.otlp.policies.responseHeaderModifier.set`|object||
-|`frontendPolicies.accessLog.otlp.policies.responseHeaderModifier.remove`|[]string||
-|`frontendPolicies.accessLog.otlp.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`frontendPolicies.accessLog.otlp.policies.requestRedirect.scheme`|string||
-|`frontendPolicies.accessLog.otlp.policies.requestRedirect.authority`|string||
-|`frontendPolicies.accessLog.otlp.policies.requestRedirect.authority.full`|string||
-|`frontendPolicies.accessLog.otlp.policies.requestRedirect.authority.host`|string||
-|`frontendPolicies.accessLog.otlp.policies.requestRedirect.authority.port`|integer||
-|`frontendPolicies.accessLog.otlp.policies.requestRedirect.path`|object||
-|`frontendPolicies.accessLog.otlp.policies.requestRedirect.path.full`|string||
-|`frontendPolicies.accessLog.otlp.policies.requestRedirect.path.prefix`|string||
-|`frontendPolicies.accessLog.otlp.policies.requestRedirect.status`|integer||
 |`frontendPolicies.accessLog.otlp.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`frontendPolicies.accessLog.otlp.policies.transformations.request`|object||
 |`frontendPolicies.accessLog.otlp.policies.transformations.request.add`|object||
@@ -3843,13 +3220,6 @@
 |`frontendPolicies.accessLog.otlp.policies.tcp.connectTimeout`|object||
 |`frontendPolicies.accessLog.otlp.policies.tcp.connectTimeout.secs`|integer||
 |`frontendPolicies.accessLog.otlp.policies.tcp.connectTimeout.nanos`|integer||
-|`frontendPolicies.accessLog.otlp.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`frontendPolicies.accessLog.otlp.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`frontendPolicies.accessLog.otlp.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`frontendPolicies.accessLog.otlp.policies.health.eviction.duration`|string||
-|`frontendPolicies.accessLog.otlp.policies.health.eviction.restoreHealth`|number||
-|`frontendPolicies.accessLog.otlp.policies.health.eviction.consecutiveFailures`|integer||
-|`frontendPolicies.accessLog.otlp.policies.health.eviction.healthThreshold`|number||
 |`frontendPolicies.accessLog.otlp.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`frontendPolicies.accessLog.otlp.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`frontendPolicies.accessLog.otlp.policies.backendTunnel.proxy.service`|object||
@@ -3874,20 +3244,6 @@
 |`frontendPolicies.tracing.policies.requestHeaderModifier.add`|object||
 |`frontendPolicies.tracing.policies.requestHeaderModifier.set`|object||
 |`frontendPolicies.tracing.policies.requestHeaderModifier.remove`|[]string||
-|`frontendPolicies.tracing.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`frontendPolicies.tracing.policies.responseHeaderModifier.add`|object||
-|`frontendPolicies.tracing.policies.responseHeaderModifier.set`|object||
-|`frontendPolicies.tracing.policies.responseHeaderModifier.remove`|[]string||
-|`frontendPolicies.tracing.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`frontendPolicies.tracing.policies.requestRedirect.scheme`|string||
-|`frontendPolicies.tracing.policies.requestRedirect.authority`|string||
-|`frontendPolicies.tracing.policies.requestRedirect.authority.full`|string||
-|`frontendPolicies.tracing.policies.requestRedirect.authority.host`|string||
-|`frontendPolicies.tracing.policies.requestRedirect.authority.port`|integer||
-|`frontendPolicies.tracing.policies.requestRedirect.path`|object||
-|`frontendPolicies.tracing.policies.requestRedirect.path.full`|string||
-|`frontendPolicies.tracing.policies.requestRedirect.path.prefix`|string||
-|`frontendPolicies.tracing.policies.requestRedirect.status`|integer||
 |`frontendPolicies.tracing.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`frontendPolicies.tracing.policies.transformations.request`|object||
 |`frontendPolicies.tracing.policies.transformations.request.add`|object||
@@ -3949,13 +3305,6 @@
 |`frontendPolicies.tracing.policies.tcp.connectTimeout`|object||
 |`frontendPolicies.tracing.policies.tcp.connectTimeout.secs`|integer||
 |`frontendPolicies.tracing.policies.tcp.connectTimeout.nanos`|integer||
-|`frontendPolicies.tracing.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`frontendPolicies.tracing.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`frontendPolicies.tracing.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`frontendPolicies.tracing.policies.health.eviction.duration`|string||
-|`frontendPolicies.tracing.policies.health.eviction.restoreHealth`|number||
-|`frontendPolicies.tracing.policies.health.eviction.consecutiveFailures`|integer||
-|`frontendPolicies.tracing.policies.health.eviction.healthThreshold`|number||
 |`frontendPolicies.tracing.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`frontendPolicies.tracing.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`frontendPolicies.tracing.policies.backendTunnel.proxy.service`|object||
@@ -4090,20 +3439,6 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.remove`|[]string||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.add`|object||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.set`|object||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.remove`|[]string||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.scheme`|string||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority`|string||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.full`|string||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.host`|string||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.port`|integer||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path`|object||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path.full`|string||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path.prefix`|string||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.status`|integer||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.transformations.request`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.transformations.request.add`|object||
@@ -4165,13 +3500,6 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout.secs`|integer||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout.nanos`|integer||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.health.eviction.duration`|string||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.health.eviction.restoreHealth`|number||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.health.eviction.consecutiveFailures`|integer||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.health.eviction.healthThreshold`|number||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service`|object||
@@ -4190,20 +3518,6 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -4265,13 +3579,6 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -4290,20 +3597,6 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path`|object||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.transformations.request`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.add`|object||
@@ -4365,13 +3658,6 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.duration`|string||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -4417,20 +3703,6 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -4492,13 +3764,6 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -4517,20 +3782,6 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path`|object||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.transformations.request`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.add`|object||
@@ -4592,13 +3843,6 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.duration`|string||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -4697,20 +3941,6 @@
 |`policies[].policy.remoteRateLimit.policies.requestHeaderModifier.add`|object||
 |`policies[].policy.remoteRateLimit.policies.requestHeaderModifier.set`|object||
 |`policies[].policy.remoteRateLimit.policies.requestHeaderModifier.remove`|[]string||
-|`policies[].policy.remoteRateLimit.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`policies[].policy.remoteRateLimit.policies.responseHeaderModifier.add`|object||
-|`policies[].policy.remoteRateLimit.policies.responseHeaderModifier.set`|object||
-|`policies[].policy.remoteRateLimit.policies.responseHeaderModifier.remove`|[]string||
-|`policies[].policy.remoteRateLimit.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`policies[].policy.remoteRateLimit.policies.requestRedirect.scheme`|string||
-|`policies[].policy.remoteRateLimit.policies.requestRedirect.authority`|string||
-|`policies[].policy.remoteRateLimit.policies.requestRedirect.authority.full`|string||
-|`policies[].policy.remoteRateLimit.policies.requestRedirect.authority.host`|string||
-|`policies[].policy.remoteRateLimit.policies.requestRedirect.authority.port`|integer||
-|`policies[].policy.remoteRateLimit.policies.requestRedirect.path`|object||
-|`policies[].policy.remoteRateLimit.policies.requestRedirect.path.full`|string||
-|`policies[].policy.remoteRateLimit.policies.requestRedirect.path.prefix`|string||
-|`policies[].policy.remoteRateLimit.policies.requestRedirect.status`|integer||
 |`policies[].policy.remoteRateLimit.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`policies[].policy.remoteRateLimit.policies.transformations.request`|object||
 |`policies[].policy.remoteRateLimit.policies.transformations.request.add`|object||
@@ -4772,13 +4002,6 @@
 |`policies[].policy.remoteRateLimit.policies.tcp.connectTimeout`|object||
 |`policies[].policy.remoteRateLimit.policies.tcp.connectTimeout.secs`|integer||
 |`policies[].policy.remoteRateLimit.policies.tcp.connectTimeout.nanos`|integer||
-|`policies[].policy.remoteRateLimit.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`policies[].policy.remoteRateLimit.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`policies[].policy.remoteRateLimit.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`policies[].policy.remoteRateLimit.policies.health.eviction.duration`|string||
-|`policies[].policy.remoteRateLimit.policies.health.eviction.restoreHealth`|number||
-|`policies[].policy.remoteRateLimit.policies.health.eviction.consecutiveFailures`|integer||
-|`policies[].policy.remoteRateLimit.policies.health.eviction.healthThreshold`|number||
 |`policies[].policy.remoteRateLimit.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`policies[].policy.remoteRateLimit.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`policies[].policy.remoteRateLimit.policies.backendTunnel.proxy.service`|object||
@@ -4851,20 +4074,6 @@
 |`policies[].policy.extAuthz.policies.requestHeaderModifier.add`|object||
 |`policies[].policy.extAuthz.policies.requestHeaderModifier.set`|object||
 |`policies[].policy.extAuthz.policies.requestHeaderModifier.remove`|[]string||
-|`policies[].policy.extAuthz.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`policies[].policy.extAuthz.policies.responseHeaderModifier.add`|object||
-|`policies[].policy.extAuthz.policies.responseHeaderModifier.set`|object||
-|`policies[].policy.extAuthz.policies.responseHeaderModifier.remove`|[]string||
-|`policies[].policy.extAuthz.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`policies[].policy.extAuthz.policies.requestRedirect.scheme`|string||
-|`policies[].policy.extAuthz.policies.requestRedirect.authority`|string||
-|`policies[].policy.extAuthz.policies.requestRedirect.authority.full`|string||
-|`policies[].policy.extAuthz.policies.requestRedirect.authority.host`|string||
-|`policies[].policy.extAuthz.policies.requestRedirect.authority.port`|integer||
-|`policies[].policy.extAuthz.policies.requestRedirect.path`|object||
-|`policies[].policy.extAuthz.policies.requestRedirect.path.full`|string||
-|`policies[].policy.extAuthz.policies.requestRedirect.path.prefix`|string||
-|`policies[].policy.extAuthz.policies.requestRedirect.status`|integer||
 |`policies[].policy.extAuthz.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`policies[].policy.extAuthz.policies.transformations.request`|object||
 |`policies[].policy.extAuthz.policies.transformations.request.add`|object||
@@ -4926,13 +4135,6 @@
 |`policies[].policy.extAuthz.policies.tcp.connectTimeout`|object||
 |`policies[].policy.extAuthz.policies.tcp.connectTimeout.secs`|integer||
 |`policies[].policy.extAuthz.policies.tcp.connectTimeout.nanos`|integer||
-|`policies[].policy.extAuthz.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`policies[].policy.extAuthz.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`policies[].policy.extAuthz.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`policies[].policy.extAuthz.policies.health.eviction.duration`|string||
-|`policies[].policy.extAuthz.policies.health.eviction.restoreHealth`|number||
-|`policies[].policy.extAuthz.policies.health.eviction.consecutiveFailures`|integer||
-|`policies[].policy.extAuthz.policies.health.eviction.healthThreshold`|number||
 |`policies[].policy.extAuthz.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`policies[].policy.extAuthz.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`policies[].policy.extAuthz.policies.backendTunnel.proxy.service`|object||
@@ -4972,20 +4174,6 @@
 |`policies[].policy.extProc.policies.requestHeaderModifier.add`|object||
 |`policies[].policy.extProc.policies.requestHeaderModifier.set`|object||
 |`policies[].policy.extProc.policies.requestHeaderModifier.remove`|[]string||
-|`policies[].policy.extProc.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`policies[].policy.extProc.policies.responseHeaderModifier.add`|object||
-|`policies[].policy.extProc.policies.responseHeaderModifier.set`|object||
-|`policies[].policy.extProc.policies.responseHeaderModifier.remove`|[]string||
-|`policies[].policy.extProc.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`policies[].policy.extProc.policies.requestRedirect.scheme`|string||
-|`policies[].policy.extProc.policies.requestRedirect.authority`|string||
-|`policies[].policy.extProc.policies.requestRedirect.authority.full`|string||
-|`policies[].policy.extProc.policies.requestRedirect.authority.host`|string||
-|`policies[].policy.extProc.policies.requestRedirect.authority.port`|integer||
-|`policies[].policy.extProc.policies.requestRedirect.path`|object||
-|`policies[].policy.extProc.policies.requestRedirect.path.full`|string||
-|`policies[].policy.extProc.policies.requestRedirect.path.prefix`|string||
-|`policies[].policy.extProc.policies.requestRedirect.status`|integer||
 |`policies[].policy.extProc.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`policies[].policy.extProc.policies.transformations.request`|object||
 |`policies[].policy.extProc.policies.transformations.request.add`|object||
@@ -5047,13 +4235,6 @@
 |`policies[].policy.extProc.policies.tcp.connectTimeout`|object||
 |`policies[].policy.extProc.policies.tcp.connectTimeout.secs`|integer||
 |`policies[].policy.extProc.policies.tcp.connectTimeout.nanos`|integer||
-|`policies[].policy.extProc.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`policies[].policy.extProc.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`policies[].policy.extProc.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`policies[].policy.extProc.policies.health.eviction.duration`|string||
-|`policies[].policy.extProc.policies.health.eviction.restoreHealth`|number||
-|`policies[].policy.extProc.policies.health.eviction.consecutiveFailures`|integer||
-|`policies[].policy.extProc.policies.health.eviction.healthThreshold`|number||
 |`policies[].policy.extProc.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`policies[].policy.extProc.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`policies[].policy.extProc.policies.backendTunnel.proxy.service`|object||
@@ -5099,20 +4280,6 @@
 |`backends[].policies.requestHeaderModifier.add`|object||
 |`backends[].policies.requestHeaderModifier.set`|object||
 |`backends[].policies.requestHeaderModifier.remove`|[]string||
-|`backends[].policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`backends[].policies.responseHeaderModifier.add`|object||
-|`backends[].policies.responseHeaderModifier.set`|object||
-|`backends[].policies.responseHeaderModifier.remove`|[]string||
-|`backends[].policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`backends[].policies.requestRedirect.scheme`|string||
-|`backends[].policies.requestRedirect.authority`|string||
-|`backends[].policies.requestRedirect.authority.full`|string||
-|`backends[].policies.requestRedirect.authority.host`|string||
-|`backends[].policies.requestRedirect.authority.port`|integer||
-|`backends[].policies.requestRedirect.path`|object||
-|`backends[].policies.requestRedirect.path.full`|string||
-|`backends[].policies.requestRedirect.path.prefix`|string||
-|`backends[].policies.requestRedirect.status`|integer||
 |`backends[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`backends[].policies.transformations.request`|object||
 |`backends[].policies.transformations.request.add`|object||
@@ -5174,13 +4341,6 @@
 |`backends[].policies.tcp.connectTimeout`|object||
 |`backends[].policies.tcp.connectTimeout.secs`|integer||
 |`backends[].policies.tcp.connectTimeout.nanos`|integer||
-|`backends[].policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`backends[].policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`backends[].policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`backends[].policies.health.eviction.duration`|string||
-|`backends[].policies.health.eviction.restoreHealth`|number||
-|`backends[].policies.health.eviction.consecutiveFailures`|integer||
-|`backends[].policies.health.eviction.healthThreshold`|number||
 |`backends[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`backends[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`backends[].policies.backendTunnel.proxy.service`|object||
@@ -5222,20 +4382,6 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.remove`|[]string||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.add`|object||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.set`|object||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.remove`|[]string||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.scheme`|string||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority`|string||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.full`|string||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.host`|string||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.port`|integer||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path`|object||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path.full`|string||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path.prefix`|string||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.status`|integer||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.add`|object||
@@ -5297,13 +4443,6 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout.secs`|integer||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout.nanos`|integer||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.duration`|string||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.restoreHealth`|number||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.consecutiveFailures`|integer||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.healthThreshold`|number||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service`|object||
@@ -5322,20 +4461,6 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -5397,13 +4522,6 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -5422,20 +4540,6 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path`|object||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.add`|object||
@@ -5497,13 +4601,6 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.duration`|string||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -5549,20 +4646,6 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -5624,13 +4707,6 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -5649,20 +4725,6 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path`|object||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.add`|object||
@@ -5724,13 +4786,6 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.duration`|string||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -5849,20 +4904,6 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.requestHeaderModifier.add`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.requestHeaderModifier.set`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.requestHeaderModifier.remove`|[]string||
-|`llm.models[].guardrails.request[].openAIModeration.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`llm.models[].guardrails.request[].openAIModeration.policies.responseHeaderModifier.add`|object||
-|`llm.models[].guardrails.request[].openAIModeration.policies.responseHeaderModifier.set`|object||
-|`llm.models[].guardrails.request[].openAIModeration.policies.responseHeaderModifier.remove`|[]string||
-|`llm.models[].guardrails.request[].openAIModeration.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`llm.models[].guardrails.request[].openAIModeration.policies.requestRedirect.scheme`|string||
-|`llm.models[].guardrails.request[].openAIModeration.policies.requestRedirect.authority`|string||
-|`llm.models[].guardrails.request[].openAIModeration.policies.requestRedirect.authority.full`|string||
-|`llm.models[].guardrails.request[].openAIModeration.policies.requestRedirect.authority.host`|string||
-|`llm.models[].guardrails.request[].openAIModeration.policies.requestRedirect.authority.port`|integer||
-|`llm.models[].guardrails.request[].openAIModeration.policies.requestRedirect.path`|object||
-|`llm.models[].guardrails.request[].openAIModeration.policies.requestRedirect.path.full`|string||
-|`llm.models[].guardrails.request[].openAIModeration.policies.requestRedirect.path.prefix`|string||
-|`llm.models[].guardrails.request[].openAIModeration.policies.requestRedirect.status`|integer||
 |`llm.models[].guardrails.request[].openAIModeration.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.transformations.request`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.transformations.request.add`|object||
@@ -5924,13 +4965,6 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.tcp.connectTimeout`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.tcp.connectTimeout.secs`|integer||
 |`llm.models[].guardrails.request[].openAIModeration.policies.tcp.connectTimeout.nanos`|integer||
-|`llm.models[].guardrails.request[].openAIModeration.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`llm.models[].guardrails.request[].openAIModeration.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`llm.models[].guardrails.request[].openAIModeration.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`llm.models[].guardrails.request[].openAIModeration.policies.health.eviction.duration`|string||
-|`llm.models[].guardrails.request[].openAIModeration.policies.health.eviction.restoreHealth`|number||
-|`llm.models[].guardrails.request[].openAIModeration.policies.health.eviction.consecutiveFailures`|integer||
-|`llm.models[].guardrails.request[].openAIModeration.policies.health.eviction.healthThreshold`|number||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTunnel.proxy.service`|object||
@@ -5949,20 +4983,6 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.transformations.request`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -6024,13 +5044,6 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -6049,20 +5062,6 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`llm.models[].guardrails.request[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`llm.models[].guardrails.request[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.requestRedirect.path`|object||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.transformations.request`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.transformations.request.add`|object||
@@ -6124,13 +5123,6 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`llm.models[].guardrails.request[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`llm.models[].guardrails.request[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`llm.models[].guardrails.request[].googleModelArmor.policies.health.eviction.duration`|string||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -6176,20 +5168,6 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.transformations.request`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -6251,13 +5229,6 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -6276,20 +5247,6 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`llm.models[].guardrails.response[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`llm.models[].guardrails.response[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.requestRedirect.path`|object||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.transformations.request`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.transformations.request.add`|object||
@@ -6351,13 +5308,6 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`llm.models[].guardrails.response[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`llm.models[].guardrails.response[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`llm.models[].guardrails.response[].googleModelArmor.policies.health.eviction.duration`|string||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -6427,20 +5377,6 @@
 |`llm.policies.extAuthz.policies.requestHeaderModifier.add`|object||
 |`llm.policies.extAuthz.policies.requestHeaderModifier.set`|object||
 |`llm.policies.extAuthz.policies.requestHeaderModifier.remove`|[]string||
-|`llm.policies.extAuthz.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`llm.policies.extAuthz.policies.responseHeaderModifier.add`|object||
-|`llm.policies.extAuthz.policies.responseHeaderModifier.set`|object||
-|`llm.policies.extAuthz.policies.responseHeaderModifier.remove`|[]string||
-|`llm.policies.extAuthz.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`llm.policies.extAuthz.policies.requestRedirect.scheme`|string||
-|`llm.policies.extAuthz.policies.requestRedirect.authority`|string||
-|`llm.policies.extAuthz.policies.requestRedirect.authority.full`|string||
-|`llm.policies.extAuthz.policies.requestRedirect.authority.host`|string||
-|`llm.policies.extAuthz.policies.requestRedirect.authority.port`|integer||
-|`llm.policies.extAuthz.policies.requestRedirect.path`|object||
-|`llm.policies.extAuthz.policies.requestRedirect.path.full`|string||
-|`llm.policies.extAuthz.policies.requestRedirect.path.prefix`|string||
-|`llm.policies.extAuthz.policies.requestRedirect.status`|integer||
 |`llm.policies.extAuthz.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`llm.policies.extAuthz.policies.transformations.request`|object||
 |`llm.policies.extAuthz.policies.transformations.request.add`|object||
@@ -6502,13 +5438,6 @@
 |`llm.policies.extAuthz.policies.tcp.connectTimeout`|object||
 |`llm.policies.extAuthz.policies.tcp.connectTimeout.secs`|integer||
 |`llm.policies.extAuthz.policies.tcp.connectTimeout.nanos`|integer||
-|`llm.policies.extAuthz.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`llm.policies.extAuthz.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`llm.policies.extAuthz.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`llm.policies.extAuthz.policies.health.eviction.duration`|string||
-|`llm.policies.extAuthz.policies.health.eviction.restoreHealth`|number||
-|`llm.policies.extAuthz.policies.health.eviction.consecutiveFailures`|integer||
-|`llm.policies.extAuthz.policies.health.eviction.healthThreshold`|number||
 |`llm.policies.extAuthz.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`llm.policies.extAuthz.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`llm.policies.extAuthz.policies.backendTunnel.proxy.service`|object||
@@ -6548,20 +5477,6 @@
 |`llm.policies.extProc.policies.requestHeaderModifier.add`|object||
 |`llm.policies.extProc.policies.requestHeaderModifier.set`|object||
 |`llm.policies.extProc.policies.requestHeaderModifier.remove`|[]string||
-|`llm.policies.extProc.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`llm.policies.extProc.policies.responseHeaderModifier.add`|object||
-|`llm.policies.extProc.policies.responseHeaderModifier.set`|object||
-|`llm.policies.extProc.policies.responseHeaderModifier.remove`|[]string||
-|`llm.policies.extProc.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`llm.policies.extProc.policies.requestRedirect.scheme`|string||
-|`llm.policies.extProc.policies.requestRedirect.authority`|string||
-|`llm.policies.extProc.policies.requestRedirect.authority.full`|string||
-|`llm.policies.extProc.policies.requestRedirect.authority.host`|string||
-|`llm.policies.extProc.policies.requestRedirect.authority.port`|integer||
-|`llm.policies.extProc.policies.requestRedirect.path`|object||
-|`llm.policies.extProc.policies.requestRedirect.path.full`|string||
-|`llm.policies.extProc.policies.requestRedirect.path.prefix`|string||
-|`llm.policies.extProc.policies.requestRedirect.status`|integer||
 |`llm.policies.extProc.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`llm.policies.extProc.policies.transformations.request`|object||
 |`llm.policies.extProc.policies.transformations.request.add`|object||
@@ -6623,13 +5538,6 @@
 |`llm.policies.extProc.policies.tcp.connectTimeout`|object||
 |`llm.policies.extProc.policies.tcp.connectTimeout.secs`|integer||
 |`llm.policies.extProc.policies.tcp.connectTimeout.nanos`|integer||
-|`llm.policies.extProc.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`llm.policies.extProc.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`llm.policies.extProc.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`llm.policies.extProc.policies.health.eviction.duration`|string||
-|`llm.policies.extProc.policies.health.eviction.restoreHealth`|number||
-|`llm.policies.extProc.policies.health.eviction.consecutiveFailures`|integer||
-|`llm.policies.extProc.policies.health.eviction.healthThreshold`|number||
 |`llm.policies.extProc.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`llm.policies.extProc.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`llm.policies.extProc.policies.backendTunnel.proxy.service`|object||
@@ -6696,20 +5604,6 @@
 |`mcp.targets[].policies.requestHeaderModifier.add`|object||
 |`mcp.targets[].policies.requestHeaderModifier.set`|object||
 |`mcp.targets[].policies.requestHeaderModifier.remove`|[]string||
-|`mcp.targets[].policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`mcp.targets[].policies.responseHeaderModifier.add`|object||
-|`mcp.targets[].policies.responseHeaderModifier.set`|object||
-|`mcp.targets[].policies.responseHeaderModifier.remove`|[]string||
-|`mcp.targets[].policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`mcp.targets[].policies.requestRedirect.scheme`|string||
-|`mcp.targets[].policies.requestRedirect.authority`|string||
-|`mcp.targets[].policies.requestRedirect.authority.full`|string||
-|`mcp.targets[].policies.requestRedirect.authority.host`|string||
-|`mcp.targets[].policies.requestRedirect.authority.port`|integer||
-|`mcp.targets[].policies.requestRedirect.path`|object||
-|`mcp.targets[].policies.requestRedirect.path.full`|string||
-|`mcp.targets[].policies.requestRedirect.path.prefix`|string||
-|`mcp.targets[].policies.requestRedirect.status`|integer||
 |`mcp.targets[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`mcp.targets[].policies.transformations.request`|object||
 |`mcp.targets[].policies.transformations.request.add`|object||
@@ -6771,13 +5665,6 @@
 |`mcp.targets[].policies.tcp.connectTimeout`|object||
 |`mcp.targets[].policies.tcp.connectTimeout.secs`|integer||
 |`mcp.targets[].policies.tcp.connectTimeout.nanos`|integer||
-|`mcp.targets[].policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`mcp.targets[].policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`mcp.targets[].policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`mcp.targets[].policies.health.eviction.duration`|string||
-|`mcp.targets[].policies.health.eviction.restoreHealth`|number||
-|`mcp.targets[].policies.health.eviction.consecutiveFailures`|integer||
-|`mcp.targets[].policies.health.eviction.healthThreshold`|number||
 |`mcp.targets[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`mcp.targets[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`mcp.targets[].policies.backendTunnel.proxy.service`|object||
@@ -6886,20 +5773,6 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.remove`|[]string||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.add`|object||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.set`|object||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.responseHeaderModifier.remove`|[]string||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.scheme`|string||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority`|string||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.full`|string||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.host`|string||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.authority.port`|integer||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path`|object||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path.full`|string||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.path.prefix`|string||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestRedirect.status`|integer||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.add`|object||
@@ -6961,13 +5834,6 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout.secs`|integer||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.connectTimeout.nanos`|integer||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.duration`|string||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.restoreHealth`|number||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.consecutiveFailures`|integer||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.health.eviction.healthThreshold`|number||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service`|object||
@@ -6986,20 +5852,6 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -7061,13 +5913,6 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -7086,20 +5931,6 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path`|object||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.add`|object||
@@ -7161,13 +5992,6 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.duration`|string||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -7213,20 +6037,6 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.set`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.remove`|[]string||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.add`|object||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.set`|object||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.responseHeaderModifier.remove`|[]string||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.scheme`|string||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority`|string||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.full`|string||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.host`|string||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.authority.port`|integer||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path`|object||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path.full`|string||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.path.prefix`|string||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestRedirect.status`|integer||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.add`|object||
@@ -7288,13 +6098,6 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout.secs`|integer||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.connectTimeout.nanos`|integer||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.duration`|string||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.restoreHealth`|number||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.consecutiveFailures`|integer||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.health.eviction.healthThreshold`|number||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service`|object||
@@ -7313,20 +6116,6 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.set`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.remove`|[]string||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.add`|object||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.set`|object||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.responseHeaderModifier.remove`|[]string||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.scheme`|string||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority`|string||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.full`|string||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.host`|string||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.authority.port`|integer||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path`|object||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path.full`|string||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.path.prefix`|string||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestRedirect.status`|integer||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.add`|object||
@@ -7388,13 +6177,6 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout.secs`|integer||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.connectTimeout.nanos`|integer||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.duration`|string||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.restoreHealth`|number||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.consecutiveFailures`|integer||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.health.eviction.healthThreshold`|number||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service`|object||
@@ -7493,20 +6275,6 @@
 |`mcp.policies.remoteRateLimit.policies.requestHeaderModifier.add`|object||
 |`mcp.policies.remoteRateLimit.policies.requestHeaderModifier.set`|object||
 |`mcp.policies.remoteRateLimit.policies.requestHeaderModifier.remove`|[]string||
-|`mcp.policies.remoteRateLimit.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`mcp.policies.remoteRateLimit.policies.responseHeaderModifier.add`|object||
-|`mcp.policies.remoteRateLimit.policies.responseHeaderModifier.set`|object||
-|`mcp.policies.remoteRateLimit.policies.responseHeaderModifier.remove`|[]string||
-|`mcp.policies.remoteRateLimit.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`mcp.policies.remoteRateLimit.policies.requestRedirect.scheme`|string||
-|`mcp.policies.remoteRateLimit.policies.requestRedirect.authority`|string||
-|`mcp.policies.remoteRateLimit.policies.requestRedirect.authority.full`|string||
-|`mcp.policies.remoteRateLimit.policies.requestRedirect.authority.host`|string||
-|`mcp.policies.remoteRateLimit.policies.requestRedirect.authority.port`|integer||
-|`mcp.policies.remoteRateLimit.policies.requestRedirect.path`|object||
-|`mcp.policies.remoteRateLimit.policies.requestRedirect.path.full`|string||
-|`mcp.policies.remoteRateLimit.policies.requestRedirect.path.prefix`|string||
-|`mcp.policies.remoteRateLimit.policies.requestRedirect.status`|integer||
 |`mcp.policies.remoteRateLimit.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`mcp.policies.remoteRateLimit.policies.transformations.request`|object||
 |`mcp.policies.remoteRateLimit.policies.transformations.request.add`|object||
@@ -7568,13 +6336,6 @@
 |`mcp.policies.remoteRateLimit.policies.tcp.connectTimeout`|object||
 |`mcp.policies.remoteRateLimit.policies.tcp.connectTimeout.secs`|integer||
 |`mcp.policies.remoteRateLimit.policies.tcp.connectTimeout.nanos`|integer||
-|`mcp.policies.remoteRateLimit.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`mcp.policies.remoteRateLimit.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`mcp.policies.remoteRateLimit.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`mcp.policies.remoteRateLimit.policies.health.eviction.duration`|string||
-|`mcp.policies.remoteRateLimit.policies.health.eviction.restoreHealth`|number||
-|`mcp.policies.remoteRateLimit.policies.health.eviction.consecutiveFailures`|integer||
-|`mcp.policies.remoteRateLimit.policies.health.eviction.healthThreshold`|number||
 |`mcp.policies.remoteRateLimit.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`mcp.policies.remoteRateLimit.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`mcp.policies.remoteRateLimit.policies.backendTunnel.proxy.service`|object||
@@ -7647,20 +6408,6 @@
 |`mcp.policies.extAuthz.policies.requestHeaderModifier.add`|object||
 |`mcp.policies.extAuthz.policies.requestHeaderModifier.set`|object||
 |`mcp.policies.extAuthz.policies.requestHeaderModifier.remove`|[]string||
-|`mcp.policies.extAuthz.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`mcp.policies.extAuthz.policies.responseHeaderModifier.add`|object||
-|`mcp.policies.extAuthz.policies.responseHeaderModifier.set`|object||
-|`mcp.policies.extAuthz.policies.responseHeaderModifier.remove`|[]string||
-|`mcp.policies.extAuthz.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`mcp.policies.extAuthz.policies.requestRedirect.scheme`|string||
-|`mcp.policies.extAuthz.policies.requestRedirect.authority`|string||
-|`mcp.policies.extAuthz.policies.requestRedirect.authority.full`|string||
-|`mcp.policies.extAuthz.policies.requestRedirect.authority.host`|string||
-|`mcp.policies.extAuthz.policies.requestRedirect.authority.port`|integer||
-|`mcp.policies.extAuthz.policies.requestRedirect.path`|object||
-|`mcp.policies.extAuthz.policies.requestRedirect.path.full`|string||
-|`mcp.policies.extAuthz.policies.requestRedirect.path.prefix`|string||
-|`mcp.policies.extAuthz.policies.requestRedirect.status`|integer||
 |`mcp.policies.extAuthz.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`mcp.policies.extAuthz.policies.transformations.request`|object||
 |`mcp.policies.extAuthz.policies.transformations.request.add`|object||
@@ -7722,13 +6469,6 @@
 |`mcp.policies.extAuthz.policies.tcp.connectTimeout`|object||
 |`mcp.policies.extAuthz.policies.tcp.connectTimeout.secs`|integer||
 |`mcp.policies.extAuthz.policies.tcp.connectTimeout.nanos`|integer||
-|`mcp.policies.extAuthz.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`mcp.policies.extAuthz.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`mcp.policies.extAuthz.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`mcp.policies.extAuthz.policies.health.eviction.duration`|string||
-|`mcp.policies.extAuthz.policies.health.eviction.restoreHealth`|number||
-|`mcp.policies.extAuthz.policies.health.eviction.consecutiveFailures`|integer||
-|`mcp.policies.extAuthz.policies.health.eviction.healthThreshold`|number||
 |`mcp.policies.extAuthz.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`mcp.policies.extAuthz.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`mcp.policies.extAuthz.policies.backendTunnel.proxy.service`|object||
@@ -7768,20 +6508,6 @@
 |`mcp.policies.extProc.policies.requestHeaderModifier.add`|object||
 |`mcp.policies.extProc.policies.requestHeaderModifier.set`|object||
 |`mcp.policies.extProc.policies.requestHeaderModifier.remove`|[]string||
-|`mcp.policies.extProc.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`mcp.policies.extProc.policies.responseHeaderModifier.add`|object||
-|`mcp.policies.extProc.policies.responseHeaderModifier.set`|object||
-|`mcp.policies.extProc.policies.responseHeaderModifier.remove`|[]string||
-|`mcp.policies.extProc.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`mcp.policies.extProc.policies.requestRedirect.scheme`|string||
-|`mcp.policies.extProc.policies.requestRedirect.authority`|string||
-|`mcp.policies.extProc.policies.requestRedirect.authority.full`|string||
-|`mcp.policies.extProc.policies.requestRedirect.authority.host`|string||
-|`mcp.policies.extProc.policies.requestRedirect.authority.port`|integer||
-|`mcp.policies.extProc.policies.requestRedirect.path`|object||
-|`mcp.policies.extProc.policies.requestRedirect.path.full`|string||
-|`mcp.policies.extProc.policies.requestRedirect.path.prefix`|string||
-|`mcp.policies.extProc.policies.requestRedirect.status`|integer||
 |`mcp.policies.extProc.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`mcp.policies.extProc.policies.transformations.request`|object||
 |`mcp.policies.extProc.policies.transformations.request.add`|object||
@@ -7843,13 +6569,6 @@
 |`mcp.policies.extProc.policies.tcp.connectTimeout`|object||
 |`mcp.policies.extProc.policies.tcp.connectTimeout.secs`|integer||
 |`mcp.policies.extProc.policies.tcp.connectTimeout.nanos`|integer||
-|`mcp.policies.extProc.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`mcp.policies.extProc.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`mcp.policies.extProc.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`mcp.policies.extProc.policies.health.eviction.duration`|string||
-|`mcp.policies.extProc.policies.health.eviction.restoreHealth`|number||
-|`mcp.policies.extProc.policies.health.eviction.consecutiveFailures`|integer||
-|`mcp.policies.extProc.policies.health.eviction.healthThreshold`|number||
 |`mcp.policies.extProc.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`mcp.policies.extProc.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`mcp.policies.extProc.policies.backendTunnel.proxy.service`|object||
