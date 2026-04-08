@@ -472,6 +472,17 @@ impl<K: Key> HostPool<K> {
 			},
 		}
 	}
+	fn return_dead_connection(&mut self, value: HttpConnection) {
+		match value {
+			HttpConnection::Http1(_) => {
+				// Just drop it
+			},
+			HttpConnection::Http2(h) => {
+				// Even if it has capacity its dead now; do not track it
+				self.active_h2.remove(&h);
+			},
+		}
+	}
 	pub fn forget_pending_connection(
 		&mut self,
 		key: K,
@@ -1001,17 +1012,17 @@ impl<K: Key> DerefMut for Pooled<K> {
 impl<K: Key> Drop for Pooled<K> {
 	fn drop(&mut self) {
 		if let Some((k, value)) = self.value.take() {
-			if !value.is_open() {
-				trace!("connection already closed; skip idle pool insertion");
-				// If we *already* know the connection is done here,
-				// it shouldn't be re-inserted back into the pool.
-				return;
-			}
-
 			if let Some(pool) = self.pool.upgrade() {
 				let mut hosts = Pool::lock_hosts(&pool, &k);
-				trace!(key=?k, "returning connection to pool");
-				hosts.return_connection(self.settings.clone(), pool.clone(), k, value);
+				if value.is_open() {
+					trace!(key=?k, "returning connection to pool");
+					hosts.return_connection(self.settings.clone(), pool.clone(), k, value);
+				} else {
+					trace!("connection already closed; skip idle pool insertion");
+					// If we *already* know the connection is done here,
+					// it shouldn't be re-inserted back into the pool.
+					hosts.return_dead_connection(value)
+				}
 			} else {
 				trace!("pool dropped, dropping pooled ({:?})", k);
 			}
@@ -2255,10 +2266,7 @@ mod tests {
 
 		drop(sc1);
 
-		assert_matches!(
-			w2.await,
-			Ok(Err(ClientConnectError::CheckoutIsClosed(_)))
-		);
+		assert_matches!(w2.await, Ok(Err(ClientConnectError::CheckoutIsClosed(_))));
 	}
 
 	#[tokio::test]
@@ -2357,6 +2365,38 @@ mod tests {
 		control.close().await;
 
 		let (_sc2, _w2) = must_want_new_connection(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_closed_checked_out_http2_connection_is_cleared_without_future_checkout() {
+		let pool = pool_with_expected_h2_capacity_idle(2, Duration::from_millis(5));
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+		let (conn, control) = mock_http2_connection_with_control(2).await;
+
+		pool.insert_new_connection(sc1, conn);
+		let pooled1 = w1
+			.await
+			.expect("first waiter should receive inserted connection")
+			.unwrap();
+		let pooled2 = w2
+			.await
+			.expect("second waiter should receive inserted connection")
+			.unwrap();
+
+		control.close().await;
+		drop(pooled1);
+		drop(pooled2);
+
+		{
+			let hosts = pool.hosts.lock();
+			let host = hosts
+				.get(&key)
+				.expect("host entry should exist before cleanup");
+			assert_eq!(host.active_h2.0.len(), 0, "should have no active");
+			assert_eq!(host.idle.len(), 0, "should have no idle");
+		}
 	}
 
 	#[tokio::test]
