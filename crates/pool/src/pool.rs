@@ -434,7 +434,11 @@ impl<K: Key> HostPool<K> {
 		let (remaining, was_at_max) = load.release_stream_slot();
 		if remaining == 0 {
 			if let Some(v) = self.active_h2.remove_by_load(&load) {
-				self.return_idle(settings, pool, k, HttpConnection::Http2(v))
+				if v.tx.is_ready() {
+					self.return_idle(settings, pool, k, HttpConnection::Http2(v))
+				} else {
+					trace!("skip moving h2 connection to idle; not open")
+				}
 			}
 		} else if was_at_max {
 			self.active_h2.mark_active_by_load(&load);
@@ -1011,36 +1015,39 @@ impl<K: Key> DerefMut for Pooled<K> {
 
 impl<K: Key> Drop for Pooled<K> {
 	fn drop(&mut self) {
-		if let Some((k, value)) = self.value.take() {
-			if let Some(pool) = self.pool.upgrade() {
-				let mut hosts = Pool::lock_hosts(&pool, &k);
-				if value.is_open() {
-					trace!(key=?k, "returning connection to pool");
-					hosts.return_connection(self.settings.clone(), pool.clone(), k, value);
-				} else {
-					trace!("connection already closed; skip idle pool insertion");
-					// If we *already* know the connection is done here,
-					// it shouldn't be re-inserted back into the pool.
-					hosts.return_dead_connection(value)
-				}
-			} else {
-				trace!("pool dropped, dropping pooled ({:?})", k);
-			}
+		let Some((k, value)) = self.value.take() else {
+			// Already handled
+			return;
+		};
+		let Some(pool) = self.pool.upgrade() else {
+			trace!("pool dropped, dropping pooled ({:?})", k);
+			return;
+		};
+		let mut hosts = Pool::lock_hosts(&pool, &k);
+		if value.is_open() {
+			trace!(key=?k, "returning connection to pool");
+			hosts.return_connection(self.settings.clone(), pool.clone(), k, value);
+		} else {
+			trace!("connection already closed; skip idle pool insertion");
+			// If we *already* know the connection is done here,
+			// it shouldn't be re-inserted back into the pool.
+			hosts.return_dead_connection(value)
 		}
 	}
 }
 
 impl<K: Key> Drop for H2CapacityGuard<K> {
 	fn drop(&mut self) {
-		if let Some((k, v)) = self.value.take() {
-			if let Some(pool) = self.pool.upgrade() {
-				let mut hosts = Pool::lock_hosts(&pool, &k);
-				trace!(key=?k, "returning connection to pool");
-				hosts.return_h2_stream(self.settings.clone(), pool.clone(), k, v);
-			} else {
-				trace!("pool dropped, dropping pooled ({:?})", k);
-			}
-		}
+		let Some((k, value)) = self.value.take() else {
+			// Already handled
+			return;
+		};
+		let Some(pool) = self.pool.upgrade() else {
+			trace!("pool dropped, dropping pooled ({:?})", k);
+			return;
+		};
+		let mut hosts = Pool::lock_hosts(&pool, &k);
+		hosts.return_h2_stream(self.settings.clone(), pool.clone(), k, value);
 	}
 }
 
@@ -2252,7 +2259,6 @@ mod tests {
 			.await
 			.expect("second waiter should receive the shared h2 connection")
 			.unwrap();
-		tracing::error!("howardjohn: {:#?}", pool.hosts);
 
 		let _pooled3 = w3.await.expect("get").unwrap();
 	}
@@ -2365,6 +2371,34 @@ mod tests {
 		control.close().await;
 
 		let (_sc2, _w2) = must_want_new_connection(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_closed_http2_guard_does_not_park_dead_connection_in_idle() {
+		let pool = pool_with_expected_h2_capacity_idle(2, Duration::from_secs(60));
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let (conn, control) = mock_http2_connection_with_control(2).await;
+
+		pool.insert_new_connection(sc1, conn);
+		let pooled = w1
+			.await
+			.expect("waiter should receive inserted connection")
+			.unwrap();
+		let guard = pooled.into_guard();
+
+		control.close().await;
+		drop(guard);
+
+		let host = pool.host(&key);
+		assert!(
+			host.idle.is_empty(),
+			"dead h2 connection should not be parked in idle after guard drop"
+		);
+		assert!(
+			host.active_h2.0.is_empty(),
+			"dead h2 connection should not remain active after guard drop"
+		);
 	}
 
 	#[tokio::test]
