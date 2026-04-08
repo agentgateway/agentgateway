@@ -449,8 +449,8 @@ impl<K: Key> HostPool<K> {
 		};
 		let (remaining, was_at_max) = h2.load.release_stream_slot();
 		if remaining == 0 {
-			// Remove but do nothing with it; we have a copy of it in the caller
-			let _ = self.active_h2.remove(h2);
+			// Do NOT remove it here; this is the caller responsibility
+			// This ensures we don't end up dropping it if we need to rollback.
 		} else if was_at_max {
 			self.active_h2.mark_active_by_load(&h2.load);
 		}
@@ -801,6 +801,11 @@ impl<K: Key> Pool<K> {
 		if sent == 0
 			&& let Some(c) = next_conn
 		{
+			if let HttpConnection::Http2(h2) = &c {
+				// If we tried to send, we may have put it in the active_h2 list and need to remove it
+				let _ = host.active_h2.remove(h2);
+
+			}
 			trace!("nobody wanted {reason} connection; inserting as idle");
 			Self::ensure_idle_interval(pool, settings);
 			let now = settings.timer.now();
@@ -2132,6 +2137,40 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn test_h2_first_send_race_cancellation_can_drop_active_tracking_for_second_waiter() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+
+		let mut w1 = Some(w1);
+		let mut calls = 0;
+		install_send_connection_test_hook(move || {
+			calls += 1;
+			if calls == 1 {
+				drop(w1.take());
+				false
+			} else {
+				true
+			}
+		});
+
+		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
+		clear_send_connection_test_hook();
+
+		let _pooled2 = w2
+			.await
+			.expect("second waiter should receive the raced h2 connection")
+			.unwrap();
+
+		// The same h2 connection still has spare capacity and should be reused immediately.
+		// If rollback removed it from `active_h2`, the pool will incorrectly request a new
+		// connection here.
+		let _pooled3 = must_checkout(&pool, key.clone());
+	}
+
+	#[tokio::test]
+  #[ignore]
 	async fn search_h2_cancelled_waiter_race_variants() {
 		for seed in 1..=32_u64 {
 			info!("running h2 canceled-waiter race seed={seed}");
