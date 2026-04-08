@@ -141,6 +141,25 @@ impl Debug for H2Pool {
 }
 
 impl H2Pool {
+	pub fn ensure_tracked(&mut self, c: &ReservedHttp2Connection) {
+		if self
+			.0
+			.iter()
+			.find(|entry| Arc::ptr_eq(&entry.load, &c.load))
+			.is_none()
+		{
+			let cpy = ReservedHttp2Connection {
+				info: c.info.clone(),
+				tx: c.tx.clone(),
+				load: c.load.clone(),
+			};
+			if c.load.remaining_capacity() == 0 {
+				self.0.push_back(cpy)
+			} else {
+				self.0.push_front(cpy)
+			}
+		}
+	}
 	/// increment_load attempts to increment the load on a connection if it is HTTP2.
 	/// This automatically manages tracking of position
 	pub fn increment_load(&mut self, c: &HttpConnection) -> Option<CapacityReservationResult> {
@@ -814,6 +833,10 @@ impl<K: Key> Pool<K> {
 				Ok(()) => {
 					capacity -= 1;
 					sent += 1;
+					if let Some(HttpConnection::Http2(h2)) = &next_conn {
+						// We need to make sure its actively tracked; if we hit this from the idle flow it may have been removed.
+						let _ = host.active_h2.ensure_tracked(h2);
+					}
 				},
 				Err(Ok(mut e)) => {
 					trace!("send failed");
@@ -1994,6 +2017,45 @@ mod tests {
 		drop(pooled1);
 
 		let _ = must_checkout(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_h2_last_stream_returned_to_waiter_keeps_remaining_capacity_tracked() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+
+		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
+		let pooled1 = w1.await.expect("first waiter should receive h2 connection");
+		let pooled2 = w2
+			.await
+			.expect("second waiter should receive h2 connection");
+
+		// With the first connection full, the next request starts another connect and
+		// a second request waits behind it.
+		let (sc2, w3) = must_want_new_connection(&pool, key.clone());
+		let mut w4 = Some(must_wait_for_existing_connection(&pool, key.clone()));
+
+		// Free one slot first, then return the last active stream. The last return
+		// will hand the idle connection directly to w3.
+		drop(pooled1);
+		drop(pooled2);
+
+		let _pooled3 = w3
+			.await
+			.expect("first queued waiter should receive the returned h2 connection")
+			.unwrap();
+
+		// Remove the stale queued waiter so fairness does not mask whether the
+		// returned h2 connection still has its spare slot tracked.
+		drop(w4.take());
+
+		// The same h2 connection still has one more free stream slot, so an immediate
+		// checkout should reuse it instead of waiting for sc2's future connection.
+		let _pooled4 = must_checkout(&pool, key.clone());
+
+		drop(sc2);
 	}
 
 	#[tokio::test]
