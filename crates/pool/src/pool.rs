@@ -1818,8 +1818,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_cancelled_waiter_and_connection(
-	) {
+	async fn test_cancelled_waiter_and_connection() {
 		let pool = pool();
 		let key = host_key("foo");
 		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
@@ -1832,9 +1831,7 @@ mod tests {
 
 		pool.insert_new_connection(sc2, mock_http1_connection().await);
 		// The error from sc1 delivers to w2; this is expected. waiters and new connections are not coupled at all.
-		assert_matches!(w2
-			.await,
-			Ok(Err(ClientConnectError::CheckoutIsClosed(_))))
+		assert_matches!(w2.await, Ok(Err(ClientConnectError::CheckoutIsClosed(_))))
 	}
 
 	#[tokio::test]
@@ -2457,6 +2454,33 @@ mod tests {
 		// This time, we should get success since we cached
 		let _pooled1 = w1.await.expect("get h2").unwrap();
 		let _pooled2 = w2.await.expect("get h2").unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_under_capacity_first_connect_cancelled_waiter() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_auto("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+		let (sc2, w3) = must_want_new_connection(&pool, key.clone());
+
+		// The shared waiter goes away, but the later waiter still has its own
+		// pending connection via sc2.
+		drop(w2);
+
+		// The first connection comes in under-capacity (HTTP/1.1 instead of the
+		// expected HTTP/2). That should not fail w3, since sc2 is still live.
+		pool.insert_new_connection(sc1, mock_http2_connection(1).await);
+		let _pooled1 = w1
+			.await
+			.expect("first waiter should receive connection")
+			.unwrap();
+
+		pool.insert_new_connection(sc2, mock_http2_connection(1).await);
+		// In theory, we could directly send sc2's connection. However, this has the same practical result
+		// as the retry loop will check it out.
+		assert_matches!(w3.await, Ok(Err(ClientConnectError::CheckoutIsClosed(_))));
+		let _ = must_checkout(&pool, key.clone());
 	}
 
 	#[tokio::test]
