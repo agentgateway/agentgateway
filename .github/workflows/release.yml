@@ -80,7 +80,7 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            os: ubuntu-24.04
+            os: blacksmith-4vcpu-ubuntu-2404
           - platform: linux/arm64
             os: blacksmith-4vcpu-ubuntu-2404-arm
     env:
@@ -205,7 +205,7 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            os: ubuntu-24.04
+            os: blacksmith-4vcpu-ubuntu-2404
           - platform: linux/arm64
             os: blacksmith-4vcpu-ubuntu-2404-arm
     env:
@@ -513,20 +513,24 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-24.04
+          - os: blacksmith-4vcpu-ubuntu-2404
             target: x86_64-unknown-linux-musl
             # Performance is horrendous on musl without jemalloc
             features: jemalloc
-          - os: ubuntu-24.04-arm
-            target: blacksmith-4vcpu-ubuntu-2404-arm
+            name: linux
+          - os: blacksmith-4vcpu-ubuntu-2404-arm
+            target: aarch64-unknown-linux-musl
             # TODO: arm64 build fails with jemalloc for some reason? https://github.com/tikv/jemallocator/issues/146
             features: default
+            name: linux-arm
           - os: macos-26
             target: aarch64-apple-darwin
             features: default
+            name: mac
           - os: windows-2025
             target: x86_64-pc-windows-msvc
             features: default
+            name: windows
     steps:
     - name: Checkout Repository
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -544,8 +548,8 @@ jobs:
         cd ui
         npm install
         npm run build
-    - name: Install musl-tools
-      if: ${{ startsWith(matrix.os, 'ubuntu-') }}
+    - name: Prepare Linux target
+      if: ${{ matrix.target == 'x86_64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-musl' }}
       run: |
         sudo apt-get update
         sudo apt-get install -y musl-tools
@@ -560,7 +564,7 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
       with:
-        name: release-binary-${{ matrix.os }}
+        name: release-binary-${{ matrix.name }}
         path: |
           target/${{ matrix.target }}/release/agentgateway
           target/${{ matrix.target }}/release/agentgateway.exe
@@ -589,13 +593,13 @@ jobs:
       run: |
         ls -R
         mkdir outputs
-        mv release-binary-macos-26/agentgateway outputs/agentgateway-darwin-arm64
+        mv release-binary-mac/agentgateway outputs/agentgateway-darwin-arm64
         sha256sum outputs/agentgateway-darwin-arm64 > outputs/agentgateway-darwin-arm64.sha256
-        mv release-binary-ubuntu-24.04/agentgateway outputs/agentgateway-linux-amd64
+        mv release-binary-linux/agentgateway outputs/agentgateway-linux-amd64
         sha256sum outputs/agentgateway-linux-amd64 > outputs/agentgateway-linux-amd64.sha256
-        mv release-binary-ubuntu-24.04-arm/agentgateway outputs/agentgateway-linux-arm64
+        mv release-binary-linux-arm/agentgateway outputs/agentgateway-linux-arm64
         sha256sum outputs/agentgateway-linux-arm64 > outputs/agentgateway-linux-arm64.sha256
-        mv release-binary-windows-2025/agentgateway.exe outputs/agentgateway-windows-amd64.exe
+        mv release-binary-windows/agentgateway.exe outputs/agentgateway-windows-amd64.exe
         sha256sum outputs/agentgateway-windows-amd64.exe > outputs/agentgateway-windows-amd64.exe.sha256
     - name: Create GitHub Release
       uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
