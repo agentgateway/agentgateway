@@ -167,6 +167,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				anyhow::bail!("auth token {p} not found")
 			},
 		};
+		let ca_headers = parse_headers("CA_HEADER_");
 		let ca_cert = parse_default(
 			"CA_ROOT_CA",
 			"./var/run/secrets/istio/root-cert.pem".to_string(),
@@ -190,6 +191,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 
 			auth,
 			ca_cert: ca_root_cert,
+			ca_headers: ca_headers.unwrap(),
 		})
 	} else {
 		None
@@ -612,6 +614,32 @@ fn get_cpu_count() -> anyhow::Result<usize> {
 	}
 }
 
+fn parse_headers(prefix: &str) -> Result<Vec<(String, String)>, anyhow::Error> {
+	let mut headers = Vec::new();
+
+	for (key, value) in env::vars() {
+		let stripped_key: Option<&str> = key.strip_prefix(prefix);
+		match stripped_key {
+			Some(stripped_key) => {
+				// attempt to parse the stripped key
+				// http::header::HeaderName, http::HeaderValue
+				let metadata_key = http::header::HeaderName::from_str(stripped_key)
+					.map_err(|_| anyhow::anyhow!("invalid header key: {}", key))?;
+				// attempt to parse the value
+				let metadata_value = http::HeaderValue::from_str(&value)
+					.map_err(|_| anyhow::anyhow!("invalid header value: {}", value))?;
+				headers.push((
+					metadata_key.to_string(),
+					metadata_value.to_str().unwrap_or("").to_string(),
+				));
+			},
+			None => continue,
+		}
+	}
+
+	Ok(headers)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -691,7 +719,7 @@ mod tests {
 				r#"
 config:
   session:
-    key: "{inline_key}"
+	key: "{inline_key}"
 "#
 			),
 			None,

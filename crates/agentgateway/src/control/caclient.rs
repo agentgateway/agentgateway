@@ -65,6 +65,7 @@ pub struct Config {
 	pub identity: Identity,
 	pub auth: AuthSource,
 	pub ca_cert: RootCert,
+	pub ca_headers: Vec<(String, String)>,
 }
 
 #[derive(Clone, Debug)]
@@ -430,11 +431,23 @@ impl CaClient {
 	) -> Result<(), Error> {
 		info!("Fetching certificate for identity: {}", config.identity);
 
+		let headers: Result<Vec<(http::header::HeaderName, http::HeaderValue)>, anyhow::Error> = config
+			.ca_headers
+			.iter()
+			.map(|(k, v)| {
+				Ok((
+					http::header::HeaderName::from_str(k)?,
+					http::HeaderValue::from_str(v)?,
+				))
+			})
+			.collect();
+
 		let svc = control::grpc_connector(
 			client,
 			config.address.clone(),
 			config.auth.clone(),
 			config.ca_cert.clone(),
+			headers.unwrap(),
 		)
 		.await
 		.map_err(|e| Error::CaClientCreation(Arc::new(e)))?;
