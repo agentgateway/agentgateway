@@ -872,23 +872,30 @@ fn test_prompt_enrichment() {
 		"requests/policies/openai_with_messages.json",
 		apply_test_prompts,
 	);
+	test_request::<types::responses::Request>(
+		OPENAI,
+		"requests/policies/openai_with_text_input.json",
+		apply_test_prompts,
+	);
+	test_request::<types::responses::Request>(
+		OPENAI,
+		"requests/responses/assistant-history.json",
+		apply_test_prompts,
+	);
 }
 
 #[test]
 fn test_get_messages() {
 	use crate::llm::types::RequestType;
 
-	let input_path = fixture_path("requests/completions/full.json");
-	let input_str = &fs::read_to_string(&input_path).expect("Failed to read input file");
-	let input_raw: Value = serde_json::from_str(input_str).expect("Failed to parse input json");
-
 	fn extract_messages<R: RequestType + DeserializeOwned>(
-		input: &str,
-		path: &Path,
-		raw: &Value,
+		fixture: &str,
 		provider: &str,
 	) {
-		let request: R = serde_json::from_str(input).expect("Failed to parse json");
+		let path = fixture_path(fixture);
+		let input_str = fs::read_to_string(&path).expect("Failed to read input file");
+		let raw: Value = serde_json::from_str(&input_str).expect("Failed to parse input json");
+		let request: R = serde_json::from_str(&input_str).expect("Failed to parse json");
 
 		let out: Vec<Value> = request
 			.get_messages()
@@ -901,10 +908,9 @@ fn test_get_messages() {
 			})
 			.collect();
 
-		let (snapshot_path, snapshot_name) =
-			snapshot_path_and_name("requests/completions/full.json", provider);
+		let (snapshot_path, snapshot_name) = snapshot_path_and_name(fixture, provider);
 		insta::with_settings!({
-			info => raw,
+			info => &raw,
 			description => path.to_string_lossy().to_string(),
 			omit_expression => true,
 			prepend_module_to_snapshot => false,
@@ -915,16 +921,16 @@ fn test_get_messages() {
 	}
 
 	extract_messages::<types::completions::Request>(
-		input_str,
-		&input_path,
-		&input_raw,
+		"requests/completions/full.json",
 		"get-messages-completions",
 	);
 	extract_messages::<types::messages::Request>(
-		input_str,
-		&input_path,
-		&input_raw,
+		"requests/completions/full.json",
 		"get-messages-messages",
+	);
+	extract_messages::<types::responses::Request>(
+		"requests/responses/assistant-history.json",
+		"get-messages-responses",
 	);
 }
 
