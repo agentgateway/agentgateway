@@ -241,6 +241,28 @@ pub(crate) enum HttpConnection {
 }
 
 impl HttpConnection {
+	fn release_stream_slot(&self) {
+		match self {
+			HttpConnection::Http1(_) => {},
+			HttpConnection::Http2(inner) => {
+				inner.load.release_stream_slot();
+			},
+		}
+	}
+	fn increment_load(&self) -> Option<CapacityReservationResult> {
+		match self {
+			HttpConnection::Http1(_) => None,
+			HttpConnection::Http2(inner) => Some(inner.load.try_reserve_stream_slot()),
+		}
+	}
+	pub fn maybe_clone(&self) -> Option<Self> {
+		match self {
+			HttpConnection::Http1(_) => None,
+			HttpConnection::Http2(inner) => Some(HttpConnection::Http2(
+				inner.clone_without_load_incremented(),
+			)),
+		}
+	}
 	pub fn capacity(&self) -> usize {
 		match self {
 			HttpConnection::Http1(_) => 1,
@@ -411,9 +433,9 @@ impl<K: Key> HostPool<K> {
 		if remaining == 0 {
 			if let Some(v) = self.active_h2.remove_by_load(&load) {
 				self.return_idle(settings, pool, k, HttpConnection::Http2(v))
-			} else if was_at_max {
-				self.active_h2.mark_active_by_load(&load);
 			}
+		} else if was_at_max {
+			self.active_h2.mark_active_by_load(&load);
 		}
 	}
 	fn return_connection(
@@ -697,7 +719,7 @@ impl<K: Key> Pool<K> {
 		settings: &Arc<PoolSettings>,
 		original_con: HttpConnection,
 	) {
-		let mut conn = Some(original_con);
+		let mut next_conn = Some(original_con);
 		let mut sent = 0;
 		while capacity > 0 {
 			let Some(tx) = host.waiters.pop_front() else {
@@ -708,40 +730,49 @@ impl<K: Key> Pool<K> {
 				continue;
 			}
 
-			let Some(raw_conn) = conn.take() else {
+			let Some(this_conn) = next_conn.take() else {
 				break;
 			};
+			next_conn = this_conn.maybe_clone();
+
+			match this_conn.increment_load() {
+				Some(CapacityReservationResult::NoCapacity) => break,
+				Some(CapacityReservationResult::ReservedButNotFilled) => {},
+				Some(CapacityReservationResult::ReservedAndFilled) => {
+					let HttpConnection::Http2(h2) = &this_conn else {
+						unreachable!("increment_load returns ReservedAndFilled only for Http2");
+					};
+					host.active_h2.mark_full(h2);
+				},
+				None => {},
+			}
 			let pooled = Pooled {
-				value: Some((key.clone(), raw_conn)),
+				value: Some((key.clone(), this_conn)),
 				is_reused: reason == "idle",
 				pool: Arc::downgrade(pool),
 				settings: settings.clone(),
 			};
-			let (this, next) = pooled.maybe_clone();
-			if let Some((mut nc, full)) = next {
-				conn = nc.value.take().map(|(_, c)| c);
-				if full && let Some(HttpConnection::Http2(h2)) = conn.as_ref() {
-					host.active_h2.mark_full(h2);
-				}
-			}
 			capacity -= 1;
-			match tx.send(Ok(this)) {
+			match tx.send(Ok(pooled)) {
 				Ok(()) => {
 					sent += 1;
 				},
 				Err(Ok(mut e)) => {
 					trace!("send failed");
 					// Recover the connection without dropping the pooled wrapper
-					// while the host lock is still held.
 					// We verify its Ok() explicitly above
-					conn = e.value.take().map(|(_, c)| c);
+					next_conn = e.value.take().map(|(_, c)| c);
+					if let Some(next_conn) = &next_conn {
+						// We reserved it above, now drop it back to avoid double counting
+						next_conn.release_stream_slot()
+					}
 				},
 				Err(_) => unreachable!("Ok() always above"),
 			}
 		}
 		trace!(fulfilled=%sent, "sent {reason} connection");
 		if sent == 0
-			&& let Some(c) = conn
+			&& let Some(c) = next_conn
 		{
 			trace!("nobody wanted {reason} connection; inserting as idle");
 			Self::ensure_idle_interval(pool, settings);
@@ -779,7 +810,7 @@ impl<K: Key> Pool<K> {
 				let c = host.active_h2.maybe_insert_new(c, true);
 				let p = Pooled {
 					value: Some((key, c)),
-					is_reused: false,
+					is_reused: true,
 					pool: Arc::downgrade(&self.hosts),
 					settings: self.settings.clone(),
 				};
