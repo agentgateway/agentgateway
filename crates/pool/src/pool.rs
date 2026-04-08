@@ -1818,6 +1818,26 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn test_cancelled_waiter_and_connection(
+	) {
+		let pool = pool();
+		let key = host_key("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let (sc2, w2) = must_want_new_connection(&pool, key.clone());
+
+		// The first request goes away, but the second request still has its own
+		// connection attempt in flight via sc2.
+		drop(w1);
+		drop(sc1);
+
+		pool.insert_new_connection(sc2, mock_http1_connection().await);
+		// The error from sc1 delivers to w2; this is expected. waiters and new connections are not coupled at all.
+		assert_matches!(w2
+			.await,
+			Ok(Err(ClientConnectError::CheckoutIsClosed(_))))
+	}
+
+	#[tokio::test]
 	async fn test_pool_cancelled_connection_while_waiting() {
 		let pool = pool();
 		let key = host_key("foo");
