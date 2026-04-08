@@ -310,6 +310,24 @@ impl<'a> Executor<'a> {
 		}
 		this
 	}
+	pub fn new_llm_rate_limit(
+		req: Option<&'a RequestSnapshot>,
+		resp: &'a crate::http::Response,
+		llm: &'a LLMContext,
+	) -> Self {
+		let mut this = Self::new_empty();
+		if let Some(req) = req {
+			this.set_request_snapshot(req);
+		}
+		this.set_response(resp);
+		this.llm = ExtensionOrDirect::Direct(Some(llm));
+		this
+	}
+	pub fn new_llm_rate_limit_streaming(llm: &'a LLMContext) -> Self {
+		let mut this = Self::new_empty();
+		this.llm = ExtensionOrDirect::Direct(Some(llm));
+		this
+	}
 	pub fn new_tcp_logger(
 		source_context: Option<&'a SourceContext>,
 		end_time: &'a RequestTime,

@@ -1507,6 +1507,14 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 										http::localratelimit::RateLimitType::Tokens
 									},
 								},
+								cost: d
+									.cost
+									.as_ref()
+									.map(|expr| Arc::new(cel::Expression::new_permissive(expr))),
+								limit_override: d
+									.limit_override
+									.as_ref()
+									.map(|expr| Arc::new(cel::Expression::new_permissive(expr))),
 							})
 						},
 					)

@@ -894,6 +894,8 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].entries[].key`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].entries[].value`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].type`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].cost`|string|cost determines the optional expression to determine the cost of the request.<br>If unset, type `requests` defaults to `1`, and type `tokens` defaults to `total_tokens`.<br>If the expression fails to evaluate, the descriptor is skipped.<br>Costs are evaluated upon request completion.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.failureMode`|string|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`binds[].listeners[].routes[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`binds[].listeners[].routes[].policies.jwtAuth.mode`|string||
@@ -4788,6 +4790,8 @@
 |`policies[].policy.remoteRateLimit.descriptors[].entries[].key`|string||
 |`policies[].policy.remoteRateLimit.descriptors[].entries[].value`|string||
 |`policies[].policy.remoteRateLimit.descriptors[].type`|string||
+|`policies[].policy.remoteRateLimit.descriptors[].cost`|string|cost determines the optional expression to determine the cost of the request.<br>If unset, type `requests` defaults to `1`, and type `tokens` defaults to `total_tokens`.<br>If the expression fails to evaluate, the descriptor is skipped.<br>Costs are evaluated upon request completion.|
+|`policies[].policy.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`policies[].policy.remoteRateLimit.failureMode`|string|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`policies[].policy.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`policies[].policy.jwtAuth.mode`|string||
@@ -6660,6 +6664,124 @@
 |`llm.policies.apiKey.mode`|string|Validation mode for API keys|
 |`llm.policies.authorization`|object|Authorization policies for HTTP access.|
 |`llm.policies.authorization.rules`|[]string||
+|`llm.policies.localRateLimit`|[]object|Rate limit incoming requests. State is kept local.|
+|`llm.policies.localRateLimit[].maxTokens`|integer||
+|`llm.policies.localRateLimit[].tokensPerFill`|integer||
+|`llm.policies.localRateLimit[].fillInterval`|string||
+|`llm.policies.localRateLimit[].type`|string||
+|`llm.policies.remoteRateLimit`|object|Rate limit incoming requests. State is managed by a remote server.|
+|`llm.policies.remoteRateLimit.service`|object||
+|`llm.policies.remoteRateLimit.service.name`|object||
+|`llm.policies.remoteRateLimit.service.name.namespace`|string||
+|`llm.policies.remoteRateLimit.service.name.hostname`|string||
+|`llm.policies.remoteRateLimit.service.port`|integer||
+|`llm.policies.remoteRateLimit.host`|string|Hostname or IP address|
+|`llm.policies.remoteRateLimit.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.remoteRateLimit.domain`|string||
+|`llm.policies.remoteRateLimit.policies`|object|Policies to connect to the backend|
+|`llm.policies.remoteRateLimit.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`llm.policies.remoteRateLimit.policies.requestHeaderModifier.add`|object||
+|`llm.policies.remoteRateLimit.policies.requestHeaderModifier.set`|object||
+|`llm.policies.remoteRateLimit.policies.requestHeaderModifier.remove`|[]string||
+|`llm.policies.remoteRateLimit.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
+|`llm.policies.remoteRateLimit.policies.responseHeaderModifier.add`|object||
+|`llm.policies.remoteRateLimit.policies.responseHeaderModifier.set`|object||
+|`llm.policies.remoteRateLimit.policies.responseHeaderModifier.remove`|[]string||
+|`llm.policies.remoteRateLimit.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
+|`llm.policies.remoteRateLimit.policies.requestRedirect.scheme`|string||
+|`llm.policies.remoteRateLimit.policies.requestRedirect.authority`|string||
+|`llm.policies.remoteRateLimit.policies.requestRedirect.authority.full`|string||
+|`llm.policies.remoteRateLimit.policies.requestRedirect.authority.host`|string||
+|`llm.policies.remoteRateLimit.policies.requestRedirect.authority.port`|integer||
+|`llm.policies.remoteRateLimit.policies.requestRedirect.path`|object||
+|`llm.policies.remoteRateLimit.policies.requestRedirect.path.full`|string||
+|`llm.policies.remoteRateLimit.policies.requestRedirect.path.prefix`|string||
+|`llm.policies.remoteRateLimit.policies.requestRedirect.status`|integer||
+|`llm.policies.remoteRateLimit.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`llm.policies.remoteRateLimit.policies.transformations.request`|object||
+|`llm.policies.remoteRateLimit.policies.transformations.request.add`|object||
+|`llm.policies.remoteRateLimit.policies.transformations.request.set`|object||
+|`llm.policies.remoteRateLimit.policies.transformations.request.remove`|[]string||
+|`llm.policies.remoteRateLimit.policies.transformations.request.body`|string||
+|`llm.policies.remoteRateLimit.policies.transformations.request.metadata`|object||
+|`llm.policies.remoteRateLimit.policies.transformations.response`|object||
+|`llm.policies.remoteRateLimit.policies.transformations.response.add`|object||
+|`llm.policies.remoteRateLimit.policies.transformations.response.set`|object||
+|`llm.policies.remoteRateLimit.policies.transformations.response.remove`|[]string||
+|`llm.policies.remoteRateLimit.policies.transformations.response.body`|string||
+|`llm.policies.remoteRateLimit.policies.transformations.response.metadata`|object||
+|`llm.policies.remoteRateLimit.policies.backendTLS`|object|Send TLS to the backend.|
+|`llm.policies.remoteRateLimit.policies.backendTLS.cert`|string||
+|`llm.policies.remoteRateLimit.policies.backendTLS.key`|string||
+|`llm.policies.remoteRateLimit.policies.backendTLS.root`|string||
+|`llm.policies.remoteRateLimit.policies.backendTLS.hostname`|string||
+|`llm.policies.remoteRateLimit.policies.backendTLS.insecure`|boolean||
+|`llm.policies.remoteRateLimit.policies.backendTLS.insecureHost`|boolean||
+|`llm.policies.remoteRateLimit.policies.backendTLS.alpn`|[]string||
+|`llm.policies.remoteRateLimit.policies.backendTLS.subjectAltNames`|[]string||
+|`llm.policies.remoteRateLimit.policies.backendAuth`|object|Authenticate to the backend.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.passthrough`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.key`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.key.file`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.gcp`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.gcp.type`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.gcp.type`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.aws`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.aws.accessKeyId`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.aws.region`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.aws.sessionToken`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.implicit`|object||
+|`llm.policies.remoteRateLimit.policies.http`|object|Specify HTTP settings for the backend|
+|`llm.policies.remoteRateLimit.policies.http.version`|string||
+|`llm.policies.remoteRateLimit.policies.http.requestTimeout`|string||
+|`llm.policies.remoteRateLimit.policies.tcp`|object|Specify TCP settings for the backend|
+|`llm.policies.remoteRateLimit.policies.tcp.keepalives`|object||
+|`llm.policies.remoteRateLimit.policies.tcp.keepalives.enabled`|boolean||
+|`llm.policies.remoteRateLimit.policies.tcp.keepalives.time`|string||
+|`llm.policies.remoteRateLimit.policies.tcp.keepalives.interval`|string||
+|`llm.policies.remoteRateLimit.policies.tcp.keepalives.retries`|integer||
+|`llm.policies.remoteRateLimit.policies.tcp.connectTimeout`|object||
+|`llm.policies.remoteRateLimit.policies.tcp.connectTimeout.secs`|integer||
+|`llm.policies.remoteRateLimit.policies.tcp.connectTimeout.nanos`|integer||
+|`llm.policies.remoteRateLimit.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
+|`llm.policies.remoteRateLimit.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
+|`llm.policies.remoteRateLimit.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
+|`llm.policies.remoteRateLimit.policies.health.eviction.duration`|string||
+|`llm.policies.remoteRateLimit.policies.health.eviction.restoreHealth`|number||
+|`llm.policies.remoteRateLimit.policies.health.eviction.consecutiveFailures`|integer||
+|`llm.policies.remoteRateLimit.policies.health.eviction.healthThreshold`|number||
+|`llm.policies.remoteRateLimit.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.service`|object||
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.service.name`|object||
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.service.port`|integer||
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.remoteRateLimit.descriptors`|[]object||
+|`llm.policies.remoteRateLimit.descriptors[].entries`|[]object||
+|`llm.policies.remoteRateLimit.descriptors[].entries[].key`|string||
+|`llm.policies.remoteRateLimit.descriptors[].entries[].value`|string||
+|`llm.policies.remoteRateLimit.descriptors[].type`|string||
+|`llm.policies.remoteRateLimit.descriptors[].cost`|string|cost determines the optional expression to determine the cost of the request.<br>If unset, type `requests` defaults to `1`, and type `tokens` defaults to `total_tokens`.<br>If the expression fails to evaluate, the descriptor is skipped.<br>Costs are evaluated upon request completion.|
+|`llm.policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
+|`llm.policies.remoteRateLimit.failureMode`|string|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`mcp`|object||
 |`mcp.port`|integer||
 |`mcp.targets`|[]object||
@@ -7581,6 +7703,8 @@
 |`mcp.policies.remoteRateLimit.descriptors[].entries[].key`|string||
 |`mcp.policies.remoteRateLimit.descriptors[].entries[].value`|string||
 |`mcp.policies.remoteRateLimit.descriptors[].type`|string||
+|`mcp.policies.remoteRateLimit.descriptors[].cost`|string|cost determines the optional expression to determine the cost of the request.<br>If unset, type `requests` defaults to `1`, and type `tokens` defaults to `total_tokens`.<br>If the expression fails to evaluate, the descriptor is skipped.<br>Costs are evaluated upon request completion.|
+|`mcp.policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`mcp.policies.remoteRateLimit.failureMode`|string|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`mcp.policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`mcp.policies.jwtAuth.mode`|string||

@@ -178,6 +178,21 @@ policies:
             allow:
               - "jwt.email.endsWith(\"@example.com\")"
         phase: route
+  - key: listener/2
+    name: ~
+    target:
+      gateway:
+        gatewayName: name
+        gatewayNamespace: ns
+        listenerName: llm
+    policy:
+      traffic:
+        localRateLimit:
+          - fillInterval: 1s
+            maxTokens: 100
+            tokensPerFill: 10
+            type: tokens
+        phase: route
   - key: "llm:transformation"
     name:
       kind: Local
