@@ -1346,14 +1346,6 @@ mod tests {
 		TEST_LOCK.lock()
 	}
 
-	fn install_forget_pending_test_hook(f: impl FnMut() -> bool + Send + 'static) {
-		*Pool::<KeyImpl>::forget_pending_test_hook().lock() = Some(Box::new(f));
-	}
-
-	fn clear_forget_pending_test_hook() {
-		*Pool::<KeyImpl>::forget_pending_test_hook().lock() = None;
-	}
-
 	fn assert_h2_queue_invariants(pool: &Pool<KeyImpl>, key: &KeyImpl, context: &str) {
 		let host = pool.host(key);
 		let mut active_ids = HashSet::new();
@@ -2034,6 +2026,39 @@ mod tests {
 		drop(pooled1);
 
 		let _ = must_checkout(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_h2_returned_active_capacity_does_not_wake_existing_waiter() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+
+		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
+		let pooled1 = w1.await.expect("first waiter should receive h2 connection");
+		let pooled2 = w2
+			.await
+			.expect("second waiter should receive h2 connection");
+
+		// One extra request starts another connect, and the next request parks
+		// behind it. If the current h2 connection regains capacity first, that
+		// parked waiter should be woken by the returned stream.
+		let (sc2, _w3) = must_want_new_connection(&pool, key.clone());
+		let mut w4 = Box::pin(must_wait_for_existing_connection(&pool, key.clone()));
+
+		drop(pooled1);
+
+		// This should probably be ready immediately instead of waiting for sc2... but its not a big deal.
+		assert!(
+			!futures_util::poll!(&mut w4).is_ready(),
+			"returning an h2 stream with a parked waiter should wake that waiter immediately"
+		);
+
+		drop(sc2);
+		drop(pooled2);
+		// Should get cancelled from sc2 dropping
+		w4.await.expect("waiter should receive h2 connection").expect_err("should fail");
 	}
 
 	#[tokio::test]
