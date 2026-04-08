@@ -883,6 +883,8 @@ impl<K: Key> Pool<K> {
 		// We will register ourselves as a waiter, and indicate to the caller if they should spawn
 		// a connection or not.
 		let pending = host.expected_connecting_capacity;
+		// Clear cancelled waiters
+		host.waiters.retain(|w| !w.is_canceled());
 		let waiters = host.waiters.len();
 		trace!("checkout waiting for idle connection: {:?}", key);
 		let should_connect = if pending <= waiters {
@@ -1740,6 +1742,26 @@ mod tests {
 		drop(w1);
 		// We should be able to checkout the connection since w1 didn't want it
 		let _ = must_checkout(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_canceled_pending_waiter_should_not_force_extra_connection() {
+		let pool = pool();
+		let key = host_key("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+
+		// The original request went away while its connection attempt is still in flight.
+		drop(w1);
+
+		// A new request should wait on the already-pending connection instead of
+		// immediately demanding another one.
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+
+		pool.insert_new_connection(sc1, mock_http1_connection().await);
+		let _pooled2 = w2
+			.await
+			.expect("live waiter should receive the existing pending connection")
+			.unwrap();
 	}
 
 	#[tokio::test]
