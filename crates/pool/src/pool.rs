@@ -148,11 +148,11 @@ impl H2Pool {
 			HttpConnection::Http1(_) => None,
 			HttpConnection::Http2(h2) => {
 				let res = h2.load.try_reserve_stream_slot();
-				if res == CapacityReservationResult::ReservedAndFilled  {
+				if res == CapacityReservationResult::ReservedAndFilled {
 					self.mark_full(h2);
 				}
 				Some(res)
-			}
+			},
 		}
 	}
 	pub fn mark_full(&mut self, c: &ReservedHttp2Connection) {
@@ -440,10 +440,7 @@ impl<K: Key> HostPool<K> {
 			self.active_h2.mark_active_by_load(&load);
 		}
 	}
-	fn release_h2_stream_without_returning_to_idle(
-		&mut self,
-		s: &HttpConnection,
-	) {
+	fn release_h2_stream_without_returning_to_idle(&mut self, s: &HttpConnection) {
 		let HttpConnection::Http2(h2) = s else {
 			return;
 		};
@@ -768,8 +765,9 @@ impl<K: Key> Pool<K> {
 			};
 			next_conn = this_conn.maybe_clone();
 
-			if let Some(CapacityReservationResult::NoCapacity) = host.active_h2.increment_load(&this_conn) {
-				break
+			if let Some(CapacityReservationResult::NoCapacity) = host.active_h2.increment_load(&this_conn)
+			{
+				break;
 			}
 			let pooled = Pooled {
 				value: Some((key.clone(), this_conn)),
@@ -779,9 +777,9 @@ impl<K: Key> Pool<K> {
 			};
 			#[cfg(test)]
 			Self::run_send_connection_test_hook();
-			capacity -= 1;
 			match tx.send(Ok(pooled)) {
 				Ok(()) => {
+					capacity -= 1;
 					sent += 1;
 				},
 				Err(Ok(mut e)) => {
@@ -804,7 +802,6 @@ impl<K: Key> Pool<K> {
 			if let HttpConnection::Http2(h2) = &c {
 				// If we tried to send, we may have put it in the active_h2 list and need to remove it
 				let _ = host.active_h2.remove(h2);
-
 			}
 			trace!("nobody wanted {reason} connection; inserting as idle");
 			Self::ensure_idle_interval(pool, settings);
@@ -1283,6 +1280,11 @@ mod tests {
 		*Pool::<KeyImpl>::send_connection_test_hook().lock() = None;
 	}
 
+	fn lock_send_connection_test_hook() -> parking_lot::MutexGuard<'static, ()> {
+		static TEST_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+		TEST_LOCK.lock()
+	}
+
 	fn assert_h2_queue_invariants(pool: &Pool<KeyImpl>, key: &KeyImpl, context: &str) {
 		let host = pool.host(key);
 		let mut active_ids = HashSet::new();
@@ -1354,6 +1356,7 @@ mod tests {
 	}
 
 	async fn run_h2_cancelled_waiter_race_variant(seed: u64) {
+		let _guard = lock_send_connection_test_hook();
 		clear_send_connection_test_hook();
 
 		let mut rng = XorShift64::new(seed);
@@ -2097,6 +2100,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_h2_canceled_only_waiter_keeps_connection_in_idle_and_active() {
+		let _guard = lock_send_connection_test_hook();
 		let pool = pool_with_expected_h2_capacity(2);
 		let key = host_key_h2("foo");
 		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
@@ -2118,6 +2122,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_h2_canceled_only_waiter_allows_duplicate_checkout_of_same_max1_connection() {
+		let _guard = lock_send_connection_test_hook();
 		let pool = pool_with_expected_h2_capacity(1);
 		let key = host_key_h2("foo");
 		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
@@ -2138,6 +2143,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_h2_first_send_race_cancellation_can_drop_active_tracking_for_second_waiter() {
+		let _guard = lock_send_connection_test_hook();
 		let pool = pool_with_expected_h2_capacity(2);
 		let key = host_key_h2("foo");
 		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
@@ -2170,7 +2176,40 @@ mod tests {
 	}
 
 	#[tokio::test]
-  #[ignore]
+	async fn test_h2_first_send_race_cancellation_can_starve_third_waiter_despite_free_capacity() {
+		let _guard = lock_send_connection_test_hook();
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+		let (_sc3, w3) = must_want_new_connection(&pool, key.clone());
+
+		let mut w1 = Some(w1);
+		let mut calls = 0;
+		install_send_connection_test_hook(move || {
+			calls += 1;
+			if calls == 1 {
+				drop(w1.take());
+				false
+			} else {
+				true
+			}
+		});
+
+		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
+		clear_send_connection_test_hook();
+
+		let _pooled2 = w2
+			.await
+			.expect("second waiter should receive the shared h2 connection")
+			.unwrap();
+		tracing::error!("howardjohn: {:#?}", pool.hosts);
+
+		let _pooled3 = w3.await.expect("get").unwrap();
+	}
+
+	#[tokio::test]
+	#[ignore]
 	async fn search_h2_cancelled_waiter_race_variants() {
 		for seed in 1..=32_u64 {
 			info!("running h2 canceled-waiter race seed={seed}");
