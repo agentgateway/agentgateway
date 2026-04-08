@@ -10889,6 +10889,7 @@ type AIBackend_AzureOpenAI struct {
 	Model         *string                `protobuf:"bytes,1,opt,name=model,proto3,oneof" json:"model,omitempty"`
 	Host          string                 `protobuf:"bytes,2,opt,name=host,proto3" json:"host,omitempty"`
 	ApiVersion    *string                `protobuf:"bytes,3,opt,name=api_version,json=apiVersion,proto3,oneof" json:"api_version,omitempty"`
+	ProjectName   *string                `protobuf:"bytes,4,opt,name=project_name,json=projectName,proto3,oneof" json:"project_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -10940,6 +10941,13 @@ func (x *AIBackend_AzureOpenAI) GetHost() string {
 func (x *AIBackend_AzureOpenAI) GetApiVersion() string {
 	if x != nil && x.ApiVersion != nil {
 		return *x.ApiVersion
+	}
+	return ""
+}
+
+func (x *AIBackend_AzureOpenAI) GetProjectName() string {
+	if x != nil && x.ProjectName != nil {
+		return *x.ProjectName
 	}
 	return ""
 }
@@ -12025,7 +12033,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x11agent_runtime_arn\x18\x01 \x01(\tR\x0fagentRuntimeArn\x12!\n" +
 	"\tqualifier\x18\x02 \x01(\tH\x00R\tqualifier\x88\x01\x01B\f\n" +
 	"\n" +
-	"_qualifier\"\xe7\f\n" +
+	"_qualifier\"\xa1\r\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -12053,14 +12061,16 @@ const file_resource_proto_rawDesc = "" +
 	"\x11guardrail_version\x18\x04 \x01(\tH\x02R\x10guardrailVersion\x88\x01\x01B\b\n" +
 	"\x06_modelB\x17\n" +
 	"\x15_guardrail_identifierB\x14\n" +
-	"\x12_guardrail_version\x1a|\n" +
+	"\x12_guardrail_version\x1a\xb5\x01\n" +
 	"\vAzureOpenAI\x12\x19\n" +
 	"\x05model\x18\x01 \x01(\tH\x00R\x05model\x88\x01\x01\x12\x12\n" +
 	"\x04host\x18\x02 \x01(\tR\x04host\x12$\n" +
 	"\vapi_version\x18\x03 \x01(\tH\x01R\n" +
-	"apiVersion\x88\x01\x01B\b\n" +
+	"apiVersion\x88\x01\x01\x12&\n" +
+	"\fproject_name\x18\x04 \x01(\tH\x02R\vprojectName\x88\x01\x01B\b\n" +
 	"\x06_modelB\x0e\n" +
-	"\f_api_version\x1a\x90\x06\n" +
+	"\f_api_versionB\x0f\n" +
+	"\r_project_name\x1a\x90\x06\n" +
 	"\bProvider\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12V\n" +
 	"\rhost_override\x18\x02 \x01(\v21.agentgateway.dev.resource.AIBackend.HostOverrideR\fhostOverride\x12(\n" +

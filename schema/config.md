@@ -1343,6 +1343,7 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceType`|string|The type of Azure endpoint. Determines the host suffix.|
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.apiVersion`|string||
+|`binds[].listeners[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resource_type` is `Foundry`.<br>Used to construct paths: `/api/projects/{project_name}/openai/v1/...`.<br>This is distinct from `resource_name` which is used for the host.|
 |`binds[].listeners[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -2041,6 +2042,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|string|The type of Azure endpoint. Determines the host suffix.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.apiVersion`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resource_type` is `Foundry`.<br>Used to construct paths: `/api/projects/{project_name}/openai/v1/...`.<br>This is distinct from `resource_name` which is used for the host.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -5769,6 +5771,7 @@
 |`llm.models[].params.azureResourceName`|string|For Azure: the resource name of the deployment|
 |`llm.models[].params.azureResourceType`|string|For Azure: the type of Azure endpoint (openAI or foundry)|
 |`llm.models[].params.azureApiVersion`|string|For Azure: the API version to use|
+|`llm.models[].params.azureProjectName`|string|For Azure: the Foundry project name (required for foundry resource type)|
 |`llm.models[].params.hostOverride`|string|Override the upstream host for this provider.|
 |`llm.models[].params.pathOverride`|string|Override the upstream path for this provider.|
 |`llm.models[].params.pathPrefix`|string|Override the default base path prefix for this provider.|

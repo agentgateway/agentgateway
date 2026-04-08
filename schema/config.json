@@ -4755,6 +4755,13 @@
             "string",
             "null"
           ]
+        },
+        "projectName": {
+          "description": "The Foundry project name, required when `resource_type` is `Foundry`.\nUsed to construct paths: `/api/projects/{project_name}/openai/v1/...`.\nThis is distinct from `resource_name` which is used for the host.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
@@ -4772,7 +4779,7 @@
           "const": "openAI"
         },
         {
-          "description": "Azure AI Foundry endpoint: `{resourceName}.cognitiveservices.azure.com`",
+          "description": "Azure AI Foundry (project) endpoint: `{resourceName}.services.ai.azure.com`\nRequires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`",
           "type": "string",
           "const": "foundry"
         }
@@ -6202,6 +6209,13 @@
         },
         "azureApiVersion": {
           "description": "For Azure: the API version to use",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "azureProjectName": {
+          "description": "For Azure: the Foundry project name (required for foundry resource type)",
           "type": [
             "string",
             "null"
