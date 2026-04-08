@@ -27,7 +27,7 @@ use tracing::{debug, trace};
 
 pub const DEFAULT_EXPECTED_HTTP2_CAPACITY: usize = 100;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Pool<K: Key> {
 	hosts: Arc<Mutex<HashMap<K, HostPool<K>>>>,
 	pub settings: Arc<PoolSettings>,
@@ -240,6 +240,18 @@ pub(crate) enum HttpConnection {
 	Http2(ReservedHttp2Connection),
 }
 
+impl fmt::Debug for HttpConnection {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		let v = match self {
+			HttpConnection::Http1(_) => "http1",
+			HttpConnection::Http2(_) => "http2",
+		};
+		f.debug_struct("HttpConnection")
+			.field("version", &v)
+			.finish()
+	}
+}
+
 impl HttpConnection {
 	fn release_stream_slot(&self) {
 		match self {
@@ -311,17 +323,6 @@ pub(crate) struct ReservedHttp2Connection {
 }
 
 impl ReservedHttp2Connection {
-	fn clone_increment_load(&self) -> Option<(Self, bool)> {
-		match self.load.try_reserve_stream_slot() {
-			CapacityReservationResult::NoCapacity => None,
-			CapacityReservationResult::ReservedAndFilled => {
-				Some((self.clone_without_load_incremented(), true))
-			},
-			CapacityReservationResult::ReservedButNotFilled => {
-				Some((self.clone_without_load_incremented(), false))
-			},
-		}
-	}
 	fn clone_without_load_incremented(&self) -> Self {
 		Self {
 			info: self.info.clone(),
@@ -384,6 +385,7 @@ impl H2Load {
 }
 
 // HostPool stores information for a single host.
+#[derive(Debug)]
 struct HostPool<K: Key> {
 	// The number of currently establishing connections
 	connecting: usize,
@@ -916,30 +918,6 @@ impl<K: Key> Pooled<K> {
 			settings: self.settings.clone(),
 		}
 	}
-	fn maybe_clone(self) -> (Self, Option<(Self, bool)>) {
-		match self.value.as_ref() {
-			Some((_, HttpConnection::Http1(_h))) => {
-				// HTTP/1.1 cannot be cloned
-				(self, None)
-			},
-			Some((k, HttpConnection::Http2(h))) => {
-				// HTTP/2 can be cloned unless its at-capacity.
-				let cpy = h.clone_increment_load().map(|(c, full)| {
-					(
-						Self {
-							value: Some((k.clone(), HttpConnection::Http2(c))),
-							is_reused: true,
-							pool: self.pool.clone(),
-							settings: self.settings.clone(),
-						},
-						full,
-					)
-				});
-				(self, cpy)
-			},
-			None => (self, None),
-		}
-	}
 	pub fn is_reused(&self) -> bool {
 		self.is_reused
 	}
@@ -1010,6 +988,7 @@ impl<K: Key> Drop for H2CapacityGuard<K> {
 	}
 }
 
+#[derive(Debug)]
 struct Idle {
 	idle_at: Instant,
 	value: HttpConnection,
@@ -1881,6 +1860,40 @@ mod tests {
 
 		drop(reused1);
 		drop(reused2);
+	}
+
+	#[tokio::test]
+	async fn test_h2_waiter_cancelled() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+		// Cancel wait
+		drop(w2);
+		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
+		let _pooled1 = w1.await.expect("get h2");
+		let _pooled2 = must_checkout(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_h2_waiter_cancelled2() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		let w2 = must_wait_for_existing_connection(&pool, key.clone());
+		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
+		let pooled1 = w1.await.expect("get h2");
+		let (sc3, w3) = must_want_new_connection(&pool, key.clone());
+		let w4 = must_wait_for_existing_connection(&pool, key.clone());
+		pool.insert_new_connection(sc3, mock_http2_connection(2).await);
+		let (sc5, w5) = must_want_new_connection(&pool, key.clone());
+		pool.insert_new_connection(sc5, mock_http2_connection(2).await);
+		tracing::error!("howardjohn: {:#?}", pool.hosts);
+		// drop(w3);
+		drop(w4);
+		drop(pooled1);
+		tracing::error!("howardjohn: {:#?}", pool.hosts);
+		panic!("x")
 	}
 
 	#[tokio::test]
