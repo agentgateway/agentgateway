@@ -3230,6 +3230,17 @@
         "type": {
           "$ref": "#/$defs/RateLimitType",
           "default": "requests"
+        },
+        "limitOverride": {
+          "description": "limitOverride determines the optional expression to determine the limit of the request.\nThis tells the remote server what limit to apply to the request.\nThe expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:\n`{\"unit\":\"second\",\"requestsPerUnit\":100}`.\nValid units: second, minute, hour, day, month, year\nIf the expression fails to evaluate, the descriptor is skipped.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,

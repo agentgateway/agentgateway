@@ -36,6 +36,7 @@ mod conversion;
 pub mod policy;
 mod types;
 
+use crate::store;
 pub use types::SimpleChatCompletionMessage;
 
 #[cfg(test)]
