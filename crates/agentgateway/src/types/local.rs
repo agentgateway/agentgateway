@@ -1066,14 +1066,6 @@ pub struct SimpleLocalBackendPolicies {
 	#[serde(default)]
 	pub request_header_modifier: Option<filters::HeaderModifier>,
 
-	/// Headers to be modified in the response.
-	#[serde(default)]
-	pub response_header_modifier: Option<filters::HeaderModifier>,
-
-	/// Directly respond to the request with a redirect.
-	#[serde(default)]
-	pub request_redirect: Option<filters::RequestRedirect>,
-
 	/// Modify requests and responses sent to and from the backend.
 	#[serde(default)]
 	#[serde(deserialize_with = "de_transform")]
@@ -1096,10 +1088,6 @@ pub struct SimpleLocalBackendPolicies {
 	/// Specify TCP settings for the backend
 	#[serde(default)]
 	pub tcp: Option<backend::TCP>,
-
-	/// Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.
-	#[serde(default)]
-	pub health: Option<health::LocalHealthPolicy>,
 
 	/// Specify a tunnel to use when connecting to the backend
 	#[serde(default)]
@@ -1139,14 +1127,11 @@ impl LocalBackendPolicies {
 			simple:
 				SimpleLocalBackendPolicies {
 					request_header_modifier,
-					response_header_modifier,
-					request_redirect,
 					transformations,
 					backend_tls,
 					backend_auth,
 					http,
 					tcp,
-					health,
 					backend_tunnel,
 				},
 			mcp_authorization,
@@ -1166,12 +1151,6 @@ impl LocalBackendPolicies {
 		if let Some(p) = request_header_modifier {
 			pols.push(BackendPolicy::RequestHeaderModifier(p));
 		}
-		if let Some(p) = response_header_modifier {
-			pols.push(BackendPolicy::ResponseHeaderModifier(p));
-		}
-		if let Some(p) = request_redirect {
-			pols.push(BackendPolicy::RequestRedirect(p));
-		}
 		if let Some(p) = transformations {
 			pols.push(BackendPolicy::Transformation(p));
 		}
@@ -1190,11 +1169,6 @@ impl LocalBackendPolicies {
 		if let Some(mut p) = ai {
 			p.compile_model_alias_patterns();
 			pols.push(BackendPolicy::AI(Arc::new(p)))
-		}
-		if let Some(p) = health {
-			pols.push(BackendPolicy::Health(p.try_into().map_err(
-				|e: crate::cel::Error| anyhow::anyhow!("health.unhealthyExpression: {}", e),
-			)?));
 		}
 		Ok(pols)
 	}

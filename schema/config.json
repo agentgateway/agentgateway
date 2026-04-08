@@ -2147,30 +2147,6 @@
           ],
           "default": null
         },
-        "responseHeaderModifier": {
-          "description": "Headers to be modified in the response.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "requestRedirect": {
-          "description": "Directly respond to the request with a redirect.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestRedirect"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
         "transformations": {
           "description": "Modify requests and responses sent to and from the backend.",
           "anyOf": [
@@ -2223,18 +2199,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/TCP"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "health": {
-          "description": "Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalHealthPolicy"
             },
             {
               "type": "null"
@@ -2760,64 +2724,6 @@
         "secs",
         "nanos"
       ]
-    },
-    "LocalHealthPolicy": {
-      "description": "Local/config health policy with CEL as string; converted to Policy by compiling the expression.\nMirrors the proto `Health` message structure.",
-      "type": "object",
-      "properties": {
-        "unhealthyExpression": {
-          "description": "CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.\nWhen unset, any 5xx or connection failure is treated as unhealthy.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "eviction": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalEviction"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "LocalEviction": {
-      "description": "Local/config eviction sub-policy with duration as string; mirrors `Eviction`.",
-      "type": "object",
-      "properties": {
-        "duration": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "restoreHealth": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        },
-        "consecutiveFailures": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int32"
-        },
-        "healthThreshold": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        }
-      },
-      "additionalProperties": false
     },
     "Tunnel": {
       "type": "object",
@@ -4345,30 +4251,6 @@
           ],
           "default": null
         },
-        "responseHeaderModifier": {
-          "description": "Headers to be modified in the response.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "requestRedirect": {
-          "description": "Directly respond to the request with a redirect.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestRedirect"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
         "transformations": {
           "description": "Modify requests and responses sent to and from the backend.",
           "anyOf": [
@@ -4421,18 +4303,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/TCP"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "health": {
-          "description": "Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalHealthPolicy"
             },
             {
               "type": "null"
@@ -4772,30 +4642,6 @@
           ],
           "default": null
         },
-        "responseHeaderModifier": {
-          "description": "Headers to be modified in the response.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "requestRedirect": {
-          "description": "Directly respond to the request with a redirect.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestRedirect"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
         "transformations": {
           "description": "Modify requests and responses sent to and from the backend.",
           "anyOf": [
@@ -4848,18 +4694,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/TCP"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "health": {
-          "description": "Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalHealthPolicy"
             },
             {
               "type": "null"
@@ -6220,6 +6054,64 @@
         "bedrock",
         "azureOpenAI"
       ]
+    },
+    "LocalHealthPolicy": {
+      "description": "Local/config health policy with CEL as string; converted to Policy by compiling the expression.\nMirrors the proto `Health` message structure.",
+      "type": "object",
+      "properties": {
+        "unhealthyExpression": {
+          "description": "CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.\nWhen unset, any 5xx or connection failure is treated as unhealthy.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "eviction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalEviction"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalEviction": {
+      "description": "Local/config eviction sub-policy with duration as string; mirrors `Eviction`.",
+      "type": "object",
+      "properties": {
+        "duration": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "restoreHealth": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "consecutiveFailures": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "healthThreshold": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "additionalProperties": false
     },
     "LLMRouteMatch": {
       "type": "object",
