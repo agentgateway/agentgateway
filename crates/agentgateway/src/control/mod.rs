@@ -248,10 +248,10 @@ impl tower::Service<::http::Request<tonic::body::Body>> for GrpcChannel {
 		let mut req = req.map(http::Body::new);
 
 		Box::pin(async move {
-			auth.insert_headers(req.headers_mut())?;
 			ca_headers.iter().for_each(|(k, v)| {
 				req.headers_mut().insert(k.clone(), v.clone());
 			});
+			auth.insert_headers(req.headers_mut())?;
 			http::modify_req_uri(&mut req, |uri| {
 				uri.authority = Some(Authority::try_from(target.to_string())?);
 				uri.scheme = Some(transport.scheme());
