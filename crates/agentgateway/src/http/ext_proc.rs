@@ -957,8 +957,7 @@ pub(crate) fn extract_dynamic_metadata(
 	// Get or create metadata container, merging with existing metadata
 	let mut dynamic_metadata = req
 		.extensions_mut()
-		.remove::<Arc<ExtProcDynamicMetadata>>()
-		.map(|arc| (*arc).clone())
+		.remove::<ExtProcDynamicMetadata>()
 		.unwrap_or_default();
 
 	// Merge new fields into existing metadata
@@ -969,7 +968,7 @@ pub(crate) fn extract_dynamic_metadata(
 	}
 
 	if !dynamic_metadata.0.is_empty() {
-		req.extensions_mut().insert(Arc::new(dynamic_metadata));
+		req.extensions_mut().insert(dynamic_metadata);
 	}
 
 	Ok(())

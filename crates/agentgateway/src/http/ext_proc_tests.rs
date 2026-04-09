@@ -1,14 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use ::http::{HeaderMap, Method, Request};
-use hyper_util::client::legacy::Client;
-use serde_json::json;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::Sender;
-use tonic::Status;
-use wiremock::MockServer;
-
 use crate::cel::Expression;
 use crate::http::ext_proc::proto::header_value_option::HeaderAppendAction;
 use crate::http::ext_proc::proto::{
@@ -24,6 +16,14 @@ use crate::test_helpers::extprocmock::{
 };
 use crate::test_helpers::proxymock::*;
 use crate::*;
+use ::http::{HeaderMap, Method, Request};
+use hyper_util::client::legacy::Client;
+use protos::envoy::service::ext_proc::v3::processing_response;
+use serde_json::json;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
+use tonic::Status;
+use wiremock::MockServer;
 
 #[tokio::test]
 async fn nop_ext_proc() {
@@ -201,6 +201,43 @@ async fn failure_fail_open() {
 	assert_eq!(res.status(), 200);
 }
 
+#[tokio::test]
+async fn dynamic_metadata() {
+	let mock = body_mock(b"").await;
+	let (_mock, _ext_proc, mut bind, _io) = setup_ext_proc_mock(
+		mock,
+		ext_proc::FailureMode::FailClosed,
+		ExtProcMock::new(DynamicMetadataExtProc::default),
+		"{}",
+	)
+	.await;
+	bind
+		.attach_route_policy(json!({
+			"transformations": {
+				"response": {
+					"set": {
+						"x-extproc-metadata": "extproc.some[0]",
+					},
+				},
+			},
+		}))
+		.await;
+	let io = bind.serve_http(strng::new("bind"));
+	let res = send_request(io, Method::POST, "http://lo").await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(
+		res
+			.headers()
+			.get("x-extproc-metadata")
+			.unwrap()
+			.to_str()
+			.unwrap(),
+		"a"
+	);
+	let body = read_body_raw(res.into_body()).await;
+	assert_eq!(body.as_ref(), b"");
+}
+
 pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
 	mock: MockServer,
 	failure_mode: ext_proc::FailureMode,
@@ -258,6 +295,74 @@ struct NopExtProc {
 
 #[async_trait::async_trait]
 impl Handler for NopExtProc {
+	async fn handle_request_body(
+		&mut self,
+		_body: &proto::HttpBody,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		if !self.sent_req_body {
+			let _ = sender.send(request_body_response(None)).await;
+		}
+		self.sent_req_body = true;
+		Ok(())
+	}
+
+	async fn handle_response_body(
+		&mut self,
+		_body: &proto::HttpBody,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		if !self.sent_resp_body {
+			let _ = sender.send(response_body_response(None)).await;
+		}
+		self.sent_resp_body = true;
+		Ok(())
+	}
+}
+
+#[derive(Debug, Default)]
+struct DynamicMetadataExtProc {
+	sent_req_body: bool,
+	sent_resp_body: bool,
+}
+
+#[async_trait::async_trait]
+impl Handler for DynamicMetadataExtProc {
+	async fn handle_request_headers(
+		&mut self,
+		_headers: &HttpHeaders,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		use prost_wkt_types::Value;
+		use prost_wkt_types::value::Kind;
+
+		let _ = sender
+			.send(Ok(ProcessingResponse {
+				response: Some(processing_response::Response::RequestHeaders(
+					proto::HeadersResponse { response: None },
+				)),
+				dynamic_metadata: Some(prost_wkt_types::Struct {
+					fields: HashMap::from([(
+						"some".to_string(),
+						Value {
+							kind: Some(Kind::ListValue(prost_wkt_types::ListValue {
+								values: vec![
+									Value {
+										kind: Some(Kind::StringValue("a".to_string())),
+									},
+									Value {
+										kind: Some(Kind::StringValue("b".to_string())),
+									},
+								],
+							})),
+						},
+					)]),
+				}),
+				..Default::default()
+			}))
+			.await;
+		Ok(())
+	}
 	async fn handle_request_body(
 		&mut self,
 		_body: &proto::HttpBody,
@@ -1342,7 +1447,6 @@ fn test_dynamic_metadata_extraction() {
 
 mod extract_dynamic_metadata_tests {
 	use std::collections::HashMap;
-	use std::sync::Arc;
 
 	use prost_wkt_types::value::Kind;
 	use prost_wkt_types::{Struct, Value};
@@ -1370,7 +1474,7 @@ mod extract_dynamic_metadata_tests {
 
 		let extracted = req
 			.extensions()
-			.get::<Arc<ExtProcDynamicMetadata>>()
+			.get::<ExtProcDynamicMetadata>()
 			.expect("metadata should be in extensions");
 		assert_eq!(
 			extracted.0.get("user_id"),
@@ -1390,7 +1494,7 @@ mod extract_dynamic_metadata_tests {
 				.into_iter()
 				.collect(),
 		);
-		req.extensions_mut().insert(Arc::new(existing));
+		req.extensions_mut().insert(existing);
 
 		let metadata = Struct {
 			fields: [(
@@ -1403,10 +1507,7 @@ mod extract_dynamic_metadata_tests {
 		};
 		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
-		let extracted = req
-			.extensions()
-			.get::<Arc<ExtProcDynamicMetadata>>()
-			.unwrap();
+		let extracted = req.extensions().get::<ExtProcDynamicMetadata>().unwrap();
 		assert_eq!(extracted.0.len(), 2);
 		assert_eq!(
 			extracted.0.get("existing"),
@@ -1430,7 +1531,7 @@ mod extract_dynamic_metadata_tests {
 				.into_iter()
 				.collect(),
 		);
-		req.extensions_mut().insert(Arc::new(existing));
+		req.extensions_mut().insert(existing);
 
 		let metadata = Struct {
 			fields: [(
@@ -1443,10 +1544,7 @@ mod extract_dynamic_metadata_tests {
 		};
 		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
-		let extracted = req
-			.extensions()
-			.get::<Arc<ExtProcDynamicMetadata>>()
-			.unwrap();
+		let extracted = req.extensions().get::<ExtProcDynamicMetadata>().unwrap();
 		assert_eq!(extracted.0.len(), 1);
 		assert_eq!(
 			extracted.0.get("key"),
@@ -1466,12 +1564,7 @@ mod extract_dynamic_metadata_tests {
 
 		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
-		assert!(
-			req
-				.extensions()
-				.get::<Arc<ExtProcDynamicMetadata>>()
-				.is_none()
-		);
+		assert!(req.extensions().get::<ExtProcDynamicMetadata>().is_none());
 	}
 
 	#[test]
@@ -1507,10 +1600,7 @@ mod extract_dynamic_metadata_tests {
 
 		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
-		let extracted = req
-			.extensions()
-			.get::<Arc<ExtProcDynamicMetadata>>()
-			.unwrap();
+		let extracted = req.extensions().get::<ExtProcDynamicMetadata>().unwrap();
 
 		assert_eq!(extracted.0.len(), 3);
 		assert_eq!(
@@ -1553,10 +1643,7 @@ mod extract_dynamic_metadata_tests {
 		};
 		extract_dynamic_metadata(&mut req, &metadata2).unwrap();
 
-		let extracted = req
-			.extensions()
-			.get::<Arc<ExtProcDynamicMetadata>>()
-			.unwrap();
+		let extracted = req.extensions().get::<ExtProcDynamicMetadata>().unwrap();
 		assert_eq!(extracted.0.len(), 2);
 		assert_eq!(extracted.0.get("key1"), Some(&serde_json::json!("value1")));
 		assert_eq!(extracted.0.get("key2"), Some(&serde_json::json!(true)));
