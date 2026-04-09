@@ -110,13 +110,7 @@ output:
   namespace: default
   ports:
   - servicePort: 9002
-- extensions:
-  - config:
-      '@type': type.googleapis.com/google.protobuf.Struct
-      value:
-        canonicalPort: 8080
-    name: agentgateway.inference_pool_endpoint_config
-  hostname: gateway-pool.default.inference.cluster.local
+- hostname: gateway-pool.default.inference.cluster.local
   name: gateway-pool
   namespace: default
   ports:

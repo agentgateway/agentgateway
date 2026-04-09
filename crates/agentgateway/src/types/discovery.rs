@@ -8,8 +8,6 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
-use prost::Message;
-use prost_wkt_types::{Struct as ProstStruct, value::Kind as StructKind};
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -21,9 +19,6 @@ use crate::types::proto::workload::{
 };
 use crate::types::proto::{ProtoError, workload};
 use crate::*;
-
-const INFERENCE_POOL_SERVICE_EXTENSION_NAME: &str = "agentgateway.inference_pool_endpoint_config";
-const INFERENCE_POOL_CANONICAL_PORT_STRUCT_KEY: &str = "canonicalPort";
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -486,9 +481,6 @@ pub struct Service {
 
 	#[serde(default, skip_serializing_if = "is_default")]
 	pub ip_families: Option<IpFamily>,
-
-	#[serde(default, skip_serializing_if = "is_default")]
-	pub inference_pool: Option<InferencePoolServiceConfig>,
 }
 
 impl Service {
@@ -524,12 +516,6 @@ impl Service {
 				.map(|lb| lb.health_policy == LoadBalancerHealthPolicy::AllowAll)
 				.unwrap_or(false)
 	}
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct InferencePoolServiceConfig {
-	pub canonical_port: u16,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, serde::Serialize, serde::Deserialize)]
@@ -816,58 +802,6 @@ pub fn network_addr(network: Strng, vip: IpAddr) -> NetworkAddress {
 	}
 }
 
-fn inference_pool_service_config_from_xds(
-	extensions: &[workload::Extension],
-) -> Result<Option<InferencePoolServiceConfig>, ProtoError> {
-	let Some(extension) = extensions
-		.iter()
-		.find(|extension| extension.name == INFERENCE_POOL_SERVICE_EXTENSION_NAME)
-	else {
-		return Ok(None);
-	};
-
-	let Some(config) = &extension.config else {
-		return Err(ProtoError::Generic(format!(
-			"service extension {} is missing config",
-			extension.name
-		)));
-	};
-
-	if config.type_url != "type.googleapis.com/google.protobuf.Struct" {
-		return Err(ProtoError::Generic(format!(
-			"service extension {} has unsupported type {}",
-			extension.name, config.type_url
-		)));
-	}
-
-	let config = ProstStruct::decode(config.value.as_slice())?;
-	let canonical_port = match config
-		.fields
-		.get(INFERENCE_POOL_CANONICAL_PORT_STRUCT_KEY)
-		.and_then(|value| value.kind.as_ref())
-	{
-		Some(StructKind::NumberValue(port))
-			if *port >= 1.0 && *port <= u16::MAX as f64 && port.fract() == 0.0 =>
-		{
-			*port as u16
-		},
-		Some(_) => {
-			return Err(ProtoError::Generic(format!(
-				"service extension {} has invalid {} value",
-				extension.name, INFERENCE_POOL_CANONICAL_PORT_STRUCT_KEY
-			)));
-		},
-		None => {
-			return Err(ProtoError::Generic(format!(
-				"service extension {} is missing {}",
-				extension.name, INFERENCE_POOL_CANONICAL_PORT_STRUCT_KEY
-			)));
-		},
-	};
-
-	Ok(Some(InferencePoolServiceConfig { canonical_port }))
-}
-
 impl TryFrom<&XdsService> for Service {
 	type Error = ProtoError;
 
@@ -901,7 +835,6 @@ impl TryFrom<&XdsService> for Service {
 		} else {
 			None
 		};
-		let inference_pool = inference_pool_service_config_from_xds(&s.extensions)?;
 		let app_protocols = s
 			.ports
 			.iter()
@@ -944,7 +877,6 @@ impl TryFrom<&XdsService> for Service {
 			waypoint,
 			load_balancer: lb,
 			ip_families,
-			inference_pool,
 		};
 		Ok(svc)
 	}
@@ -1002,46 +934,5 @@ impl TryFrom<XdsScope> for LoadBalancerScopes {
 			XdsScope::Network => Ok(LoadBalancerScopes::Network),
 			_ => Err(ProtoError::EnumParse("invalid target".to_string())),
 		}
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use prost_types::Any;
-	use prost_wkt_types::{Struct, Value};
-	use std::collections::HashMap;
-
-	#[tokio::test]
-	async fn service_try_from_reads_inference_pool_extension() {
-		let config = Struct {
-			fields: HashMap::from([(
-				INFERENCE_POOL_CANONICAL_PORT_STRUCT_KEY.to_string(),
-				Value {
-					kind: Some(StructKind::NumberValue(8000.0)),
-				},
-			)]),
-		};
-		let service = XdsService {
-			name: "gateway-pool".into(),
-			namespace: "default".into(),
-			hostname: "gateway-pool.default.svc.cluster.local".into(),
-			extensions: vec![workload::Extension {
-				name: INFERENCE_POOL_SERVICE_EXTENSION_NAME.into(),
-				config: Some(Any {
-					type_url: "type.googleapis.com/google.protobuf.Struct".into(),
-					value: config.encode_to_vec(),
-				}),
-			}],
-			..Default::default()
-		};
-
-		let parsed = Service::try_from(&service).expect("service extension should parse");
-		assert_eq!(
-			parsed.inference_pool,
-			Some(InferencePoolServiceConfig {
-				canonical_port: 8000,
-			})
-		);
 	}
 }

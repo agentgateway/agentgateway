@@ -13,7 +13,6 @@ use crate::types::discovery::{Endpoint, Service, Workload};
 use crate::*;
 
 type EndpointKey = Strng;
-type SelectedEndpoint = (EndpointKey, Arc<Endpoint>, Arc<EndpointInfo>, Arc<Workload>);
 
 #[derive(Debug, Clone, Serialize)]
 pub struct EndpointWithInfo<T> {
@@ -60,19 +59,6 @@ fn contains_target_port(ep: &Endpoint, wanted_target: u16) -> bool {
 	ep.port.values().any(|tp| *tp == wanted_target)
 }
 
-fn endpoint_candidate(
-	workloads: &store::WorkloadStore,
-	key: &EndpointKey,
-	endpoint: &Arc<Endpoint>,
-	info: &Arc<EndpointInfo>,
-) -> Option<SelectedEndpoint> {
-	let Some(workload) = workloads.find_uid(&endpoint.workload_uid) else {
-		debug!("failed to fetch workload for {}", endpoint.workload_uid);
-		return None;
-	};
-	Some((key.clone(), endpoint.clone(), info.clone(), workload))
-}
-
 impl EndpointSet<Endpoint> {
 	pub fn insert(&self, ep: Endpoint) {
 		// Currently, buckets are not supported
@@ -99,14 +85,17 @@ impl EndpointSet<Endpoint> {
 				.index()
 				.iter()
 				.find_map(|(key, EndpointWithInfo { endpoint, info })| {
-					let (key, endpoint, info, wl) = endpoint_candidate(workloads, key, endpoint, info)?;
+					let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
+						debug!("failed to fetch workload for {}", endpoint.workload_uid);
+						return None;
+					};
 					if !wl.workload_ips.contains(&o.ip()) {
 						return None;
 					}
-					if !contains_target_port(endpoint.as_ref(), o.port()) {
+					if !contains_target_port(endpoint, o.port()) {
 						return None;
 					}
-					Some((key, endpoint, info, wl))
+					Some((key.clone(), endpoint.clone(), info, wl))
 				})
 		} else {
 			let index = iter.index();
@@ -122,7 +111,10 @@ impl EndpointSet<Endpoint> {
 				.filter_map(|idx| {
 					let (key, EndpointWithInfo { endpoint, info }) =
 						index.get_index(idx).expect("index already checked");
-					let (key, endpoint, info, wl) = endpoint_candidate(workloads, key, endpoint, info)?;
+					let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
+						debug!("failed to fetch workload for {}", endpoint.workload_uid);
+						return None;
+					};
 					if target_port.unwrap_or_default() == 0 && !endpoint.port.contains_key(&svc_port) {
 						// Filter workload out, it doesn't have a matching port
 						// This is not great, since if we have a lot of partial endpoints we hit bad cases.
@@ -133,7 +125,7 @@ impl EndpointSet<Endpoint> {
 						);
 						return None;
 					}
-					Some((key, endpoint, info, wl))
+					Some((key.clone(), endpoint.clone(), info, wl))
 				})
 				.max_by(|(_, _, a, _), (_, _, b, _)| a.score().total_cmp(&b.score()));
 			if let Some(best) = best {
@@ -143,7 +135,10 @@ impl EndpointSet<Endpoint> {
 				index
 					.iter()
 					.filter_map(|(key, EndpointWithInfo { endpoint, info })| {
-						let (key, endpoint, info, wl) = endpoint_candidate(workloads, key, endpoint, info)?;
+						let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
+							debug!("failed to fetch workload for {}", endpoint.workload_uid);
+							return None;
+						};
 						if target_port.unwrap_or_default() == 0 && !endpoint.port.contains_key(&svc_port) {
 							// Filter workload out, it doesn't have a matching port
 							trace!(
@@ -152,14 +147,13 @@ impl EndpointSet<Endpoint> {
 							);
 							return None;
 						}
-						Some((key, endpoint, info, wl))
+						Some((key.clone(), endpoint.clone(), info, wl))
 					})
 					.max_by(|(_, _, a, _), (_, _, b, _)| a.score().total_cmp(&b.score()))
 			}
 		};
 		let (key, ep, ep_info, wl) = selected?;
-		// Preserve the concrete endpoint key so multiple targets on the same workload remain distinct.
-		let handle = svc.endpoints.start_request(key, &ep_info);
+		let handle = svc.endpoints.start_request(key, ep_info);
 		Some((ep, handle, wl))
 	}
 }
@@ -685,7 +679,7 @@ mod tests {
 	use crate::types::discovery::{
 		AppProtocol, Endpoint, HealthStatus, InboundProtocol, Locality, NetworkMode, Service, Workload,
 	};
-	use std::collections::{HashMap, HashSet};
+	use std::collections::HashMap;
 	use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 	fn test_inference_workload() -> Arc<Workload> {
@@ -729,9 +723,6 @@ mod tests {
 			waypoint: None,
 			load_balancer: None,
 			ip_families: None,
-			inference_pool: Some(crate::types::discovery::InferencePoolServiceConfig {
-				canonical_port: 8000,
-			}),
 		}
 	}
 
@@ -742,19 +733,10 @@ mod tests {
 
 		let service = test_inference_service();
 		service.endpoints.insert_key(
-			"wl-1:8000".into(),
+			"wl-1".into(),
 			Endpoint {
 				workload_uid: workload.uid.clone(),
-				port: HashMap::from([(8000, 8000)]),
-				status: HealthStatus::Healthy,
-			},
-			0,
-		);
-		service.endpoints.insert_key(
-			"wl-1:8001".into(),
-			Endpoint {
-				workload_uid: workload.uid.clone(),
-				port: HashMap::from([(8000, 8001)]),
+				port: HashMap::from([(8000, 8000), (8001, 8001)]),
 				status: HealthStatus::Healthy,
 			},
 			0,
@@ -774,37 +756,8 @@ mod tests {
 			.expect("override should resolve the matching target port");
 
 		assert_eq!(workload.uid.as_str(), "wl-1");
-		assert_eq!(endpoint.port.get(&8000), Some(&8001));
-		assert_eq!(handle.key.as_str(), "wl-1:8001");
-	}
-
-	#[tokio::test]
-	async fn select_endpoint_can_reach_all_inference_pool_target_ports_without_override() {
-		let (discovery, service) = multi_port_inference_fixture();
-		let mut seen = HashSet::new();
-
-		for _ in 0..64 {
-			let (endpoint, handle, workload) = service
-				.endpoints
-				.select_endpoint(&discovery.workloads, &service, 8000, None)
-				.expect("fail-open selection should find a backend");
-
-			assert_eq!(workload.uid.as_str(), "wl-1");
-			assert!(matches!(
-				endpoint.port.get(&8000),
-				Some(&8000) | Some(&8001)
-			));
-			seen.insert(handle.key.clone());
-
-			if seen.len() == 2 {
-				break;
-			}
-		}
-
-		assert_eq!(
-			seen,
-			HashSet::from([strng::new("wl-1:8000"), strng::new("wl-1:8001")])
-		);
+		assert_eq!(endpoint.port.get(&8001), Some(&8001));
+		assert_eq!(handle.key.as_str(), "wl-1");
 	}
 
 	// --- Ewma ---

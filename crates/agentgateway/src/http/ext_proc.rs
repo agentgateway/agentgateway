@@ -88,6 +88,13 @@ pub struct InferencePoolRouter {
 	ext_proc: Option<ExtProcInstance>,
 }
 
+#[derive(Debug, Default)]
+pub struct InferenceRequestResult {
+	pub destination: Option<SocketAddr>,
+	pub policy_response: PolicyResponse,
+	pub failed_open: bool,
+}
+
 impl InferenceRouting {
 	pub fn build(&self, client: PolicyClient) -> InferencePoolRouter {
 		InferencePoolRouter {
@@ -108,12 +115,13 @@ impl InferencePoolRouter {
 	pub async fn mutate_request(
 		&mut self,
 		req: &mut http::Request,
-	) -> Result<(Option<SocketAddr>, PolicyResponse), ProxyError> {
+	) -> Result<InferenceRequestResult, ProxyError> {
 		let Some(ext_proc) = &mut self.ext_proc else {
-			return Ok((None, Default::default()));
+			return Ok(Default::default());
 		};
 		let r = std::mem::take(req);
 		let (new_req, pr) = ext_proc.mutate_request(r).await?;
+		let failed_open = ext_proc.did_fail_open();
 		*req = new_req;
 		let dest = req
 			.headers()
@@ -122,7 +130,11 @@ impl InferencePoolRouter {
 			.map(|v| v.parse::<SocketAddr>())
 			.transpose()
 			.map_err(|e| ProxyError::Processing(anyhow!("EPP returned invalid address: {e}")))?;
-		Ok((dest, pr.unwrap_or_default()))
+		Ok(InferenceRequestResult {
+			destination: dest,
+			policy_response: pr.unwrap_or_default(),
+			failed_open,
+		})
 	}
 
 	pub async fn mutate_response(
@@ -253,6 +265,10 @@ struct ExtProcInstance {
 }
 
 impl ExtProcInstance {
+	fn did_fail_open(&self) -> bool {
+		self.skipped
+	}
+
 	fn new(
 		client: PolicyClient,
 		policies: Vec<BackendPolicy>,

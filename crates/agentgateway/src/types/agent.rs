@@ -1058,16 +1058,6 @@ impl<'de> serde::Deserialize<'de> for SimpleBackendReference {
 }
 
 impl SimpleBackend {
-	fn service_backend_info(svc: &Arc<Service>, port: u16) -> BackendInfo {
-		BackendInfo {
-			backend_type: cel::BackendType::Service,
-			backend_name: strng::format!("{}:{}", svc.hostname.clone(), port),
-			service_hostname: Some(svc.hostname.clone()),
-			service_canonical_port: Some(port),
-			service_available_ports: Some(svc.ports.keys().copied().sorted().collect_vec().into()),
-		}
-	}
-
 	pub fn hostport(&self) -> String {
 		match self {
 			SimpleBackend::Service(svc, port) => {
@@ -1103,37 +1093,14 @@ impl SimpleBackend {
 	}
 
 	pub fn backend_info(&self) -> BackendInfo {
-		match self {
-			SimpleBackend::Service(svc, port) => Self::service_backend_info(svc, *port),
-			SimpleBackend::Opaque(_, _) => BackendInfo {
-				backend_type: self.backend_type(),
-				backend_name: strng::format!("{}", self),
-				service_hostname: None,
-				service_canonical_port: None,
-				service_available_ports: None,
-			},
-			SimpleBackend::Invalid => BackendInfo {
-				backend_type: self.backend_type(),
-				backend_name: strng::format!("{}", self),
-				service_hostname: None,
-				service_canonical_port: None,
-				service_available_ports: None,
-			},
+		BackendInfo {
+			backend_type: self.backend_type(),
+			backend_name: strng::format!("{}", self),
 		}
 	}
 }
 
 impl Backend {
-	fn service_backend_info(svc: &Arc<Service>, port: u16) -> BackendInfo {
-		BackendInfo {
-			backend_type: cel::BackendType::Service,
-			backend_name: strng::format!("{}:{}", svc.hostname.clone(), port),
-			service_hostname: Some(svc.hostname.clone()),
-			service_canonical_port: Some(port),
-			service_available_ports: Some(svc.ports.keys().copied().sorted().collect_vec().into()),
-		}
-	}
-
 	pub fn target(&self) -> BackendTarget {
 		match self {
 			Backend::Service(svc, port) => BackendTarget::Service {
@@ -1213,20 +1180,9 @@ impl Backend {
 	}
 
 	pub fn backend_info(&self) -> BackendInfo {
-		match self {
-			Backend::Service(svc, port) => Self::service_backend_info(svc, *port),
-			Backend::Opaque(_, _)
-			| Backend::MCP(_, _)
-			| Backend::AI(_, _)
-			| Backend::Aws(_, _)
-			| Backend::Dynamic(_, _)
-			| Backend::Invalid => BackendInfo {
-				backend_type: self.backend_type(),
-				backend_name: self.name(),
-				service_hostname: None,
-				service_canonical_port: None,
-				service_available_ports: None,
-			},
+		BackendInfo {
+			backend_type: self.backend_type(),
+			backend_name: self.name(),
 		}
 	}
 }
@@ -1235,25 +1191,6 @@ impl Backend {
 pub struct BackendInfo {
 	pub backend_type: cel::BackendType,
 	pub backend_name: Strng,
-	pub service_hostname: Option<Strng>,
-	pub service_canonical_port: Option<u16>,
-	pub service_available_ports: Option<Arc<[u16]>>,
-}
-
-impl BackendInfo {
-	pub fn service_available_ports_display(&self) -> Option<String> {
-		self
-			.service_available_ports
-			.as_ref()
-			.map(|ports| ports.iter().map(|port| port.to_string()).join(","))
-	}
-
-	pub fn is_inference_pool_backend(&self) -> bool {
-		self
-			.service_hostname
-			.as_ref()
-			.is_some_and(|hostname| hostname.contains(".inference."))
-	}
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -2520,44 +2457,6 @@ mod tests {
 
 		let info = opaque_backend.backend_info();
 		assert_eq!(info.backend_name, strng::new("ns/test-opaque"));
-	}
-
-	#[tokio::test]
-	async fn test_service_backend_info_exposes_canonical_and_available_ports() {
-		let svc = Arc::new(Service {
-			name: "gateway-pool".into(),
-			namespace: "default".into(),
-			hostname: "gateway-pool.default.inference.cluster.local".into(),
-			vips: Vec::new(),
-			ports: BTreeMap::from([(8081, 8081), (8080, 8080)])
-				.into_iter()
-				.collect(),
-			app_protocols: BTreeMap::new().into_iter().collect(),
-			endpoints: Default::default(),
-			subject_alt_names: Vec::new(),
-			waypoint: None,
-			load_balancer: None,
-			ip_families: None,
-			inference_pool: None,
-		});
-
-		let backend = Backend::Service(svc, 8080);
-		let info = backend.backend_info();
-
-		assert_eq!(
-			info.backend_name,
-			strng::new("gateway-pool.default.inference.cluster.local:8080")
-		);
-		assert_eq!(
-			info.service_hostname,
-			Some(strng::new("gateway-pool.default.inference.cluster.local"))
-		);
-		assert_eq!(info.service_canonical_port, Some(8080));
-		assert_eq!(
-			info.service_available_ports_display().as_deref(),
-			Some("8080,8081")
-		);
-		assert!(info.is_inference_pool_backend());
 	}
 
 	#[test]

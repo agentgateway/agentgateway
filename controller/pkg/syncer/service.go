@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/protobuf/types/known/structpb"
 	"istio.io/istio/pilot/pkg/features"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/provider"
@@ -31,11 +30,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
 
-const (
-	inferencePoolServiceExtensionName   = "agentgateway.inference_pool_endpoint_config"
-	inferencePoolCanonicalPortStructKey = "canonicalPort"
-)
-
 // InferenceHostname produces FQDN for a k8s service
 func InferenceHostname(name, namespace, domainSuffix string) host.Name {
 	return host.Name(name + "." + namespace + "." + "inference" + "." + domainSuffix) // Format: "%s.%s.svc.%s"
@@ -48,21 +42,6 @@ func toInferencePoolAppProtocol(appProtocol inf.AppProtocol) workloadapi.AppProt
 	default:
 		return workloadapi.AppProtocol_HTTP11
 	}
-}
-
-func inferencePoolServiceExtensions(targetPorts []inf.Port) []*workloadapi.Extension {
-	if len(targetPorts) <= 1 {
-		return nil
-	}
-
-	return []*workloadapi.Extension{{
-		Name: inferencePoolServiceExtensionName,
-		Config: protoconv.MessageToAny(&structpb.Struct{
-			Fields: map[string]*structpb.Value{
-				inferencePoolCanonicalPortStructKey: structpb.NewNumberValue(float64(targetPorts[0].Number)),
-			},
-		}),
-	}}
 }
 
 func InferencePoolBuilder() krt.TransformationSingle[*inf.InferencePool, model.ServiceInfo] {
@@ -79,11 +58,10 @@ func InferencePoolBuilder() krt.TransformationSingle[*inf.InferencePool, model.S
 
 		// TODO this is only checking one controller - we may be missing service vips for instances in another cluster
 		svc := &workloadapi.Service{
-			Name:       s.Name,
-			Namespace:  s.Namespace,
-			Hostname:   string(InferenceHostname(s.Name, s.Namespace, domainSuffix)),
-			Ports:      ports,
-			Extensions: inferencePoolServiceExtensions(s.Spec.TargetPorts),
+			Name:      s.Name,
+			Namespace: s.Namespace,
+			Hostname:  string(InferenceHostname(s.Name, s.Namespace, domainSuffix)),
+			Ports:     ports,
 		}
 
 		selector := make(map[string]string, len(s.Spec.Selector.MatchLabels))

@@ -1314,13 +1314,18 @@ async fn make_backend_call(
 	});
 
 	let mut maybe_inference = policies.build_inference(policy_client.clone());
-	let (inference_override, ext_proc_resp) = maybe_inference.mutate_request(&mut req).await?;
-	ext_proc_resp.apply(response_policies.headers())?;
-	log.add(|l| l.inference_pool = inference_override);
+	let inference_result = maybe_inference.mutate_request(&mut req).await?;
+	inference_result
+		.policy_response
+		.apply(response_policies.headers())?;
+	log.add(|l| l.inference_pool = inference_result.destination);
 
 	// Use inference override if present, otherwise check for stateful MCP pinning.
 	// In practice, these don't conflict: inference is for AI backends, MCP pinning is for MCP backends.
-	let override_dest = inference_override.or(policies.override_dest);
+	let service_override = ServiceCallOverride {
+		destination: inference_result.destination.or(policies.override_dest),
+		inference_failed_open: inference_result.failed_open,
+	};
 
 	let backend_call = match backend {
 		Backend::AI(n, ai) => {
@@ -1367,7 +1372,7 @@ async fn make_backend_call(
 			&inputs,
 			policies,
 			&mut log,
-			override_dest,
+			service_override,
 			svc,
 			port,
 			req.uri().host(),
@@ -1718,7 +1723,7 @@ pub fn build_service_call(
 	inputs: &ProxyInputs,
 	backend_policies: BackendPolicies,
 	log: &mut Option<&mut RequestLog>,
-	override_dest: Option<SocketAddr>,
+	service_override: ServiceCallOverride,
 	svc: &Arc<Service>,
 	port: &u16,
 	request_host: Option<&str>,
@@ -1727,22 +1732,17 @@ pub fn build_service_call(
 	let workloads = &inputs.stores.read_discovery().workloads;
 	let (ep, handle, wl) = svc
 		.endpoints
-		.select_endpoint(workloads, svc.as_ref(), port, override_dest)
+		.select_endpoint(workloads, svc.as_ref(), port, service_override.destination)
 		.ok_or(ProxyError::NoHealthyEndpoints)?;
 
-	let svc_target_port = svc.ports.get(&port).copied().unwrap_or_default();
-	let target_port = if let Some(ov) = override_dest {
-		// use the explicit override. select_endpoint ensures this is actually in the endpoint
-		ov.port()
-	} else if let Some(&ep_target_port) = ep.port.get(&port) {
-		// prefer endpoint port mapping
-		ep_target_port
-	} else if svc_target_port > 0 {
-		// otherwise, see if the service has this port
-		svc_target_port
-	} else {
-		return Err(ProxyError::NoHealthyEndpoints);
-	};
+	let target_port = select_service_target_port(
+		ep.as_ref(),
+		svc.as_ref(),
+		port,
+		service_override.destination,
+		service_override.inference_failed_open,
+	)
+	.ok_or(ProxyError::NoHealthyEndpoints)?;
 
 	let http_version_override = if svc.port_is_http2(port) {
 		Some(::http::Version::HTTP_2)
@@ -1830,6 +1830,37 @@ pub fn build_service_call(
 	})
 }
 
+fn select_service_target_port(
+	ep: &Endpoint,
+	svc: &Service,
+	svc_port: u16,
+	override_dest: Option<SocketAddr>,
+	inference_failed_open: bool,
+) -> Option<u16> {
+	let svc_target_port = svc.ports.get(&svc_port).copied().unwrap_or_default();
+	if let Some(ov) = override_dest {
+		// use the explicit override. select_endpoint ensures this is actually in the endpoint
+		return Some(ov.port());
+	}
+	if inference_failed_open {
+		let mut target_ports = ep.port.values().copied().collect::<Vec<_>>();
+		target_ports.sort_unstable();
+		target_ports.dedup();
+		if let Some(target_port) = target_ports.choose(&mut rand::rng()).copied() {
+			return Some(target_port);
+		}
+	}
+	if let Some(&ep_target_port) = ep.port.get(&svc_port) {
+		// prefer endpoint port mapping
+		return Some(ep_target_port);
+	}
+	if svc_target_port > 0 {
+		// otherwise, see if the service has this port
+		return Some(svc_target_port);
+	}
+	None
+}
+
 /// Combines workload identity with service SANs.
 fn workload_and_service_sans(wl: &Workload, svc: &Service) -> Vec<Identity> {
 	let wl_id = wl.identity();
@@ -1869,7 +1900,10 @@ fn should_retry(res: &Result<Response, SnapshottedProxyResponse>, pol: &retry::P
 
 #[cfg(test)]
 mod tests {
-	use super::resolved_workload_target_hostname;
+	use super::{resolved_workload_target_hostname, select_service_target_port};
+	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
+	use std::collections::{HashMap, HashSet};
+	use std::net::SocketAddr;
 
 	#[test]
 	fn resolved_workload_target_hostname_uses_explicit_workload_hostname() {
@@ -1909,6 +1943,75 @@ mod tests {
 			resolved_workload_target_hostname("*.example.com", None),
 			None
 		);
+	}
+
+	fn multi_port_inference_service() -> Service {
+		Service {
+			name: "gateway-pool".into(),
+			namespace: "default".into(),
+			hostname: "gateway-pool.default.inference.cluster.local".into(),
+			vips: Vec::new(),
+			ports: HashMap::from([(8000, 8000), (8001, 8001)]),
+			app_protocols: HashMap::from([(8000, AppProtocol::Http2), (8001, AppProtocol::Http2)]),
+			endpoints: Default::default(),
+			subject_alt_names: Vec::new(),
+			waypoint: None,
+			load_balancer: None,
+			ip_families: None,
+		}
+	}
+
+	#[tokio::test]
+	async fn select_service_target_port_uses_override_destination_when_present() {
+		let endpoint = Endpoint {
+			workload_uid: "wl-1".into(),
+			port: HashMap::from([(8000, 8000), (8001, 8001)]),
+			status: HealthStatus::Healthy,
+		};
+		let service = multi_port_inference_service();
+		let override_dest = SocketAddr::from(([10, 0, 0, 1], 8001));
+
+		assert_eq!(
+			select_service_target_port(&endpoint, &service, 8000, Some(override_dest), true),
+			Some(8001)
+		);
+	}
+
+	#[tokio::test]
+	async fn select_service_target_port_uses_canonical_port_without_inference_fail_open() {
+		let endpoint = Endpoint {
+			workload_uid: "wl-1".into(),
+			port: HashMap::from([(8000, 8000), (8001, 8001)]),
+			status: HealthStatus::Healthy,
+		};
+		let service = multi_port_inference_service();
+
+		assert_eq!(
+			select_service_target_port(&endpoint, &service, 8000, None, false),
+			Some(8000)
+		);
+	}
+
+	#[tokio::test]
+	async fn select_service_target_port_can_reach_all_ports_after_inference_fail_open() {
+		let endpoint = Endpoint {
+			workload_uid: "wl-1".into(),
+			port: HashMap::from([(8000, 8000), (8001, 8001)]),
+			status: HealthStatus::Healthy,
+		};
+		let service = multi_port_inference_service();
+		let mut seen = HashSet::new();
+
+		for _ in 0..64 {
+			let target_port = select_service_target_port(&endpoint, &service, 8000, None, true)
+				.expect("expected a target port");
+			seen.insert(target_port);
+			if seen.len() == 2 {
+				break;
+			}
+		}
+
+		assert_eq!(seen, HashSet::from([8000, 8001]));
 	}
 }
 
@@ -2050,6 +2153,12 @@ pub struct BackendCall {
 	pub transport_override: Option<(InboundProtocol, Vec<Identity>)>,
 	pub network_gateway: Option<(GatewayAddress, Identity)>, /* For double hbone: (gateway_address, gateway_identity) */
 	pub backend_policies: BackendPolicies,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ServiceCallOverride {
+	pub destination: Option<SocketAddr>,
+	pub inference_failed_open: bool,
 }
 
 #[derive(Debug, Default)]
