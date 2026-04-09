@@ -8,6 +8,8 @@ pub mod connect;
 pub mod pool;
 pub mod rt;
 
+#[cfg(test)]
+mod blackbox_tests;
 mod client;
 pub mod service;
 pub use client::{Builder, Client, Error, ResponseFuture};

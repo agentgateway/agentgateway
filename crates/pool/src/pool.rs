@@ -13,6 +13,7 @@ use std::sync::{Arc, Weak};
 use std::task::{self, Poll};
 use std::time::{Duration, Instant};
 
+use crate::client::RequestBody;
 use crate::common::exec;
 use crate::common::exec::Exec;
 use crate::common::timer::Timer;
@@ -119,7 +120,6 @@ impl CapacityCache {
 			CapacityCache::Guess(ExpectedCapacity::Http2) => expected_http2_capacity,
 			// Assume we are going to get HTTP2; this ensures we don't flood with connections for HTTP/1.1
 			// If we don't get it, we will just try again with the new expected value cached.
-			// TODO: actually implement the cache part.
 			CapacityCache::Guess(ExpectedCapacity::Auto) => expected_http2_capacity,
 			CapacityCache::Cached(exact) => *exact,
 		}
@@ -142,12 +142,7 @@ impl Debug for H2Pool {
 
 impl H2Pool {
 	pub fn ensure_tracked(&mut self, c: &ReservedHttp2Connection) {
-		if self
-			.0
-			.iter()
-			.find(|entry| Arc::ptr_eq(&entry.load, &c.load))
-			.is_none()
-		{
+		if !self.0.iter().any(|entry| Arc::ptr_eq(&entry.load, &c.load)) {
 			let cpy = ReservedHttp2Connection {
 				info: c.info.clone(),
 				tx: c.tx.clone(),
@@ -265,7 +260,7 @@ impl H2Pool {
 
 pub(crate) struct ReservedHttp1Connection {
 	pub(crate) info: Connected,
-	pub(crate) tx: hyper::client::conn::http1::SendRequest<axum_core::body::Body>,
+	pub(crate) tx: hyper::client::conn::http1::SendRequest<RequestBody>,
 }
 
 pub(crate) enum HttpConnection {
@@ -302,11 +297,11 @@ impl HttpConnection {
 	}
 	pub fn try_send_request(
 		&mut self,
-		req: Request<axum_core::body::Body>,
+		req: Request<RequestBody>,
 	) -> impl Future<
 		Output = Result<
 			Response<hyper::body::Incoming>,
-			hyper::client::conn::TrySendError<Request<axum_core::body::Body>>,
+			hyper::client::conn::TrySendError<Request<RequestBody>>,
 		>,
 	> {
 		match self {
@@ -337,7 +332,7 @@ pub struct H2CapacityGuard<K: Key> {
 
 pub(crate) struct ReservedHttp2Connection {
 	pub(crate) info: Connected,
-	pub(crate) tx: hyper::client::conn::http2::SendRequest<axum_core::body::Body>,
+	pub(crate) tx: hyper::client::conn::http2::SendRequest<RequestBody>,
 	pub(crate) load: Arc<H2Load>,
 }
 
@@ -835,7 +830,7 @@ impl<K: Key> Pool<K> {
 					sent += 1;
 					if let Some(HttpConnection::Http2(h2)) = &next_conn {
 						// We need to make sure its actively tracked; if we hit this from the idle flow it may have been removed.
-						let _ = host.active_h2.ensure_tracked(h2);
+						host.active_h2.ensure_tracked(h2);
 					}
 				},
 				Err(Ok(mut e)) => {
@@ -991,18 +986,19 @@ impl<K: Key> Debug for Pooled<K> {
 impl<K: Key> Pooled<K> {}
 
 impl<K: Key> Pooled<K> {
-	pub(crate) fn into_guard(mut self) -> H2CapacityGuard<K> {
-		H2CapacityGuard {
-			value: self.value.take().map(|(k, v)| {
-				let HttpConnection::Http2(h2) = v else {
-					panic!("into_guard must be used on http2")
-				};
-				(k, h2.load)
-			}),
+	pub(crate) fn into_h2_parts(mut self) -> (ReservedHttp2Connection, H2CapacityGuard<K>) {
+		let (k, v) = self.value.take().expect("not dropped");
+		let HttpConnection::Http2(h2) = v else {
+			panic!("into_h2_parts must be used on http2")
+		};
+		let guard = H2CapacityGuard {
+			value: Some((k, h2.load.clone())),
 			pool: self.pool.clone(),
 			settings: self.settings.clone(),
-		}
+		};
+		(h2, guard)
 	}
+
 	pub fn is_reused(&self) -> bool {
 		self.is_reused
 	}
@@ -1098,7 +1094,6 @@ impl fmt::Display for Error {
 		f.write_str(match self {
 			Error::PoolDisabled => "pool is disabled",
 			Error::CheckedOutClosedValue => "checked out connection was closed",
-			// TODO see this too much
 			Error::CheckoutNoLongerWanted => "request was canceled",
 			Error::WaitingOnSharedFailedConnection => "shared wait failed",
 			Error::ConnectionDroppedWithoutCompletion => "connection dropped without completion",
@@ -2432,7 +2427,7 @@ mod tests {
 			.await
 			.expect("waiter should receive inserted connection")
 			.unwrap();
-		let guard = pooled.into_guard();
+		let (_c, guard) = pooled.into_h2_parts();
 
 		control.close().await;
 		drop(guard);

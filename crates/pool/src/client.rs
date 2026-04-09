@@ -160,12 +160,12 @@ where
 	/// # fn main() {}
 	/// ```
 	pub fn request(&self, req: Request<axum_core::body::Body>) -> ResponseFuture {
-		ResponseFuture::new(self.clone().send_request(req))
+		ResponseFuture::new(self.clone().send_request(req.map(RequestBody::new)))
 	}
 
 	async fn send_request(
 		self,
-		mut req: Request<axum_core::body::Body>,
+		mut req: Request<RequestBody>,
 	) -> Result<Response<axum_core::body::Body>, Error> {
 		// We may change URI so clone it to keep the original
 		let uri = req.uri().clone();
@@ -198,8 +198,8 @@ where
 
 	async fn try_send_request(
 		&self,
-		req: Request<axum_core::body::Body>,
-	) -> Result<Response<axum_core::body::Body>, TrySendError<axum_core::body::Body>> {
+		req: Request<RequestBody>,
+	) -> Result<Response<axum_core::body::Body>, TrySendError<RequestBody>> {
 		let (parts, body) = req.into_parts();
 
 		let mut pooled = self
@@ -244,38 +244,64 @@ where
 			authority_form(req.uri_mut());
 		}
 
-		let mut res = match pooled.try_send_request(req).await {
-			Ok(res) => res,
-			Err(mut err) => {
-				return if let Some(req) = err.take_message() {
-					Err(TrySendError::Retryable {
-						connection_reused: pooled.is_reused() || pooled.is_http2(),
-						error: e!(Canceled, err.into_error()).with_connect_info(pooled.conn_info().clone()),
-						req,
-					})
-				} else {
-					Err(TrySendError::Nope(
-						e!(SendRequest, err.into_error()).with_connect_info(pooled.conn_info().clone()),
-					))
-				};
-			},
-		};
-
-		// If the Connector included 'extra' info, add to Response...
-		if let Some(extra) = &pooled.conn_info().extra {
-			extra.set(res.extensions_mut());
-		}
-
 		let res = if pooled.is_http2() {
-			let guard = pooled.into_guard();
-			// Insert the guard into the response extensions... AND the body
-			// This ensures that its not dropped until both are done.
-			// Inserting into the response is a guard against the body being dropped before the stream is complete.
-			// This is still possible to drop both the response and the body, but less likely; if it does occur,
-			// the impact is that we attempt to send on a stream that is full, which will block until it has capacity.
-			// res.extensions_mut().insert(guard.clone());
-			res.map(|b| BodyLog::wrap(b, Some(guard)))
+			let (mut h2, guard) = pooled.into_h2_parts();
+
+			// Retries must not accumulate multiple stream guards on the same body.
+			req.body_mut().clear_keep_alive();
+			let shared_guard = ErasedH2Guard::new(Arc::new(guard));
+			req.body_mut().set_keep_alive(shared_guard.clone());
+
+			let mut res = match h2.tx.try_send_request(req).await {
+				Ok(res) => res,
+				Err(mut err) => {
+					return if let Some(mut req) = err.take_message() {
+						req.body_mut().clear_keep_alive();
+						Err(TrySendError::Retryable {
+							connection_reused: true,
+							error: e!(Canceled, err.into_error()).with_connect_info(h2.info.clone()),
+							req,
+						})
+					} else {
+						Err(TrySendError::Nope(
+							e!(SendRequest, err.into_error()).with_connect_info(h2.info.clone()),
+						))
+					};
+				},
+			};
+
+			// If the Connector included 'extra' info, add to Response...
+			if let Some(extra) = &h2.info.extra {
+				extra.set(res.extensions_mut());
+			}
+
+			// Keep the reservation alive with the response head as well, in case the
+			// body is split out and dropped before the stream is fully complete.
+			res.extensions_mut().insert(shared_guard.clone());
+			res.map(|b| BodyLog::wrap(b, Some(shared_guard)))
 		} else {
+			let mut res = match pooled.try_send_request(req).await {
+				Ok(res) => res,
+				Err(mut err) => {
+					return if let Some(req) = err.take_message() {
+						Err(TrySendError::Retryable {
+							connection_reused: pooled.is_reused() || pooled.is_http2(),
+							error: e!(Canceled, err.into_error()).with_connect_info(pooled.conn_info().clone()),
+							req,
+						})
+					} else {
+						Err(TrySendError::Nope(
+							e!(SendRequest, err.into_error()).with_connect_info(pooled.conn_info().clone()),
+						))
+					};
+				},
+			};
+
+			// If the Connector included 'extra' info, add to Response...
+			if let Some(extra) = &pooled.conn_info().extra {
+				extra.set(res.extensions_mut());
+			}
+
 			// when pooled is dropped, it will try to insert back into the
 			// pool. To delay that, spawn a future that completes once the
 			// sender is ready again.
@@ -378,14 +404,12 @@ where
 			.connect(super::connect::sealed::Internal, ext)
 			.map_err(|src| e!(Connect, src))
 			.await?;
-		// TODO: true-up our estimate
 		let connected = io.connected();
 		let is_h2 = (is_ver_h2 && connected.alpn == Alpn::None) || connected.alpn == Alpn::H2;
 
 		let cx = if is_h2 {
 			let (mut tx, conn) = self.h2_builder.handshake(io).await.map_err(Error::tx)?;
 
-			// TODO: this needs to actually check within the execution.
 			// Currently we do not allow exceeding the expected capacity (though it can be less than)
 			let expected = self.pool.settings.expected_http2_capacity;
 			let cur_max = std::cmp::min(conn.current_max_send_streams(), expected);
@@ -603,6 +627,72 @@ fn is_schema_secure(uri: &Uri) -> bool {
 		.scheme_str()
 		.map(|scheme_str| matches!(scheme_str, "wss" | "https"))
 		.unwrap_or_default()
+}
+
+#[derive(Clone)]
+pub(crate) struct ErasedH2Guard {
+	_inner: Arc<dyn Send + Sync>,
+}
+
+impl ErasedH2Guard {
+	fn new<K: Key>(guard: Arc<pool::H2CapacityGuard<K>>) -> Self {
+		Self { _inner: guard }
+	}
+}
+
+impl Debug for ErasedH2Guard {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_tuple("ErasedH2Guard").finish()
+	}
+}
+
+pin_project_lite::pin_project! {
+	#[must_use]
+	pub(crate) struct RequestBody {
+		#[pin]
+		body: axum_core::body::Body,
+		keep_alive: Option<ErasedH2Guard>,
+	}
+}
+
+impl RequestBody {
+	fn new(body: axum_core::body::Body) -> Self {
+		Self {
+			body,
+			keep_alive: None,
+		}
+	}
+
+	fn set_keep_alive(&mut self, keep_alive: ErasedH2Guard) {
+		self.keep_alive = Some(keep_alive);
+	}
+
+	fn clear_keep_alive(&mut self) {
+		let _ = self.keep_alive.take();
+	}
+}
+
+impl Body for RequestBody {
+	type Data = Bytes;
+	type Error = axum_core::Error;
+
+	#[inline]
+	fn poll_frame(
+		mut self: Pin<&mut Self>,
+		cx: &mut Context<'_>,
+	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+		self.as_mut().project().body.poll_frame(cx)
+	}
+
+	#[inline]
+	fn is_end_stream(&self) -> bool {
+		self.body.is_end_stream()
+	}
+
+	#[inline]
+	fn size_hint(&self) -> SizeHint {
+		self.body.size_hint()
+	}
 }
 
 pin_project_lite::pin_project! {
@@ -1103,6 +1193,12 @@ impl Builder {
 	/// The value must be no larger than `u32::MAX`.
 	pub fn http2_max_send_buf_size(&mut self, max: usize) -> &mut Self {
 		self.h2_builder.max_send_buf_size(max);
+		self
+	}
+
+	#[cfg(test)]
+	pub(crate) fn pool_expected_http2_capacity(&mut self, expected: usize) -> &mut Self {
+		self.pool_config.expected_http2_capacity = expected;
 		self
 	}
 

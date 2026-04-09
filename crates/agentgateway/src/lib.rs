@@ -243,7 +243,7 @@ mod defaults {
 		Duration::from_secs(10)
 	}
 	pub fn pool_idle_timeout() -> Duration {
-		Duration::from_secs(9)
+		Duration::from_secs(90)
 	}
 
 	pub fn max_buffer_size() -> usize {
