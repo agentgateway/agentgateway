@@ -747,8 +747,8 @@ pin_project_lite::pin_project! {
 }
 
 impl<B, D> DropBody<B, D> {
-	pub fn new(body: B, dropper: D) -> Self {
-		Self { body, dropper }
+	pub fn new(body: B, dropper: D) -> Body {
+		Body::new(Self { body, dropper })
 	}
 }
 

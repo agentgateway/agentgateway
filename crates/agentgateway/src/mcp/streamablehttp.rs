@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::http::{Request, Response};
+use crate::http::{DropBody, Request, Response};
 use crate::mcp::handler::RelayInputs;
 use crate::mcp::session::SessionManager;
 use crate::*;
@@ -124,7 +124,7 @@ impl StreamableHttpService {
 				trace!("cleaning up stateless session");
 				let _ = session.delete_session(part).await;
 			});
-			return response.map(|r| r.map(|b| HoldBody::wrap(b, tx)));
+			return response.map(|r| r.map(|b| DropBody::new(b, tx)));
 		}
 
 		let session_id = part
@@ -218,53 +218,4 @@ fn accepted_response() -> Response {
 		.status(StatusCode::ACCEPTED)
 		.body(crate::http::Body::empty())
 		.expect("valid response")
-}
-
-pin_project_lite::pin_project! {
-	/// HoldBody keep-alive some data (T) to RAII
-	#[must_use]
-	#[derive(Debug)]
-	struct HoldBody<B, T> {
-		#[pin]
-		body: B,
-		keep_alive: T,
-	}
-}
-
-impl<B, T> HoldBody<B, T> {
-	pub fn wrap(body: B, keep_alive: T) -> http::Body
-	where
-		T: Send + 'static,
-		B: Body<Data = Bytes> + Unpin + Send + 'static,
-		B::Error: Into<BoxError> + Debug,
-	{
-		axum_core::body::Body::new(HoldBody { body, keep_alive })
-	}
-}
-
-impl<B, T> Body for HoldBody<B, T>
-where
-	B: Body + Unpin,
-	<B as Body>::Error: std::fmt::Debug,
-{
-	type Data = B::Data;
-	type Error = B::Error;
-
-	#[inline]
-	fn poll_frame(
-		mut self: Pin<&mut Self>,
-		cx: &mut Context<'_>,
-	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-		self.as_mut().project().body.poll_frame(cx)
-	}
-
-	#[inline]
-	fn is_end_stream(&self) -> bool {
-		self.body.is_end_stream()
-	}
-
-	#[inline]
-	fn size_hint(&self) -> SizeHint {
-		self.body.size_hint()
-	}
 }
