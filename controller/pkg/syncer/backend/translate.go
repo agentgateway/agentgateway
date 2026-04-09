@@ -442,6 +442,20 @@ func translateLLMProvider(llm *agentgateway.LLMProvider, providerName string) (*
 				ApiVersion: llm.AzureOpenAI.ApiVersion,
 			},
 		}
+	} else if llm.Azure != nil {
+		resourceType := api.AIBackend_OPEN_AI
+		if llm.Azure.ResourceType == agentgateway.AzureResourceTypeFoundry {
+			resourceType = api.AIBackend_FOUNDRY
+		}
+		provider.Provider = &api.AIBackend_Provider_Azure{
+			Azure: &api.AIBackend_Azure{
+				ResourceName: string(llm.Azure.ResourceName),
+				ResourceType: resourceType,
+				Model:        llm.Azure.Model,
+				ApiVersion:   llm.Azure.ApiVersion,
+				ProjectName:  llm.Azure.ProjectName,
+			},
+		}
 	} else if llm.Anthropic != nil {
 		provider.Provider = &api.AIBackend_Provider_Anthropic{
 			Anthropic: &api.AIBackend_Anthropic{

@@ -185,7 +185,7 @@ type NamedLLMProvider struct {
 }
 
 // LLMProvider specifies the target large language model provider that the backend should route requests to.
-// +kubebuilder:validation:ExactlyOneOf=openai;azureopenai;anthropic;gemini;vertexai;bedrock
+// +kubebuilder:validation:ExactlyOneOf=openai;azureopenai;azure;anthropic;gemini;vertexai;bedrock
 // +kubebuilder:validation:XValidation:rule="has(self.host) || has(self.port) ? has(self.host) && has(self.port) : true",message="both host and port must be set together"
 // +kubebuilder:validation:XValidation:rule="!(has(self.path) && has(self.pathPrefix))",message="path and pathPrefix are mutually exclusive"
 // +kubebuilder:validation:XValidation:rule="has(self.pathPrefix) ? has(self.host) : true",message="pathPrefix requires host to be set"
@@ -197,6 +197,11 @@ type LLMProvider struct {
 	// Azure OpenAI provider
 	// +optional
 	AzureOpenAI *AzureOpenAIConfig `json:"azureopenai,omitempty"`
+
+	// Azure provider with resource-based configuration.
+	// Supports both Azure OpenAI and Azure AI Foundry resource types.
+	// +optional
+	Azure *AzureConfig `json:"azure,omitempty"`
 
 	// Anthropic provider
 	// +optional
@@ -267,6 +272,46 @@ type AzureOpenAIConfig struct {
 	// If unset, defaults to `v1`.
 	// +optional
 	ApiVersion *TinyString `json:"apiVersion,omitempty"`
+}
+
+// AzureResourceType specifies the type of Azure endpoint.
+// +kubebuilder:validation:Enum=openAI;foundry
+type AzureResourceType string
+
+const (
+	// AzureResourceTypeOpenAI uses the Azure OpenAI endpoint: {resourceName}.openai.azure.com
+	AzureResourceTypeOpenAI AzureResourceType = "openAI"
+	// AzureResourceTypeFoundry uses the Azure AI Foundry endpoint: {resourceName}-resource.services.ai.azure.com
+	AzureResourceTypeFoundry AzureResourceType = "foundry"
+)
+
+// AzureConfig settings for Azure AI backends, supporting both Azure OpenAI and Azure AI Foundry.
+// +kubebuilder:validation:XValidation:message="projectName is required when resourceType is foundry",rule="self.resourceType != 'foundry' || has(self.projectName)"
+type AzureConfig struct {
+	// The Azure resource name used to construct the endpoint host.
+	// For OpenAI: {resourceName}.openai.azure.com
+	// For Foundry: {resourceName}-resource.services.ai.azure.com
+	// +required
+	ResourceName ShortString `json:"resourceName"`
+
+	// The type of Azure endpoint. Determines the host suffix.
+	// +required
+	ResourceType AzureResourceType `json:"resourceType"`
+
+	// Optional: Override the model name, such as `gpt-4o-mini`.
+	// If unset, the model name is taken from the request.
+	// +optional
+	Model *ShortString `json:"model,omitempty"`
+
+	// The version of the Azure OpenAI API to use.
+	// If unset, defaults to `v1`.
+	// +optional
+	ApiVersion *TinyString `json:"apiVersion,omitempty"`
+
+	// The Foundry project name, required when `resourceType` is `foundry`.
+	// Used to construct paths: /api/projects/{projectName}/openai/v1/...
+	// +optional
+	ProjectName *ShortString `json:"projectName,omitempty"`
 }
 
 // GeminiConfig settings for the [Gemini](https://ai.google.dev/gemini-api/docs) LLM provider.

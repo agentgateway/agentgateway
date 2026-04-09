@@ -825,6 +825,22 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 									cached_cred: Default::default(),
 								})
 							},
+							Some(proto::agent::ai_backend::provider::Provider::Azure(azure)) => {
+								let resource_type = match azure.resource_type() {
+									proto::agent::ai_backend::AzureResourceType::Foundry => {
+										llm::azure::AzureResourceType::Foundry
+									},
+									_ => llm::azure::AzureResourceType::OpenAI,
+								};
+								AIProvider::Azure(llm::azure::Provider {
+									model: azure.model.as_deref().map(strng::new),
+									resource_name: strng::new(&azure.resource_name),
+									resource_type,
+									api_version: azure.api_version.as_deref().map(strng::new),
+									project_name: azure.project_name.as_deref().map(strng::new),
+									cached_cred: Default::default(),
+								})
+							},
 							None => {
 								return Err(ProtoError::Generic(format!(
 									"AI backend provider at index {provider_idx} is required"
