@@ -1099,6 +1099,15 @@ pub async fn build_transport(
 	} else {
 		ApplicationTransport::Plaintext
 	};
+	// Ingress-to-waypoint HBONE: connect physically to the waypoint, with service VIP as authority.
+	if let Some(iw) = &backend_call.ingress_waypoint {
+		return Ok(Transport::Hbone(
+			app_transport,
+			iw.waypoint_identities.clone(),
+			Some(iw.waypoint_dst),
+		));
+	}
+
 	if let Some(tun) = backend_tunnel {
 		let backend = super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?;
 		let pols = crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &[], None);
@@ -1188,7 +1197,7 @@ pub async fn build_transport(
 		},
 		(Some((InboundProtocol::HBONE, idents)), Some(ca)) => {
 			if ca.get_identity().await.is_ok() {
-				Transport::Hbone(app_transport, idents.clone())
+				Transport::Hbone(app_transport, idents.clone(), None)
 			} else {
 				warn!("wanted TLS but CA is not available");
 				app_transport.into()
@@ -1362,6 +1371,7 @@ async fn make_backend_call(
 				http_version_override: None,
 				transport_override: None,
 				network_gateway: None,
+				ingress_waypoint: None,
 			}
 		},
 		Backend::Service(svc, port) => build_service_call(
@@ -1379,6 +1389,7 @@ async fn make_backend_call(
 			transport_override: None,
 			network_gateway: None,
 			backend_policies: policies,
+			ingress_waypoint: None,
 		},
 		Backend::Aws(_, config) => {
 			http::modify_req_uri(&mut req, |uri| {
@@ -1408,6 +1419,7 @@ async fn make_backend_call(
 				http_version_override: None,
 				transport_override: None,
 				network_gateway: None,
+				ingress_waypoint: None,
 			}
 		},
 		Backend::Dynamic(_, _) => {
@@ -1426,6 +1438,7 @@ async fn make_backend_call(
 				transport_override: None,
 				network_gateway: None,
 				backend_policies: policies,
+				ingress_waypoint: None,
 			}
 		},
 		Backend::MCP(name, backend) => {
@@ -1725,6 +1738,36 @@ pub fn build_service_call(
 	request_host: Option<&str>,
 ) -> Result<BackendCall, ProxyError> {
 	let port = *port;
+
+	// When operating as an ingress gateway with ingress-use-waypoint, route through the waypoint.
+	// The waypoint handles endpoint selection, policy, and load balancing.
+	// We check that this gateway is NOT the waypoint for the service — the waypoint itself should
+	// not redirect traffic back to itself.
+	if svc.ingress_use_waypoint && !is_self_the_waypoint(inputs, svc) {
+		if let Some(ingress_waypoint) = build_ingress_waypoint_routing(inputs, svc, port) {
+			let http_version_override = if svc.port_is_http2(port) {
+				Some(::http::Version::HTTP_2)
+			} else if svc.port_is_http1(port) {
+				Some(::http::Version::HTTP_11)
+			} else {
+				None
+			};
+			tracing::debug!(
+				service = %svc.hostname,
+				waypoint_dst = %ingress_waypoint.waypoint_dst,
+				"routing ingress traffic through waypoint"
+			);
+			return Ok(BackendCall {
+				target: Target::Address(ingress_waypoint.service_vip_addr),
+				http_version_override,
+				transport_override: None,
+				network_gateway: None,
+				backend_policies,
+				ingress_waypoint: Some(ingress_waypoint),
+			});
+		}
+		tracing::warn!(service = %svc.hostname, "ingress-use-waypoint is set but waypoint not reachable, routing directly");
+	}
 	let workloads = &inputs.stores.read_discovery().workloads;
 	let (ep, handle, wl) = svc
 		.endpoints
@@ -1828,6 +1871,143 @@ pub fn build_service_call(
 		transport_override: Some((wl.protocol, workload_and_service_sans(&wl, svc))),
 		network_gateway,
 		backend_policies,
+		ingress_waypoint: None,
+	})
+}
+
+/// Routing information for an ingress gateway routing through a waypoint.
+#[derive(Debug, Clone)]
+pub struct IngressWaypointRouting {
+	/// Service VIP:port used as the HBONE CONNECT authority so the waypoint can identify the service.
+	pub service_vip_addr: SocketAddr,
+	/// Physical HBONE destination: waypoint_ip:hbone_mtls_port
+	pub waypoint_dst: SocketAddr,
+	/// Expected SPIFFE identities of the waypoint
+	pub waypoint_identities: Vec<Identity>,
+}
+
+/// Returns true if this gateway instance is the waypoint for the given service.
+/// Used to prevent waypoints from redirecting traffic back to themselves.
+fn is_self_the_waypoint(inputs: &ProxyInputs, svc: &Service) -> bool {
+	let Some(self_id) = inputs.cfg.self_addr.as_ref() else {
+		return false;
+	};
+	let Some(wp) = svc.waypoint.as_ref() else {
+		return false;
+	};
+	match &wp.destination {
+		types::discovery::gatewayaddress::Destination::Hostname(nh) => self_id.matches_hostname(nh),
+		types::discovery::gatewayaddress::Destination::Address(addr) => {
+			let stores = inputs.stores.clone();
+			self_id.matches_address(addr, |ns, hostname| {
+				let nh = types::discovery::NamespacedHostname {
+					namespace: ns.clone(),
+					hostname: hostname.clone(),
+				};
+				stores
+					.read_discovery()
+					.services
+					.get_by_namespaced_host(&nh)
+					.map(|s| s.vips.clone())
+			})
+		},
+	}
+}
+
+/// Builds ingress-to-waypoint routing info for a service.
+/// Returns `None` if the waypoint is not reachable or its identity is unknown.
+fn build_ingress_waypoint_routing(
+	inputs: &ProxyInputs,
+	svc: &Service,
+	port: u16,
+) -> Option<IngressWaypointRouting> {
+	let wp = svc.waypoint.as_ref()?;
+
+	// Get waypoint physical address — resolve hostname to VIP if needed
+	let waypoint_ip = match &wp.destination {
+		types::discovery::gatewayaddress::Destination::Address(net_addr) => net_addr.address,
+		types::discovery::gatewayaddress::Destination::Hostname(nh) => {
+			let discovery = inputs.stores.read_discovery();
+			let wp_svc = discovery.services.get_by_namespaced_host(nh).or_else(|| {
+				tracing::warn!(
+					service = %svc.hostname,
+					waypoint = %nh,
+					"waypoint service not found for ingress-use-waypoint"
+				);
+				None
+			})?;
+			wp_svc
+				.vips
+				.iter()
+				.find(|v| v.network == inputs.cfg.network)
+				.or_else(|| wp_svc.vips.first())
+				.map(|v| v.address)
+				.or_else(|| {
+					tracing::warn!(
+						service = %svc.hostname,
+						waypoint = %nh,
+						"waypoint service has no VIPs for ingress-use-waypoint"
+					);
+					None
+				})?
+		},
+	};
+	let waypoint_dst = SocketAddr::new(waypoint_ip, wp.hbone_mtls_port);
+
+	// Get SPIFFE identity for mTLS with the waypoint.
+	// waypoint_ip may be a pod IP (direct) or a service ClusterIP (hostname-resolved).
+	// Try workload lookup first (pod IP case), then fall back to service SANs (VIP case).
+	let net_addr = types::discovery::NetworkAddress {
+		network: inputs.cfg.network.clone(),
+		address: waypoint_ip,
+	};
+	let waypoint_identities = {
+		let discovery = inputs.stores.read_discovery();
+		if let Some(wl) = discovery.workloads.find_address(&net_addr) {
+			vec![wl.identity()]
+		} else if let Some(wp_svc) = discovery.services.get_by_vip(&net_addr) {
+			// waypoint_ip is a service VIP — get identity from the backing workload
+			let identity = wp_svc.endpoints.iter().iter().find_map(|(ep, _)| {
+				discovery
+					.workloads
+					.find_uid(&ep.workload_uid)
+					.map(|wl| wl.identity())
+			});
+			match identity {
+				Some(id) => vec![id],
+				None => {
+					tracing::warn!(
+						service = %svc.hostname,
+						waypoint_ip = %waypoint_ip,
+						"waypoint service has no endpoints, cannot determine mTLS identity for ingress-use-waypoint"
+					);
+					return None;
+				},
+			}
+		} else {
+			tracing::warn!(
+				service = %svc.hostname,
+				waypoint_ip = %waypoint_ip,
+				"waypoint not found (not a workload or service VIP), cannot determine identity for ingress-use-waypoint"
+			);
+			return None;
+		}
+	};
+
+	// Use the service VIP as the HBONE CONNECT authority.
+	// The AGW waypoint inbound handler looks up the service by VIP IP, so we must send an IP-based
+	// authority (hostname-based CONNECT is not supported by the AGW waypoint).
+	let service_vip_addr = svc
+		.vips
+		.iter()
+		.find(|v| v.network == inputs.cfg.network)
+		.or_else(|| svc.vips.first())
+		.map(|v| SocketAddr::new(v.address, port))?;
+
+	Some(IngressWaypointRouting {
+		service_vip_addr,
+		waypoint_dst,
+		waypoint_identities,
 	})
 }
 
@@ -2051,6 +2231,9 @@ pub struct BackendCall {
 	pub transport_override: Option<(InboundProtocol, Vec<Identity>)>,
 	pub network_gateway: Option<(GatewayAddress, Identity)>, /* For double hbone: (gateway_address, gateway_identity) */
 	pub backend_policies: BackendPolicies,
+	/// When set, send via HBONE to a waypoint (ingress-use-waypoint path).
+	/// `target` holds the service VIP:port used as the HBONE CONNECT authority.
+	pub ingress_waypoint: Option<IngressWaypointRouting>,
 }
 
 #[derive(Debug, Default)]

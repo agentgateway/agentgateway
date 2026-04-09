@@ -1632,6 +1632,7 @@ async fn test_hostname_resolution_logic() {
 			),
 			hbone_mtls_port: 15008,
 		}),
+		ingress_use_waypoint: false,
 		load_balancer: None,
 		ip_families: None,
 	};
@@ -1680,6 +1681,7 @@ async fn test_hostname_resolution_logic() {
 		endpoints: Default::default(),
 		subject_alt_names: Default::default(),
 		waypoint: None,
+		ingress_use_waypoint: false,
 		load_balancer: None,
 		ip_families: None,
 	};

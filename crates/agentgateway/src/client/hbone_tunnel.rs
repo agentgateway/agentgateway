@@ -15,6 +15,7 @@ pub async fn handshake(
 	mut hbone_pool: agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>,
 	ep: SocketAddr,
 	identities: Vec<Identity>,
+	waypoint_dst: Option<SocketAddr>,
 ) -> Result<Socket, Error> {
 	let uri = Uri::builder()
 		.scheme(Scheme::HTTPS)
@@ -22,6 +23,7 @@ pub async fn handshake(
 		.path_and_query("/")
 		.build()
 		.expect("static builder must be accepted");
+	let physical_dst = waypoint_dst.unwrap_or_else(|| SocketAddr::from((ep.ip(), 15008)));
 	tracing::debug!("will use HBONE");
 	let req = ::http::Request::builder()
 		.uri(uri)
@@ -32,7 +34,7 @@ pub async fn handshake(
 
 	let pool_key = Box::new(WorkloadKey {
 		dst_id: identities,
-		dst: SocketAddr::from((ep.ip(), 15008)),
+		dst: physical_dst,
 	});
 
 	let upgraded = Box::pin(hbone_pool.send_request_pooled(&pool_key, req))

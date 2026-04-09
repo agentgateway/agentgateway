@@ -93,6 +93,10 @@ message Service {
   // canonical marks this Service as taking priority during hostname lookups,
   // when there is not a match in the namespace of the client.
   bool canonical = 11;
+
+  // ingress_use_waypoint indicates that ingress gateways should route traffic to this service
+  // through its waypoint proxy rather than directly to endpoints.
+  bool ingress_use_waypoint = 12;
 }
 
 enum IPFamilies {
