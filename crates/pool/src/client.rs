@@ -308,15 +308,19 @@ where
 			//
 			// This *should* only be once the related `Connection` has polled
 			// for a new request to start.
-			let on_idle = poll_fn(move |cx| {
-				let HttpConnection::Http1(h1) = pooled.deref_mut() else {
-					panic!("asserted http1 above")
-				};
-				h1.tx.poll_ready(cx)
-			})
-			.map(move |_| ());
+			//
+			// If its already ready, then we don't need to worry about it.
+			if ! pooled.is_open() {
+				let on_idle = poll_fn(move |cx| {
+					let HttpConnection::Http1(h1) = pooled.deref_mut() else {
+						panic!("asserted http1 above")
+					};
+					h1.tx.poll_ready(cx)
+				})
+				.map(move |_| ());
 
-			self.exec.execute(on_idle);
+				self.exec.execute(on_idle);
+			}
 
 			res.map(|b| BodyLog::wrap(b, None::<()>))
 		};
