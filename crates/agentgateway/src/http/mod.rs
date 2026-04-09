@@ -216,6 +216,7 @@ pub use ::http::uri::{Authority, Scheme};
 pub use ::http::{
 	HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header, status, uri,
 };
+use axum_core::BoxError;
 use bytes::Bytes;
 use cel::Value;
 use http::uri::PathAndQuery;
@@ -746,16 +747,19 @@ pin_project_lite::pin_project! {
 	}
 }
 
-impl<B, D> DropBody<B, D> {
+impl<B, D> DropBody<B, D>
+where
+	D: Send + 'static,
+	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
+	B::Error: Into<BoxError>,
+{
+	#[allow(clippy::new_ret_no_self)]
 	pub fn new(body: B, dropper: D) -> Body {
 		Body::new(Self { body, dropper })
 	}
 }
 
-impl<B: http_body::Body + Debug + Unpin, D> http_body::Body for DropBody<B, D>
-where
-	B::Data: Debug,
-{
+impl<B: http_body::Body + Unpin, D> http_body::Body for DropBody<B, D> {
 	type Data = B::Data;
 	type Error = B::Error;
 
