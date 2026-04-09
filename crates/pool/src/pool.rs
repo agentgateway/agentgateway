@@ -2,10 +2,11 @@ use hashbrown::HashMap;
 use hashbrown::hash_map::EntryRef;
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 use std::collections::VecDeque;
+use std::collections::hash_map::DefaultHasher;
 use std::error::Error as StdError;
 use std::fmt::{self, Debug, Formatter};
 use std::future::Future;
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -26,11 +27,63 @@ use http::{Request, Response};
 use hyper::rt::{Sleep, Timer as _};
 use tracing::{debug, trace};
 
+// per https://datatracker.ietf.org/doc/html/rfc9113#section-6.5.2-2.6.1, servers are expected to
+// but not required to set this to at least 100. In practice, a wide range of clients will have failures
+// with settings less than this, so it seems a safe default.
 pub const DEFAULT_EXPECTED_HTTP2_CAPACITY: usize = 100;
 
+// Fairly arbitrary number; we may want to explore tuning this.
+const SHARD_COUNT: usize = 16;
+
+type HostMap<K> = HashMap<K, HostPool<K>>;
+
+/// Shard the host map to avoid one mega-mutex contention.
+/// While under extremely high concurrency, this shows ~20% improvement in throughput and is pretty low cost.
+/// Note: a key is deterministically in a single shard; this does not increase the number of outbound connections.
+#[derive(Debug)]
+struct HostShards<K: Key> {
+	shards: [Mutex<HostMap<K>>; SHARD_COUNT],
+}
+
+impl<K: Key> HostShards<K> {
+	fn new() -> Self {
+		Self {
+			shards: std::array::from_fn(|_| Mutex::new(HashMap::new())),
+		}
+	}
+
+	fn shard_index(key: &K) -> usize {
+		key.shard() % SHARD_COUNT
+	}
+
+	fn lock_shard(&self, key: &K) -> MutexGuard<'_, HostMap<K>> {
+		self.shards[Self::shard_index(key)].lock()
+	}
+
+	fn lock_host(&self, key: &K) -> MappedMutexGuard<'_, HostPool<K>> {
+		MutexGuard::map(self.lock_shard(key), |hosts| match hosts.entry_ref(key) {
+			EntryRef::Occupied(entry) => entry.into_mut(),
+			EntryRef::Vacant(entry) => {
+				entry.insert_with_key(key.clone(), HostPool::new(key.expected_capacity()))
+			},
+		})
+	}
+
+	fn clear_expired(&self, settings: &PoolSettings) {
+		let now = settings.timer.now();
+		for shard in &self.shards {
+			let mut hosts = shard.lock();
+			Pool::<K>::clear_expired(settings, now, &mut hosts);
+		}
+	}
+}
+
+/// Pool is a connection pool for a set of hosts.
+/// Each host shares the same top level settings, and individual per-K entries maintain state for
+/// each host under mutex.
 #[derive(Clone, Debug)]
 pub struct Pool<K: Key> {
-	hosts: Arc<Mutex<HashMap<K, HostPool<K>>>>,
+	hosts: Arc<HostShards<K>>,
 	pub settings: Arc<PoolSettings>,
 }
 
@@ -46,10 +99,8 @@ pub struct PoolSettings {
 
 impl<K: Key> Pool<K> {
 	/// This should *only* be called by the IdleTask
-	fn clear_expired(settings: &PoolSettings, hosts: &mut HashMap<K, HostPool<K>>) {
+	fn clear_expired(settings: &PoolSettings, now: Instant, hosts: &mut HostMap<K>) {
 		let dur = settings.timeout.expect("interval assumes timeout");
-
-		let now = settings.timer.now();
 
 		hosts.retain(|key, host| {
 			host.idle.retain(|entry| {
@@ -74,19 +125,11 @@ impl<K: Key> Pool<K> {
 			!empty
 		});
 	}
-	fn lock_hosts<'a>(
-		hosts: &'a Mutex<HashMap<K, HostPool<K>>>,
-		k: &K,
-	) -> MappedMutexGuard<'a, HostPool<K>> {
-		MutexGuard::map(hosts.lock(), |l| match l.entry_ref(k) {
-			EntryRef::Occupied(entry) => entry.into_mut(),
-			EntryRef::Vacant(entry) => {
-				entry.insert_with_key(k.clone(), HostPool::new(k.expected_capacity()))
-			},
-		})
+	fn lock_hosts<'a>(hosts: &'a HostShards<K>, k: &K) -> MappedMutexGuard<'a, HostPool<K>> {
+		hosts.lock_host(k)
 	}
 	fn host(&self, k: &K) -> MappedMutexGuard<'_, HostPool<K>> {
-		Pool::<K>::lock_hosts(&self.hosts, k)
+		Pool::<K>::lock_hosts(self.hosts.as_ref(), k)
 	}
 }
 
@@ -102,6 +145,12 @@ pub enum ExpectedCapacity {
 
 pub trait Key: Eq + Hash + Clone + Debug + Unpin + Send + Sync + 'static {
 	fn expected_capacity(&self) -> ExpectedCapacity;
+
+	fn shard(&self) -> usize {
+		let mut hasher = DefaultHasher::new();
+		self.hash(&mut hasher);
+		hasher.finish() as usize
+	}
 }
 
 #[derive(Debug)]
@@ -326,7 +375,7 @@ impl HttpConnection {
 #[derive(Debug)]
 pub struct H2CapacityGuard<K: Key> {
 	value: Option<(K, Arc<H2Load>)>,
-	pool: Weak<Mutex<HashMap<K, HostPool<K>>>>,
+	pool: Weak<HostShards<K>>,
 	settings: Arc<PoolSettings>,
 }
 
@@ -441,7 +490,7 @@ impl<K: Key> HostPool<K> {
 	fn return_h2_stream(
 		&mut self,
 		settings: Arc<PoolSettings>,
-		pool: Arc<Mutex<HashMap<K, HostPool<K>>>>,
+		pool: Arc<HostShards<K>>,
 		k: K,
 		load: Arc<H2Load>,
 	) {
@@ -473,7 +522,7 @@ impl<K: Key> HostPool<K> {
 	fn return_connection(
 		&mut self,
 		settings: Arc<PoolSettings>,
-		pool: Arc<Mutex<HashMap<K, HostPool<K>>>>,
+		pool: Arc<HostShards<K>>,
 		k: K,
 		value: HttpConnection,
 	) {
@@ -564,7 +613,7 @@ impl<K: Key> HostPool<K> {
 	pub fn return_idle(
 		&mut self,
 		settings: Arc<PoolSettings>,
-		pool: Arc<Mutex<HashMap<K, HostPool<K>>>>,
+		pool: Arc<HostShards<K>>,
 		key: K,
 		conn: HttpConnection,
 	) {
@@ -617,7 +666,7 @@ impl<K: Key> Pool<K> {
 		let timer = Timer::new(timer);
 
 		Pool {
-			hosts: Arc::new(Mutex::new(HashMap::new())),
+			hosts: Arc::new(HostShards::new()),
 			settings: Arc::new(PoolSettings {
 				idle_interval_spawned: AtomicBool::new(false),
 				max_idle_per_host: config.max_idle_per_host,
@@ -640,7 +689,7 @@ pub(crate) struct WaitForConnection<K: Key> {
 struct ShouldConnectInner<K: Key> {
 	expected_capacity: usize,
 	key: K,
-	pool: Weak<Mutex<HashMap<K, HostPool<K>>>>,
+	pool: Weak<HostShards<K>>,
 }
 
 #[derive(Debug)]
@@ -654,7 +703,7 @@ impl<K: Key> Drop for ShouldConnect<K> {
 			return;
 		};
 		if let Some(pool) = inner.pool.upgrade() {
-			let mut hosts = Pool::lock_hosts(&pool, &inner.key);
+			let mut hosts = Pool::lock_hosts(pool.as_ref(), &inner.key);
 			hosts.forget_pending_connection(inner.key, inner.expected_capacity, None, false);
 		}
 	}
@@ -763,10 +812,7 @@ impl<K: Key> Pool<K> {
 		}
 	}
 
-	fn ensure_idle_interval(
-		pool: &Arc<Mutex<HashMap<K, HostPool<K>>>>,
-		settings: &Arc<PoolSettings>,
-	) {
+	fn ensure_idle_interval(pool: &Arc<HostShards<K>>, settings: &Arc<PoolSettings>) {
 		let Some(duration) = settings.timeout else {
 			return;
 		};
@@ -792,7 +838,7 @@ impl<K: Key> Pool<K> {
 		key: K,
 		mut capacity: usize,
 		host: &mut HostPool<K>,
-		pool: &Arc<Mutex<HashMap<K, HostPool<K>>>>,
+		pool: &Arc<HostShards<K>>,
 		settings: &Arc<PoolSettings>,
 		original_con: HttpConnection,
 	) {
@@ -970,7 +1016,7 @@ impl<'a, K: Debug> IdlePopper<'a, K> {
 pub(crate) struct Pooled<K: Key> {
 	value: Option<(K, HttpConnection)>,
 	is_reused: bool,
-	pool: Weak<Mutex<HashMap<K, HostPool<K>>>>,
+	pool: Weak<HostShards<K>>,
 	settings: Arc<PoolSettings>,
 }
 
@@ -1044,7 +1090,7 @@ impl<K: Key> Drop for Pooled<K> {
 			trace!("pool dropped, dropping pooled ({:?})", k);
 			return;
 		};
-		let mut hosts = Pool::lock_hosts(&pool, &k);
+		let mut hosts = Pool::lock_hosts(pool.as_ref(), &k);
 		if value.is_open() {
 			trace!(key=?k, "returning connection to pool");
 			hosts.return_connection(self.settings.clone(), pool.clone(), k, value);
@@ -1067,7 +1113,7 @@ impl<K: Key> Drop for H2CapacityGuard<K> {
 			trace!("pool dropped, dropping pooled ({:?})", k);
 			return;
 		};
-		let mut hosts = Pool::lock_hosts(&pool, &k);
+		let mut hosts = Pool::lock_hosts(pool.as_ref(), &k);
 		hosts.return_h2_stream(self.settings.clone(), pool.clone(), k, value);
 	}
 }
@@ -1132,7 +1178,7 @@ pin_project_lite::pin_project! {
 		duration: Duration,
 		deadline: Instant,
 		fut: Pin<Box<dyn Sleep>>,
-		pool: Weak<Mutex<HashMap<K, HostPool<K>>>>,
+		pool: Weak<HostShards<K>>,
 		settings: Arc<PoolSettings>,
 	}
 }
@@ -1154,9 +1200,8 @@ impl<K: Key> Future for IdleTask<K> {
 			*this.fut = this.timer.sleep_until(*this.deadline);
 
 			if let Some(inner) = this.pool.upgrade() {
-				let mut l = inner.lock();
 				trace!("idle interval checking for expired");
-				Pool::clear_expired(this.settings, &mut l);
+				inner.clear_expired(this.settings.as_ref());
 				continue;
 			}
 			trace!("pool closed, canceling idle interval");
@@ -2466,7 +2511,7 @@ mod tests {
 		drop(pooled2);
 
 		{
-			let hosts = pool.hosts.lock();
+			let hosts = pool.hosts.lock_shard(&key);
 			let host = hosts
 				.get(&key)
 				.expect("host entry should exist before cleanup");

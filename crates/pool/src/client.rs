@@ -310,7 +310,7 @@ where
 			// for a new request to start.
 			//
 			// If its already ready, then we don't need to worry about it.
-			if ! pooled.is_open() {
+			if !pooled.is_open() {
 				let on_idle = poll_fn(move |cx| {
 					let HttpConnection::Http1(h1) = pooled.deref_mut() else {
 						panic!("asserted http1 above")

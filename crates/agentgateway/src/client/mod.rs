@@ -186,6 +186,13 @@ impl agent_pool::pool::Key for PoolKey {
 			},
 		}
 	}
+
+	fn shard(&self) -> usize {
+		match self.1.ip() {
+			std::net::IpAddr::V4(addr) => addr.octets()[3] as usize,
+			std::net::IpAddr::V6(addr) => addr.segments()[7] as usize,
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy)]
