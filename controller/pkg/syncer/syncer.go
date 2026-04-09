@@ -455,7 +455,12 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 
 	// Compose with plugin-provided parent resolvers.
 	if ext := s.agwPlugins.AddResourceExtension; ext != nil && len(ext.ParentResolvers) > 0 {
-		resolvers := append([]translator.ParentResolver{routeParents}, ext.ParentResolvers...)
+		resolvers := []translator.ParentResolver{routeParents}
+		for _, r := range ext.ParentResolvers {
+			if r != nil {
+				resolvers = append(resolvers, r)
+			}
+		}
 		routeParents = &translator.CompositeParentResolver{Resolvers: resolvers}
 	}
 

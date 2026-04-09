@@ -40,7 +40,11 @@ func MergePlugins(plug ...AgwPlugin) AgwPlugin {
 			if p.AddResourceExtension.GatewayStatuses != nil {
 				ret.AddResourceExtension.GatewayStatuses = p.AddResourceExtension.GatewayStatuses
 			}
-			ret.AddResourceExtension.ParentResolvers = append(ret.AddResourceExtension.ParentResolvers, p.AddResourceExtension.ParentResolvers...)
+			for _, r := range p.AddResourceExtension.ParentResolvers {
+				if r != nil {
+					ret.AddResourceExtension.ParentResolvers = append(ret.AddResourceExtension.ParentResolvers, r)
+				}
+			}
 		}
 	}
 	return ret
