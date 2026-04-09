@@ -732,6 +732,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptCaching.cacheMessages`|boolean||
 |`binds[].listeners[].routes[].policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].policies.ai.promptCaching.minTokens`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`binds[].listeners[].routes[].policies.ai.routes`|object||
 |`binds[].listeners[].routes[].policies.backendTLS`|object|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.backendTLS.cert`|string||
@@ -893,6 +894,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].entries[].key`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].entries[].value`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].type`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.failureMode`|string|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`binds[].listeners[].routes[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`binds[].listeners[].routes[].policies.jwtAuth.mode`|string||
@@ -912,6 +914,21 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks.url`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`binds[].listeners[].routes[].policies.oidc`|object|Authenticate incoming browser requests with OIDC authorization code flow.|
+|`binds[].listeners[].routes[].policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
+|`binds[].listeners[].routes[].policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
+|`binds[].listeners[].routes[].policies.oidc.discovery.file`|string||
+|`binds[].listeners[].routes[].policies.oidc.discovery.url`|string||
+|`binds[].listeners[].routes[].policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
+|`binds[].listeners[].routes[].policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
+|`binds[].listeners[].routes[].policies.oidc.tokenEndpointAuth`|string|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.|
+|`binds[].listeners[].routes[].policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
+|`binds[].listeners[].routes[].policies.oidc.jwks.file`|string||
+|`binds[].listeners[].routes[].policies.oidc.jwks.url`|string||
+|`binds[].listeners[].routes[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
+|`binds[].listeners[].routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`binds[].listeners[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
+|`binds[].listeners[].routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`binds[].listeners[].routes[].policies.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|object|.htpasswd file contents/reference|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.file`|string||
@@ -2000,6 +2017,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.cacheMessages`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.minTokens`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.routes`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers`|[]object||
@@ -2697,6 +2715,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessages`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.minTokens`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.routes`|object||
 |`binds[].listeners[].routes[].backends[].aws`|object||
 |`binds[].listeners[].routes[].backends[].aws.agentCore`|object||
@@ -3372,6 +3391,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheMessages`|boolean||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.minTokens`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.routes`|object||
 |`binds[].listeners[].tcpRoutes`|[]object||
 |`binds[].listeners[].tcpRoutes[].name`|string||
@@ -3417,6 +3437,21 @@
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].policies`|object||
+|`binds[].listeners[].policies.oidc`|object|Authenticate incoming browser requests with OIDC authorization code flow.|
+|`binds[].listeners[].policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
+|`binds[].listeners[].policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
+|`binds[].listeners[].policies.oidc.discovery.file`|string||
+|`binds[].listeners[].policies.oidc.discovery.url`|string||
+|`binds[].listeners[].policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
+|`binds[].listeners[].policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
+|`binds[].listeners[].policies.oidc.tokenEndpointAuth`|string|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.|
+|`binds[].listeners[].policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
+|`binds[].listeners[].policies.oidc.jwks.file`|string||
+|`binds[].listeners[].policies.oidc.jwks.url`|string||
+|`binds[].listeners[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
+|`binds[].listeners[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`binds[].listeners[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
+|`binds[].listeners[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`binds[].listeners[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`binds[].listeners[].policies.jwtAuth.mode`|string||
 |`binds[].listeners[].policies.jwtAuth.providers`|[]object||
@@ -4592,6 +4627,7 @@
 |`policies[].policy.ai.promptCaching.cacheMessages`|boolean||
 |`policies[].policy.ai.promptCaching.cacheTools`|boolean||
 |`policies[].policy.ai.promptCaching.minTokens`|integer||
+|`policies[].policy.ai.promptCaching.cacheMessageOffset`|integer||
 |`policies[].policy.ai.routes`|object||
 |`policies[].policy.backendTLS`|object|Send TLS to the backend.|
 |`policies[].policy.backendTLS.cert`|string||
@@ -4753,6 +4789,7 @@
 |`policies[].policy.remoteRateLimit.descriptors[].entries[].key`|string||
 |`policies[].policy.remoteRateLimit.descriptors[].entries[].value`|string||
 |`policies[].policy.remoteRateLimit.descriptors[].type`|string||
+|`policies[].policy.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`policies[].policy.remoteRateLimit.failureMode`|string|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`policies[].policy.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`policies[].policy.jwtAuth.mode`|string||
@@ -4772,6 +4809,21 @@
 |`policies[].policy.jwtAuth.jwks.url`|string||
 |`policies[].policy.jwtAuth.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`policies[].policy.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`policies[].policy.oidc`|object|Authenticate incoming browser requests with OIDC authorization code flow.|
+|`policies[].policy.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
+|`policies[].policy.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
+|`policies[].policy.oidc.discovery.file`|string||
+|`policies[].policy.oidc.discovery.url`|string||
+|`policies[].policy.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
+|`policies[].policy.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
+|`policies[].policy.oidc.tokenEndpointAuth`|string|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.|
+|`policies[].policy.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
+|`policies[].policy.oidc.jwks.file`|string||
+|`policies[].policy.oidc.jwks.url`|string||
+|`policies[].policy.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
+|`policies[].policy.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`policies[].policy.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
+|`policies[].policy.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`policies[].policy.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`policies[].policy.basicAuth.htpasswd`|object|.htpasswd file contents/reference|
 |`policies[].policy.basicAuth.htpasswd.file`|string||
@@ -5707,6 +5759,7 @@
 |`backends[].policies.ai.promptCaching.cacheMessages`|boolean||
 |`backends[].policies.ai.promptCaching.cacheTools`|boolean||
 |`backends[].policies.ai.promptCaching.minTokens`|integer||
+|`backends[].policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`backends[].policies.ai.routes`|object||
 |`llm`|object||
 |`llm.port`|integer||
@@ -6322,6 +6375,21 @@
 |`llm.models[].matches[].headers[].value.exact`|string||
 |`llm.models[].matches[].headers[].value.regex`|string||
 |`llm.policies`|object|policies defines policies for handling incoming requests, before a model is selected|
+|`llm.policies.oidc`|object|Authenticate incoming browser requests with OIDC authorization code flow.|
+|`llm.policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
+|`llm.policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
+|`llm.policies.oidc.discovery.file`|string||
+|`llm.policies.oidc.discovery.url`|string||
+|`llm.policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
+|`llm.policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
+|`llm.policies.oidc.tokenEndpointAuth`|string|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.|
+|`llm.policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
+|`llm.policies.oidc.jwks.file`|string||
+|`llm.policies.oidc.jwks.url`|string||
+|`llm.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
+|`llm.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`llm.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
+|`llm.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`llm.policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`llm.policies.jwtAuth.mode`|string||
 |`llm.policies.jwtAuth.providers`|[]object||
@@ -7353,6 +7421,7 @@
 |`mcp.policies.ai.promptCaching.cacheMessages`|boolean||
 |`mcp.policies.ai.promptCaching.cacheTools`|boolean||
 |`mcp.policies.ai.promptCaching.minTokens`|integer||
+|`mcp.policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`mcp.policies.ai.routes`|object||
 |`mcp.policies.backendTLS`|object|Send TLS to the backend.|
 |`mcp.policies.backendTLS.cert`|string||
@@ -7514,6 +7583,7 @@
 |`mcp.policies.remoteRateLimit.descriptors[].entries[].key`|string||
 |`mcp.policies.remoteRateLimit.descriptors[].entries[].value`|string||
 |`mcp.policies.remoteRateLimit.descriptors[].type`|string||
+|`mcp.policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`mcp.policies.remoteRateLimit.failureMode`|string|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`mcp.policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`mcp.policies.jwtAuth.mode`|string||
@@ -7533,6 +7603,21 @@
 |`mcp.policies.jwtAuth.jwks.url`|string||
 |`mcp.policies.jwtAuth.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`mcp.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`mcp.policies.oidc`|object|Authenticate incoming browser requests with OIDC authorization code flow.|
+|`mcp.policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
+|`mcp.policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
+|`mcp.policies.oidc.discovery.file`|string||
+|`mcp.policies.oidc.discovery.url`|string||
+|`mcp.policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
+|`mcp.policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
+|`mcp.policies.oidc.tokenEndpointAuth`|string|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.|
+|`mcp.policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
+|`mcp.policies.oidc.jwks.file`|string||
+|`mcp.policies.oidc.jwks.url`|string||
+|`mcp.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
+|`mcp.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`mcp.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
+|`mcp.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`mcp.policies.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
 |`mcp.policies.basicAuth.htpasswd`|object|.htpasswd file contents/reference|
 |`mcp.policies.basicAuth.htpasswd.file`|string||

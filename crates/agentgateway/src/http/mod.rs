@@ -19,6 +19,8 @@ pub mod csrf;
 pub mod envoy_proto_common;
 pub mod ext_authz;
 pub mod ext_proc;
+pub(crate) mod oauth;
+pub mod oidc;
 pub mod outlierdetection;
 mod peekbody;
 pub mod remoteratelimit;
@@ -31,6 +33,45 @@ pub type Error = axum_core::Error;
 pub type Body = axum_core::body::Body;
 pub type Request = ::http::Request<Body>;
 pub type Response = ::http::Response<Body>;
+
+pub(crate) fn iter_request_cookies(
+	req: &Request,
+) -> impl Iterator<Item = cookie::Cookie<'static>> + '_ {
+	req
+		.headers()
+		.get_all(header::COOKIE)
+		.into_iter()
+		.filter_map(|value| value.to_str().ok())
+		.flat_map(|header_value| {
+			cookie::Cookie::split_parse(header_value.to_owned())
+				.filter_map(Result::ok)
+				.map(cookie::Cookie::into_owned)
+		})
+}
+
+pub(crate) fn read_request_cookie(req: &Request, name: &str) -> Option<String> {
+	let mut matched = None;
+	for cookie in iter_request_cookies(req) {
+		if cookie.name() == name {
+			matched = Some(cookie.value().to_owned());
+		}
+	}
+	matched
+}
+
+pub(crate) fn strip_request_cookies_by_prefix(req: &mut Request, prefix: &str) {
+	let preserved: Vec<String> = iter_request_cookies(req)
+		.filter(|cookie| !cookie.name().starts_with(prefix))
+		.map(|cookie| cookie.to_string())
+		.collect();
+
+	req.headers_mut().remove(header::COOKIE);
+	if !preserved.is_empty() {
+		let hv =
+			HeaderValue::from_str(&preserved.join("; ")).expect("re-joined cookie header is valid");
+		req.headers_mut().insert(header::COOKIE, hv);
+	}
+}
 
 // SendDirectResponse is a Response that has been buffered so that it is Send.
 pub struct SendDirectResponse(pub ::http::Response<Bytes>);

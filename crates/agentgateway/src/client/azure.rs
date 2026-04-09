@@ -53,14 +53,7 @@ impl azure_core::http::HttpClient for Client {
 			.call(Call {
 				req: request,
 				target: match url.host().expect("url must have a host") {
-					url::Host::Domain(h) => Target::try_from((h, url.port_or_known_default().unwrap_or(80)))
-						.map_err(|e| {
-							azure_core::Error::with_error(
-								azure_core::error::ErrorKind::Other,
-								e,
-								"failed to parse host for `agentgateway::client::Client` request",
-							)
-						})?,
+					url::Host::Domain(h) => Target::from((h, url.port_or_known_default().unwrap_or(80))),
 					url::Host::Ipv4(ip) => Target::Address(SocketAddr::from((
 						ip,
 						url.port_or_known_default().unwrap_or(80),

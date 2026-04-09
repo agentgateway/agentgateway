@@ -1,0 +1,46 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/completions/gemini_zero_completion_tokens.json
+info:
+  model: gemini-2.5-flash
+  usage:
+    prompt_tokens: 7
+    completion_tokens: 0
+    total_tokens: 8
+  choices:
+    - message:
+        role: assistant
+      finish_reason: length
+      index: 0
+  created: 1775595226
+  id: 2m7Vaca_HdfC1MkP1trPwAM
+  object: chat.completion
+---
+{
+  "response": {
+    "model": "gemini-2.5-flash",
+    "usage": {
+      "prompt_tokens": 7,
+      "completion_tokens": 0,
+      "total_tokens": 8
+    },
+    "choices": [
+      {
+        "message": {
+          "role": "assistant"
+        },
+        "finish_reason": "length",
+        "index": 0
+      }
+    ],
+    "created": "[date]",
+    "id": "[id]",
+    "object": "chat.completion"
+  },
+  "parsed": {
+    "input_tokens": 7,
+    "output_tokens": 0,
+    "total_tokens": 8,
+    "provider_model": "gemini-2.5-flash"
+  }
+}

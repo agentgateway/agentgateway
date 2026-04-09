@@ -2,6 +2,7 @@ use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::cel::{ContextBuilder, Executor};
+use crate::proxy::ProxyError;
 use crate::*;
 
 #[derive(Clone, Debug)]
@@ -34,13 +35,14 @@ impl NetworkAuthorizationSet {
 		Self(rs)
 	}
 
-	pub fn apply(&self, source: &crate::cel::SourceContext) -> anyhow::Result<()> {
+	pub fn apply(&self, source: &crate::cel::SourceContext) -> Result<(), ProxyError> {
 		let exec = Executor::new_source(source);
 		let allowed = self.0.validate(&exec);
 		if !allowed {
-			anyhow::bail!("network authorization denied");
+			Err(ProxyError::AuthorizationFailed)
+		} else {
+			Ok(())
 		}
-		Ok(())
 	}
 
 	pub fn register(&self, cel: &mut ContextBuilder) {

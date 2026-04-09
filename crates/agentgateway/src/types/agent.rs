@@ -1,6 +1,6 @@
 use std::cmp;
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
@@ -2038,6 +2038,7 @@ pub enum TrafficPolicy {
 	ExtAuthz(ext_authz::ExtAuthz),
 	ExtProc(ext_proc::ExtProc),
 	JwtAuth(JwtAuthentication),
+	Oidc(crate::http::oidc::OidcPolicy),
 	BasicAuth(crate::http::basicauth::BasicAuthentication),
 	APIKey(crate::http::apikey::APIKeyAuthentication),
 	Transformation(crate::http::transformation_cel::Transformation),
@@ -2304,13 +2305,11 @@ impl serde::Serialize for Target {
 	}
 }
 
-impl TryFrom<(&str, u16)> for Target {
-	type Error = anyhow::Error;
-
-	fn try_from((host, port): (&str, u16)) -> Result<Self, Self::Error> {
+impl From<(&str, u16)> for Target {
+	fn from((host, port): (&str, u16)) -> Self {
 		match host.parse::<IpAddr>() {
-			Ok(target) => Ok(Target::Address(SocketAddr::new(target, port))),
-			Err(_) => Ok(Target::Hostname(host.into(), port)),
+			Ok(target) => Target::Address(SocketAddr::new(target, port)),
+			Err(_) => Target::Hostname(host.into(), port),
 		}
 	}
 }
@@ -2327,7 +2326,7 @@ impl TryFrom<&str> for Target {
 			anyhow::bail!("invalid host:port: {hostport}");
 		};
 		let port: u16 = port.parse()?;
-		(host, port).try_into()
+		Ok((host, port).into())
 	}
 }
 

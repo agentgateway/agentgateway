@@ -20,6 +20,11 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Bod
 				types::responses::typed::ResponseStreamEvent::ResponseCreated(created) => {
 					log.non_atomic_mutate(|r| {
 						r.response.provider_model = Some(strng::new(&created.response.model));
+						r.response.service_tier = created
+							.response
+							.service_tier
+							.as_ref()
+							.and_then(types::serialize_str);
 						if let Some(usage) = &created.response.usage {
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.output_tokens = Some(usage.output_tokens as u64);
@@ -42,6 +47,11 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Bod
 				types::responses::typed::ResponseStreamEvent::ResponseCompleted(completed) => {
 					log.non_atomic_mutate(|r| {
 						r.response.provider_model = Some(strng::new(&completed.response.model));
+						r.response.service_tier = completed
+							.response
+							.service_tier
+							.as_ref()
+							.and_then(types::serialize_str);
 						if let Some(usage) = &completed.response.usage {
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.output_tokens = Some(usage.output_tokens as u64);

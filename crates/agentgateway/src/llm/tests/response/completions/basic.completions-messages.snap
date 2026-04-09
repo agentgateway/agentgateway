@@ -46,13 +46,17 @@ info:
     "stop_sequence": null,
     "usage": {
       "input_tokens": 17,
-      "output_tokens": 23
+      "output_tokens": 23,
+      "service_tier": "default"
     }
   },
   "parsed": {
     "input_tokens": 17,
+    "input_audio_tokens": 0,
     "output_tokens": 23,
+    "output_audio_tokens": 0,
     "total_tokens": 40,
+    "service_tier": "default",
     "provider_model": "gpt-3.5-turbo-0125"
   }
 }

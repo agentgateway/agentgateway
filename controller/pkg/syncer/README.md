@@ -910,7 +910,7 @@ spec:
     - protocol: TCP
       port: 3001
       targetPort: 3001
-      appProtocol: kgateway.dev/mcp
+      appProtocol: agentgateway.dev/mcp
   type: ClusterIP
 EOF
 ```
@@ -1002,7 +1002,7 @@ spec:
   ports:
   - port: 80
     targetPort: 8000
-    appProtocol: kgateway.dev/mcp
+    appProtocol: agentgateway.dev/mcp
 EOF
 ```
 
@@ -1044,11 +1044,11 @@ spec:
     - protocol: TCP
       port: 9090
       targetPort: 9090
-      appProtocol: kgateway.dev/a2a
+      appProtocol: agentgateway.dev/a2a
 EOF
 ```
 
-Note, you must use `kgateway.dev/a2a` as the app protocol for the kgateway control plane to configure agentgateway to use a2a.
+Note, you must use `agentgateway.dev/a2a` as the app protocol for the kgateway control plane to configure agentgateway to use a2a.
 
 Apply the routing config:
 ```shell
@@ -1539,7 +1539,7 @@ spec:
     - protocol: TCP
       port: 3001
       targetPort: 3001
-      appProtocol: kgateway.dev/mcp
+      appProtocol: agentgateway.dev/mcp
   type: ClusterIP
 EOF
 ```
@@ -1764,7 +1764,7 @@ EOF
 
 ```shell
 kubectl apply -f- <<EOF
-apiVersion: gateway.kgateway.dev/v1alpha1
+apiVersion: gateway.agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
   name: token-rate-limit
@@ -1901,7 +1901,7 @@ EOF
 ```
 
 #### Bedrock prompt caching
-Enable Bedrock prompt caching via `AgentgatewayPolicy.spec.backend.ai.promptCaching` to reduce costs on repeated prompts and tool specs. Set `minTokens` to avoid caching short prompts; only Bedrock models support this feature.
+Enable Bedrock prompt caching via `AgentgatewayPolicy.spec.backend.ai.promptCaching` to reduce costs on repeated prompts and tool specs. Set `minTokens` to avoid caching short prompts; only Bedrock models support this feature. Use `cacheMessageOffset` to shift the message cache point further back in the conversation (0 = default second-to-last message; higher values move it N additional messages toward the start).
 
 ```shell
 kubectl apply -f- <<EOF

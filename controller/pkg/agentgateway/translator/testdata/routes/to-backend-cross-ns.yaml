@@ -1,0 +1,78 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: test-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: test-gateway
+  hostnames:
+    - example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      backendRefs:
+        - name: be
+          namespace: other
+          kind: AgentgatewayBackend
+          group: agentgateway.dev
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: be
+  namespace: other
+spec:
+  static:
+    host: primary.example.com
+    port: 80
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - weight: 1
+      hostnames:
+      - example.com
+      key: default/test-route.00.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          pathPrefix: /api
+      name:
+        kind: HTTPRoute
+        name: test-route
+        namespace: default
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: test-route
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: backendRef be/other not accessible to a HTTPRoute in namespace "default"
+          (missing a ReferenceGrant?)
+        reason: RefNotPermitted
+        status: "False"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default

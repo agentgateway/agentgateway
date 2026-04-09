@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 62
 description: src/llm/tests/response/responses/basic.json
 info:
   id: resp_0fd43e1b46691ead0069a89a2144808199a06ce29faf5798da
@@ -80,6 +81,7 @@ info:
       }
     ],
     "model": "gpt-4o-2024-08-06",
+    "service_tier": "default",
     "usage": {
       "input_tokens": 10,
       "output_tokens": 10,
@@ -114,7 +116,6 @@ info:
       "summary": null
     },
     "safety_identifier": null,
-    "service_tier": "default",
     "store": true,
     "temperature": 1.0,
     "text": {
@@ -137,6 +138,7 @@ info:
     "total_tokens": 20,
     "reasoning_tokens": 0,
     "cached_input_tokens": 0,
+    "service_tier": "default",
     "provider_model": "gpt-4o-2024-08-06"
   }
 }

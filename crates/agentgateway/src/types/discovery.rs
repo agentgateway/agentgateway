@@ -27,6 +27,16 @@ pub struct NamespacedHostname {
 	pub hostname: Strng,
 }
 
+impl NamespacedHostname {
+	pub fn as_policy_target_ref(&self) -> super::agent::PolicyTargetRef {
+		super::agent::PolicyTargetRef::Backend(super::agent::BackendTargetRef::Service {
+			hostname: &self.hostname,
+			namespace: &self.namespace,
+			port: None,
+		})
+	}
+}
+
 impl FromStr for NamespacedHostname {
 	type Err = ProtoError;
 

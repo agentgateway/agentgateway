@@ -1,6 +1,7 @@
 {
   "realm": "mcp",
   "enabled": true,
+  "sslRequired": "NONE",
   "displayName": "MCP Realm",
   "displayNameHtml": "<div class=\"kc-logo-text\"><span>MCP</span></div>",
   "loginTheme": "keycloak",

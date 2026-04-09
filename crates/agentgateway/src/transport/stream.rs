@@ -63,6 +63,13 @@ pub struct HBONEConnectionInfo {
 	pub hbone_address: SocketAddr,
 }
 
+/// WaypointTLSInfo indicates if TLS sniffing should be performed
+/// for waypoint traffic based on the service port's appProtocol.
+#[derive(Debug, Clone)]
+pub struct WaypointTLSInfo {
+	pub should_sniff_tls: bool,
+}
+
 #[derive(Debug, Default)]
 pub struct Metrics {
 	counter: Option<BytesCounter>,
@@ -531,6 +538,13 @@ impl Extension {
 	}
 	fn wrap(ext: Arc<Extension>) -> Self {
 		Extension::Wrapped(http::Extensions::new(), ext)
+	}
+
+	pub fn remove<T: Clone + Send + Sync + 'static>(&mut self) -> Option<T> {
+		match self {
+			Extension::Single(extensions) => extensions.remove(),
+			Extension::Wrapped(extensions, _) => extensions.remove(),
+		}
 	}
 
 	pub fn insert<T: Clone + Send + Sync + 'static>(&mut self, val: T) -> Option<T> {

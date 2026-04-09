@@ -42,6 +42,7 @@ impl StateManager {
 				addr.clone(),
 				xds.auth.clone(),
 				xds.ca_cert.clone(),
+				vec![],
 			)
 			.await?;
 			Some(

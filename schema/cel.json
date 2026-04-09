@@ -223,6 +223,33 @@
           "format": "uint64",
           "minimum": 0
         },
+        "inputImageTokens": {
+          "description": "The number of image tokens in the input/prompt.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "inputTextTokens": {
+          "description": "The number of text tokens in the input/prompt.\nNote: this field is only set in multi-modal calls where the total token count is split out by\ntext/image/audio; for standard all-text calls, this is unset.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "inputAudioTokens": {
+          "description": "The number of audio tokens in the input/prompt.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
         "cachedInputTokens": {
           "description": "The number of tokens in the input/prompt read from cache (savings)",
           "type": [
@@ -250,6 +277,33 @@
           "format": "uint64",
           "minimum": 0
         },
+        "outputImageTokens": {
+          "description": "The number of image tokens in the output/completion.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "outputTextTokens": {
+          "description": "The number of text tokens in the output/completion.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "outputAudioTokens": {
+          "description": "The number of audio tokens in the output/completion.\nNote: this field is only set in multi-modal calls where the total token count is split out by\ntext/image/audio; for standard all-text calls, this is unset.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
         "reasoningTokens": {
           "description": "The number of reasoning tokens in the output/completion.",
           "type": [
@@ -267,6 +321,13 @@
           ],
           "format": "uint64",
           "minimum": 0
+        },
+        "serviceTier": {
+          "description": "The service tier the provider served the request under.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "countTokens": {
           "description": "The number of tokens in the request, when using the token counting endpoint\nThese are not counted as 'input tokens' since they do not consume input tokens.",

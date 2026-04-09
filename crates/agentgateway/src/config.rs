@@ -167,6 +167,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				anyhow::bail!("auth token {p} not found")
 			},
 		};
+		let ca_headers = parse_headers("CA_HEADER_");
 		let ca_cert = parse_default(
 			"CA_ROOT_CA",
 			"./var/run/secrets/istio/root-cert.pem".to_string(),
@@ -190,6 +191,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 
 			auth,
 			ca_cert: ca_root_cert,
+			ca_headers: ca_headers?,
 		})
 	} else {
 		None
@@ -249,6 +251,10 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			Some(session) => crate::http::sessionpersistence::Encoder::aes(session.key.expose_secret())?,
 		}
 	};
+	// Browser OIDC cookie crypto is core gateway runtime config, not per-policy input.
+	let oidc_cookie_encoder = parse::<String>("OIDC_COOKIE_SECRET")?
+		.map(|key| crate::http::sessionpersistence::Encoder::aes(key.trim()))
+		.transpose()?;
 
 	Ok(crate::Config {
 		ipv6_enabled,
@@ -405,6 +411,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			node_id: ENV.node_id.clone(),
 		},
 		session_encoder,
+		oidc_cookie_encoder,
 		hbone: Arc::new(agent_hbone::Config {
 			// window size: per-stream limit
 			window_size: parse("HTTP2_STREAM_WINDOW_SIZE")?
@@ -609,6 +616,109 @@ fn get_cpu_count() -> anyhow::Result<usize> {
 		Some(limit) => Ok(limit),
 		// This is *logical cores*
 		None => Ok(num_cpus::get()),
+	}
+}
+
+fn parse_headers(prefix: &str) -> Result<Vec<(String, String)>, anyhow::Error> {
+	let mut headers = Vec::new();
+
+	for (key, value) in env::vars() {
+		let stripped_key: Option<&str> = key.strip_prefix(prefix);
+		match stripped_key {
+			Some(stripped_key) => {
+				// Env vars are typically uppercase and often use `_` instead of `-`.
+				// Normalize the suffix after `prefix` so values like
+				// `CA_HEADER_AUTHORIZATION` and `CA_HEADER_X_CUSTOM_HEADER`
+				// map to valid header names such as `authorization` and
+				// `x-custom-header`.
+				let normalized_key = stripped_key.to_ascii_lowercase().replace('_', "-");
+				// attempt to parse the normalized key
+				let metadata_key = http::header::HeaderName::from_str(&normalized_key)
+					.map_err(|_| anyhow::anyhow!("invalid header key: {}", key))?;
+				// attempt to parse the value
+				http::HeaderValue::from_str(&value)
+					.map_err(|_| anyhow::anyhow!("invalid header value: {}", value))?;
+				headers.push((metadata_key.to_string(), value));
+			},
+			None => continue,
+		}
+	}
+
+	Ok(headers)
+}
+
+#[cfg(test)]
+mod parse_headers_tests {
+	use super::*;
+	use std::env;
+	use std::ffi::OsString;
+	use std::sync::{LazyLock, Mutex};
+
+	static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+	struct TempEnvVar {
+		key: String,
+		previous: Option<OsString>,
+	}
+
+	impl TempEnvVar {
+		fn set(key: &str, value: &str) -> Self {
+			let previous = env::var_os(key);
+			unsafe {
+				env::set_var(key, value);
+			}
+			Self {
+				key: key.to_string(),
+				previous,
+			}
+		}
+	}
+
+	impl Drop for TempEnvVar {
+		fn drop(&mut self) {
+			match &self.previous {
+				Some(value) => unsafe {
+					env::set_var(&self.key, value);
+				},
+				None => unsafe {
+					env::remove_var(&self.key);
+				},
+			}
+		}
+	}
+
+	#[test]
+	fn test_parse_headers_valid_header_and_normalizes_name() {
+		let _guard = ENV_LOCK.lock().expect("env mutex poisoned");
+		let _header = TempEnvVar::set("TEST_PARSE_HEADERS_X-Test-Header", "header-value");
+
+		let headers = parse_headers("TEST_PARSE_HEADERS_").expect("header parsing should succeed");
+
+		assert!(headers.contains(&("x-test-header".to_string(), "header-value".to_string())));
+	}
+
+	#[test]
+	fn test_parse_headers_rejects_invalid_header_key() {
+		let _guard = ENV_LOCK.lock().expect("env mutex poisoned");
+		let _header = TempEnvVar::set("TEST_PARSE_HEADERS_Bad@Header", "header-value");
+
+		let err = parse_headers("TEST_PARSE_HEADERS_").expect_err("invalid header key should fail");
+
+		assert!(
+			err
+				.to_string()
+				.contains("invalid header key: TEST_PARSE_HEADERS_Bad@Header")
+		);
+	}
+
+	#[test]
+	fn test_parse_headers_rejects_invalid_header_value() {
+		let _guard = ENV_LOCK.lock().expect("env mutex poisoned");
+		let _header = TempEnvVar::set("TEST_PARSE_HEADERS_X-Test-Header", "bad\nvalue");
+
+		let err = parse_headers("TEST_PARSE_HEADERS_").expect_err("invalid header value should fail");
+
+		assert!(err.to_string().contains("invalid header value: bad\nvalue"));
 	}
 }
 

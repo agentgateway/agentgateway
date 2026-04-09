@@ -20,6 +20,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
@@ -129,16 +130,14 @@ func translatePoliciesForBackendTLS(
 			}
 		}
 
-		backendTLSPoliciesForThisTarget := krt.FetchOne(krtctx, targetIndex, krt.FilterKey(tgtRef.String()))
-		if backendTLSPoliciesForThisTarget != nil {
-			if err := checkConflicted(btls, target, backendTLSPoliciesForThisTarget); err != nil {
-				conds[string(gwv1.PolicyConditionAccepted)].error = &ConfigError{
-					Reason:  string(gwv1.PolicyReasonConflicted),
-					Message: err.Error(),
-				}
-				// We cannot send this policy to agentgateway, as it would not know the priority logic.
-				continue
+		backendTLSPoliciesForThisTarget := krtutil.FetchIndexObjects(krtctx, targetIndex, tgtRef)
+		if err := checkConflicted(btls, target, backendTLSPoliciesForThisTarget); err != nil {
+			conds[string(gwv1.PolicyConditionAccepted)].error = &ConfigError{
+				Reason:  string(gwv1.PolicyReasonConflicted),
+				Message: err.Error(),
 			}
+			// We cannot send this policy to agentgateway, as it would not know the priority logic.
+			continue
 		}
 
 		switch string(target.Kind) {
@@ -253,9 +252,9 @@ func translatePoliciesForBackendTLS(
 func checkConflicted(
 	btls *gwv1.BackendTLSPolicy,
 	target gwv1.LocalPolicyTargetReferenceWithSectionName,
-	allMatches *krt.IndexObject[utils.TypedNamespacedName, *gwv1.BackendTLSPolicy],
+	allMatches []*gwv1.BackendTLSPolicy,
 ) error {
-	for _, m := range allMatches.Objects {
+	for _, m := range allMatches {
 		if m.UID == btls.UID {
 			// This is ourself, skip it
 			continue

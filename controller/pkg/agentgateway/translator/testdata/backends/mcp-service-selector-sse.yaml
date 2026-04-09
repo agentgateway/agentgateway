@@ -21,12 +21,12 @@ metadata:
   labels:
     app: mcp-server
   annotations:
-    kgateway.dev/mcp-http-path: /custom-path
+    agentgateway.dev/mcp-http-path: /custom-path
 spec:
   ports:
   - name: mcp
     port: 8080
-    appProtocol: kgateway.dev/mcp-sse
+    appProtocol: agentgateway.dev/mcp-sse
 ---
 # Output
 output:

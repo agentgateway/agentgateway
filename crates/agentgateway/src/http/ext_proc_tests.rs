@@ -1,14 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use ::http::{HeaderMap, Method, Request};
-use hyper_util::client::legacy::Client;
-use serde_json::json;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::Sender;
-use tonic::Status;
-use wiremock::MockServer;
-
 use crate::cel::Expression;
 use crate::http::ext_proc::proto::header_value_option::HeaderAppendAction;
 use crate::http::ext_proc::proto::{
@@ -17,12 +9,21 @@ use crate::http::ext_proc::proto::{
 };
 use crate::http::ext_proc::{ExtProcDynamicMetadata, proto};
 use crate::http::{Body, ext_proc};
+use crate::test_helpers::MockInstance;
 use crate::test_helpers::extprocmock::{
-	ExtProcMock, ExtProcMockInstance, Handler, immediate_response, request_body_response,
-	request_header_response, response_body_response, response_header_response,
+	ExtProcMock, Handler, immediate_response, request_body_response, request_header_response,
+	response_body_response, response_header_response,
 };
 use crate::test_helpers::proxymock::*;
 use crate::*;
+use ::http::{HeaderMap, Method, Request};
+use hyper_util::client::legacy::Client;
+use protos::envoy::service::ext_proc::v3::processing_response;
+use serde_json::json;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
+use tonic::Status;
+use wiremock::MockServer;
 
 #[tokio::test]
 async fn nop_ext_proc() {
@@ -122,6 +123,22 @@ async fn immediate_response_request() {
 }
 
 #[tokio::test]
+async fn immediate_response_request_body_is_deferred_to_response() {
+	let mock = simple_mock().await;
+	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
+		mock,
+		ext_proc::FailureMode::FailClosed,
+		ExtProcMock::new(ImmediateResponseRequestBodyExtProc::default),
+		"{}",
+	)
+	.await;
+	let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
+	assert_eq!(res.status(), 403);
+	let body = read_body_raw(res.into_body()).await;
+	assert_eq!(body.as_ref(), b"Access denied");
+}
+
+#[tokio::test]
 async fn immediate_response_response() {
 	let mock = simple_mock().await;
 	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
@@ -154,6 +171,22 @@ async fn failure_fail_closed() {
 }
 
 #[tokio::test]
+async fn failure_fail_open_body() {
+	let mock = simple_mock().await;
+	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
+		mock,
+		ext_proc::FailureMode::FailOpen,
+		ExtProcMock::new(FailureExtProcResponse::default),
+		"{}",
+	)
+	.await;
+
+	// If we have a body, we should NOT fail open
+	let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
+	assert_eq!(res.status(), 500);
+}
+
+#[tokio::test]
 async fn failure_fail_open() {
 	let mock = simple_mock().await;
 	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
@@ -163,10 +196,46 @@ async fn failure_fail_open() {
 		"{}",
 	)
 	.await;
-	let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
+
+	let res = send_request(io, Method::POST, "http://lo").await;
 	assert_eq!(res.status(), 200);
-	let body = read_body(res.into_body()).await;
-	assert_eq!(body.body.as_ref(), b"request");
+}
+
+#[tokio::test]
+async fn dynamic_metadata() {
+	let mock = body_mock(b"").await;
+	let (_mock, _ext_proc, mut bind, _io) = setup_ext_proc_mock(
+		mock,
+		ext_proc::FailureMode::FailClosed,
+		ExtProcMock::new(DynamicMetadataExtProc::default),
+		"{}",
+	)
+	.await;
+	bind
+		.attach_route_policy(json!({
+			"transformations": {
+				"response": {
+					"set": {
+						"x-extproc-metadata": "extproc.some[0]",
+					},
+				},
+			},
+		}))
+		.await;
+	let io = bind.serve_http(strng::new("bind"));
+	let res = send_request(io, Method::POST, "http://lo").await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(
+		res
+			.headers()
+			.get("x-extproc-metadata")
+			.unwrap()
+			.to_str()
+			.unwrap(),
+		"a"
+	);
+	let body = read_body_raw(res.into_body()).await;
+	assert_eq!(body.as_ref(), b"");
 }
 
 pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
@@ -176,7 +245,7 @@ pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
 	config: &str,
 ) -> (
 	MockServer,
-	ExtProcMockInstance,
+	MockInstance,
 	TestBind,
 	Client<MemoryConnector, Body>,
 ) {
@@ -193,7 +262,7 @@ pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
 	response_attributes: Option<HashMap<String, Arc<Expression>>>,
 ) -> (
 	MockServer,
-	ExtProcMockInstance,
+	MockInstance,
 	TestBind,
 	Client<MemoryConnector, Body>,
 ) {
@@ -226,6 +295,74 @@ struct NopExtProc {
 
 #[async_trait::async_trait]
 impl Handler for NopExtProc {
+	async fn handle_request_body(
+		&mut self,
+		_body: &proto::HttpBody,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		if !self.sent_req_body {
+			let _ = sender.send(request_body_response(None)).await;
+		}
+		self.sent_req_body = true;
+		Ok(())
+	}
+
+	async fn handle_response_body(
+		&mut self,
+		_body: &proto::HttpBody,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		if !self.sent_resp_body {
+			let _ = sender.send(response_body_response(None)).await;
+		}
+		self.sent_resp_body = true;
+		Ok(())
+	}
+}
+
+#[derive(Debug, Default)]
+struct DynamicMetadataExtProc {
+	sent_req_body: bool,
+	sent_resp_body: bool,
+}
+
+#[async_trait::async_trait]
+impl Handler for DynamicMetadataExtProc {
+	async fn handle_request_headers(
+		&mut self,
+		_headers: &HttpHeaders,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		use prost_wkt_types::Value;
+		use prost_wkt_types::value::Kind;
+
+		let _ = sender
+			.send(Ok(ProcessingResponse {
+				response: Some(processing_response::Response::RequestHeaders(
+					proto::HeadersResponse { response: None },
+				)),
+				dynamic_metadata: Some(prost_wkt_types::Struct {
+					fields: HashMap::from([(
+						"some".to_string(),
+						Value {
+							kind: Some(Kind::ListValue(prost_wkt_types::ListValue {
+								values: vec![
+									Value {
+										kind: Some(Kind::StringValue("a".to_string())),
+									},
+									Value {
+										kind: Some(Kind::StringValue("b".to_string())),
+									},
+								],
+							})),
+						},
+					)]),
+				}),
+				..Default::default()
+			}))
+			.await;
+		Ok(())
+	}
 	async fn handle_request_body(
 		&mut self,
 		_body: &proto::HttpBody,
@@ -389,6 +526,45 @@ impl Handler for ImmediateResponseExtProc {
 }
 
 #[derive(Debug, Default)]
+struct ImmediateResponseRequestBodyExtProc {
+	sent: bool,
+}
+
+#[async_trait::async_trait]
+impl Handler for ImmediateResponseRequestBodyExtProc {
+	async fn handle_request_headers(
+		&mut self,
+		_: &HttpHeaders,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let _ = sender.send(request_header_response(None)).await;
+		Ok(())
+	}
+
+	async fn handle_request_body(
+		&mut self,
+		_: &proto::HttpBody,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		if !self.sent {
+			self.sent = true;
+			let _ = sender
+				.send(immediate_response(proto::ImmediateResponse {
+					status: Some(proto::HttpStatus {
+						code: proto::StatusCode::Forbidden as i32,
+					}),
+					body: "Access denied".to_string(),
+					headers: None,
+					grpc_status: None,
+					details: "".to_string(),
+				}))
+				.await;
+		}
+		Ok(())
+	}
+}
+
+#[derive(Debug, Default)]
 struct ImmediateResponseExtProcResponse {
 	sent_req_body: bool,
 }
@@ -471,7 +647,7 @@ fn test_default_append_action_overwrite() {
 		}],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 1);
@@ -507,7 +683,7 @@ fn test_append_if_exists_or_add() {
 		],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 2);
@@ -545,7 +721,7 @@ fn test_add_if_absent() {
 		],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 1);
@@ -582,7 +758,7 @@ fn test_overwrite_if_exists_or_add() {
 		],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 1);
@@ -619,7 +795,7 @@ fn test_overwrite_if_exists() {
 		],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 1);
@@ -638,7 +814,7 @@ fn test_remove_headers() {
 		set_headers: vec![],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	assert!(headers.get("to-remove").is_none());
 	assert_eq!(headers.get("keep").unwrap(), "value");
@@ -665,7 +841,7 @@ fn test_apply_header_mutations_request() {
 		}],
 	});
 
-	super::apply_header_mutations_request(&mut req, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_request(&mut req, mutation.as_ref());
 
 	let headers = req.headers();
 	assert!(headers.get("to-remove").is_none());
@@ -726,7 +902,7 @@ fn test_apply_pseudo_headers_request_with_raw_value() {
 		],
 	});
 
-	super::apply_header_mutations_request(&mut req, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_request(&mut req, mutation.as_ref());
 
 	// Verify pseudo-headers were applied
 	assert_eq!(req.method(), "POST");
@@ -767,7 +943,7 @@ fn test_apply_pseudo_headers_request_with_value_field() {
 		],
 	});
 
-	super::apply_header_mutations_request(&mut req, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_request(&mut req, mutation.as_ref());
 
 	// Verify pseudo-headers from value field were applied
 	assert_eq!(req.method(), "PUT");
@@ -795,7 +971,7 @@ fn test_pseudo_headers_request_raw_value_precedence() {
 		}],
 	});
 
-	super::apply_header_mutations_request(&mut req, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_request(&mut req, mutation.as_ref());
 
 	// raw_value should take precedence
 	assert_eq!(req.method(), "DELETE");
@@ -822,7 +998,7 @@ fn test_apply_header_mutations_response() {
 		}],
 	});
 
-	super::apply_header_mutations_response(&mut resp, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_response(&mut resp, mutation.as_ref());
 
 	let headers = resp.headers();
 	assert!(headers.get("to-remove").is_none());
@@ -854,7 +1030,7 @@ fn test_apply_pseudo_headers_response_with_raw_value() {
 		}],
 	});
 
-	super::apply_header_mutations_response(&mut resp, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_response(&mut resp, mutation.as_ref());
 
 	// Verify :status pseudo-header was applied
 	assert_eq!(resp.status(), 404);
@@ -882,7 +1058,7 @@ fn test_apply_pseudo_headers_response_with_value_field() {
 		}],
 	});
 
-	super::apply_header_mutations_response(&mut resp, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_response(&mut resp, mutation.as_ref());
 
 	// Verify :status pseudo-header from value field was applied
 	assert_eq!(resp.status(), 201);
@@ -908,7 +1084,7 @@ fn test_pseudo_headers_response_raw_value_precedence() {
 		}],
 	});
 
-	super::apply_header_mutations_response(&mut resp, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_response(&mut resp, mutation.as_ref());
 
 	// raw_value should take precedence
 	assert_eq!(resp.status(), 403);
@@ -956,7 +1132,7 @@ fn test_apply_mixed_headers_and_pseudo_headers_request() {
 		],
 	});
 
-	super::apply_header_mutations_request(&mut req, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_request(&mut req, mutation.as_ref());
 
 	// Verify pseudo-header was applied
 	assert_eq!(req.method(), "POST");
@@ -1006,7 +1182,7 @@ fn test_apply_mixed_headers_and_pseudo_headers_response() {
 		],
 	});
 
-	super::apply_header_mutations_response(&mut resp, mutation.as_ref()).unwrap();
+	super::apply_header_mutations_response(&mut resp, mutation.as_ref());
 
 	// Verify pseudo-header was applied
 	assert_eq!(resp.status(), 201);
@@ -1044,7 +1220,7 @@ fn test_deprecated_append_true() {
 		],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 2);
@@ -1071,7 +1247,7 @@ fn test_deprecated_append_false() {
 		}],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 1);
@@ -1107,7 +1283,7 @@ fn test_value_field_instead_of_raw_value() {
 		],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 2);
@@ -1133,7 +1309,7 @@ fn test_raw_value_takes_precedence_over_value() {
 		}],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	assert_eq!(headers.get("test").unwrap(), "raw-value-wins");
 }
@@ -1156,7 +1332,7 @@ fn test_append_action_priority_over_deprecated_append() {
 		}],
 	});
 
-	super::apply_header_mutations(&mut headers, mutation.as_ref()).unwrap();
+	super::apply_header_mutations(&mut headers, mutation.as_ref());
 
 	let values: Vec<_> = headers.get_all("existing").iter().collect();
 	assert_eq!(values.len(), 1);
@@ -1271,13 +1447,12 @@ fn test_dynamic_metadata_extraction() {
 
 mod extract_dynamic_metadata_tests {
 	use std::collections::HashMap;
-	use std::sync::Arc;
 
 	use prost_wkt_types::value::Kind;
 	use prost_wkt_types::{Struct, Value};
 
+	use super::super::extract_dynamic_metadata;
 	use super::*;
-	use crate::http::ext_proc::ExtProcInstance;
 
 	#[test]
 	fn test_extract_creates_extension() {
@@ -1295,11 +1470,11 @@ mod extract_dynamic_metadata_tests {
 			.body(Body::empty())
 			.unwrap();
 
-		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata).unwrap();
+		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
 		let extracted = req
 			.extensions()
-			.get::<Arc<ExtProcDynamicMetadata>>()
+			.get::<ExtProcDynamicMetadata>()
 			.expect("metadata should be in extensions");
 		assert_eq!(
 			extracted.0.get("user_id"),
@@ -1319,7 +1494,7 @@ mod extract_dynamic_metadata_tests {
 				.into_iter()
 				.collect(),
 		);
-		req.extensions_mut().insert(Arc::new(existing));
+		req.extensions_mut().insert(existing);
 
 		let metadata = Struct {
 			fields: [(
@@ -1330,12 +1505,9 @@ mod extract_dynamic_metadata_tests {
 			)]
 			.into(),
 		};
-		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata).unwrap();
+		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
-		let extracted = req
-			.extensions()
-			.get::<Arc<ExtProcDynamicMetadata>>()
-			.unwrap();
+		let extracted = req.extensions().get::<ExtProcDynamicMetadata>().unwrap();
 		assert_eq!(extracted.0.len(), 2);
 		assert_eq!(
 			extracted.0.get("existing"),
@@ -1359,7 +1531,7 @@ mod extract_dynamic_metadata_tests {
 				.into_iter()
 				.collect(),
 		);
-		req.extensions_mut().insert(Arc::new(existing));
+		req.extensions_mut().insert(existing);
 
 		let metadata = Struct {
 			fields: [(
@@ -1370,32 +1542,14 @@ mod extract_dynamic_metadata_tests {
 			)]
 			.into(),
 		};
-		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata).unwrap();
+		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
-		let extracted = req
-			.extensions()
-			.get::<Arc<ExtProcDynamicMetadata>>()
-			.unwrap();
+		let extracted = req.extensions().get::<ExtProcDynamicMetadata>().unwrap();
 		assert_eq!(extracted.0.len(), 1);
 		assert_eq!(
 			extracted.0.get("key"),
 			Some(&serde_json::json!("new_value"))
 		);
-	}
-
-	#[test]
-	fn test_extract_none_request_ok() {
-		let metadata = Struct {
-			fields: [(
-				"key".to_string(),
-				Value {
-					kind: Some(Kind::StringValue("value".to_string())),
-				},
-			)]
-			.into(),
-		};
-		let result = ExtProcInstance::extract_dynamic_metadata(None, &metadata);
-		assert!(result.is_ok());
 	}
 
 	#[test]
@@ -1408,14 +1562,9 @@ mod extract_dynamic_metadata_tests {
 			.body(Body::empty())
 			.unwrap();
 
-		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata).unwrap();
+		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
-		assert!(
-			req
-				.extensions()
-				.get::<Arc<ExtProcDynamicMetadata>>()
-				.is_none()
-		);
+		assert!(req.extensions().get::<ExtProcDynamicMetadata>().is_none());
 	}
 
 	#[test]
@@ -1449,12 +1598,9 @@ mod extract_dynamic_metadata_tests {
 			.body(Body::empty())
 			.unwrap();
 
-		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata).unwrap();
+		extract_dynamic_metadata(&mut req, &metadata).unwrap();
 
-		let extracted = req
-			.extensions()
-			.get::<Arc<ExtProcDynamicMetadata>>()
-			.unwrap();
+		let extracted = req.extensions().get::<ExtProcDynamicMetadata>().unwrap();
 
 		assert_eq!(extracted.0.len(), 3);
 		assert_eq!(
@@ -1484,7 +1630,7 @@ mod extract_dynamic_metadata_tests {
 			)]
 			.into(),
 		};
-		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata1).unwrap();
+		extract_dynamic_metadata(&mut req, &metadata1).unwrap();
 
 		let metadata2 = Struct {
 			fields: [(
@@ -1495,12 +1641,9 @@ mod extract_dynamic_metadata_tests {
 			)]
 			.into(),
 		};
-		ExtProcInstance::extract_dynamic_metadata(Some(&mut req), &metadata2).unwrap();
+		extract_dynamic_metadata(&mut req, &metadata2).unwrap();
 
-		let extracted = req
-			.extensions()
-			.get::<Arc<ExtProcDynamicMetadata>>()
-			.unwrap();
+		let extracted = req.extensions().get::<ExtProcDynamicMetadata>().unwrap();
 		assert_eq!(extracted.0.len(), 2);
 		assert_eq!(extracted.0.get("key1"), Some(&serde_json::json!("value1")));
 		assert_eq!(extracted.0.get("key2"), Some(&serde_json::json!(true)));

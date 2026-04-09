@@ -501,10 +501,16 @@ pub fn set_resource_defaults_from_config(cfg: &crate::Config) {
 		attrs.push(KeyValue::new("host.name", self_id.hostname().to_string()));
 	}
 	// Use gateway name/namespace as authoritative service identity
-	let service_name = cfg.xds.gateway.to_string();
-	let service_namespace = cfg.xds.namespace.to_string();
-	attrs.retain(|kv| kv.key.as_str() != "service.namespace");
-	attrs.push(KeyValue::new("service.namespace", service_namespace));
+	let (service_name, service_namespace) = if cfg.xds.address.is_some() {
+		(cfg.xds.gateway.to_string(), cfg.xds.namespace.to_string())
+	} else {
+		(Default::default(), Default::default())
+	};
+
+	if !service_namespace.is_empty() {
+		attrs.retain(|kv| kv.key.as_str() != "service.namespace");
+		attrs.push(KeyValue::new("service.namespace", service_namespace));
+	}
 
 	// Resolve service name: config > OTEL_SERVICE_NAME env > default
 	let resolved_service_name = if service_name.is_empty() {

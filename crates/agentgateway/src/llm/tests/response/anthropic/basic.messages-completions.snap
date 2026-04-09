@@ -21,6 +21,7 @@ info:
 {
   "response": {
     "model": "claude-haiku-4-5-20251001",
+    "service_tier": "standard",
     "usage": {
       "prompt_tokens": 15,
       "completion_tokens": 21,
@@ -50,6 +51,7 @@ info:
     "output_tokens": 21,
     "total_tokens": 36,
     "cached_input_tokens": 12,
+    "service_tier": "standard",
     "provider_model": "claude-haiku-4-5-20251001"
   }
 }

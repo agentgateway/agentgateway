@@ -389,7 +389,7 @@ impl Client {
 			backend_config: Arc::new(backend_config),
 			metrics,
 		};
-		let client = b.build_with_pool_key(connector.clone());
+		let client = b.build(connector.clone());
 		Client { client, connector }
 	}
 
@@ -412,8 +412,7 @@ impl Client {
 		} else {
 			ApplicationTransport::Plaintext.into()
 		};
-		let target = Target::try_from((host, port))
-			.map_err(|e| ProxyError::ProcessingString(format!("failed to parse host: {e}")))?;
+		let target = Target::from((host, port));
 		self
 			.call(Call {
 				req,

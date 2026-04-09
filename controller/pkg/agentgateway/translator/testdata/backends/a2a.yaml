@@ -11,7 +11,7 @@ spec:
     - protocol: TCP
       port: 9090
       targetPort: 9090
-      appProtocol: kgateway.dev/a2a
+      appProtocol: agentgateway.dev/a2a
 ---
 # Output
 output:

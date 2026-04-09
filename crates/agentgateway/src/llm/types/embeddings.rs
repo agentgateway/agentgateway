@@ -126,7 +126,15 @@ impl crate::llm::types::ResponseType for Response {
 	fn to_llm_response(&self, _include_completion_in_log: bool) -> crate::llm::LLMResponse {
 		crate::llm::LLMResponse {
 			input_tokens: Some(self.usage.prompt_tokens as u64),
+			input_image_tokens: None,
+			input_text_tokens: None,
+			input_audio_tokens: None,
 			total_tokens: Some(self.usage.total_tokens as u64),
+			output_tokens: None,
+			output_image_tokens: None,
+			output_text_tokens: None,
+			output_audio_tokens: None,
+			service_tier: None,
 			..Default::default()
 		}
 	}

@@ -4,7 +4,7 @@ Name|Version|License
 [anthropics/anthropic-sdk-go](https://github.com/anthropics/anthropic-sdk-go)|v1.27.1|MIT License
 [retry-go/v4](https://github.com/avast/retry-go)|v4.7.0|MIT License
 [xds/go](https://github.com/cncf/xds)|v0.0.0-20260202195803-dba9d589def2|Apache License 2.0
-[go-control-plane/envoy](https://github.com/envoyproxy/go-control-plane)|v1.37.1-0.20260313105501-0df655d8a214|Apache License 2.0
+[go-control-plane/envoy](https://github.com/envoyproxy/go-control-plane)|v1.37.1-0.20260402053555-4e9843ddb8d0|Apache License 2.0
 [ghodss/yaml](https://github.com/ghodss/yaml)|v1.0.1-0.20190212211648-25d852aebe32|MIT License
 [go-jose/v4](https://github.com/go-jose/go-jose)|v4.1.3|Apache License 2.0
 [go-logr/logr](https://github.com/go-logr/logr)|v1.4.3|Apache License 2.0
@@ -37,7 +37,7 @@ Name|Version|License
 [helm/v3](https://helm.sh/helm/v3)|v3.20.1|Apache License 2.0
 [istio.io/api](https://istio.io/api)|v1.29.0-alpha.0.0.20260315093121-ce7e56c13e1d|Apache License 2.0
 [istio.io/client-go](https://istio.io/client-go)|v1.29.0-alpha.0.0.20260315093321-a99807642da7|Apache License 2.0
-[istio.io/istio](https://istio.io/istio)|v0.0.0-20260320151437-efc2b41130da|Apache License 2.0
+[istio.io/istio](https://istio.io/istio)|v0.0.0-20260407051556-b9f70d130eb6|Apache License 2.0
 [k8s.io/api](https://k8s.io/api)|v0.35.3|Apache License 2.0
 [k8s.io/apiextensions-apiserver](https://k8s.io/apiextensions-apiserver)|v0.35.3|Apache License 2.0
 [k8s.io/apimachinery](https://k8s.io/apimachinery)|v0.35.3|Apache License 2.0

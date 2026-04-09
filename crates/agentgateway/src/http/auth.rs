@@ -747,24 +747,27 @@ mod azure {
 				AzureAuthCredentialSource::ManagedIdentity {
 					user_assigned_identity,
 				} => {
-					let options: Option<azure_identity::ManagedIdentityCredentialOptions> =
-						user_assigned_identity.as_ref().map(|uami| {
-							azure_identity::ManagedIdentityCredentialOptions {
-								user_assigned_id: match uami {
-									AzureUserAssignedIdentity::ClientId(cid) => {
-										Some(UserAssignedId::ClientId(cid.to_string()))
-									},
-									AzureUserAssignedIdentity::ObjectId(oid) => {
-										Some(UserAssignedId::ObjectId(oid.to_string()))
-									},
-									AzureUserAssignedIdentity::ResourceId(rid) => {
-										Some(UserAssignedId::ResourceId(rid.to_string()))
-									},
-								},
-								client_options,
-							}
-						});
-					Ok(azure_identity::ManagedIdentityCredential::new(options)?)
+					// Always construct ManagedIdentityCredentialOptions so that the
+					// custom reqwest-backed transport is injected regardless of whether
+					// a user-assigned identity is specified.
+					//
+					// Before this fix, .map() short-circuited to None for system-assigned
+					// identity (managedIdentity: {}), causing ManagedIdentityCredential::new(None)
+					// to fall back to NoopClient which panics on every IMDS request.
+					// See: https://github.com/agentgateway/agentgateway/issues/900
+					let options = azure_identity::ManagedIdentityCredentialOptions {
+						user_assigned_id: user_assigned_identity.as_ref().map(|uami| match uami {
+							AzureUserAssignedIdentity::ClientId(cid) => UserAssignedId::ClientId(cid.to_string()),
+							AzureUserAssignedIdentity::ObjectId(oid) => UserAssignedId::ObjectId(oid.to_string()),
+							AzureUserAssignedIdentity::ResourceId(rid) => {
+								UserAssignedId::ResourceId(rid.to_string())
+							},
+						}),
+						client_options,
+					};
+					Ok(azure_identity::ManagedIdentityCredential::new(Some(
+						options,
+					))?)
 				},
 				AzureAuthCredentialSource::WorkloadIdentity {} => {
 					Ok(azure_identity::WorkloadIdentityCredential::new(Some(

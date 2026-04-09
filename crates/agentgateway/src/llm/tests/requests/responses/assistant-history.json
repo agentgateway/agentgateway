@@ -1,0 +1,19 @@
+{
+  "model": "gpt-4o",
+  "input": [
+    {
+      "type": "message",
+      "role": "assistant",
+      "phase": "final_answer",
+      "content": [
+        {"type": "output_text", "text": "Here is the answer."},
+        {"type": "refusal", "text": "I cannot help with that part."}
+      ]
+    },
+    {
+      "type": "message",
+      "role": "user",
+      "content": [{"type": "input_text", "text": "Follow up question."}]
+    }
+  ]
+}

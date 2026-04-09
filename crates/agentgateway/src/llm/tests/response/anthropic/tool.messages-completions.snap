@@ -26,6 +26,7 @@ info:
 {
   "response": {
     "model": "claude-opus-4-6",
+    "service_tier": "standard",
     "usage": {
       "prompt_tokens": 558,
       "completion_tokens": 48,
@@ -65,6 +66,7 @@ info:
     "output_tokens": 48,
     "total_tokens": 606,
     "cached_input_tokens": 2,
+    "service_tier": "standard",
     "provider_model": "claude-opus-4-6"
   }
 }

@@ -12,7 +12,6 @@ import (
 	"istio.io/istio/pkg/cluster"
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/network"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/util/sets"
@@ -164,6 +163,15 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	gatewayFinalStatus := s.buildFinalGatewayStatus(gatewayInitialStatus, routeAttachments, krtopts)
 	status.RegisterStatus(s.statusCollections, gatewayFinalStatus, translator.GetStatus)
 
+	// Register plugin-provided gateway statuses. These statuses are scoped to a
+	// specific gatewayclass as we already filter out those Gateways in
+	// buildAgwResources and won't conflict with status written by the non-plugin
+	// one above.
+	if s.agwPlugins.AddResourceExtension != nil && s.agwPlugins.AddResourceExtension.GatewayStatuses != nil {
+		pluginGwFinalStatus := s.buildFinalGatewayStatus(s.agwPlugins.AddResourceExtension.GatewayStatuses, routeAttachments, krtopts)
+		status.RegisterStatus(s.statusCollections, pluginGwFinalStatus, translator.GetStatus)
+	}
+
 	listenerSetFinalStatus := s.buildFinalListenerSetStatus(gateways, listenerSetInitialStatus, routeAttachments, krtopts)
 	status.RegisterStatus(s.statusCollections, listenerSetFinalStatus, translator.GetStatus)
 
@@ -259,18 +267,18 @@ func (s *Syncer) buildFinalListenerSetStatus(
 				counts[r.ListenerName]++
 			}
 			for idx, l := range i.Obj.Spec.Listeners {
-				gatewayListener := krt.FetchOne(ctx, gatewayIndex, krt.FilterKey(utils.SectionedNamespacedName{
+				gatewayListeners := krtutil.FetchIndexObjects(ctx, gatewayIndex, utils.SectionedNamespacedName{
 					NamespacedName: types.NamespacedName{
 						Namespace: i.Obj.Namespace,
 						Name:      i.Obj.Name,
 					},
 					SectionName: l.Name,
-				}.String()))
-				if len(gatewayListener.Objects) == 0 {
+				})
+				if len(gatewayListeners) == 0 {
 					continue
 				}
 
-				obj := gatewayListener.Objects[0]
+				obj := gatewayListeners[0]
 				if !obj.Valid {
 					invalidListenerCount++
 				} else {
@@ -443,7 +451,18 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	}
 
 	// Build routes
-	routeParents := translator.BuildRouteParents(filteredGateways)
+	var routeParents translator.ParentResolver = translator.BuildRouteParents(filteredGateways)
+
+	// Compose with plugin-provided parent resolvers.
+	if ext := s.agwPlugins.AddResourceExtension; ext != nil && len(ext.ParentResolvers) > 0 {
+		resolvers := []translator.ParentResolver{routeParents}
+		for _, r := range ext.ParentResolvers {
+			if r != nil {
+				resolvers = append(resolvers, r)
+			}
+		}
+		routeParents = &translator.CompositeParentResolver{Resolvers: resolvers}
+	}
 
 	referenceTypes := plugins.DefaultReferenceTypes(s.agwCollections)
 	if s.buildReferenceTypesFunc != nil {
@@ -480,14 +499,12 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	})
 	ancestorCollection := ancestorsIndex.AsCollection(append(krtopts.ToOptions("AncestorBackend"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 
-	// First, make the policies with access to the route-level attachment references.
 	referenceIndex := plugins.BuildReferenceIndex(ancestorCollection, routeAttachmentsIndex, referenceTypes)
-	agwPolicies, policyReferences, policyStatuses := AgwPolicyCollection(s.agwPlugins, referenceIndex, krtopts)
-	for _, col := range policyStatuses {
-		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
-	}
 
-	// Next, build backend references.
+	// Phase 1: Collect policy references (e.g. ext_proc backendRefs) BEFORE building
+	// policies. This ensures BackendTLSPolicy can look up gateways for backends that
+	// are only reachable via PolicyAttachments (like ext_proc processor Services).
+	policyReferences := CollectPolicyReferences(s.agwPlugins, referenceIndex, krtopts)
 	backendPolicyReferences := AgwBackendReferencesCollection(s.agwPlugins, krtopts)
 	joinedPolicyReferences := krt.JoinCollection([]krt.Collection[*plugins.PolicyAttachment]{policyReferences, backendPolicyReferences}, krtopts.ToOptions("JoinPolicyAttachment")...)
 	policyReferencesIndex := krt.NewIndex(joinedPolicyReferences, "policyReferences", func(o *plugins.PolicyAttachment) []utils.TypedNamespacedName {
@@ -496,7 +513,13 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	policyReferencesIndexCollection := policyReferencesIndex.AsCollection(append(krtopts.ToOptions("PolicyReferencesIndex"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 	referenceIndex = referenceIndex.WithPolicyAttachments(policyReferencesIndexCollection)
 
-	// Finally, build the backend collection with backend+route references
+	// Phase 2: Build policies with the fully-populated reference index.
+	agwPolicies, policyStatuses := BuildPolicies(s.agwPlugins, referenceIndex, krtopts)
+	for _, col := range policyStatuses {
+		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
+	}
+
+	// Build the backend collection with backend+route references
 	agwBackends, agwBackendStatus := AgwBackendCollection(s.agwPlugins, referenceIndex, krtopts)
 	for _, col := range agwBackendStatus {
 		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
@@ -601,16 +624,12 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 		ClusterID:       clusterId,
 	}, opts)
 	builder := ambient.Builder{
-		DomainSuffix:      kubeutils.GetClusterDomainName(),
-		ClusterID:         clusterId,
-		NetworkGateways:   Networks.NetworkGateways,
-		GatewaysByNetwork: Networks.GatewaysByNetwork,
+		DomainSuffix: kubeutils.GetClusterDomainName(),
+		ClusterID:    clusterId,
+		Networks:     Networks,
 		Flags: ambient.FeatureFlags{
 			EnableK8SServiceSelectWorkloadEntries: true,
 			EnableMtlsTransportProtocol:           true,
-		},
-		Network: func(ctx krt.HandlerContext) network.ID {
-			return ""
 		},
 	}
 

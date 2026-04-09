@@ -16,6 +16,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	"sigs.k8s.io/yaml"
 
+	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
@@ -138,32 +139,21 @@ func (dt DeployerTester) GetObjects(
 	tt HelmTestCase,
 	scheme *runtime.Scheme,
 	dir string,
-	crdDir string,
 ) []client.Object {
 	filePath := filepath.Join(dir, "testdata/", tt.InputFile)
 	inputFile := filePath + ".yaml"
 
-	gvkToStructuralSchema, err := testutils.GetStructuralSchemas(crdDir)
-	require.NoError(t, err, "error getting structural schemas")
+	validator := apitests.NewAgentgatewayValidatorSkipMissing(t)
 
-	objs, err := testutils.LoadFromFiles(inputFile, scheme, gvkToStructuralSchema)
+	objs, err := testutils.LoadFromFiles(inputFile, scheme, validator)
 	require.NoError(t, err, "error loading files from input file")
 
 	return objs
 }
 
-func (dt DeployerTester) RunHelmChartTest(
-	t *testing.T,
-	tt HelmTestCase,
-	scheme *runtime.Scheme,
-	dir string,
-	crdDir string,
-	fakeClient apiclient.Client,
-) {
+func (dt DeployerTester) RunHelmChartTest(t *testing.T, tt HelmTestCase, scheme *runtime.Scheme, dir string, fakeClient apiclient.Client, objs []client.Object) {
 	filePath := filepath.Join(dir, "testdata/", tt.InputFile)
 	outputFile := filePath + "-out.yaml"
-
-	objs := dt.GetObjects(t, tt, scheme, dir, crdDir)
 
 	_, gtw := ExtractCommonObjs(t, objs)
 	if gtw == nil {

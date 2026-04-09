@@ -1,0 +1,50 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/bedrock/tool.bin
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"input-model","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":1,"item":{"type":"function_call","arguments":"","call_id":"call_xxx","name":"top_song","id":"","status":"in_progress"}}
+
+event: event
+data: {"type":"response.function_call_arguments.delta","sequence_number":4,"item_id":"","output_index":1,"delta":"{\"sign\":"}
+
+event: event
+data: {"type":"response.function_call_arguments.delta","sequence_number":5,"item_id":"","output_index":1,"delta":"\"WZPZ\"}"}
+
+event: event
+data: {"type":"response.function_call_arguments.done","name":"top_song","sequence_number":6,"item_id":"","output_index":1,"arguments":"{\"sign\":\"WZPZ\"}"}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":7,"output_index":1,"item":{"type":"function_call","arguments":"{\"sign\":\"WZPZ\"}","call_id":"call_xxx","name":"top_song","id":"","status":"completed"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":8,"output_index":2,"item":{"type":"function_call","arguments":"","call_id":"call_xxx","name":"hello","id":"","status":"in_progress"}}
+
+event: event
+data: {"type":"response.function_call_arguments.delta","sequence_number":9,"item_id":"","output_index":2,"delta":"{\"sign\":\"world\"}"}
+
+event: event
+data: {"type":"response.function_call_arguments.done","name":"hello","sequence_number":10,"item_id":"","output_index":2,"arguments":"{\"sign\":\"world\"}"}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":11,"output_index":2,"item":{"type":"function_call","arguments":"{\"sign\":\"world\"}","call_id":"call_xxx","name":"hello","id":"","status":"completed"}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":12,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":13,"response":{"created_at":123,"id":"","model":"input-model","object":"response","output":[],"status":"completed","usage":{"input_tokens":150,"input_tokens_details":{"cached_tokens":0},"output_tokens":45,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":195}}}
+
+
+
+{
+  "input_tokens": 150,
+  "output_tokens": 45,
+  "total_tokens": 195
+}

@@ -846,7 +846,7 @@ impl McpBackendHost {
 		let McpBackendHost { host, port, path } = self;
 		Ok(match (host, port, path) {
 			(host, Some(port), Some(path)) => {
-				let b = Target::try_from((host.as_str(), *port))?;
+				let b = Target::from((host.as_str(), *port));
 				(b, path.clone(), false)
 			},
 			(host, None, None) => {
@@ -865,7 +865,7 @@ impl McpBackendHost {
 					},
 				};
 
-				let b = Target::try_from((host, port))?;
+				let b = Target::from((host, port));
 				(b, path.to_string(), scheme == &http::Scheme::HTTPS)
 			},
 			_ => {
@@ -1006,6 +1006,9 @@ struct LocalLLMPolicy {
 #[apply(schema_de!)]
 #[derive(Default)]
 struct LocalGatewayPolicy {
+	/// Authenticate incoming browser requests with OIDC authorization code flow.
+	#[serde(default)]
+	oidc: Option<crate::http::oidc::LocalOidcConfig>,
 	/// Authenticate incoming JWT requests.
 	#[serde(default)]
 	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
@@ -1034,6 +1037,7 @@ struct LocalGatewayPolicy {
 impl From<LocalGatewayPolicy> for FilterOrPolicy {
 	fn from(val: LocalGatewayPolicy) -> Self {
 		let LocalGatewayPolicy {
+			oidc,
 			jwt_auth,
 			ext_authz,
 			ext_proc,
@@ -1042,6 +1046,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 			api_key,
 		} = val;
 		FilterOrPolicy {
+			oidc,
 			jwt_auth,
 			ext_authz,
 			ext_proc,
@@ -1311,6 +1316,9 @@ pub struct FilterOrPolicy {
 	/// Authenticate incoming JWT requests.
 	#[serde(default)]
 	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
+	/// Authenticate incoming browser requests with OIDC authorization code flow.
+	#[serde(default)]
+	oidc: Option<crate::http::oidc::LocalOidcConfig>,
 	/// Authenticate incoming requests using Basic Authentication with htpasswd.
 	#[serde(default)]
 	basic_auth: Option<crate::http::basicauth::LocalBasicAuth>,
@@ -1377,8 +1385,15 @@ async fn convert(
 		let bind_name = strng::format!("bind/{}", b.port);
 		let mut ls = ListenerSet::default();
 		for (idx, l) in b.listeners.into_iter().enumerate() {
-			let (l, pol, backends) =
-				convert_listener(client.clone(), idx, l, bind_name.clone(), gateway.clone()).await?;
+			let (l, pol, backends) = convert_listener(
+				client.clone(),
+				config,
+				idx,
+				l,
+				bind_name.clone(),
+				gateway.clone(),
+			)
+			.await?;
 			all_policies.extend_from_slice(&pol);
 			all_backends.extend_from_slice(&backends);
 			ls.insert(l)
@@ -1400,15 +1415,21 @@ async fn convert(
 	}
 
 	for p in policies {
-		let res = split_policies(client.clone(), p.policy).await?;
+		let policy_key = p.name.to_string();
+		let res = split_policies(
+			client.clone(),
+			p.policy,
+			config.as_policy_context(&policy_key),
+		)
+		.await?;
 		if (res.route_policies.len() + res.backend_policies.len()) != 1 {
-			anyhow::bail!("'policies' must contain exactly 1 policy")
+			bail!("'policies' must contain exactly 1 policy");
 		}
-		let tp = res
-			.route_policies
-			.first()
-			.map(|r| PolicyType::from((r.clone(), p.phase)))
-			.unwrap_or_else(|| res.backend_policies.first().unwrap().clone().into());
+		let tp = if let Some(route_policy) = res.route_policies.into_iter().next() {
+			PolicyType::from((route_policy, p.phase))
+		} else {
+			res.backend_policies.into_iter().next().unwrap().into()
+		};
 		let tgt_policy = TargetedPolicy {
 			name: Some(TypedResourceName {
 				kind: strng::literal!("Local"),
@@ -1453,13 +1474,98 @@ async fn convert(
 	// Add frontend policies targeted to this listener
 	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
 
-	Ok(NormalizedLocalConfig {
+	let normalized = NormalizedLocalConfig {
 		binds: all_binds,
 		policies: all_policies,
 		backends: all_backends.into_iter().collect(),
 		workloads,
 		services,
-	})
+	};
+	validate_listener_oidc_modes(&normalized)?;
+	Ok(normalized)
+}
+
+#[derive(Default)]
+struct ListenerOidcModes {
+	has_gateway_phase_oidc: bool,
+	has_route_phase_oidc: bool,
+}
+
+fn validate_listener_oidc_modes(normalized: &NormalizedLocalConfig) -> anyhow::Result<()> {
+	let mut listener_modes: HashMap<ListenerName, ListenerOidcModes> = HashMap::new();
+	let mut route_listeners: HashMap<RouteName, ListenerName> = HashMap::new();
+	let listeners: Vec<ListenerName> = normalized
+		.binds
+		.iter()
+		.flat_map(|bind| bind.listeners.iter())
+		.map(|listener| listener.name.clone())
+		.collect();
+
+	for bind in &normalized.binds {
+		for listener in bind.listeners.iter() {
+			for route in listener.routes.iter() {
+				route_listeners.insert(route.name.clone(), listener.name.clone());
+				if route
+					.inline_policies
+					.iter()
+					.any(|policy| matches!(policy, TrafficPolicy::Oidc(_)))
+				{
+					listener_modes
+						.entry(listener.name.clone())
+						.or_default()
+						.has_route_phase_oidc = true;
+				}
+			}
+		}
+	}
+
+	for policy in &normalized.policies {
+		let PolicyType::Traffic(traffic) = &policy.policy else {
+			continue;
+		};
+		if !matches!(traffic.policy, TrafficPolicy::Oidc(_)) {
+			continue;
+		}
+
+		let affected_listeners: Vec<ListenerName> = match &policy.target {
+			PolicyTarget::Gateway(target) => listeners
+				.iter()
+				.filter(|listener| {
+					listener.gateway_name == target.gateway_name
+						&& listener.gateway_namespace == target.gateway_namespace
+						&& target
+							.listener_name
+							.as_ref()
+							.is_none_or(|name| listener.listener_name == *name)
+				})
+				.cloned()
+				.collect(),
+			PolicyTarget::Route(route) => route_listeners.get(route).into_iter().cloned().collect(),
+			PolicyTarget::Backend(_) => Vec::new(),
+		};
+
+		for listener in affected_listeners {
+			let modes = listener_modes.entry(listener).or_default();
+			match traffic.phase {
+				PolicyPhase::Gateway => modes.has_gateway_phase_oidc = true,
+				PolicyPhase::Route => modes.has_route_phase_oidc = true,
+			}
+		}
+	}
+
+	if let Some((listener, _)) = listener_modes
+		.iter()
+		.find(|(_, modes)| modes.has_gateway_phase_oidc && modes.has_route_phase_oidc)
+	{
+		bail!(
+			"listener '{}/{}/{}' cannot mix gateway-phase oidc with route-phase oidc",
+			listener.gateway_namespace,
+			listener.gateway_name,
+			listener.listener_name
+		);
+	}
+
+	Ok(())
 }
 
 static STARTUP_TIMESTAMP: OnceLock<u64> = OnceLock::new();
@@ -1521,9 +1627,15 @@ async fn convert_llm_config(
 				authorization,
 				..Default::default()
 			},
+			None,
 		)
 		.await?;
-		let gateway_policies = split_policies(client.clone(), gateway.into()).await?;
+		let gateway_policies = split_policies(
+			client.clone(),
+			gateway.into(),
+			config.as_policy_context("listener/llm"),
+		)
+		.await?;
 		(
 			gateway_policies.route_policies,
 			authorization_policies.route_policies,
@@ -1798,6 +1910,18 @@ json(request.body).model
 						crate::llm::RouteType::Responses,
 					),
 					(
+						strng::new("/v1/images/generations"),
+						crate::llm::RouteType::Detect,
+					),
+					(
+						strng::new("/v1/images/edits"),
+						crate::llm::RouteType::Detect,
+					),
+					(
+						strng::new("/v1/images/variations"),
+						crate::llm::RouteType::Detect,
+					),
+					(
 						strng::new("/v1/responses/compact"),
 						crate::llm::RouteType::Detect,
 					),
@@ -1834,23 +1958,24 @@ json(request.body).model
 
 	if !listener_gateway_policies.is_empty() || !listener_route_policies.is_empty() {
 		let pc = listener_gateway_policies.len();
+		let target = PolicyTarget::Gateway(listener_name.clone().into());
 		for (idx, pol) in listener_gateway_policies.into_iter().enumerate() {
 			let key = strng::format!("listener/{idx}");
 			all_policies.push(TargetedPolicy {
-				key: key.clone(),
+				key,
 				name: None,
-				target: PolicyTarget::Gateway(listener_name.clone().into()),
+				target: target.clone(),
 				policy: (pol, PolicyPhase::Gateway).into(),
-			})
+			});
 		}
 		for (idx, pol) in listener_route_policies.into_iter().enumerate() {
 			let key = strng::format!("listener/{}", pc + idx);
 			all_policies.push(TargetedPolicy {
-				key: key.clone(),
+				key,
 				name: None,
-				target: PolicyTarget::Gateway(listener_name.clone().into()),
+				target: target.clone(),
 				policy: (pol, PolicyPhase::Route).into(),
-			})
+			});
 		}
 	}
 
@@ -1905,16 +2030,17 @@ async fn convert_mcp_config(
 		policies,
 	} = mcp_config;
 	let port = port.unwrap_or(DEFAULT_MCP_PORT);
+	let route_key = strng::new("mcp:default");
 
 	let resolved_policies = if let Some(pol) = policies {
-		split_policies(client.clone(), pol).await?
+		split_policies(client.clone(), pol, config.as_policy_context(&route_key)).await?
 	} else {
 		ResolvedPolicies::default()
 	};
 
 	let mut routes = RouteSet::default();
 	let route = Route {
-		key: strng::new("mcp:default"),
+		key: route_key.clone(),
 		service_key: None,
 		name: RouteName {
 			name: strng::new("default"),
@@ -1997,6 +2123,7 @@ fn detect_bind_protocol(listeners: &ListenerSet) -> BindProtocol {
 
 async fn convert_listener(
 	client: client::Client,
+	config: &crate::Config,
 	idx: usize,
 	l: LocalListener,
 	bind_key: Strng,
@@ -2053,15 +2180,26 @@ async fn convert_listener(
 		.unwrap_or_else(|| strng::format!("listener{}", idx));
 	let gateway_name = gateway.gateway_name.clone();
 	let gateway_namespace = gateway.gateway_namespace.clone();
-	let key: ListenerKey =
-		strng::format!("{gateway_namespace}/{gateway_name}/{bind_key}/{listener_name}");
+	let name = ListenerName {
+		gateway_name,
+		gateway_namespace,
+		listener_name,
+		listener_set: None,
+	};
+	let hostname = hostname.unwrap_or_default();
+	let key: ListenerKey = strng::format!(
+		"{}/{}/{bind_key}/{}",
+		name.gateway_namespace,
+		name.gateway_name,
+		name.listener_name
+	);
 
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
 
 	let mut rs = RouteSet::default();
 	for (idx, l) in routes.into_iter().flatten().enumerate() {
-		let (route, backends) = convert_route(client.clone(), l, idx, key.clone()).await?;
+		let (route, backends) = convert_route(client.clone(), config, l, idx, key.clone()).await?;
 		all_backends.extend_from_slice(&backends);
 		rs.insert(route)
 	}
@@ -2074,30 +2212,30 @@ async fn convert_listener(
 		trs.insert(route)
 	}
 
-	let name = ListenerName {
-		gateway_name,
-		gateway_namespace,
-		listener_name,
-		listener_set: None,
-	};
-
 	if let Some(pol) = policies {
-		let pols = split_policies(client.clone(), pol.into()).await?;
+		let listener_policy_id = strng::format!("listener/{key}");
+		let pols = split_policies(
+			client.clone(),
+			pol.into(),
+			config.as_policy_context(listener_policy_id),
+		)
+		.await?;
+		let target = PolicyTarget::Gateway(name.clone().into());
 		for (idx, pol) in pols.route_policies.into_iter().enumerate() {
 			let key = strng::format!("listener/{key}/{idx}");
 			all_policies.push(TargetedPolicy {
-				key: key.clone(),
+				key,
 				name: None,
-				target: PolicyTarget::Gateway(name.clone().into()),
+				target: target.clone(),
 				policy: (pol, PolicyPhase::Gateway).into(),
-			})
+			});
 		}
 	}
 
 	let l = Listener {
 		key,
 		name,
-		hostname: hostname.unwrap_or_default(),
+		hostname,
 		protocol,
 		routes: rs,
 		tcp_routes: trs,
@@ -2107,6 +2245,7 @@ async fn convert_listener(
 
 pub async fn convert_route(
 	client: client::Client,
+	config: &crate::Config,
 	lr: LocalRoute,
 	idx: usize,
 	listener_key: ListenerKey,
@@ -2157,7 +2296,15 @@ pub async fn convert_route(
 		external_backends.extend_from_slice(&backends);
 	}
 	let resolved = if let Some(pol) = policies {
-		split_policies(client, pol).await?
+		split_policies(
+			client,
+			pol,
+			Some(AttachedPolicyContext {
+				oidc_policy_id: crate::http::oidc::PolicyId::route(&key),
+				oidc_cookie_encoder: config.oidc_cookie_encoder.as_ref(),
+			}),
+		)
+		.await?
 	} else {
 		ResolvedPolicies::default()
 	};
@@ -2165,6 +2312,7 @@ pub async fn convert_route(
 		br.inline_policies
 			.extend_from_slice(&resolved.backend_policies);
 	}
+	let inline_policies = resolved.route_policies;
 	let route = Route {
 		key,
 		service_key: None,
@@ -2177,15 +2325,20 @@ pub async fn convert_route(
 		hostnames,
 		matches,
 		backends: backend_refs,
-		inline_policies: resolved.route_policies,
+		inline_policies,
 	};
 	Ok((route, external_backends))
 }
 
 #[derive(Default)]
-pub struct ResolvedPolicies {
-	pub backend_policies: Vec<BackendPolicy>,
-	pub route_policies: Vec<TrafficPolicy>,
+pub(crate) struct ResolvedPolicies {
+	pub(crate) backend_policies: Vec<BackendPolicy>,
+	pub(crate) route_policies: Vec<TrafficPolicy>,
+}
+
+pub struct AttachedPolicyContext<'a> {
+	pub oidc_policy_id: crate::http::oidc::PolicyId,
+	pub oidc_cookie_encoder: Option<&'a crate::http::sessionpersistence::Encoder>,
 }
 
 async fn split_frontend_policies(
@@ -2248,9 +2401,10 @@ async fn split_frontend_policies(
 	}
 	Ok(pols)
 }
-pub async fn split_policies(
+pub(crate) async fn split_policies(
 	client: Client,
 	pol: FilterOrPolicy,
+	attached: Option<AttachedPolicyContext<'_>>,
 ) -> Result<ResolvedPolicies, Error> {
 	let mut resolved = ResolvedPolicies::default();
 	let ResolvedPolicies {
@@ -2276,6 +2430,7 @@ pub async fn split_policies(
 		local_rate_limit,
 		remote_rate_limit,
 		jwt_auth,
+		oidc: oidc_config,
 		basic_auth,
 		api_key,
 		transformations,
@@ -2344,6 +2499,27 @@ pub async fn split_policies(
 			mcp: None,
 		}));
 	}
+	let compiled_oidc = if let Some(oidc) = oidc_config {
+		let Some(AttachedPolicyContext {
+			oidc_policy_id,
+			oidc_cookie_encoder,
+		}) = attached
+		else {
+			return Err(Error::msg("oidc policies must be attached"));
+		};
+		let Some(oidc_cookie_encoder) = oidc_cookie_encoder else {
+			return Err(Error::msg(
+				"OIDC_COOKIE_SECRET is required when oidc is configured",
+			));
+		};
+		Some(TrafficPolicy::Oidc(
+			oidc
+				.compile(client.clone(), oidc_policy_id, oidc_cookie_encoder)
+				.await?,
+		))
+	} else {
+		None
+	};
 	if let Some(p) = basic_auth {
 		route_policies.push(TrafficPolicy::BasicAuth(p.try_into()?));
 	}
@@ -2378,6 +2554,9 @@ pub async fn split_policies(
 	}
 	if let Some(p) = retry {
 		route_policies.push(TrafficPolicy::Retry(p));
+	}
+	if let Some(oidc) = compiled_oidc {
+		route_policies.push(oidc);
 	}
 	Ok(resolved)
 }

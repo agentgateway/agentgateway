@@ -46,8 +46,15 @@ impl<IO> Parser<IO> {
 				self.log.non_atomic_mutate(|r| {
 					r.response = LLMResponse {
 						input_tokens: Some(usage.input_tokens as u64),
+						input_image_tokens: None,
+						input_text_tokens: None,
+						input_audio_tokens: None,
 						output_tokens: Some(usage.output_tokens as u64),
+						output_image_tokens: None,
+						output_text_tokens: None,
+						output_audio_tokens: None,
 						total_tokens: Some(usage.total_tokens as u64),
+						service_tier: None,
 						provider_model: None,
 						completion: None,
 						first_token: None,

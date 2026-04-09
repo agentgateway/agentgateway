@@ -6,13 +6,13 @@ metadata:
   labels:
     app: mcp-app
   annotations:
-    kgateway.dev/mcp-path: /test
+    agentgateway.dev/mcp-path: /test
 spec:
   selector:
     test: test
   ports:
     - protocol: TCP
-      appProtocol: kgateway.dev/mcp
+      appProtocol: agentgateway.dev/mcp
       port: 80
       targetPort: test
 ---

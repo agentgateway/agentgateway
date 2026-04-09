@@ -621,6 +621,7 @@ message TrafficPolicySpec {
     message Descriptor {
       repeated Entry entries = 1;
       Type type = 2;
+      optional string limit_override = 3; // CEL expr returning {unit, requestsPerUnit}
     }
     message Entry {
       string key = 1;
@@ -954,6 +955,7 @@ message BackendPolicySpec {
       bool cache_messages = 2;
       bool cache_tools = 3;
       optional uint32 min_tokens = 4;
+      optional uint32 cache_message_offset = 5;
     }
 
     map<string, string> defaults = 2;

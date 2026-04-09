@@ -1,28 +1,30 @@
 ## OAuth2 Proxy integration
 
 This example shows how to integrate with [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/) for authorization.
-In this example, we will setup GitHub Oauth authentication. However, the same concepts can be used with other providers,
-or with other authentication sources.
+For a gateway-native browser login flow, use the [oidc](../oidc/README.md) example instead.
+
+In this example, we set up GitHub OAuth authentication. The same pattern can be used with other providers, or with other authentication sources.
 
 ### Running the example
 
 First, create a [GitHub OAuth App](https://github.com/settings/applications/new).
-Take note of the Client ID and Client Secret, and start OAuth2 Proxy locally
+Use `http://localhost:3000/oauth2/callback` as the callback URL. Then take note of the Client ID
+and Client Secret, and start OAuth2 Proxy locally:
 
 ```bash
 export OAUTH2_PROXY_CLIENT_SECRET=...
 export OAUTH2_PROXY_CLIENT_ID=...
 export OAUTH2_PROXY_COOKIE_SECRET=`python -c 'import os,base64; print(base64.b64encode(os.urandom(16)).decode("ascii"))'`
-docker compose up
+docker compose -f examples/oauth2-proxy/docker-compose.yaml up
 ```
 
-Note: the example configuration of OAuth2 proxy is setup with just a basic configuration to get started.
-Review the [OAuth2 Proxy documentation](https://oauth2-proxy.github.io/oauth2-proxy/configuration/overview) for real world usage.
+Note: the example configuration of OAuth2 Proxy uses a minimal setup to get started.
+Review the [OAuth2 Proxy documentation](https://oauth2-proxy.github.io/oauth2-proxy/configuration/overview) for real-world usage.
 
-Finally, run agentgateway:
+Then run agentgateway:
 
 ```bash
 cargo run -- -f examples/oauth2-proxy/config.yaml
 ```
 
-Now, requests to `http://localhost:3000` should automatically redirect to a GitHub sign-in page.
+Requests to `http://localhost:3000` should automatically redirect to a GitHub sign-in page.

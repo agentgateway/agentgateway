@@ -1,0 +1,100 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/responses/assistant-history.json
+info:
+  model: gpt-4o
+  input:
+    - type: message
+      role: assistant
+      phase: final_answer
+      content:
+        - type: output_text
+          text: Here is the answer.
+        - type: refusal
+          text: I cannot help with that part.
+    - type: message
+      role: user
+      content:
+        - type: input_text
+          text: Follow up question.
+---
+{
+  "input": [
+    {
+      "type": "message",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "prepend system prompt"
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "type": "message",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "prepend user message"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "content": "prepend assistant message"
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "phase": "final_answer",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "Here is the answer."
+        },
+        {
+          "type": "refusal",
+          "text": "I cannot help with that part."
+        }
+      ]
+    },
+    {
+      "type": "message",
+      "role": "user",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "Follow up question."
+        }
+      ]
+    },
+    {
+      "type": "message",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "append user message"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "type": "message",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "append system prompt"
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "content": "append assistant prompt"
+    }
+  ],
+  "model": "gpt-4o"
+}

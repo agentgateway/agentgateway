@@ -188,7 +188,7 @@ spec:
     - protocol: TCP
       port: 9999
       targetPort: 9999
-      appProtocol: kgateway.dev/a2a
+      appProtocol: agentgateway.dev/a2a
 ---
 apiVersion: v1
 kind: Service
@@ -231,7 +231,7 @@ spec:
   ports:
     - port: 80
       targetPort: 8000
-      appProtocol: kgateway.dev/mcp
+      appProtocol: agentgateway.dev/mcp
 ---
 apiVersion: v1
 kind: Service
@@ -246,7 +246,7 @@ spec:
     - name: http
       port: 80
       targetPort: 3001
-      appProtocol: kgateway.dev/mcp
+      appProtocol: agentgateway.dev/mcp
   type: ClusterIP
 ---
 apiVersion: v1

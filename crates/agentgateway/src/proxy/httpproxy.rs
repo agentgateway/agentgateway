@@ -29,7 +29,9 @@ use crate::http::{
 };
 use crate::llm::{InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType};
 use crate::proxy::tcpproxy::TCPProxy;
-use crate::proxy::{ProxyError, ProxyResponse, ProxyResponseReason, resolve_simple_backend};
+use crate::proxy::{
+	ProxyError, ProxyResponse, ProxyResponseReason, WaypointService, resolve_simple_backend,
+};
 use crate::store::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
 	RoutePath,
@@ -81,6 +83,14 @@ async fn apply_request_policies(
 			.map_err(ProxyError::from)?
 			.apply(response_policies.headers())?;
 	}
+
+	if let Some(o) = &policies.oidc {
+		o.apply(Some(log), req, client.clone())
+			.await
+			.map_err(|e| ProxyResponse::from(ProxyError::OidcFailure(e)))?
+			.apply(response_policies.headers())?;
+	}
+	http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
 
 	if let Some(j) = &policies.jwt {
 		j.apply(&client, Some(log), req).await?;
@@ -255,6 +265,14 @@ async fn apply_gateway_policies(
 	ext_proc: Option<&mut ExtProcRequest>,
 	response_headers: &mut HeaderMap,
 ) -> Result<(), ProxyResponse> {
+	if let Some(o) = &policies.oidc {
+		o.apply(Some(log), req, client.clone())
+			.await
+			.map_err(|e| ProxyResponse::from(ProxyError::OidcFailure(e)))?
+			.apply(response_headers)?;
+		http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
+	}
+
 	if let Some(j) = &policies.jwt {
 		j.apply(&client, Some(log), req).await?;
 	}
@@ -394,6 +412,7 @@ impl HTTPProxy {
 			.clone();
 		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
 		connection.copy::<cel::SourceContext>(req.extensions_mut());
+		connection.copy::<WaypointService>(req.extensions_mut());
 		req
 			.extensions_mut()
 			.insert(RequestTime(start.as_datetime()));
@@ -412,12 +431,7 @@ impl HTTPProxy {
 		// or direct responses
 		let mut response_policies = ResponsePolicies::default();
 		let ret = self
-			.proxy_internal(
-				connection,
-				req,
-				log.as_mut().unwrap(),
-				&mut response_policies,
-			)
+			.proxy_internal(req, log.as_mut().unwrap(), &mut response_policies)
 			.await
 			.map_err(|e| e.0);
 
@@ -481,12 +495,11 @@ impl HTTPProxy {
 
 	async fn proxy_internal(
 		&self,
-		connection: Arc<Extension>,
 		req: ::http::Request<Incoming>,
 		log: &mut RequestLog,
 		response_policies: &mut ResponsePolicies,
 	) -> Result<Response, SnapshottedProxyResponse> {
-		log.tls_info = connection.get::<TLSConnectionInfo>().cloned();
+		log.tls_info = req.extensions().get::<TLSConnectionInfo>().cloned();
 		log.backend_protocol = Some(cel::BackendProtocol::http);
 
 		let selected_listener = self.selected_listener.clone();
@@ -500,7 +513,7 @@ impl HTTPProxy {
 		};
 
 		sensitive_headers(&mut req);
-		normalize_uri(&connection, &mut req)
+		normalize_uri(log.tls_info.as_ref(), &mut req)
 			.map_err(ProxyError::Processing)
 			.snapshot_on_err(log, &mut req)?;
 		let mut req_upgrade = hop_by_hop_headers(&mut req);
@@ -526,10 +539,13 @@ impl HTTPProxy {
 		let selected_listener = match selected_listener {
 			Ok(l) => {
 				debug!(bind=%bind_name, listener=%l.key, "selected listener");
-				let frontend_policies = inputs
-					.stores
-					.read_binds()
-					.listener_frontend_policies(&l.name);
+				let frontend_policies = inputs.stores.read_binds().listener_frontend_policies(
+					&l.name,
+					req
+						.extensions()
+						.get::<WaypointService>()
+						.map(WaypointService::as_policy_ref),
+				);
 
 				self
 					.handle_frontend_policies(&frontend_policies, log, &mut req)
@@ -579,8 +595,6 @@ impl HTTPProxy {
 
 		let (selected_route, path_match) = http::route::select_best_route(
 			inputs.stores.clone(),
-			inputs.cfg.network.clone(),
-			inputs.cfg.self_addr.as_ref(),
 			self.target_address,
 			&selected_listener,
 			&req,
@@ -606,6 +620,7 @@ impl HTTPProxy {
 
 		let route_path = RoutePath {
 			route: &selected_route.name,
+			service: selected_route.service_key.as_ref(),
 			listener: &selected_listener.name,
 		};
 
@@ -1087,7 +1102,7 @@ pub async fn build_transport(
 	if let Some(tun) = backend_tunnel {
 		let backend = super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?;
 		let pols = crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &[], None);
-		let call = TCPProxy::build_backend_call(&mut None, inputs, &backend.backend, pols)?;
+		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols)?;
 		let tunnel_backend_tls = call.backend_policies.backend_tls.clone();
 		let tunnel_auth = call.backend_policies.backend_auth.clone();
 		// This is a bounded recursion; this code is only called when backend_tunnel is set, and in this call
@@ -1349,9 +1364,15 @@ async fn make_backend_call(
 				network_gateway: None,
 			}
 		},
-		Backend::Service(svc, port) => {
-			build_service_call(&inputs, policies, &mut log, override_dest, svc, port)?
-		},
+		Backend::Service(svc, port) => build_service_call(
+			&inputs,
+			policies,
+			&mut log,
+			override_dest,
+			svc,
+			port,
+			req.uri().host(),
+		)?,
 		Backend::Opaque(_, target) => BackendCall {
 			target: target.clone(),
 			http_version_override: None,
@@ -1398,7 +1419,7 @@ async fn make_backend_call(
 					Some(s) if *s == Scheme::HTTPS => 443,
 					_ => 80,
 				});
-			let target = Target::try_from((host, port)).map_err(ProxyError::Processing)?;
+			let target = Target::from((host, port));
 			BackendCall {
 				target,
 				http_version_override: None,
@@ -1701,6 +1722,7 @@ pub fn build_service_call(
 	override_dest: Option<SocketAddr>,
 	svc: &Arc<Service>,
 	port: &u16,
+	request_host: Option<&str>,
 ) -> Result<BackendCall, ProxyError> {
 	let port = *port;
 	let workloads = &inputs.stores.read_discovery().workloads;
@@ -1785,14 +1807,19 @@ pub fn build_service_call(
 		);
 		Target::Hostname(svc.hostname.clone(), port)
 	} else {
-		// TODO: support a mode like ServiceEntry DYNAMIC_DNS. Need a way to signal this, though; perhaps:
-		// wl.workload_ips.is_empty() && wl.hostname.starts_with("*.")
-		// For direct connections, we need the workload IP
-		let Some(ip) = wl.workload_ips.first() else {
-			return Err(ProxyError::NoHealthyEndpoints);
-		};
-		let dest = SocketAddr::from((*ip, target_port));
-		Target::Address(dest)
+		// TODO: this should only be used with DNS resolution type! maybe?
+		if wl.workload_ips.is_empty()
+			&& let Some(hostname) = resolved_workload_target_hostname(&wl.hostname, request_host)
+		{
+			Target::Hostname(hostname.into(), port)
+		} else {
+			// For direct connections, we need the workload IP
+			let Some(ip) = wl.workload_ips.first() else {
+				return Err(ProxyError::NoHealthyEndpoints);
+			};
+			let dest = SocketAddr::from((*ip, target_port));
+			Target::Address(dest)
+		}
 	};
 
 	Ok(BackendCall {
@@ -1817,11 +1844,72 @@ fn workload_and_service_sans(wl: &Workload, svc: &Service) -> Vec<Identity> {
 	ids
 }
 
+fn resolved_workload_target_hostname<'a>(
+	workload_hostname: &'a str,
+	request_host: Option<&'a str>,
+) -> Option<&'a str> {
+	if workload_hostname.is_empty() {
+		return None;
+	}
+
+	if let Some(wildcard_suffix) = workload_hostname.strip_prefix("*.") {
+		let suffix = format!(".{wildcard_suffix}");
+		request_host.filter(|host| host.ends_with(&suffix))
+	} else {
+		Some(workload_hostname)
+	}
+}
+
 fn should_retry(res: &Result<Response, SnapshottedProxyResponse>, pol: &retry::Policy) -> bool {
 	match res {
 		Ok(resp) => pol.codes.contains(&resp.status()),
 		Err(SnapshottedProxyResponse(ProxyResponse::Error(e))) => e.is_retryable(),
 		Err(SnapshottedProxyResponse(ProxyResponse::DirectResponse(_))) => false,
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::resolved_workload_target_hostname;
+
+	#[test]
+	fn resolved_workload_target_hostname_uses_explicit_workload_hostname() {
+		assert_eq!(
+			resolved_workload_target_hostname("api.example.com", Some("caller.example.com")),
+			Some("api.example.com")
+		);
+		assert_eq!(
+			resolved_workload_target_hostname("api.example.com", None),
+			Some("api.example.com")
+		);
+	}
+
+	#[test]
+	fn resolved_workload_target_hostname_uses_request_host_for_matching_wildcard() {
+		assert_eq!(
+			resolved_workload_target_hostname("*.example.com", Some("api.example.com")),
+			Some("api.example.com")
+		);
+		assert_eq!(
+			resolved_workload_target_hostname("*.example.com", Some("deep.api.example.com")),
+			Some("deep.api.example.com")
+		);
+	}
+
+	#[test]
+	fn resolved_workload_target_hostname_rejects_non_matching_wildcard() {
+		assert_eq!(
+			resolved_workload_target_hostname("*.example.com", Some("example.com")),
+			None
+		);
+		assert_eq!(
+			resolved_workload_target_hostname("*.example.com", Some("api.other.com")),
+			None
+		);
+		assert_eq!(
+			resolved_workload_target_hostname("*.example.com", None),
+			None
+		);
 	}
 }
 
@@ -1928,7 +2016,7 @@ fn sensitive_headers(req: &mut Request) {
 
 // The http library will not put the authority into req.uri().authority for HTTP/1. Normalize so
 // the rest of the code doesn't need to worry about it
-fn normalize_uri(connection: &Extension, req: &mut Request) -> anyhow::Result<()> {
+fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::Result<()> {
 	debug!("request before normalization: {req:?}");
 	if let ::http::Version::HTTP_10 | ::http::Version::HTTP_11 = req.version()
 		&& req.uri().authority().is_none()
@@ -1945,7 +2033,7 @@ fn normalize_uri(connection: &Extension, req: &mut Request) -> anyhow::Result<()
 		parts.authority = Some(host);
 		if parts.path_and_query.is_some() {
 			// TODO: or always do this?
-			if connection.get::<TLSConnectionInfo>().is_some() {
+			if tls.is_some() {
 				parts.scheme = Some(Scheme::HTTPS);
 			} else {
 				parts.scheme = Some(Scheme::HTTP);

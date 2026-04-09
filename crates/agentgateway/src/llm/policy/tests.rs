@@ -161,6 +161,7 @@ fn test_prompt_caching_policy_deserialization() {
 	assert!(caching.cache_messages);
 	assert!(!caching.cache_tools);
 	assert_eq!(caching.min_tokens, Some(1024));
+	assert_eq!(caching.cache_message_offset, 0);
 }
 
 #[test]
@@ -179,6 +180,7 @@ fn test_prompt_caching_policy_defaults() {
 	assert!(caching.cache_messages); // Default: true
 	assert!(!caching.cache_tools); // Default: false
 	assert_eq!(caching.min_tokens, Some(1024)); // Default: 1024
+	assert_eq!(caching.cache_message_offset, 0); // Default: 0
 }
 
 #[test]
@@ -210,6 +212,24 @@ fn test_prompt_caching_explicit_disable() {
 
 	// Should be None when explicitly set to null
 	assert!(policy.prompt_caching.is_none());
+}
+
+#[test]
+fn test_prompt_caching_with_offset() {
+	use serde_json::json;
+
+	let json = json!({
+		"promptCaching": {
+			"cacheMessages": true,
+			"cacheMessageOffset": 4
+		}
+	});
+
+	let policy: Policy = serde_json::from_value(json).unwrap();
+	let caching = policy.prompt_caching.unwrap();
+
+	assert!(caching.cache_messages);
+	assert_eq!(caching.cache_message_offset, 4);
 }
 
 #[test]

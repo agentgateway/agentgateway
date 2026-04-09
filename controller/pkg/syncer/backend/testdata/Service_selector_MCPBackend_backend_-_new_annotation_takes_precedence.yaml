@@ -1,0 +1,14 @@
+- key: test-ns/service-mcp-backend-precedence
+  mcp:
+    targets:
+    - backend:
+        port: 8080
+        service:
+          hostname: mcp-service-both.test-ns.svc.cluster.local
+          namespace: test-ns
+      name: mcp-service-both-mcp
+      path: /new/path
+      protocol: STREAMABLE_HTTP
+  name:
+    name: service-mcp-backend-precedence
+    namespace: test-ns

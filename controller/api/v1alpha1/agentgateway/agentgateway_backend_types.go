@@ -455,7 +455,7 @@ type McpTarget struct {
 	// This field may only be used with host-based static targets, not
 	// `backendRef`.
 	// +optional
-	Policies *BackendWithMCP `json:"policies,omitempty"`
+	Policies *BackendSimple `json:"policies,omitempty"`
 }
 
 // MCPProtocol defines the protocol to use for the `MCPBackend` target.

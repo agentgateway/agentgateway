@@ -9,6 +9,7 @@ pub mod vertex;
 
 use agent_core::prelude::Strng;
 use agent_core::strng;
+use serde::Serialize;
 
 use crate::apply;
 use crate::llm::{AIError, LLMRequest, LLMResponse};
@@ -73,4 +74,8 @@ pub trait RequestType: Send + Sync {
 pub struct SimpleChatCompletionMessage {
 	pub role: Strng,
 	pub content: Strng,
+}
+
+pub fn serialize_str<T: Serialize>(value: &T) -> Option<Strng> {
+	serde_json::to_value(value).ok()?.as_str().map(Into::into)
 }
