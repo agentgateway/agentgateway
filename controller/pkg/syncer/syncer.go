@@ -163,6 +163,15 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	gatewayFinalStatus := s.buildFinalGatewayStatus(gatewayInitialStatus, routeAttachments, krtopts)
 	status.RegisterStatus(s.statusCollections, gatewayFinalStatus, translator.GetStatus)
 
+	// Register plugin-provided gateway statuses. These statuses are scoped to a
+	// specific gatewayclass as we already filter out those Gateways in
+	// buildAgwResources and won't conflict with status written by the non-plugin
+	// one above.
+	if s.agwPlugins.AddResourceExtension != nil && s.agwPlugins.AddResourceExtension.GatewayStatuses != nil {
+		pluginGwFinalStatus := s.buildFinalGatewayStatus(s.agwPlugins.AddResourceExtension.GatewayStatuses, routeAttachments, krtopts)
+		status.RegisterStatus(s.statusCollections, pluginGwFinalStatus, translator.GetStatus)
+	}
+
 	listenerSetFinalStatus := s.buildFinalListenerSetStatus(gateways, listenerSetInitialStatus, routeAttachments, krtopts)
 	status.RegisterStatus(s.statusCollections, listenerSetFinalStatus, translator.GetStatus)
 
@@ -442,7 +451,13 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	}
 
 	// Build routes
-	routeParents := translator.BuildRouteParents(filteredGateways)
+	var routeParents translator.ParentResolver = translator.BuildRouteParents(filteredGateways)
+
+	// Compose with plugin-provided parent resolvers.
+	if ext := s.agwPlugins.AddResourceExtension; ext != nil && len(ext.ParentResolvers) > 0 {
+		resolvers := append([]translator.ParentResolver{routeParents}, ext.ParentResolvers...)
+		routeParents = &translator.CompositeParentResolver{Resolvers: resolvers}
+	}
 
 	referenceTypes := plugins.DefaultReferenceTypes(s.agwCollections)
 	if s.buildReferenceTypesFunc != nil {
