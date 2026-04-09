@@ -9,7 +9,10 @@ on:
       - "main"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref_name }}
+  # GitHub concurrency keeps at most one running and one pending run per group.
+  # Use ref_name for PRs so new commits cancel older PR runs on the same PR,
+  # but key pushes by SHA so postsubmit runs do not cancel each other.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.ref_name) || format('push-{0}', github.sha) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
