@@ -1326,7 +1326,7 @@ mod tests {
 	}
 
 	fn pool_max_idle<K: Key>(max_idle: usize) -> Pool<K> {
-		let pool = Pool::new(
+		Pool::new(
 			super::Config {
 				idle_timeout: Some(Duration::from_millis(100)),
 				max_idle_per_host: max_idle,
@@ -1334,13 +1334,12 @@ mod tests {
 			},
 			TokioExecutor::new(),
 			MockTimer::default(),
-		);
-		pool
+		)
 	}
 
 	fn pool_with_idle_timeout<K: Key>(idle_timeout: Duration) -> Pool<K> {
 		init_test_tracing();
-		let pool = Pool::new(
+		Pool::new(
 			super::Config {
 				idle_timeout: Some(idle_timeout),
 				max_idle_per_host: usize::MAX,
@@ -1348,8 +1347,7 @@ mod tests {
 			},
 			TokioExecutor::new(),
 			MockTimer::default(),
-		);
-		pool
+		)
 	}
 
 	fn pool_with_expected_h2_capacity_idle<K: Key>(
@@ -1357,7 +1355,7 @@ mod tests {
 		idle: Duration,
 	) -> Pool<K> {
 		init_test_tracing();
-		let pool = Pool::new(
+		Pool::new(
 			super::Config {
 				idle_timeout: Some(idle),
 				max_idle_per_host: usize::MAX,
@@ -1365,8 +1363,7 @@ mod tests {
 			},
 			TokioExecutor::new(),
 			MockTimer::default(),
-		);
-		pool
+		)
 	}
 	fn pool_with_expected_h2_capacity<K: Key>(expected_http2_capacity: usize) -> Pool<K> {
 		pool_with_expected_h2_capacity_idle(expected_http2_capacity, Duration::from_secs(10))
@@ -1380,9 +1377,21 @@ mod tests {
 		*Pool::<KeyImpl>::send_connection_test_hook().lock() = None;
 	}
 
-	fn lock_send_connection_test_hook() -> parking_lot::MutexGuard<'static, ()> {
-		static TEST_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
-		TEST_LOCK.lock()
+	struct SendConnectionTestHookGuard {
+		_guard: tokio::sync::MutexGuard<'static, ()>,
+	}
+
+	impl Drop for SendConnectionTestHookGuard {
+		fn drop(&mut self) {
+			clear_send_connection_test_hook();
+		}
+	}
+
+	async fn lock_send_connection_test_hook() -> SendConnectionTestHookGuard {
+		static TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+		SendConnectionTestHookGuard {
+			_guard: TEST_LOCK.lock().await,
+		}
 	}
 
 	fn assert_h2_queue_invariants(pool: &Pool<KeyImpl>, key: &KeyImpl, context: &str) {
@@ -2185,6 +2194,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_h2_waiter_cancelled_race() {
+		let _guard = lock_send_connection_test_hook().await;
 		let pool = pool_with_expected_h2_capacity(2);
 		let key = host_key_h2("foo");
 		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
@@ -2225,11 +2235,10 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_h2_canceled_only_waiter_keeps_connection_in_idle_and_active() {
-		let _guard = lock_send_connection_test_hook();
+		let _guard = lock_send_connection_test_hook().await;
 		let pool = pool_with_expected_h2_capacity(2);
 		let key = host_key_h2("foo");
 		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
-
 		let mut w1 = Some(w1);
 		install_send_connection_test_hook(move || {
 			drop(w1.take());
@@ -2247,11 +2256,10 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_h2_canceled_only_waiter_allows_duplicate_checkout_of_same_max1_connection() {
-		let _guard = lock_send_connection_test_hook();
+		let _guard = lock_send_connection_test_hook().await;
 		let pool = pool_with_expected_h2_capacity(1);
 		let key = host_key_h2("foo");
 		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
-
 		let mut w1 = Some(w1);
 		install_send_connection_test_hook(move || {
 			drop(w1.take());
@@ -2268,12 +2276,11 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_h2_first_send_race_cancellation_can_drop_active_tracking_for_second_waiter() {
-		let _guard = lock_send_connection_test_hook();
+		let _guard = lock_send_connection_test_hook().await;
 		let pool = pool_with_expected_h2_capacity(2);
 		let key = host_key_h2("foo");
 		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
 		let w2 = must_wait_for_existing_connection(&pool, key.clone());
-
 		let mut w1 = Some(w1);
 		let mut calls = 0;
 		install_send_connection_test_hook(move || {
@@ -2287,7 +2294,6 @@ mod tests {
 		});
 
 		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
-		clear_send_connection_test_hook();
 
 		let _pooled2 = w2
 			.await
@@ -2302,13 +2308,12 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_h2_first_send_race_cancellation_can_starve_third_waiter_despite_free_capacity() {
-		let _guard = lock_send_connection_test_hook();
+		let _guard = lock_send_connection_test_hook().await;
 		let pool = pool_with_expected_h2_capacity(2);
 		let key = host_key_h2("foo");
 		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
 		let w2 = must_wait_for_existing_connection(&pool, key.clone());
 		let (_sc3, w3) = must_want_new_connection(&pool, key.clone());
-
 		let mut w1 = Some(w1);
 		let mut calls = 0;
 		install_send_connection_test_hook(move || {
@@ -2322,7 +2327,6 @@ mod tests {
 		});
 
 		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
-		clear_send_connection_test_hook();
 
 		let _pooled2 = w2
 			.await
