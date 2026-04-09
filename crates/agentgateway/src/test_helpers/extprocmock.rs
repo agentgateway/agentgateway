@@ -191,6 +191,11 @@ where
 		let srv = ExternalProcessorServer::new(self.clone());
 		super::common::spawn_service(srv).await
 	}
+
+	pub async fn spawn_on(&self, address: std::net::SocketAddr) -> MockInstance {
+		let srv = ExternalProcessorServer::new(self.clone());
+		super::common::spawn_service_on(srv, address).await
+	}
 }
 
 #[tonic::async_trait]

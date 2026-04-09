@@ -70,6 +70,11 @@ where
 		let srv = RateLimitServiceServer::new(self.clone());
 		super::common::spawn_service(srv).await
 	}
+
+	pub async fn spawn_on(&self, address: std::net::SocketAddr) -> super::common::MockInstance {
+		let srv = RateLimitServiceServer::new(self.clone());
+		super::common::spawn_service_on(srv, address).await
+	}
 }
 
 #[tonic::async_trait]
