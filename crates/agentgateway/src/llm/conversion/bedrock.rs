@@ -173,6 +173,8 @@ pub mod from_completions {
 	use std::time::Instant;
 
 	use bytes::Bytes;
+	use futures_util::StreamExt;
+	use futures_util::stream;
 	use itertools::Itertools;
 	use types::bedrock;
 	use types::completions::typed as completions;
@@ -681,7 +683,7 @@ pub mod from_completions {
 		let mut tool_calls: HashMap<i32, String> = HashMap::new();
 		let model = model.to_string();
 		let message_id = message_id.to_string();
-		parse::aws_sse::transform(b, buffer_limit, move |f| {
+		let body = parse::aws_sse::transform(b, buffer_limit, move |f| {
 			let res = bedrock::ConverseStreamOutput::deserialize(f).ok()?;
 			let mk = |choices: Vec<completions::ChatChoiceStream>, usage: Option<completions::Usage>| {
 				Some(completions::StreamResponse {
@@ -848,7 +850,12 @@ pub mod from_completions {
 					}
 				},
 			}
-		})
+		});
+
+		let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
+		Body::from_stream(body.into_data_stream().chain(stream::once(async move {
+			Ok::<Bytes, axum_core::Error>(done)
+		})))
 	}
 
 	pub fn translate_stop_reason(

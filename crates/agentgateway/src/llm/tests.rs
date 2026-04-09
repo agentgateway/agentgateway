@@ -1009,6 +1009,66 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	);
 }
 
+#[tokio::test]
+async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done() {
+	let bedrock = AIProvider::Bedrock(bedrock::Provider {
+		model: Some(strng::new("openai.gpt-oss-120b-1:0")),
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	});
+
+	let body = Body::from(
+		fs::read(fixture_path("response/bedrock/basic.bin"))
+			.expect("failed to read Bedrock streaming fixture"),
+	);
+	let mut resp = Response::new(body);
+	resp.headers_mut().insert(
+		::http::header::CONTENT_TYPE,
+		"application/vnd.amazon.eventstream".parse().unwrap(),
+	);
+	resp.headers_mut().insert(
+		crate::http::x_headers::X_AMZN_REQUESTID,
+		"request_id".parse().unwrap(),
+	);
+
+	let translated = bedrock
+		.process_streaming(
+			LLMRequest {
+				input_tokens: None,
+				input_format: InputFormat::Completions,
+				request_model: "input-model".into(),
+				provider: Default::default(),
+				streaming: true,
+				params: Default::default(),
+				prompt: None,
+			},
+			LLMResponsePolicies::default(),
+			AsyncLog::default(),
+			false,
+			resp,
+		)
+		.await
+		.expect("Bedrock streaming translation should succeed");
+
+	crate::http::tests_common::assert_header(
+		&translated,
+		::http::header::CONTENT_TYPE,
+		"text/event-stream",
+	);
+
+	let body = translated.collect().await.unwrap().to_bytes();
+	let text = String::from_utf8(body.to_vec()).expect("stream should be valid UTF-8");
+	assert!(
+		text.ends_with("data: [DONE]\n\n"),
+		"translated Bedrock completions stream must end with [DONE], got:\n{text}",
+	);
+	assert!(
+		!text.contains("event: \n"),
+		"translated Bedrock completions stream must not emit empty event fields:\n{text}",
+	);
+}
+
 #[test]
 fn setup_request_openai_applies_prefixed_path_without_host_override() {
 	let provider = AIProvider::OpenAI(openai::Provider { model: None });
