@@ -1,10 +1,38 @@
+use std::io;
+
 use agent_core::strng;
+use bytes::Bytes;
 use http::HeaderMap;
+use http_body_util::BodyExt;
 use serde_json::json;
 
 use super::*;
 use crate::llm::bedrock::Provider;
 use crate::llm::types;
+
+#[tokio::test]
+async fn test_append_done_on_success_omits_done_after_error() {
+	let mut body = super::from_completions::append_done_on_success(futures_util::stream::iter(vec![
+		Ok::<_, axum_core::Error>(Bytes::from_static(b"data: chunk\n\n")),
+		Err(axum_core::Error::new(io::Error::other("boom"))),
+	]));
+
+	let first = body
+		.frame()
+		.await
+		.expect("first frame should be present")
+		.expect("first frame should succeed")
+		.into_data()
+		.expect("first frame should contain data");
+	assert_eq!(first, Bytes::from_static(b"data: chunk\n\n"));
+
+	let second = body.frame().await.expect("error frame should be present");
+	assert!(second.is_err(), "upstream error should be forwarded");
+	assert!(
+		body.frame().await.is_none(),
+		"stream must terminate after an upstream error without appending [DONE]"
+	);
+}
 
 #[test]
 fn test_extract_beta_headers_variants() {

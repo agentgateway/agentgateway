@@ -174,7 +174,7 @@ pub mod from_completions {
 
 	use bytes::Bytes;
 	use futures_util::StreamExt;
-	use futures_util::stream;
+	use futures_util::stream::{self, BoxStream};
 	use itertools::Itertools;
 	use types::bedrock;
 	use types::completions::typed as completions;
@@ -852,10 +852,29 @@ pub mod from_completions {
 			}
 		});
 
+		append_done_on_success(body.into_data_stream())
+	}
+
+	pub(super) fn append_done_on_success<S>(stream: S) -> Body
+	where
+		S: futures_core::Stream<Item = Result<Bytes, axum_core::Error>> + Send + 'static,
+	{
 		let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
-		Body::from_stream(body.into_data_stream().chain(stream::once(async move {
-			Ok::<Bytes, axum_core::Error>(done)
-		})))
+		let stream = stream::unfold(
+			(Some(stream.boxed()), Some(done)),
+			|(stream, done): (
+				Option<BoxStream<'static, Result<Bytes, axum_core::Error>>>,
+				Option<Bytes>,
+			)| async move {
+				let mut stream = stream?;
+				match stream.next().await {
+					Some(Ok(chunk)) => Some((Ok(chunk), (Some(stream), done))),
+					Some(Err(err)) => Some((Err(err), (None, None))),
+					None => done.map(|done| (Ok(done), (None, None))),
+				}
+			},
+		);
+		Body::from_stream(stream)
 	}
 
 	pub fn translate_stop_reason(
