@@ -282,7 +282,7 @@ pub struct RawSession {
 
 #[apply(schema_de!)]
 pub struct RawTracing {
-	otlp_endpoint: String,
+	otlp_endpoint: Option<String>,
 	#[serde(default)]
 	headers: HashMap<String, String>,
 	#[serde(default)]

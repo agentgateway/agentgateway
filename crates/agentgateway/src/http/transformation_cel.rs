@@ -263,6 +263,10 @@ impl Transformation {
 				}
 			}
 		}
+		if let RequestOrResponse::Request(r) = &mut r {
+		tracing::error!("howardjohn: {:?} {:?}", r, http::DebugExtensions(r));
+
+		}
 		for (k, v) in &cfg.add {
 			let val = Self::exec_header(&r, v, k, request);
 			r.apply_header(k, val, true);
