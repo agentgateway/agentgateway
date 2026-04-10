@@ -369,7 +369,10 @@
       "type": "object",
       "properties": {
         "otlpEndpoint": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "headers": {
           "type": "object",
@@ -422,10 +425,7 @@
           ]
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "otlpEndpoint"
-      ]
+      "additionalProperties": false
     },
     "Protocol": {
       "type": "string",
