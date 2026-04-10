@@ -851,6 +851,9 @@ impl Debug for DebugExtensions<'_> {
 		if let Some(e) = ext.get::<RequestTime>() {
 			d.field("RequestTime", e);
 		}
+		if let Some(e) = ext.get::<transformation_cel::TransformationMetadata>() {
+			d.field("TransformationMetadata", e);
+		}
 		d.finish()
 	}
 }

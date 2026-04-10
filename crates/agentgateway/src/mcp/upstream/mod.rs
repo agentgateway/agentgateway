@@ -14,6 +14,7 @@ use thiserror::Error;
 use tokio::process::Command;
 
 use crate::http::jwt::Claims;
+use crate::http::transformation_cel::TransformationMetadata;
 use crate::mcp::FailureMode;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
@@ -28,8 +29,16 @@ use crate::*;
 #[derive(Debug, Clone)]
 pub struct IncomingRequestContext {
 	headers: http::HeaderMap,
-	claims: Option<Claims>,
-	buffer_limit: Option<BufferLimit>,
+	ext: ::http::Extensions,
+}
+
+fn cpy_ext<T: Clone + Send + Sync + 'static>(
+	inp: &::http::request::Parts,
+	ext: &mut ::http::Extensions,
+) {
+	if let Some(v) = inp.extensions.get::<T>() {
+		ext.insert(v.clone());
+	}
 }
 
 impl IncomingRequestContext {
@@ -37,17 +46,13 @@ impl IncomingRequestContext {
 	pub fn empty() -> Self {
 		Self {
 			headers: http::HeaderMap::new(),
-			claims: None,
-			buffer_limit: None,
+			ext: ::http::Extensions::new(),
 		}
 	}
 	pub fn new(parts: &::http::request::Parts) -> Self {
-		let claims = parts.extensions.get::<Claims>().cloned();
-		let buffer_limit = parts.extensions.get::<BufferLimit>().cloned();
 		Self {
 			headers: parts.headers.clone(),
-			claims,
-			buffer_limit,
+			ext: parts.extensions.clone(),
 		}
 	}
 	pub fn apply(&self, req: &mut http::Request) {
@@ -60,12 +65,7 @@ impl IncomingRequestContext {
 				req.headers_mut().insert(k.clone(), v.clone());
 			}
 		}
-		if let Some(claims) = self.claims.as_ref() {
-			req.extensions_mut().insert(claims.clone());
-		}
-		if let Some(buffer_limit) = self.buffer_limit.as_ref() {
-			req.extensions_mut().insert(buffer_limit.clone());
-		}
+		req.extensions_mut().extend(self.ext.clone());
 	}
 }
 
