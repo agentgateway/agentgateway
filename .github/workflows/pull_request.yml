@@ -39,8 +39,9 @@ jobs:
       with:
         toolchain: "${{ env.RUST_VERSION }}"
     - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      # Github cache is too tiny to handle the full matrix :-(
-      if: ${{ startsWith(matrix.os, 'blacksmith-') }}
+      # GHA 10gb cache cannot handle all 3 builds. However, because we put all the heavy linux caches on Blacksmith,
+      # we have space for windows and mac.
+      # If we change up the runners, consider if we have space for all three (note: Blacksmith has 25gb though)
       with:
         # Github cache will restore from 'main' OR the current branch.
         # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
