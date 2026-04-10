@@ -56,7 +56,7 @@ assert_matches = "1.5.0"
 async-openai = { version = "0.34", default-features = false, features = ["chat-completion-types", "moderation-types", "response-types", "realtime-types"] }
 async-stream = "0.3"
 async-trait = "0.1"
-aws-config = { version = "1.8", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-config = { version = "1.8", default-features = false, features = ["default-https-client", "rt-tokio", "sso"] }
 aws-credential-types = "1.2"
 aws-sigv4 = "1.3"
 aws-smithy-eventstream = "0.60"
