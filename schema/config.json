@@ -4757,7 +4757,7 @@
           ]
         },
         "projectName": {
-          "description": "The Foundry project name, required when `resource_type` is `Foundry`.\nUsed to construct paths: `/api/projects/{project_name}/openai/v1/...`.\nThis is distinct from `resource_name` which is used for the host.",
+          "description": "The Foundry project name, required when `resourceType` is `foundry`.\nUsed to construct paths: `/api/projects/{projectName}/openai/v1/...`.\nThis is distinct from `resourceName` which is used for the host.",
           "type": [
             "string",
             "null"

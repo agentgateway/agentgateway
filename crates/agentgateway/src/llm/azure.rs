@@ -27,9 +27,9 @@ pub struct Provider {
 	pub resource_type: AzureResourceType,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub api_version: Option<Strng>,
-	/// The Foundry project name, required when `resource_type` is `Foundry`.
-	/// Used to construct paths: `/api/projects/{project_name}/openai/v1/...`.
-	/// This is distinct from `resource_name` which is used for the host.
+	/// The Foundry project name, required when `resourceType` is `foundry`.
+	/// Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.
+	/// This is distinct from `resourceName` which is used for the host.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub project_name: Option<Strng>,
 	/// Per-provider credential cache, shared across requests via Arc.
