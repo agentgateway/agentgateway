@@ -275,18 +275,18 @@ type AzureOpenAIConfig struct {
 }
 
 // AzureResourceType specifies the type of Azure endpoint.
-// +kubebuilder:validation:Enum=openAI;foundry
+// +kubebuilder:validation:Enum=OpenAI;Foundry
 type AzureResourceType string
 
 const (
 	// AzureResourceTypeOpenAI uses the Azure OpenAI endpoint: {resourceName}.openai.azure.com
-	AzureResourceTypeOpenAI AzureResourceType = "openAI"
+	AzureResourceTypeOpenAI AzureResourceType = "OpenAI"
 	// AzureResourceTypeFoundry uses the Azure AI Foundry endpoint: {resourceName}-resource.services.ai.azure.com
-	AzureResourceTypeFoundry AzureResourceType = "foundry"
+	AzureResourceTypeFoundry AzureResourceType = "Foundry"
 )
 
 // AzureConfig settings for Azure AI backends, supporting both Azure OpenAI and Azure AI Foundry.
-// +kubebuilder:validation:XValidation:message="projectName is required when resourceType is foundry",rule="self.resourceType != 'foundry' || has(self.projectName)"
+// +kubebuilder:validation:XValidation:message="projectName is required when resourceType is Foundry",rule="self.resourceType != 'Foundry' || has(self.projectName)"
 type AzureConfig struct {
 	// The Azure resource name used to construct the endpoint host.
 	// For OpenAI: {resourceName}.openai.azure.com
@@ -308,7 +308,7 @@ type AzureConfig struct {
 	// +optional
 	ApiVersion *TinyString `json:"apiVersion,omitempty"`
 
-	// The Foundry project name, required when `resourceType` is `foundry`.
+	// The Foundry project name, required when `resourceType` is `Foundry`.
 	// Used to construct paths: /api/projects/{projectName}/openai/v1/...
 	// +optional
 	ProjectName *ShortString `json:"projectName,omitempty"`
