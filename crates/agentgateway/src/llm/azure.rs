@@ -11,7 +11,7 @@ pub enum AzureResourceType {
 	/// Azure OpenAI Service endpoint: `{resourceName}.openai.azure.com`
 	#[serde(alias = "azureOpenAI")]
 	OpenAI,
-	/// Azure AI Foundry (project) endpoint: `{resourceName}.services.ai.azure.com`
+	/// Azure AI Foundry (project) endpoint: `{resourceName}-resource.services.ai.azure.com`
 	/// Requires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`
 	#[serde(alias = "aiServices")]
 	Foundry,
@@ -93,7 +93,10 @@ impl Provider {
 	pub fn parse_host(host: &str) -> (Strng, AzureResourceType) {
 		if let Some(name) = host.strip_suffix(".openai.azure.com") {
 			(strng::new(name), AzureResourceType::OpenAI)
+		} else if let Some(name) = host.strip_suffix("-resource.services.ai.azure.com") {
+			(strng::new(name), AzureResourceType::Foundry)
 		} else if let Some(name) = host.strip_suffix(".services.ai.azure.com") {
+			// Be lenient and accept non-canonical Foundry hosts without the `-resource` segment.
 			(strng::new(name), AzureResourceType::Foundry)
 		} else {
 			// Fallback: treat the whole host as the resource name with OpenAI type
