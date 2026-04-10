@@ -38,7 +38,7 @@ const Container = styled.div`
   }
 `
 
-const StyledFooterButton = styled(Button)`
+const StyledScrollToBottomButton = styled(Button)`
   && {
     background-color: var(--color-bg-base);
     color: var(--color-text-base);
@@ -65,16 +65,15 @@ const StyledFooterButton = styled(Button)`
 /**
  * Component
  */
-interface SoloLogViewerProps {
+interface StreamingLogViewerProps {
   data: string[];
 }
 
-export const SoloLogViewer = ({ data }: SoloLogViewerProps) => {
+export const StreamingLogViewer = ({ data }: StreamingLogViewerProps) => {
   const { theme } = useTheme();
   const [isTextWrapped, setIsTextWrapped] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentItemCount, setCurrentItemCount] = useState(0);
-  const [linesBehind, setLinesBehind] = useState(0);
   const logViewerRef = useRef<any>(null);
 
   useEffect(() => {
@@ -83,10 +82,6 @@ export const SoloLogViewer = ({ data }: SoloLogViewerProps) => {
       if (logViewerRef.current) { 
         logViewerRef.current.scrollToBottom();
       }
-    } else if (data.length !== currentItemCount) { 
-      setLinesBehind(data.length - currentItemCount);
-    } else { 
-      setLinesBehind(0);
     }
   }, [isPaused, data]);
 
@@ -108,15 +103,15 @@ export const SoloLogViewer = ({ data }: SoloLogViewerProps) => {
     }
   };
 
-  const FooterButton = () => (
+  const ScrollToBottomButton = () => (
     <Tooltip title={`Scroll to bottom`}>
-      <StyledFooterButton
+      <StyledScrollToBottomButton
         data-testid="log-viewer-footer-button"
         onClick={() => setIsPaused(false)}
         isBlock
       >
         <ChevronDown />
-      </StyledFooterButton>
+      </StyledScrollToBottomButton>
     </Tooltip>
   )
 
@@ -131,7 +126,7 @@ export const SoloLogViewer = ({ data }: SoloLogViewerProps) => {
         scrollToRow={isPaused ? undefined : currentItemCount}
         innerRef={logViewerRef}
         onScroll={onScroll}
-        footer={isPaused && <FooterButton />}
+        footer={isPaused && <ScrollToBottomButton />}
         toolbar={
           <Toolbar>
             <ToolbarContent>

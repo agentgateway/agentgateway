@@ -54,6 +54,11 @@ export const lightTheme: ThemeConfig = {
       colorBgContainer: "#ffffff",
       colorBorder: "#d9d9d9",
     },
+    Segmented: {
+      trackBg: '#ffffff',
+      itemSelectedBg: '#e8e8e8',
+      itemHoverBg: '#d0d0d0',
+    },
   },
 };
 
@@ -119,6 +124,11 @@ export const darkTheme: ThemeConfig = {
       colorWarningBorder: "#594214",
       colorInfoBg: "#111a2c",
       colorInfoBorder: "#15325b",
+    },
+    Segmented: {
+      trackBg: '#1a1a1a',
+      itemSelectedBg: '#333333',
+      itemHoverBg: '#424242',
     },
   },
 };

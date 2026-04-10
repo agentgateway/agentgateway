@@ -1,7 +1,7 @@
 import styled from "@emotion/styled";
 import { useEffect, useState } from "react";
 import { MOCK_LLM_LOGS } from "../../api/mockLogs";
-import { SoloLogViewer } from "../../components/LogViewer/SoloLogViewer";
+import { StreamingLogViewer } from "../../components/StreamingLogViewer/StreamingLogViewer";
 
 const Container = styled.div`
   display: flex;
@@ -30,7 +30,7 @@ export const LLMLogsPage = () => {
 
   return (
     <Container>
-      <SoloLogViewer data={mockLLMLogs} />
+      <StreamingLogViewer data={mockLLMLogs} />
     </Container>
   );
 };
