@@ -34,6 +34,8 @@ jobs:
     name: ${{ matrix.name }}
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        persist-credentials: false
     - name: Install Rust
       uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
       with:
@@ -61,6 +63,8 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        persist-credentials: false
     - name: Install Rust
       uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
       with:
@@ -84,6 +88,8 @@ jobs:
         working-directory: ui
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        persist-credentials: false
     - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
       with:
         node-version: 24
@@ -97,6 +103,8 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        persist-credentials: false
     - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
       with:
         go-version: "${{ env.GO_VERSION }}"
@@ -110,6 +118,8 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        persist-credentials: false
     - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
       with:
         go-version: "${{ env.GO_VERSION }}"
@@ -130,6 +140,8 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        persist-credentials: false
     - name: Check Runner Info
       run: |
         cat /sys/fs/cgroup/cpu.stat || true
@@ -182,6 +194,8 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        persist-credentials: false
     - name: Install Rust
       uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
       with:

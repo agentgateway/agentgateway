@@ -104,6 +104,8 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        persist-credentials: false
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
@@ -230,6 +232,8 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        persist-credentials: false
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
@@ -350,6 +354,8 @@ jobs:
       working-directory: .
 
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        persist-credentials: false
 
     - name: Login to GitHub Container Registry
       uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -362,8 +368,7 @@ jobs:
       uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
       with:
         go-version: "${{ env.GO_VERSION }}"
-        cache-dependency-path: |
-          **/*.sum
+        cache: false
 
     - name: Build controller binary
       run: |
@@ -491,6 +496,8 @@ jobs:
       VERSION: ${{ needs.setup.outputs.version }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Helm login to ${{ env.CHART_REGISTRY_IMAGE_BASE }}
         run: echo "${{ secrets.GITHUB_TOKEN }}" | ./tools/helm registry login ghcr.io -u ${{ github.repository_owner }} --password-stdin
@@ -534,6 +541,8 @@ jobs:
     steps:
     - name: Checkout Repository
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        persist-credentials: false
     - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
       with:
         node-version: 24

@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
 
       - name: Restore cache
         uses: Andrej730/cache/restore@e294f7d180f76c94062d0251c60fe7362ce6667d
