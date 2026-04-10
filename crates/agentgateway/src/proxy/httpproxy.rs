@@ -1801,17 +1801,19 @@ pub fn build_service_call(
 	// For double HBONE, use hostname-based target so the gateway can resolve it
 	let target = if network_gateway.is_some() {
 		tracing::debug!(
-			hostname = % svc.hostname,
-			port = % port,
+			hostname=%svc.hostname,
+			port=%port,
 			"using hostname-based target for double hbone"
 		);
+		// Use the original service port, not the target port; the gateway will resolve it
 		Target::Hostname(svc.hostname.clone(), port)
 	} else {
 		// TODO: this should only be used with DNS resolution type! maybe?
 		if wl.workload_ips.is_empty()
 			&& let Some(hostname) = resolved_workload_target_hostname(&wl.hostname, request_host)
 		{
-			Target::Hostname(hostname.into(), port)
+			// use the target port here
+			Target::Hostname(hostname.into(), svc_target_port)
 		} else {
 			// For direct connections, we need the workload IP
 			let Some(ip) = wl.workload_ips.first() else {
