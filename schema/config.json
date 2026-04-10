@@ -4779,7 +4779,7 @@
           "const": "openAI"
         },
         {
-          "description": "Azure AI Foundry (project) endpoint: `{resourceName}.services.ai.azure.com`\nRequires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`",
+          "description": "Azure AI Foundry (project) endpoint: `{resourceName}-resource.services.ai.azure.com`\nRequires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`",
           "type": "string",
           "const": "foundry"
         }
