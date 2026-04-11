@@ -1,0 +1,14 @@
+name: DCO
+
+on:
+  pull_request:
+
+jobs:
+  dco:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check DCO
+        uses: amannn/action-semantic-pull-request@v5

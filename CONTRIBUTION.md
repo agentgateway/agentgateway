@@ -108,6 +108,26 @@ Only project maintainers can create releases. The process is:
 - Help answer questions in GitHub issues
 - Review pull requests from other contributors
 
+## Developer Certificate of Origin (DCO)
+
+All new inbound code contributions must be accompanied by a Developer Certificate of
+Origin (http://developercertificate.org/) sign-off.
+
+Sign off every commit using the `-s` flag:
+
+```bash
+git commit -s -m "your message"
+```
+
+This adds `Signed-off-by: Your Name <your@email.com>` to your commit.
+
+If you forgot to sign off a previous commit, run:
+
+```bash
+git commit --amend -s --no-edit
+git push --force-with-lease
+```
+
 ## License
 
 By contributing to this project, you agree that your contributions will be licensed under the project's license.
