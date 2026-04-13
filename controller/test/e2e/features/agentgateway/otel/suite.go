@@ -28,6 +28,8 @@ var (
 	setupManifest         = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup.yaml")
 	tracingManifest       = filepath.Join(fsutils.MustGetThisDir(), "testdata", "tracing.yaml")
 	accessLogOtlpManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "accesslog-otlp.yaml")
+	collectorLogTimeout   = 20 * time.Second
+	collectorLogPoll      = 500 * time.Millisecond
 
 	setup = base.TestCase{
 		Manifests: []string{
@@ -73,6 +75,9 @@ func (s *testingSuite) testOTelTracing() {
 	s.TestInstallation.AssertionsT(s.T()).EventuallyAgwPolicyCondition(s.Ctx, "agw", "agentgateway-base", "Accepted", metav1.ConditionTrue)
 
 	headerValue := fmt.Sprintf("%v", rand.Intn(10000)) //nolint:gosec // G404: Using math/rand for test trace identification
+	collectorPod, err := s.getCollectorPod()
+	s.Require().NoError(err, "Failed to resolve collector pod")
+
 	s.TestInstallation.AssertionsT(s.T()).Gomega.Eventually(func(g gomega.Gomega) {
 		common.BaseGateway.Send(
 			s.T(),
@@ -84,7 +89,8 @@ func (s *testingSuite) testOTelTracing() {
 			curl.WithPath("/status/200"),
 		)
 
-		logs := s.getCollectorLogs(g)
+		logs, err := s.getCollectorLogs(collectorPod)
+		g.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to get collector pod logs")
 
 		mustContain := []string{
 			`-> http.method: Str(GET)`,
@@ -108,13 +114,16 @@ func (s *testingSuite) testOTelTracing() {
 		g.Expect(hasHTTPURL).To(gomega.BeTrue(), "missing expected URL/host/path attributes in traces")
 
 		g.Expect(strings.Contains(logs, `-> http.status: Int(200)`)).To(gomega.BeTrue(), "missing expected HTTP status attribute in traces")
-	}, time.Second*60, time.Second*15, "should find traces in collector pod logs").Should(gomega.Succeed())
+	}, collectorLogTimeout, collectorLogPoll, "should find traces in collector pod logs").Should(gomega.Succeed())
 }
 
 // testOTelAccessLog makes a request and checks the collector pod logs
 // for OTLP access log records.
 func (s *testingSuite) testOTelAccessLog() {
 	s.TestInstallation.AssertionsT(s.T()).EventuallyAgwPolicyCondition(s.Ctx, "agw-accesslog", "agentgateway-base", "Accepted", metav1.ConditionTrue)
+
+	collectorPod, err := s.getCollectorPod()
+	s.Require().NoError(err, "Failed to resolve collector pod")
 
 	s.TestInstallation.AssertionsT(s.T()).Gomega.Eventually(func(g gomega.Gomega) {
 		common.BaseGateway.Send(
@@ -126,7 +135,8 @@ func (s *testingSuite) testOTelAccessLog() {
 			curl.WithPath("/status/200"),
 		)
 
-		logs := s.getCollectorLogs(g)
+		logs, err := s.getCollectorLogs(collectorPod)
+		g.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to get collector pod logs")
 
 		mustContain := []string{
 			`ScopeLogs`,
@@ -143,19 +153,25 @@ func (s *testingSuite) testOTelAccessLog() {
 			}
 		}
 		g.Expect(missing).To(gomega.BeEmpty(), "missing required access log lines in collector output")
-	}, time.Second*60, time.Second*15, "should find access logs in collector pod logs").Should(gomega.Succeed())
+	}, collectorLogTimeout, collectorLogPoll, "should find access logs in collector pod logs").Should(gomega.Succeed())
 }
 
-func (s *testingSuite) getCollectorLogs(g gomega.Gomega) string {
+func (s *testingSuite) getCollectorPod() (string, error) {
 	pods, err := s.TestInstallation.Actions.Kubectl().GetPodsInNsWithLabel(
 		s.Ctx,
 		"default",
 		"app.kubernetes.io/name=opentelemetry-collector",
 	)
-	g.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to get collector pods")
-	g.Expect(pods).NotTo(gomega.BeEmpty(), "No collector pods found")
+	if err != nil {
+		return "", err
+	}
+	if len(pods) == 0 {
+		return "", fmt.Errorf("no collector pods found")
+	}
 
-	logs, err := s.TestInstallation.Actions.Kubectl().GetContainerLogs(s.Ctx, "default", pods[0])
-	g.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to get pod logs")
-	return logs
+	return pods[0], nil
+}
+
+func (s *testingSuite) getCollectorLogs(pod string) (string, error) {
+	return s.TestInstallation.Actions.Kubectl().GetContainerLogs(s.Ctx, "default", pod)
 }

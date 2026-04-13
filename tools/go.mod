@@ -376,7 +376,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/gotestsum v1.13.0 // indirect
-	helm.sh/helm/v3 v3.20.1 // indirect
+	helm.sh/helm/v3 v3.20.2 // indirect
 	honnef.co/go/tools v0.7.0 // indirect
 	istio.io/tools v0.0.0-20260320122037-c5be745c208b // indirect
 	k8s.io/api v0.35.2 // indirect

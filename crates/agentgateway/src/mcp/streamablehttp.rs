@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::http::{Request, Response};
+use crate::http::{DropBody, Request, Response};
 use crate::mcp::handler::RelayInputs;
 use crate::mcp::session::SessionManager;
 use crate::*;
@@ -114,9 +114,15 @@ impl StreamableHttpService {
 				.stateless_send_and_initialize(part.clone(), message)
 				.await;
 
+			let (tx, rx) = tokio::sync::oneshot::channel::<()>();
 			// Clean up upstream resources (e.g., stdio processes)
-			let _ = session.delete_session(part).await;
-			return response;
+			tokio::task::spawn(async move {
+				// Wait until the response is actually completed.
+				let _ = rx.await;
+				trace!("cleaning up stateless session");
+				let _ = session.delete_session(part).await;
+			});
+			return response.map(|r| r.map(|b| DropBody::new(b, tx)));
 		}
 
 		let session_id = part

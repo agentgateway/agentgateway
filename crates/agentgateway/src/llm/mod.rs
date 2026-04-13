@@ -42,6 +42,15 @@ pub use types::SimpleChatCompletionMessage;
 #[cfg(test)]
 mod tests;
 
+fn normalize_sse_response_headers(mut resp: Response) -> Response {
+	resp.headers_mut().insert(
+		header::CONTENT_TYPE,
+		HeaderValue::from_static("text/event-stream"),
+	);
+	resp.headers_mut().remove(header::CONTENT_LENGTH);
+	resp
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AIBackend {
@@ -1151,6 +1160,11 @@ impl AIProvider {
 			parts.headers.remove(header::TRANSFER_ENCODING);
 		}
 		let resp = Response::from_parts(parts, body);
+		let resp = if matches!(input_format, InputFormat::Detect) {
+			resp
+		} else {
+			normalize_sse_response_headers(resp)
+		};
 
 		Ok(match (self, input_format) {
 			// Completions with OpenAI: just passthrough

@@ -1,7 +1,8 @@
 use bytes::Bytes;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use tokio_sse_codec::{Event, Frame, SseDecoder, SseEncoder};
+use tokio_sse_codec::{Event, Frame, SseDecoder};
+use tokio_util::codec::BytesCodec;
 
 use super::passthrough::parser as passthrough_parser;
 use super::transform::parser as transform_parser;
@@ -53,26 +54,21 @@ pub fn json_transform<I: DeserializeOwned, O: Serialize>(
 	mut f: impl FnMut(anyhow::Result<I>) -> Option<O> + Send + 'static,
 ) -> http::Body {
 	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
-	let encoder = SseEncoder::new();
+	let encoder = BytesCodec::new();
 
 	transform_parser(b, decoder, encoder, move |o| {
 		let data = unwrap_sse_data(o)?;
 		// Pass through [DONE] events unchanged
 		if data.as_ref() == b"[DONE]" {
-			return Some(Frame::Event(Event::<Bytes> {
-				data: Bytes::from_static(b"[DONE]"),
-				name: std::borrow::Cow::Borrowed(""),
-				id: None,
-			}));
+			return Some(crate::parse::encode_sse_event(
+				"",
+				Bytes::from_static(b"[DONE]"),
+			));
 		}
 		let obj = serde_json::from_slice::<I>(&data);
 		let transformed = f(obj.map_err(anyhow::Error::from))?;
 		let json_bytes = serde_json::to_vec(&transformed).ok()?;
-		Some(Frame::Event(Event::<Bytes> {
-			data: Bytes::from(json_bytes),
-			name: std::borrow::Cow::Borrowed(""),
-			id: None,
-		}))
+		Some(crate::parse::encode_sse_event("", Bytes::from(json_bytes)))
 	})
 }
 
@@ -91,7 +87,7 @@ where
 	It::IntoIter: Send,
 {
 	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
-	let encoder = SseEncoder::new();
+	let encoder = BytesCodec::new();
 
 	transform_parser(b, decoder, encoder, move |o| {
 		let data = unwrap_sse_data(o);
@@ -102,11 +98,10 @@ where
 				.into_iter()
 				.filter_map(|(event_name, item)| {
 					let json_bytes = serde_json::to_vec(&item).ok()?;
-					Some(Frame::Event(Event::<Bytes> {
-						data: Bytes::from(json_bytes),
-						name: std::borrow::Cow::Borrowed(event_name),
-						id: None,
-					}))
+					Some(crate::parse::encode_sse_event(
+						event_name,
+						Bytes::from(json_bytes),
+					))
 				})
 				.collect();
 		}
@@ -119,11 +114,10 @@ where
 			.into_iter()
 			.filter_map(|(event_name, item)| {
 				let json_bytes = serde_json::to_vec(&item).ok()?;
-				Some(Frame::Event(Event::<Bytes> {
-					data: Bytes::from(json_bytes),
-					name: std::borrow::Cow::Borrowed(event_name),
-					id: None,
-				}))
+				Some(crate::parse::encode_sse_event(
+					event_name,
+					Bytes::from(json_bytes),
+				))
 			})
 			.collect()
 	})

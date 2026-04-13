@@ -115,10 +115,10 @@ func AgwRouteCollection(
 	routes := krt.JoinCollection([]krt.Collection[agwir.AgwResource]{httpRoutes, grpcRoutes, tcpRoutes, tlsRoutes}, krtopts.ToOptions("ADPRoutes")...)
 
 	routeAttachments := krt.JoinCollection([]krt.Collection[*plugins.RouteAttachment]{
-		gatewayRouteAttachmentCountCollection(inputs, httpRouteCol, wellknown.HTTPRouteGVK, krtopts),
-		gatewayRouteAttachmentCountCollection(inputs, grpcRouteCol, wellknown.GRPCRouteGVK, krtopts),
-		gatewayRouteAttachmentCountCollection(inputs, tlsRouteCol, wellknown.TLSRouteGVK, krtopts),
-		gatewayRouteAttachmentCountCollection(inputs, tcpRouteCol, wellknown.TCPRouteGVK, krtopts),
+		gatewayRouteAttachmentCollection(inputs, httpRouteCol, wellknown.HTTPRouteGVK, krtopts),
+		gatewayRouteAttachmentCollection(inputs, grpcRouteCol, wellknown.GRPCRouteGVK, krtopts),
+		gatewayRouteAttachmentCollection(inputs, tlsRouteCol, wellknown.TLSRouteGVK, krtopts),
+		gatewayRouteAttachmentCollection(inputs, tcpRouteCol, wellknown.TCPRouteGVK, krtopts),
 	})
 
 	ancestorBackends := krt.JoinCollection([]krt.Collection[*utils.AncestorBackend]{
@@ -555,9 +555,9 @@ func buildGatewayRoutes[T any](convertRules func() T) T {
 	return convertRules()
 }
 
-// gatewayRouteAttachmentCountCollection holds the generic logic to determine the parents a route is attached to, used for
-// computing the aggregated `attachedRoutes` status in Gateway.
-func gatewayRouteAttachmentCountCollection[T controllers.Object](
+// gatewayRouteAttachmentCollection holds the generic logic to determine the parents a route is attached to.
+// Used for computing `attachedRoutes` status and for resolving route-to-gateway associations in the ReferenceIndex.
+func gatewayRouteAttachmentCollection[T controllers.Object](
 	inputs RouteContextInputs,
 	col krt.Collection[T],
 	kind schema.GroupVersionKind,
@@ -572,12 +572,23 @@ func gatewayRouteAttachmentCountCollection[T controllers.Object](
 
 		parentRefs := extractParentReferenceInfo(ctx, inputs.RouteParents, obj)
 		return slices.MapFilter(FilteredReferences(parentRefs), func(e RouteParentReference) **plugins.RouteAttachment {
-			if e.ParentKey.Kind != wellknown.GatewayGVK.Kind && e.ParentKey.Kind != wellknown.ListenerSetGVK.Kind {
+			if e.ParentKey.Kind == wellknown.ListenerSetGVK.Kind {
+				return ptr.Of(&plugins.RouteAttachment{
+					From:         from,
+					To:           e.ParentKey,
+					Gateway:      e.ParentGateway,
+					ListenerName: string(e.ParentSection),
+				})
+			}
+			if e.ParentGateway.Name == "" {
 				return nil
 			}
 			return ptr.Of(&plugins.RouteAttachment{
-				From:         from,
-				To:           e.ParentKey,
+				From: from,
+				To: utils.TypedNamespacedName{
+					Kind:           wellknown.GatewayGVK.Kind,
+					NamespacedName: e.ParentGateway,
+				},
 				Gateway:      e.ParentGateway,
 				ListenerName: string(e.ParentSection),
 			})

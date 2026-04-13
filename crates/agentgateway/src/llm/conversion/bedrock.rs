@@ -173,6 +173,8 @@ pub mod from_completions {
 	use std::time::Instant;
 
 	use bytes::Bytes;
+	use futures_util::StreamExt;
+	use futures_util::stream::{self, BoxStream};
 	use itertools::Itertools;
 	use types::bedrock;
 	use types::completions::typed as completions;
@@ -681,7 +683,7 @@ pub mod from_completions {
 		let mut tool_calls: HashMap<i32, String> = HashMap::new();
 		let model = model.to_string();
 		let message_id = message_id.to_string();
-		parse::aws_sse::transform(b, buffer_limit, move |f| {
+		let body = parse::aws_sse::transform(b, buffer_limit, move |f| {
 			let res = bedrock::ConverseStreamOutput::deserialize(f).ok()?;
 			let mk = |choices: Vec<completions::ChatChoiceStream>, usage: Option<completions::Usage>| {
 				Some(completions::StreamResponse {
@@ -848,7 +850,31 @@ pub mod from_completions {
 					}
 				},
 			}
-		})
+		});
+
+		append_done_on_success(body.into_data_stream())
+	}
+
+	pub(super) fn append_done_on_success<S>(stream: S) -> Body
+	where
+		S: futures_core::Stream<Item = Result<Bytes, axum_core::Error>> + Send + 'static,
+	{
+		let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
+		let stream = stream::unfold(
+			(Some(stream.boxed()), Some(done)),
+			|(stream, done): (
+				Option<BoxStream<'static, Result<Bytes, axum_core::Error>>>,
+				Option<Bytes>,
+			)| async move {
+				let mut stream = stream?;
+				match stream.next().await {
+					Some(Ok(chunk)) => Some((Ok(chunk), (Some(stream), done))),
+					Some(Err(err)) => Some((Err(err), (None, None))),
+					None => done.map(|done| (Ok(done), (None, None))),
+				}
+			},
+		);
+		Body::from_stream(stream)
 	}
 
 	pub fn translate_stop_reason(

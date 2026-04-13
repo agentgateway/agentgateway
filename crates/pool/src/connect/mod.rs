@@ -82,7 +82,7 @@ pub trait Connection {
 ///
 /// This can be used to inform recipients about things like if ALPN
 /// was used, or if connected to an HTTP agentgateway.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Connected {
 	pub(super) alpn: Alpn,
 	pub(super) is_proxied: bool,

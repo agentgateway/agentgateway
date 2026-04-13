@@ -32,8 +32,8 @@ pub static INSECURE_TRUST: Lazy<BackendTLS> = Lazy::new(|| {
 pub struct PerAlpnConfig {
 	config: Arc<ClientConfig>,
 	allow_custom_alpn: bool,
-	h1: std::sync::OnceLock<Arc<ClientConfig>>,
-	h2: std::sync::OnceLock<Arc<ClientConfig>>,
+	h1: Arc<std::sync::OnceLock<Arc<ClientConfig>>>,
+	h2: Arc<std::sync::OnceLock<Arc<ClientConfig>>>,
 }
 
 impl PerAlpnConfig {

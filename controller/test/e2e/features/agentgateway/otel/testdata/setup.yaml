@@ -14,7 +14,8 @@ data:
             endpoint: 0.0.0.0:4318
 
     processors:
-      batch: {}
+      batch:
+        timeout: 100ms
 
     exporters:
       debug:

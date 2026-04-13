@@ -122,10 +122,10 @@ impl LegacySSEService {
 		);
 		let (parts, _) = request.into_parts();
 		Ok(Sse::new(stream).into_response().map(|b| {
-			http::Body::new(DropBody::new(
+			DropBody::new(
 				b,
 				session::dropper(self.session_manager.clone(), session, parts),
-			))
+			)
 		}))
 	}
 }

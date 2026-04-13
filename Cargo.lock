@@ -97,6 +97,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent-pool"
+version = "0.0.0"
+dependencies = [
+ "assert_matches",
+ "axum-core",
+ "bytes",
+ "futures-channel",
+ "futures-core",
+ "futures-util",
+ "hashbrown 0.16.1",
+ "http 1.4.0",
+ "http-body-util",
+ "hyper",
+ "parking_lot",
+ "pin-project-lite",
+ "tokio",
+ "tower-service",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "agent-xds"
 version = "0.0.0"
 dependencies = [
@@ -125,6 +147,7 @@ dependencies = [
  "agent-celx",
  "agent-core",
  "agent-hbone",
+ "agent-pool",
  "agent-xds",
  "anyhow",
  "arc-swap",
@@ -173,7 +196,6 @@ dependencies = [
  "httpdate",
  "hyper",
  "hyper-util",
- "hyper-util-fork",
  "include_dir",
  "indexmap 2.13.1",
  "insta",
@@ -3030,22 +3052,6 @@ dependencies = [
  "tower-service",
  "tracing",
  "windows-registry",
-]
-
-[[package]]
-name = "hyper-util-fork"
-version = "0.1.14"
-dependencies = [
- "bytes",
- "futures-channel",
- "futures-core",
- "futures-util",
- "http 1.4.0",
- "hyper",
- "pin-project-lite",
- "tokio",
- "tower-service",
- "tracing",
 ]
 
 [[package]]

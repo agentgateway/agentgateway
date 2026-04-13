@@ -127,9 +127,9 @@ impl Connection for Socket {
 #[derive(Debug, Clone, Default)]
 pub struct HttpProxy;
 
-impl hyper_util_fork::client::legacy::connect::Connection for Socket {
-	fn connected(&self) -> hyper_util_fork::client::legacy::connect::Connected {
-		let mut con = hyper_util_fork::client::legacy::connect::Connected::new();
+impl agent_pool::connect::Connection for Socket {
+	fn connected(&self) -> agent_pool::connect::Connected {
+		let mut con = agent_pool::connect::Connected::new();
 		if self.ext.get::<HttpProxy>().is_some() {
 			con = con.proxy(true);
 		}

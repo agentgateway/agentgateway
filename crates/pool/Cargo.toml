@@ -1,0 +1,33 @@
+[package]
+name = "agent-pool"
+version = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+publish = { workspace = true }
+
+
+[dependencies]
+futures-channel.workspace = true
+futures-core.workspace = true
+futures-util.workspace = true
+http.workspace = true
+hyper.workspace = true
+pin-project-lite.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+tower-service.workspace = true
+parking_lot.workspace = true
+hashbrown.workspace = true
+axum-core.workspace = true
+
+[dev-dependencies]
+assert_matches.workspace = true
+hyper.workspace = true
+bytes.workspace = true
+http-body-util.workspace = true
+futures-util.workspace = true
+tokio.workspace = true
+tracing-subscriber.workspace = true
+
+[features]
+default = []
