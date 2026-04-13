@@ -59,7 +59,6 @@ output:
               apiVersion: 2024-02-15-preview
               model: gpt-4o-mini
               resourceName: ai-gateway
-              resourceType: OpenAI
             name: azureopenai
         - providers:
           - gemini:
