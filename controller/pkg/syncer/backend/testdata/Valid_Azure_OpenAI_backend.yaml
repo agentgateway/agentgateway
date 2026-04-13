@@ -5,7 +5,6 @@ ai:
         apiVersion: 2024-02-15-preview
         model: my-deployment
         resourceName: endpoint-123
-        resourceType: OpenAI
       name: backend
 key: test-ns/azure-openai-backend
 name:

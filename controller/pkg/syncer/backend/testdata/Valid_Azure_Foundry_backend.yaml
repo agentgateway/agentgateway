@@ -1,0 +1,14 @@
+ai:
+  providerGroups:
+  - providers:
+    - azure:
+        apiVersion: 2024-12-01-preview
+        model: gpt-4o-mini
+        projectName: my-project
+        resourceName: my-foundry-resource
+        resourceType: FOUNDRY
+      name: backend
+key: test-ns/azure-foundry-backend
+name:
+  name: azure-foundry-backend
+  namespace: test-ns
