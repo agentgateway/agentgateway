@@ -120,7 +120,6 @@ pub enum AIProvider {
 	Vertex(vertex::Provider),
 	Anthropic(anthropic::Provider),
 	Bedrock(bedrock::Provider),
-	#[serde(alias = "azureOpenAI")]
 	Azure(azure::Provider),
 }
 
@@ -131,7 +130,6 @@ pub enum LocalModelAIProvider {
 	Vertex,
 	Anthropic,
 	Bedrock,
-	#[serde(alias = "azureOpenAI")]
 	Azure,
 }
 

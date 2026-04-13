@@ -813,18 +813,6 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 									guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
 								})
 							},
-							Some(proto::agent::ai_backend::provider::Provider::Azureopenai(azureopenai)) => {
-								let (resource_name, resource_type) =
-									llm::azure::Provider::parse_host(&azureopenai.host);
-								AIProvider::Azure(llm::azure::Provider {
-									model: azureopenai.model.as_deref().map(strng::new),
-									resource_name,
-									resource_type,
-									api_version: azureopenai.api_version.as_deref().map(strng::new),
-									project_name: azureopenai.project_name.as_deref().map(strng::new),
-									cached_cred: Default::default(),
-								})
-							},
 							Some(proto::agent::ai_backend::provider::Provider::Azure(azure)) => {
 								let resource_type = match azure.resource_type() {
 									proto::agent::ai_backend::AzureResourceType::Foundry => {
@@ -840,6 +828,11 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 									project_name: azure.project_name.as_deref().map(strng::new),
 									cached_cred: Default::default(),
 								})
+							},
+							Some(proto::agent::ai_backend::provider::Provider::Azureopenai(_)) => {
+								return Err(ProtoError::Generic(format!(
+									"AI backend provider at index {provider_idx} uses deprecated azureOpenAI format; use azure instead"
+								)));
 							},
 							None => {
 								return Err(ProtoError::Generic(format!(

@@ -3,6 +3,7 @@ package agentgatewaybackend
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"istio.io/istio/pilot/pkg/model/kstatus"
 	"istio.io/istio/pkg/config"
@@ -435,11 +436,13 @@ func translateLLMProvider(llm *agentgateway.LLMProvider, providerName string) (*
 			},
 		}
 	} else if llm.AzureOpenAI != nil {
-		provider.Provider = &api.AIBackend_Provider_Azureopenai{
-			Azureopenai: &api.AIBackend_AzureOpenAI{
-				Host:       llm.AzureOpenAI.Endpoint,
-				Model:      llm.AzureOpenAI.DeploymentName,
-				ApiVersion: llm.AzureOpenAI.ApiVersion,
+		resourceName, resourceType := parseAzureEndpoint(string(llm.AzureOpenAI.Endpoint))
+		provider.Provider = &api.AIBackend_Provider_Azure{
+			Azure: &api.AIBackend_Azure{
+				ResourceName: resourceName,
+				ResourceType: resourceType,
+				Model:        llm.AzureOpenAI.DeploymentName,
+				ApiVersion:   llm.AzureOpenAI.ApiVersion,
 			},
 		}
 	} else if llm.Azure != nil {
@@ -539,4 +542,20 @@ func toMCPProtocol(appProtocol string) api.MCPTarget_Protocol {
 		// should never happen since this function is only invoked for valid MCPBackend protocols
 		return api.MCPTarget_UNDEFINED
 	}
+}
+
+// parseAzureEndpoint extracts the resource name and resource type from a full
+// Azure endpoint host string (e.g. "my-resource.openai.azure.com").
+func parseAzureEndpoint(endpoint string) (string, api.AIBackend_AzureResourceType) {
+	if name, ok := strings.CutSuffix(endpoint, ".openai.azure.com"); ok {
+		return name, api.AIBackend_OPEN_AI
+	}
+	if name, ok := strings.CutSuffix(endpoint, "-resource.services.ai.azure.com"); ok {
+		return name, api.AIBackend_FOUNDRY
+	}
+	if name, ok := strings.CutSuffix(endpoint, ".services.ai.azure.com"); ok {
+		return name, api.AIBackend_FOUNDRY
+	}
+	// Fallback: treat the whole endpoint as the resource name with OpenAI type.
+	return endpoint, api.AIBackend_OPEN_AI
 }
