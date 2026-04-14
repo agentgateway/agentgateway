@@ -5776,6 +5776,7 @@ type StaticBackend struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Host          string                 `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
 	Port          int32                  `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
+	UnixPath      string                 `protobuf:"bytes,3,opt,name=unix_path,json=unixPath,proto3" json:"unix_path,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5822,6 +5823,13 @@ func (x *StaticBackend) GetPort() int32 {
 		return x.Port
 	}
 	return 0
+}
+
+func (x *StaticBackend) GetUnixPath() string {
+	if x != nil {
+		return x.UnixPath
+	}
+	return ""
 }
 
 type DynamicForwardProxy struct {
@@ -12184,10 +12192,11 @@ const file_resource_proto_rawDesc = "" +
 	"\x06STRICT\x10\x01\x12\x0e\n" +
 	"\n" +
 	"PERMISSIVE\x10\x02B\x06\n" +
-	"\x04kind\"7\n" +
+	"\x04kind\"T\n" +
 	"\rStaticBackend\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
-	"\x04port\x18\x02 \x01(\x05R\x04port\"\x15\n" +
+	"\x04port\x18\x02 \x01(\x05R\x04port\x12\x1b\n" +
+	"\tunix_path\x18\x03 \x01(\tR\bunixPath\"\x15\n" +
 	"\x13DynamicForwardProxy\"h\n" +
 	"\n" +
 	"AwsBackend\x12O\n" +

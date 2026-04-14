@@ -118,14 +118,19 @@ func BuildAgwBackend(
 	}
 
 	if b := backend.Spec.Static; b != nil {
+		sb := &api.StaticBackend{}
+		switch {
+		case b.UnixPath != nil:
+			sb.UnixPath = *b.UnixPath
+		default:
+			sb.Host = ptr.OrEmpty(b.Host)
+			sb.Port = ptr.OrDefault(b.Port, 0)
+		}
 		return []*api.Backend{{
 			Key:  backend.Namespace + "/" + backend.Name,
 			Name: plugins.ResourceName(backend),
 			Kind: &api.Backend_Static{
-				Static: &api.StaticBackend{
-					Host: b.Host,
-					Port: b.Port,
-				},
+				Static: sb,
 			},
 			InlinePolicies: pols,
 		}}, errors.Join(errs...)

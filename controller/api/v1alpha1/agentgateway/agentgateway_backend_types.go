@@ -107,15 +107,24 @@ type AwsAgentCoreBackend struct {
 	Qualifier *string `json:"qualifier,omitempty"`
 }
 
+// StaticBackend specifies a static backend endpoint — either TCP (host + port) or Unix Domain Socket.
+// +kubebuilder:validation:XValidation:rule="has(self.unixPath) || (has(self.host) && has(self.port))",message="must specify either unixPath or both host and port"
+// +kubebuilder:validation:XValidation:rule="!has(self.unixPath) || (!has(self.host) && !has(self.port))",message="unixPath and host/port are mutually exclusive"
 type StaticBackend struct {
-	// host to connect to.
-	// +required
-	Host ShortString `json:"host"`
-	// port to connect to.
+	// host to connect to (for TCP backends).
+	// +optional
+	Host *ShortString `json:"host,omitempty"`
+	// port to connect to (for TCP backends).
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
-	// +required
-	Port int32 `json:"port"`
+	// +optional
+	Port *int32 `json:"port,omitempty"`
+	// unixPath is the filesystem path to a Unix Domain Socket. The gateway pod
+	// must share a volume with the target (e.g., via emptyDir sidecar pattern).
+	// Mutually exclusive with host/port.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	UnixPath *string `json:"unixPath,omitempty"`
 }
 
 // AIBackend specifies the AI backend configuration

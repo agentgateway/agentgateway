@@ -1152,6 +1152,7 @@ message BackendPolicySpec {
 message StaticBackend {
   string host = 1;
   int32 port = 2;
+  string unix_path = 3;
 }
 
 message DynamicForwardProxy {}

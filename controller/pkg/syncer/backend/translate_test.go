@@ -692,7 +692,7 @@ func TestBuildStaticIr(t *testing.T) {
 				},
 				Spec: agentgateway.AgentgatewayBackendSpec{
 					Static: &agentgateway.StaticBackend{
-						Host: "api.example.com", Port: 443,
+						Host: ptr.Of[agentgateway.ShortString]("api.example.com"), Port: ptr.Of[int32](443),
 					},
 				},
 			},
@@ -701,6 +701,25 @@ func TestBuildStaticIr(t *testing.T) {
 					backend.Key == "test-ns/test-backend" &&
 					backend.GetStatic().Host == "api.example.com" &&
 					backend.GetStatic().Port == 443
+			},
+		},
+		{
+			name: "Valid unix socket backend",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "uds-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					Static: &agentgateway.StaticBackend{
+						UnixPath: ptr.Of("/shared/agent/agent.sock"),
+					},
+				},
+			},
+			validate: func(backend *api.Backend) bool {
+				return backend != nil &&
+					backend.Key == "test-ns/uds-backend" &&
+					backend.GetStatic().UnixPath == "/shared/agent/agent.sock"
 			},
 		},
 	}

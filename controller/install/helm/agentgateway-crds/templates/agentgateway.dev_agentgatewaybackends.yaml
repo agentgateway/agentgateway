@@ -449,6 +449,15 @@ spec:
                                           Reduces API costs by caching static content like system prompts and tool definitions.
                                           Only applicable for Bedrock Claude 3+ and Nova models.
                                         properties:
+                                          cacheMessageOffset:
+                                            default: 0
+                                            description: |-
+                                              CacheMessageOffset shifts the message cache point further back in the
+                                              conversation. 0 (default) places it at the second-to-last message.
+                                              Higher values move it N additional messages towards the start, clamped
+                                              to bounds.
+                                            minimum: 0
+                                            type: integer
                                           cacheMessages:
                                             default: true
                                             description: |-
@@ -7858,6 +7867,15 @@ spec:
                           Reduces API costs by caching static content like system prompts and tool definitions.
                           Only applicable for Bedrock Claude 3+ and Nova models.
                         properties:
+                          cacheMessageOffset:
+                            default: 0
+                            description: |-
+                              CacheMessageOffset shifts the message cache point further back in the
+                              conversation. 0 (default) places it at the second-to-last message.
+                              Higher values move it N additional messages towards the start, clamped
+                              to bounds.
+                            minimum: 0
+                            type: integer
                           cacheMessages:
                             default: true
                             description: |-
@@ -13369,20 +13387,29 @@ spec:
                 description: static represents a static hostname.
                 properties:
                   host:
-                    description: host to connect to.
+                    description: host to connect to (for TCP backends).
                     maxLength: 256
                     minLength: 1
                     type: string
                   port:
-                    description: port to connect to.
+                    description: port to connect to (for TCP backends).
                     format: int32
                     maximum: 65535
                     minimum: 1
                     type: integer
-                required:
-                - host
-                - port
+                  unixPath:
+                    description: |-
+                      unixPath is the filesystem path to a Unix Domain Socket. The gateway pod
+                      must share a volume with the target (e.g., via emptyDir sidecar pattern).
+                      Mutually exclusive with host/port.
+                    minLength: 1
+                    type: string
                 type: object
+                x-kubernetes-validations:
+                - message: must specify either unixPath or both host and port
+                  rule: has(self.unixPath) || (has(self.host) && has(self.port))
+                - message: unixPath and host/port are mutually exclusive
+                  rule: '!has(self.unixPath) || (!has(self.host) && !has(self.port))'
             type: object
             x-kubernetes-validations:
             - message: AI policies require AI backend

@@ -742,7 +742,12 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 		let name = s.name.as_ref().ok_or(ProtoError::MissingRequiredField)?;
 		let backend = match &s.kind {
 			Some(proto::agent::backend::Kind::Static(s)) => {
-				Backend::Opaque(name.into(), Target::from((s.host.as_str(), s.port as u16)))
+				let target = if !s.unix_path.is_empty() {
+					Target::UnixSocket(std::path::PathBuf::from(&s.unix_path))
+				} else {
+					Target::from((s.host.as_str(), s.port as u16))
+				};
+				Backend::Opaque(name.into(), target)
 			},
 			Some(proto::agent::backend::Kind::Dynamic(_)) => Backend::Dynamic(name.into(), ()),
 			Some(proto::agent::backend::Kind::Aws(a)) => {
