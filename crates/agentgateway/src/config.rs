@@ -181,8 +181,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			crate::control::RootCert::Default
 		};
 		// Build the allowed trust domains list. The local trust domain is always first.
-		// ADDITIONAL_TRUST_DOMAINS is a comma-separated list of extra domains to accept
-		// (e.g. peer cluster trust domains in a multi-cluster peering setup).
+		// ADDITIONAL_TRUST_DOMAINS is a comma-separated list of extra domains to accept.
 		let mut allowed_trust_domains: Vec<Strng> = vec![td.clone().into()];
 		let additional = parse("ADDITIONAL_TRUST_DOMAINS")?
 			.or(raw.additional_trust_domains)
