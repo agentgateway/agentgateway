@@ -469,13 +469,13 @@
           "default": 0
         },
         "rawAddress": {
-          "description": "The original TCP peer IP address of the downstream connection.",
+          "description": "The original TCP peer IP address of the downstream connection.\nThis can differ from the `address` when using tunneling protocols like PROXY.",
           "type": "string",
           "format": "ip",
           "default": "0.0.0.0"
         },
         "rawPort": {
-          "description": "The original TCP peer port of the downstream connection.",
+          "description": "The original TCP peer port of the downstream connection.\nThis can differ from the `port` when using tunneling protocols like PROXY.",
           "type": "integer",
           "format": "uint16",
           "minimum": 0,

@@ -108,10 +108,12 @@ pub struct SourceContext {
 	#[serde(default = "dummy_address", rename = "rawAddress")]
 	#[dynamic(rename = "rawAddress")]
 	/// The original TCP peer IP address of the downstream connection.
+	/// This can differ from the `address` when using tunneling protocols like PROXY.
 	pub raw_address: IpAddr,
 	#[serde(default, rename = "rawPort")]
 	#[dynamic(rename = "rawPort")]
 	/// The original TCP peer port of the downstream connection.
+	/// This can differ from the `port` when using tunneling protocols like PROXY.
 	pub raw_port: u16,
 	/// The (Istio SPIFFE) identity of the downstream connection, if available.
 	#[serde(flatten, default, deserialize_with = "none_if_empty")]

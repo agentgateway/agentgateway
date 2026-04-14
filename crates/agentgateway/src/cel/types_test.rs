@@ -1,11 +1,9 @@
 use bytes::Bytes;
 use http::Method;
 use serde_json::json;
-use std::time::Instant;
 
 use super::*;
 use crate::http::Body;
-use crate::transport::stream::TCPConnectionInfo;
 
 /// Helper to build a test request with various fields populated
 fn build_test_request() -> crate::http::Request {
