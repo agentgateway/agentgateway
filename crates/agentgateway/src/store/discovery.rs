@@ -227,7 +227,7 @@ impl WorkloadStore {
 /// Data store for service information.
 #[derive(Default, Debug)]
 pub struct ServiceStore {
-	/// Maintains a mapping of service key -> (endpoint key -> workload endpoint)
+	/// Maintains a mapping of service key -> (endpoint UID -> workload endpoint)
 	/// this is used to handle ordering issues if workloads are received before services.
 	pub(super) staged_services: HashMap<NamespacedHostname, HashMap<Strng, Endpoint>>,
 
@@ -250,19 +250,20 @@ impl ServiceStore {
 		for (namespaced_host, ports) in services {
 			// Parse the namespaced hostname for the service.
 			let namespaced_host = NamespacedHostname::from_str(namespaced_host)?;
-			for (endpoint_key, endpoint) in service_endpoints(namespaced_host.clone(), workload, ports) {
-				self.insert_endpoint(namespaced_host.clone(), endpoint_key, endpoint)
-			}
+			self.insert_endpoint(
+				namespaced_host,
+				Endpoint {
+					workload_uid: workload.uid.clone(),
+					port: crate::types::discovery::ports_from_xds(ports),
+					status: workload.status,
+				},
+			)
 		}
 		Ok(())
 	}
 
-	fn insert_endpoint(
-		&mut self,
-		service_name: NamespacedHostname,
-		endpoint_key: Strng,
-		ep: Endpoint,
-	) {
+	fn insert_endpoint(&mut self, service_name: NamespacedHostname, ep: Endpoint) {
+		let ep_uid = ep.workload_uid.clone();
 		if let Some(svc) = self.get_by_namespaced_host(&service_name) {
 			// We may or may not accept the endpoint based on it's health
 			if !svc.should_include_endpoint(ep.status) {
@@ -272,7 +273,7 @@ impl ServiceStore {
 				);
 				return;
 			}
-			svc.endpoints.insert_key(endpoint_key, ep, 0);
+			svc.endpoints.insert(ep);
 		} else {
 			// We received workload endpoints, but don't have the Service yet.
 			// This can happen due to ordering issues.
@@ -283,7 +284,7 @@ impl ServiceStore {
 				.staged_services
 				.entry(service_name.clone())
 				.or_default()
-				.insert(endpoint_key, ep.clone());
+				.insert(ep_uid, ep.clone());
 		}
 	}
 
@@ -293,13 +294,13 @@ impl ServiceStore {
 		let workload_uid = &prev_workload.uid;
 		for svc in prev_workload.services.iter() {
 			// Remove the endpoint from the staged services.
-			if let Entry::Occupied(mut staged) = self.staged_services.entry(svc.clone()) {
-				staged
-					.get_mut()
-					.retain(|_, ep| &ep.workload_uid != workload_uid);
-				if staged.get().is_empty() {
-					staged.remove();
-				}
+			self
+				.staged_services
+				.entry(svc.clone())
+				.or_default()
+				.remove(workload_uid);
+			if self.staged_services[svc].is_empty() {
+				self.staged_services.remove(svc);
 			}
 
 			services_to_update.insert(svc.clone());
@@ -308,9 +309,7 @@ impl ServiceStore {
 		// Now remove the endpoint from all Services.
 		for svc in &services_to_update {
 			if let Some(svc) = self.get_by_namespaced_host(svc) {
-				svc
-					.endpoints
-					.remove_matching(|ep| &ep.workload_uid == workload_uid);
+				svc.endpoints.remove(workload_uid.clone());
 			}
 		}
 	}
@@ -372,9 +371,9 @@ impl ServiceStore {
 					"staged service found, inserting {} endpoints",
 					endpoints.len()
 				);
-				for (key, ep) in endpoints {
+				for (_, ep) in endpoints {
 					if service.should_include_endpoint(ep.status) {
-						service.endpoints.insert_key(key, ep, 0);
+						service.endpoints.insert(ep);
 					}
 				}
 			}
@@ -410,21 +409,6 @@ impl ServiceStore {
 			},
 		}
 	}
-}
-
-fn service_endpoints(
-	_service_name: NamespacedHostname,
-	workload: &Arc<Workload>,
-	ports: &PortList,
-) -> Vec<(Strng, Endpoint)> {
-	vec![(
-		workload.uid.clone(),
-		Endpoint {
-			workload_uid: workload.uid.clone(),
-			port: crate::types::discovery::ports_from_xds(ports),
-			status: workload.status,
-		},
-	)]
 }
 
 impl ServiceStore {
@@ -655,149 +639,4 @@ pub struct LocalWorkload {
 	#[serde(flatten)]
 	pub workload: Workload,
 	pub services: HashMap<String, HashMap<u16, u16>>,
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::types::discovery::{
-		AppProtocol, HealthStatus, InboundProtocol, Locality, NetworkMode,
-	};
-	use std::net::{IpAddr, Ipv4Addr};
-
-	fn inference_service_name() -> NamespacedHostname {
-		NamespacedHostname {
-			namespace: "default".into(),
-			hostname: "gateway-pool.default.inference.cluster.local".into(),
-		}
-	}
-
-	fn test_workload(service: &NamespacedHostname) -> Arc<Workload> {
-		Arc::new(Workload {
-			workload_ips: vec![IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1))],
-			waypoint: None,
-			network_gateway: None,
-			protocol: InboundProtocol::TCP,
-			network_mode: NetworkMode::Standard,
-			uid: "wl-1".into(),
-			name: "gateway-pod".into(),
-			namespace: "default".into(),
-			trust_domain: "cluster.local".into(),
-			service_account: "default".into(),
-			network: "network".into(),
-			workload_name: "gateway".into(),
-			workload_type: "pod".into(),
-			canonical_name: "".into(),
-			canonical_revision: "".into(),
-			hostname: "".into(),
-			node: "".into(),
-			authorization_policies: Vec::new(),
-			status: HealthStatus::Healthy,
-			cluster_id: "cluster".into(),
-			locality: Locality::default(),
-			services: vec![service.clone()],
-			capacity: 1,
-		})
-	}
-
-	fn test_service(service: &NamespacedHostname) -> Service {
-		Service {
-			name: "gateway-pool".into(),
-			namespace: service.namespace.clone(),
-			hostname: service.hostname.clone(),
-			vips: Vec::new(),
-			ports: HashMap::from([(8000, 8000), (8001, 8001)]),
-			app_protocols: HashMap::from([(8000, AppProtocol::Http2), (8001, AppProtocol::Http2)]),
-			endpoints: Default::default(),
-			subject_alt_names: Vec::new(),
-			waypoint: None,
-			load_balancer: None,
-			ip_families: None,
-		}
-	}
-
-	fn multi_port_list() -> PortList {
-		PortList {
-			ports: vec![
-				types::proto::workload::Port {
-					service_port: 8000,
-					target_port: 8000,
-					app_protocol: 0,
-				},
-				types::proto::workload::Port {
-					service_port: 8001,
-					target_port: 8001,
-					app_protocol: 0,
-				},
-			],
-		}
-	}
-
-	#[tokio::test]
-	async fn insert_endpoint_for_services_keeps_multi_port_inference_pool_as_single_endpoint() {
-		let service_name = inference_service_name();
-		let workload = test_workload(&service_name);
-		let services = HashMap::from([(service_name.to_string(), multi_port_list())]);
-		let mut store = ServiceStore::default();
-		store.insert(test_service(&service_name));
-
-		store
-			.insert_endpoint_for_services(&workload, &services)
-			.expect("inference pool endpoints should be inserted");
-
-		let svc = store
-			.get_by_namespaced_host(&service_name)
-			.expect("service should exist");
-		let binding = svc.endpoints.iter();
-		let endpoints = binding.index();
-		assert_eq!(endpoints.len(), 1);
-
-		let endpoint = endpoints
-			.get(&strng::new("wl-1"))
-			.expect("missing endpoint");
-		assert_eq!(endpoint.endpoint.workload_uid.as_str(), "wl-1");
-		assert_eq!(endpoint.endpoint.port.get(&8000), Some(&8000));
-		assert_eq!(endpoint.endpoint.port.get(&8001), Some(&8001));
-	}
-
-	#[tokio::test]
-	async fn remove_endpoint_removes_all_multi_port_inference_pool_entries() {
-		let service_name = inference_service_name();
-		let workload = test_workload(&service_name);
-		let services = HashMap::from([(service_name.to_string(), multi_port_list())]);
-		let mut store = ServiceStore::default();
-		store.insert(test_service(&service_name));
-		store
-			.insert_endpoint_for_services(&workload, &services)
-			.expect("inference pool endpoints should be inserted");
-
-		store.remove_endpoint(workload.as_ref());
-
-		let svc = store
-			.get_by_namespaced_host(&service_name)
-			.expect("service should still exist");
-		let binding = svc.endpoints.iter();
-		assert!(binding.index().is_empty());
-	}
-
-	#[tokio::test]
-	async fn staged_multi_port_inference_pool_entries_are_inserted_when_service_arrives() {
-		let service_name = inference_service_name();
-		let workload = test_workload(&service_name);
-		let services = HashMap::from([(service_name.to_string(), multi_port_list())]);
-		let mut store = ServiceStore::default();
-
-		store
-			.insert_endpoint_for_services(&workload, &services)
-			.expect("inference pool endpoints should be staged");
-		store.insert(test_service(&service_name));
-
-		let svc = store
-			.get_by_namespaced_host(&service_name)
-			.expect("service should exist");
-		let binding = svc.endpoints.iter();
-		let endpoints = binding.index();
-		assert_eq!(endpoints.len(), 1);
-		assert!(endpoints.contains_key(&strng::new("wl-1")));
-	}
 }

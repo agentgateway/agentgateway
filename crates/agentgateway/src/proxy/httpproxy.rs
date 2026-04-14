@@ -12,7 +12,7 @@ use headers::HeaderMapExt;
 use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
-use rand::seq::IndexedRandom;
+use rand::seq::{IndexedRandom, IteratorRandom};
 use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
@@ -1842,13 +1842,10 @@ fn select_service_target_port(
 		// use the explicit override. select_endpoint ensures this is actually in the endpoint
 		return Some(ov.port());
 	}
-	if inference_failed_open {
-		let mut target_ports = ep.port.values().copied().collect::<Vec<_>>();
-		target_ports.sort_unstable();
-		target_ports.dedup();
-		if let Some(target_port) = target_ports.choose(&mut rand::rng()).copied() {
-			return Some(target_port);
-		}
+	if inference_failed_open
+		&& let Some(target_port) = ep.port.values().choose(&mut rand::rng()).copied()
+	{
+		return Some(target_port);
 	}
 	if let Some(&ep_target_port) = ep.port.get(&svc_port) {
 		// prefer endpoint port mapping
