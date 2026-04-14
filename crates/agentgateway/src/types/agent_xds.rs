@@ -501,10 +501,10 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
 			Some(proto::agent::backend_auth_policy::Kind::Gcp(g)) => {
 				BackendAuth::Gcp(match g.token_type {
 					None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
-						r#type: Some(auth::AccessToken),
+						r#type: Some(auth::gcp::AccessToken),
 					},
 					Some(gcp::TokenType::IdToken(gcp::IdToken { audience })) => GcpAuth::IdToken {
-						r#type: auth::IdToken,
+						r#type: auth::gcp::IdToken,
 						audience,
 					},
 				})
@@ -531,47 +531,47 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
 					Some(proto::agent::azure::Kind::ExplicitConfig(config)) => {
 						let src = match config.credential_source {
 							Some(azure_explicit_config::CredentialSource::ClientSecret(cs)) => {
-								auth::AzureAuthCredentialSource::ClientSecret {
+								auth::azure::AzureAuthCredentialSource::ClientSecret {
 									tenant_id: cs.tenant_id,
 									client_id: cs.client_id,
 									client_secret: cs.client_secret.into(),
 								}
 							},
 							Some(azure_explicit_config::CredentialSource::ManagedIdentityCredential(mic)) => {
-								auth::AzureAuthCredentialSource::ManagedIdentity {
+								auth::azure::AzureAuthCredentialSource::ManagedIdentity {
 									user_assigned_identity: mic.user_assigned_identity.and_then(|uami| {
 										uami.id.map(|id| match id {
 											user_assigned_identity::Id::ClientId(c) => {
-												auth::AzureUserAssignedIdentity::ClientId(c)
+												auth::azure::AzureUserAssignedIdentity::ClientId(c)
 											},
 											user_assigned_identity::Id::ObjectId(o) => {
-												auth::AzureUserAssignedIdentity::ObjectId(o)
+												auth::azure::AzureUserAssignedIdentity::ObjectId(o)
 											},
 											user_assigned_identity::Id::ResourceId(r) => {
-												auth::AzureUserAssignedIdentity::ResourceId(r)
+												auth::azure::AzureUserAssignedIdentity::ResourceId(r)
 											},
 										})
 									}),
 								}
 							},
 							Some(azure_explicit_config::CredentialSource::WorkloadIdentityCredential(_)) => {
-								auth::AzureAuthCredentialSource::WorkloadIdentity {}
+								auth::azure::AzureAuthCredentialSource::WorkloadIdentity {}
 							},
 							None => {
 								return Err(ProtoError::MissingRequiredField);
 							},
 						};
-						auth::AzureAuth::ExplicitConfig {
+						auth::azure::AzureAuth::ExplicitConfig {
 							credential_source: src,
 							cached_cred: Default::default(),
 						}
 					},
 					Some(proto::agent::azure::Kind::DeveloperImplicit(_)) => {
-						auth::AzureAuth::DeveloperImplicit {
+						auth::azure::AzureAuth::DeveloperImplicit {
 							cached_cred: Default::default(),
 						}
 					},
-					Some(proto::agent::azure::Kind::Implicit(_)) => auth::AzureAuth::Implicit {
+					Some(proto::agent::azure::Kind::Implicit(_)) => auth::azure::AzureAuth::Implicit {
 						cached_cred: Default::default(),
 					},
 					None => return Err(ProtoError::MissingRequiredField),

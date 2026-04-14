@@ -1,7 +1,7 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
 
-use crate::http::auth::AzureCredentialCache;
+use crate::http::auth::azure::AzureCredentialCache;
 use crate::llm::RouteType;
 use crate::*;
 
