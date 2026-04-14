@@ -180,6 +180,19 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		} else {
 			crate::control::RootCert::Default
 		};
+		// Build the allowed trust domains list. The local trust domain is always first.
+		// ADDITIONAL_TRUST_DOMAINS is a comma-separated list of extra domains to accept
+		// (e.g. peer cluster trust domains in a multi-cluster peering setup).
+		let mut allowed_trust_domains: Vec<Strng> = vec![td.clone().into()];
+		let additional = parse("ADDITIONAL_TRUST_DOMAINS")?
+			.or(raw.additional_trust_domains)
+			.unwrap_or_default();
+		for domain in additional.split(',') {
+			let domain = domain.trim();
+			if !domain.is_empty() {
+				allowed_trust_domains.push(domain.into());
+			}
+		}
 		Some(caclient::Config {
 			address: addr,
 			secret_ttl: Duration::from_secs(86400),
@@ -188,10 +201,10 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				namespace: ns.into(),
 				service_account: sa.into(),
 			},
-
 			auth,
 			ca_cert: ca_root_cert,
 			ca_headers: ca_headers?,
+			allowed_trust_domains,
 		})
 	} else {
 		None

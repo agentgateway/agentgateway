@@ -66,6 +66,7 @@ pub struct Config {
 	pub auth: AuthSource,
 	pub ca_cert: RootCert,
 	pub ca_headers: Vec<(String, String)>,
+	pub allowed_trust_domains: Vec<Strng>,
 }
 
 #[derive(Clone, Debug)]
@@ -83,10 +84,16 @@ pub struct WorkloadCertificate {
 	private_key: PrivateKeyDer<'static>,
 	expiry: Expiration,
 	identity: Identity,
+	allowed_trust_domains: Vec<Strng>,
 }
 
 impl WorkloadCertificate {
-	fn new(key: &[u8], cert: &[u8], chain: Vec<&[u8]>) -> Result<WorkloadCertificate, Error> {
+	fn new(
+		key: &[u8],
+		cert: &[u8],
+		chain: Vec<&[u8]>,
+		allowed_trust_domains: Vec<Strng>,
+	) -> Result<WorkloadCertificate, Error> {
 		let cert = parse_cert(cert.to_vec())?;
 		let mut roots_store = RootCertStore::empty();
 		let identity = cert
@@ -126,6 +133,7 @@ impl WorkloadCertificate {
 			private_key: key,
 			chain: cert_and_chain,
 			identity,
+			allowed_trust_domains,
 		})
 	}
 	pub fn is_expired(&self) -> bool {
@@ -183,8 +191,6 @@ impl WorkloadCertificate {
 		})
 	}
 	pub fn hbone_termination(&self) -> Result<ServerConfig, Error> {
-		let Identity::Spiffe { trust_domain, .. } = &self.identity;
-
 		// TODO: this is too expensive to build per request
 		let roots = self.roots.clone();
 		let raw_client_cert_verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
@@ -192,9 +198,12 @@ impl WorkloadCertificate {
 			transport::tls::provider(),
 		)
 		.build()?;
+		// Verify the client's SPIFFE trust domain is in the allowed set.
+		// The list always includes the local trust domain.
+		// An empty list disables the check and relies solely on CA-level trust.
 		let client_cert_verifier = transport::tls::trustdomain::TrustDomainVerifier::new(
 			raw_client_cert_verifier,
-			Some(trust_domain.clone()),
+			self.allowed_trust_domains.clone(),
 		);
 		let mut sc = ServerConfig::builder_with_provider(transport::tls::provider())
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
@@ -510,6 +519,7 @@ impl CaClient {
 			&private_key,
 			leaf_cert,
 			chain_certs,
+			config.allowed_trust_domains.clone(),
 		)?);
 
 		// Verify the certificate matches our identity
