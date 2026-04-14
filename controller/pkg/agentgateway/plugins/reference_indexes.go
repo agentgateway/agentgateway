@@ -315,6 +315,21 @@ func (p ReferenceIndex) lookupGatewaysForBackend(ctx krt.HandlerContext, object 
 	return base
 }
 
+func IsBackendLikeTarget(policyTarget *api.PolicyTarget) bool {
+	return policyTarget.GetBackend() != nil || policyTarget.GetService() != nil
+}
+
+// TODO: PolicyAttachment and AncestorBackend are keyed by root object only (no port/section).
+// This means section-scoped targets (e.g. svc-a:9090 vs svc-a:8080) chain identically in the
+// recursive graph, causing over-attachment. A follow-up should add section-aware indexing to
+// support scoped recursive chaining without over-attachment.
+func (p ReferenceIndex) LookupGatewaysForPolicyTarget(ctx krt.HandlerContext, object utils.TypedNamespacedName, policyTarget *api.PolicyTarget) sets.Set[types.NamespacedName] {
+	if IsBackendLikeTarget(policyTarget) {
+		return p.LookupGatewaysForBackend(ctx, object)
+	}
+	return p.LookupGatewaysForTarget(ctx, object)
+}
+
 func (p ReferenceIndex) WithPolicyAttachments(references krt.IndexCollection[utils.TypedNamespacedName, *PolicyAttachment]) ReferenceIndex {
 	p.PolicyAttachments = references
 	return p
