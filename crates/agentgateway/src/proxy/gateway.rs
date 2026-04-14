@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::error::Error as StdError;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -694,10 +695,9 @@ impl Gateway {
 		match res {
 			Ok(_) => Ok(()),
 			Err(e) => {
-				if let Some(te) = e.downcast_ref::<hyper::Error>()
-					&& te.is_timeout()
-				{
-					// This is just closing an idle connection; no need to log which is misleading
+				if should_ignore_downstream_connection_error(e.as_ref()) {
+					// Expected for idle keepalive expiry and clients tearing down long-lived
+					// streams such as SSE before the server finishes the response.
 					return Ok(());
 				}
 				anyhow::bail!("{e}");
@@ -1288,6 +1288,16 @@ fn is_accept_error_per_connection(e: &std::io::Error) -> bool {
 		e.raw_os_error(),
 		Some(libc::ECONNABORTED | libc::ECONNRESET | libc::EPERM)
 	)
+}
+
+fn should_ignore_downstream_connection_error(err: &(dyn StdError + 'static)) -> bool {
+	if let Some(hyper_err) = err.downcast_ref::<hyper::Error>()
+		&& (hyper_err.is_timeout() || hyper_err.is_incomplete_message())
+	{
+		return true;
+	}
+
+	false
 }
 
 fn build_response(status: StatusCode) -> ::http::Response<()> {
