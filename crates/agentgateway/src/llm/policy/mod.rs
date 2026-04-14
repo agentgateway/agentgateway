@@ -369,9 +369,11 @@ impl Policy {
 		req: &mut dyn RequestType,
 		http_headers: &HeaderMap,
 		claims: Option<Claims>,
+		span_writer: crate::telemetry::log::SpanWriter,
 	) -> anyhow::Result<Option<Response>> {
 		let client = PolicyClient {
 			inputs: backend_info.inputs.clone(),
+			span_writer,
 		};
 		for g in self
 			.prompt_guard
@@ -887,6 +889,9 @@ impl Policy {
 		phase: crate::telemetry::metrics::GuardrailPhase,
 		action: crate::telemetry::metrics::GuardrailAction,
 	) {
+		let _span = client
+			.span_writer
+			.start(format!("guardrail:{phase:?}:{action:?}"));
 		client
 			.inputs
 			.metrics

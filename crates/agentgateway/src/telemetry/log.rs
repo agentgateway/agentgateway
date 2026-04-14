@@ -834,17 +834,24 @@ impl Drop for DropOnLog {
 				.inc_by(retry_count as u64);
 		}
 
-		Self::add_llm_metrics(
-			&log,
-			&route_identifier,
-			end_time,
-			duration,
-			llm_response.as_ref(),
-			&custom_metric_fields,
-		);
+		if llm_response.is_some() {
+			let _llm_span = log.span_writer().start("llm");
+			Self::add_llm_metrics(
+				&log,
+				&route_identifier,
+				end_time,
+				duration,
+				llm_response.as_ref(),
+				&custom_metric_fields,
+			);
+		}
 		if let Some(mcp) = &mcp
 			&& mcp.method_name.is_some()
 		{
+			let _mcp_span = log.span_writer().start(format!(
+				"mcp:{}",
+				mcp.method_name.as_deref().unwrap_or("unknown")
+			));
 			// Check mcp.method_name is set, so we don't count things like GET and DELETE
 			log
 				.metrics
@@ -1230,7 +1237,10 @@ impl PolicyGrpcLogExporter {
 		let channel = GrpcReferenceChannel {
 			target,
 			policies: Arc::new(policies),
-			client: crate::proxy::httpproxy::PolicyClient { inputs },
+			client: crate::proxy::httpproxy::PolicyClient {
+				inputs,
+				span_writer: Default::default(),
+			},
 		};
 		let tonic_client =
 			opentelemetry_proto::tonic::collector::logs::v1::logs_service_client::LogsServiceClient::new(
