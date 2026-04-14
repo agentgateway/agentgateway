@@ -105,6 +105,14 @@ pub struct SourceContext {
 	#[serde(default)]
 	/// The port of the downstream connection.
 	pub port: u16,
+	#[serde(default = "dummy_address", rename = "rawAddress")]
+	#[dynamic(rename = "rawAddress")]
+	/// The original TCP peer IP address of the downstream connection.
+	pub raw_address: IpAddr,
+	#[serde(default, rename = "rawPort")]
+	#[dynamic(rename = "rawPort")]
+	/// The original TCP peer port of the downstream connection.
+	pub raw_port: u16,
 	/// The (Istio SPIFFE) identity of the downstream connection, if available.
 	#[serde(flatten, default, deserialize_with = "none_if_empty")]
 	#[dynamic(flatten)]
@@ -134,6 +142,24 @@ pub struct WorkloadContext {
 	/// The service account of the source workload.
 	#[serde(default)]
 	pub service_account: Strng,
+}
+
+impl SourceContext {
+	pub fn from_tcp_connection(
+		tcp: &crate::transport::stream::TCPConnectionInfo,
+		tls: Option<crate::transport::tls::TlsInfo>,
+		unverified_workload: Option<WorkloadContext>,
+	) -> Self {
+		let raw_peer_addr = tcp.raw_peer_addr.unwrap_or(tcp.peer_addr);
+		Self {
+			address: tcp.peer_addr.ip(),
+			port: tcp.peer_addr.port(),
+			raw_address: raw_peer_addr.ip(),
+			raw_port: raw_peer_addr.port(),
+			tls,
+			unverified_workload,
+		}
+	}
 }
 
 impl WorkloadContext {
@@ -1507,6 +1533,8 @@ pub fn full_example_executor() -> ExecutorSerde {
 		source: Some(SourceContext {
 			address: "127.0.0.1".parse().unwrap(),
 			port: 12345,
+			raw_address: "127.0.0.1".parse().unwrap(),
+			raw_port: 12345,
 			tls: Some(TlsInfo {
 				identity: None,
 				subject_alt_names: vec!["san".into()],

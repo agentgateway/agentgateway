@@ -468,6 +468,20 @@
           "maximum": 65535,
           "default": 0
         },
+        "rawAddress": {
+          "description": "The original TCP peer IP address of the downstream connection.",
+          "type": "string",
+          "format": "ip",
+          "default": "0.0.0.0"
+        },
+        "rawPort": {
+          "description": "The original TCP peer port of the downstream connection.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 0
+        },
         "identity": {
           "description": "The (Istio SPIFFE) identity of the downstream connection, if available.",
           "type": [

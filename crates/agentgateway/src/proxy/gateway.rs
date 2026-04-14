@@ -648,12 +648,11 @@ impl Gateway {
 			&inputs.cfg.network,
 			tcp.peer_addr.ip(),
 		);
-		let src = crate::cel::SourceContext {
-			address: tcp.peer_addr.ip(),
-			port: tcp.peer_addr.port(),
-			tls: tls.and_then(|t| t.src_identity.clone()),
+		let src = crate::cel::SourceContext::from_tcp_connection(
+			tcp,
+			tls.and_then(|t| t.src_identity.clone()),
 			unverified_workload,
-		};
+		);
 		if let Some(network_authorization) = policies.network_authorization.as_ref()
 			&& let Err(e) = network_authorization.apply(&src)
 		{

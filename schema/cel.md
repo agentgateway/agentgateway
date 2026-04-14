@@ -63,6 +63,8 @@
 |`source`|object|`source` contains attributes about the source of the request.|
 |`source.address`|string|The IP address of the downstream connection.|
 |`source.port`|integer|The port of the downstream connection.|
+|`source.rawAddress`|string|The original TCP peer IP address of the downstream connection.|
+|`source.rawPort`|integer|The original TCP peer port of the downstream connection.|
 |`source.identity`|object|The (Istio SPIFFE) identity of the downstream connection, if available.|
 |`source.identity.trustDomain`|string|The trust domain of the identity.|
 |`source.identity.namespace`|string|The namespace of the identity.|

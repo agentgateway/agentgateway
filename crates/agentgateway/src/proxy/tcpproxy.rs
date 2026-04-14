@@ -42,12 +42,11 @@ impl TCPProxy {
 			&self.inputs.cfg.network,
 			tcp.peer_addr.ip(),
 		);
-		let src = SourceContext {
-			address: tcp.peer_addr.ip(),
-			port: tcp.peer_addr.port(),
-			tls: tls.and_then(|t| t.src_identity.clone()),
+		let src = SourceContext::from_tcp_connection(
+			tcp,
+			tls.and_then(|t| t.src_identity.clone()),
 			unverified_workload,
-		};
+		);
 		let mut log: DropOnLog = RequestLog::new(
 			log::CelLogging::new(
 				self.inputs.cfg.logging.clone(),
