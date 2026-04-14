@@ -649,7 +649,7 @@ pub mod trustdomain {
 
 		use super::*;
 
-		/// Generate a self-signed cert with a SPIFFE URI SAN for the given trust domain.
+		/// Generate a leaf cert with a SPIFFE URI SAN for the given trust domain, signed by a test CA.
 		fn make_spiffe_cert(trust_domain: &str) -> CertificateDer<'static> {
 			let kp = KeyPair::generate().unwrap();
 			let ca_kp = KeyPair::generate().unwrap();

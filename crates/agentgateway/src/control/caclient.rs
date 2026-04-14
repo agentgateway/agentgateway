@@ -199,8 +199,9 @@ impl WorkloadCertificate {
 		)
 		.build()?;
 		// Verify the client's SPIFFE trust domain is in the allowed set.
-		// The list always includes the local trust domain.
-		// An empty list disables the check and relies solely on CA-level trust.
+		// TrustDomainVerifier treats an empty allow-list as "check disabled" and
+		// falls back to CA-level trust only; the config-populated list used here
+		// normally includes the local trust domain.
 		let client_cert_verifier = transport::tls::trustdomain::TrustDomainVerifier::new(
 			raw_client_cert_verifier,
 			self.allowed_trust_domains.clone(),

@@ -128,7 +128,7 @@
           ]
         },
         "additionalTrustDomains": {
-          "description": "Comma-separated list of additional SPIFFE trust domains accepted on inbound HBONE\nconnections. The local trust_domain is always implicitly included.",
+          "description": "Comma-separated list of additional SPIFFE trust domains accepted on inbound HBONE\nconnections. The local trust domain is always implicitly included.",
           "type": [
             "string",
             "null"
