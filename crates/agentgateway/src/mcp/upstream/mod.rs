@@ -13,8 +13,6 @@ use rmcp::transport::TokioChildProcess;
 use thiserror::Error;
 use tokio::process::Command;
 
-use crate::http::jwt::Claims;
-use crate::http::transformation_cel::TransformationMetadata;
 use crate::mcp::FailureMode;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
@@ -22,7 +20,6 @@ use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::{mergestream, upstream};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::transport::BufferLimit;
 use crate::types::agent::McpTargetSpec;
 use crate::*;
 
@@ -30,15 +27,6 @@ use crate::*;
 pub struct IncomingRequestContext {
 	headers: http::HeaderMap,
 	ext: ::http::Extensions,
-}
-
-fn cpy_ext<T: Clone + Send + Sync + 'static>(
-	inp: &::http::request::Parts,
-	ext: &mut ::http::Extensions,
-) {
-	if let Some(v) = inp.extensions.get::<T>() {
-		ext.insert(v.clone());
-	}
 }
 
 impl IncomingRequestContext {
