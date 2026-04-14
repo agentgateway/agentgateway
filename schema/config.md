@@ -732,6 +732,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptCaching.cacheMessages`|boolean||
 |`binds[].listeners[].routes[].policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].policies.ai.promptCaching.minTokens`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`binds[].listeners[].routes[].policies.ai.routes`|object||
 |`binds[].listeners[].routes[].policies.backendTLS`|object|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.backendTLS.cert`|string||
@@ -893,6 +894,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].entries[].key`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].entries[].value`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].type`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.failureMode`|string|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`binds[].listeners[].routes[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`binds[].listeners[].routes[].policies.jwtAuth.mode`|string||
@@ -1322,7 +1324,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.failureMode`|string|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.|
 |`binds[].listeners[].routes[].backends[].ai`|object||
 |`binds[].listeners[].routes[].backends[].ai.name`|string||
-|`binds[].listeners[].routes[].backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, or azureOpenAI may be set.|
+|`binds[].listeners[].routes[].backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, or azure may be set.|
 |`binds[].listeners[].routes[].backends[].ai.provider.openAI`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.openAI.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.gemini`|object||
@@ -1338,10 +1340,12 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock.guardrailIdentifier`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock.guardrailVersion`|string||
-|`binds[].listeners[].routes[].backends[].ai.provider.azureOpenAI`|object||
-|`binds[].listeners[].routes[].backends[].ai.provider.azureOpenAI.model`|string||
-|`binds[].listeners[].routes[].backends[].ai.provider.azureOpenAI.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.provider.azureOpenAI.apiVersion`|string||
+|`binds[].listeners[].routes[].backends[].ai.provider.azure`|object||
+|`binds[].listeners[].routes[].backends[].ai.provider.azure.model`|string||
+|`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
+|`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceType`|string|The type of Azure endpoint. Determines the host suffix.|
+|`binds[].listeners[].routes[].backends[].ai.provider.azure.apiVersion`|string||
+|`binds[].listeners[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`binds[].listeners[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -2015,11 +2019,12 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.cacheMessages`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.minTokens`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.routes`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].name`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, or azureOpenAI may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, or azure may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.gemini`|object||
@@ -2035,10 +2040,12 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailIdentifier`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailVersion`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azureOpenAI`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azureOpenAI.model`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azureOpenAI.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azureOpenAI.apiVersion`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.model`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|string|The type of Azure endpoint. Determines the host suffix.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.apiVersion`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -2712,6 +2719,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessages`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.minTokens`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.routes`|object||
 |`binds[].listeners[].routes[].backends[].aws`|object||
 |`binds[].listeners[].routes[].backends[].aws.agentCore`|object||
@@ -3387,6 +3395,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheMessages`|boolean||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.minTokens`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.routes`|object||
 |`binds[].listeners[].tcpRoutes`|[]object||
 |`binds[].listeners[].tcpRoutes[].name`|string||
@@ -4622,6 +4631,7 @@
 |`policies[].policy.ai.promptCaching.cacheMessages`|boolean||
 |`policies[].policy.ai.promptCaching.cacheTools`|boolean||
 |`policies[].policy.ai.promptCaching.minTokens`|integer||
+|`policies[].policy.ai.promptCaching.cacheMessageOffset`|integer||
 |`policies[].policy.ai.routes`|object||
 |`policies[].policy.backendTLS`|object|Send TLS to the backend.|
 |`policies[].policy.backendTLS.cert`|string||
@@ -4783,6 +4793,7 @@
 |`policies[].policy.remoteRateLimit.descriptors[].entries[].key`|string||
 |`policies[].policy.remoteRateLimit.descriptors[].entries[].value`|string||
 |`policies[].policy.remoteRateLimit.descriptors[].type`|string||
+|`policies[].policy.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`policies[].policy.remoteRateLimit.failureMode`|string|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`policies[].policy.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`policies[].policy.jwtAuth.mode`|string||
@@ -5752,6 +5763,7 @@
 |`backends[].policies.ai.promptCaching.cacheMessages`|boolean||
 |`backends[].policies.ai.promptCaching.cacheTools`|boolean||
 |`backends[].policies.ai.promptCaching.minTokens`|integer||
+|`backends[].policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`backends[].policies.ai.routes`|object||
 |`llm`|object||
 |`llm.port`|integer||
@@ -5764,8 +5776,10 @@
 |`llm.models[].params.awsRegion`|string||
 |`llm.models[].params.vertexRegion`|string||
 |`llm.models[].params.vertexProject`|string||
-|`llm.models[].params.azureHost`|string|For Azure: the host of the deployment|
+|`llm.models[].params.azureResourceName`|string|For Azure: the resource name of the deployment|
+|`llm.models[].params.azureResourceType`|string|For Azure: the type of Azure endpoint (openAI or foundry)|
 |`llm.models[].params.azureApiVersion`|string|For Azure: the API version to use|
+|`llm.models[].params.azureProjectName`|string|For Azure: the Foundry project name (required for foundry resource type)|
 |`llm.models[].params.hostOverride`|string|Override the upstream host for this provider.|
 |`llm.models[].params.pathOverride`|string|Override the upstream path for this provider.|
 |`llm.models[].params.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -7413,6 +7427,7 @@
 |`mcp.policies.ai.promptCaching.cacheMessages`|boolean||
 |`mcp.policies.ai.promptCaching.cacheTools`|boolean||
 |`mcp.policies.ai.promptCaching.minTokens`|integer||
+|`mcp.policies.ai.promptCaching.cacheMessageOffset`|integer||
 |`mcp.policies.ai.routes`|object||
 |`mcp.policies.backendTLS`|object|Send TLS to the backend.|
 |`mcp.policies.backendTLS.cert`|string||
@@ -7574,6 +7589,7 @@
 |`mcp.policies.remoteRateLimit.descriptors[].entries[].key`|string||
 |`mcp.policies.remoteRateLimit.descriptors[].entries[].value`|string||
 |`mcp.policies.remoteRateLimit.descriptors[].type`|string||
+|`mcp.policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`mcp.policies.remoteRateLimit.failureMode`|string|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`mcp.policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`mcp.policies.jwtAuth.mode`|string||

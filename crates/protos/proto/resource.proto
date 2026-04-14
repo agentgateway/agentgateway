@@ -621,6 +621,7 @@ message TrafficPolicySpec {
     message Descriptor {
       repeated Entry entries = 1;
       Type type = 2;
+      optional string limit_override = 3; // CEL expr returning {unit, requestsPerUnit}
     }
     message Entry {
       string key = 1;
@@ -954,6 +955,7 @@ message BackendPolicySpec {
       bool cache_messages = 2;
       bool cache_tools = 3;
       optional uint32 min_tokens = 4;
+      optional uint32 cache_message_offset = 5;
     }
 
     map<string, string> defaults = 2;
@@ -1194,6 +1196,25 @@ message AIBackend {
     optional string model = 1;
     string host = 2;
     optional string api_version = 3;
+    optional string project_name = 4;
+  }
+  // Azure provider with explicit resource-based configuration.
+  // Supports both Azure OpenAI and Azure AI Foundry resource types.
+  message Azure {
+    // The Azure resource name used to construct the endpoint host.
+    string resource_name = 1;
+    // The type of Azure endpoint.
+    AzureResourceType resource_type = 2;
+    // Optional model name override.
+    optional string model = 3;
+    // Optional Azure API version. Defaults to "v1" if not set.
+    optional string api_version = 4;
+    // Foundry project name, required when resource_type is FOUNDRY.
+    optional string project_name = 5;
+  }
+  enum AzureResourceType {
+    OPEN_AI = 0;
+    FOUNDRY = 1;
   }
 
   message Provider {
@@ -1208,6 +1229,7 @@ message AIBackend {
       Anthropic anthropic = 7;
       Bedrock bedrock = 8;
       AzureOpenAI azureopenai = 11;
+      Azure azure = 13;
     }
     repeated BackendPolicySpec inline_policies = 10;
   }

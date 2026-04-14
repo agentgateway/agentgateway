@@ -401,4 +401,13 @@ type PromptCachingConfig struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=1024
 	MinTokens int `json:"minTokens,omitempty"`
+
+	// CacheMessageOffset shifts the message cache point further back in the
+	// conversation. 0 (default) places it at the second-to-last message.
+	// Higher values move it N additional messages towards the start, clamped
+	// to bounds.
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=0
+	CacheMessageOffset int `json:"cacheMessageOffset,omitempty"`
 }

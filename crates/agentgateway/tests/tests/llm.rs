@@ -191,7 +191,7 @@ macro_rules! provider_env_model_test {
 }
 
 fn llm_config(provider: &str, env: &str, model: &str) -> String {
-	let policies = if provider == "azureOpenAI" {
+	let policies = if provider == "azure" {
 		r#"
       policies:
         backendAuth:
@@ -219,9 +219,10 @@ fn llm_config(provider: &str, env: &str, model: &str) -> String {
               projectId: $VERTEX_PROJECT
               region: us-east5
               "#
-	} else if provider == "azureOpenAI" {
+	} else if provider == "azure" {
 		r#"
-              host: $AZURE_HOST
+              resourceName: $AZURE_RESOURCE_NAME
+              resourceType: $AZURE_RESOURCE_TYPE
               "#
 	} else {
 		""
@@ -607,29 +608,18 @@ mod vertex {
 	);
 }
 
-mod azureopenai {
+mod azure {
 	use super::*;
-	send_completions_tests!("azureOpenAI", "", "gpt-4o-mini");
-	send_completions_tool_tests!("azureOpenAI", "", "gpt-4o-mini");
-	send_messages_tests!("azureOpenAI", "", "gpt-4o-mini");
-	send_messages_image_tests!(
-		"azureOpenAI",
-		"",
-		"gpt-4o-mini",
-		send_messages_with_image_url
-	);
-	send_messages_tool_tests!("azureOpenAI", "", "gpt-4o-mini");
-	send_responses_tests!("azureOpenAI", "", "gpt-4o-mini");
-	send_embeddings_tests!(
-		embeddings,
-		"azureOpenAI",
-		"",
-		"text-embedding-3-small",
-		None
-	);
+	send_completions_tests!("azure", "", "gpt-4o-mini");
+	send_completions_tool_tests!("azure", "", "gpt-4o-mini");
+	send_messages_tests!("azure", "", "gpt-4o-mini");
+	send_messages_image_tests!("azure", "", "gpt-4o-mini", send_messages_with_image_url);
+	send_messages_tool_tests!("azure", "", "gpt-4o-mini");
+	send_responses_tests!("azure", "", "gpt-4o-mini");
+	send_embeddings_tests!(embeddings, "azure", "", "text-embedding-3-small", None);
 	provider_model_test!(
 		messages_count_tokens_completions_backend,
-		"azureOpenAI",
+		"azure",
 		"",
 		"gpt-4o-mini",
 		send_messages_count_tokens
@@ -647,7 +637,10 @@ pub async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGatewa
 	if provider == "vertex" && !require_env("VERTEX_PROJECT") {
 		return None;
 	}
-	if provider == "azureOpenAI" && !require_env("AZURE_HOST") {
+	if provider == "azure" && !require_env("AZURE_RESOURCE_NAME") {
+		return None;
+	}
+	if provider == "azure" && !require_env("AZURE_RESOURCE_TYPE") {
 		return None;
 	}
 	let gw = AgentGateway::new(llm_config(provider, env, model))

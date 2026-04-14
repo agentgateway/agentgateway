@@ -4,8 +4,8 @@ pub mod proxy_protocol;
 pub mod request_builder;
 pub mod tcpproxy;
 
+use agent_pool::Error as HyperError;
 pub use gateway::Gateway;
-use hyper_util_fork::client::legacy::Error as HyperError;
 use rmcp::ErrorData;
 use rmcp::model::{ErrorCode, JsonRpcError};
 

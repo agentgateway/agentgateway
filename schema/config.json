@@ -3025,6 +3025,12 @@
           "format": "uint",
           "minimum": 0,
           "default": 1024
+        },
+        "cacheMessageOffset": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 0
         }
       },
       "additionalProperties": false
@@ -3224,6 +3230,17 @@
         "type": {
           "$ref": "#/$defs/RateLimitType",
           "default": "requests"
+        },
+        "limitOverride": {
+          "description": "limitOverride determines the optional expression to determine the limit of the request.\nThis tells the remote server what limit to apply to the request.\nThe expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:\n`{\"unit\":\"second\",\"requestsPerUnit\":100}`.\nValid units: second, minute, hour, day, month, year\nIf the expression fails to evaluate, the descriptor is skipped.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -4634,12 +4651,12 @@
         {
           "type": "object",
           "properties": {
-            "azureOpenAI": {
+            "azure": {
               "$ref": "#/$defs/Provider6"
             }
           },
           "required": [
-            "azureOpenAI"
+            "azure"
           ],
           "additionalProperties": false
         }
@@ -4742,10 +4759,22 @@
             "null"
           ]
         },
-        "host": {
+        "resourceName": {
+          "description": "The Azure resource name used to construct the endpoint host.",
           "type": "string"
         },
+        "resourceType": {
+          "description": "The type of Azure endpoint. Determines the host suffix.",
+          "$ref": "#/$defs/AzureResourceType"
+        },
         "apiVersion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "projectName": {
+          "description": "The Foundry project name, required when `resourceType` is `foundry`.\nUsed to construct paths: `/api/projects/{projectName}/openai/v1/...`.\nThis is distinct from `resourceName` which is used for the host.",
           "type": [
             "string",
             "null"
@@ -4754,7 +4783,23 @@
       },
       "additionalProperties": false,
       "required": [
-        "host"
+        "resourceName",
+        "resourceType"
+      ]
+    },
+    "AzureResourceType": {
+      "description": "The type of Azure endpoint to connect to.",
+      "oneOf": [
+        {
+          "description": "Azure OpenAI Service endpoint: `{resourceName}.openai.azure.com`",
+          "type": "string",
+          "const": "openAI"
+        },
+        {
+          "description": "Azure AI Foundry (project) endpoint: `{resourceName}-resource.services.ai.azure.com`\nRequires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`",
+          "type": "string",
+          "const": "foundry"
+        }
       ]
     },
     "LocalBackendPolicies": {
@@ -6161,15 +6206,33 @@
             "null"
           ]
         },
-        "azureHost": {
-          "description": "For Azure: the host of the deployment",
+        "azureResourceName": {
+          "description": "For Azure: the resource name of the deployment",
           "type": [
             "string",
             "null"
           ]
         },
+        "azureResourceType": {
+          "description": "For Azure: the type of Azure endpoint (openAI or foundry)",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AzureResourceType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "azureApiVersion": {
           "description": "For Azure: the API version to use",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "azureProjectName": {
+          "description": "For Azure: the Foundry project name (required for foundry resource type)",
           "type": [
             "string",
             "null"
@@ -6218,7 +6281,7 @@
         "vertex",
         "anthropic",
         "bedrock",
-        "azureOpenAI"
+        "azure"
       ]
     },
     "LLMRouteMatch": {

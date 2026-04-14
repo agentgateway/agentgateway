@@ -48,11 +48,12 @@ case "${1:-}" in
     # Realm import may complete after container is up; wait for each imported realm's
     # JWKS specifically so example validation can rely on discovery-backed providers.
     for jwks_endpoint in "${KEYCLOAK_REALM_JWKS_ENDPOINTS[@]}"; do
-      if ! wait_for_http_ok "$jwks_endpoint" 240 3; then
+      if ! wait_for_http_ok "$jwks_endpoint" 240 1; then
         echo "Keycloak realm JWKS endpoint did not become available in time: $jwks_endpoint" >&2
         exit 1
       fi
     done
+    docker logs keycloak
     ;;
   stop)
     pkill -f "examples/mcp-authentication/auth_server.py" 2>/dev/null || true

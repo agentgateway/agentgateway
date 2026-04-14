@@ -1901,7 +1901,7 @@ EOF
 ```
 
 #### Bedrock prompt caching
-Enable Bedrock prompt caching via `AgentgatewayPolicy.spec.backend.ai.promptCaching` to reduce costs on repeated prompts and tool specs. Set `minTokens` to avoid caching short prompts; only Bedrock models support this feature.
+Enable Bedrock prompt caching via `AgentgatewayPolicy.spec.backend.ai.promptCaching` to reduce costs on repeated prompts and tool specs. Set `minTokens` to avoid caching short prompts; only Bedrock models support this feature. Use `cacheMessageOffset` to shift the message cache point further back in the conversation (0 = default second-to-last message; higher values move it N additional messages toward the start).
 
 ```shell
 kubectl apply -f- <<EOF

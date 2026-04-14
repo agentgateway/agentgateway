@@ -89,6 +89,55 @@ spec:
                                     minLength: 1
                                     type: string
                                 type: object
+                              azure:
+                                description: |-
+                                  Azure provider with resource-based configuration.
+                                  Supports both Azure OpenAI and Azure AI Foundry resource types.
+                                properties:
+                                  apiVersion:
+                                    description: |-
+                                      The version of the Azure OpenAI API to use.
+                                      If unset, defaults to `v1`.
+                                    maxLength: 64
+                                    minLength: 1
+                                    type: string
+                                  model:
+                                    description: |-
+                                      Optional: Override the model name, such as `gpt-4o-mini`.
+                                      If unset, the model name is taken from the request.
+                                    maxLength: 256
+                                    minLength: 1
+                                    type: string
+                                  projectName:
+                                    description: |-
+                                      The Foundry project name, required when `resourceType` is `Foundry`.
+                                      Used to construct paths: /api/projects/{projectName}/openai/v1/...
+                                    maxLength: 256
+                                    minLength: 1
+                                    type: string
+                                  resourceName:
+                                    description: |-
+                                      The Azure resource name used to construct the endpoint host.
+                                      For OpenAI: {resourceName}.openai.azure.com
+                                      For Foundry: {resourceName}-resource.services.ai.azure.com
+                                    maxLength: 256
+                                    minLength: 1
+                                    type: string
+                                  resourceType:
+                                    description: The type of Azure endpoint. Determines
+                                      the host suffix.
+                                    enum:
+                                    - OpenAI
+                                    - Foundry
+                                    type: string
+                                required:
+                                - resourceName
+                                - resourceType
+                                type: object
+                                x-kubernetes-validations:
+                                - message: projectName is required when resourceType
+                                    is Foundry
+                                  rule: self.resourceType != 'Foundry' || has(self.projectName)
                               azureopenai:
                                 description: Azure OpenAI provider
                                 properties:
@@ -6387,8 +6436,8 @@ spec:
                             - message: pathPrefix requires host to be set
                               rule: 'has(self.pathPrefix) ? has(self.host) : true'
                             - message: exactly one of the fields in [openai azureopenai
-                                anthropic gemini vertexai bedrock] must be set
-                              rule: '[has(self.openai),has(self.azureopenai),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock)].filter(x,x==true).size()
+                                azure anthropic gemini vertexai bedrock] must be set
+                              rule: '[has(self.openai),has(self.azureopenai),has(self.azure),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock)].filter(x,x==true).size()
                                 == 1'
                           maxItems: 16
                           minItems: 1
@@ -6418,6 +6467,54 @@ spec:
                             minLength: 1
                             type: string
                         type: object
+                      azure:
+                        description: |-
+                          Azure provider with resource-based configuration.
+                          Supports both Azure OpenAI and Azure AI Foundry resource types.
+                        properties:
+                          apiVersion:
+                            description: |-
+                              The version of the Azure OpenAI API to use.
+                              If unset, defaults to `v1`.
+                            maxLength: 64
+                            minLength: 1
+                            type: string
+                          model:
+                            description: |-
+                              Optional: Override the model name, such as `gpt-4o-mini`.
+                              If unset, the model name is taken from the request.
+                            maxLength: 256
+                            minLength: 1
+                            type: string
+                          projectName:
+                            description: |-
+                              The Foundry project name, required when `resourceType` is `Foundry`.
+                              Used to construct paths: /api/projects/{projectName}/openai/v1/...
+                            maxLength: 256
+                            minLength: 1
+                            type: string
+                          resourceName:
+                            description: |-
+                              The Azure resource name used to construct the endpoint host.
+                              For OpenAI: {resourceName}.openai.azure.com
+                              For Foundry: {resourceName}-resource.services.ai.azure.com
+                            maxLength: 256
+                            minLength: 1
+                            type: string
+                          resourceType:
+                            description: The type of Azure endpoint. Determines the
+                              host suffix.
+                            enum:
+                            - OpenAI
+                            - Foundry
+                            type: string
+                        required:
+                        - resourceName
+                        - resourceType
+                        type: object
+                        x-kubernetes-validations:
+                        - message: projectName is required when resourceType is Foundry
+                          rule: self.resourceType != 'Foundry' || has(self.projectName)
                       azureopenai:
                         description: Azure OpenAI provider
                         properties:
@@ -6583,9 +6680,9 @@ spec:
                       rule: '!(has(self.path) && has(self.pathPrefix))'
                     - message: pathPrefix requires host to be set
                       rule: 'has(self.pathPrefix) ? has(self.host) : true'
-                    - message: exactly one of the fields in [openai azureopenai anthropic
-                        gemini vertexai bedrock] must be set
-                      rule: '[has(self.openai),has(self.azureopenai),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock)].filter(x,x==true).size()
+                    - message: exactly one of the fields in [openai azureopenai azure
+                        anthropic gemini vertexai bedrock] must be set
+                      rule: '[has(self.openai),has(self.azureopenai),has(self.azure),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock)].filter(x,x==true).size()
                         == 1'
                 type: object
                 x-kubernetes-validations:
@@ -12558,6 +12655,9 @@ spec:
                     description: |-
                       `mcp` specifies settings for MCP workloads. This is only applicable when
                       connecting to a `Backend` of type `mcp`.
+
+                      This field is deprecated; prefer to use traffic policy `jwtAuthentication.mcp`, which ensures authentication runs before
+                      other policies such as transformation and rate limiting.
                     properties:
                       authentication:
                         description: '`authentication` defines `MCPBackend`-specific

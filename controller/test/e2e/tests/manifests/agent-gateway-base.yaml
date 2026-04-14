@@ -3,6 +3,19 @@ kind: Namespace
 metadata:
   name: agentgateway-base
 ---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: base-gateway-params
+  namespace: agentgateway-base
+spec:
+  env:
+    # Drop export time from 5s to 200ms to speed up tests
+    - name: OTEL_BSP_SCHEDULE_DELAY
+      value: "200"
+    - name: OTEL_BLRP_SCHEDULE_DELAY
+      value: "200"
+---
 kind: Gateway
 apiVersion: gateway.networking.k8s.io/v1
 metadata:
@@ -10,6 +23,11 @@ metadata:
   namespace: agentgateway-base
 spec:
   gatewayClassName: agentgateway
+  infrastructure:
+    parametersRef:
+      group: agentgateway.dev
+      kind: AgentgatewayParameters
+      name: base-gateway-params
   listeners:
     - protocol: HTTP
       port: 80

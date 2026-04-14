@@ -17,9 +17,11 @@ use crate::mcp::McpAuthorization;
 use crate::mcp::handler::Relay;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::test_helpers::extauthmock::{ExtAuthMock, deny_response};
 use crate::test_helpers::proxymock::{
 	BIND_KEY, TestBind, basic_named_route, basic_route, setup_proxy_test, simple_bind,
 };
+use crate::test_helpers::ratelimitmock::{RateLimitMock, over_limit_response};
 use crate::types::agent::{BackendPolicy, FrontendPolicy, PolicyTarget, TargetedPolicy};
 use crate::*;
 
@@ -2125,5 +2127,170 @@ async fn test_runtime_fanout_fail_open_all_fail() {
 		res.is_ok(),
 		"expected success with FailOpen even if ALL upstreams error mid-request: {:?}",
 		res.err()
+	);
+}
+
+#[tokio::test]
+async fn mcp_local_ratelimit() {
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind(basic_route(mock.addr)));
+
+	// Attach local rate limit policy
+	// MCP protocol overhead: initialize + notification + SSE GET = 3 requests
+	// Allow 5 total: overhead (3) + tool calls (2), then rate limit the 6th
+	t.attach_route_policy(serde_json::json!({
+		"localRateLimit": [{
+			"maxTokens": 5,
+			"tokensPerFill": 1,
+			"fillInterval": "10s",
+			"type": "requests"
+		}]
+	}))
+	.await;
+
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = mcp_streamable_client(io).await;
+
+	// First two calls should succeed
+	let result1 = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo")
+				.with_arguments(serde_json::json!({"n": 1}).as_object().cloned().unwrap()),
+		)
+		.await;
+	assert!(result1.is_ok(), "First request should succeed");
+
+	let result2 = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo")
+				.with_arguments(serde_json::json!({"n": 2}).as_object().cloned().unwrap()),
+		)
+		.await;
+	assert!(result2.is_ok(), "Second request should succeed");
+
+	// Third call should be rate limited
+	let result3 = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo")
+				.with_arguments(serde_json::json!({"n": 3}).as_object().cloned().unwrap()),
+		)
+		.await;
+	assert!(result3.is_err(), "Third request should be rate limited");
+}
+
+#[tokio::test]
+async fn mcp_extauth_deny() {
+	struct DenyAllAuthz;
+
+	#[async_trait::async_trait]
+	impl crate::test_helpers::extauthmock::Handler for DenyAllAuthz {
+		async fn check(
+			&mut self,
+			_request: &crate::http::ext_authz::proto::CheckRequest,
+		) -> Result<crate::http::ext_authz::proto::CheckResponse, tonic::Status> {
+			deny_response(
+				crate::http::ext_authz::proto::StatusCode::Forbidden,
+				"denied by mock ext_authz",
+			)
+		}
+	}
+
+	let authz = ExtAuthMock::new(|| DenyAllAuthz).spawn().await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind(basic_route(mock.addr)));
+
+	// Attach extAuthz policy pointing to our mock server
+	t.attach_route_policy(serde_json::json!({
+		"extAuthz": {
+			"host": authz.address.to_string(),
+			"protocol": {
+				"grpc": {}
+			}
+		}
+	}))
+	.await;
+
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	// Client should fail to initialize due to ext_authz denial
+	let result = try_mcp_streamable_client(io).await;
+	let err = result.expect_err("Client initialization should be denied by ext_authz");
+	let err_msg = err.to_string();
+	assert!(
+		err_msg.contains("403") && err_msg.contains("denied by mock ext_authz"),
+		"Expected 403 denial from ext_authz, got: {err_msg}"
+	);
+}
+
+async fn try_mcp_streamable_client(
+	s: SocketAddr,
+) -> Result<RunningService<RoleClient, InitializeRequestParams>, rmcp::service::ClientInitializeError>
+{
+	use rmcp::ServiceExt;
+	use rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
+	use rmcp::transport::StreamableHttpClientTransport;
+	let transport =
+		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
+	let client_info = ClientInfo::new(
+		ClientCapabilities::default(),
+		Implementation::new("test client".to_string(), "0.0.1".to_string()),
+	);
+
+	client_info.serve(transport).await
+}
+
+#[tokio::test]
+async fn mcp_remote_ratelimit_deny() {
+	struct DenyAllRateLimit;
+
+	#[async_trait::async_trait]
+	impl crate::test_helpers::ratelimitmock::Handler for DenyAllRateLimit {
+		async fn should_rate_limit(
+			&mut self,
+			_request: &crate::http::remoteratelimit::proto::RateLimitRequest,
+		) -> Result<crate::http::remoteratelimit::proto::RateLimitResponse, tonic::Status> {
+			over_limit_response(b"rate limit exceeded by mock".to_vec())
+		}
+	}
+
+	let ratelimit = RateLimitMock::new(|| DenyAllRateLimit).spawn().await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind(basic_route(mock.addr)));
+
+	// Attach remoteRateLimit policy pointing to our mock server
+	t.attach_route_policy(serde_json::json!({
+		"remoteRateLimit": {
+			"host": ratelimit.address.to_string(),
+			"domain": "test",
+			"descriptors": [{
+				"entries": [
+					{"key": "generic_key", "value": "\"test\""}
+				],
+				"type": "requests"
+			}]
+		}
+	}))
+	.await;
+
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	// Client should fail to initialize due to rate limit denial
+	let result = try_mcp_streamable_client(io).await;
+	let err = result.expect_err("Client initialization should be rate limited");
+	let err_msg = err.to_string();
+	assert!(
+		err_msg.contains("429") && err_msg.contains("rate limit exceeded by mock"),
+		"Expected 429 rate limit from remote service, got: {err_msg}"
 	);
 }

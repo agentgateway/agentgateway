@@ -1,0 +1,29 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/bedrock/tool.bin
+---
+data: {"id":"request_id","choices":[{"index":0,"delta":{"content":null,"role":"assistant"}}],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"request_id","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"id":"tooluse_kZJMlvQmRJ6eAyJE5GIl7Q","type":"function","function":{"name":"top_song","arguments":null}}]}}],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"request_id","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"id":null,"type":null,"function":{"name":null,"arguments":"{\"sign\":"}}]}}],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"request_id","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"id":null,"type":null,"function":{"name":null,"arguments":"\"WZPZ\"}"}}]}}],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"request_id","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":1,"id":"tooluse_kZJMlvQmRJ6eAyxxx","type":"function","function":{"name":"hello","arguments":null}}]}}],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"request_id","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":1,"id":null,"type":null,"function":{"name":null,"arguments":"{\"sign\":\"world\"}"}}]}}],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"request_id","choices":[{"index":0,"delta":{"content":null},"finish_reason":"tool_calls"}],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"request_id","choices":[],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":150,"completion_tokens":45,"total_tokens":195}}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 150,
+  "output_tokens": 45,
+  "total_tokens": 195
+}

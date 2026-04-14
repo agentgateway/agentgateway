@@ -11,6 +11,7 @@ members = [
     "crates/cel-fork/cel",
     "crates/cel-fork/cel-derive",
     "crates/celx",
+    "crates/pool",
     "crates/core",
     "crates/hbone",
     "crates/protos",
@@ -23,6 +24,7 @@ default-members = [
     "crates/cel-fork/cel",
     "crates/cel-fork/cel-derive",
     "crates/celx",
+    "crates/pool",
     "crates/core",
     "crates/hbone",
     "crates/protos",
@@ -40,6 +42,7 @@ publish = false
 agent-core = { path = "crates/core" }
 agent-celx = { path = "crates/celx" }
 agent-hbone = { path = "crates/hbone" }
+agent-pool = { path = "crates/pool" }
 agent-xds = { path = "crates/xds" }
 agentgateway = { path = "crates/agentgateway" }
 cel = { path = "crates/cel-fork/cel" }
@@ -50,7 +53,7 @@ anyhow = "1.0"
 arc-swap = "1.9"
 arcstr = { version = "1.2", features = ["serde"] }
 assert_matches = "1.5.0"
-async-openai = { git = "https://github.com/64bit/async-openai", rev = "6e482db7185e3e186fe49bae0ec2f214fc822e4a", default-features = false, features = ["chat-completion-types", "moderation-types", "response-types", "realtime-types"] }
+async-openai = { version = "0.34", default-features = false, features = ["chat-completion-types", "moderation-types", "response-types", "realtime-types"] }
 async-stream = "0.3"
 async-trait = "0.1"
 aws-config = { version = "1.8", default-features = false, features = ["default-https-client", "rt-tokio"] }
@@ -100,10 +103,9 @@ httpdate = "1.0"
 http = "1.4"
 http-body = "1"
 http-body-util = "0.1.3"
-hyper = { version = "1.8", features = ["full"] }
+hyper = { version = "1.9", features = ["full"] }
 hyper-rustls = "0.27"
 hyper-util = { version = "0.1", features = ["full"] }
-hyper-util-fork = { path = "crates/hyper-util-fork" }
 include_dir = "0.7"
 indexmap = { version = "2.13", features = ["serde"] }
 insta = { version = "1.47", features = ["json", "redactions", "filters", "yaml"] }

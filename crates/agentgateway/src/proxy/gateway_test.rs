@@ -2194,3 +2194,157 @@ async fn auto_protocol_peek_timeout() {
 	tokio::time::sleep(std::time::Duration::from_secs(10)).await;
 	// If we reach here, the timeout worked (auto-advance means no real wait).
 }
+
+#[tokio::test]
+async fn waypoint_http_basic() {
+	let mock = simple_mock().await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(waypoint_bind(ListenerProtocol::HBONE))
+		.with_waypoint_service(*mock.address());
+	let io = t.serve_waypoint_http(BIND_KEY);
+	let res = send_request(io, Method::GET, "http://my-svc.default.svc.cluster.local").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body(res.into_body()).await;
+	assert_eq!(body.method, Method::GET);
+}
+
+#[tokio::test]
+async fn waypoint_http_fallback() {
+	let mock = simple_mock().await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(waypoint_bind(ListenerProtocol::HTTP))
+		.with_waypoint_service(*mock.address());
+	let io = t.serve_waypoint_http(BIND_KEY);
+	let res = send_request(io, Method::POST, "http://my-svc.default.svc.cluster.local").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body(res.into_body()).await;
+	assert_eq!(body.method, Method::POST);
+}
+
+#[tokio::test]
+async fn waypoint_tcp_basic() {
+	let mock = simple_mock().await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(waypoint_bind(ListenerProtocol::HBONE))
+		.with_waypoint_service(*mock.address());
+	let io = t.serve_waypoint_tcp(BIND_KEY);
+	let res = send_request(io, Method::GET, "http://my-svc.default.svc.cluster.local").await;
+	assert_eq!(res.status(), 200);
+}
+
+#[tokio::test]
+async fn waypoint_service_policy_header_modifier() {
+	let mock = simple_mock().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(waypoint_bind(ListenerProtocol::HBONE))
+		.with_waypoint_service(*mock.address());
+	t.attach_service_policy(json!({
+		"requestHeaderModifier": {
+			"add": { "x-svc-req": "from-service" },
+		},
+		"responseHeaderModifier": {
+			"add": { "x-svc-resp": "from-service" },
+		},
+	}))
+	.await;
+	let io = t.serve_waypoint_http(BIND_KEY);
+	let res = send_request(io, Method::GET, "http://my-svc.default.svc.cluster.local").await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("x-svc-resp"), "from-service");
+	let body = read_body(res.into_body()).await;
+	assert_eq!(
+		body.headers.get("x-svc-req").unwrap().as_bytes(),
+		b"from-service"
+	);
+}
+
+#[tokio::test]
+async fn waypoint_service_policy_direct_response() {
+	let mock = simple_mock().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(waypoint_bind(ListenerProtocol::HBONE))
+		.with_waypoint_service(*mock.address());
+	t.attach_service_policy(json!({
+		"directResponse": {
+			"status": 418,
+			"body": "teapot",
+		},
+	}))
+	.await;
+	let io = t.serve_waypoint_http(BIND_KEY);
+	let res = send_request(io, Method::GET, "http://my-svc.default.svc.cluster.local").await;
+	assert_eq!(res.status(), 418);
+	assert_eq!(read_body!(res).as_bytes(), b"teapot");
+}
+
+#[tokio::test]
+async fn waypoint_gateway_policy_authz_allow() {
+	let mock = simple_mock().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(waypoint_bind(ListenerProtocol::HBONE))
+		.with_waypoint_service(*mock.address());
+	t.attach_frontend_policy(json!({
+		"networkAuthorization": {
+			"rules": ["source.port == 12345"],
+		},
+	}))
+	.await;
+	let io = t.serve_waypoint_http(BIND_KEY);
+	let res = send_request(io, Method::GET, "http://my-svc.default.svc.cluster.local").await;
+	assert_eq!(res.status(), 200);
+}
+
+#[tokio::test]
+async fn waypoint_gateway_policy_authz_deny() {
+	let mock = simple_mock().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(waypoint_bind(ListenerProtocol::HBONE))
+		.with_waypoint_service(*mock.address());
+	t.attach_frontend_policy(json!({
+		"networkAuthorization": {
+			"rules": ["source.port == 54321"],
+		},
+	}))
+	.await;
+	let io = t.serve_waypoint_http(BIND_KEY);
+	RequestBuilder::new(Method::GET, "http://my-svc.default.svc.cluster.local")
+		.send(io)
+		.await
+		.expect_err("should be denied by network authorization");
+}
+
+/// Gateway-targeted network authorization applies to TCP waypoint path.
+#[tokio::test]
+async fn waypoint_tcp_gateway_policy_authz_deny() {
+	let mock = simple_mock().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(waypoint_bind(ListenerProtocol::HBONE))
+		.with_waypoint_service(*mock.address());
+	t.attach_frontend_policy(json!({
+		"networkAuthorization": {
+			"rules": ["source.port == 54321"],
+		},
+	}))
+	.await;
+	let io = t.serve_waypoint_tcp(BIND_KEY);
+	RequestBuilder::new(Method::GET, "http://my-svc.default.svc.cluster.local")
+		.send(io)
+		.await
+		.expect_err("should be denied by network authorization");
+}

@@ -73,12 +73,13 @@ pub struct Response {
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Choice {
+	#[serde(default)]
 	pub message: ResponseMessage,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Default, Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct ResponseMessage {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub content: Option<String>,
@@ -107,13 +108,16 @@ pub struct UsagePromptDetails {
 	pub rest: serde_json::Value,
 }
 
-#[derive(Debug, Deserialize, Clone, Serialize)]
+#[derive(Default, Debug, Deserialize, Clone, Serialize)]
 pub struct Usage {
 	/// Number of tokens in the prompt.
+	#[serde(default)]
 	pub prompt_tokens: u32,
 	/// Number of tokens in the generated completion.
+	#[serde(default)]
 	pub completion_tokens: u32,
 	/// Total number of tokens used in the request (prompt + completion).
+	#[serde(default)]
 	pub total_tokens: u32,
 	/// Breakdown of tokens used in a completion.
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -469,10 +473,13 @@ pub mod typed {
 	#[derive(Default, Debug, Deserialize, Clone, Serialize)]
 	pub struct Usage {
 		/// Number of tokens in the prompt.
+		#[serde(default)]
 		pub prompt_tokens: u32,
 		/// Number of tokens in the generated completion.
+		#[serde(default)]
 		pub completion_tokens: u32,
 		/// Total number of tokens used in the request (prompt + completion).
+		#[serde(default)]
 		pub total_tokens: u32,
 		/// Breakdown of tokens used in a completion.
 		#[serde(skip_serializing_if = "Option::is_none")]

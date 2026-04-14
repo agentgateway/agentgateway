@@ -35,7 +35,7 @@ type AgentgatewayPolicy struct {
 
 	// status defines the current state of AgentgatewayPolicy.
 	// +optional
-	Status gwv1.PolicyStatus `json:"status,omitempty"`
+	Status gwv1.PolicyStatus `json:"status,omitzero"`
 	// TODO: embed this into a typed Status field when
 	// https://github.com/kubernetes/kubernetes/issues/131533 is resolved
 }
@@ -221,16 +221,6 @@ type BackendEviction struct {
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
-type BackendWithMCP struct {
-	BackendSimple `json:",inline"`
-
-	// `mcp` specifies settings for MCP workloads. This is only applicable when
-	// connecting to a `Backend` of type `mcp`.
-	// +optional
-	MCP *BackendMCP `json:"mcp,omitempty"`
-}
-
-// +kubebuilder:validation:AtLeastOneFieldSet
 type BackendWithAI struct {
 	BackendSimple `json:",inline"`
 
@@ -251,6 +241,10 @@ type BackendFull struct {
 
 	// `mcp` specifies settings for MCP workloads. This is only applicable when
 	// connecting to a `Backend` of type `mcp`.
+	//
+	// This field is deprecated; prefer to use traffic policy `jwtAuthentication.mcp`, which ensures authentication runs before
+	// other policies such as transformation and rate limiting.
+	//
 	// +optional
 	MCP *BackendMCP `json:"mcp,omitempty"`
 }

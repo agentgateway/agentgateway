@@ -8,7 +8,10 @@ import (
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
+	"istio.io/istio/pkg/slices"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
@@ -59,6 +62,55 @@ type AddResourcesPlugin struct {
 	Listeners        krt.Collection[ir.AgwResource]
 	Routes           krt.Collection[ir.AgwResource]
 	AncestorBackends krt.Collection[*utils.AncestorBackend]
+	GatewayStatuses  krt.StatusCollection[*gwv1.Gateway, gwv1.GatewayStatus]
+	// ParentResolvers contribute additional parent resolution logic to the
+	// main route pipeline.
+	ParentResolvers []ParentResolver
+}
+
+// ParentInfo holds info about a "Parent" - something that can be referenced as a ParentRef in the API.
+type ParentInfo struct {
+	ParentGateway          types.NamespacedName
+	ParentGatewayClassName string
+	// ListenerKey is the internal key of the listener resource created for this parent.
+	ListenerKey string
+	// ServiceKey (optionally) links a parent reference to an individual Service.
+	ServiceKey *types.NamespacedName
+	// AllowedKinds indicates which kinds can be admitted by this Parent.
+	AllowedKinds []gwv1.RouteGroupKind
+	// Hostnames that must match to reference the Parent. Format is ns/hostname.
+	Hostnames []string
+	// OriginalHostname is the unprocessed form of Hostnames; how it appeared in users' config.
+	OriginalHostname string
+	// CreationTimestamp is used in determining listener precedence.
+	CreationTimestamp metav1.Time
+
+	SectionName    gwv1.SectionName
+	Port           gwv1.PortNumber
+	Protocol       gwv1.ProtocolType
+	TLSPassthrough bool
+}
+
+func (g ParentInfo) Equals(other ParentInfo) bool {
+	return g.ParentGateway == other.ParentGateway &&
+		g.ParentGatewayClassName == other.ParentGatewayClassName &&
+		g.ListenerKey == other.ListenerKey &&
+		ptr.Equal(g.ServiceKey, other.ServiceKey) &&
+		g.OriginalHostname == other.OriginalHostname &&
+		g.SectionName == other.SectionName &&
+		g.Port == other.Port &&
+		g.Protocol == other.Protocol &&
+		g.TLSPassthrough == other.TLSPassthrough &&
+		g.CreationTimestamp == other.CreationTimestamp &&
+		slices.EqualFunc(g.AllowedKinds, other.AllowedKinds, func(a, b gwv1.RouteGroupKind) bool {
+			return a.Kind == b.Kind && ptr.Equal(a.Group, b.Group)
+		}) &&
+		slices.Equal(g.Hostnames, other.Hostnames)
+}
+
+// ParentResolver resolves parent references for routes.
+type ParentResolver interface {
+	ParentsFor(ctx krt.HandlerContext, pk utils.TypedNamespacedName) []*ParentInfo
 }
 
 func ResourceName[T config.Namer](o T) *api.ResourceName {

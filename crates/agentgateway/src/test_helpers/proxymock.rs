@@ -246,6 +246,28 @@ pub fn simple_bind(route: Route) -> Bind {
 	}
 }
 
+pub fn waypoint_bind(protocol: ListenerProtocol) -> Bind {
+	Bind {
+		key: BIND_KEY,
+		address: "127.0.0.1:15008".parse().unwrap(),
+		listeners: ListenerSet::from_list([Listener {
+			key: LISTENER_KEY,
+			name: crate::types::agent::ListenerName {
+				gateway_name: strng::literal!("default"),
+				gateway_namespace: strng::literal!("default"),
+				listener_name: strng::EMPTY,
+				listener_set: None,
+			},
+			hostname: Default::default(),
+			protocol,
+			tcp_routes: Default::default(),
+			routes: Default::default(),
+		}]),
+		protocol: BindProtocol::http,
+		tunnel_protocol: Default::default(),
+	}
+}
+
 pub fn simple_tcp_bind(route: TCPRoute) -> Bind {
 	Bind {
 		key: BIND_KEY,
@@ -387,6 +409,52 @@ impl TestBind {
 	}
 	pub fn with_route(self, r: Route) -> Self {
 		self.pi.stores.binds.write().insert_route(r, LISTENER_KEY);
+		self
+	}
+
+	/// Insert a service + workload via sync_local so endpoint linking is exercised.
+	pub fn with_waypoint_service(self, backend_addr: SocketAddr) -> Self {
+		use crate::store::LocalWorkload;
+		use crate::types::discovery::{
+			GatewayAddress, NetworkAddress, Service, Workload, gatewayaddress::Destination,
+		};
+		let svc = Service {
+			name: strng::literal!("my-svc"),
+			namespace: strng::literal!("default"),
+			hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+			vips: vec![NetworkAddress {
+				network: strng::EMPTY,
+				address: "127.0.0.1".parse().unwrap(),
+			}],
+			ports: std::collections::HashMap::from([(80, backend_addr.port())]),
+			waypoint: Some(GatewayAddress {
+				destination: Destination::Hostname(crate::types::discovery::NamespacedHostname {
+					namespace: strng::literal!("default"),
+					hostname: strng::literal!("default.default.svc.cluster.local"),
+				}),
+				hbone_mtls_port: 15008,
+			}),
+			..Default::default()
+		};
+		let wl = LocalWorkload {
+			workload: Workload {
+				uid: strng::literal!("test-wl-uid"),
+				name: strng::literal!("test-wl"),
+				namespace: strng::literal!("default"),
+				workload_ips: vec![backend_addr.ip()],
+				..Default::default()
+			},
+			services: std::collections::HashMap::from([(
+				"default/my-svc.default.svc.cluster.local".to_string(),
+				std::collections::HashMap::from([(80, backend_addr.port())]),
+			)]),
+		};
+		self
+			.pi
+			.stores
+			.discovery
+			.sync_local(vec![svc], vec![wl], Default::default())
+			.unwrap();
 		self
 	}
 
@@ -618,6 +686,32 @@ impl TestBind {
 			});
 		}
 	}
+	pub async fn attach_service_policy(&mut self, p: serde_json::Value) {
+		let oidc_key = strng::format!("oidc/{}", self.policies + 1);
+		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
+		let pols = local::split_policies(
+			self.pi.upstream.clone(),
+			pol,
+			self.pi.cfg.as_policy_context(oidc_key),
+		)
+		.await
+		.unwrap();
+		assert!(pols.backend_policies.is_empty());
+		for v in pols.route_policies {
+			self.policies += 1;
+			let key = strng::format!("pol/{}", self.policies);
+			self.with_policy(TargetedPolicy {
+				key,
+				name: None,
+				target: PolicyTarget::Backend(BackendTarget::Service {
+					hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+					namespace: strng::literal!("default"),
+					port: None,
+				}),
+				policy: (v, PolicyPhase::Route).into(),
+			});
+		}
+	}
 	pub async fn attach_frontend_policy(&mut self, p: serde_json::Value) {
 		let cfg = serde_json::json!({
 			"frontendPolicies": p,
@@ -661,14 +755,17 @@ impl TestBind {
 	pub fn with_policy(&mut self, p: TargetedPolicy) {
 		self.pi.stores.binds.write().insert_policy(p);
 	}
-	pub fn serve_http(&self, bind_name: BindKey) -> Client<MemoryConnector, Body> {
-		let io = self.serve(bind_name);
+	fn memory_client(io: DuplexStream) -> Client<MemoryConnector, Body> {
 		::hyper_util::client::legacy::Client::builder(TokioExecutor::new())
 			.timer(TokioTimer::new())
 			.build(MemoryConnector {
 				tls_config: None,
 				io: Arc::new(Mutex::new(Some(io))),
 			})
+	}
+
+	pub fn serve_http(&self, bind_name: BindKey) -> Client<MemoryConnector, Body> {
+		Self::memory_client(self.serve(bind_name))
 	}
 	pub fn serve_https(
 		&self,
@@ -706,6 +803,43 @@ impl TestBind {
 				io: Arc::new(Mutex::new(Some(io))),
 			})
 	}
+	pub fn serve_waypoint_http(&self, bind_name: BindKey) -> Client<MemoryConnector, Body> {
+		Self::memory_client(self.serve_waypoint(bind_name, true))
+	}
+
+	pub fn serve_waypoint_tcp(&self, bind_name: BindKey) -> Client<MemoryConnector, Body> {
+		Self::memory_client(self.serve_waypoint(bind_name, false))
+	}
+
+	fn serve_waypoint(&self, bind_name: BindKey, is_http: bool) -> DuplexStream {
+		let (client, server) = tokio::io::duplex(8192);
+		let server = Socket::from_memory(
+			server,
+			TCPConnectionInfo {
+				peer_addr: "127.0.0.1:12345".parse().unwrap(),
+				local_addr: "127.0.0.1:80".parse().unwrap(),
+				start: Instant::now(),
+				raw_peer_addr: None,
+			},
+		);
+		let svc = self
+			.pi
+			.stores
+			.read_discovery()
+			.services
+			.get_by_vip(&crate::types::discovery::NetworkAddress {
+				network: self.pi.cfg.network.clone(),
+				address: "127.0.0.1".parse().unwrap(),
+			})
+			.unwrap_or_else(|| Arc::new(crate::types::discovery::Service::default()));
+		let pi = self.pi.clone();
+		let drain = self.drain_rx.clone();
+		tokio::spawn(async move {
+			Gateway::handle_waypoint(bind_name, pi, svc, server, is_http, drain).await;
+		});
+		client
+	}
+
 	pub fn serve(&self, bind_name: BindKey) -> DuplexStream {
 		let (client, server) = tokio::io::duplex(8192);
 		let server = Socket::from_memory(

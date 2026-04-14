@@ -377,10 +377,14 @@ pub struct LocalLLMParams {
 	vertex_region: Option<Strng>,
 	// For Vertex: The Google project ID to use
 	vertex_project: Option<Strng>,
-	/// For Azure: the host of the deployment
-	azure_host: Option<Strng>,
+	/// For Azure: the resource name of the deployment
+	azure_resource_name: Option<Strng>,
+	/// For Azure: the type of Azure endpoint (openAI or foundry)
+	azure_resource_type: Option<crate::llm::azure::AzureResourceType>,
 	/// For Azure: the API version to use
 	azure_api_version: Option<Strng>,
+	/// For Azure: the Foundry project name (required for foundry resource type)
+	azure_project_name: Option<Strng>,
 	/// Override the upstream host for this provider.
 	#[serde(default)]
 	host_override: Option<Target>,
@@ -846,7 +850,7 @@ impl McpBackendHost {
 		let McpBackendHost { host, port, path } = self;
 		Ok(match (host, port, path) {
 			(host, Some(port), Some(path)) => {
-				let b = Target::try_from((host.as_str(), *port))?;
+				let b = Target::from((host.as_str(), *port));
 				(b, path.clone(), false)
 			},
 			(host, None, None) => {
@@ -865,7 +869,7 @@ impl McpBackendHost {
 					},
 				};
 
-				let b = Target::try_from((host, port))?;
+				let b = Target::from((host, port));
 				(b, path.to_string(), scheme == &http::Scheme::HTTPS)
 			},
 			_ => {
@@ -1761,14 +1765,18 @@ json(request.body).model
 				guardrail_identifier: None,
 				guardrail_version: None,
 			}),
-			LocalModelAIProvider::AzureOpenAI => {
-				AIProvider::AzureOpenAI(crate::llm::azureopenai::Provider {
-					model,
-					host: p.azure_host.context("azure requires azure_host")?,
-					api_version: p.azure_api_version,
-					cached_cred: Default::default(),
-				})
-			},
+			LocalModelAIProvider::Azure => AIProvider::Azure(crate::llm::azure::Provider {
+				model,
+				resource_name: p
+					.azure_resource_name
+					.context("azure requires azureResourceName")?,
+				resource_type: p
+					.azure_resource_type
+					.context("azure requires azureResourceType")?,
+				api_version: p.azure_api_version,
+				project_name: p.azure_project_name,
+				cached_cred: Default::default(),
+			}),
 		};
 
 		// Create backend auth policy

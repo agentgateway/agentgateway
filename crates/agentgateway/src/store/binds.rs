@@ -395,6 +395,8 @@ impl Default for Store {
 #[derive(Debug, Clone)]
 pub struct RoutePath<'a> {
 	pub listener: &'a ListenerName,
+	// the originally intended service, pre-routing
+	pub service: Option<&'a NamespacedHostname>,
 	pub route: &'a RouteName,
 }
 
@@ -481,13 +483,18 @@ impl Store {
 	}
 
 	pub fn route_policies(&self, path: &RoutePath<'_>, inline: &[TrafficPolicy]) -> RoutePolicies {
-		let &RoutePath { listener, route } = path;
+		let &RoutePath {
+			listener,
+			service,
+			route,
+		} = path;
 		let gateway = self
 			.policies_by_target
 			.get(&listener.as_gateway_target_ref());
 		let listener = self
 			.policies_by_target
 			.get(&listener.as_listener_target_ref());
+		let service = service.and_then(|s| self.policies_by_target.get(&s.as_policy_target_ref()));
 		let route_rule = self
 			.policies_by_target
 			.get(&route.as_route_rule_target_ref());
@@ -497,6 +504,7 @@ impl Store {
 			.copied()
 			.flatten()
 			.chain(route.iter().copied().flatten())
+			.chain(service.iter().copied().flatten())
 			.chain(listener.iter().copied().flatten())
 			.chain(gateway.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
@@ -705,7 +713,7 @@ impl Store {
 		let gateway_rules =
 			gateway.and_then(|t| self.policies_by_target.get(&t.as_gateway_target_ref()));
 
-		// RouteRule > Route > SubBackend > Backend > Service > Gateway
+		// RouteRule > Route > SubBackend > Backend/Service > Gateway
 		// Most specific (route context) to least specific (gateway-wide default)
 		let rules = route_rule_rules
 			.iter()
@@ -1629,6 +1637,7 @@ mod tests {
 		let http_pols = store.route_policies(
 			&RoutePath {
 				listener: &listener,
+				service: None,
 				route: &http_route,
 			},
 			&[],
@@ -1638,6 +1647,7 @@ mod tests {
 		let grpc_pols = store.route_policies(
 			&RoutePath {
 				listener: &listener,
+				service: None,
 				route: &grpc_route,
 			},
 			&[],

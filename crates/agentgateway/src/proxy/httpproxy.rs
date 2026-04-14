@@ -620,6 +620,7 @@ impl HTTPProxy {
 
 		let route_path = RoutePath {
 			route: &selected_route.name,
+			service: selected_route.service_key.as_ref(),
 			listener: &selected_listener.name,
 		};
 
@@ -1423,7 +1424,7 @@ async fn make_backend_call(
 					Some(s) if *s == Scheme::HTTPS => 443,
 					_ => 80,
 				});
-			let target = Target::try_from((host, port)).map_err(ProxyError::Processing)?;
+			let target = Target::from((host, port));
 			BackendCall {
 				target,
 				http_version_override: None,
@@ -1800,10 +1801,11 @@ pub fn build_service_call(
 	// For double HBONE, use hostname-based target so the gateway can resolve it
 	let target = if network_gateway.is_some() {
 		tracing::debug!(
-			hostname = % svc.hostname,
-			port = % port,
+			hostname=%svc.hostname,
+			port=%port,
 			"using hostname-based target for double hbone"
 		);
+		// Use the original service port, not the target port; the gateway will resolve it
 		Target::Hostname(svc.hostname.clone(), port)
 	} else {
 		// TODO: this should only be used with DNS resolution type! maybe?
