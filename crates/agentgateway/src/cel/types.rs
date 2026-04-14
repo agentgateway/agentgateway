@@ -117,7 +117,7 @@ pub struct SourceContext {
 	/// from the source IP (not cryptographically authenticated). Policy
 	/// authors should prefer `source.identity.*` for trust-sensitive checks.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub workload: Option<WorkloadContext>,
+	pub unverified_workload: Option<WorkloadContext>,
 }
 
 #[apply(schema!)]
@@ -125,16 +125,6 @@ pub struct SourceContext {
 /// Workload context wrapper. All fields live under `unverified` to make it
 /// clear that the data is resolved by IP, not cryptographically verified.
 pub struct WorkloadContext {
-	/// Unverified workload metadata resolved from the source IP.
-	pub unverified: UnverifiedMetadata,
-}
-
-#[apply(schema!)]
-#[derive(cel::DynamicType)]
-/// Unverified workload metadata resolved from the workload discovery store
-/// by source IP. These fields are **not** cryptographically authenticated;
-/// prefer `source.identity.*` for trust-sensitive policy decisions.
-pub struct UnverifiedMetadata {
 	/// The pod name of the source workload.
 	#[serde(default)]
 	pub name: Strng,
@@ -161,11 +151,9 @@ impl WorkloadContext {
 				address: addr,
 			})
 			.map(|w| WorkloadContext {
-				unverified: UnverifiedMetadata {
-					name: w.name.clone(),
-					namespace: w.namespace.clone(),
-					service_account: w.service_account.clone(),
-				},
+				name: w.name.clone(),
+				namespace: w.namespace.clone(),
+				service_account: w.service_account.clone(),
 			})
 	}
 }
@@ -1526,12 +1514,10 @@ pub fn full_example_executor() -> ExecutorSerde {
 				subject: Default::default(),
 				subject_cn: Some("cn".into()),
 			}),
-			workload: Some(WorkloadContext {
-				unverified: UnverifiedMetadata {
-					name: "pod-1".into(),
-					namespace: "ns-1".into(),
-					service_account: "sa-1".into(),
-				},
+			unverified_workload: Some(WorkloadContext {
+				name: "pod-1".into(),
+				namespace: "ns-1".into(),
+				service_account: "sa-1".into(),
 			}),
 		}),
 		jwt: Some(jwt::Claims {

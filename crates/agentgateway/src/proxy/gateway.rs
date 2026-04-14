@@ -642,7 +642,7 @@ impl Gateway {
 			.get_or_create(&transport_labels)
 			.inc();
 
-		let workload = crate::cel::WorkloadContext::from_stores(
+		let unverified_workload = crate::cel::WorkloadContext::from_stores(
 			&inputs.stores,
 			&inputs.cfg.network,
 			tcp.peer_addr.ip(),
@@ -651,7 +651,7 @@ impl Gateway {
 			address: tcp.peer_addr.ip(),
 			port: tcp.peer_addr.port(),
 			tls: tls.and_then(|t| t.src_identity.clone()),
-			workload,
+			unverified_workload,
 		};
 		if let Some(network_authorization) = policies.network_authorization.as_ref()
 			&& let Err(e) = network_authorization.apply(&src)
