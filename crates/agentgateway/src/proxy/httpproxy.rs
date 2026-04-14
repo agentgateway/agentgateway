@@ -1810,7 +1810,7 @@ pub fn build_service_call(
 		if wl.workload_ips.is_empty()
 			&& let Some(hostname) = resolved_workload_target_hostname(&wl.hostname, request_host)
 		{
-			Target::Hostname(hostname.into(), port)
+			Target::Hostname(hostname.into(), target_port)
 		} else {
 			// For direct connections, we need the workload IP
 			let Some(ip) = wl.workload_ips.first() else {
