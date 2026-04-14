@@ -967,6 +967,17 @@ impl TryFrom<&proto::agent::McpTarget> for McpTarget {
 		let proto = proto::agent::mcp_target::Protocol::try_from(s.protocol)?;
 		let backend = resolve_simple_reference(s.backend.as_ref());
 
+		let compression = s
+			.response_compression
+			.as_ref()
+			.filter(|rc| rc.enabled)
+			.map(|rc| match rc.format.as_str() {
+				"markdown" => crate::mcp::compress::CompressionFormat::Markdown,
+				"tsv" => crate::mcp::compress::CompressionFormat::Tsv,
+				"csv" => crate::mcp::compress::CompressionFormat::Csv,
+				_ => crate::mcp::compress::CompressionFormat::None,
+			});
+
 		Ok(Self {
 			name: strng::new(&s.name),
 			spec: match proto {
@@ -977,6 +988,7 @@ impl TryFrom<&proto::agent::McpTarget> for McpTarget {
 					} else {
 						s.path.clone()
 					},
+					response_compression: compression,
 				}),
 				Protocol::Undefined | Protocol::StreamableHttp => {
 					McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
@@ -986,6 +998,7 @@ impl TryFrom<&proto::agent::McpTarget> for McpTarget {
 						} else {
 							s.path.clone()
 						},
+						response_compression: compression,
 					})
 				},
 			},

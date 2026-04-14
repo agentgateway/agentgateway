@@ -295,6 +295,13 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 				mcpTarget.Protocol = api.MCPTarget_STREAMABLE_HTTP
 			}
 
+			if rc := target.ResponseCompression; rc != nil && rc.Enabled {
+				mcpTarget.ResponseCompression = &api.MCPTarget_ResponseCompression{
+					Enabled: rc.Enabled,
+					Format:  rc.Format,
+				}
+			}
+
 			mcpTargets = append(mcpTargets, mcpTarget)
 		} else if s := target.Selector; s != nil {
 			targets, err := TranslateMCPSelectorTargets(ctx, be.Namespace, target.Selector)

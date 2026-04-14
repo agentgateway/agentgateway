@@ -444,6 +444,25 @@ type McpTargetSelector struct {
 	// instead.
 	// +optional
 	Static *McpTarget `json:"static,omitempty"`
+
+	// Protocol is the protocol to use for the connection to the MCPBackend target.
+	// +optional
+	Protocol *MCPProtocol `json:"protocol,omitempty"`
+
+	// ResponseCompression configures response compression for the target.
+	// +optional
+	ResponseCompression *ResponseCompression `json:"responseCompression,omitempty"`
+}
+
+// ResponseCompression configures response compression.
+type ResponseCompression struct {
+	// Enabled determines if response compression is enabled.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Format specifies the format to use for compression (e.g., markdown).
+	// +optional
+	Format string `json:"format,omitempty"`
 }
 
 const (
