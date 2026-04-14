@@ -15,7 +15,7 @@
 |`config.namespace`|string||
 |`config.gateway`|string||
 |`config.trustDomain`|string||
-|`config.additionalTrustDomains`|string|Comma-separated list of additional SPIFFE trust domains accepted on inbound HBONE<br>connections. The local trust domain is always implicitly included.|
+|`config.additionalTrustDomains`|string|Comma-separated list of additional SPIFFE trust domains accepted on inbound HBONE<br>connections. The local trust_domain is always implicitly included.|
 |`config.serviceAccount`|string||
 |`config.clusterId`|string||
 |`config.network`|string||
