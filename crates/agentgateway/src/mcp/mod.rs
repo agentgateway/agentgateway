@@ -1,4 +1,5 @@
 pub(crate) mod auth;
+pub mod compress;
 mod handler;
 mod mergestream;
 mod rbac;

@@ -1014,6 +1014,7 @@ impl HTTPProxy {
 	fn policy_client(&self) -> PolicyClient {
 		PolicyClient {
 			inputs: self.inputs.clone(),
+			span_writer: Default::default(),
 		}
 	}
 }
@@ -1277,6 +1278,7 @@ async fn make_backend_call(
 ) -> Result<Response, ProxyResponse> {
 	let policy_client = PolicyClient {
 		inputs: inputs.clone(),
+		span_writer: log.as_ref().map(|l| l.span_writer()).unwrap_or_default(),
 	};
 
 	// The MCP backend aggregates multiple backends into a single backend.
@@ -2231,6 +2233,7 @@ pub struct TunnelClient {
 #[derive(Debug, Clone)]
 pub struct PolicyClient {
 	pub inputs: Arc<ProxyInputs>,
+	pub span_writer: crate::telemetry::log::SpanWriter,
 }
 
 impl PolicyClient {
