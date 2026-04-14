@@ -1,6 +1,6 @@
 # MCP Response Compression
 
-MCP tool call responses frequently contain large JSON payloads — lists of database rows, API results, file metadata — that consume significant context window tokens when consumed by LLM-based agents. Response compression converts these JSON payloads into compact tabular formats (markdown, TSV, CSV) at the proxy layer, reducing token usage without losing information.
+MCP tool call responses frequently contain large JSON payloads — lists of database rows, API results, file metadata — that consume significant context window tokens when consumed by LLM-based agents. Response compression converts these JSON payloads into compact tabular formats (markdown, TSV, CSV) at the proxy layer, reducing token usage while preserving the tabular structure. Note that nested objects are summarized as `{...}` and large arrays are truncated, so this is a lossy transformation optimized for LLM consumption rather than lossless encoding.
 
 This document covers the design and architecture of the compression pipeline.
 
@@ -67,7 +67,7 @@ Compression exposes Prometheus metrics through the standard agentgateway metrics
 * `mcp_response_compression_original_bytes` / `mcp_response_compression_compressed_bytes` — size histograms.
 * `mcp_response_compression_ratio` — compression ratio (0.0–1.0).
 
-All metrics carry `gateway`, `listener`, `route`, `target`, and `format` labels, consistent with existing MCP metrics.
+All metrics carry `target` and `format` labels.
 
 ## Testing
 

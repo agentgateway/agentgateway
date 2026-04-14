@@ -119,9 +119,6 @@ pub struct ConnectLabels {
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct CompressionLabels {
-	pub gateway: DefaultedUnknown<RichStrng>,
-	pub listener: DefaultedUnknown<RichStrng>,
-	pub route: DefaultedUnknown<RichStrng>,
 	pub target: DefaultedUnknown<RichStrng>,
 	pub format: DefaultedUnknown<EncodeDisplay<CompressionFormat>>,
 }

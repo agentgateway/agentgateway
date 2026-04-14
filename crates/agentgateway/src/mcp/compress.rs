@@ -106,7 +106,7 @@ fn convert_array_to_table(arr: &[Value], format: CompressionFormat) -> String {
 
 			// Header row
 			result.push_str("| ");
-			result.push_str(&all_keys.join(" | "));
+			result.push_str(&all_keys.iter().map(|k| escape_markdown(k)).collect::<Vec<_>>().join(" | "));
 			result.push_str(" |\n");
 
 			// Separator row
@@ -122,7 +122,9 @@ fn convert_array_to_table(arr: &[Value], format: CompressionFormat) -> String {
 					result.push_str("| ");
 					let values: Vec<String> = all_keys
 						.iter()
-						.map(|key| obj.get(key).map(render_value).unwrap_or_default())
+						.map(|key| {
+							escape_markdown(&obj.get(key).map(render_value).unwrap_or_default())
+						})
 						.collect();
 					result.push_str(&values.join(" | "));
 					result.push_str(" |\n");
@@ -135,7 +137,7 @@ fn convert_array_to_table(arr: &[Value], format: CompressionFormat) -> String {
 			let mut result = String::new();
 
 			// Header row
-			result.push_str(&all_keys.join("\t"));
+			result.push_str(&all_keys.iter().map(|k| escape_tsv(k)).collect::<Vec<_>>().join("\t"));
 			result.push('\n');
 
 			// Data rows
@@ -143,7 +145,9 @@ fn convert_array_to_table(arr: &[Value], format: CompressionFormat) -> String {
 				if let Value::Object(obj) = item {
 					let values: Vec<String> = all_keys
 						.iter()
-						.map(|key| obj.get(key).map(render_value).unwrap_or_default())
+						.map(|key| {
+							escape_tsv(&obj.get(key).map(render_value).unwrap_or_default())
+						})
 						.collect();
 					result.push_str(&values.join("\t"));
 					result.push('\n');
@@ -218,6 +222,14 @@ fn render_value(value: &Value) -> String {
 		},
 		Value::Object(_) => "{...}".to_string(),
 	}
+}
+
+fn escape_markdown(value: &str) -> String {
+	value.replace('|', "\\|").replace('\n', " ")
+}
+
+fn escape_tsv(value: &str) -> String {
+	value.replace('\t', " ").replace('\n', " ")
 }
 
 fn escape_csv_value(value: &str) -> String {
@@ -339,6 +351,22 @@ mod tests {
 
 		let result = compress_response(input, CompressionFormat::Markdown);
 		assert!(result.is_none());
+	}
+
+	#[test]
+	fn test_markdown_escapes_pipe() {
+		let input = r#"[{"name": "a|b", "value": "ok"}]"#;
+		let result = compress_response(input, CompressionFormat::Markdown).unwrap();
+		assert!(result.contains("a\\|b"));
+		assert!(!result.contains("| a|b |"));
+	}
+
+	#[test]
+	fn test_tsv_escapes_tab_and_newline() {
+		let input = r#"[{"name": "a\tb", "desc": "line1\nline2"}]"#;
+		let result = compress_response(input, CompressionFormat::Tsv).unwrap();
+		// Tabs and newlines in values should be replaced with spaces
+		assert!(!result.contains("a\tb"));
 	}
 
 	#[test]

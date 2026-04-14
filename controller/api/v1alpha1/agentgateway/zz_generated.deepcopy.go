@@ -2243,11 +2243,6 @@ func (in *McpTargetSelector) DeepCopyInto(out *McpTargetSelector) {
 		*out = new(McpTarget)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.Protocol != nil {
-		in, out := &in.Protocol, &out.Protocol
-		*out = new(MCPProtocol)
-		**out = **in
-	}
 	if in.ResponseCompression != nil {
 		in, out := &in.ResponseCompression, &out.ResponseCompression
 		*out = new(ResponseCompression)

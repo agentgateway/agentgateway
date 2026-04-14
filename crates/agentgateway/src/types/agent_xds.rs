@@ -971,11 +971,11 @@ impl TryFrom<&proto::agent::McpTarget> for McpTarget {
 			.response_compression
 			.as_ref()
 			.filter(|rc| rc.enabled)
-			.map(|rc| match rc.format.as_str() {
-				"markdown" => crate::mcp::compress::CompressionFormat::Markdown,
-				"tsv" => crate::mcp::compress::CompressionFormat::Tsv,
-				"csv" => crate::mcp::compress::CompressionFormat::Csv,
-				_ => crate::mcp::compress::CompressionFormat::None,
+			.and_then(|rc| match rc.format.as_str() {
+				"markdown" => Some(crate::mcp::compress::CompressionFormat::Markdown),
+				"tsv" => Some(crate::mcp::compress::CompressionFormat::Tsv),
+				"csv" => Some(crate::mcp::compress::CompressionFormat::Csv),
+				_ => None, // Unknown or "none" format with enabled=true treated as disabled
 			});
 
 		Ok(Self {

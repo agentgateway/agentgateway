@@ -608,9 +608,6 @@ fn compress_stream(
 			&& let ServerResult::CallToolResult(CallToolResult { content, .. }) = &mut response.result
 		{
 			let labels = crate::telemetry::metrics::CompressionLabels {
-				gateway: DefaultedUnknown::default(),
-				listener: DefaultedUnknown::default(),
-				route: DefaultedUnknown::default(),
 				target: DefaultedUnknown::from(Some(agent_core::strng::new(&target_name))),
 				format: DefaultedUnknown::from(Some(format)),
 			};
@@ -643,7 +640,10 @@ fn compress_stream(
 							.get_or_create(&labels)
 							.inc();
 
-						text_content.text = compressed;
+						// Only apply compression if the result is actually smaller
+						if compressed_len < original_len {
+							text_content.text = compressed;
+						}
 					} else {
 						metrics
 							.mcp_response_compression_skipped_total

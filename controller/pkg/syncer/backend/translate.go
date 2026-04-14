@@ -308,6 +308,15 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 			if err != nil {
 				return nil, err
 			}
+			// Apply responseCompression from the target selector to each generated target
+			if rc := target.ResponseCompression; rc != nil && rc.Enabled {
+				for _, t := range targets {
+					t.ResponseCompression = &api.MCPTarget_ResponseCompression{
+						Enabled: rc.Enabled,
+						Format:  rc.Format,
+					}
+				}
+			}
 			mcpTargets = append(mcpTargets, targets...)
 		}
 	}
