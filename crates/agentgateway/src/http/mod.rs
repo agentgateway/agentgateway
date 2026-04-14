@@ -611,6 +611,13 @@ pub fn classify_content_type(h: &HeaderMap) -> WellKnownContentTypes {
 	WellKnownContentTypes::Unknown
 }
 
+pub fn get_path_and_query(req: &Uri) -> &str {
+	req
+		.path_and_query()
+		.map(|pq| pq.as_str())
+		.unwrap_or_else(|| req.path())
+}
+
 pub fn get_host(req: &Request) -> Result<&str, ProxyError> {
 	// We expect a normalized request, so this will always be in the URI
 	// TODO: handle absolute HTTP/1.1 form
