@@ -462,7 +462,6 @@ mod aws {
 	use aws_credential_types::provider::ProvideCredentials;
 	use aws_sigv4::http_request::{SignableBody, sign};
 	use aws_sigv4::sign::v4::SigningParams;
-	use http_body_util::BodyExt;
 	use secrecy::ExposeSecret;
 	use tokio::sync::OnceCell;
 
@@ -472,6 +471,7 @@ mod aws {
 
 	pub async fn sign_request(req: &mut http::Request, aws_auth: &AwsAuth) -> anyhow::Result<()> {
 		let creds = load_credentials(aws_auth).await?.into();
+		let lim = crate::http::buffer_limit(req);
 		let orig_body = std::mem::take(req.body_mut());
 		// Get the region based on auth mode
 		let region = match aws_auth {
@@ -510,7 +510,7 @@ mod aws {
 			.build()?
 			.into();
 
-		let body = orig_body.collect().await?.to_bytes();
+		let body = http::read_body_with_limit(orig_body, lim).await?;
 		let signable_request = aws_sigv4::http_request::SignableRequest::new(
 			req.method().as_str(),
 			req.uri().to_string().replace("http://", "https://"),
