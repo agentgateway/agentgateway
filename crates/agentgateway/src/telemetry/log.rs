@@ -891,6 +891,7 @@ impl Drop for DropOnLog {
 				None
 			}
 		});
+
 		let mut kv = vec![
 			("gateway", route_identifier.gateway.as_deref().map(display)),
 			(

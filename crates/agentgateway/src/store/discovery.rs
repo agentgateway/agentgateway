@@ -261,7 +261,6 @@ impl ServiceStore {
 		}
 		Ok(())
 	}
-
 	fn insert_endpoint(&mut self, service_name: NamespacedHostname, ep: Endpoint) {
 		let ep_uid = ep.workload_uid.clone();
 		if let Some(svc) = self.get_by_namespaced_host(&service_name) {

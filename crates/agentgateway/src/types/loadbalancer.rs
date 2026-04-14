@@ -58,7 +58,6 @@ pub struct EndpointSet<T> {
 fn contains_target_port(ep: &Endpoint, wanted_target: u16) -> bool {
 	ep.port.values().any(|tp| *tp == wanted_target)
 }
-
 impl EndpointSet<Endpoint> {
 	pub fn insert(&self, ep: Endpoint) {
 		// Currently, buckets are not supported
@@ -81,22 +80,19 @@ impl EndpointSet<Endpoint> {
 
 		let iter = svc.endpoints.iter();
 		let selected = if let Some(o) = override_dest {
-			iter
-				.index()
-				.iter()
-				.find_map(|(key, EndpointWithInfo { endpoint, info })| {
-					let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
-						debug!("failed to fetch workload for {}", endpoint.workload_uid);
-						return None;
-					};
-					if !wl.workload_ips.contains(&o.ip()) {
-						return None;
-					}
-					if !contains_target_port(endpoint, o.port()) {
-						return None;
-					}
-					Some((key.clone(), endpoint.clone(), info, wl))
-				})
+			iter.iter().find_map(|(ep, ep_info)| {
+				let Some(wl) = workloads.find_uid(&ep.workload_uid) else {
+					debug!("failed to fetch workload for {}", ep.workload_uid);
+					return None;
+				};
+				if !wl.workload_ips.contains(&o.ip()) {
+					return None;
+				}
+				if !contains_target_port(ep, o.port()) {
+					return None;
+				}
+				Some((ep.clone(), ep_info, wl))
+			})
 		} else {
 			let index = iter.index();
 			if index.is_empty() {
@@ -109,7 +105,7 @@ impl EndpointSet<Endpoint> {
 			let best = [a, b]
 				.into_iter()
 				.filter_map(|idx| {
-					let (key, EndpointWithInfo { endpoint, info }) =
+					let (_, EndpointWithInfo { endpoint, info }) =
 						index.get_index(idx).expect("index already checked");
 					let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
 						debug!("failed to fetch workload for {}", endpoint.workload_uid);
@@ -125,35 +121,37 @@ impl EndpointSet<Endpoint> {
 						);
 						return None;
 					}
-					Some((key.clone(), endpoint.clone(), info, wl))
+					Some((endpoint.clone(), info, wl))
 				})
-				.max_by(|(_, _, a, _), (_, _, b, _)| a.score().total_cmp(&b.score()));
+				.max_by(|(_, a, _), (_, b, _)| a.score().total_cmp(&b.score()));
 			if let Some(best) = best {
 				Some(best)
 			} else {
 				// Fallback to O(n) lookup
-				index
+				iter
 					.iter()
-					.filter_map(|(key, EndpointWithInfo { endpoint, info })| {
-						let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
-							debug!("failed to fetch workload for {}", endpoint.workload_uid);
+					.filter_map(|(ep, ep_info)| {
+						let Some(wl) = workloads.find_uid(&ep.workload_uid) else {
+							debug!("failed to fetch workload for {}", ep.workload_uid);
 							return None;
 						};
-						if target_port.unwrap_or_default() == 0 && !endpoint.port.contains_key(&svc_port) {
+						if target_port.unwrap_or_default() == 0 && !ep.port.contains_key(&svc_port) {
 							// Filter workload out, it doesn't have a matching port
 							trace!(
 								"filter endpoint {}, it does not have service port {}",
-								endpoint.workload_uid, svc_port
+								ep.workload_uid, svc_port
 							);
 							return None;
 						}
-						Some((key.clone(), endpoint.clone(), info, wl))
+						Some((ep.clone(), ep_info, wl))
 					})
-					.max_by(|(_, _, a, _), (_, _, b, _)| a.score().total_cmp(&b.score()))
+					.max_by(|(_, a, _), (_, b, _)| a.score().total_cmp(&b.score()))
 			}
 		};
-		let (key, ep, ep_info, wl) = selected?;
-		let handle = svc.endpoints.start_request(key, ep_info);
+		let (ep, ep_info, wl) = selected?;
+		let handle = svc
+			.endpoints
+			.start_request(ep.workload_uid.clone(), ep_info);
 		Some((ep, handle, wl))
 	}
 }
@@ -296,29 +294,6 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 
 	pub fn iter(&self) -> ActiveEndpointsIter<T> {
 		ActiveEndpointsIter(self.best_bucket())
-	}
-
-	pub fn remove_matching<F>(&self, mut f: F)
-	where
-		F: FnMut(&T) -> bool,
-	{
-		let keys = self
-			.buckets
-			.iter()
-			.flat_map(|bucket| {
-				let group = bucket.load_full();
-				group
-					.active
-					.iter()
-					.chain(group.rejected.iter())
-					.filter(|(_, info)| f(info.endpoint.as_ref()))
-					.map(|(key, _)| key.clone())
-					.collect_vec()
-			})
-			.collect_vec();
-		for key in keys {
-			self.remove(key);
-		}
 	}
 
 	pub fn insert_key(&self, key: EndpointKey, ep: T, bucket: usize) {
@@ -675,90 +650,6 @@ impl<T> ActiveEndpointsIter<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::store::DiscoveryStore;
-	use crate::types::discovery::{
-		AppProtocol, Endpoint, HealthStatus, InboundProtocol, Locality, NetworkMode, Service, Workload,
-	};
-	use std::collections::HashMap;
-	use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-
-	fn test_inference_workload() -> Arc<Workload> {
-		Arc::new(Workload {
-			workload_ips: vec![IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1))],
-			waypoint: None,
-			network_gateway: None,
-			protocol: InboundProtocol::TCP,
-			network_mode: NetworkMode::Standard,
-			uid: "wl-1".into(),
-			name: "gateway-pod".into(),
-			namespace: "default".into(),
-			trust_domain: "cluster.local".into(),
-			service_account: "default".into(),
-			network: "network".into(),
-			workload_name: "gateway".into(),
-			workload_type: "pod".into(),
-			canonical_name: "".into(),
-			canonical_revision: "".into(),
-			hostname: "".into(),
-			node: "".into(),
-			authorization_policies: Vec::new(),
-			status: HealthStatus::Healthy,
-			cluster_id: "cluster".into(),
-			locality: Locality::default(),
-			services: Vec::new(),
-			capacity: 1,
-		})
-	}
-
-	fn test_inference_service() -> Service {
-		Service {
-			name: "gateway-pool".into(),
-			namespace: "default".into(),
-			hostname: "gateway-pool.default.inference.cluster.local".into(),
-			vips: Vec::new(),
-			ports: HashMap::from([(8000, 8000), (8001, 8001)]),
-			app_protocols: HashMap::from([(8000, AppProtocol::Http2), (8001, AppProtocol::Http2)]),
-			endpoints: Default::default(),
-			subject_alt_names: Vec::new(),
-			waypoint: None,
-			load_balancer: None,
-			ip_families: None,
-		}
-	}
-
-	fn multi_port_inference_fixture() -> (DiscoveryStore, Service) {
-		let workload = test_inference_workload();
-		let mut discovery = DiscoveryStore::new();
-		discovery.workloads.insert(workload.clone());
-
-		let service = test_inference_service();
-		service.endpoints.insert_key(
-			"wl-1".into(),
-			Endpoint {
-				workload_uid: workload.uid.clone(),
-				port: HashMap::from([(8000, 8000), (8001, 8001)]),
-				status: HealthStatus::Healthy,
-			},
-			0,
-		);
-
-		(discovery, service)
-	}
-
-	#[tokio::test]
-	async fn select_endpoint_honors_inference_pool_override_target_port() {
-		let (discovery, service) = multi_port_inference_fixture();
-		let override_dest = SocketAddr::from((Ipv4Addr::new(10, 0, 0, 1), 8001));
-
-		let (endpoint, handle, workload) = service
-			.endpoints
-			.select_endpoint(&discovery.workloads, &service, 8000, Some(override_dest))
-			.expect("override should resolve the matching target port");
-
-		assert_eq!(workload.uid.as_str(), "wl-1");
-		assert_eq!(endpoint.port.get(&8001), Some(&8001));
-		assert_eq!(handle.key.as_str(), "wl-1");
-	}
 
 	// --- Ewma ---
 
