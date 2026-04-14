@@ -762,10 +762,13 @@ impl AIProvider {
 				// All providers support completions input
 			},
 			(
-				AIProvider::OpenAI(_) | AIProvider::Azure(_) | AIProvider::Bedrock(_),
+				AIProvider::OpenAI(_)
+				| AIProvider::Azure(_)
+				| AIProvider::Bedrock(_)
+				| AIProvider::Gemini(_),
 				InputFormat::Responses,
 			) => {
-				// OpenAI supports responses input (Bedrock supports responses input via translation)
+				// OpenAI supports responses input (Bedrock & Gemini support responses input via translation)
 			},
 			(
 				AIProvider::Anthropic(_)
@@ -854,12 +857,22 @@ impl AIProvider {
 			}
 		} else {
 			match self {
-				AIProvider::Vertex(provider) if provider.is_anthropic_model(Some(request_model)) => {
-					let body = req.to_anthropic()?;
-					provider.prepare_anthropic_message_body(body)?
+				AIProvider::OpenAI(_) | AIProvider::Azure(_) => req.to_openai()?,
+				AIProvider::Vertex(p) => {
+					if p.is_anthropic_model(Some(request_model)) {
+						let body = req.to_anthropic()?;
+						p.prepare_anthropic_message_body(body)?
+					} else {
+						req.to_vertex(p)?
+					}
 				},
-				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Azure(_) => req.to_openai()?,
-				AIProvider::Vertex(p) => req.to_vertex(p)?,
+				AIProvider::Gemini(_) => {
+					if original_format == InputFormat::Responses {
+						req.to_gemini()?
+					} else {
+						req.to_openai()?
+					}
+				},
 				AIProvider::Anthropic(_) => req.to_anthropic()?,
 				AIProvider::Bedrock(p) => req.to_bedrock(
 					p,
@@ -1108,6 +1121,9 @@ impl AIProvider {
 					))
 				}
 			},
+			(AIProvider::Gemini(_), InputFormat::Responses) => {
+				conversion::gemini::from_responses::translate_response(bytes, &req.request_model)
+			},
 			(_, InputFormat::Responses) => Err(AIError::UnsupportedConversion(strng::literal!(
 				"this provider does not support Responses"
 			))),
@@ -1194,13 +1210,17 @@ impl AIProvider {
 			},
 			// Responses with OpenAI: just passthrough
 			(
-				AIProvider::OpenAI(_)
-				| AIProvider::Gemini(_)
-				| AIProvider::Azure(_)
-				| AIProvider::Vertex(_),
+				AIProvider::OpenAI(_) | AIProvider::Azure(_) | AIProvider::Vertex(_),
 				InputFormat::Responses,
 			) => resp.map(|b| {
 				conversion::responses::passthrough_stream(b, buffer, AmendOnDrop::new(log, rate_limit))
+			}),
+			(AIProvider::Gemini(_), InputFormat::Responses) => resp.map(|b| {
+				conversion::gemini::from_responses::translate_stream(
+					b,
+					buffer,
+					AmendOnDrop::new(log, rate_limit),
+				)
 			}),
 			// Vertex messages: passthrough only for Anthropic models, otherwise translate from completions
 			(AIProvider::Vertex(_), InputFormat::Messages) if is_vertex_anthropic => resp.map(|b| {
@@ -1332,6 +1352,9 @@ impl AIProvider {
 			},
 			(AIProvider::Gemini(_), InputFormat::Completions) => {
 				conversion::completions::translate_google_error(bytes)
+			},
+			(AIProvider::Gemini(_), InputFormat::Responses) => {
+				conversion::gemini::from_responses::translate_error(bytes)
 			},
 			(AIProvider::Gemini(_), InputFormat::Embeddings) => {
 				// Passthrough; Gemini embeddings endpoint already returns OpenAI-compatible errors.

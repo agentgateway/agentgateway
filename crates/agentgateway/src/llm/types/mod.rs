@@ -63,6 +63,10 @@ pub trait RequestType: Send + Sync {
 		)))
 	}
 
+	fn to_gemini(&self) -> Result<Vec<u8>, AIError> {
+		Err(AIError::UnsupportedConversion(strng::literal!("gemini")))
+	}
+
 	fn to_vertex(&self, _provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
 		Err(AIError::UnsupportedConversion(strng::literal!("vertex")))
 	}

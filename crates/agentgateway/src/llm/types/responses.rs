@@ -382,6 +382,10 @@ impl RequestType for Request {
 		serde_json::to_vec(&self).map_err(AIError::RequestMarshal)
 	}
 
+	fn to_gemini(&self) -> Result<Vec<u8>, AIError> {
+		conversion::gemini::from_responses::translate(self)
+	}
+
 	fn to_bedrock(
 		&self,
 		provider: &crate::llm::bedrock::Provider,
