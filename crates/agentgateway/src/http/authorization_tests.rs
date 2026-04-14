@@ -1,12 +1,12 @@
 use super::*;
 use crate::cel::{RequestSnapshot, SourceContext};
 use crate::http::authorization::PolicySet;
-use crate::http::{Body, jwt};
+use crate::http::{jwt, Body};
 use crate::mcp::{MCPInfo, ResourceId, ResourceType};
-use ::http::Method;
 #[cfg(test)]
 use assert_matches::assert_matches;
 use divan::Bencher;
+use http::Method;
 use serde_json::json;
 use std::net::{IpAddr, Ipv4Addr};
 

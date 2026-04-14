@@ -224,6 +224,7 @@ impl TCPProxy {
 				http_version_override: None,
 				transport_override: None,
 				network_gateway: None,
+				waypoint: None,
 				backend_policies,
 			},
 			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),

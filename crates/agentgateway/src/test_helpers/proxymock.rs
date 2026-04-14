@@ -458,6 +458,73 @@ impl TestBind {
 		self
 	}
 
+	/// Like `with_waypoint_service` but sets `ingress_use_waypoint: true`.
+	/// This creates a service that an ingress gateway should route through its waypoint.
+	/// `waypoint_addr` is the address of the waypoint proxy.
+	pub fn with_ingress_use_waypoint_service(
+		self,
+		backend_addr: SocketAddr,
+		waypoint_addr: SocketAddr,
+	) -> Self {
+		use crate::store::LocalWorkload;
+		use crate::types::discovery::{
+			GatewayAddress, NetworkAddress, Service, Workload, gatewayaddress::Destination,
+		};
+
+		// Create the waypoint service so hostname resolution works
+		let wp_svc = Service {
+			name: strng::literal!("waypoint"),
+			namespace: strng::literal!("default"),
+			hostname: strng::literal!("waypoint.default.svc.cluster.local"),
+			vips: vec![NetworkAddress {
+				network: strng::EMPTY,
+				address: waypoint_addr.ip(),
+			}],
+			ports: std::collections::HashMap::from([(15008, 15008)]),
+			..Default::default()
+		};
+
+		let svc = Service {
+			name: strng::literal!("my-svc"),
+			namespace: strng::literal!("default"),
+			hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+			vips: vec![NetworkAddress {
+				network: strng::EMPTY,
+				address: "10.0.0.1".parse().unwrap(),
+			}],
+			ports: std::collections::HashMap::from([(80, backend_addr.port())]),
+			waypoint: Some(GatewayAddress {
+				destination: Destination::Hostname(crate::types::discovery::NamespacedHostname {
+					namespace: strng::literal!("default"),
+					hostname: strng::literal!("waypoint.default.svc.cluster.local"),
+				}),
+				hbone_mtls_port: waypoint_addr.port(),
+			}),
+			ingress_use_waypoint: true,
+			..Default::default()
+		};
+		let wl = LocalWorkload {
+			workload: Workload {
+				uid: strng::literal!("test-wl-uid"),
+				name: strng::literal!("test-wl"),
+				namespace: strng::literal!("default"),
+				workload_ips: vec![backend_addr.ip()],
+				..Default::default()
+			},
+			services: std::collections::HashMap::from([(
+				"default/my-svc.default.svc.cluster.local".to_string(),
+				std::collections::HashMap::from([(80, backend_addr.port())]),
+			)]),
+		};
+		self
+			.pi
+			.stores
+			.discovery
+			.sync_local(vec![wp_svc, svc], vec![wl], Default::default())
+			.unwrap();
+		self
+	}
+
 	pub fn with_backend(self, b: SocketAddr) -> Self {
 		let b = Backend::Opaque(
 			ResourceName::new(strng::format!("{}", b), "".into()),

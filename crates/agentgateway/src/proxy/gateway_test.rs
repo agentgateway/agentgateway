@@ -1634,6 +1634,7 @@ async fn test_hostname_resolution_logic() {
 		}),
 		load_balancer: None,
 		ip_families: None,
+		ingress_use_waypoint: false,
 	};
 
 	stores.insert_service_internal(service);
@@ -1682,6 +1683,7 @@ async fn test_hostname_resolution_logic() {
 		waypoint: None,
 		load_balancer: None,
 		ip_families: None,
+		ingress_use_waypoint: false,
 	};
 	stores.insert_service_internal(service_no_vips);
 
@@ -2347,4 +2349,312 @@ async fn waypoint_tcp_gateway_policy_authz_deny() {
 		.send(io)
 		.await
 		.expect_err("should be denied by network authorization");
+}
+
+// --- Ingress → Waypoint tests ---
+// These test that when a service has ingress_use_waypoint=true,
+// build_service_call correctly populates the BackendCall with
+// a WaypointTarget and hostname-based target.
+
+#[tokio::test]
+async fn ingress_use_waypoint_sets_waypoint_target() {
+	use crate::proxy::httpproxy;
+	use crate::types::discovery::NamespacedHostname;
+
+	let mock = simple_mock().await;
+	let waypoint_addr: std::net::SocketAddr = "10.0.0.50:15008".parse().unwrap();
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_ingress_use_waypoint_service(*mock.address(), waypoint_addr);
+
+	let svc = t
+		.pi
+		.stores
+		.read_discovery()
+		.services
+		.get_by_namespaced_host(&NamespacedHostname {
+			namespace: strng::literal!("default"),
+			hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+		})
+		.expect("service must exist");
+
+	assert!(svc.ingress_use_waypoint, "ingress_use_waypoint must be set");
+	assert!(svc.waypoint.is_some(), "waypoint must be configured");
+
+	let backend_call = httpproxy::build_service_call(
+		&t.pi,
+		Default::default(),
+		&mut None,
+		None,
+		&svc,
+		&80,
+		None,
+	)
+	.expect("build_service_call should succeed");
+
+	// Waypoint target should be populated
+	let wp = backend_call
+		.waypoint
+		.expect("waypoint target must be set when ingress_use_waypoint is true");
+	assert_eq!(
+		wp.address.ip(),
+		waypoint_addr.ip(),
+		"waypoint address should be the waypoint VIP"
+	);
+	assert_eq!(
+		wp.address.port(),
+		waypoint_addr.port(),
+		"waypoint port should be the hbone_mtls_port"
+	);
+
+	// Target must be the service hostname, not a workload IP
+	assert_matches!(backend_call.target, Target::Hostname(ref host, port) => {
+		assert_eq!(host.as_str(), "my-svc.default.svc.cluster.local");
+		assert_eq!(port, 80);
+	});
+}
+
+#[tokio::test]
+async fn ingress_use_waypoint_false_no_waypoint() {
+	use crate::proxy::httpproxy;
+	use crate::types::discovery::NamespacedHostname;
+
+	let mock = simple_mock().await;
+	// Use the standard waypoint service helper which has ingress_use_waypoint: false
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_waypoint_service(*mock.address());
+
+	let svc = t
+		.pi
+		.stores
+		.read_discovery()
+		.services
+		.get_by_namespaced_host(&NamespacedHostname {
+			namespace: strng::literal!("default"),
+			hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+		})
+		.expect("service must exist");
+
+	assert!(
+		!svc.ingress_use_waypoint,
+		"ingress_use_waypoint should be false"
+	);
+
+	let backend_call = httpproxy::build_service_call(
+		&t.pi,
+		Default::default(),
+		&mut None,
+		None,
+		&svc,
+		&80,
+		None,
+	)
+	.expect("build_service_call should succeed");
+
+	// Waypoint should NOT be set
+	assert!(
+		backend_call.waypoint.is_none(),
+		"waypoint should not be set when ingress_use_waypoint is false"
+	);
+
+	// Target should be a direct workload address, not hostname
+	assert_matches!(backend_call.target, Target::Address(_));
+}
+
+#[tokio::test]
+async fn ingress_use_waypoint_ip_based_waypoint() {
+	use crate::proxy::httpproxy;
+	use crate::store::LocalWorkload;
+	use crate::types::discovery::{
+		GatewayAddress, NamespacedHostname, NetworkAddress, Service, Workload,
+		gatewayaddress::Destination,
+	};
+
+	let mock = simple_mock().await;
+	let waypoint_ip: std::net::IpAddr = "10.0.0.99".parse().unwrap();
+
+	let t = setup_proxy_test("{}").unwrap();
+
+	// Create a service with an IP-based waypoint (not hostname)
+	let svc = Service {
+		name: strng::literal!("my-svc"),
+		namespace: strng::literal!("default"),
+		hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+		vips: vec![NetworkAddress {
+			network: strng::EMPTY,
+			address: "10.0.0.1".parse().unwrap(),
+		}],
+		ports: std::collections::HashMap::from([(80, mock.address().port())]),
+		waypoint: Some(GatewayAddress {
+			destination: Destination::Address(NetworkAddress {
+				network: strng::EMPTY,
+				address: waypoint_ip,
+			}),
+			hbone_mtls_port: 15008,
+		}),
+		ingress_use_waypoint: true,
+		..Default::default()
+	};
+	let wl = LocalWorkload {
+		workload: Workload {
+			uid: strng::literal!("test-wl-uid"),
+			name: strng::literal!("test-wl"),
+			namespace: strng::literal!("default"),
+			workload_ips: vec![mock.address().ip()],
+			..Default::default()
+		},
+		services: std::collections::HashMap::from([(
+			"default/my-svc.default.svc.cluster.local".to_string(),
+			std::collections::HashMap::from([(80, mock.address().port())]),
+		)]),
+	};
+	t.pi
+		.stores
+		.discovery
+		.sync_local(vec![svc], vec![wl], Default::default())
+		.unwrap();
+
+	let svc = t
+		.pi
+		.stores
+		.read_discovery()
+		.services
+		.get_by_namespaced_host(&NamespacedHostname {
+			namespace: strng::literal!("default"),
+			hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+		})
+		.expect("service must exist");
+
+	let backend_call = httpproxy::build_service_call(
+		&t.pi,
+		Default::default(),
+		&mut None,
+		None,
+		&svc,
+		&80,
+		None,
+	)
+	.expect("build_service_call should succeed");
+
+	let wp = backend_call
+		.waypoint
+		.expect("waypoint target must be set for IP-based waypoint");
+	assert_eq!(wp.address.ip(), waypoint_ip);
+	assert_eq!(wp.address.port(), 15008);
+}
+
+#[tokio::test]
+async fn ingress_use_waypoint_no_waypoint_field_no_routing() {
+	use crate::proxy::httpproxy;
+	use crate::store::LocalWorkload;
+	use crate::types::discovery::{NamespacedHostname, NetworkAddress, Service, Workload};
+
+	let mock = simple_mock().await;
+	let t = setup_proxy_test("{}").unwrap();
+
+	// Service with ingress_use_waypoint=true but NO waypoint configured
+	let svc = Service {
+		name: strng::literal!("my-svc"),
+		namespace: strng::literal!("default"),
+		hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+		vips: vec![NetworkAddress {
+			network: strng::EMPTY,
+			address: "10.0.0.1".parse().unwrap(),
+		}],
+		ports: std::collections::HashMap::from([(80, mock.address().port())]),
+		waypoint: None, // No waypoint
+		ingress_use_waypoint: true,
+		..Default::default()
+	};
+	let wl = LocalWorkload {
+		workload: Workload {
+			uid: strng::literal!("test-wl-uid"),
+			name: strng::literal!("test-wl"),
+			namespace: strng::literal!("default"),
+			workload_ips: vec![mock.address().ip()],
+			..Default::default()
+		},
+		services: std::collections::HashMap::from([(
+			"default/my-svc.default.svc.cluster.local".to_string(),
+			std::collections::HashMap::from([(80, mock.address().port())]),
+		)]),
+	};
+	t.pi
+		.stores
+		.discovery
+		.sync_local(vec![svc], vec![wl], Default::default())
+		.unwrap();
+
+	let svc = t
+		.pi
+		.stores
+		.read_discovery()
+		.services
+		.get_by_namespaced_host(&NamespacedHostname {
+			namespace: strng::literal!("default"),
+			hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+		})
+		.expect("service must exist");
+
+	let backend_call = httpproxy::build_service_call(
+		&t.pi,
+		Default::default(),
+		&mut None,
+		None,
+		&svc,
+		&80,
+		None,
+	)
+	.expect("build_service_call should succeed");
+
+	// No waypoint configured, so it should fall back to direct routing
+	assert!(
+		backend_call.waypoint.is_none(),
+		"waypoint should not be set when no waypoint is configured on the service"
+	);
+	assert_matches!(backend_call.target, Target::Address(_));
+}
+
+#[tokio::test]
+async fn ingress_use_waypoint_build_transport_falls_back_without_ca() {
+	use crate::proxy::httpproxy;
+	use crate::types::discovery::NamespacedHostname;
+
+	let mock = simple_mock().await;
+	let waypoint_addr: std::net::SocketAddr = "10.0.0.50:15008".parse().unwrap();
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_ingress_use_waypoint_service(*mock.address(), waypoint_addr);
+
+	let svc = t
+		.pi
+		.stores
+		.read_discovery()
+		.services
+		.get_by_namespaced_host(&NamespacedHostname {
+			namespace: strng::literal!("default"),
+			hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+		})
+		.expect("service must exist");
+
+	let backend_call = httpproxy::build_service_call(
+		&t.pi,
+		Default::default(),
+		&mut None,
+		None,
+		&svc,
+		&80,
+		None,
+	)
+	.expect("build_service_call should succeed");
+
+	assert!(backend_call.waypoint.is_some());
+
+	// build_transport with no CA should fall back to plain transport
+	let transport = httpproxy::build_transport(&t.pi, &backend_call, None, None, None)
+		.await
+		.expect("build_transport should succeed");
+	// Without CA, it falls back to Plain
+	assert_eq!(transport.name(), "plaintext");
 }
