@@ -147,6 +147,7 @@ impl StreamableHttpService {
 		{
 			return mcp::Error::MissingSessionHeader.into();
 		}
+		let idle_ttl = inputs.backend.session_idle_ttl;
 		let relay = inputs.build_new_connections()?;
 		let mut session = self.session_manager.create_session(relay);
 		let mut resp = session.send(part, message).await?;
@@ -155,7 +156,7 @@ impl StreamableHttpService {
 			return mcp::Error::InvalidSessionIdHeader.into();
 		};
 		resp.headers_mut().insert(HEADER_SESSION_ID, sid);
-		self.session_manager.insert_session(session);
+		self.session_manager.insert_session(session, idle_ttl);
 		Ok(resp)
 	}
 

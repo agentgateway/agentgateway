@@ -961,6 +961,7 @@ impl TryFrom<&proto::agent::Backend> for BackendWithPolicies {
 						proto::agent::mcp_backend::FailureMode::FailOpen => FailureMode::FailOpen,
 						proto::agent::mcp_backend::FailureMode::FailClosed => FailureMode::FailClosed,
 					},
+					session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 				},
 			),
 			None => {

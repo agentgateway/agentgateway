@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::agentcore;
 use crate::client::Client;
@@ -800,6 +800,9 @@ impl LocalBackend {
 						McpPrefixMode::Conditional => false,
 					}),
 					failure_mode: tgt.failure_mode.unwrap_or_default(),
+					session_idle_ttl: tgt
+						.session_idle_ttl
+						.unwrap_or(crate::mcp::DEFAULT_SESSION_IDLE_TTL),
 				};
 				backends.push(Backend::MCP(name, m).into());
 				backends
@@ -871,6 +874,13 @@ pub struct LocalMcpBackend {
 	/// Defaults to `failClosed`.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub failure_mode: Option<FailureMode>,
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "crate::serdes::serde_dur_option"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub session_idle_ttl: Option<Duration>,
 }
 
 #[apply(schema_de!)]

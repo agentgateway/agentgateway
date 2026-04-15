@@ -1,9 +1,9 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use agent_core::prelude::Strng;
 use axum::response::Response;
 
-use crate::ProxyInputs;
 use crate::http::authorization::RuleSets;
 use crate::http::sessionpersistence::Encoder;
 use crate::http::*;
@@ -21,6 +21,7 @@ use crate::telemetry::log::RequestLog;
 use crate::types::agent::{
 	BackendTargetRef, McpBackend, McpTargetSpec, ResourceName, SimpleBackend, SimpleBackendReference,
 };
+use crate::{ProxyInputs, mcp};
 
 #[derive(Debug, Clone)]
 pub struct App {
@@ -30,7 +31,7 @@ pub struct App {
 
 impl App {
 	pub fn new(state: Stores, encoder: Encoder) -> Self {
-		let session: Arc<SessionManager> = Arc::new(crate::mcp::session::SessionManager::new(encoder));
+		let session = crate::mcp::session::SessionManager::new(encoder);
 		Self { state, session }
 	}
 
@@ -102,6 +103,7 @@ impl App {
 				targets: nt,
 				stateful: backend.stateful,
 				failure_mode: backend.failure_mode,
+				session_idle_ttl: backend.session_idle_ttl,
 			}
 		};
 		let sm = self.session.clone();
@@ -171,6 +173,18 @@ pub struct McpBackendGroup {
 	pub targets: Vec<Arc<McpTarget>>,
 	pub stateful: bool,
 	pub failure_mode: FailureMode,
+	pub session_idle_ttl: Duration,
+}
+
+impl Default for McpBackendGroup {
+	fn default() -> Self {
+		Self {
+			targets: vec![],
+			stateful: true,
+			failure_mode: crate::mcp::FailureMode::default(),
+			session_idle_ttl: mcp::DEFAULT_SESSION_IDLE_TTL,
+		}
+	}
 }
 
 #[derive(Debug)]

@@ -1306,6 +1306,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.statefulMode`|string||
 |`binds[].listeners[].routes[].backends[].mcp.prefixMode`|string||
 |`binds[].listeners[].routes[].backends[].mcp.failureMode`|string|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.|
+|`binds[].listeners[].routes[].backends[].mcp.sessionIdleTtl`|string||
 |`binds[].listeners[].routes[].backends[].ai`|object||
 |`binds[].listeners[].routes[].backends[].ai.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, or azure may be set.|
@@ -12077,6 +12078,7 @@
 |`mcp.statefulMode`|string||
 |`mcp.prefixMode`|string||
 |`mcp.failureMode`|string|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.|
+|`mcp.sessionIdleTtl`|string||
 |`mcp.policies`|object||
 |`mcp.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`mcp.policies.requestHeaderModifier.add`|object||

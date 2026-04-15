@@ -11,6 +11,7 @@ mod upstream;
 use std::fmt::{Display, Write};
 use std::io;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[cfg(feature = "schema")]
 use crate::JsonSchema;
@@ -37,6 +38,8 @@ pub enum FailureMode {
 	/// If ALL targets fail, still return an error.
 	FailOpen,
 }
+
+pub(crate) const DEFAULT_SESSION_IDLE_TTL: Duration = Duration::from_mins(30);
 
 #[cfg(test)]
 #[path = "mcp_tests.rs"]

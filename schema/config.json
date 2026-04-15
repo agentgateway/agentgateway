@@ -4219,6 +4219,12 @@
               "type": "null"
             }
           ]
+        },
+        "sessionIdleTtl": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
@@ -6578,6 +6584,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "sessionIdleTtl": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "policies": {

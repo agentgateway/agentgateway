@@ -223,7 +223,7 @@ async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 				fake_streamable_target("b", mock_b.addr),
 			],
 			stateful: false,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -1653,8 +1653,7 @@ mod legacymockserver {
 async fn test_zero_targets_fail_closed() {
 	let backend = McpBackendGroup {
 		targets: vec![],
-		stateful: true,
-		failure_mode: FailureMode::FailClosed,
+		..Default::default()
 	};
 	let client = PolicyClient {
 		inputs: setup_proxy_test("{}").unwrap().pi,
@@ -1667,8 +1666,8 @@ async fn test_zero_targets_fail_closed() {
 async fn test_zero_targets_fail_open() {
 	let backend = McpBackendGroup {
 		targets: vec![],
-		stateful: true,
 		failure_mode: FailureMode::FailOpen,
+		..Default::default()
 	};
 	let client = PolicyClient {
 		inputs: setup_proxy_test("{}").unwrap().pi,
@@ -1706,6 +1705,7 @@ async fn test_setup_partial_success_fail_open() {
 		],
 		stateful: false,
 		failure_mode: FailureMode::FailOpen,
+		..Default::default()
 	};
 	let client = PolicyClient {
 		inputs: setup_proxy_test("{}").unwrap().pi,
@@ -1743,6 +1743,7 @@ async fn test_all_targets_fail_open_still_errors() {
 		],
 		stateful: false,
 		failure_mode: FailureMode::FailOpen,
+		..Default::default()
 	};
 	let client = PolicyClient {
 		inputs: setup_proxy_test("{}").unwrap().pi,
@@ -1864,8 +1865,7 @@ fn test_openapi_targets_emit_stateless_session_state() {
 				"openapi",
 				SocketAddr::from(([127, 0, 0, 1], 30031)),
 			)],
-			stateful: true,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -1912,8 +1912,7 @@ fn test_sse_targets_emit_stateless_session_state() {
 				"sse",
 				SocketAddr::from(([127, 0, 0, 1], 30032)),
 			)],
-			stateful: true,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -1958,7 +1957,7 @@ async fn test_stdio_targets_remain_non_stateless() {
 		McpBackendGroup {
 			targets: vec![fake_stdio_target("stdio")],
 			stateful: false,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -1982,6 +1981,7 @@ async fn test_fanout_deletion_fail_open_skips_failed_upstreams() {
 			],
 			stateful: true,
 			failure_mode: FailureMode::FailOpen,
+			session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -2013,8 +2013,7 @@ fn test_set_sessions_matches_by_target_name() {
 				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30001))),
 				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30002))),
 			],
-			stateful: true,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -2062,8 +2061,7 @@ fn test_set_sessions_rejects_mismatched_target_set() {
 				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30011))),
 				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30012))),
 			],
-			stateful: true,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -2106,8 +2104,7 @@ fn test_merge_initialize_merges_upstream_instructions_when_multiplexing() {
 				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30101))),
 				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30102))),
 			],
-			stateful: true,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -2180,8 +2177,7 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 				"alpha",
 				SocketAddr::from(([127, 0, 0, 1], 30103)),
 			)],
-			stateful: true,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -2231,8 +2227,7 @@ fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 				"solo",
 				SocketAddr::from(([127, 0, 0, 1], 30104)),
 			)],
-			stateful: true,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {

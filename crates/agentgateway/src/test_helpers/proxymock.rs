@@ -531,6 +531,7 @@ impl TestBind {
 				stateful,
 				always_use_prefix: false,
 				failure_mode: FailureMode::FailClosed,
+				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 			},
 		);
 		{
@@ -579,6 +580,7 @@ impl TestBind {
 				stateful,
 				always_use_prefix: false,
 				failure_mode: FailureMode::FailClosed,
+				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 			},
 		);
 		{

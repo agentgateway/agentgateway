@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;
+use std::sync::Mutex as StdMutex;
+use std::time::{Duration, Instant};
 
 use ::http::StatusCode;
 use ::http::header::CONTENT_TYPE;
@@ -34,6 +36,15 @@ pub struct Session {
 	pub id: Arc<str>,
 	tx: Option<Sender<ServerJsonRpcMessage>>,
 }
+
+#[derive(Debug, Clone)]
+struct SessionEntry {
+	session: Session,
+	last_access: Instant,
+	idle_ttl: Duration,
+}
+
+const SESSION_REAP_INTERVAL: Duration = Duration::from_secs(30);
 
 impl Session {
 	/// send a message to upstream server(s)
@@ -509,7 +520,8 @@ impl Session {
 #[derive(Debug)]
 pub struct SessionManager {
 	encoder: http::sessionpersistence::Encoder,
-	sessions: RwLock<HashMap<String, Session>>,
+	sessions: Arc<RwLock<HashMap<String, SessionEntry>>>,
+	idle_reaper: Option<tokio::task::AbortHandle>,
 }
 
 fn session_id() -> Arc<str> {
@@ -517,23 +529,21 @@ fn session_id() -> Arc<str> {
 }
 
 impl SessionManager {
-	pub fn new(encoder: http::sessionpersistence::Encoder) -> Self {
-		Self {
+	pub fn new(encoder: http::sessionpersistence::Encoder) -> Arc<Self> {
+		let sessions = Arc::new(RwLock::new(HashMap::new()));
+		let task = tokio::spawn(run_idle_reaper(sessions.clone()));
+		Arc::new(Self {
 			encoder,
-			sessions: Default::default(),
-		}
+			sessions,
+			idle_reaper: Some(task.abort_handle()),
+		})
 	}
 
 	pub fn get_session(&self, id: &str, builder: RelayInputs) -> Option<Session> {
-		Some(
-			self
-				.sessions
-				.read()
-				.ok()?
-				.get(id)
-				.cloned()?
-				.with_inputs(builder),
-		)
+		let mut sessions = self.sessions.write().ok()?;
+		let entry = sessions.get_mut(id)?;
+		entry.last_access = Instant::now();
+		Some(entry.session.clone().with_inputs(builder))
 	}
 
 	pub fn get_or_resume_session(
@@ -541,9 +551,11 @@ impl SessionManager {
 		id: &str,
 		builder: RelayInputs,
 	) -> Result<Option<Session>, mcp::Error> {
-		if let Some(s) = self.sessions.read().expect("poisoned").get(id).cloned() {
-			return Ok(Some(s.with_inputs(builder)));
+		if let Some(s) = self.sessions.write().expect("poisoned").get_mut(id) {
+			s.last_access = Instant::now();
+			return Ok(Some(s.session.clone().with_inputs(builder)));
 		}
+		let idle_ttl = builder.backend.session_idle_ttl;
 		let d = http::sessionpersistence::SessionState::decode(id, &self.encoder)
 			.map_err(|_| mcp::Error::InvalidSessionIdHeader)?;
 		let http::sessionpersistence::SessionState::MCP(state) = d else {
@@ -562,7 +574,14 @@ impl SessionManager {
 			encoder: self.encoder.clone(),
 		};
 		let mut sm = self.sessions.write().expect("write lock");
-		sm.insert(id.to_string(), sess.clone());
+		sm.insert(
+			id.to_string(),
+			SessionEntry {
+				session: sess.clone(),
+				last_access: Instant::now(),
+				idle_ttl,
+			},
+		);
 		Ok(Some(sess))
 	}
 
@@ -579,9 +598,16 @@ impl SessionManager {
 		}
 	}
 
-	pub fn insert_session(&self, sess: Session) {
+	pub fn insert_session(&self, sess: Session, idle_ttl: Duration) {
 		let mut sm = self.sessions.write().expect("write lock");
-		sm.insert(sess.id.to_string(), sess);
+		sm.insert(
+			sess.id.to_string(),
+			SessionEntry {
+				session: sess,
+				last_access: Instant::now(),
+				idle_ttl,
+			},
+		);
 	}
 
 	/// create_stateless_session creates a session for stateless mode.
@@ -600,7 +626,11 @@ impl SessionManager {
 
 	/// create_legacy_session establishes a legacy SSE session.
 	/// These will have the ability to send messages to them via a channel.
-	pub fn create_legacy_session(&self, relay: Relay) -> (Session, Receiver<ServerJsonRpcMessage>) {
+	pub fn create_legacy_session(
+		&self,
+		relay: Relay,
+		idle_ttl: Duration,
+	) -> (Session, Receiver<ServerJsonRpcMessage>) {
 		let (tx, rx) = tokio::sync::mpsc::channel(64);
 		let id = session_id();
 		let sess = Session {
@@ -610,17 +640,52 @@ impl SessionManager {
 			encoder: self.encoder.clone(),
 		};
 		let mut sm = self.sessions.write().expect("write lock");
-		sm.insert(id.to_string(), sess.clone());
+		sm.insert(
+			id.to_string(),
+			SessionEntry {
+				session: sess.clone(),
+				last_access: Instant::now(),
+				idle_ttl,
+			},
+		);
 		(sess, rx)
 	}
 
 	pub async fn delete_session(&self, id: &str, parts: Parts) -> Option<Response> {
 		let sess = {
 			let mut sm = self.sessions.write().expect("write lock");
-			sm.remove(id)?
+			sm.remove(id)?.session
 		};
 		// Swallow the error
 		sess.delete_session(parts).await.ok()
+	}
+}
+
+impl Drop for SessionManager {
+	fn drop(&mut self) {
+		if let Some(abort) = self.idle_reaper.take() {
+			abort.abort();
+		}
+	}
+}
+
+async fn run_idle_reaper(sessions: Arc<RwLock<HashMap<String, SessionEntry>>>) {
+	let mut ticker = tokio::time::interval(SESSION_REAP_INTERVAL);
+	ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+	loop {
+		ticker.tick().await;
+		reap_expired_entries(&sessions);
+	}
+}
+
+fn reap_expired_entries(sessions: &Arc<RwLock<HashMap<String, SessionEntry>>>) {
+	let now = Instant::now();
+	let mut guard = sessions.write().expect("write lock");
+	let pre = guard.len();
+	guard.retain(|_, entry| now.duration_since(entry.last_access) < entry.idle_ttl);
+	let post = guard.len();
+	if post < pre {
+		tracing::debug!("reaped {} sessions", pre - post);
 	}
 }
 
