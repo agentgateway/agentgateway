@@ -54,7 +54,10 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		mcp_state: mcp::router::App::new(stores.clone(), encoder),
 	});
 
-	let client = PolicyClient { inputs: pi.clone(), span_writer: Default::default() };
+	let client = PolicyClient {
+		inputs: pi.clone(),
+		span_writer: Default::default(),
+	};
 	let test_tool_get = Tool::new(
 		Cow::Borrowed("get_user"),
 		Cow::Borrowed("Get user details"),
