@@ -622,345 +622,341 @@ impl<'a> Value<'a> {
 		let resolve = |e| Value::resolve(e, ctx, resolver);
 		let resolve_materialized = |e| Value::resolve_materialized(e, ctx, resolver);
 		if call.args.len() == 3 && call.func_name == operators::CONDITIONAL {
-					let cond = resolve(&call.args[0])?;
-					return if cond.to_bool()? {
-						resolve(&call.args[1])
-					} else {
-						resolve(&call.args[2])
-					};
-				}
-				if call.args.len() == 2 {
-					match call.func_name.as_str() {
-						op @ (operators::ADD
-						| operators::SUBSTRACT
-						| operators::DIVIDE
-						| operators::MULTIPLY
-						| operators::MODULO) => {
-							// Parser builds `a op b op c op ...` as a left-recursive tree; walk the
-							// left spine iteratively so deep chains don't recurse (and overflow).
-							let mut rhs_rev = vec![&call.args[1]];
-							let mut leftmost = &call.args[0];
-							while let Expr::Call(inner) = &leftmost.expr
-								&& inner.args.len() == 2
-								&& inner.func_name == op
-							{
-								rhs_rev.push(&inner.args[1]);
-								leftmost = &inner.args[0];
-							}
-							let mut acc = resolve(leftmost)?;
-							for rhs in rhs_rev.into_iter().rev() {
-								let r = resolve(rhs)?;
-								acc = match op {
-									operators::ADD => (acc + r)?,
-									operators::SUBSTRACT => (acc - r)?,
-									operators::DIVIDE => (acc / r)?,
-									operators::MULTIPLY => (acc * r)?,
-									operators::MODULO => (acc % r)?,
-									_ => unreachable!(),
-								};
-							}
-							return Ok(acc);
-						},
-						operators::EQUALS => {
-							let left = resolve_materialized(&call.args[0])?;
-							let right = resolve_materialized(&call.args[1])?;
-							return Value::Bool(left.eq(&right)).into();
-						},
-						operators::NOT_EQUALS => {
-							let left = resolve_materialized(&call.args[0])?;
-							let right = resolve_materialized(&call.args[1])?;
-							return Value::Bool(left.ne(&right)).into();
-						},
-						operators::LESS => {
-							let left = resolve_materialized(&call.args[0])?;
-							let right = resolve_materialized(&call.args[1])?;
-							return Value::Bool(
-								left
-									.partial_cmp(&right)
-									.ok_or(ExecutionError::ValuesNotComparable(
-										left.as_static(),
-										right.as_static(),
-									))? == Ordering::Less,
-							)
-							.into();
-						},
-						operators::LESS_EQUALS => {
-							let left = resolve_materialized(&call.args[0])?;
-							let right = resolve_materialized(&call.args[1])?;
-							return Value::Bool(
-								left
-									.partial_cmp(&right)
-									.ok_or(ExecutionError::ValuesNotComparable(
-										left.as_static(),
-										right.as_static(),
-									))? != Ordering::Greater,
-							)
-							.into();
-						},
-						operators::GREATER => {
-							let left = resolve_materialized(&call.args[0])?;
-							let right = resolve_materialized(&call.args[1])?;
-							return Value::Bool(
-								left
-									.partial_cmp(&right)
-									.ok_or(ExecutionError::ValuesNotComparable(
-										left.as_static(),
-										right.as_static(),
-									))? == Ordering::Greater,
-							)
-							.into();
-						},
-						operators::GREATER_EQUALS => {
-							let left = resolve_materialized(&call.args[0])?;
-							let right = resolve_materialized(&call.args[1])?;
-							return Value::Bool(
-								left
-									.partial_cmp(&right)
-									.ok_or(ExecutionError::ValuesNotComparable(
-										left.as_static(),
-										right.as_static(),
-									))? != Ordering::Less,
-							)
-							.into();
-						},
-						operators::IN => {
-							let left = resolve_materialized(&call.args[0])?;
-							let right = resolve(&call.args[1])?;
-							if let Value::Dynamic(d) = &right
-								&& let Value::String(k) = &left
-								&& d.field(k.as_ref()).is_some()
-							{
-								// Optimistically attempt to lookup without materializing.
-								// This will fail for lists, string vs string, etc and fallback to slow path.
-								return Value::Bool(true).into();
-							}
-							match (left, right.always_materialize_owned()) {
-								(Value::String(l), Value::String(r)) => {
-									return Value::Bool(r.as_ref().contains(l.as_ref())).into();
-								},
-								(any, Value::List(v)) => {
-									return Value::Bool(v.as_ref().contains(&any)).into();
-								},
-								(any, Value::Map(m)) => match KeyRef::try_from(&any) {
-									Ok(key) => return Value::Bool(m.contains_key(&key)).into(),
-									Err(_) => return Value::Bool(false).into(),
-								},
-								(left, right) => Err(ExecutionError::ValuesNotComparable(
-									left.as_static(),
-									right.as_static(),
-								))?,
-							}
-						},
-						operators::LOGICAL_OR => {
-							let left = try_bool(resolve(&call.args[0]));
-							return if Ok(true) == left {
-								Ok(true.into())
-							} else {
-								let right = if let Value::Bool(b) = resolve_materialized(&call.args[1])? {
-									Some(b)
-								} else {
-									None
-								};
-								match (&left, right) {
-									(Ok(false), Some(right)) => Ok(right.into()),
-									(Err(_), Some(true)) => Ok(true.into()),
-									(_, _) => Err(left.err().unwrap_or(ExecutionError::NoSuchOverload)),
-								}
-							};
-						},
-						operators::LOGICAL_AND => {
-							let left = try_bool(resolve(&call.args[0]));
-							return if Ok(false) == left {
-								Ok(false.into())
-							} else {
-								let right = if let Value::Bool(b) = resolve_materialized(&call.args[1])? {
-									Some(b)
-								} else {
-									None
-								};
-								match (&left, right) {
-									(Ok(true), Some(right)) => Ok(right.into()),
-									(Err(_), Some(false)) => Ok(false.into()),
-									(_, _) => Err(left.err().unwrap_or(ExecutionError::NoSuchOverload)),
-								}
-							};
-						},
-						operators::INDEX | operators::OPT_INDEX => {
-							let mut value: Value<'a> = resolve(&call.args[0])?;
-							let idx = resolve_materialized(&call.args[1])?;
-							let mut is_optional = call.func_name == operators::OPT_INDEX;
-
-							if let Ok(opt_val) = <&OptionalValue>::try_from(&value) {
-								is_optional = true;
-								value = match opt_val.value() {
-									Some(inner) => inner.clone(),
-									None => {
-										return Ok(OpaqueValue::new(OptionalValue::none()).into());
-									},
-								};
-							}
-							if let Value::Dynamic(d) = &value
-								&& let Value::String(k) = idx
-							{
-								// TODO: in the future, if required, we could allow lookup of int for a list
-								let result = d
-									.field(k.as_ref())
-									.ok_or_else(|| ExecutionError::NoSuchKey(Arc::from(k.as_ref())));
-								return Self::maybe_optional(is_optional, result);
-							};
-
-							// Since we already established we cannot use dynamic, materialize
-							let result = match (value.always_materialize_owned(), idx) {
-								(Value::List(items), Value::Int(idx)) => {
-									if idx >= 0 && (idx as usize) < items.len() {
-										let x: Value<'a> = items.as_ref()[idx as usize].clone();
-										x.into()
-									} else {
-										Err(ExecutionError::IndexOutOfBounds(idx.into()))
-									}
-								},
-								(Value::List(items), Value::UInt(idx)) => {
-									if (idx as usize) < items.len() {
-										items.as_ref()[idx as usize].clone().into()
-									} else {
-										Err(ExecutionError::IndexOutOfBounds(idx.into()))
-									}
-								},
-								(Value::String(_), Value::Int(idx)) => {
-									Err(ExecutionError::NoSuchKey(idx.to_string().into()))
-								},
-								(Value::Map(map), Value::String(property)) => map
-									.get(&KeyRef::String(StringValue::Borrowed(&property)))
-									.cloned()
-									.ok_or_else(|| ExecutionError::NoSuchKey(property.as_owned())),
-								(Value::Map(map), Value::Bool(property)) => map
-									.get(&KeyRef::Bool(property))
-									.cloned()
-									.ok_or_else(|| ExecutionError::NoSuchKey(property.to_string().into())),
-								(Value::Map(map), Value::Int(property)) => map
-									.get(&KeyRef::Int(property))
-									.cloned()
-									.ok_or_else(|| ExecutionError::NoSuchKey(property.to_string().into())),
-								(Value::Map(map), Value::UInt(property)) => map
-									.get(&KeyRef::Uint(property))
-									.cloned()
-									.ok_or_else(|| ExecutionError::NoSuchKey(property.to_string().into())),
-								(Value::Map(_), index) => {
-									Err(ExecutionError::UnsupportedMapIndex(index.as_static()))
-								},
-								(Value::List(_), index) => {
-									Err(ExecutionError::UnsupportedListIndex(index.as_static()))
-								},
-								(value, index) => Err(ExecutionError::UnsupportedIndex(
-									value.as_static(),
-									index.as_static(),
-								))?,
-							};
-
-							return Self::maybe_optional(is_optional, result);
-						},
-						operators::OPT_SELECT => {
-							let operand = resolve(&call.args[0])?;
-							let field_literal = resolve_materialized(&call.args[1])?;
-							let field = match field_literal {
-								Value::String(s) => s,
-								_ => {
-									return Err(ExecutionError::function_error(
-										"_?._",
-										"field must be string",
-									));
-								},
-							};
-							if let Ok(opt_val) = <&OptionalValue>::try_from(&operand) {
-								return match opt_val.value() {
-									Some(inner) => {
-										Ok(OpaqueValue::new(OptionalValue::of(inner.clone().member(&field)?)).into())
-									},
-									None => Ok(operand),
-								};
-							}
-							return Ok(
-								OpaqueValue::new(OptionalValue::of(operand.member(&field)?.as_static())).into(),
-							);
-						},
-						_ => (),
+			let cond = resolve(&call.args[0])?;
+			return if cond.to_bool()? {
+				resolve(&call.args[1])
+			} else {
+				resolve(&call.args[2])
+			};
+		}
+		if call.args.len() == 2 {
+			match call.func_name.as_str() {
+				op @ (operators::ADD
+				| operators::SUBSTRACT
+				| operators::DIVIDE
+				| operators::MULTIPLY
+				| operators::MODULO) => {
+					// Parser builds `a op b op c op ...` as a left-recursive tree; walk the
+					// left spine iteratively so deep chains don't recurse (and overflow).
+					let mut rhs_rev = vec![&call.args[1]];
+					let mut leftmost = &call.args[0];
+					while let Expr::Call(inner) = &leftmost.expr
+						&& inner.args.len() == 2
+						&& inner.func_name == op
+					{
+						rhs_rev.push(&inner.args[1]);
+						leftmost = &inner.args[0];
 					}
-				}
-				if call.args.len() == 1 {
-					match call.func_name.as_str() {
-						operators::LOGICAL_NOT => {
-							let expr = resolve(&call.args[0])?;
-							return Ok(Value::Bool(!expr.to_bool()?));
-						},
-						operators::NEGATE => {
-							return match resolve_materialized(&call.args[0])? {
-								Value::Int(i) => Ok(Value::Int(-i)),
-								Value::Float(f) => Ok(Value::Float(-f)),
-								value => Err(ExecutionError::UnsupportedUnaryOperator(
-									"minus",
-									value.as_static(),
-								)),
-							};
-						},
-						operators::NOT_STRICTLY_FALSE => {
-							return match resolve(&call.args[0])? {
-								Value::Bool(b) => Ok(Value::Bool(b)),
-								_ => Ok(Value::Bool(true)),
-							};
-						},
-						_ => (),
-					}
-				}
-
-				match &call.target {
-					None => {
-						let Some(func) = ctx.get_function(call.func_name.as_str()) else {
-							return Err(ExecutionError::UndeclaredReference(
-								call.func_name.clone().into(),
-							));
+					let mut acc = resolve(leftmost)?;
+					for rhs in rhs_rev.into_iter().rev() {
+						let r = resolve(rhs)?;
+						acc = match op {
+							operators::ADD => (acc + r)?,
+							operators::SUBSTRACT => (acc - r)?,
+							operators::DIVIDE => (acc / r)?,
+							operators::MULTIPLY => (acc * r)?,
+							operators::MODULO => (acc % r)?,
+							_ => unreachable!(),
 						};
-						let mut ctx = FunctionContext::new(&call.func_name, None, ctx, &call.args, resolver);
-						(func)(&mut ctx)
-					},
-					Some(target) => {
-						let qualified_func = if let Expr::Ident(prefix) = &target.expr {
-							ctx.get_qualified_function(prefix, call.func_name.as_str())
+					}
+					return Ok(acc);
+				},
+				operators::EQUALS => {
+					let left = resolve_materialized(&call.args[0])?;
+					let right = resolve_materialized(&call.args[1])?;
+					return Value::Bool(left.eq(&right)).into();
+				},
+				operators::NOT_EQUALS => {
+					let left = resolve_materialized(&call.args[0])?;
+					let right = resolve_materialized(&call.args[1])?;
+					return Value::Bool(left.ne(&right)).into();
+				},
+				operators::LESS => {
+					let left = resolve_materialized(&call.args[0])?;
+					let right = resolve_materialized(&call.args[1])?;
+					return Value::Bool(
+						left
+							.partial_cmp(&right)
+							.ok_or(ExecutionError::ValuesNotComparable(
+								left.as_static(),
+								right.as_static(),
+							))? == Ordering::Less,
+					)
+					.into();
+				},
+				operators::LESS_EQUALS => {
+					let left = resolve_materialized(&call.args[0])?;
+					let right = resolve_materialized(&call.args[1])?;
+					return Value::Bool(
+						left
+							.partial_cmp(&right)
+							.ok_or(ExecutionError::ValuesNotComparable(
+								left.as_static(),
+								right.as_static(),
+							))? != Ordering::Greater,
+					)
+					.into();
+				},
+				operators::GREATER => {
+					let left = resolve_materialized(&call.args[0])?;
+					let right = resolve_materialized(&call.args[1])?;
+					return Value::Bool(
+						left
+							.partial_cmp(&right)
+							.ok_or(ExecutionError::ValuesNotComparable(
+								left.as_static(),
+								right.as_static(),
+							))? == Ordering::Greater,
+					)
+					.into();
+				},
+				operators::GREATER_EQUALS => {
+					let left = resolve_materialized(&call.args[0])?;
+					let right = resolve_materialized(&call.args[1])?;
+					return Value::Bool(
+						left
+							.partial_cmp(&right)
+							.ok_or(ExecutionError::ValuesNotComparable(
+								left.as_static(),
+								right.as_static(),
+							))? != Ordering::Less,
+					)
+					.into();
+				},
+				operators::IN => {
+					let left = resolve_materialized(&call.args[0])?;
+					let right = resolve(&call.args[1])?;
+					if let Value::Dynamic(d) = &right
+						&& let Value::String(k) = &left
+						&& d.field(k.as_ref()).is_some()
+					{
+						// Optimistically attempt to lookup without materializing.
+						// This will fail for lists, string vs string, etc and fallback to slow path.
+						return Value::Bool(true).into();
+					}
+					match (left, right.always_materialize_owned()) {
+						(Value::String(l), Value::String(r)) => {
+							return Value::Bool(r.as_ref().contains(l.as_ref())).into();
+						},
+						(any, Value::List(v)) => {
+							return Value::Bool(v.as_ref().contains(&any)).into();
+						},
+						(any, Value::Map(m)) => match KeyRef::try_from(&any) {
+							Ok(key) => return Value::Bool(m.contains_key(&key)).into(),
+							Err(_) => return Value::Bool(false).into(),
+						},
+						(left, right) => Err(ExecutionError::ValuesNotComparable(
+							left.as_static(),
+							right.as_static(),
+						))?,
+					}
+				},
+				operators::LOGICAL_OR => {
+					let left = try_bool(resolve(&call.args[0]));
+					return if Ok(true) == left {
+						Ok(true.into())
+					} else {
+						let right = if let Value::Bool(b) = resolve_materialized(&call.args[1])? {
+							Some(b)
 						} else {
 							None
 						};
-						if let Some(func) = qualified_func {
-							let mut fctx = FunctionContext::new(&call.func_name, None, ctx, &call.args, resolver);
-							return (func)(&mut fctx);
+						match (&left, right) {
+							(Ok(false), Some(right)) => Ok(right.into()),
+							(Err(_), Some(true)) => Ok(true.into()),
+							(_, _) => Err(left.err().unwrap_or(ExecutionError::NoSuchOverload)),
 						}
-						let tgt = Some(resolve(target)?);
-
-						// Try call_function first for opaque and dynamic objects.
-						if let Some(Value::Object(ob)) = &tgt {
-							let ob = ob.clone();
-							let mut fctx = FunctionContext::new(&call.func_name, None, ctx, &call.args, resolver);
-							if let Some(result) = ob.call_function(call.func_name.as_str(), &mut fctx) {
-								return result;
-							}
-						}
-						if let Some(Value::Dynamic(dynamic)) = &tgt {
-							let mut fctx = FunctionContext::new(&call.func_name, None, ctx, &call.args, resolver);
-							if let Some(result) = dynamic.call_function(call.func_name.as_str(), &mut fctx) {
-								return result;
-							}
-						}
-
-						// Fall back to qualified_func or ctx.get_function
-						let Some(func) = qualified_func.or_else(|| ctx.get_function(call.func_name.as_str()))
-						else {
-							return Err(ExecutionError::UndeclaredReference(
-								call.func_name.clone().into(),
-							));
+					};
+				},
+				operators::LOGICAL_AND => {
+					let left = try_bool(resolve(&call.args[0]));
+					return if Ok(false) == left {
+						Ok(false.into())
+					} else {
+						let right = if let Value::Bool(b) = resolve_materialized(&call.args[1])? {
+							Some(b)
+						} else {
+							None
 						};
-						let mut fctx =
-							FunctionContext::new(&call.func_name, tgt.clone(), ctx, &call.args, resolver);
-						(func)(&mut fctx)
-					},
+						match (&left, right) {
+							(Ok(true), Some(right)) => Ok(right.into()),
+							(Err(_), Some(false)) => Ok(false.into()),
+							(_, _) => Err(left.err().unwrap_or(ExecutionError::NoSuchOverload)),
+						}
+					};
+				},
+				operators::INDEX | operators::OPT_INDEX => {
+					let mut value: Value<'a> = resolve(&call.args[0])?;
+					let idx = resolve_materialized(&call.args[1])?;
+					let mut is_optional = call.func_name == operators::OPT_INDEX;
+
+					if let Ok(opt_val) = <&OptionalValue>::try_from(&value) {
+						is_optional = true;
+						value = match opt_val.value() {
+							Some(inner) => inner.clone(),
+							None => {
+								return Ok(OpaqueValue::new(OptionalValue::none()).into());
+							},
+						};
+					}
+					if let Value::Dynamic(d) = &value
+						&& let Value::String(k) = idx
+					{
+						// TODO: in the future, if required, we could allow lookup of int for a list
+						let result = d
+							.field(k.as_ref())
+							.ok_or_else(|| ExecutionError::NoSuchKey(Arc::from(k.as_ref())));
+						return Self::maybe_optional(is_optional, result);
+					};
+
+					// Since we already established we cannot use dynamic, materialize
+					let result = match (value.always_materialize_owned(), idx) {
+						(Value::List(items), Value::Int(idx)) => {
+							if idx >= 0 && (idx as usize) < items.len() {
+								let x: Value<'a> = items.as_ref()[idx as usize].clone();
+								x.into()
+							} else {
+								Err(ExecutionError::IndexOutOfBounds(idx.into()))
+							}
+						},
+						(Value::List(items), Value::UInt(idx)) => {
+							if (idx as usize) < items.len() {
+								items.as_ref()[idx as usize].clone().into()
+							} else {
+								Err(ExecutionError::IndexOutOfBounds(idx.into()))
+							}
+						},
+						(Value::String(_), Value::Int(idx)) => {
+							Err(ExecutionError::NoSuchKey(idx.to_string().into()))
+						},
+						(Value::Map(map), Value::String(property)) => map
+							.get(&KeyRef::String(StringValue::Borrowed(&property)))
+							.cloned()
+							.ok_or_else(|| ExecutionError::NoSuchKey(property.as_owned())),
+						(Value::Map(map), Value::Bool(property)) => map
+							.get(&KeyRef::Bool(property))
+							.cloned()
+							.ok_or_else(|| ExecutionError::NoSuchKey(property.to_string().into())),
+						(Value::Map(map), Value::Int(property)) => map
+							.get(&KeyRef::Int(property))
+							.cloned()
+							.ok_or_else(|| ExecutionError::NoSuchKey(property.to_string().into())),
+						(Value::Map(map), Value::UInt(property)) => map
+							.get(&KeyRef::Uint(property))
+							.cloned()
+							.ok_or_else(|| ExecutionError::NoSuchKey(property.to_string().into())),
+						(Value::Map(_), index) => Err(ExecutionError::UnsupportedMapIndex(index.as_static())),
+						(Value::List(_), index) => Err(ExecutionError::UnsupportedListIndex(index.as_static())),
+						(value, index) => Err(ExecutionError::UnsupportedIndex(
+							value.as_static(),
+							index.as_static(),
+						))?,
+					};
+
+					return Self::maybe_optional(is_optional, result);
+				},
+				operators::OPT_SELECT => {
+					let operand = resolve(&call.args[0])?;
+					let field_literal = resolve_materialized(&call.args[1])?;
+					let field = match field_literal {
+						Value::String(s) => s,
+						_ => {
+							return Err(ExecutionError::function_error(
+								"_?._",
+								"field must be string",
+							));
+						},
+					};
+					if let Ok(opt_val) = <&OptionalValue>::try_from(&operand) {
+						return match opt_val.value() {
+							Some(inner) => {
+								Ok(OpaqueValue::new(OptionalValue::of(inner.clone().member(&field)?)).into())
+							},
+							None => Ok(operand),
+						};
+					}
+					return Ok(
+						OpaqueValue::new(OptionalValue::of(operand.member(&field)?.as_static())).into(),
+					);
+				},
+				_ => (),
+			}
+		}
+		if call.args.len() == 1 {
+			match call.func_name.as_str() {
+				operators::LOGICAL_NOT => {
+					let expr = resolve(&call.args[0])?;
+					return Ok(Value::Bool(!expr.to_bool()?));
+				},
+				operators::NEGATE => {
+					return match resolve_materialized(&call.args[0])? {
+						Value::Int(i) => Ok(Value::Int(-i)),
+						Value::Float(f) => Ok(Value::Float(-f)),
+						value => Err(ExecutionError::UnsupportedUnaryOperator(
+							"minus",
+							value.as_static(),
+						)),
+					};
+				},
+				operators::NOT_STRICTLY_FALSE => {
+					return match resolve(&call.args[0])? {
+						Value::Bool(b) => Ok(Value::Bool(b)),
+						_ => Ok(Value::Bool(true)),
+					};
+				},
+				_ => (),
+			}
+		}
+
+		match &call.target {
+			None => {
+				let Some(func) = ctx.get_function(call.func_name.as_str()) else {
+					return Err(ExecutionError::UndeclaredReference(
+						call.func_name.clone().into(),
+					));
+				};
+				let mut ctx = FunctionContext::new(&call.func_name, None, ctx, &call.args, resolver);
+				(func)(&mut ctx)
+			},
+			Some(target) => {
+				let qualified_func = if let Expr::Ident(prefix) = &target.expr {
+					ctx.get_qualified_function(prefix, call.func_name.as_str())
+				} else {
+					None
+				};
+				if let Some(func) = qualified_func {
+					let mut fctx = FunctionContext::new(&call.func_name, None, ctx, &call.args, resolver);
+					return (func)(&mut fctx);
 				}
+				let tgt = Some(resolve(target)?);
+
+				// Try call_function first for opaque and dynamic objects.
+				if let Some(Value::Object(ob)) = &tgt {
+					let ob = ob.clone();
+					let mut fctx = FunctionContext::new(&call.func_name, None, ctx, &call.args, resolver);
+					if let Some(result) = ob.call_function(call.func_name.as_str(), &mut fctx) {
+						return result;
+					}
+				}
+				if let Some(Value::Dynamic(dynamic)) = &tgt {
+					let mut fctx = FunctionContext::new(&call.func_name, None, ctx, &call.args, resolver);
+					if let Some(result) = dynamic.call_function(call.func_name.as_str(), &mut fctx) {
+						return result;
+					}
+				}
+
+				// Fall back to qualified_func or ctx.get_function
+				let Some(func) = qualified_func.or_else(|| ctx.get_function(call.func_name.as_str()))
+				else {
+					return Err(ExecutionError::UndeclaredReference(
+						call.func_name.clone().into(),
+					));
+				};
+				let mut fctx =
+					FunctionContext::new(&call.func_name, tgt.clone(), ctx, &call.args, resolver);
+				(func)(&mut fctx)
+			},
+		}
 	}
 
 	#[inline(never)]

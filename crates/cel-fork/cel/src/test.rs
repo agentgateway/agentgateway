@@ -491,14 +491,14 @@ fn deep_arithmetic_chain() {
 	let resolver = context::DefaultVariableResolver;
 	let n = 250;
 
-	let add = std::iter::repeat("1").take(n).collect::<Vec<_>>().join(" + ");
+	let add = std::iter::repeat_n("1", n).collect::<Vec<_>>().join(" + ");
 	let p = Program::compile(&add).unwrap();
 	let res = Value::resolve(&p.expression, &ctx, &resolver).unwrap();
 	assert_eq!(res.json().unwrap(), json!(n as i64));
 
 	// Left-associative `0 - 1 - 1 - ... - 1` (n ones) == -n.
 	let sub = std::iter::once("0".to_string())
-		.chain(std::iter::repeat("1".to_string()).take(n))
+		.chain(std::iter::repeat_n("1".to_string(), n))
 		.collect::<Vec<_>>()
 		.join(" - ");
 	let p = Program::compile(&sub).unwrap();
