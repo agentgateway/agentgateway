@@ -263,7 +263,7 @@ mod requests {
 						conversion::bedrock::from_responses::translate(&req, &bedrock_provider, None, None)
 					}),
 					GEMINI => test_request(GEMINI, test, |req| {
-						conversion::gemini::from_responses::translate(&req)
+						conversion::openai_compat::from_responses::translate(&req)
 					}),
 					other => panic!("unsupported provider in RESPONSES_REQUESTS: {other}"),
 				}

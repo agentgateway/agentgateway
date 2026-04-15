@@ -868,7 +868,7 @@ impl AIProvider {
 				},
 				AIProvider::Gemini(_) => {
 					if original_format == InputFormat::Responses {
-						req.to_gemini()?
+						req.to_openai_chat_completions()?
 					} else {
 						req.to_openai()?
 					}
@@ -1122,7 +1122,7 @@ impl AIProvider {
 				}
 			},
 			(AIProvider::Gemini(_), InputFormat::Responses) => {
-				conversion::gemini::from_responses::translate_response(bytes, &req.request_model)
+				conversion::openai_compat::to_responses::translate_response(bytes, &req.request_model)
 			},
 			(_, InputFormat::Responses) => Err(AIError::UnsupportedConversion(strng::literal!(
 				"this provider does not support Responses"
@@ -1216,7 +1216,7 @@ impl AIProvider {
 				conversion::responses::passthrough_stream(b, buffer, AmendOnDrop::new(log, rate_limit))
 			}),
 			(AIProvider::Gemini(_), InputFormat::Responses) => resp.map(|b| {
-				conversion::gemini::from_responses::translate_stream(
+				conversion::openai_compat::to_responses::translate_stream(
 					b,
 					buffer,
 					AmendOnDrop::new(log, rate_limit),
