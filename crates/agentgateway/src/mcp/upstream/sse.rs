@@ -5,13 +5,13 @@ use futures_core::Stream;
 use futures_core::stream::BoxStream;
 use futures_util::{StreamExt, TryFutureExt};
 use headers::HeaderMapExt;
-use parking_lot::Mutex;
 use pin_project_lite::pin_project;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::EVENT_STREAM_MIME_TYPE;
 use sse_stream::{Sse, SseStream};
+use std::sync::Weak;
 
 use crate::client::ResolvedDestination;
 use crate::mcp::ClientError;
@@ -33,7 +33,7 @@ struct ClientCore {
 pub struct Client {
 	client: ClientCore,
 
-	active_stream: Arc<Mutex<Option<std::sync::Weak<super::stdio::Process>>>>,
+	active_stream: Arc<tokio::sync::Mutex<Option<std::sync::Weak<super::stdio::Process>>>>,
 }
 
 struct SseClient {
@@ -194,23 +194,15 @@ impl Client {
 	}
 
 	pub async fn stop(&self) -> Result<(), UpstreamError> {
-		let stream = self
-			.active_stream
-			.lock()
-			.take()
-			.and_then(|stream| stream.upgrade());
-		if let Some(s) = stream {
+		let mut stream = self.active_stream.lock().await;
+		if let Some(s) = stream.take().and_then(|stream| stream.upgrade()) {
 			s.stop().await?;
 		}
 		Ok(())
 	}
 	async fn get_stream(&self, ctx: &IncomingRequestContext) -> Result<Arc<Process>, UpstreamError> {
-		if let Some(stream) = self
-			.active_stream
-			.lock()
-			.as_ref()
-			.and_then(std::sync::Weak::upgrade)
-		{
+		let mut stream = self.active_stream.lock().await;
+		if let Some(stream) = stream.as_ref().and_then(Weak::upgrade) {
 			return Ok(stream);
 		}
 
@@ -224,10 +216,6 @@ impl Client {
 		};
 
 		let proc = Arc::new(Process::new(transport));
-		let mut stream = self.active_stream.lock();
-		if let Some(existing) = stream.as_ref().and_then(std::sync::Weak::upgrade) {
-			return Ok(existing);
-		}
 		*stream = Some(Arc::downgrade(&proc));
 		Ok(proc)
 	}
