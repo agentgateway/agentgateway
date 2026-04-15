@@ -1821,6 +1821,7 @@ fn persisted_stateless_session(
 
 #[test]
 fn test_openapi_targets_emit_stateless_session_state() {
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![fake_openapi_target(
@@ -1832,8 +1833,10 @@ fn test_openapi_targets_emit_stateless_session_state() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 
@@ -1869,6 +1872,7 @@ fn test_openapi_targets_emit_stateless_session_state() {
 
 #[test]
 fn test_sse_targets_emit_stateless_session_state() {
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![fake_sse_target(
@@ -1880,8 +1884,10 @@ fn test_sse_targets_emit_stateless_session_state() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 
@@ -1917,6 +1923,7 @@ fn test_sse_targets_emit_stateless_session_state() {
 
 #[tokio::test]
 async fn test_stdio_targets_remain_non_stateless() {
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![fake_stdio_target("stdio")],
@@ -1925,8 +1932,10 @@ async fn test_stdio_targets_remain_non_stateless() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 
@@ -2072,6 +2081,7 @@ fn test_merge_initialize_merges_upstream_instructions_when_multiplexing() {
 		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
 	};
 
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![
@@ -2083,8 +2093,10 @@ fn test_merge_initialize_merges_upstream_instructions_when_multiplexing() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 
@@ -2146,6 +2158,7 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
 	};
 
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![fake_streamable_target(
@@ -2157,8 +2170,10 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 
@@ -2197,6 +2212,7 @@ fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
 	};
 
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![fake_streamable_target(
@@ -2208,8 +2224,10 @@ fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 
