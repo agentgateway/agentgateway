@@ -1740,6 +1740,7 @@ fn fake_sse_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 				"/unused-{name}"
 			)),
 			path: "/sse".to_string(),
+			response_compression: None,
 		}),
 		backend_policies: Default::default(),
 		backend: Some(crate::types::agent::SimpleBackend::Opaque(
@@ -1768,6 +1769,7 @@ fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 				"/unused-{name}"
 			)),
 			schema: Arc::new(schema),
+			response_compression: None,
 		}),
 		backend_policies: Default::default(),
 		backend: Some(crate::types::agent::SimpleBackend::Opaque(

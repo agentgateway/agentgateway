@@ -977,6 +977,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 
 	let client = PolicyClient {
 		inputs: setup_proxy_test("{}").unwrap().pi,
+		span_writer: Default::default(),
 	};
 
 	let result = bedrock
