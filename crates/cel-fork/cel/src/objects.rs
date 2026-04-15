@@ -11,7 +11,7 @@ use std::ops;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use crate::common::ast::{EntryExpr, Expr, OptimizedExpr, operators};
+use crate::common::ast::{CallExpr, EntryExpr, Expr, OptimizedExpr, operators};
 use crate::common::value::CelVal;
 use crate::context::{Context, SingleVarResolver, VariableResolver};
 use crate::functions::FunctionContext;
@@ -556,7 +556,6 @@ impl<'a> Value<'a> {
 		resolver: &'rf dyn VariableResolver<'vars>,
 	) -> ResolveResult<'a> {
 		let resolve = |e| Value::resolve(e, ctx, resolver);
-		let resolve_materialized = |e| Value::resolve_materialized(e, ctx, resolver);
 		match &expr.expr {
 			Expr::Optimized {
 				optimized,
@@ -575,8 +574,54 @@ impl<'a> Value<'a> {
 			},
 			Expr::Literal(val) => Ok(val.clone().into()),
 			Expr::Inline(val) => Ok(val.clone()),
-			Expr::Call(call) => {
-				if call.args.len() == 3 && call.func_name == operators::CONDITIONAL {
+			Expr::Call(call) => Self::resolve_call(call, ctx, resolver),
+			Expr::Ident(name) => {
+				if let Some(v) = resolver.resolve(name) {
+					return Ok(v);
+				}
+				Err(ExecutionError::UndeclaredReference(name.to_string().into()))
+			},
+			Expr::Select(select) => {
+				let left_op = select.operand.deref();
+				if !select.test {
+					if let Expr::Ident(name) = &left_op.expr {
+						if let Some(v) = resolver.resolve_member(name, &select.field) {
+							return Ok(v);
+						}
+					}
+				}
+				let left: Value<'a> = resolve(left_op)?;
+				if select.test {
+					match left.always_materialize().as_ref() {
+						Value::Map(map) => {
+							let b = map.contains_key(&KeyRef::String(select.field.as_str().into()));
+							Ok(Value::Bool(b))
+						},
+						_ => Ok(Value::Bool(false)),
+					}
+				} else {
+					left.member(&select.field)
+				}
+			},
+			Expr::List(list_expr) => Self::resolve_list(list_expr, ctx, resolver),
+			Expr::Map(map_expr) => Self::resolve_map(map_expr, ctx, resolver),
+			Expr::Comprehension(comprehension) => {
+				Self::resolve_comprehension(comprehension, ctx, resolver)
+			},
+			Expr::Struct(_) => Err(ExecutionError::UnsupportedStruct),
+			Expr::Unspecified => panic!("Can't evaluate Unspecified Expr"),
+		}
+	}
+
+	#[inline(never)]
+	fn resolve_call<'vars: 'a, 'rf>(
+		call: &'vars CallExpr,
+		ctx: &'vars Context,
+		resolver: &'rf dyn VariableResolver<'vars>,
+	) -> ResolveResult<'a> {
+		let resolve = |e| Value::resolve(e, ctx, resolver);
+		let resolve_materialized = |e| Value::resolve_materialized(e, ctx, resolver);
+		if call.args.len() == 3 && call.func_name == operators::CONDITIONAL {
 					let cond = resolve(&call.args[0])?;
 					return if cond.to_bool()? {
 						resolve(&call.args[1])
@@ -916,121 +961,107 @@ impl<'a> Value<'a> {
 						(func)(&mut fctx)
 					},
 				}
-			},
-			Expr::Ident(name) => {
-				if let Some(v) = resolver.resolve(name) {
-					return Ok(v);
-				}
-				Err(ExecutionError::UndeclaredReference(name.to_string().into()))
-			},
-			Expr::Select(select) => {
-				let left_op = select.operand.deref();
-				if !select.test {
-					if let Expr::Ident(name) = &left_op.expr {
-						if let Some(v) = resolver.resolve_member(name, &select.field) {
-							return Ok(v);
-						}
-					}
-				}
-				let left: Value<'a> = resolve(left_op)?;
-				if select.test {
-					match left.always_materialize().as_ref() {
-						Value::Map(map) => {
-							let b = map.contains_key(&KeyRef::String(select.field.as_str().into()));
-							Ok(Value::Bool(b))
-						},
-						_ => Ok(Value::Bool(false)),
-					}
-				} else {
-					left.member(&select.field)
-				}
-			},
-			Expr::List(list_expr) => {
-				let list = list_expr
-					.elements
-					.iter()
-					.enumerate()
-					.map(|(idx, element)| {
-						resolve(element).map(|value| {
-							if list_expr.optional_indices.contains(&idx) {
-								if let Ok(opt_val) = <&OptionalValue>::try_from(&value) {
-									opt_val.value().cloned().map(|v| v.as_static())
-								} else {
-									Some(value)
-								}
-							} else {
-								Some(value)
-							}
-						})
-					})
-					.filter_map(|r| r.transpose())
-					.collect::<Result<Arc<_>, _>>()?;
-				Value::List(ListValue::PartiallyOwned(list)).into()
-			},
-			Expr::Map(map_expr) => {
-				let mut map = hashbrown::HashMap::with_capacity(map_expr.entries.len());
-				for entry in map_expr.entries.iter() {
-					let (k, v, is_optional) = match &entry.expr {
-						EntryExpr::StructField(_) => panic!("WAT?"),
-						EntryExpr::MapEntry(e) => (&e.key, &e.value, e.optional),
-					};
-					let key = resolve(k)?
-						.as_static()
-						.try_into()
-						.map_err(ExecutionError::UnsupportedKeyType)?;
-					let value = resolve(v)?.as_static();
+	}
 
-					if is_optional {
+	#[inline(never)]
+	fn resolve_list<'vars: 'a, 'rf>(
+		list_expr: &'vars crate::common::ast::ListExpr,
+		ctx: &'vars Context,
+		resolver: &'rf dyn VariableResolver<'vars>,
+	) -> ResolveResult<'a> {
+		let list = list_expr
+			.elements
+			.iter()
+			.enumerate()
+			.map(|(idx, element)| {
+				Value::resolve(element, ctx, resolver).map(|value| {
+					if list_expr.optional_indices.contains(&idx) {
 						if let Ok(opt_val) = <&OptionalValue>::try_from(&value) {
-							if let Some(inner) = opt_val.value() {
-								map.insert(key, inner.clone());
-							}
+							opt_val.value().cloned().map(|v| v.as_static())
 						} else {
-							map.insert(key, value);
+							Some(value)
 						}
 					} else {
-						map.insert(key, value);
+						Some(value)
 					}
+				})
+			})
+			.filter_map(|r| r.transpose())
+			.collect::<Result<Arc<_>, _>>()?;
+		Value::List(ListValue::PartiallyOwned(list)).into()
+	}
+
+	#[inline(never)]
+	fn resolve_map<'vars: 'a, 'rf>(
+		map_expr: &'vars crate::common::ast::MapExpr,
+		ctx: &'vars Context,
+		resolver: &'rf dyn VariableResolver<'vars>,
+	) -> ResolveResult<'a> {
+		let mut map = hashbrown::HashMap::with_capacity(map_expr.entries.len());
+		for entry in map_expr.entries.iter() {
+			let (k, v, is_optional) = match &entry.expr {
+				EntryExpr::StructField(_) => panic!("WAT?"),
+				EntryExpr::MapEntry(e) => (&e.key, &e.value, e.optional),
+			};
+			let key = Value::resolve(k, ctx, resolver)?
+				.as_static()
+				.try_into()
+				.map_err(ExecutionError::UnsupportedKeyType)?;
+			let value = Value::resolve(v, ctx, resolver)?.as_static();
+
+			if is_optional {
+				if let Ok(opt_val) = <&OptionalValue>::try_from(&value) {
+					if let Some(inner) = opt_val.value() {
+						map.insert(key, inner.clone());
+					}
+				} else {
+					map.insert(key, value);
 				}
-				Ok(Value::Map(MapValue::Owned(Arc::from(map))))
-			},
-			Expr::Comprehension(comprehension) => {
-				let accu_init = resolve(&comprehension.accu_init)?;
-				let iter = resolve_materialized(&comprehension.iter_range)?;
-				let mut accu = accu_init;
-				match iter {
-					Value::List(items) => {
-						for item in items.as_ref() {
-							let comp_resolver =
-								SingleVarResolver::new(resolver, &comprehension.accu_var, accu.clone());
-							if !Value::resolve(&comprehension.loop_cond, ctx, &comp_resolver)?.to_bool()? {
-								break;
-							}
-							let with_iter =
-								SingleVarResolver::new(&comp_resolver, &comprehension.iter_var, item.clone());
-							accu = Value::resolve(&comprehension.loop_step, ctx, &with_iter)?;
-						}
-					},
-					Value::Map(map) => {
-						for key in map.iter_keys() {
-							let comp_resolver =
-								SingleVarResolver::new(resolver, &comprehension.accu_var, accu.clone());
-							if !Value::resolve(&comprehension.loop_cond, ctx, &comp_resolver)?.to_bool()? {
-								break;
-							}
-							let kv = Value::from(key);
-							let with_iter = SingleVarResolver::new(&comp_resolver, &comprehension.iter_var, kv);
-							accu = Value::resolve(&comprehension.loop_step, ctx, &with_iter)?;
-						}
-					},
-					_ => return Err(crate::ExecutionError::NoSuchOverload),
-				}
-				let comp_resolver = SingleVarResolver::new(resolver, &comprehension.accu_var, accu);
-				Value::resolve(&comprehension.result, ctx, &comp_resolver)
-			},
-			Expr::Struct(_) => Err(ExecutionError::UnsupportedStruct),
-			Expr::Unspecified => panic!("Can't evaluate Unspecified Expr"),
+			} else {
+				map.insert(key, value);
+			}
 		}
+		Ok(Value::Map(MapValue::Owned(Arc::from(map))))
+	}
+
+	#[inline(never)]
+	fn resolve_comprehension<'vars: 'a, 'rf>(
+		comprehension: &'vars crate::common::ast::ComprehensionExpr,
+		ctx: &'vars Context,
+		resolver: &'rf dyn VariableResolver<'vars>,
+	) -> ResolveResult<'a> {
+		let accu_init = Value::resolve(&comprehension.accu_init, ctx, resolver)?;
+		let iter = Value::resolve_materialized(&comprehension.iter_range, ctx, resolver)?;
+		let mut accu = accu_init;
+		match iter {
+			Value::List(items) => {
+				for item in items.as_ref() {
+					let comp_resolver =
+						SingleVarResolver::new(resolver, &comprehension.accu_var, accu.clone());
+					if !Value::resolve(&comprehension.loop_cond, ctx, &comp_resolver)?.to_bool()? {
+						break;
+					}
+					let with_iter =
+						SingleVarResolver::new(&comp_resolver, &comprehension.iter_var, item.clone());
+					accu = Value::resolve(&comprehension.loop_step, ctx, &with_iter)?;
+				}
+			},
+			Value::Map(map) => {
+				for key in map.iter_keys() {
+					let comp_resolver =
+						SingleVarResolver::new(resolver, &comprehension.accu_var, accu.clone());
+					if !Value::resolve(&comprehension.loop_cond, ctx, &comp_resolver)?.to_bool()? {
+						break;
+					}
+					let kv = Value::from(key);
+					let with_iter = SingleVarResolver::new(&comp_resolver, &comprehension.iter_var, kv);
+					accu = Value::resolve(&comprehension.loop_step, ctx, &with_iter)?;
+				}
+			},
+			_ => return Err(crate::ExecutionError::NoSuchOverload),
+		}
+		let comp_resolver = SingleVarResolver::new(resolver, &comprehension.accu_var, accu);
+		Value::resolve(&comprehension.result, ctx, &comp_resolver)
 	}
 
 	fn maybe_optional(is_optional: bool, result: Result<Value, ExecutionError>) -> ResolveResult {
