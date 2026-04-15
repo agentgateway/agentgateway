@@ -1763,6 +1763,15 @@
           "$ref": "#/$defs/McpAuthenticationMode",
           "default": "strict"
         },
+        "authorizationLocation": {
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        },
         "jwtValidationOptions": {
           "$ref": "#/$defs/JWTValidationOptions"
         }
@@ -1854,6 +1863,79 @@
           "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
           "type": "string",
           "const": "permissive"
+        }
+      ]
+    },
+    "AuthorizationLocation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "header": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "prefix": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "header"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "queryParameter": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "queryParameter"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cookie": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "cookie"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -2403,6 +2485,17 @@
           "properties": {
             "passthrough": {
               "type": "object",
+              "properties": {
+                "authorizationLocation": {
+                  "$ref": "#/$defs/AuthorizationLocation",
+                  "default": {
+                    "header": {
+                      "name": "authorization",
+                      "prefix": "Bearer "
+                    }
+                  }
+                }
+              },
               "additionalProperties": false
             }
           },
@@ -2415,7 +2508,25 @@
           "type": "object",
           "properties": {
             "key": {
-              "$ref": "#/$defs/FileOrInline"
+              "type": "object",
+              "properties": {
+                "value": {
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                "authorizationLocation": {
+                  "$ref": "#/$defs/AuthorizationLocation",
+                  "default": {
+                    "header": {
+                      "name": "authorization",
+                      "prefix": "Bearer "
+                    }
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "value"
+              ]
             }
           },
           "required": [
@@ -3354,6 +3465,15 @@
               "$ref": "#/$defs/Mode",
               "default": "optional"
             },
+            "location": {
+              "$ref": "#/$defs/AuthorizationLocation",
+              "default": {
+                "header": {
+                  "name": "authorization",
+                  "prefix": "Bearer "
+                }
+              }
+            },
             "providers": {
               "type": "array",
               "items": {
@@ -3372,6 +3492,15 @@
             "mode": {
               "$ref": "#/$defs/Mode",
               "default": "optional"
+            },
+            "location": {
+              "$ref": "#/$defs/AuthorizationLocation",
+              "default": {
+                "header": {
+                  "name": "authorization",
+                  "prefix": "Bearer "
+                }
+              }
             },
             "issuer": {
               "type": "string"
@@ -3560,6 +3689,15 @@
           "description": "Validation mode for basic authentication",
           "$ref": "#/$defs/Mode2",
           "default": "optional"
+        },
+        "authorizationLocation": {
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Basic "
+            }
+          }
         }
       },
       "additionalProperties": false,
@@ -3596,6 +3734,15 @@
           "description": "Validation mode for API keys",
           "$ref": "#/$defs/Mode3",
           "default": "optional"
+        },
+        "location": {
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
         }
       },
       "additionalProperties": false,

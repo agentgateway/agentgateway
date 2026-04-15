@@ -307,9 +307,10 @@ async fn stream_to_stream_single_tls() {
 		&mock,
 		true,
 		false,
-		vec![BackendPolicy::BackendAuth(BackendAuth::Key(
-			SecretString::new("my-key".into()),
-		))],
+		vec![BackendPolicy::BackendAuth(BackendAuth::Key {
+			value: SecretString::new("my-key".into()),
+			authorization_location: crate::http::auth::AuthorizationLocation::default(),
+		})],
 	)
 	.await;
 	let client = mcp_streamable_client(io).await;

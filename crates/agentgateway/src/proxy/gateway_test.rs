@@ -1535,7 +1535,13 @@ async fn tunnel_connect() {
 			&tunnel_addr,
 			json!({
 				"backendAuth": {
-					"key": "my-key"
+					"key": {
+						"value": "my-key",
+						"location": {
+								"header": "authorization",
+								"prefix": "Basic "
+						}
+					}
 				}
 			}),
 		)

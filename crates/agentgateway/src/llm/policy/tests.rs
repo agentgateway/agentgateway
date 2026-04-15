@@ -1110,9 +1110,10 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 		template_id: strng::new("test-template"),
 		project_id: strng::new("test-project"),
 		location: Some(strng::new("us-central1")),
-		policies: vec![BackendPolicy::BackendAuth(BackendAuth::Key(
-			SecretString::new("user-provided-api-key".into()),
-		))],
+		policies: vec![BackendPolicy::BackendAuth(BackendAuth::Key {
+			value: SecretString::new("user-provided-api-key".into()),
+			authorization_location: crate::http::auth::AuthorizationLocation::default(),
+		})],
 	};
 
 	let pols = model_armor.build_request_policies();
@@ -1121,7 +1122,13 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 	let resolved = store.inline_backend_policies(&pols);
 
 	assert!(
-		matches!(resolved.backend_auth, Some(BackendAuth::Key(_))),
+		matches!(
+			resolved.backend_auth,
+			Some(BackendAuth::Key {
+				value: _,
+				authorization_location: _
+			})
+		),
 		"Expected user-provided Key auth to take precedence over \
 		 the implicit GCP fallback, but got: {:?}",
 		resolved.backend_auth

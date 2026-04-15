@@ -163,6 +163,14 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.file`|string||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.url`|string||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.mode`|string||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -219,8 +227,25 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -298,8 +323,25 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -377,8 +419,25 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -567,8 +626,25 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -646,8 +722,25 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -821,8 +914,25 @@
 |`binds[].listeners[].routes[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -889,8 +999,25 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -944,6 +1071,14 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.failureMode`|string|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`binds[].listeners[].routes[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`binds[].listeners[].routes[].policies.jwtAuth.mode`|string||
+|`binds[].listeners[].routes[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.jwtAuth.location.header`|object||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.header.name`|string||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.cookie`|object||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.providers`|[]object||
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].issuer`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].audiences`|[]string||
@@ -953,6 +1088,14 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].routes[].policies.jwtAuth.mode`|string||
+|`binds[].listeners[].routes[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.jwtAuth.location.header`|object||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.header.name`|string||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.cookie`|object||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.issuer`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.audiences`|[]string||
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks`|object||
@@ -980,11 +1123,27 @@
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.file`|string||
 |`binds[].listeners[].routes[].policies.basicAuth.realm`|string|Realm name for the WWW-Authenticate header|
 |`binds[].listeners[].routes[].policies.basicAuth.mode`|string|Validation mode for basic authentication|
+|`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.apiKey`|object|Authenticate incoming requests using API Keys|
 |`binds[].listeners[].routes[].policies.apiKey.keys`|[]object|List of API keys|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].key`|string||
 |`binds[].listeners[].routes[].policies.apiKey.keys[].metadata`|any||
 |`binds[].listeners[].routes[].policies.apiKey.mode`|string|Validation mode for API keys|
+|`binds[].listeners[].routes[].policies.apiKey.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.apiKey.location.header`|object||
+|`binds[].listeners[].routes[].policies.apiKey.location.header.name`|string||
+|`binds[].listeners[].routes[].policies.apiKey.location.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.apiKey.location.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.apiKey.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.apiKey.location.cookie`|object||
+|`binds[].listeners[].routes[].policies.apiKey.location.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
 |`binds[].listeners[].routes[].policies.extAuthz.service`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.service.name`|object||
@@ -1022,8 +1181,25 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1122,8 +1298,25 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1258,8 +1451,25 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1366,8 +1576,25 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1489,8 +1716,25 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1568,8 +1812,25 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1647,8 +1908,25 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1837,8 +2115,25 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1916,8 +2211,25 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2129,8 +2441,25 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2252,8 +2581,25 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2331,8 +2677,25 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2410,8 +2773,25 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2600,8 +2980,25 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2679,8 +3076,25 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2869,8 +3283,25 @@
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2992,8 +3423,25 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3071,8 +3519,25 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3150,8 +3615,25 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3340,8 +3822,25 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3419,8 +3918,25 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3635,6 +4151,14 @@
 |`binds[].listeners[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`binds[].listeners[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`binds[].listeners[].policies.jwtAuth.mode`|string||
+|`binds[].listeners[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.jwtAuth.location.header`|object||
+|`binds[].listeners[].policies.jwtAuth.location.header.name`|string||
+|`binds[].listeners[].policies.jwtAuth.location.header.prefix`|string||
+|`binds[].listeners[].policies.jwtAuth.location.queryParameter`|object||
+|`binds[].listeners[].policies.jwtAuth.location.queryParameter.name`|string||
+|`binds[].listeners[].policies.jwtAuth.location.cookie`|object||
+|`binds[].listeners[].policies.jwtAuth.location.cookie.name`|string||
 |`binds[].listeners[].policies.jwtAuth.providers`|[]object||
 |`binds[].listeners[].policies.jwtAuth.providers[].issuer`|string||
 |`binds[].listeners[].policies.jwtAuth.providers[].audiences`|[]string||
@@ -3644,6 +4168,14 @@
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].policies.jwtAuth.mode`|string||
+|`binds[].listeners[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.jwtAuth.location.header`|object||
+|`binds[].listeners[].policies.jwtAuth.location.header.name`|string||
+|`binds[].listeners[].policies.jwtAuth.location.header.prefix`|string||
+|`binds[].listeners[].policies.jwtAuth.location.queryParameter`|object||
+|`binds[].listeners[].policies.jwtAuth.location.queryParameter.name`|string||
+|`binds[].listeners[].policies.jwtAuth.location.cookie`|object||
+|`binds[].listeners[].policies.jwtAuth.location.cookie.name`|string||
 |`binds[].listeners[].policies.jwtAuth.issuer`|string||
 |`binds[].listeners[].policies.jwtAuth.audiences`|[]string||
 |`binds[].listeners[].policies.jwtAuth.jwks`|object||
@@ -3688,8 +4220,25 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key`|object||
-|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3788,8 +4337,25 @@
 |`binds[].listeners[].policies.extProc.policies.backendTLS.subjectAltNames`|[]string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key`|object||
-|`binds[].listeners[].policies.extProc.policies.backendAuth.key.file`|string||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.key.authorizationLocation.header`|object||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.type`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3856,11 +4422,27 @@
 |`binds[].listeners[].policies.basicAuth.htpasswd.file`|string||
 |`binds[].listeners[].policies.basicAuth.realm`|string|Realm name for the WWW-Authenticate header|
 |`binds[].listeners[].policies.basicAuth.mode`|string|Validation mode for basic authentication|
+|`binds[].listeners[].policies.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.basicAuth.authorizationLocation.header`|object||
+|`binds[].listeners[].policies.basicAuth.authorizationLocation.header.name`|string||
+|`binds[].listeners[].policies.basicAuth.authorizationLocation.header.prefix`|string||
+|`binds[].listeners[].policies.basicAuth.authorizationLocation.queryParameter`|object||
+|`binds[].listeners[].policies.basicAuth.authorizationLocation.queryParameter.name`|string||
+|`binds[].listeners[].policies.basicAuth.authorizationLocation.cookie`|object||
+|`binds[].listeners[].policies.basicAuth.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].policies.apiKey`|object|Authenticate incoming requests using API Keys|
 |`binds[].listeners[].policies.apiKey.keys`|[]object|List of API keys|
 |`binds[].listeners[].policies.apiKey.keys[].key`|string||
 |`binds[].listeners[].policies.apiKey.keys[].metadata`|any||
 |`binds[].listeners[].policies.apiKey.mode`|string|Validation mode for API keys|
+|`binds[].listeners[].policies.apiKey.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.apiKey.location.header`|object||
+|`binds[].listeners[].policies.apiKey.location.header.name`|string||
+|`binds[].listeners[].policies.apiKey.location.header.prefix`|string||
+|`binds[].listeners[].policies.apiKey.location.queryParameter`|object||
+|`binds[].listeners[].policies.apiKey.location.queryParameter.name`|string||
+|`binds[].listeners[].policies.apiKey.location.cookie`|object||
+|`binds[].listeners[].policies.apiKey.location.cookie.name`|string||
 |`binds[].tunnelProtocol`|string||
 |`frontendPolicies`|object||
 |`frontendPolicies.http`|object|Settings for handling incoming HTTP requests.|
@@ -3927,8 +4509,25 @@
 |`frontendPolicies.accessLog.otlp.policies.backendTLS.subjectAltNames`|[]string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth`|object|Authenticate to the backend.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough`|object||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key`|object||
-|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.file`|string||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.value`|object||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.value.file`|string||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.authorizationLocation.header`|object||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.type`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4012,8 +4611,25 @@
 |`frontendPolicies.tracing.policies.backendTLS.subjectAltNames`|[]string||
 |`frontendPolicies.tracing.policies.backendAuth`|object|Authenticate to the backend.|
 |`frontendPolicies.tracing.policies.backendAuth.passthrough`|object||
+|`frontendPolicies.tracing.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`frontendPolicies.tracing.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`frontendPolicies.tracing.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`frontendPolicies.tracing.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`frontendPolicies.tracing.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`frontendPolicies.tracing.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`frontendPolicies.tracing.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`frontendPolicies.tracing.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`frontendPolicies.tracing.policies.backendAuth.key`|object||
-|`frontendPolicies.tracing.policies.backendAuth.key.file`|string||
+|`frontendPolicies.tracing.policies.backendAuth.key.value`|object||
+|`frontendPolicies.tracing.policies.backendAuth.key.value.file`|string||
+|`frontendPolicies.tracing.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`frontendPolicies.tracing.policies.backendAuth.key.authorizationLocation.header`|object||
+|`frontendPolicies.tracing.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`frontendPolicies.tracing.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`frontendPolicies.tracing.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`frontendPolicies.tracing.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`frontendPolicies.tracing.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`frontendPolicies.tracing.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`frontendPolicies.tracing.policies.backendAuth.gcp`|object||
 |`frontendPolicies.tracing.policies.backendAuth.gcp.type`|string||
 |`frontendPolicies.tracing.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4151,6 +4767,14 @@
 |`policies[].policy.mcpAuthentication.jwks.file`|string||
 |`policies[].policy.mcpAuthentication.jwks.url`|string||
 |`policies[].policy.mcpAuthentication.mode`|string||
+|`policies[].policy.mcpAuthentication.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.mcpAuthentication.authorizationLocation.header`|object||
+|`policies[].policy.mcpAuthentication.authorizationLocation.header.name`|string||
+|`policies[].policy.mcpAuthentication.authorizationLocation.header.prefix`|string||
+|`policies[].policy.mcpAuthentication.authorizationLocation.queryParameter`|object||
+|`policies[].policy.mcpAuthentication.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.mcpAuthentication.authorizationLocation.cookie`|object||
+|`policies[].policy.mcpAuthentication.authorizationLocation.cookie.name`|string||
 |`policies[].policy.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`policies[].policy.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -4207,8 +4831,25 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.file`|string||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header`|object||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4286,8 +4927,25 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4365,8 +5023,25 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4555,8 +5230,25 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4634,8 +5326,25 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4809,8 +5518,25 @@
 |`policies[].policy.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.backendAuth.passthrough`|object||
+|`policies[].policy.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.backendAuth.passthrough.authorizationLocation.header`|object||
+|`policies[].policy.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`policies[].policy.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`policies[].policy.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`policies[].policy.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`policies[].policy.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`policies[].policy.backendAuth.key`|object||
-|`policies[].policy.backendAuth.key.file`|string||
+|`policies[].policy.backendAuth.key.value`|object||
+|`policies[].policy.backendAuth.key.value.file`|string||
+|`policies[].policy.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.backendAuth.key.authorizationLocation.header`|object||
+|`policies[].policy.backendAuth.key.authorizationLocation.header.name`|string||
+|`policies[].policy.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`policies[].policy.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`policies[].policy.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.backendAuth.key.authorizationLocation.cookie`|object||
+|`policies[].policy.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`policies[].policy.backendAuth.gcp`|object||
 |`policies[].policy.backendAuth.gcp.type`|string||
 |`policies[].policy.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4877,8 +5603,25 @@
 |`policies[].policy.remoteRateLimit.policies.backendTLS.subjectAltNames`|[]string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough`|object||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key`|object||
-|`policies[].policy.remoteRateLimit.policies.backendAuth.key.file`|string||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.key.value`|object||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.key.value.file`|string||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.key.authorizationLocation.header`|object||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.type`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4932,6 +5675,14 @@
 |`policies[].policy.remoteRateLimit.failureMode`|string|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`policies[].policy.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`policies[].policy.jwtAuth.mode`|string||
+|`policies[].policy.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.jwtAuth.location.header`|object||
+|`policies[].policy.jwtAuth.location.header.name`|string||
+|`policies[].policy.jwtAuth.location.header.prefix`|string||
+|`policies[].policy.jwtAuth.location.queryParameter`|object||
+|`policies[].policy.jwtAuth.location.queryParameter.name`|string||
+|`policies[].policy.jwtAuth.location.cookie`|object||
+|`policies[].policy.jwtAuth.location.cookie.name`|string||
 |`policies[].policy.jwtAuth.providers`|[]object||
 |`policies[].policy.jwtAuth.providers[].issuer`|string||
 |`policies[].policy.jwtAuth.providers[].audiences`|[]string||
@@ -4941,6 +5692,14 @@
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`policies[].policy.jwtAuth.mode`|string||
+|`policies[].policy.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.jwtAuth.location.header`|object||
+|`policies[].policy.jwtAuth.location.header.name`|string||
+|`policies[].policy.jwtAuth.location.header.prefix`|string||
+|`policies[].policy.jwtAuth.location.queryParameter`|object||
+|`policies[].policy.jwtAuth.location.queryParameter.name`|string||
+|`policies[].policy.jwtAuth.location.cookie`|object||
+|`policies[].policy.jwtAuth.location.cookie.name`|string||
 |`policies[].policy.jwtAuth.issuer`|string||
 |`policies[].policy.jwtAuth.audiences`|[]string||
 |`policies[].policy.jwtAuth.jwks`|object||
@@ -4968,11 +5727,27 @@
 |`policies[].policy.basicAuth.htpasswd.file`|string||
 |`policies[].policy.basicAuth.realm`|string|Realm name for the WWW-Authenticate header|
 |`policies[].policy.basicAuth.mode`|string|Validation mode for basic authentication|
+|`policies[].policy.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.basicAuth.authorizationLocation.header`|object||
+|`policies[].policy.basicAuth.authorizationLocation.header.name`|string||
+|`policies[].policy.basicAuth.authorizationLocation.header.prefix`|string||
+|`policies[].policy.basicAuth.authorizationLocation.queryParameter`|object||
+|`policies[].policy.basicAuth.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.basicAuth.authorizationLocation.cookie`|object||
+|`policies[].policy.basicAuth.authorizationLocation.cookie.name`|string||
 |`policies[].policy.apiKey`|object|Authenticate incoming requests using API Keys|
 |`policies[].policy.apiKey.keys`|[]object|List of API keys|
 |`policies[].policy.apiKey.keys[].key`|string||
 |`policies[].policy.apiKey.keys[].metadata`|any||
 |`policies[].policy.apiKey.mode`|string|Validation mode for API keys|
+|`policies[].policy.apiKey.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.apiKey.location.header`|object||
+|`policies[].policy.apiKey.location.header.name`|string||
+|`policies[].policy.apiKey.location.header.prefix`|string||
+|`policies[].policy.apiKey.location.queryParameter`|object||
+|`policies[].policy.apiKey.location.queryParameter.name`|string||
+|`policies[].policy.apiKey.location.cookie`|object||
+|`policies[].policy.apiKey.location.cookie.name`|string||
 |`policies[].policy.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
 |`policies[].policy.extAuthz.service`|object||
 |`policies[].policy.extAuthz.service.name`|object||
@@ -5010,8 +5785,25 @@
 |`policies[].policy.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
 |`policies[].policy.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.extAuthz.policies.backendAuth.passthrough`|object||
+|`policies[].policy.extAuthz.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.extAuthz.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`policies[].policy.extAuthz.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`policies[].policy.extAuthz.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`policies[].policy.extAuthz.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`policies[].policy.extAuthz.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.extAuthz.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`policies[].policy.extAuthz.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.key`|object||
-|`policies[].policy.extAuthz.policies.backendAuth.key.file`|string||
+|`policies[].policy.extAuthz.policies.backendAuth.key.value`|object||
+|`policies[].policy.extAuthz.policies.backendAuth.key.value.file`|string||
+|`policies[].policy.extAuthz.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.extAuthz.policies.backendAuth.key.authorizationLocation.header`|object||
+|`policies[].policy.extAuthz.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`policies[].policy.extAuthz.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`policies[].policy.extAuthz.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`policies[].policy.extAuthz.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.extAuthz.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`policies[].policy.extAuthz.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.gcp`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.gcp.type`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5110,8 +5902,25 @@
 |`policies[].policy.extProc.policies.backendTLS.subjectAltNames`|[]string||
 |`policies[].policy.extProc.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.extProc.policies.backendAuth.passthrough`|object||
+|`policies[].policy.extProc.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.extProc.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`policies[].policy.extProc.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`policies[].policy.extProc.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`policies[].policy.extProc.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`policies[].policy.extProc.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.extProc.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`policies[].policy.extProc.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`policies[].policy.extProc.policies.backendAuth.key`|object||
-|`policies[].policy.extProc.policies.backendAuth.key.file`|string||
+|`policies[].policy.extProc.policies.backendAuth.key.value`|object||
+|`policies[].policy.extProc.policies.backendAuth.key.value.file`|string||
+|`policies[].policy.extProc.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.extProc.policies.backendAuth.key.authorizationLocation.header`|object||
+|`policies[].policy.extProc.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`policies[].policy.extProc.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`policies[].policy.extProc.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`policies[].policy.extProc.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`policies[].policy.extProc.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`policies[].policy.extProc.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`policies[].policy.extProc.policies.backendAuth.gcp`|object||
 |`policies[].policy.extProc.policies.backendAuth.gcp.type`|string||
 |`policies[].policy.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6851,8 +7660,25 @@
 |`backends[].policies.backendTLS.subjectAltNames`|[]string||
 |`backends[].policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].policies.backendAuth.passthrough`|object||
+|`backends[].policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`backends[].policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`backends[].policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`backends[].policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`backends[].policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`backends[].policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`backends[].policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`backends[].policies.backendAuth.key`|object||
-|`backends[].policies.backendAuth.key.file`|string||
+|`backends[].policies.backendAuth.key.value`|object||
+|`backends[].policies.backendAuth.key.value.file`|string||
+|`backends[].policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.backendAuth.key.authorizationLocation.header`|object||
+|`backends[].policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`backends[].policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`backends[].policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`backends[].policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`backends[].policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`backends[].policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`backends[].policies.backendAuth.gcp`|object||
 |`backends[].policies.backendAuth.gcp.type`|string||
 |`backends[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6974,8 +7800,25 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.file`|string||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header`|object||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7053,8 +7896,25 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7132,8 +7992,25 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7322,8 +8199,25 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7401,8 +8295,25 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11160,8 +12071,25 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough`|object||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key`|object||
-|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.file`|string||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.value`|object||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header`|object||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.type`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11239,8 +12167,25 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11318,8 +12263,25 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key`|object||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11508,8 +12470,25 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11587,8 +12566,25 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key`|object||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11748,6 +12744,14 @@
 |`llm.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`llm.policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`llm.policies.jwtAuth.mode`|string||
+|`llm.policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.jwtAuth.location.header`|object||
+|`llm.policies.jwtAuth.location.header.name`|string||
+|`llm.policies.jwtAuth.location.header.prefix`|string||
+|`llm.policies.jwtAuth.location.queryParameter`|object||
+|`llm.policies.jwtAuth.location.queryParameter.name`|string||
+|`llm.policies.jwtAuth.location.cookie`|object||
+|`llm.policies.jwtAuth.location.cookie.name`|string||
 |`llm.policies.jwtAuth.providers`|[]object||
 |`llm.policies.jwtAuth.providers[].issuer`|string||
 |`llm.policies.jwtAuth.providers[].audiences`|[]string||
@@ -11757,6 +12761,14 @@
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`llm.policies.jwtAuth.mode`|string||
+|`llm.policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.jwtAuth.location.header`|object||
+|`llm.policies.jwtAuth.location.header.name`|string||
+|`llm.policies.jwtAuth.location.header.prefix`|string||
+|`llm.policies.jwtAuth.location.queryParameter`|object||
+|`llm.policies.jwtAuth.location.queryParameter.name`|string||
+|`llm.policies.jwtAuth.location.cookie`|object||
+|`llm.policies.jwtAuth.location.cookie.name`|string||
 |`llm.policies.jwtAuth.issuer`|string||
 |`llm.policies.jwtAuth.audiences`|[]string||
 |`llm.policies.jwtAuth.jwks`|object||
@@ -11801,8 +12813,25 @@
 |`llm.policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
 |`llm.policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.policies.extAuthz.policies.backendAuth.passthrough`|object||
+|`llm.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`llm.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`llm.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`llm.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`llm.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`llm.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`llm.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`llm.policies.extAuthz.policies.backendAuth.key`|object||
-|`llm.policies.extAuthz.policies.backendAuth.key.file`|string||
+|`llm.policies.extAuthz.policies.backendAuth.key.value`|object||
+|`llm.policies.extAuthz.policies.backendAuth.key.value.file`|string||
+|`llm.policies.extAuthz.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.extAuthz.policies.backendAuth.key.authorizationLocation.header`|object||
+|`llm.policies.extAuthz.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`llm.policies.extAuthz.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`llm.policies.extAuthz.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`llm.policies.extAuthz.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`llm.policies.extAuthz.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`llm.policies.extAuthz.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`llm.policies.extAuthz.policies.backendAuth.gcp`|object||
 |`llm.policies.extAuthz.policies.backendAuth.gcp.type`|string||
 |`llm.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11901,8 +12930,25 @@
 |`llm.policies.extProc.policies.backendTLS.subjectAltNames`|[]string||
 |`llm.policies.extProc.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.policies.extProc.policies.backendAuth.passthrough`|object||
+|`llm.policies.extProc.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.extProc.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`llm.policies.extProc.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`llm.policies.extProc.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`llm.policies.extProc.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`llm.policies.extProc.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`llm.policies.extProc.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`llm.policies.extProc.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`llm.policies.extProc.policies.backendAuth.key`|object||
-|`llm.policies.extProc.policies.backendAuth.key.file`|string||
+|`llm.policies.extProc.policies.backendAuth.key.value`|object||
+|`llm.policies.extProc.policies.backendAuth.key.value.file`|string||
+|`llm.policies.extProc.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.extProc.policies.backendAuth.key.authorizationLocation.header`|object||
+|`llm.policies.extProc.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`llm.policies.extProc.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`llm.policies.extProc.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`llm.policies.extProc.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`llm.policies.extProc.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`llm.policies.extProc.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`llm.policies.extProc.policies.backendAuth.gcp`|object||
 |`llm.policies.extProc.policies.backendAuth.gcp.type`|string||
 |`llm.policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11969,11 +13015,27 @@
 |`llm.policies.basicAuth.htpasswd.file`|string||
 |`llm.policies.basicAuth.realm`|string|Realm name for the WWW-Authenticate header|
 |`llm.policies.basicAuth.mode`|string|Validation mode for basic authentication|
+|`llm.policies.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.basicAuth.authorizationLocation.header`|object||
+|`llm.policies.basicAuth.authorizationLocation.header.name`|string||
+|`llm.policies.basicAuth.authorizationLocation.header.prefix`|string||
+|`llm.policies.basicAuth.authorizationLocation.queryParameter`|object||
+|`llm.policies.basicAuth.authorizationLocation.queryParameter.name`|string||
+|`llm.policies.basicAuth.authorizationLocation.cookie`|object||
+|`llm.policies.basicAuth.authorizationLocation.cookie.name`|string||
 |`llm.policies.apiKey`|object|Authenticate incoming requests using API Keys|
 |`llm.policies.apiKey.keys`|[]object|List of API keys|
 |`llm.policies.apiKey.keys[].key`|string||
 |`llm.policies.apiKey.keys[].metadata`|any||
 |`llm.policies.apiKey.mode`|string|Validation mode for API keys|
+|`llm.policies.apiKey.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.apiKey.location.header`|object||
+|`llm.policies.apiKey.location.header.name`|string||
+|`llm.policies.apiKey.location.header.prefix`|string||
+|`llm.policies.apiKey.location.queryParameter`|object||
+|`llm.policies.apiKey.location.queryParameter.name`|string||
+|`llm.policies.apiKey.location.cookie`|object||
+|`llm.policies.apiKey.location.cookie.name`|string||
 |`llm.policies.authorization`|object|Authorization policies for HTTP access.|
 |`llm.policies.authorization.rules`|[]string||
 |`mcp`|object||
@@ -12032,8 +13094,25 @@
 |`mcp.targets[].policies.backendTLS.subjectAltNames`|[]string||
 |`mcp.targets[].policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.targets[].policies.backendAuth.passthrough`|object||
+|`mcp.targets[].policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.targets[].policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`mcp.targets[].policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`mcp.targets[].policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`mcp.targets[].policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`mcp.targets[].policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`mcp.targets[].policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`mcp.targets[].policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`mcp.targets[].policies.backendAuth.key`|object||
-|`mcp.targets[].policies.backendAuth.key.file`|string||
+|`mcp.targets[].policies.backendAuth.key.value`|object||
+|`mcp.targets[].policies.backendAuth.key.value.file`|string||
+|`mcp.targets[].policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.targets[].policies.backendAuth.key.authorizationLocation.header`|object||
+|`mcp.targets[].policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`mcp.targets[].policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`mcp.targets[].policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`mcp.targets[].policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`mcp.targets[].policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`mcp.targets[].policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`mcp.targets[].policies.backendAuth.gcp`|object||
 |`mcp.targets[].policies.backendAuth.gcp.type`|string||
 |`mcp.targets[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12145,6 +13224,14 @@
 |`mcp.policies.mcpAuthentication.jwks.file`|string||
 |`mcp.policies.mcpAuthentication.jwks.url`|string||
 |`mcp.policies.mcpAuthentication.mode`|string||
+|`mcp.policies.mcpAuthentication.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.mcpAuthentication.authorizationLocation.header`|object||
+|`mcp.policies.mcpAuthentication.authorizationLocation.header.name`|string||
+|`mcp.policies.mcpAuthentication.authorizationLocation.header.prefix`|string||
+|`mcp.policies.mcpAuthentication.authorizationLocation.queryParameter`|object||
+|`mcp.policies.mcpAuthentication.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.mcpAuthentication.authorizationLocation.cookie`|object||
+|`mcp.policies.mcpAuthentication.authorizationLocation.cookie.name`|string||
 |`mcp.policies.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`mcp.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -12201,8 +13288,25 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.file`|string||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header`|object||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12280,8 +13384,25 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12359,8 +13480,25 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12549,8 +13687,25 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.file`|string||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header`|object||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12628,8 +13783,25 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.file`|string||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header`|object||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12803,8 +13975,25 @@
 |`mcp.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.backendAuth.passthrough`|object||
+|`mcp.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`mcp.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`mcp.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`mcp.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`mcp.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`mcp.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`mcp.policies.backendAuth.key`|object||
-|`mcp.policies.backendAuth.key.file`|string||
+|`mcp.policies.backendAuth.key.value`|object||
+|`mcp.policies.backendAuth.key.value.file`|string||
+|`mcp.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.backendAuth.key.authorizationLocation.header`|object||
+|`mcp.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`mcp.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`mcp.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`mcp.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`mcp.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`mcp.policies.backendAuth.gcp`|object||
 |`mcp.policies.backendAuth.gcp.type`|string||
 |`mcp.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12871,8 +14060,25 @@
 |`mcp.policies.remoteRateLimit.policies.backendTLS.subjectAltNames`|[]string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough`|object||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key`|object||
-|`mcp.policies.remoteRateLimit.policies.backendAuth.key.file`|string||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.key.value`|object||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.key.value.file`|string||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation.header`|object||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.type`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12926,6 +14132,14 @@
 |`mcp.policies.remoteRateLimit.failureMode`|string|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.|
 |`mcp.policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`mcp.policies.jwtAuth.mode`|string||
+|`mcp.policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.jwtAuth.location.header`|object||
+|`mcp.policies.jwtAuth.location.header.name`|string||
+|`mcp.policies.jwtAuth.location.header.prefix`|string||
+|`mcp.policies.jwtAuth.location.queryParameter`|object||
+|`mcp.policies.jwtAuth.location.queryParameter.name`|string||
+|`mcp.policies.jwtAuth.location.cookie`|object||
+|`mcp.policies.jwtAuth.location.cookie.name`|string||
 |`mcp.policies.jwtAuth.providers`|[]object||
 |`mcp.policies.jwtAuth.providers[].issuer`|string||
 |`mcp.policies.jwtAuth.providers[].audiences`|[]string||
@@ -12935,6 +14149,14 @@
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`mcp.policies.jwtAuth.mode`|string||
+|`mcp.policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.jwtAuth.location.header`|object||
+|`mcp.policies.jwtAuth.location.header.name`|string||
+|`mcp.policies.jwtAuth.location.header.prefix`|string||
+|`mcp.policies.jwtAuth.location.queryParameter`|object||
+|`mcp.policies.jwtAuth.location.queryParameter.name`|string||
+|`mcp.policies.jwtAuth.location.cookie`|object||
+|`mcp.policies.jwtAuth.location.cookie.name`|string||
 |`mcp.policies.jwtAuth.issuer`|string||
 |`mcp.policies.jwtAuth.audiences`|[]string||
 |`mcp.policies.jwtAuth.jwks`|object||
@@ -12962,11 +14184,27 @@
 |`mcp.policies.basicAuth.htpasswd.file`|string||
 |`mcp.policies.basicAuth.realm`|string|Realm name for the WWW-Authenticate header|
 |`mcp.policies.basicAuth.mode`|string|Validation mode for basic authentication|
+|`mcp.policies.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.basicAuth.authorizationLocation.header`|object||
+|`mcp.policies.basicAuth.authorizationLocation.header.name`|string||
+|`mcp.policies.basicAuth.authorizationLocation.header.prefix`|string||
+|`mcp.policies.basicAuth.authorizationLocation.queryParameter`|object||
+|`mcp.policies.basicAuth.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.basicAuth.authorizationLocation.cookie`|object||
+|`mcp.policies.basicAuth.authorizationLocation.cookie.name`|string||
 |`mcp.policies.apiKey`|object|Authenticate incoming requests using API Keys|
 |`mcp.policies.apiKey.keys`|[]object|List of API keys|
 |`mcp.policies.apiKey.keys[].key`|string||
 |`mcp.policies.apiKey.keys[].metadata`|any||
 |`mcp.policies.apiKey.mode`|string|Validation mode for API keys|
+|`mcp.policies.apiKey.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.apiKey.location.header`|object||
+|`mcp.policies.apiKey.location.header.name`|string||
+|`mcp.policies.apiKey.location.header.prefix`|string||
+|`mcp.policies.apiKey.location.queryParameter`|object||
+|`mcp.policies.apiKey.location.queryParameter.name`|string||
+|`mcp.policies.apiKey.location.cookie`|object||
+|`mcp.policies.apiKey.location.cookie.name`|string||
 |`mcp.policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
 |`mcp.policies.extAuthz.service`|object||
 |`mcp.policies.extAuthz.service.name`|object||
@@ -13004,8 +14242,25 @@
 |`mcp.policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
 |`mcp.policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.extAuthz.policies.backendAuth.passthrough`|object||
+|`mcp.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`mcp.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`mcp.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`mcp.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`mcp.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`mcp.policies.extAuthz.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.key`|object||
-|`mcp.policies.extAuthz.policies.backendAuth.key.file`|string||
+|`mcp.policies.extAuthz.policies.backendAuth.key.value`|object||
+|`mcp.policies.extAuthz.policies.backendAuth.key.value.file`|string||
+|`mcp.policies.extAuthz.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.extAuthz.policies.backendAuth.key.authorizationLocation.header`|object||
+|`mcp.policies.extAuthz.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`mcp.policies.extAuthz.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`mcp.policies.extAuthz.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`mcp.policies.extAuthz.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.extAuthz.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`mcp.policies.extAuthz.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.gcp`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.gcp.type`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13104,8 +14359,25 @@
 |`mcp.policies.extProc.policies.backendTLS.subjectAltNames`|[]string||
 |`mcp.policies.extProc.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.extProc.policies.backendAuth.passthrough`|object||
+|`mcp.policies.extProc.policies.backendAuth.passthrough.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.extProc.policies.backendAuth.passthrough.authorizationLocation.header`|object||
+|`mcp.policies.extProc.policies.backendAuth.passthrough.authorizationLocation.header.name`|string||
+|`mcp.policies.extProc.policies.backendAuth.passthrough.authorizationLocation.header.prefix`|string||
+|`mcp.policies.extProc.policies.backendAuth.passthrough.authorizationLocation.queryParameter`|object||
+|`mcp.policies.extProc.policies.backendAuth.passthrough.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.extProc.policies.backendAuth.passthrough.authorizationLocation.cookie`|object||
+|`mcp.policies.extProc.policies.backendAuth.passthrough.authorizationLocation.cookie.name`|string||
 |`mcp.policies.extProc.policies.backendAuth.key`|object||
-|`mcp.policies.extProc.policies.backendAuth.key.file`|string||
+|`mcp.policies.extProc.policies.backendAuth.key.value`|object||
+|`mcp.policies.extProc.policies.backendAuth.key.value.file`|string||
+|`mcp.policies.extProc.policies.backendAuth.key.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.extProc.policies.backendAuth.key.authorizationLocation.header`|object||
+|`mcp.policies.extProc.policies.backendAuth.key.authorizationLocation.header.name`|string||
+|`mcp.policies.extProc.policies.backendAuth.key.authorizationLocation.header.prefix`|string||
+|`mcp.policies.extProc.policies.backendAuth.key.authorizationLocation.queryParameter`|object||
+|`mcp.policies.extProc.policies.backendAuth.key.authorizationLocation.queryParameter.name`|string||
+|`mcp.policies.extProc.policies.backendAuth.key.authorizationLocation.cookie`|object||
+|`mcp.policies.extProc.policies.backendAuth.key.authorizationLocation.cookie.name`|string||
 |`mcp.policies.extProc.policies.backendAuth.gcp`|object||
 |`mcp.policies.extProc.policies.backendAuth.gcp.type`|string||
 |`mcp.policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|

@@ -1,16 +1,17 @@
 use std::hash::Hash;
 
 use ::cel::Value;
-use axum_core::RequestExt;
-use axum_extra::TypedHeader;
-use axum_extra::headers::Authorization;
-use headers::authorization::Bearer;
 use macro_rules_attribute::apply;
 use secrecy::{ExposeSecret, SecretString};
 
 use crate::http::Request;
+use crate::http::auth::AuthorizationLocation;
 use crate::proxy::ProxyError;
 use crate::*;
+
+#[cfg(test)]
+#[path = "apikey_tests.rs"]
+mod tests;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -86,23 +87,26 @@ pub struct APIKeyAuthentication {
 
 	/// Validation mode for API Key authentication
 	pub mode: Mode,
+
+	#[serde(default)]
+	pub location: AuthorizationLocation,
 }
 
 impl APIKeyAuthentication {
-	pub fn new(keys: impl IntoIterator<Item = (APIKey, UserMetadata)>, mode: Mode) -> Self {
+	pub fn new(
+		keys: impl IntoIterator<Item = (APIKey, UserMetadata)>,
+		mode: Mode,
+		location: AuthorizationLocation,
+	) -> Self {
 		Self {
 			users: Arc::new(keys.into_iter().collect()),
 			mode,
+			location,
 		}
 	}
 
 	async fn verify(&self, req: &mut Request) -> Result<Option<Claims>, ProxyError> {
-		// Extract Bearer authorization header
-		// TODO: allow extracting from other places
-		let Ok(TypedHeader(Authorization(bearer))) = req
-			.extract_parts::<TypedHeader<Authorization<Bearer>>>()
-			.await
-		else {
+		let Some(key) = self.location.extract(req) else {
 			// In strict mode, we require credentials
 			if self.mode == Mode::Strict {
 				return Err(ProxyError::APIKeyAuthenticationFailure(Error::Missing));
@@ -111,7 +115,7 @@ impl APIKeyAuthentication {
 			return Ok(None);
 		};
 
-		let key = APIKey::new(bearer.token());
+		let key = APIKey::new(key);
 		if let Some(meta) = self.users.get(&key) {
 			let claims = Claims {
 				key,
@@ -128,7 +132,7 @@ impl APIKeyAuthentication {
 	pub async fn apply(&self, req: &mut Request) -> Result<(), ProxyError> {
 		let res = self.verify(req).await?;
 		if let Some(claims) = res {
-			req.headers_mut().remove(http::header::AUTHORIZATION);
+			self.location.remove(req)?;
 			// Insert the claims into extensions so we can reference it later
 			req.extensions_mut().insert(claims);
 		}
@@ -144,6 +148,9 @@ pub struct LocalAPIKeys {
 	/// Validation mode for API keys
 	#[serde(default)]
 	pub mode: Mode,
+
+	#[serde(default)]
+	pub location: AuthorizationLocation,
 }
 
 #[apply(schema_de!)]
@@ -160,6 +167,7 @@ impl LocalAPIKeys {
 				.into_iter()
 				.map(|k| (k.key, k.metadata.unwrap_or_default())),
 			self.mode,
+			self.location,
 		)
 	}
 }

@@ -34,29 +34,26 @@ pub type Body = axum_core::body::Body;
 pub type Request = ::http::Request<Body>;
 pub type Response = ::http::Response<Body>;
 
-pub(crate) fn iter_request_cookies(
-	req: &Request,
-) -> impl Iterator<Item = cookie::Cookie<'static>> + '_ {
+pub(crate) fn iter_request_cookies<'a>(
+	req: &'a Request,
+) -> impl Iterator<Item = cookie::Cookie<'a>> + 'a {
 	req
 		.headers()
 		.get_all(header::COOKIE)
 		.into_iter()
 		.filter_map(|value| value.to_str().ok())
-		.flat_map(|header_value| {
-			cookie::Cookie::split_parse(header_value.to_owned())
-				.filter_map(Result::ok)
-				.map(cookie::Cookie::into_owned)
+		.flat_map(move |header_value| {
+			cookie::Cookie::split_parse(Cow::Borrowed(header_value)).filter_map(Result::ok)
 		})
 }
 
-pub(crate) fn read_request_cookie(req: &Request, name: &str) -> Option<String> {
-	let mut matched = None;
+pub(crate) fn read_request_cookie<'a>(req: &'a Request, name: &str) -> Option<Cow<'a, str>> {
 	for cookie in iter_request_cookies(req) {
 		if cookie.name() == name {
-			matched = Some(cookie.value().to_owned());
+			return Some(Cow::Owned(cookie.value().to_owned()));
 		}
 	}
-	matched
+	None
 }
 
 pub(crate) fn strip_request_cookies_by_prefix(req: &mut Request, prefix: &str) {
@@ -206,6 +203,7 @@ impl RequestOrResponse<'_> {
 	}
 }
 
+use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use std::pin::Pin;
@@ -224,6 +222,7 @@ use http_body::{Frame, SizeHint};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tower_serve_static::private::mime;
 use url::Url;
+use url::form_urlencoded;
 
 use crate::cel::{BackendContext, LLMContext, RequestTime, SourceContext};
 use crate::client::PoolKey;
@@ -588,6 +587,78 @@ pub fn modify_url(
 	Ok(())
 }
 
+pub fn modify_query_parameters<S, R, KSet, VSet, KRemove>(
+	uri: &mut Uri,
+	query_parameters_to_set: S,
+	query_parameters_to_remove: R,
+) -> anyhow::Result<()>
+where
+	S: IntoIterator<Item = (KSet, VSet)>,
+	R: IntoIterator<Item = KRemove>,
+	KSet: AsRef<str>,
+	VSet: AsRef<str>,
+	KRemove: AsRef<str>,
+{
+	let query_parameters_to_set = query_parameters_to_set
+		.into_iter()
+		.map(|(key, value)| (key.as_ref().to_owned(), value.as_ref().to_owned()))
+		.collect::<Vec<_>>();
+	let query_parameters_to_remove = query_parameters_to_remove
+		.into_iter()
+		.map(|key| key.as_ref().to_owned())
+		.collect::<Vec<_>>();
+
+	if query_parameters_to_set.is_empty() && query_parameters_to_remove.is_empty() {
+		return Ok(());
+	}
+
+	let mut parts = std::mem::take(uri).into_parts();
+	let path = parts
+		.path_and_query
+		.as_ref()
+		.map(|pq| pq.path())
+		.filter(|path| !path.is_empty())
+		.unwrap_or("/");
+	let query = parts
+		.path_and_query
+		.as_ref()
+		.and_then(|pq| pq.query())
+		.unwrap_or_default();
+	let mut pairs = form_urlencoded::parse(query.as_bytes())
+		.map(|(key, value)| (key.into_owned(), value.into_owned()))
+		.collect::<Vec<_>>();
+
+	for (key, value) in query_parameters_to_set {
+		pairs.retain(|(current_key, _)| current_key != &key);
+		pairs.push((key, value));
+	}
+
+	if !query_parameters_to_remove.is_empty() {
+		pairs.retain(|(key, _)| {
+			!query_parameters_to_remove
+				.iter()
+				.any(|remove| remove == key)
+		});
+	}
+
+	let mut updated = form_urlencoded::Serializer::new(String::new());
+	for (key, value) in pairs {
+		updated.append_pair(&key, &value);
+	}
+
+	let updated = updated.finish();
+	parts.path_and_query = Some(
+		if updated.is_empty() {
+			path.to_string()
+		} else {
+			format!("{path}?{updated}")
+		}
+		.parse()?,
+	);
+	*uri = Uri::from_parts(parts)?;
+	Ok(())
+}
+
 #[derive(Debug)]
 pub enum WellKnownContentTypes {
 	Json,
@@ -862,5 +933,38 @@ impl Debug for DebugExtensions<'_> {
 			d.field("TransformationMetadata", e);
 		}
 		d.finish()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_modify_query_parameters_for_relative_uri() {
+		let mut uri = "/resource?keep=1&set=old&set=older&remove=gone"
+			.parse()
+			.unwrap();
+
+		modify_query_parameters(
+			&mut uri,
+			[("set", "updated"), ("new", "added value")],
+			["remove"],
+		)
+		.unwrap();
+
+		assert_eq!(
+			uri.to_string(),
+			"/resource?keep=1&set=updated&new=added+value"
+		);
+	}
+
+	#[test]
+	fn test_modify_query_parameters_for_absolute_uri() {
+		let mut uri = "https://example.com/resource?remove=1".parse().unwrap();
+
+		modify_query_parameters(&mut uri, std::iter::empty::<(&str, &str)>(), ["remove"]).unwrap();
+
+		assert_eq!(uri.to_string(), "https://example.com/resource");
 	}
 }

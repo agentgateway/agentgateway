@@ -233,12 +233,35 @@ message BackendAuthPolicy {
   }
 }
 
-// No fields needed for passthrough authentication.
-message Passthrough {}
+message AuthorizationLocation {
+  message Header {
+    string name = 1;
+    optional string prefix = 2;
+  }
+
+  message QueryParameter {
+    string name = 1;
+  }
+
+  message Cookie {
+    string name = 1;
+  }
+
+  oneof kind {
+    Header header = 1;
+    QueryParameter query_parameter = 2;
+    Cookie cookie = 3;
+  }
+}
+
+message Passthrough {
+  AuthorizationLocation authorization_location = 1;
+}
 
 // Contains a secret for authentication, e.g. an API key.
 message Key {
   string secret = 1;
+  AuthorizationLocation authorization_location = 2;
 }
 
 // GCP-specific backend authentication.
@@ -728,6 +751,7 @@ message TrafficPolicySpec {
     Mode mode = 1;
     repeated JWTProvider providers = 2;
     MCP mcp = 3;
+    AuthorizationLocation authorization_location = 4;
   }
 
   // Basic authentication configuration using htpasswd file
@@ -748,6 +772,8 @@ message TrafficPolicySpec {
 
     // How the basic authentication should behave
     Mode mode = 3;
+
+    AuthorizationLocation authorization_location = 4;
   }
 
   // API Key authentication
@@ -769,6 +795,8 @@ message TrafficPolicySpec {
 
     // How the API key authentication should behave
     Mode mode = 2;
+
+    AuthorizationLocation authorization_location = 3;
   }
 
   message TransformationPolicy {
@@ -1161,6 +1189,7 @@ message BackendPolicySpec {
     Mode mode = 6;
     // JWT validation options controlling which claims must be present.
     JWTValidationOptions jwt_validation_options = 7;
+    AuthorizationLocation authorization_location = 8;
   }
 
   oneof kind {

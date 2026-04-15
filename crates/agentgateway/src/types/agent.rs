@@ -2273,6 +2273,8 @@ pub struct LocalMcpAuthentication {
 	#[serde(default)]
 	pub mode: McpAuthenticationMode,
 	#[serde(default)]
+	pub authorization_location: http::auth::AuthorizationLocation,
+	#[serde(default)]
 	pub jwt_validation_options: http::jwt::JWTValidationOptions,
 }
 
@@ -2298,6 +2300,7 @@ impl LocalMcpAuthentication {
 
 		Ok(http::jwt::LocalJwtConfig::Single {
 			mode: self.mode.into(),
+			location: self.authorization_location.clone(),
 			issuer: self.issuer.clone(),
 			audiences: Some(self.audiences.clone()),
 			jwks,

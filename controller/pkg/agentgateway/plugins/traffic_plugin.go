@@ -556,6 +556,7 @@ func processDirectResponse(directResponse *agentgateway.DirectResponse, basePoli
 
 func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthentication, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
 	p := &api.TrafficPolicySpec_JWT{}
+	p.AuthorizationLocation = translateAuthorizationLocation(jwt.Location)
 
 	switch jwt.Mode {
 	case agentgateway.JWTAuthenticationModeOptional:
@@ -632,6 +633,7 @@ func processBasicAuthenticationPolicy(
 ) (*api.Policy, error) {
 	p := &api.TrafficPolicySpec_BasicAuthentication{}
 	p.Realm = ba.Realm
+	p.AuthorizationLocation = translateAuthorizationLocation(ba.Location)
 
 	switch ba.Mode {
 	case agentgateway.BasicAuthenticationModeOptional:
@@ -688,6 +690,7 @@ func processAPIKeyAuthenticationPolicy(
 	policy types.NamespacedName,
 ) (*api.Policy, error) {
 	p := &api.TrafficPolicySpec_APIKey{}
+	p.AuthorizationLocation = translateAuthorizationLocation(ak.Location)
 
 	switch ak.Mode {
 	case agentgateway.APIKeyAuthenticationModeOptional:

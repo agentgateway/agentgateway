@@ -662,6 +662,39 @@ const (
 	JWTAuthenticationModePermissive JWTAuthenticationMode = "Permissive"
 )
 
+// +kubebuilder:validation:ExactlyOneOf=header;queryParameter;cookie
+type AuthorizationLocation struct {
+	// +optional
+	Header *AuthorizationHeaderLocation `json:"header,omitempty"`
+	// +optional
+	QueryParameter *AuthorizationQueryParameterLocation `json:"queryParameter,omitempty"`
+	// +optional
+	Cookie *AuthorizationCookieLocation `json:"cookie,omitempty"`
+}
+
+type AuthorizationHeaderLocation struct {
+	// +required
+	Name gwv1.HTTPHeaderName `json:"name"`
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=256
+	// +optional
+	Prefix *string `json:"prefix,omitempty"`
+}
+
+type AuthorizationQueryParameterLocation struct {
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=256
+	// +required
+	Name string `json:"name"`
+}
+
+type AuthorizationCookieLocation struct {
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=256
+	// +required
+	Name string `json:"name"`
+}
+
 // +kubebuilder:validation:XValidation:rule="!has(self.mcp) || size(self.providers) == 1",message="jwtAuthentication.mcp requires exactly one provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.mcp) || !has(self.mode) || self.mode == 'Strict'",message="jwtAuthentication.mcp requires mode Strict"
 type JWTAuthentication struct {
@@ -674,6 +707,11 @@ type JWTAuthentication struct {
 	// +kubebuilder:validation:MaxItems=64
 	// +required
 	Providers []JWTProvider `json:"providers"`
+
+	// `location` controls where JWT credentials are read from.
+	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
 
 	// `mcp` optionally enables MCP OAuth metadata endpoint handling
 	// and MCP-specific authentication behavior on top of standard JWT validation.
@@ -811,6 +849,11 @@ type BasicAuthentication struct {
 	//	    bob:$apr1$Ukb5LgRD$EPY2lIfY.A54jzLELNIId/
 	// +optional
 	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+
+	// `location` controls where Basic credentials are read from.
+	// If omitted, credentials are read from the `Authorization` header with the `Basic ` prefix.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Strict;Optional
@@ -892,6 +935,11 @@ type APIKeyAuthentication struct {
 	//	  client2: "k-456"
 	// +optional
 	SecretSelector *SecretSelector `json:"secretSelector,omitempty"`
+
+	// `location` controls where API keys are read from.
+	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
 }
 
 type SecretSelector struct {
@@ -908,6 +956,7 @@ const (
 )
 
 // +kubebuilder:validation:ExactlyOneOf=key;secretRef;passthrough;aws;azure;gcp
+// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key or passthrough auth"
 type BackendAuth struct {
 	// `key` provides an inline key to use as the value of the
 	// `Authorization` header. This option is the least secure; usage of a
@@ -928,7 +977,6 @@ type BackendAuth struct {
 	// request, the original token would be unchanged, so this would have no effect.
 	// +optional
 	Passthrough *BackendAuthPassthrough `json:"passthrough,omitempty"`
-	// TODO: azure, gcp
 
 	// Auth specifies an explicit AWS authentication method for the backend.
 	// When omitted, we will try to use the default AWS SDK authentication methods.
@@ -946,6 +994,12 @@ type BackendAuth struct {
 	//
 	// +optional
 	GCP *GcpAuth `json:"gcp,omitempty"`
+
+	// `location` controls where  backend credentials are inserted.
+	// If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
+	// This applies to `key`, `secretRef`, and `passthrough`.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=AccessToken;IdToken

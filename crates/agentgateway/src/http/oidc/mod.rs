@@ -209,7 +209,7 @@ impl OidcPolicy {
 			return Ok(PolicyResponse::default());
 		}
 
-		if let Some(cookie) = read_cookie(req, &self.session.cookie_name) {
+		if let Some(cookie) = crate::http::read_request_cookie(req, &self.session.cookie_name) {
 			match self.session.decode_browser_session(&cookie) {
 				Ok(browser_session) => {
 					if browser_session.policy_id == self.policy_id
@@ -256,8 +256,9 @@ impl OidcPolicy {
 		let transaction_cookie_name = self
 			.session
 			.transaction_cookie_name(&callback_state.transaction_id);
-		let transaction_cookie =
-			read_cookie(req, &transaction_cookie_name).ok_or(Error::MissingTransaction)?;
+		let transaction_cookie = crate::http::read_request_cookie(req, &transaction_cookie_name)
+			.ok_or(Error::MissingTransaction)?
+			.to_string();
 		if let Some(error) = query.error {
 			return Err(Error::ProviderCallback(error));
 		}
@@ -311,10 +312,6 @@ impl CallbackQuery {
 		}
 		Some(CallbackQuery { state, code, error })
 	}
-}
-
-fn read_cookie(req: &Request, name: &str) -> Option<String> {
-	crate::http::read_request_cookie(req, name)
 }
 
 pub(crate) fn build_redirect_response(

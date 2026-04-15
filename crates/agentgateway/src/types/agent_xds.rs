@@ -234,7 +234,11 @@ impl TryFrom<&proto::agent::backend_policy_spec::McpAuthentication> for McpAuthe
 			},
 		};
 
-		let jwt_validator = http::jwt::Jwt::from_providers(vec![jwt_provider], mode.into());
+		let jwt_validator = http::jwt::Jwt::from_providers(
+			vec![jwt_provider],
+			mode.into(),
+			http::auth::AuthorizationLocation::bearer_header(),
+		);
 		Ok(build_mcp_authentication(
 			m.issuer.clone(),
 			m.audiences.clone(),
@@ -550,8 +554,19 @@ impl TryFrom<proto::agent::BackendAuthPolicy> for BackendAuth {
 		use proto::agent::azure_managed_identity_credential::user_assigned_identity;
 		use proto::agent::{azure_explicit_config, gcp};
 		Ok(match s.kind {
-			Some(proto::agent::backend_auth_policy::Kind::Passthrough(_)) => BackendAuth::Passthrough {},
-			Some(proto::agent::backend_auth_policy::Kind::Key(k)) => BackendAuth::Key(k.secret.into()),
+			Some(proto::agent::backend_auth_policy::Kind::Passthrough(p)) => BackendAuth::Passthrough {
+				location: authorization_location(
+					p.authorization_location.as_ref(),
+					http::auth::AuthorizationLocation::bearer_header(),
+				)?,
+			},
+			Some(proto::agent::backend_auth_policy::Kind::Key(k)) => BackendAuth::Key {
+				value: k.secret.into(),
+				location: authorization_location(
+					k.authorization_location.as_ref(),
+					http::auth::AuthorizationLocation::bearer_header(),
+				)?,
+			},
 			Some(proto::agent::backend_auth_policy::Kind::Gcp(g)) => {
 				BackendAuth::Gcp(match g.token_type {
 					None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
@@ -1522,7 +1537,14 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 						.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))
 					})
 					.collect::<Result<Vec<_>, _>>()?;
-				let jwt_auth = http::jwt::Jwt::from_providers(providers, mode);
+				let jwt_auth = http::jwt::Jwt::from_providers(
+					providers,
+					mode,
+					authorization_location(
+						jwt.authorization_location.as_ref(),
+						http::auth::AuthorizationLocation::bearer_header(),
+					)?,
+				);
 				let mcp = match &jwt.mcp {
 					Some(mcp) => {
 						if jwt.providers.len() != 1 {
@@ -1776,6 +1798,10 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 					&ba.htpasswd_content,
 					ba.realm.clone(),
 					mode,
+					authorization_location(
+						ba.authorization_location.as_ref(),
+						http::auth::AuthorizationLocation::basic_header(),
+					)?,
 				))
 			},
 			Some(tps::Kind::ApiKeyAuth(ba)) => {
@@ -1798,7 +1824,14 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 						Ok::<_, ProtoError>((http::apikey::APIKey::new(u.key.clone()), meta))
 					})
 					.collect::<Result<Vec<_>, _>>()?;
-				TrafficPolicy::APIKey(http::apikey::APIKeyAuthentication::new(keys, mode))
+				TrafficPolicy::APIKey(http::apikey::APIKeyAuthentication::new(
+					keys,
+					mode,
+					authorization_location(
+						ba.authorization_location.as_ref(),
+						http::auth::AuthorizationLocation::bearer_header(),
+					)?,
+				))
 			},
 			Some(tps::Kind::HostRewrite(hr)) => {
 				let mode = tps::host_rewrite::Mode::try_from(hr.mode)?;
@@ -1814,6 +1847,31 @@ impl TryFrom<&proto::agent::TrafficPolicySpec> for TrafficPolicy {
 
 fn convert_duration(d: prost_types::Duration) -> Duration {
 	Duration::from_secs(d.seconds as u64) + Duration::from_nanos(d.nanos as u64)
+}
+
+fn authorization_location(
+	location: Option<&proto::agent::AuthorizationLocation>,
+	default: http::auth::AuthorizationLocation,
+) -> Result<http::auth::AuthorizationLocation, ProtoError> {
+	use proto::agent::authorization_location::Kind;
+
+	let Some(location) = location else {
+		return Ok(default);
+	};
+
+	match location.kind.as_ref() {
+		Some(Kind::Header(header)) => Ok(http::auth::AuthorizationLocation::Header {
+			name: header.name.parse()?,
+			prefix: header.prefix.clone().map(Into::into),
+		}),
+		Some(Kind::QueryParameter(query)) => Ok(http::auth::AuthorizationLocation::QueryParameter {
+			name: query.name.clone().into(),
+		}),
+		Some(Kind::Cookie(cookie)) => Ok(http::auth::AuthorizationLocation::Cookie {
+			name: cookie.name.clone().into(),
+		}),
+		None => Ok(default),
+	}
 }
 
 impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {

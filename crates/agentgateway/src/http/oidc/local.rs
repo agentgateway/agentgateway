@@ -296,6 +296,7 @@ impl PreparedOidcProvider {
 			id_token_validator: crate::http::jwt::Jwt::from_providers(
 				vec![provider],
 				crate::http::jwt::Mode::Strict,
+				crate::http::auth::AuthorizationLocation::bearer_header(),
 			),
 		})
 	}

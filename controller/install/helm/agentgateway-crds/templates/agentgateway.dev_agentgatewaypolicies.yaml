@@ -396,6 +396,64 @@ spec:
                                                 `Secret` is preferred.
                                               maxLength: 2048
                                               type: string
+                                            location:
+                                              description: |-
+                                                `location` controls where  backend credentials are inserted.
+                                                If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
+                                                This applies to `key`, `secretRef`, and `passthrough`.
+                                              properties:
+                                                cookie:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                header:
+                                                  properties:
+                                                    name:
+                                                      description: |-
+                                                        HTTPHeaderName is the name of an HTTP header.
+
+                                                        Valid values include:
+
+                                                        * "Authorization"
+                                                        * "Set-Cookie"
+
+                                                        Invalid values include:
+
+                                                          - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
+                                                            headers are not currently supported by this type.
+                                                          - "/invalid" - "/ " is an invalid character
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                      type: string
+                                                    prefix:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                queryParameter:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [header queryParameter cookie]
+                                                  must be set
+                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                                  == 1'
                                             passthrough:
                                               description: |-
                                                 `passthrough` passes through an existing token that has been sent by the
@@ -422,6 +480,11 @@ spec:
                                               x-kubernetes-map-type: atomic
                                           type: object
                                           x-kubernetes-validations:
+                                          - message: location may only be set for
+                                              key or passthrough auth
+                                            rule: 'has(self.location) ? has(self.key)
+                                              || has(self.secretRef) || has(self.passthrough)
+                                              : true'
                                           - message: exactly one of the fields in
                                               [key secretRef passthrough aws azure
                                               gcp] must be set
@@ -1202,6 +1265,64 @@ spec:
                                                 `Secret` is preferred.
                                               maxLength: 2048
                                               type: string
+                                            location:
+                                              description: |-
+                                                `location` controls where  backend credentials are inserted.
+                                                If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
+                                                This applies to `key`, `secretRef`, and `passthrough`.
+                                              properties:
+                                                cookie:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                header:
+                                                  properties:
+                                                    name:
+                                                      description: |-
+                                                        HTTPHeaderName is the name of an HTTP header.
+
+                                                        Valid values include:
+
+                                                        * "Authorization"
+                                                        * "Set-Cookie"
+
+                                                        Invalid values include:
+
+                                                          - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
+                                                            headers are not currently supported by this type.
+                                                          - "/invalid" - "/ " is an invalid character
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                      type: string
+                                                    prefix:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                queryParameter:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [header queryParameter cookie]
+                                                  must be set
+                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                                  == 1'
                                             passthrough:
                                               description: |-
                                                 `passthrough` passes through an existing token that has been sent by the
@@ -1228,6 +1349,11 @@ spec:
                                               x-kubernetes-map-type: atomic
                                           type: object
                                           x-kubernetes-validations:
+                                          - message: location may only be set for
+                                              key or passthrough auth
+                                            rule: 'has(self.location) ? has(self.key)
+                                              || has(self.secretRef) || has(self.passthrough)
+                                              : true'
                                           - message: exactly one of the fields in
                                               [key secretRef passthrough aws azure
                                               gcp] must be set
@@ -2005,6 +2131,64 @@ spec:
                                                 `Secret` is preferred.
                                               maxLength: 2048
                                               type: string
+                                            location:
+                                              description: |-
+                                                `location` controls where  backend credentials are inserted.
+                                                If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
+                                                This applies to `key`, `secretRef`, and `passthrough`.
+                                              properties:
+                                                cookie:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                header:
+                                                  properties:
+                                                    name:
+                                                      description: |-
+                                                        HTTPHeaderName is the name of an HTTP header.
+
+                                                        Valid values include:
+
+                                                        * "Authorization"
+                                                        * "Set-Cookie"
+
+                                                        Invalid values include:
+
+                                                          - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
+                                                            headers are not currently supported by this type.
+                                                          - "/invalid" - "/ " is an invalid character
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                      type: string
+                                                    prefix:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                queryParameter:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [header queryParameter cookie]
+                                                  must be set
+                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                                  == 1'
                                             passthrough:
                                               description: |-
                                                 `passthrough` passes through an existing token that has been sent by the
@@ -2031,6 +2215,11 @@ spec:
                                               x-kubernetes-map-type: atomic
                                           type: object
                                           x-kubernetes-validations:
+                                          - message: location may only be set for
+                                              key or passthrough auth
+                                            rule: 'has(self.location) ? has(self.key)
+                                              || has(self.secretRef) || has(self.passthrough)
+                                              : true'
                                           - message: exactly one of the fields in
                                               [key secretRef passthrough aws azure
                                               gcp] must be set
@@ -3025,6 +3214,64 @@ spec:
                                                 `Secret` is preferred.
                                               maxLength: 2048
                                               type: string
+                                            location:
+                                              description: |-
+                                                `location` controls where  backend credentials are inserted.
+                                                If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
+                                                This applies to `key`, `secretRef`, and `passthrough`.
+                                              properties:
+                                                cookie:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                header:
+                                                  properties:
+                                                    name:
+                                                      description: |-
+                                                        HTTPHeaderName is the name of an HTTP header.
+
+                                                        Valid values include:
+
+                                                        * "Authorization"
+                                                        * "Set-Cookie"
+
+                                                        Invalid values include:
+
+                                                          - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
+                                                            headers are not currently supported by this type.
+                                                          - "/invalid" - "/ " is an invalid character
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                      type: string
+                                                    prefix:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                queryParameter:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [header queryParameter cookie]
+                                                  must be set
+                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                                  == 1'
                                             passthrough:
                                               description: |-
                                                 `passthrough` passes through an existing token that has been sent by the
@@ -3051,6 +3298,11 @@ spec:
                                               x-kubernetes-map-type: atomic
                                           type: object
                                           x-kubernetes-validations:
+                                          - message: location may only be set for
+                                              key or passthrough auth
+                                            rule: 'has(self.location) ? has(self.key)
+                                              || has(self.secretRef) || has(self.passthrough)
+                                              : true'
                                           - message: exactly one of the fields in
                                               [key secretRef passthrough aws azure
                                               gcp] must be set
@@ -3831,6 +4083,64 @@ spec:
                                                 `Secret` is preferred.
                                               maxLength: 2048
                                               type: string
+                                            location:
+                                              description: |-
+                                                `location` controls where  backend credentials are inserted.
+                                                If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
+                                                This applies to `key`, `secretRef`, and `passthrough`.
+                                              properties:
+                                                cookie:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                header:
+                                                  properties:
+                                                    name:
+                                                      description: |-
+                                                        HTTPHeaderName is the name of an HTTP header.
+
+                                                        Valid values include:
+
+                                                        * "Authorization"
+                                                        * "Set-Cookie"
+
+                                                        Invalid values include:
+
+                                                          - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
+                                                            headers are not currently supported by this type.
+                                                          - "/invalid" - "/ " is an invalid character
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                      type: string
+                                                    prefix:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                queryParameter:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [header queryParameter cookie]
+                                                  must be set
+                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                                  == 1'
                                             passthrough:
                                               description: |-
                                                 `passthrough` passes through an existing token that has been sent by the
@@ -3857,6 +4167,11 @@ spec:
                                               x-kubernetes-map-type: atomic
                                           type: object
                                           x-kubernetes-validations:
+                                          - message: location may only be set for
+                                              key or passthrough auth
+                                            rule: 'has(self.location) ? has(self.key)
+                                              || has(self.secretRef) || has(self.passthrough)
+                                              : true'
                                           - message: exactly one of the fields in
                                               [key secretRef passthrough aws azure
                                               gcp] must be set
@@ -4907,6 +5222,63 @@ spec:
                           `Secret` is preferred.
                         maxLength: 2048
                         type: string
+                      location:
+                        description: |-
+                          `location` controls where  backend credentials are inserted.
+                          If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
+                          This applies to `key`, `secretRef`, and `passthrough`.
+                        properties:
+                          cookie:
+                            properties:
+                              name:
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          header:
+                            properties:
+                              name:
+                                description: |-
+                                  HTTPHeaderName is the name of an HTTP header.
+
+                                  Valid values include:
+
+                                  * "Authorization"
+                                  * "Set-Cookie"
+
+                                  Invalid values include:
+
+                                    - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
+                                      headers are not currently supported by this type.
+                                    - "/invalid" - "/ " is an invalid character
+                                maxLength: 256
+                                minLength: 1
+                                pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                type: string
+                              prefix:
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          queryParameter:
+                            properties:
+                              name:
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                        type: object
+                        x-kubernetes-validations:
+                        - message: exactly one of the fields in [header queryParameter
+                            cookie] must be set
+                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                            == 1'
                       passthrough:
                         description: |-
                           `passthrough` passes through an existing token that has been sent by the
@@ -4933,6 +5305,9 @@ spec:
                         x-kubernetes-map-type: atomic
                     type: object
                     x-kubernetes-validations:
+                    - message: location may only be set for key or passthrough auth
+                      rule: 'has(self.location) ? has(self.key) || has(self.secretRef)
+                        || has(self.passthrough) : true'
                     - message: exactly one of the fields in [key secretRef passthrough
                         aws azure gcp] must be set
                       rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp)].filter(x,x==true).size()
@@ -6474,6 +6849,62 @@ spec:
                       `apiKeyAuthentication` authenticates users based on a configured API
                       key.
                     properties:
+                      location:
+                        description: |-
+                          `location` controls where API keys are read from.
+                          If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
+                        properties:
+                          cookie:
+                            properties:
+                              name:
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          header:
+                            properties:
+                              name:
+                                description: |-
+                                  HTTPHeaderName is the name of an HTTP header.
+
+                                  Valid values include:
+
+                                  * "Authorization"
+                                  * "Set-Cookie"
+
+                                  Invalid values include:
+
+                                    - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
+                                      headers are not currently supported by this type.
+                                    - "/invalid" - "/ " is an invalid character
+                                maxLength: 256
+                                minLength: 1
+                                pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                type: string
+                              prefix:
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          queryParameter:
+                            properties:
+                              name:
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                        type: object
+                        x-kubernetes-validations:
+                        - message: exactly one of the fields in [header queryParameter
+                            cookie] must be set
+                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                            == 1'
                       mode:
                         default: Strict
                         description: '`mode` is the validation mode for API key authentication.'
@@ -6596,6 +7027,62 @@ spec:
                       authentication scheme (RFC 7617), where a username and password are
                       encoded in the request.
                     properties:
+                      location:
+                        description: |-
+                          `location` controls where Basic credentials are read from.
+                          If omitted, credentials are read from the `Authorization` header with the `Basic ` prefix.
+                        properties:
+                          cookie:
+                            properties:
+                              name:
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          header:
+                            properties:
+                              name:
+                                description: |-
+                                  HTTPHeaderName is the name of an HTTP header.
+
+                                  Valid values include:
+
+                                  * "Authorization"
+                                  * "Set-Cookie"
+
+                                  Invalid values include:
+
+                                    - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
+                                      headers are not currently supported by this type.
+                                    - "/invalid" - "/ " is an invalid character
+                                maxLength: 256
+                                minLength: 1
+                                pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                type: string
+                              prefix:
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          queryParameter:
+                            properties:
+                              name:
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                        type: object
+                        x-kubernetes-validations:
+                        - message: exactly one of the fields in [header queryParameter
+                            cookie] must be set
+                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                            == 1'
                       mode:
                         default: Strict
                         description: '`mode` is the validation mode for basic auth
@@ -7624,6 +8111,62 @@ spec:
                     description: '`jwtAuthentication` authenticates users based on
                       JWT tokens.'
                     properties:
+                      location:
+                        description: |-
+                          `location` controls where JWT credentials are read from.
+                          If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
+                        properties:
+                          cookie:
+                            properties:
+                              name:
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          header:
+                            properties:
+                              name:
+                                description: |-
+                                  HTTPHeaderName is the name of an HTTP header.
+
+                                  Valid values include:
+
+                                  * "Authorization"
+                                  * "Set-Cookie"
+
+                                  Invalid values include:
+
+                                    - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
+                                      headers are not currently supported by this type.
+                                    - "/invalid" - "/ " is an invalid character
+                                maxLength: 256
+                                minLength: 1
+                                pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                type: string
+                              prefix:
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          queryParameter:
+                            properties:
+                              name:
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                        type: object
+                        x-kubernetes-validations:
+                        - message: exactly one of the fields in [header queryParameter
+                            cookie] must be set
+                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                            == 1'
                       mcp:
                         description: |-
                           `mcp` optionally enables MCP OAuth metadata endpoint handling

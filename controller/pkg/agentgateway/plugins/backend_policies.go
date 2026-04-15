@@ -37,6 +37,41 @@ const (
 	healthPolicySuffix            = ":health"
 )
 
+func translateAuthorizationLocation(loc *agentgateway.AuthorizationLocation) *api.AuthorizationLocation {
+	if loc == nil {
+		return nil
+	}
+	if loc.Header != nil {
+		return &api.AuthorizationLocation{
+			Kind: &api.AuthorizationLocation_Header_{
+				Header: &api.AuthorizationLocation_Header{
+					Name:   string(loc.Header.Name),
+					Prefix: loc.Header.Prefix,
+				},
+			},
+		}
+	}
+	if loc.QueryParameter != nil {
+		return &api.AuthorizationLocation{
+			Kind: &api.AuthorizationLocation_QueryParameter_{
+				QueryParameter: &api.AuthorizationLocation_QueryParameter{
+					Name: loc.QueryParameter.Name,
+				},
+			},
+		}
+	}
+	if loc.Cookie != nil {
+		return &api.AuthorizationLocation{
+			Kind: &api.AuthorizationLocation_Cookie_{
+				Cookie: &api.AuthorizationLocation_Cookie{
+					Name: loc.Cookie.Name,
+				},
+			},
+		}
+	}
+	return nil
+}
+
 func TranslateInlineBackendPolicy(
 	ctx PolicyCtx,
 	namespace string,
@@ -659,7 +694,10 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 	if auth.InlineKey != nil && *auth.InlineKey != "" {
 		translatedAuth = &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Key{
-				Key: &api.Key{Secret: *auth.InlineKey},
+				Key: &api.Key{
+					Secret:                *auth.InlineKey,
+					AuthorizationLocation: translateAuthorizationLocation(auth.Location),
+				},
 			},
 		}
 	} else if auth.SecretRef != nil {
@@ -669,21 +707,28 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 			errs = append(errs, err)
 			translatedAuth = &api.BackendAuthPolicy{
 				Kind: &api.BackendAuthPolicy_Key{
-					Key: &api.Key{},
+					Key: &api.Key{
+						AuthorizationLocation: translateAuthorizationLocation(auth.Location),
+					},
 				},
 			}
 		} else {
 			if authKey, ok := kubeutils.GetSecretAuth(secret); ok {
 				translatedAuth = &api.BackendAuthPolicy{
 					Kind: &api.BackendAuthPolicy_Key{
-						Key: &api.Key{Secret: authKey},
+						Key: &api.Key{
+							Secret:                authKey,
+							AuthorizationLocation: translateAuthorizationLocation(auth.Location),
+						},
 					},
 				}
 			} else {
 				errs = append(errs, fmt.Errorf("secret %s/%s missing Authorization value", policy.Namespace, auth.SecretRef.Name))
 				translatedAuth = &api.BackendAuthPolicy{
 					Kind: &api.BackendAuthPolicy_Key{
-						Key: &api.Key{},
+						Key: &api.Key{
+							AuthorizationLocation: translateAuthorizationLocation(auth.Location),
+						},
 					},
 				}
 			}
@@ -705,7 +750,9 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 	} else if auth.Passthrough != nil {
 		translatedAuth = &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Passthrough{
-				Passthrough: &api.Passthrough{},
+				Passthrough: &api.Passthrough{
+					AuthorizationLocation: translateAuthorizationLocation(auth.Location),
+				},
 			},
 		}
 	}

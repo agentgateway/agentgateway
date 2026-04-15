@@ -3044,7 +3044,7 @@ dependencies = [
 [[package]]
 name = "http-serde"
 version = "2.1.1"
-source = "git+https://gitlab.com/howardjohn/http-serde?rev=163f20f551c2cf6032254b6dbbe246b91ce727ad#163f20f551c2cf6032254b6dbbe246b91ce727ad"
+source = "git+https://gitlab.com/howardjohn/http-serde?rev=c2e482be0ddf029895ba72ef8749b9f94b388fc7#c2e482be0ddf029895ba72ef8749b9f94b388fc7"
 dependencies = [
  "http 1.4.0",
  "serde",

@@ -1,6 +1,6 @@
 [patch.crates-io]
 schemars = { git = "https://github.com/howardjohn/schemars", rev = "4364354fa41897a0c2001d891c0a9a38eafedb82" }
-http-serde = { git = "https://gitlab.com/howardjohn/http-serde", rev = "163f20f551c2cf6032254b6dbbe246b91ce727ad" }
+http-serde = { git = "https://gitlab.com/howardjohn/http-serde", rev = "c2e482be0ddf029895ba72ef8749b9f94b388fc7" }
 wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "e55f5b96083125fdabc3e62f92790ee15ae3a10d" }
 
 [workspace]

@@ -29,9 +29,15 @@ async fn test_backend_auth_passthrough_happy_path() {
 		},
 		inputs,
 	};
-	apply_backend_auth(&backend_info, &BackendAuth::Passthrough {}, &mut req)
-		.await
-		.expect("apply backend auth");
+	apply_backend_auth(
+		&backend_info,
+		&BackendAuth::Passthrough {
+			authorization_location: AuthorizationLocation::default(),
+		},
+		&mut req,
+	)
+	.await
+	.expect("apply backend auth");
 
 	// Assert Authorization header added with Bearer <jwt>
 	let auth = req
@@ -61,7 +67,10 @@ async fn test_backend_auth_key() {
 		inputs,
 	};
 
-	let key_auth = BackendAuth::Key(SecretString::new("my-secret-key".into()));
+	let key_auth = BackendAuth::Key {
+		value: SecretString::new("my-secret-key".into()),
+		authorization_location: AuthorizationLocation::default(),
+	};
 	apply_backend_auth(&backend_info, &key_auth, &mut req)
 		.await
 		.expect("apply backend auth");
@@ -72,6 +81,39 @@ async fn test_backend_auth_key() {
 		.expect("authorization header must be set");
 	assert_eq!(auth.to_str().unwrap(), "Bearer my-secret-key");
 	assert!(auth.is_sensitive());
+}
+
+#[tokio::test]
+async fn test_backend_auth_key_query_parameter() {
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	*req.uri_mut() = "http://example.com/search?keep=yes&key=old"
+		.parse()
+		.unwrap();
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let inputs = t.inputs();
+
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs,
+	};
+
+	let key_auth = BackendAuth::Key {
+		value: SecretString::new("my-secret-key".into()),
+		authorization_location: AuthorizationLocation::QueryParameter { name: "key".into() },
+	};
+	apply_backend_auth(&backend_info, &key_auth, &mut req)
+		.await
+		.expect("apply backend auth");
+
+	assert_eq!(
+		req.uri().to_string(),
+		"http://example.com/search?keep=yes&key=my-secret-key"
+	);
 }
 
 #[tokio::test]

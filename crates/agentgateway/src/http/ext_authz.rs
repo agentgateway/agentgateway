@@ -2,11 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use ::http::{HeaderMap, StatusCode, Uri, header};
-use prost_types::Timestamp;
-use serde_json::Value as JsonValue;
-use url::form_urlencoded;
-
 use crate::cel::{BufferedBody, Expression, Value};
 use crate::http::envoy_proto_common;
 use crate::http::ext_authz::proto::attribute_context::HttpRequest;
@@ -24,6 +19,9 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendPolicy, SimpleBackendReference};
 use crate::*;
+use ::http::{HeaderMap, StatusCode, Uri, header};
+use prost_types::Timestamp;
+use serde_json::Value as JsonValue;
 #[cfg(test)]
 #[path = "ext_authz_tests.rs"]
 mod tests;
@@ -760,38 +758,13 @@ fn apply_query_parameters_to_request(
 	query_parameters_to_set: &[proto::QueryParameter],
 	query_parameters_to_remove: &[String],
 ) -> Result<(), ProxyError> {
-	if query_parameters_to_set.is_empty() && query_parameters_to_remove.is_empty() {
-		return Ok(());
-	}
-
-	crate::http::modify_url(req.uri_mut(), |url| {
-		let mut pairs = url
-			.query()
-			.map(|query| {
-				form_urlencoded::parse(query.as_bytes())
-					.map(|(key, value)| (key.into_owned(), value.into_owned()))
-					.collect::<Vec<_>>()
-			})
-			.unwrap_or_default();
-
-		for param in query_parameters_to_set {
-			pairs.retain(|(key, _)| key != &param.key);
-			pairs.push((param.key.clone(), param.value.clone()));
-		}
-
-		if !query_parameters_to_remove.is_empty() {
-			pairs.retain(|(key, _)| !query_parameters_to_remove.contains(key));
-		}
-
-		let mut serializer = form_urlencoded::Serializer::new(String::new());
-		for (key, value) in pairs {
-			serializer.append_pair(&key, &value);
-		}
-
-		let query = serializer.finish();
-		url.set_query((!query.is_empty()).then_some(query.as_str()));
-		Ok(())
-	})
+	crate::http::modify_query_parameters(
+		req.uri_mut(),
+		query_parameters_to_set
+			.iter()
+			.map(|param| (param.key.as_str(), param.value.as_str())),
+		query_parameters_to_remove.iter().map(String::as_str),
+	)
 	.map_err(ProxyError::Processing)
 }
 
