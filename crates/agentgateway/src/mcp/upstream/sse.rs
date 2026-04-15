@@ -1,9 +1,12 @@
 use ::http::Uri;
 use ::http::header::{ACCEPT, CONTENT_TYPE};
 use anyhow::anyhow;
+use futures_core::Stream;
 use futures_core::stream::BoxStream;
 use futures_util::{StreamExt, TryFutureExt};
 use headers::HeaderMapExt;
+use parking_lot::Mutex;
+use pin_project_lite::pin_project;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest, ServerJsonRpcMessage,
 };
@@ -30,13 +33,32 @@ struct ClientCore {
 pub struct Client {
 	client: ClientCore,
 
-	active_stream: Arc<tokio::sync::Mutex<Option<Arc<super::stdio::Process>>>>,
+	active_stream: Arc<Mutex<Option<std::sync::Weak<super::stdio::Process>>>>,
 }
 
 struct SseClient {
 	client: ClientCore,
 
 	events: BoxedSseStream,
+}
+
+pin_project! {
+	struct GuardedMessages {
+		#[pin]
+		inner: Messages,
+		_guard: Arc<Process>,
+	}
+}
+
+impl Stream for GuardedMessages {
+	type Item = Result<ServerJsonRpcMessage, ClientError>;
+
+	fn poll_next(
+		self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+	) -> std::task::Poll<Option<Self::Item>> {
+		self.project().inner.poll_next(cx)
+	}
 }
 
 impl crate::mcp::upstream::stdio::MCPTransport for SseClient {
@@ -172,17 +194,24 @@ impl Client {
 	}
 
 	pub async fn stop(&self) -> Result<(), UpstreamError> {
-		let mut stream = self.active_stream.lock().await;
-		if let Some(s) = stream.as_ref() {
+		let stream = self
+			.active_stream
+			.lock()
+			.take()
+			.and_then(|stream| stream.upgrade());
+		if let Some(s) = stream {
 			s.stop().await?;
 		}
-		*stream = None;
 		Ok(())
 	}
 	async fn get_stream(&self, ctx: &IncomingRequestContext) -> Result<Arc<Process>, UpstreamError> {
-		let mut stream = self.active_stream.lock().await;
-		if let Some(s) = stream.clone() {
-			return Ok(s);
+		if let Some(stream) = self
+			.active_stream
+			.lock()
+			.as_ref()
+			.and_then(std::sync::Weak::upgrade)
+		{
+			return Ok(stream);
 		}
 
 		let (post_uri, sse) = self.establish_sse(ctx).await?;
@@ -195,7 +224,11 @@ impl Client {
 		};
 
 		let proc = Arc::new(Process::new(transport));
-		*stream = Some(proc.clone());
+		let mut stream = self.active_stream.lock();
+		if let Some(existing) = stream.as_ref().and_then(std::sync::Weak::upgrade) {
+			return Ok(existing);
+		}
+		*stream = Some(Arc::downgrade(&proc));
 		Ok(proc)
 	}
 	async fn establish_sse(
@@ -226,7 +259,16 @@ impl Client {
 		ctx: &IncomingRequestContext,
 	) -> Result<Messages, UpstreamError> {
 		let stream = self.get_stream(ctx).await?;
-		stream.get_event_stream().await
+		let messages = stream.get_event_stream().await?;
+		// We want to drop the Process handle when the stream is done, so that we can close it if we are
+		// the last reference.
+		Ok(Messages::boxed(
+			GuardedMessages {
+				inner: messages,
+				_guard: stream,
+			}
+			.boxed(),
+		))
 	}
 	pub async fn send_message(
 		&self,
