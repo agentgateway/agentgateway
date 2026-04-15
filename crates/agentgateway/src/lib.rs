@@ -470,6 +470,9 @@ impl schemars::JsonSchema for StringBoolFloat {
 pub struct Config {
 	pub ipv6_enabled: bool,
 	pub network: Strng,
+	/// How the gateway discovers its own workload for locality-aware load balancing.
+	/// `None` disables locality filtering — any LoadBalancer config on services is ignored.
+	pub self_identity: Option<types::discovery::SelfIdentitySource>,
 	#[serde(with = "serde_dur")]
 	pub termination_max_deadline: Duration,
 	#[serde(with = "serde_dur")]

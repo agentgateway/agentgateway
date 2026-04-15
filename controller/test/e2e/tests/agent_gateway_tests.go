@@ -15,6 +15,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/extauth"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/extproc"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/jwtauth"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/locality"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/mcp"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/otel"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/policystatus"
@@ -34,6 +35,7 @@ func AgentgatewaySuiteRunner() e2e.SuiteRunner {
 	agentgatewaySuiteRunner.Register("BasicAuth", basicauth.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("ApiKeyAuth", apikeyauth.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("JwtAuth", jwtauth.NewTestingSuite)
+	agentgatewaySuiteRunner.Register("Locality", locality.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("CSRF", csrf.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("Delegation", delegation.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("Extauth", extauth.NewTestingSuite)

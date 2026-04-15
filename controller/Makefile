@@ -582,6 +582,17 @@ else
 	kubectl apply --kustomize "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=$(GIE_CRD_VERSION)"
 endif
 
+# Source the Istio CRDs from the vendored istio.io/istio module so the CRD
+# version always matches the API version agentgateway is compiled against.
+# The controller consumes Istio's ambient collections (WorkloadEntry,
+# ServiceEntry, AuthorizationPolicy...) so these CRDs must exist for those
+# informers to receive objects.
+ISTIO_CRDS_FILE := $(shell go list -m -f '{{.Dir}}' istio.io/istio)/manifests/charts/base/files/crd-all.gen.yaml
+
+.PHONY: istio-crds
+istio-crds: ## Install Istio CRDs (WorkloadEntry, ServiceEntry, etc.) from the vendored istio module
+	kubectl apply --server-side -f "$(ISTIO_CRDS_FILE)"
+
 .PHONY: metallb
 metallb: ## Install the MetalLB load balancer
 	kubectl apply -f ./test/setup/metallb.yaml
@@ -592,7 +603,7 @@ metallb: ## Install the MetalLB load balancer
 deploy-agentgateway: package-agentgateway-charts deploy-agentgateway-crd-chart deploy-agentgateway-chart ## Deploy the agentgateway chart and CRDs
 
 .PHONY: setup-base
-setup-base: kind-create gw-api-crds gie-crds metallb ## Setup the base infrastructure (kind cluster, CRDs, and MetalLB)
+setup-base: kind-create gw-api-crds gie-crds istio-crds metallb ## Setup the base infrastructure (kind cluster, CRDs, and MetalLB)
 
 # Creates a functional kind cluster, builds and loads all images, and packages charts
 # Does NOT deploy anything to the cluster

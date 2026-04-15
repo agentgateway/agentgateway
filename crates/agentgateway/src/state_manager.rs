@@ -5,9 +5,12 @@ use agent_core::prelude::*;
 use notify::{EventKind, RecursiveMode};
 use tokio::fs;
 
+use agent_core::readiness;
+
 use crate::client::Client;
 use crate::store::Stores;
 use crate::types::agent::ListenerTarget;
+use crate::types::discovery::SelfIdentitySource;
 use crate::types::proto::agent::Resource as ADPResource;
 use crate::types::proto::workload::Address as XdsAddress;
 use crate::{ConfigSource, client, control, store};
@@ -223,4 +226,104 @@ impl LocalClient {
 pub struct PreviousState {
 	pub binds: store::BindPreviousState,
 	pub discovery: store::DiscoveryPreviousState,
+}
+
+const SELF_WORKLOAD_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Populates the discovery store's self_workload according to `config.self_identity`.
+///
+/// For `Static`, sets the cached workload synchronously and rebuckets.
+/// For `Wds`, blocks readiness until WDS delivers the workload or timeout expires.
+pub fn start_self_workload_resolution(
+	config: &crate::Config,
+	stores: Stores,
+	ready: &readiness::Ready,
+) {
+	match &config.self_identity {
+		Some(SelfIdentitySource::Static(w)) => {
+			let store = stores.discovery.read();
+			store.self_workload.set((**w).clone());
+			store.rebucket_all();
+		},
+		Some(SelfIdentitySource::Wds {
+			name,
+			namespace,
+			cluster_id,
+		}) => {
+			let task = ready.register_task("self workload");
+			let name = name.clone();
+			let namespace = namespace.clone();
+			let cluster_id = cluster_id.clone();
+			tokio::spawn(async move {
+				watch_self_workload(stores, name, namespace, cluster_id, Some(task)).await;
+			});
+		},
+		None => {},
+	}
+}
+
+async fn watch_self_workload(
+	stores: Stores,
+	name: Strng,
+	namespace: Strng,
+	cluster_id: Strng,
+	mut ready_task: Option<readiness::BlockReady>,
+) {
+	let mut inserts = stores.discovery.read().workloads.subscribe_inserts();
+
+	// allow a cluster id mismatch as a very common misconfiguration is that the control plane and
+	// dataplane mismatch on this but if we do hit a conflict (should be rare) we use the cluster_id
+	// as a tiebreaker
+	let lookup = || {
+		let store = stores.discovery.read();
+		store
+			.workloads
+			.find_by_name(&name, &namespace)
+			.max_by_key(|w| w.cluster_id == cluster_id)
+			.cloned()
+	};
+
+	{
+		let store = stores.discovery.read();
+		if let Some(w) = lookup() {
+			store.self_workload.set((*w).clone());
+			store.rebucket_all();
+			return;
+		}
+	}
+
+	// wait for any change before starting our timeout if the control plane is down, or xDS is
+	// otherwise slow we don't want to bail early without locality info
+	if inserts.changed().await.is_err() {
+		return;
+	}
+
+	let deadline = tokio::time::sleep(SELF_WORKLOAD_TIMEOUT);
+	tokio::pin!(deadline);
+	loop {
+		{
+			let store = stores.discovery.read();
+			if let Some(w) = lookup() {
+				store.self_workload.set((*w).clone());
+				store.rebucket_all();
+				return;
+			}
+		}
+		tokio::select! {
+			_ = &mut deadline, if ready_task.is_some() => {
+				warn!(
+					%namespace, %name,
+					"timed out waiting for own workload in WDS after {:?}; unblocking readiness, still watching",
+					SELF_WORKLOAD_TIMEOUT
+				);
+				// drop the task, but keep looping so we can still populate the self_workload if it shows up later
+				ready_task = None;
+			}
+			r = inserts.changed() => {
+				if r.is_err() {
+					return;
+				}
+			}
+		}
+	}
 }

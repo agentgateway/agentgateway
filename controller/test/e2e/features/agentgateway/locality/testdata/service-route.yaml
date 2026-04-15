@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: locality-svc
+  namespace: agentgateway-locality
+spec:
+  # select the WorkloadEntry, not  the Pods from the deployment
+  # the WorkloadEntries lets us override locality
+  selector:
+    app: locality-svc-workloadentry
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: locality-route
+  namespace: agentgateway-locality
+spec:
+  parentRefs:
+    - name: gateway
+  hostnames:
+    - "locality.test"
+  rules:
+    - backendRefs:
+        - name: locality-svc
+          port: 80

@@ -15,7 +15,9 @@ use types::proto::workload::{
 	Address as XdsAddress, PortList, Service as XdsService, Workload as XdsWorkload,
 };
 
+use crate::store::SelfWorkload;
 use crate::types::discovery::{Endpoint, InboundProtocol, NetworkMode, Service, Workload};
+use crate::types::loadbalancer::{EndpointSet, LocalityRanker};
 use crate::*;
 
 #[derive(Debug)]
@@ -23,6 +25,8 @@ pub struct Store {
 	pub workloads: WorkloadStore,
 
 	pub services: ServiceStore,
+
+	pub self_workload: SelfWorkload,
 }
 
 impl Store {}
@@ -42,8 +46,38 @@ impl Store {
 				by_uid: Default::default(),
 			},
 			services: Default::default(),
+			self_workload: SelfWorkload::new(),
 		}
 	}
+
+	/// Recompute every endpoint's bucket against the current locality information.
+	/// Called when self-identity resolves (static or WDS).
+	pub fn rebucket_all(&self) {
+		let Some(source) = self.self_workload.get() else {
+			return;
+		};
+		for services in self.services.by_host.values() {
+			for svc in services {
+				let ranker = LocalityRanker::new(svc.load_balancer.as_ref(), Some(source));
+
+				// bucket count should only change on service updates
+				// if this assertion fails that means:
+				// - ranker has more buckets can lead to endpoints being dropped
+				// - ranker has fewer buckets can lead to stale endpoints in higher buckets
+				debug_assert_eq!(
+					ranker.priority_levels(),
+					svc.endpoints.num_buckets(),
+					"bucket count changed unexpectedly",
+				);
+
+				svc.endpoints.rebucket(|ep: &Endpoint| {
+					let wl = &self.workloads.find_uid(&ep.workload_uid)?;
+					ranker.bucket_for(&wl)
+				});
+			}
+		}
+	}
+
 	pub fn insert_address(&mut self, a: XdsAddress) -> anyhow::Result<()> {
 		match a.r#type {
 			Some(XdsType::Workload(w)) => self.insert_workload(w),
@@ -75,7 +109,7 @@ impl Store {
 		self.workloads.insert(workload.clone());
 		self
 			.services
-			.insert_endpoint_for_services(&workload, &services)?;
+			.insert_endpoint_for_services(&workload, &services, self.self_workload.get())?;
 
 		Ok(())
 	}
@@ -93,13 +127,40 @@ impl Store {
 		Ok(())
 	}
 	pub fn insert_service_internal(&mut self, mut service: Service) {
-		// If the service already exists, add existing endpoints into the new service.
-		if let Some(prev) = self
+		let ranker = LocalityRanker::new(service.load_balancer.as_ref(), self.self_workload.get());
+		let prev = self
 			.services
-			.get_by_namespaced_host(&service.namespaced_hostname())
-		{
-			// TODO: if health mode changes we are in trouble
-			service.endpoints = prev.endpoints.clone();
+			.get_by_namespaced_host(&service.namespaced_hostname());
+
+		// build a fresh EndpointSet every time the Service changes so we can handle changes to
+		// locality settings, and health requirements.
+		// TODO there may be some optimizations here when we know the lb setting didn't change
+		// and our self_workload info was the same, but we'd need mut access to the old service to
+		// take its endpointset
+		service.endpoints = EndpointSet::new_empty(ranker.priority_levels());
+		let key = service.namespaced_hostname();
+
+		// inserting endpoints requires grabbing the workload's locality info to bucket them
+		let insert_ep = |ep: Endpoint| {
+			if let Some(wl) = self.workloads.find_uid(&ep.workload_uid) {
+				if service.should_include_endpoint(ep.status) {
+					service.endpoints.insert(ep, &wl, &ranker);
+				}
+			}
+		};
+
+		// old endpoints get re-inserted to update locality bucketing
+		if let Some(prev) = prev {
+			for (ep, _) in prev.endpoints.all_endpoints() {
+				insert_ep((*ep).clone());
+			}
+		}
+
+		// add endpoints that arrived after before the service
+		if let Some(staged) = self.services.staged_services.remove(&key) {
+			for (_, ep) in staged {
+				insert_ep(ep.clone());
+			}
 		}
 
 		self.services.insert(service);
@@ -222,6 +283,25 @@ impl WorkloadStore {
 	pub fn find_address(&self, addr: &NetworkAddress) -> Option<Arc<Workload>> {
 		self.by_addr.get(addr).map(WorkloadByAddr::get)
 	}
+
+	/// Finds a workload by name and namespace.
+	/// Currently O(n) as we only use it in one place at startup.
+	/// Add an index if we use it on a more hot path.
+	pub fn find_by_name<'a>(
+		&'a self,
+		name: &'a Strng,
+		namespace: &'a Strng,
+	) -> impl Iterator<Item = &'a Arc<Workload>> + 'a {
+		self
+			.by_uid
+			.values()
+			.filter(move |w| w.name == *name && w.namespace == *namespace)
+	}
+
+	/// Subscribe to "any workload inserted" events. The receiver's `changed()` wakes on each insert.
+	pub fn subscribe_inserts(&self) -> tokio::sync::watch::Receiver<()> {
+		self.insert_notifier.subscribe()
+	}
 }
 
 /// Data store for service information.
@@ -246,6 +326,7 @@ impl ServiceStore {
 		&mut self,
 		workload: &Arc<Workload>,
 		services: &HashMap<String, PortList>,
+		locality_source: Option<&Workload>,
 	) -> anyhow::Result<()> {
 		for (namespaced_host, ports) in services {
 			// Parse the namespaced hostname for the service.
@@ -257,14 +338,22 @@ impl ServiceStore {
 					port: crate::types::discovery::ports_from_xds(ports),
 					status: workload.status,
 				},
+				workload,
+				locality_source,
 			)
 		}
 		Ok(())
 	}
-	fn insert_endpoint(&mut self, service_name: NamespacedHostname, ep: Endpoint) {
+
+	fn insert_endpoint(
+		&mut self,
+		service_name: NamespacedHostname,
+		ep: Endpoint,
+		dest_workload: &Workload,
+		locality_source: Option<&Workload>,
+	) {
 		let ep_uid = ep.workload_uid.clone();
 		if let Some(svc) = self.get_by_namespaced_host(&service_name) {
-			// We may or may not accept the endpoint based on it's health
 			if !svc.should_include_endpoint(ep.status) {
 				trace!(
 					"service doesn't accept pod with status {:?}, skip",
@@ -272,7 +361,8 @@ impl ServiceStore {
 				);
 				return;
 			}
-			svc.endpoints.insert(ep);
+			let ranker = LocalityRanker::new(svc.load_balancer.as_ref(), locality_source);
+			svc.endpoints.insert(ep, dest_workload, &ranker);
 		} else {
 			// We received workload endpoints, but don't have the Service yet.
 			// This can happen due to ordering issues.
@@ -354,31 +444,11 @@ impl ServiceStore {
 		}
 	}
 
-	/// Adds the given service.
+	/// Register a service in the lookup indexes. The caller must ensure the Service's endpoints have
+	/// been properly inserted and bucketed, including endpoints for staged_services.
 	fn insert(&mut self, service: Service) {
-		self.insert_internal(service, false)
-	}
-
-	fn insert_internal(&mut self, service: Service, endpoint_update_only: bool) {
 		let namespaced_hostname = service.namespaced_hostname();
-		// If we're replacing an existing service, remove the old one from all data structures.
-		if !endpoint_update_only {
-			// First add any staged service endpoints. Due to ordering issues, we may have received
-			// the workloads before their associated services.
-			if let Some(endpoints) = self.staged_services.remove(&namespaced_hostname) {
-				trace!(
-					"staged service found, inserting {} endpoints",
-					endpoints.len()
-				);
-				for (_, ep) in endpoints {
-					if service.should_include_endpoint(ep.status) {
-						service.endpoints.insert(ep);
-					}
-				}
-			}
-
-			let _ = self.remove(&namespaced_hostname);
-		}
+		let _ = self.remove(&namespaced_hostname);
 
 		// Create the Arc.
 		let service = Arc::new(service);
@@ -563,6 +633,7 @@ impl StoreUpdater {
 			services: Default::default(),
 			workloads: Default::default(),
 		};
+		let source = s.self_workload.get().cloned();
 		for wl in workloads {
 			trace!("inserting local workload {}", &wl.workload.uid);
 			let w = Arc::new(wl.workload);
@@ -576,7 +647,8 @@ impl StoreUpdater {
 				.into_iter()
 				.map(|(k, v)| (k, crate::types::discovery::port_list_from_ports(v)))
 				.collect();
-			s.services.insert_endpoint_for_services(&w, &services)?;
+			s.services
+				.insert_endpoint_for_services(&w, &services, source.as_ref())?;
 			old_workloads.remove(&w.uid);
 			next_state.workloads.insert(w.uid.clone());
 		}

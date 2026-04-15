@@ -199,6 +199,22 @@ impl<'de> Deserialize<'de> for NetworkAddress {
 	}
 }
 
+/// Identifies the agentgateway's own workload for locality-aware load balancing.
+///
+/// `Static`: all fields come directly from env/config. Ready immediately.
+/// `Wds`: the gateway's own pod is resolved out of the WDS workload store using
+/// `(namespace, name)`. Readiness blocks until it resolves (or times out).
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SelfIdentitySource {
+	Static(Arc<Workload>),
+	Wds {
+		name: Strng,
+		namespace: Strng,
+		cluster_id: Strng,
+	},
+}
+
 #[derive(Debug, Default, Hash, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Workload {
@@ -426,6 +442,18 @@ pub struct Locality {
 	pub region: Strng,
 	pub zone: Strng,
 	pub subzone: Strng,
+}
+
+impl Locality {
+	/// Parse an Istio-style locality string "region/zone/subzone" (trailing parts optional).
+	pub fn parse(s: &str) -> Self {
+		let mut parts = s.splitn(3, '/');
+		Locality {
+			region: parts.next().unwrap_or_default().into(),
+			zone: parts.next().unwrap_or_default().into(),
+			subzone: parts.next().unwrap_or_default().into(),
+		}
+	}
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]

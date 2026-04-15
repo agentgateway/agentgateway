@@ -42,6 +42,10 @@ use agent_hbone::server::H2Request;
 #[path = "gateway_test.rs"]
 mod tests;
 
+#[cfg(test)]
+#[path = "locality_test.rs"]
+mod locality_tests;
+
 #[derive(Debug, Clone, PartialEq)]
 
 pub enum HboneAddress {

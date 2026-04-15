@@ -13,6 +13,7 @@ use serde::de::DeserializeOwned;
 use crate::control::caclient;
 use crate::telemetry::log::{LoggingFields, MetricFields};
 use crate::telemetry::trc;
+use crate::types;
 use crate::types::discovery::{Identity, WaypointIdentity};
 use crate::{
 	Address, Config, ConfigSource, DnsLookupFamily, NestedRawConfig, RawLoggingLevel, StringOrInt,
@@ -213,6 +214,55 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		None
 	};
 	let network = parse("NETWORK")?.or(raw.network).unwrap_or_default();
+
+	// Self-identity for locality-aware load balancing.
+	// Priority:
+	//  1. Operator explicitly set LOCALITY -> Static. This is the one field WDS would otherwise
+	//     fill in from the node, so it's the only real "override" signal. NETWORK and NODE_NAME
+	//     are commonly set by istio-ambient/downward-API in normal k8s deploys and must not
+	//     bypass WDS.
+	//  2. POD_NAME+NAMESPACE known -> WDS. Standard k8s case: the control plane delivers our
+	//     own Workload with locality derived from the node we're scheduled on.
+	//  3. No pod identity but some env (NODE_NAME / NETWORK) -> Static with what we have.
+	//     Covers non-pod deploys where WDS self-lookup isn't possible.
+	let locality_env = parse::<String>("LOCALITY")?;
+	let node_env =
+		empty_to_none(Some(ENV.node_name.clone())).or_else(|| parse("NODE_NAME").ok().flatten());
+	let pod_name =
+		empty_to_none(Some(ENV.pod_name.clone())).or_else(|| parse("POD_NAME").ok().flatten());
+	let pod_namespace =
+		empty_to_none(Some(ENV.pod_namespace.clone())).or_else(|| parse("NAMESPACE").ok().flatten());
+
+	let build_static = || types::discovery::Workload {
+		name: pod_name.clone().unwrap_or_default().into(),
+		namespace: pod_namespace.clone().unwrap_or_default().into(),
+		network: network.clone().into(),
+		node: node_env.clone().unwrap_or_default().into(),
+		cluster_id: cluster.clone().into(),
+		locality: locality_env
+			.as_deref()
+			.map(types::discovery::Locality::parse)
+			.unwrap_or_default(),
+		..Default::default()
+	};
+
+	let self_identity = if locality_env.is_some() {
+		Some(types::discovery::SelfIdentitySource::Static(Arc::new(
+			build_static(),
+		)))
+	} else if let (Some(name), Some(ns)) = (pod_name.clone(), pod_namespace.clone()) {
+		Some(types::discovery::SelfIdentitySource::Wds {
+			name: name.into(),
+			namespace: ns.into(),
+			cluster_id: cluster.clone().into(),
+		})
+	} else if node_env.is_some() || !network.is_empty() {
+		Some(types::discovery::SelfIdentitySource::Static(Arc::new(
+			build_static(),
+		)))
+	} else {
+		None
+	};
 	let termination_min_deadline = parse_duration("CONNECTION_MIN_TERMINATION_DEADLINE")?
 		.or(raw.connection_min_termination_deadline)
 		.unwrap_or_default();
@@ -274,7 +324,8 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 
 	Ok(crate::Config {
 		ipv6_enabled,
-		network: network.into(),
+		network: network.clone().into(),
+		self_identity,
 		admin_addr,
 		stats_addr,
 		readiness_addr,
