@@ -484,6 +484,29 @@ fn dynamic_ops() {
 }
 
 #[test]
+fn deep_arithmetic_chain() {
+	// Left-recursive parser builds `1 + 1 + ... + 1` as deeply-nested Call nodes.
+	// Resolver must walk the spine iteratively or this overflows the stack.
+	let ctx = Context::default();
+	let resolver = context::DefaultVariableResolver;
+	let n = 250;
+
+	let add = std::iter::repeat("1").take(n).collect::<Vec<_>>().join(" + ");
+	let p = Program::compile(&add).unwrap();
+	let res = Value::resolve(&p.expression, &ctx, &resolver).unwrap();
+	assert_eq!(res.json().unwrap(), json!(n as i64));
+
+	// Left-associative `0 - 1 - 1 - ... - 1` (n ones) == -n.
+	let sub = std::iter::once("0".to_string())
+		.chain(std::iter::repeat("1".to_string()).take(n))
+		.collect::<Vec<_>>()
+		.join(" - ");
+	let p = Program::compile(&sub).unwrap();
+	let res = Value::resolve(&p.expression, &ctx, &resolver).unwrap();
+	assert_eq!(res.json().unwrap(), json!(-(n as i64)));
+}
+
+#[test]
 fn invalid_functions() {
 	let ctx = Context::default();
 	let expr = Program::compile("size('1', 2, 3)").unwrap();

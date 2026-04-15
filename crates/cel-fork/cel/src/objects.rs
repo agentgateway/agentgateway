@@ -586,18 +586,35 @@ impl<'a> Value<'a> {
 				}
 				if call.args.len() == 2 {
 					match call.func_name.as_str() {
-						operators::ADD => return resolve(&call.args[0])? + resolve(&call.args[1])?,
-						operators::SUBSTRACT => {
-							return resolve(&call.args[0])? - resolve(&call.args[1])?;
-						},
-						operators::DIVIDE => {
-							return resolve(&call.args[0])? / resolve(&call.args[1])?;
-						},
-						operators::MULTIPLY => {
-							return resolve(&call.args[0])? * resolve(&call.args[1])?;
-						},
-						operators::MODULO => {
-							return resolve(&call.args[0])? % resolve(&call.args[1])?;
+						op @ (operators::ADD
+						| operators::SUBSTRACT
+						| operators::DIVIDE
+						| operators::MULTIPLY
+						| operators::MODULO) => {
+							// Parser builds `a op b op c op ...` as a left-recursive tree; walk the
+							// left spine iteratively so deep chains don't recurse (and overflow).
+							let mut rhs_rev = vec![&call.args[1]];
+							let mut leftmost = &call.args[0];
+							while let Expr::Call(inner) = &leftmost.expr
+								&& inner.args.len() == 2
+								&& inner.func_name == op
+							{
+								rhs_rev.push(&inner.args[1]);
+								leftmost = &inner.args[0];
+							}
+							let mut acc = resolve(leftmost)?;
+							for rhs in rhs_rev.into_iter().rev() {
+								let r = resolve(rhs)?;
+								acc = match op {
+									operators::ADD => (acc + r)?,
+									operators::SUBSTRACT => (acc - r)?,
+									operators::DIVIDE => (acc / r)?,
+									operators::MULTIPLY => (acc * r)?,
+									operators::MODULO => (acc % r)?,
+									_ => unreachable!(),
+								};
+							}
+							return Ok(acc);
 						},
 						operators::EQUALS => {
 							let left = resolve_materialized(&call.args[0])?;
