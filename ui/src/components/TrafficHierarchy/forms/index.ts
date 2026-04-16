@@ -119,4 +119,8 @@ export const resourceLabels: Record<
   mcpTarget: { singular: "MCP Target", plural: "MCP Targets" },
   authorizationPolicy: { singular: "Authorization Policy", plural: "Authorization Policies" },
   transformationsPolicy: { singular: "Transformations Policy", plural: "Transformations Policies" },
+  jwtAuthPolicy: { singular: "JWT Auth Policy", plural: "JWT Auth Policies" },
+  basicAuthPolicy: { singular: "Basic Auth Policy", plural: "Basic Auth Policies" },
+  apiKeyPolicy: { singular: "API Key Policy", plural: "API Key Policies" },
+  mcpAuthenticationPolicy: { singular: "MCP Authentication Policy", plural: "MCP Authentication Policies" },
 };
