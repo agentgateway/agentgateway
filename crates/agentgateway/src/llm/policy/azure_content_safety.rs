@@ -218,7 +218,7 @@ async fn send_content_safety_request<Req: Serialize, Resp: serde::de::Deserializ
 
 	debug!(
 		uri = %uri,
-		"[Azure Content Safety] >>> Sending {} request", operation
+		">>> Sending {} request", operation
 	);
 
 	let pols = build_policies(root);
@@ -317,13 +317,13 @@ async fn send_analyze_text(
 			severity_threshold = threshold,
 			categories = ?resp.categories_analysis.iter().map(|c| (&c.category, c.severity)).collect::<Vec<_>>(),
 			blocklist_matches = resp.blocklists_match.len(),
-			"[Azure Content Safety] Content BLOCKED by text analysis"
+			"Content BLOCKED by text analysis"
 		);
 	} else {
 		debug!(
 			endpoint = %root.endpoint,
 			categories = ?resp.categories_analysis.iter().map(|c| (&c.category, c.severity)).collect::<Vec<_>>(),
-			"[Azure Content Safety] Content passed safety checks"
+			"Content passed safety checks"
 		);
 	}
 
@@ -365,12 +365,12 @@ async fn send_detect_jailbreak(
 	if resp.jailbreak_detected() {
 		warn!(
 			endpoint = %root.endpoint,
-			"[Azure Content Safety] Jailbreak attempt DETECTED"
+			"Jailbreak attempt DETECTED"
 		);
 	} else {
 		debug!(
 			endpoint = %root.endpoint,
-			"[Azure Content Safety] No jailbreak detected"
+			"No jailbreak detected"
 		);
 	}
 
