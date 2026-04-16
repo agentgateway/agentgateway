@@ -1054,8 +1054,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       // Apply form-specific transformation if available
       // Skip for types that don't have a corresponding form entry
       const form = (
-        selected.type !== "llmPolicy" && 
-        selected.type !== "mcpPolicy" &&
+        selected.type !== "llmPolicy" &&
         selected.type !== "listenerPolicy" &&
         selected.type !== "backendPolicy"
       )
@@ -1148,18 +1147,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         }, {} as Record<string, unknown>);
         await api.createOrUpdateLLM({
           ...currentConfig,
-          policies: { ...currentPolicies, [selected.node.policyType]: dataToSave },
-        } as any);
-      } else if (selected.type === "mcpPolicy") {
-        // Update the specific policy in the MCP config
-        if (!hierarchy.mcp) throw new Error("MCP config not found");
-        const currentPolicies = hierarchy.mcp.policies.reduce((acc, p) => {
-          acc[p.policyType] = p.policy;
-          return acc;
-        }, {} as Record<string, unknown>);
-        await api.createOrUpdateMCP({
-          ...hierarchy.mcp.config,
-          targets: hierarchy.mcp.targets.map((t) => t.target),
           policies: { ...currentPolicies, [selected.node.policyType]: dataToSave },
         } as any);
       }
@@ -2242,8 +2229,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           <Form
             id="model-form"
             key={isEditing ? "editing" : "viewing"}
-            schema={forms.model.schema}
-            uiSchema={forms.model.uiSchema}
+            schema={formConfig.schema}
+            uiSchema={formConfig.uiSchema}
             formData={formData}
             validator={validator}
             disabled={!isEditing || saving}

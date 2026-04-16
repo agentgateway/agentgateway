@@ -122,10 +122,6 @@ const TooltipLabel = styled.span`
   color: var(--color-text-base);
 `;
 
-const TooltipValue = styled.span`
-  color: var(--color-text-secondary);
-`;
-
 const TooltipDivider = styled.div`
   height: 1px;
   background-color: var(--color-border-base);
