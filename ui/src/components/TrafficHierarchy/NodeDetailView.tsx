@@ -1052,16 +1052,14 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       }
 
       // Apply form-specific transformation if available
-      // Skip for types that don't have a corresponding form entry
-      const form = (
-        selected.type !== "llmPolicy" &&
-        selected.type !== "listenerPolicy" &&
-        selected.type !== "backendPolicy"
-      )
-        ? (forms[selected.type] as any)
-        : undefined;
+      const policyType = (selected as any).policyType as string | undefined;
+      const form = (selected.type === "listenerPolicy" || selected.type === "backendPolicy") 
+        ? (getFormForPolicy(policyType ?? "", "routePolicy") as any) 
+        : selected.type !== "llmPolicy" 
+          ? (forms[selected.type] as any) 
+          : undefined;
       let dataToSave = fd;
-      if (form?.transformBeforeSubmit) {
+      if (form?.transformBeforeSubmit) { 
         dataToSave = form.transformBeforeSubmit(fd) as Record<string, unknown>;
       }
 

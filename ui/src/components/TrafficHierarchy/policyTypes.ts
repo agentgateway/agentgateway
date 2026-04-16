@@ -117,14 +117,14 @@ export function getDefaultPolicyValue(policyType: string): Record<string, unknow
     // ExtAuthz1 = "invalid" | { service: { name, port } } | { host: string } | { backend: string }
     case "extAuthz":
       return {
-        host: "",
+        host: "localhost:9001",
       };
 
     // ExtProc = { policies?, failureMode?, ... } & ExtProc1
     // ExtProc1 = "invalid" | { service: { name, port } } | { host: string } | { backend: string }
     case "extProc":
       return {
-        host: "",
+        host: "localhost:9001",
       };
 
     // Rate limiting

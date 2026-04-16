@@ -12,6 +12,7 @@ import * as backendForm from "./backendForm";
 import * as basicAuthPolicyForm from "./basicAuthPolicyForm";
 import * as bindForm from "./bindForm";
 import * as corsPolicyForm from "./corsPolicyForm";
+import * as extAuthzPolicyForm from "./extAuthzPolicyForm";
 import * as frontendPoliciesForm from "./frontendPoliciesForm";
 import * as genericPolicyForm from "./genericPolicyForm";
 import * as jwtAuthPolicyForm from "./jwtAuthPolicyForm";
@@ -28,6 +29,7 @@ import * as routeForm from "./routeForm";
 import * as routePolicyForm from "./routePolicyForm";
 import * as topLevelBackendForm from "./topLevelBackendForm";
 import * as transformationsPolicyForm from "./transformationsPolicyForm";
+import * as extProcPolicyForm from "./extProcPolicyForm";
 
 export const forms = {
   bind: bindForm,
@@ -53,6 +55,8 @@ export const forms = {
   basicAuthPolicy: basicAuthPolicyForm,
   apiKeyPolicy: apiKeyPolicyForm,
   mcpAuthenticationPolicy: mcpAuthenticationPolicyForm,
+  extAuthzPolicy: extAuthzPolicyForm,
+  extProcPolicy: extProcPolicyForm,
 };
 
 const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = { 
@@ -66,6 +70,8 @@ const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = {
   basicAuth: "basicAuthPolicy",
   apiKey: "apiKeyPolicy",
   mcpAuthentication: "mcpAuthenticationPolicy",
+  extAuthz: "extAuthzPolicy",
+  extProc: "extProcPolicy",
 }
 
 export function getFormForPolicy(policyType: string, fallback: keyof typeof forms = "routePolicy") { 
@@ -123,4 +129,6 @@ export const resourceLabels: Record<
   basicAuthPolicy: { singular: "Basic Auth Policy", plural: "Basic Auth Policies" },
   apiKeyPolicy: { singular: "API Key Policy", plural: "API Key Policies" },
   mcpAuthenticationPolicy: { singular: "MCP Authentication Policy", plural: "MCP Authentication Policies" },
+  extAuthzPolicy: { singular: "External Auth Policy", plural: "External Auth Policies" },
+  extProcPolicy: { singular: "External Processor Policy", plural: "External Processor Policies" },
 };
