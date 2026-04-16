@@ -92,9 +92,7 @@ export function getDefaultPolicyValue(policyType: string): Record<string, unknow
     // jwks is FileInlineOrRemote = { file: string } | string | { url: string }
     case "jwtAuth":
       return {
-        issuer: "",
-        audiences: [],
-        jwks: '{"keys":[]}',
+        providers: []
       };
 
     case "basicAuth":

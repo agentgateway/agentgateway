@@ -2404,7 +2404,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
             : {};
 
         // Create a minimal policy config for the specific type
-        const newPolicyConfig = {};
+        const newPolicyConfig = getDefaultPolicyValue(policyType);
 
         // Update the route with the new policy type
         const updatedRoute = {
