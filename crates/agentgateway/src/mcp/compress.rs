@@ -237,7 +237,7 @@ fn escape_markdown(value: &str) -> String {
 }
 
 fn escape_tsv(value: &str) -> String {
-	value.replace('\t', " ").replace('\n', " ")
+	value.replace(['\t', '\n'], " ")
 }
 
 fn escape_csv_value(value: &str) -> String {

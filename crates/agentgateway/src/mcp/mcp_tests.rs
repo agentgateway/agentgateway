@@ -216,6 +216,7 @@ async fn stateless_multiplex_get_prompt_initializes_only_target() {
 async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 	let mock_a = mock_streamable_http_server(true).await;
 	let mock_b = mock_streamable_http_server(true).await;
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![
@@ -227,8 +228,10 @@ async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 	let session_manager =
