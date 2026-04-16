@@ -11,4 +11,6 @@ export interface UrlParams {
   mcpPolicyType?: string;
   mcpTargetIndex?: number;
   mcpTargetPolicyType?: string;
+  listenerPolicyType?: string;
+  backendPolicyType?: string;
 }

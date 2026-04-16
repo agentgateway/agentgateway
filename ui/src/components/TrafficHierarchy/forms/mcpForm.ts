@@ -43,6 +43,7 @@ export const uiSchema: UiSchema = {
   },
   prefixMode: {
     "ui:widget": "select",
+    "ui:placeholder": "none",
     "ui:help": "Controls when to prefix tool names with target name",
   },
 };

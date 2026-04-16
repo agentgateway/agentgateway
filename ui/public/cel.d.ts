@@ -146,6 +146,20 @@ export interface ExecutorSerde {
      */
     inputTokens?: number | null;
     /**
+     * The number of image tokens in the input/prompt.
+     */
+    inputImageTokens?: number | null;
+    /**
+     * The number of text tokens in the input/prompt.
+     * Note: this field is only set in multi-modal calls where the total token count is split out by
+     * text/image/audio; for standard all-text calls, this is unset.
+     */
+    inputTextTokens?: number | null;
+    /**
+     * The number of audio tokens in the input/prompt.
+     */
+    inputAudioTokens?: number | null;
+    /**
      * The number of tokens in the input/prompt read from cache (savings)
      */
     cachedInputTokens?: number | null;
@@ -159,6 +173,20 @@ export interface ExecutorSerde {
      */
     outputTokens?: number | null;
     /**
+     * The number of image tokens in the output/completion.
+     */
+    outputImageTokens?: number | null;
+    /**
+     * The number of text tokens in the output/completion.
+     */
+    outputTextTokens?: number | null;
+    /**
+     * The number of audio tokens in the output/completion.
+     * Note: this field is only set in multi-modal calls where the total token count is split out by
+     * text/image/audio; for standard all-text calls, this is unset.
+     */
+    outputAudioTokens?: number | null;
+    /**
      * The number of reasoning tokens in the output/completion.
      */
     reasoningTokens?: number | null;
@@ -166,6 +194,10 @@ export interface ExecutorSerde {
      * The total number of tokens for the request.
      */
     totalTokens?: number | null;
+    /**
+     * The service tier the provider served the request under.
+     */
+    serviceTier?: string | null;
     /**
      * The number of tokens in the request, when using the token counting endpoint
      * These are not counted as 'input tokens' since they do not consume input tokens.

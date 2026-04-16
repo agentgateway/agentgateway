@@ -47,6 +47,20 @@ export const forms = {
   transformationsPolicy: transformationsPolicyForm,
 };
 
+const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = { 
+  cors: "corsPolicy",
+  requestHeaderModifier: "requestHeaderModifierPolicy",
+  responseHeaderModifier: "responseHeaderModifierPolicy",
+  authorization: "authorizationPolicy",
+  mcpAuthorization: "authorizationPolicy",
+  transformations: "transformationsPolicy",
+}
+
+export function getFormForPolicy(policyType: string, fallback: keyof typeof forms = "routePolicy") { 
+  const key = POLICY_FORM_MAP[policyType] ?? fallback;
+  return forms[key];
+}
+
 export type ResourceType = keyof typeof forms;
 
 export const resourceTypes: ResourceType[] = [

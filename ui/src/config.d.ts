@@ -289,6 +289,7 @@ export type LocalJwtConfig =
       jwks: FileInlineOrRemote;
       jwtValidationOptions?: JWTValidationOptions2;
     };
+export type TokenEndpointAuth = "clientSecretBasic" | "clientSecretPost";
 export type APIKey = string;
 export type ExtAuthz = {
   /**
@@ -996,6 +997,10 @@ export interface FilterOrPolicy {
    */
   jwtAuth?: LocalJwtConfig | null;
   /**
+   * Authenticate incoming browser requests with OIDC authorization code flow.
+   */
+  oidc?: LocalOidcConfig | null;
+  /**
    * Authenticate incoming requests using Basic Authentication with htpasswd.
    */
   basicAuth?: LocalBasicAuth | null;
@@ -1355,6 +1360,7 @@ export interface PromptCachingConfig {
   cacheMessages?: boolean;
   cacheTools?: boolean;
   minTokens?: number | null;
+  cacheMessageOffset?: number;
 }
 export interface RateLimitSpec {
   maxTokens?: number;
@@ -1365,6 +1371,15 @@ export interface RateLimitSpec {
 export interface DescriptorEntry {
   entries: KV[];
   type?: "requests" | "tokens";
+  /**
+   * limitOverride determines the optional expression to determine the limit of the request.
+   * This tells the remote server what limit to apply to the request.
+   * The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:
+   * `{"unit":"second","requestsPerUnit":100}`.
+   * Valid units: second, minute, hour, day, month, year
+   * If the expression fails to evaluate, the descriptor is skipped.
+   */
+  limitOverride?: Expression | null;
 }
 export interface KV {
   key: string;
@@ -1424,6 +1439,61 @@ export interface JWTValidationOptions2 {
    * Defaults to ["exp"]. Use an empty list to require no claims.
    */
   requiredClaims?: string[];
+}
+/**
+ * Browser-based OIDC authentication policy.
+ *
+ * Explicit mode is still OIDC: it supplies provider metadata manually instead of using discovery.
+ * Unauthenticated non-callback requests always redirect to the provider login flow. Routes that
+ * need non-redirect authentication behavior should use a different auth policy.
+ */
+export interface LocalOidcConfig {
+  /**
+   * Issuer used for discovery and ID token validation.
+   */
+  issuer: string;
+  /**
+   * Optional discovery document override. If omitted, discovery uses
+   * `${issuer}/.well-known/openid-configuration`.
+   */
+  discovery?: FileInlineOrRemote | null;
+  /**
+   * Authorization endpoint used to start the browser login flow.
+   */
+  authorizationEndpoint?: string | null;
+  /**
+   * Token endpoint used to exchange the authorization code.
+   */
+  tokenEndpoint?: string | null;
+  /**
+   * Token endpoint client authentication method for explicit provider configuration.
+   *
+   * Discovery mode derives this from provider metadata. Explicit mode defaults to
+   * `clientSecretBasic` when omitted.
+   */
+  tokenEndpointAuth?: TokenEndpointAuth | null;
+  /**
+   * JWKS source used to validate returned ID tokens.
+   */
+  jwks?: FileInlineOrRemote | null;
+  /**
+   * OAuth2 client identifier used for authorization and token exchange.
+   */
+  clientId: string;
+  /**
+   * OAuth2 client secret used for token exchange.
+   */
+  clientSecret: string;
+  /**
+   * Absolute callback URI handled by the gateway.
+   * This policy always redirects unauthenticated non-callback requests back through this login
+   * flow.
+   */
+  redirectURI: string;
+  /**
+   * Additional OAuth2 scopes to request. `openid` is always included.
+   */
+  scopes?: string[];
 }
 export interface LocalBasicAuth {
   /**
@@ -1677,6 +1747,10 @@ export interface LocalTCPBackendPolicies {
 }
 export interface LocalGatewayPolicy {
   /**
+   * Authenticate incoming browser requests with OIDC authorization code flow.
+   */
+  oidc?: LocalOidcConfig | null;
+  /**
    * Authenticate incoming JWT requests.
    */
   jwtAuth?: LocalJwtConfig | null;
@@ -1920,6 +1994,10 @@ export interface LLMRouteMatch {
   headers?: HeaderMatch[];
 }
 export interface LocalLLMPolicy {
+  /**
+   * Authenticate incoming browser requests with OIDC authorization code flow.
+   */
+  oidc?: LocalOidcConfig | null;
   /**
    * Authenticate incoming JWT requests.
    */

@@ -151,6 +151,18 @@ function App() {
                     path="/traffic-configuration/bind/:port/listener/:li/tcproute/:ri/policy/:policyType"
                     element={<TrafficConfigurationPage />}
                   />
+                  <Route 
+                    path="/traffic-configuration/bind/:port/listener/:li/policy/:policyType"
+                    element={<TrafficConfigurationPage />}
+                  />
+                  <Route 
+                    path="/traffic-configuration/bind/:port/listener/:li/route/:ri/backend/:bi/policy/:policyType"
+                    element={<TrafficConfigurationPage />}
+                  />
+                  <Route 
+                    path="/traffic-configuration/bind/:port/listener/:li/tcproute/:ri/backend/:bi/policy/:policyType"
+                    element={<TrafficConfigurationPage />}
+                  />
 
                   {/* CEL Playground */}
                   <Route

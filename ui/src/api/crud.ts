@@ -480,6 +480,72 @@ export async function updateRoutePolicy(
 }
 
 /**
+ * Update listener policy 
+ */
+export async function updateListenerPolicy(
+  port: number,
+  listenerIndex: number,
+  policyType: string,
+  value: Record<string, unknown>,
+): Promise<void> {
+  const config = await fetchConfig();
+  const bind = findBindByPort(config.binds || [], port);
+
+  if (!bind) { 
+    throw new Error(`Bind with port ${port} not found`);
+  }
+
+  const listener = bind.listeners[listenerIndex];
+  if (!listener) { 
+    throw new Error(`Listener "${listenerIndex}" not found`);
+  }
+
+  listener.policies = { ...listener?.policies, [policyType]: value };
+
+  await updateConfig(config);
+};
+
+/**
+ * Update backend policy 
+ */
+export async function updateBackendPolicy(
+  port: number,
+  listenerIndex: number,
+  routeIndex: number,
+  backendIndex: number,
+  isTcp: boolean,
+  policyType: string,
+  value: Record<string, unknown>,
+): Promise<void> { 
+  const config = await fetchConfig();
+  const bind = findBindByPort(config.binds || [], port);
+
+  if (!bind) { 
+    throw new Error(`Bind with port ${port} not found`);
+  }
+
+  const listener = bind.listeners[listenerIndex];
+  if (!listener) { 
+    throw new Error(`Listener "${listenerIndex}" not found`);
+  }
+
+  const routes = (isTcp) ? listener.tcpRoutes : listener.routes;
+  if (!routes || routeIndex >= routes.length) { 
+    throw new Error(`${isTcp ? "TCP Route" : "Route"} "${routeIndex}" not found`)
+  }
+  const route = routes[routeIndex];
+
+  const backends = route.backends;
+  if (!backends || backendIndex >= backends.length) { 
+    throw new Error(`Backend "${backendIndex}" not found`)
+  }
+  const backend = backends[backendIndex];
+
+  backend.policies = { ...backend.policies, [policyType]: value };
+  await updateConfig(config);
+}
+
+/**
  * Delete route policy
  */
 export async function deleteRoutePolicy(
@@ -506,6 +572,74 @@ export async function deleteRoutePolicy(
 
   route.policies = null;
 
+  await updateConfig(config);
+}
+
+/**
+ * Delete listener policy
+ */
+export async function deleteListenerPolicy(
+  port: number,
+  listenerIndex: number,
+  policyType: string,
+): Promise<void> { 
+  const config = await fetchConfig();
+  const bind = findBindByPort(config.binds || [], port);
+
+  if (!bind) { 
+    throw new Error(`Bind with port ${port} not found`);
+  }
+
+  const listener = bind.listeners[listenerIndex];
+  if (!listener) { 
+    throw new Error(`Listener "${listenerIndex}" not found`);
+  }
+
+  if (listener.policies) {
+    delete (listener.policies as any)[policyType];
+  }
+
+  await updateConfig(config);
+}
+
+/**
+ * Delete backend policy
+ */
+export async function deleteBackendPolicy(
+  port: number,
+  listenerIndex: number,
+  routeIndex: number,
+  backendIndex: number,
+  isTcp: boolean,
+  policyType: string,
+): Promise<void> { 
+  const config = await fetchConfig();
+  const bind = findBindByPort(config.binds || [], port);
+
+  if (!bind) { 
+    throw new Error(`Bind with port ${port} not found`);
+  }
+
+  const listener = bind.listeners[listenerIndex];
+  if (!listener) { 
+    throw new Error(`Listener "${listenerIndex}" not found`);
+  }
+
+  const routes = (isTcp) ? listener.tcpRoutes : listener.routes;
+  if (!routes || routeIndex >= routes.length) { 
+    throw new Error(`${isTcp ? "TCP Route" : "Route"} "${routeIndex}" not found`)
+  }
+  const route = routes[routeIndex];
+
+  const backends = route.backends;
+  if (!backends || backendIndex >= backends.length) { 
+    throw new Error(`Backend "${backendIndex}" not found`)
+  }
+  const backend = backends[backendIndex];
+
+   if (backend.policies) {
+    delete (backend.policies as any)[policyType];
+  }
   await updateConfig(config);
 }
 

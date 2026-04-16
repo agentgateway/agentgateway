@@ -164,8 +164,26 @@ function checkNodeExists(
     return false;
   }
 
+  // If looking at a listener policy
+  if (urlParams.listenerPolicyType) { 
+    const policies = listenerNode.listener.policies as Record<string, unknown> ?? {};
+    return urlParams.listenerPolicyType in policies;
+  }
+
   // If no route index, we're looking at the listener itself
   if (ri === undefined) return true;
+
+  // Check backend policy exists
+  if (urlParams.backendPolicyType && bi !== undefined) { 
+    const backendPolicyRouteNode = listenerNode.routes.find(
+      (rn) => rn.isTcp === isTcpRoute && rn.categoryIndex === ri,
+    );
+    if (!backendPolicyRouteNode) return false;
+    const backendNode = backendPolicyRouteNode.backends[bi];
+    if (!backendNode) return false;
+    const policies = (backendNode.backend as any)?.policies ?? {};
+    return urlParams.backendPolicyType in policies;
+  }
 
   // Check route exists
   console.log(

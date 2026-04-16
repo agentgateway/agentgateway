@@ -7,7 +7,7 @@ import { Edit2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useConfig } from "../../api";
+import { useConfig, type LocalRouteBackend } from "../../api";
 import * as api from "../../api/crud";
 import { validator } from "../../utils/validator";
 import {
@@ -19,7 +19,8 @@ import {
 } from "../FormTemplates";
 import { ProtocolTag } from "../ProtocolTag";
 import { StyledAlert } from "../StyledAlert";
-import { forms } from "./forms";
+import { forms, getFormForPolicy } from "./forms";
+import { getDefaultBackendValue } from "./forms/backendForm";
 import { useNodePolling } from "./hooks/useNodePolling";
 import type {
   BackendNode,
@@ -265,8 +266,11 @@ function findSelectedNode(
   | { type: "mcpTarget"; node: MCPTargetNode }
   | { type: "mcpTargetPolicy"; node: MCPTargetPolicyNode; target: MCPTargetNode }
   | { type: "mcpPolicy"; node: MCPPolicyNode }
+  | { type: "listenerPolicy"; policyType: string; listener: ListenerNode; bind: BindNode }
+  | { type: "backendPolicy"; policyType: string; backend: BackendNode; route: RouteNode; listener: ListenerNode; bind: BindNode }
   | { type: "frontendPolicies"; data: unknown }
   | null {
+
   // Handle model routes first
   if (urlParams.modelIndex !== undefined) {
     if (!hierarchy.llm) return null;
@@ -334,8 +338,10 @@ function findSelectedNode(
   }
 
   const { port, li, ri, bi, isTcpRoute, policyType } = urlParams;
+
   if (port === undefined) return null;
   const bindNode = hierarchy.binds.find((b) => b.bind.port === port);
+
   if (!bindNode) return null;
 
   if (li === undefined) {
@@ -344,6 +350,18 @@ function findSelectedNode(
 
   const listenerNode = bindNode.listeners[li];
   if (!listenerNode) return null;
+
+  if (urlParams.listenerPolicyType) {
+    const policyKey = urlParams.listenerPolicyType;
+    const policies = listenerNode.listener.policies ?? {};
+    if (!(policyKey in policies)) return null;
+    return {
+      type: "listenerPolicy",
+      policyType: policyKey,
+      listener: listenerNode,
+      bind: bindNode,
+    }
+  }
 
   if (ri === undefined) {
     return { type: "listener", node: listenerNode, bind: bindNode };
@@ -359,6 +377,22 @@ function findSelectedNode(
       type: "route",
       node: routeNode,
       listener: listenerNode,
+      bind: bindNode,
+    };
+  }
+
+  if (urlParams.backendPolicyType && bi !== undefined) {
+    const backendNode = routeNode.backends[bi];
+    if (!backendNode) return null;
+    const policyKey = urlParams.backendPolicyType;
+    const policies = (backendNode.backend as LocalRouteBackend)?.policies ?? {};
+    if (!(policyKey in policies)) return null;
+    return { 
+      type: "backendPolicy", 
+      policyType: policyKey, 
+      backend: backendNode, 
+      route: routeNode, 
+      listener: listenerNode, 
       bind: bindNode,
     };
   }
@@ -480,6 +514,45 @@ function generateBreadcrumbItems(
     items.push({
       title: `${selected.node.policyType} Policy`,
     });
+  } else if (selected.type === "listenerPolicy") {
+    const port = selected.bind.bind.port;
+    const li = selected.listener.listenerIndex;
+    items.push({
+      title: `Port ${port}`,
+      onClick: () => navigate(`${basePath}/bind/${port}`),
+    });
+    items.push({
+      title: selected.listener.listener.name ?? "(unnamed listener)",
+      onClick: () => navigate(`${basePath}/bind/${port}/listener/${li}`),
+    });
+    items.push({
+      title: `${getPolicyLabel(selected.policyType)} Policy`
+    });
+  } else if (selected.type === "backendPolicy") {
+    const port = selected.bind.bind.port;
+    const li = selected.listener.listenerIndex;
+    const ri = selected.route.categoryIndex;
+    const routeType = selected.route.isTcp ? "tcp" : "";
+    const bi = selected.backend.backendIndex;
+    items.push({
+      title: `Port ${port}`,
+      onClick: () => navigate(`${basePath}/bind/${port}`),
+    });
+    items.push({
+      title: selected.listener.listener.name ?? "(unnamed listener)",
+      onClick: () => navigate(`${basePath}/bind/${port}/listener/${li}`),
+    });
+    items.push({
+      title: (selected.route.route.name as string | undefined) ?? "(unnamed route)",
+      onClick: () => navigate(`${basePath}/bind/${port}/listener/${li}/${routeType}route/${ri}`)
+    });
+    items.push({
+      title: (selected.backend.backend as any)?.name ?? `Backend ${bi + 1}`,
+      onClick: () => navigate(`${basePath}/bind/${port}/listener/${li}/${routeType}route/${ri}/backend/${bi}`),
+    });
+    items.push({
+      title: `${getPolicyLabel(selected.policyType)} Policy`,
+    });
   } else if (selected.type === "llm") {
     items.push({ title: "LLM Configuration" });
   } else if (selected.type === "model") {
@@ -550,15 +623,9 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
   const { mutate } = useConfig();
 
   const basePath = useMemo(() => {
-    const knownSegments = ["bind", "llm", "mcp", "frontendPolicies", "editor"];
-    const pathname = location.pathname;
-    for (const seg of knownSegments) {
-      const idx = pathname.indexOf(`/${seg}`);
-      if (idx !== -1) return idx === 0 ? `/${seg}` : pathname.substring(0, idx);
-    }
-    return pathname.replace(/\/$/, "") || "/";
+    return `/${location.pathname.split('/').at(1) ?? ''}`;
   }, [location.pathname]);
-
+  
   // Edit mode is URL-driven
   const searchParams = new URLSearchParams(location.search);
   const isEditing = searchParams.get("edit") === "true";
@@ -797,6 +864,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         setFormData(transformedData as Record<string, unknown>);
       } else if (sel.type === "policy") {
         setFormData(sel.node.policy as Record<string, unknown>);
+      } else if (sel.type === "listenerPolicy") { 
+        const raw = sel.listener.listener.policies as Record<string, unknown> ?? {};
+        setFormData((raw[sel.policyType] ?? {}) as Record<string, unknown>);
+      } else if (sel.type === "backendPolicy") {
+        const raw = (sel.backend.backend as any)?.policies ?? {};
+        setFormData((raw[sel.policyType] ?? {}) as Record<string, unknown>);
       } else if (sel.type === "model") {
         setFormData(sel.node.model as unknown as Record<string, unknown>);
       } else if (
@@ -840,6 +913,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         setFormData(transformedData as Record<string, unknown>);
       } else if (selected.type === "policy") {
         setFormData(selected.node.policy as Record<string, unknown>);
+      } else if (selected.type === "listenerPolicy") { 
+        const raw = selected.listener.listener.policies as Record<string, unknown> ?? {};
+        setFormData((raw[selected.policyType] ?? {}) as Record<string, unknown>);
+      } else if (selected.type === "backendPolicy") {
+        const raw = (selected.backend.backend as any)?.policies ?? {};
+        setFormData((raw[selected.policyType] ?? {}) as Record<string, unknown>);
       } else if (selected.type === "llmPolicy" || selected.type === "mcpPolicy") {
         setFormData(selected.node.policy as Record<string, unknown>);
       } else if (selected.type === "model") {
@@ -954,7 +1033,12 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
 
       // Apply form-specific transformation if available
       // Skip for types that don't have a corresponding form entry
-      const form = (selected.type !== "llmPolicy" && selected.type !== "mcpPolicy")
+      const form = (
+        selected.type !== "llmPolicy" && 
+        selected.type !== "mcpPolicy" &&
+        selected.type !== "listenerPolicy" &&
+        selected.type !== "backendPolicy"
+      )
         ? (forms[selected.type] as any)
         : undefined;
       let dataToSave = fd;
@@ -1030,7 +1114,11 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         } else {
           await api.updateRouteByIndex(port, li!, ri!, updatedRoute as any);
         }
-      } else if (selected.type === "llmPolicy") {
+      } else if (selected.type === "listenerPolicy") { 
+        await api.updateListenerPolicy(port, li!, selected.policyType, dataToSave);
+      } else if (selected.type === "backendPolicy") {
+        await api.updateBackendPolicy(port, li!, ri!, bi!, isTcpRoute ?? false, selected.policyType, dataToSave);
+       } else if (selected.type === "llmPolicy") {
         // Update the specific policy in the LLM config
         if (!hierarchy.llm) throw new Error("LLM config not found");
         const currentConfig = { ...hierarchy.llm.config, models: hierarchy.llm.models.map((m) => m.model) };
@@ -1163,6 +1251,10 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         } else {
           await api.updateRouteByIndex(port, li!, ri!, updatedRoute as any);
         }
+      } else if (selected.type === "listenerPolicy") { 
+        await api.deleteListenerPolicy(port, li!, selected.policyType);
+      } else if (selected.type === "backendPolicy") {
+        await api.deleteBackendPolicy(port, li!, ri!, bi!, isTcpRoute ?? false, selected.policyType);
       } else if (selected.type === "llmPolicy") {
         if (!hierarchy.llm) throw new Error("LLM config not found");
         const currentConfig = { ...hierarchy.llm.config, models: hierarchy.llm.models.map((m) => m.model) };
@@ -1660,7 +1752,16 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             formData={formData}
             validator={validator}
             disabled={!isEditing || saving}
-            onChange={({ formData: fd }) => setFormData(fd)}
+            onChange={({ formData: fd }) => {
+              const prev = formData?.backendType;
+              const next = fd.backendType;
+              if (next && next !== prev) { 
+                // reset to defaults for new type to avoid empty object in form
+                setFormData(getDefaultBackendValue(next));
+              } else { 
+                setFormData(fd);
+              }
+            }}
             onSubmit={handleSubmit}
             onError={handleError}
             templates={formTemplates}
@@ -1682,6 +1783,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       .trim();
 
     const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
+    const formConfig = getFormForPolicy(selected.node.policyType);
+
     return (
       <Container>
         <Header>
@@ -1748,24 +1851,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           <Form
             id="policy-form"
             key={isEditing ? "editing" : "viewing"}
-            schema={
-              selected.node.policyType === "cors"
-                ? forms.corsPolicy.schema
-                : selected.node.policyType === "requestHeaderModifier"
-                  ? forms.requestHeaderModifierPolicy.schema
-                  : selected.node.policyType === "responseHeaderModifier"
-                    ? forms.responseHeaderModifierPolicy.schema
-                    : forms.routePolicy.schema
-            }
-            uiSchema={
-              selected.node.policyType === "cors"
-                ? forms.corsPolicy.uiSchema
-                : selected.node.policyType === "requestHeaderModifier"
-                  ? forms.requestHeaderModifierPolicy.uiSchema
-                  : selected.node.policyType === "responseHeaderModifier"
-                    ? forms.responseHeaderModifierPolicy.uiSchema
-                    : forms.routePolicy.uiSchema
-            }
+            schema={formConfig.schema}
+            uiSchema={formConfig.uiSchema}
             formData={formData}
             validator={validator}
             disabled={!isEditing || saving}
@@ -1783,6 +1870,96 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     );
   }
 
+  if (selected.type === "listenerPolicy" || selected.type === "backendPolicy") { 
+    const displayName = getPolicyLabel(selected.policyType);
+    const formId = `${selected.type}-form`;
+    const listenerName = selected.listener.listener.name ?? "unnamed";
+    const description = selected.type === "listenerPolicy" 
+      ? `Policy configuration for listener ${listenerName}` 
+      : `Policy configuration for backend ${selected.backend.backendIndex + 1} on route "${(selected.route.route.name as string | undefined) ?? "unnamed"}"`;
+    const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
+
+    const policyType = selected.policyType;
+    const formConfig = getFormForPolicy(policyType);
+
+    return (
+      <Container>
+        <Header>
+          <BreadcrumbWrapper>
+            <Breadcrumb items={breadcrumbItems} />
+          </BreadcrumbWrapper>
+          <TitleRow>
+            <TitleLeft>
+              <Title>{isEditing ? "Edit: ": ""}{displayName}</Title>
+              <TypeBadge>Policy</TypeBadge>
+            </TitleLeft>
+            {!isEditing && (
+              <Button
+                type="primary"
+                icon={<Edit2 size={14} />}
+                onClick={() => navigate(location.pathname + "?edit=true")}
+              >
+                Edit
+              </Button>
+            )}
+            {isEditing && (
+              <Space>
+                <Popconfirm
+                  title="Delete this policy?"
+                  description="This cannot be undone."
+                  onConfirm={handleDelete}
+                  okText="Delete"
+                  okButtonProps={{ danger: true }}
+                >
+                  <Button danger icon={<DeleteOutlined />} disabled={saving}>
+                    Delete
+                  </Button>
+                </Popconfirm>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  form={formId}
+                  loading={saving}
+                >
+                  Save
+                </Button>
+                <Button
+                  icon={<X size={14} />}
+                  onClick={() => navigate(location.pathname)}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+              </Space>
+            )}
+          </TitleRow>
+          <Description>{description}</Description>
+        </Header>
+        <Body>
+          <SectionTitle>Policy Details</SectionTitle>
+          <FormWrapper>
+            <Form
+              id={formId}
+              key={isEditing ? "editing" : "viewing"}
+              schema={formConfig.schema}
+              uiSchema={formConfig.uiSchema}
+              formData={formData}
+              validator={validator}
+              disabled={!isEditing || saving}
+              onChange={({ formData: fd }) => setFormData(fd)}
+              onSubmit={handleSubmit}
+              onError={handleError}
+              templates={formTemplates}
+              fields={formFields}
+            >
+              <></>
+            </Form>
+          </FormWrapper>
+        </Body>
+      </Container>
+    );
+  }
+
   // Handle LLM/MCP policy types
   if (selected.type === "llmPolicy" || selected.type === "mcpPolicy") {
     const displayName = getPolicyLabel(selected.node.policyType);
@@ -1791,12 +1968,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     
     // Select appropriate form based on policy type
     const policyType = selected.node.policyType;
-    const formSchema =
-      policyType === "authorization" || policyType === "mcpAuthorization"
-        ? forms.authorizationPolicy
-        : policyType === "transformations"
-          ? forms.transformationsPolicy
-          : (selected.type === "llmPolicy" ? forms.llmPolicy : forms.mcpPolicy);
+    const formConfig = getFormForPolicy(policyType, selected.type === "llmPolicy" ? "llmPolicy" : "mcpPolicy");
     
     const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
 
@@ -1865,8 +2037,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           <Form
             id={formId}
             key={isEditing ? "editing" : "viewing"}
-            schema={formSchema.schema}
-            uiSchema={formSchema.uiSchema}
+            schema={formConfig.schema}
+            uiSchema={formConfig.uiSchema}
             formData={formData}
             validator={validator}
             disabled={!isEditing || saving}
@@ -1891,12 +2063,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     
     // Select appropriate form based on policy type
     const policyType = selected.node.policyType;
-    const formSchema =
-      policyType === "authorization" || policyType === "mcpAuthorization"
-        ? forms.authorizationPolicy
-        : policyType === "transformations"
-          ? forms.transformationsPolicy
-          : forms.llmPolicy; // Use generic policy form as fallback
+    const formConfig = getFormForPolicy(policyType, "llmPolicy");
     
     const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
     const targetName = selected.target.target.name ?? `Target ${selected.target.targetIndex}`;
@@ -1966,8 +2133,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           <Form
             id={formId}
             key={isEditing ? "editing" : "viewing"}
-            schema={formSchema.schema}
-            uiSchema={formSchema.uiSchema}
+            schema={formConfig.schema}
+            uiSchema={formConfig.uiSchema}
             formData={formData}
             validator={validator}
             disabled={!isEditing || saving}
@@ -1990,6 +2157,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     const { node } = selected;
     const modelName = node.model.name || `Model ${node.modelIndex + 1}`;
     const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
+    const formConfig = getFormForPolicy("model");
 
     return (
       <Container>

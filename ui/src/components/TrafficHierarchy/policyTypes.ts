@@ -1,4 +1,4 @@
-export type PolicyScope = "llm" | "mcp" | "route" | "mcpTarget";
+export type PolicyScope = "llm" | "mcp" | "route" | "mcpTarget" | "listener" | "backend";
 
 export interface PolicyTypeInfo {
   key: string;
@@ -21,9 +21,9 @@ export interface PolicyTypeInfo {
  */
 export const POLICY_TYPES: PolicyTypeInfo[] = [
   // --- Authentication ---
-  { key: "jwtAuth", label: "JWT Auth", description: "Authenticate incoming JWT requests", scopes: ["llm", "mcp", "route"] },
-  { key: "basicAuth", label: "Basic Auth", description: "Authenticate with HTTP Basic Authentication", scopes: ["llm", "mcp", "route"] },
-  { key: "apiKey", label: "API Key Auth", description: "Authenticate with API keys", scopes: ["llm", "mcp", "route"] },
+  { key: "jwtAuth", label: "JWT Auth", description: "Authenticate incoming JWT requests", scopes: ["llm", "mcp", "route", "listener"] },
+  { key: "basicAuth", label: "Basic Auth", description: "Authenticate with HTTP Basic Authentication", scopes: ["llm", "mcp", "route", "listener"] },
+  { key: "apiKey", label: "API Key Auth", description: "Authenticate with API keys", scopes: ["llm", "mcp", "route", "listener"] },
   { key: "mcpAuthentication", label: "MCP Authentication", description: "Authentication for MCP clients", scopes: ["mcp"] },
 
   // --- Authorization ---
@@ -31,16 +31,16 @@ export const POLICY_TYPES: PolicyTypeInfo[] = [
   { key: "mcpAuthorization", label: "MCP Authorization", description: "Authorization policies for MCP access", scopes: ["mcp", "mcpTarget"] },
 
   // --- External Services ---
-  { key: "extAuthz", label: "External Auth", description: "Authenticate via external authorization server", scopes: ["llm", "mcp", "route"] },
-  { key: "extProc", label: "External Processor", description: "Extend with an external processor", scopes: ["llm", "mcp", "route"] },
+  { key: "extAuthz", label: "External Auth", description: "Authenticate via external authorization server", scopes: ["llm", "mcp", "route", "listener"] },
+  { key: "extProc", label: "External Processor", description: "Extend with an external processor", scopes: ["llm", "mcp", "route", "listener"] },
 
   // --- Request/Response Modification ---
-  { key: "transformations", label: "Transformations", description: "Modify requests and responses", scopes: ["llm", "mcp", "route", "mcpTarget"] },
-  { key: "requestHeaderModifier", label: "Request Headers", description: "Modify headers in requests", scopes: ["mcp", "route", "mcpTarget"] },
-  { key: "responseHeaderModifier", label: "Response Headers", description: "Modify headers in responses", scopes: ["mcp", "route", "mcpTarget"] },
+  { key: "transformations", label: "Transformations", description: "Modify requests and responses", scopes: ["llm", "mcp", "route", "mcpTarget", "listener", "backend"] },
+  { key: "requestHeaderModifier", label: "Request Headers", description: "Modify headers in requests", scopes: ["mcp", "route", "mcpTarget", "backend"] },
+  { key: "responseHeaderModifier", label: "Response Headers", description: "Modify headers in responses", scopes: ["mcp", "route", "mcpTarget", "backend"] },
   { key: "cors", label: "CORS", description: "Handle CORS preflight requests", scopes: ["mcp", "route"] },
   { key: "urlRewrite", label: "URL Rewrite", description: "Modify the URL path or authority", scopes: ["mcp", "route"] },
-  { key: "requestRedirect", label: "Request Redirect", description: "Respond with a redirect", scopes: ["mcp", "route", "mcpTarget"] },
+  { key: "requestRedirect", label: "Request Redirect", description: "Respond with a redirect", scopes: ["mcp", "route", "mcpTarget", "backend"] },
   { key: "requestMirror", label: "Request Mirror", description: "Mirror incoming requests to another destination", scopes: ["mcp", "route"] },
   { key: "directResponse", label: "Direct Response", description: "Respond with a static response", scopes: ["mcp", "route"] },
 
@@ -49,9 +49,9 @@ export const POLICY_TYPES: PolicyTypeInfo[] = [
   { key: "remoteRateLimit", label: "Remote Rate Limit", description: "Rate limit with remote state server", scopes: ["mcp", "route"] },
 
   // --- Backend ---
-  { key: "backendTLS", label: "Backend TLS", description: "Send TLS to the backend", scopes: ["mcp", "route", "mcpTarget"] },
+  { key: "backendTLS", label: "Backend TLS", description: "Send TLS to the backend", scopes: ["mcp", "route", "mcpTarget", "backend"] },
   { key: "backendTunnel", label: "Backend Tunnel", description: "Tunnel to the backend", scopes: ["mcp", "route", "mcpTarget"] },
-  { key: "backendAuth", label: "Backend Auth", description: "Authenticate to the backend", scopes: ["mcp", "route", "mcpTarget"] },
+  { key: "backendAuth", label: "Backend Auth", description: "Authenticate to the backend", scopes: ["mcp", "route", "mcpTarget", "backend"] },
   { key: "health", label: "Health Policy", description: "Backend outlier detection and health checks", scopes: ["mcpTarget"] },
 
   // --- Other ---

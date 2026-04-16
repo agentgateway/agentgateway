@@ -1,16 +1,16 @@
 import { useMemo } from "react";
 import { useConfig } from "../../../api";
 import type {
-    LocalBind,
-    LocalListener,
-    LocalListenerProtocol,
-    LocalLLMConfig,
-    LocalLLMModels,
-    LocalMcpTarget,
-    LocalRoute,
-    LocalRouteBackend,
-    LocalSimpleMcpConfig,
-    LocalTCPRoute,
+  LocalBind,
+  LocalListener,
+  LocalListenerProtocol,
+  LocalLLMConfig,
+  LocalLLMModels,
+  LocalMcpTarget,
+  LocalRoute,
+  LocalRouteBackend,
+  LocalSimpleMcpConfig,
+  LocalTCPRoute,
 } from "../../../config";
 
 // ---------------------------------------------------------------------------
@@ -29,6 +29,8 @@ export interface BackendNode {
   backendIndex: number;
   /** Whether this backend belongs to a TCP route */
   isTcpRoute: boolean;
+  /** Policies attached to this backend */
+  policies: PolicyNode[];
 }
 
 export interface PolicyNode {
@@ -74,6 +76,7 @@ export interface ListenerNode {
   /** Index within bind.listeners */
   listenerIndex: number;
   routes: RouteNode[];
+  policies: PolicyNode[];
   validationErrors: ValidationError[];
 }
 
@@ -285,10 +288,23 @@ export function useTrafficHierarchy(): TrafficHierarchy {
               const backends: BackendNode[] = (route.backends ?? []).map(
                 (b, bi) => {
                   totalBackends++;
+                  const backendPolicies: PolicyNode[] =
+                    b.policies &&
+                    typeof b.policies === "object" &&
+                    !Array.isArray(b.policies)
+                      ? Object.entries(b.policies).map(
+                          ([policyType, policyConfig]) => ({
+                            policyType,
+                            policy: policyConfig,
+                            isTcpRoute: false,
+                          }),
+                        )
+                      : [];
                   return {
                     backend: b,
                     backendIndex: bi,
                     isTcpRoute: false,
+                    policies: backendPolicies,
                   };
                 },
               );
@@ -330,10 +346,23 @@ export function useTrafficHierarchy(): TrafficHierarchy {
               const backends: BackendNode[] = (route.backends ?? []).map(
                 (b, bi) => {
                   totalBackends++;
+                  const backendPolicies: PolicyNode[] =
+                    b.policies &&
+                    typeof b.policies === "object" &&
+                    !Array.isArray(b.policies)
+                      ? Object.entries(b.policies).map(
+                          ([policyType, policyConfig]) => ({
+                            policyType,
+                            policy: policyConfig,
+                            isTcpRoute: true,
+                          }),
+                        )
+                      : [];
                   return {
                     backend: b,
                     backendIndex: bi,
                     isTcpRoute: true,
+                    policies: backendPolicies,
                   };
                 },
               );
@@ -368,11 +397,26 @@ export function useTrafficHierarchy(): TrafficHierarchy {
 
           const allRouteNodes = [...httpRouteNodes, ...tcpRouteNodes];
 
+          // extract listener-level policies
+          const listenerPolicies: PolicyNode[] = 
+            listener.policies && 
+            typeof listener.policies === "object" &&
+            !Array.isArray(listener.policies)
+              ? Object.entries(listener.policies)
+                .filter(([, v]) => v != null)
+                .map(([policyType, policyConfig]) => ({
+                  policyType,
+                  policy: policyConfig,
+                  isTcpRoute: false,
+                }))
+              : [];
+
           return {
             listener,
             port: bind.port,
             listenerIndex,
             routes: allRouteNodes,
+            policies: listenerPolicies,
             validationErrors: listenerErrors,
           };
         },

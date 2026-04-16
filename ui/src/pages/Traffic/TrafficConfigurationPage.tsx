@@ -104,6 +104,8 @@ const Description = styled.p`
 // ---------------------------------------------------------------------------
 
 function parseTrafficPath(pathname: string): UrlParams | null {
+  console.log("[parseTrafficPath] pathname:", pathname);
+
   // Check for model routes first (must be before general LLM route)
   const modelMatch = pathname.match(/\/traffic-configuration\/llm\/model\/(\d+)/);
   if (modelMatch) {
@@ -155,6 +157,33 @@ function parseTrafficPath(pathname: string): UrlParams | null {
   if (topLevelMatch) {
     return {
       topLevelType: topLevelMatch[1] as "llm" | "mcp" | "frontendPolicies",
+    };
+  }
+
+  // Check for listener policy routes
+  const listenerPolicyMatch = pathname.match(
+    /\/traffic-configuration\/bind\/(\d+)\/listener\/(\d+)\/policy\/([^/?]+)/
+  );
+  if (listenerPolicyMatch) {
+    return {
+      port: parseInt(listenerPolicyMatch[1], 10),
+      li: parseInt(listenerPolicyMatch[2], 10),
+      listenerPolicyType: listenerPolicyMatch[3],
+    };
+  }
+
+  // Chekck for backend policy routes
+  const backendPolicyMatch = pathname.match(
+    /\/traffic-configuration\/bind\/(\d+)\/listener\/(\d+)\/(tcp)?route\/(\d+)\/backend\/(\d+)\/policy\/([^/?]+)/
+  );
+  if (backendPolicyMatch) {
+    return {
+      port: parseInt(backendPolicyMatch[1], 10),
+      li: parseInt(backendPolicyMatch[2], 10),
+      isTcpRoute: backendPolicyMatch[3] === "tcp",
+      ri: parseInt(backendPolicyMatch[4], 10),
+      bi: parseInt(backendPolicyMatch[5], 10),
+      backendPolicyType: backendPolicyMatch[6],
     };
   }
 

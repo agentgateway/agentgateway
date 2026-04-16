@@ -19,6 +19,7 @@ export const schema: RJSFSchema = {
       type: "string",
       title: "Provider",
       enum: ["openAI", "gemini", "vertex", "anthropic", "bedrock", "azureOpenAI"],
+      default: "openAI",
       description: "LLM provider to connect to",
     },
     params: {
