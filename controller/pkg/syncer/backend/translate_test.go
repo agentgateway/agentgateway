@@ -692,7 +692,7 @@ func TestBuildStaticIr(t *testing.T) {
 				},
 				Spec: agentgateway.AgentgatewayBackendSpec{
 					Static: &agentgateway.StaticBackend{
-						Host: ptr.Of[agentgateway.ShortString]("api.example.com"), Port: ptr.Of[int32](443),
+						Host: "api.example.com", Port: 443,
 					},
 				},
 			},
