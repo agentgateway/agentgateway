@@ -108,8 +108,8 @@ type AwsAgentCoreBackend struct {
 }
 
 // StaticBackend specifies a static backend endpoint — either TCP (host + port) or Unix Domain Socket.
-// +kubebuilder:validation:XValidation:rule="has(self.unixPath) || (self.host != '' && self.port != 0)",message="must specify either unixPath or both host and port"
-// +kubebuilder:validation:XValidation:rule="!has(self.unixPath) || (self.host == '' && self.port == 0)",message="unixPath and host/port are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="has(self.unixPath) || (has(self.host) && has(self.port))",message="must specify either unixPath or both host and port"
+// +kubebuilder:validation:XValidation:rule="!has(self.unixPath) || (!has(self.host) && !has(self.port))",message="unixPath and host/port are mutually exclusive"
 type StaticBackend struct {
 	// host to connect to (for TCP backends).
 	// +optional
