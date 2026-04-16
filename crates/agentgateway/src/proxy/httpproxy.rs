@@ -654,6 +654,71 @@ impl HTTPProxy {
 		)
 		.await
 		.snapshot_on_err(log, &mut req)?;
+
+		// If the route resolves to Models and the gateway has explicit knowledge of
+		// which models are available (via explicit provider `model` fields or route-level
+		// aliases), return a synthetic response scoped to this route's backends.
+		// If no explicit knowledge exists, fall through and forward to upstream so the
+		// client gets the provider's real catalog.
+		if let Some(RouteType::Models) = route_policies
+			.llm
+			.as_ref()
+			.map(|p| p.resolve_route(req.uri().path()))
+		{
+			let mut models: std::collections::BTreeSet<(Strng, Strng)> =
+				std::collections::BTreeSet::new();
+			let mut fallback_owner: Option<Strng> = None;
+
+			for backend_ref in &selected_route.backends {
+				if let Ok(resolved) = resolve_backend(backend_ref.clone(), self.inputs.as_ref())
+					&& let Backend::AI(_, ai_backend) = &resolved.backend.backend
+				{
+					for (provider, _info) in ai_backend.providers.iter().iter() {
+						let owner = provider.provider.provider();
+						fallback_owner.get_or_insert_with(|| owner.clone());
+						if let Some(m) = provider.provider.override_model() {
+							models.insert((m, owner));
+						}
+					}
+				}
+			}
+
+			if let Some(policy) = route_policies.llm.as_ref() {
+				let owner = fallback_owner
+					.clone()
+					.unwrap_or_else(|| strng::literal!("openai"));
+				for alias in policy.model_aliases.keys() {
+					if !alias.contains('*') {
+						models.insert((alias.clone(), owner.clone()));
+					}
+				}
+			}
+
+			if !models.is_empty() {
+				let data: Vec<_> = models
+					.iter()
+					.map(|(id, owned_by)| {
+						serde_json::json!({
+							"id": id,
+							"object": "model",
+							"created": 0,
+							"owned_by": owned_by,
+						})
+					})
+					.collect();
+				let body = serde_json::json!({ "object": "list", "data": data });
+
+				return Ok(
+					::http::Response::builder()
+						.status(::http::StatusCode::OK)
+						.header(::http::header::CONTENT_TYPE, "application/json")
+						.body(http::Body::from(body.to_string()))
+						.expect("Failed to build models response"),
+				);
+			}
+			// Fall through: no explicit models or aliases configured, forward upstream.
+		}
+
 		let selected_backend = select_backend(selected_route.as_ref(), &req)
 			.ok_or(ProxyError::NoValidBackends)
 			.snapshot_on_err(log, &mut req)?;
@@ -1589,15 +1654,21 @@ async fn make_backend_call(
 					(req, response_policies, Some(llm_request))
 				},
 				RouteType::Models => {
-					return Ok(
-						::http::Response::builder()
-							.status(::http::StatusCode::NOT_IMPLEMENTED)
-							.header(::http::header::CONTENT_TYPE, "application/json")
-							.body(http::Body::from(format!(
-								"{{\"error\":\"Route '{route_type:?}' not implemented\"}}"
-							)))
-							.expect("Failed to build response"),
-					);
+					// Reached only when no explicit models/aliases were configured and the
+					// synthetic handler in proxy() fell through. Behave like a path-translating
+					// passthrough so the client receives the upstream's real model catalog.
+					llm
+						.provider
+						.setup_request(
+							&mut req,
+							route_type,
+							None,
+							llm.path_override.as_deref(),
+							llm.path_prefix.as_deref(),
+							llm.host_override.is_some(),
+						)
+						.map_err(ProxyError::Processing)?;
+					(req, LLMResponsePolicies::default(), None)
 				},
 				RouteType::Passthrough | RouteType::Realtime => {
 					// For passthrough, we only need to setup the response so we get default TLS, hostname, etc set.
