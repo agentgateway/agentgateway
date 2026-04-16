@@ -1,0 +1,62 @@
+# inference-perf config for the agentgateway + InferencePool path.
+# Target: benchmark-gateway.inference-benchmark.svc.cluster.local:8080
+#
+# Standard scenario: synthetic prompts with ShareGPT-like token distribution,
+# constant load ramping 10 -> 20 -> 30 QPS, 20s per stage, streaming enabled
+# so TTFT and ITL metrics are captured.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inference-perf-config-agentgateway
+  namespace: inference-benchmark
+data:
+  config.yaml: |
+    server:
+      base_url: "http://benchmark-gateway.inference-benchmark.svc.cluster.local:8080"
+      model_name: "meta-llama/Llama-3.1-8B-Instruct"
+
+    api:
+      type: completion
+      # streaming: true is disabled — inference-perf sends stream_options.include_usage
+      # as the string "true" instead of bool true, which inference-sim rejects with 400.
+      # Non-streaming still captures E2E latency, TPOT, and throughput.
+      # Re-enable once inference-perf bug is fixed upstream.
+      streaming: false
+
+    data:
+      type: synthetic
+      input_distribution:
+        min: 64
+        max: 512
+        mean: 256.0
+        std_dev: 64.0
+      output_distribution:
+        min: 32
+        max: 256
+        mean: 128.0
+        std_dev: 32.0
+
+    load:
+      type: constant
+      stages:
+        - rate: 10
+          duration: 20
+        - rate: 20
+          duration: 20
+        - rate: 30
+          duration: 20
+
+    report:
+      request_lifecycle:
+        per_stage: true
+        percentiles: [50, 90, 95, 99]
+
+    storage:
+      local_storage:
+        path: /results
+
+    # Use gpt2 tokenizer for token counting — the Llama tokenizer is a gated
+    # HuggingFace repo that requires auth. gpt2 is publicly available and
+    # sufficient for approximate token-length distribution in a local PoC.
+    tokenizer:
+      pretrained_model_name_or_path: gpt2

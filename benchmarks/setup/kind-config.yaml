@@ -1,0 +1,19 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: agentgateway-bench
+# Mirror the CI kubeadm config: give the kube-controller-manager higher QPS so
+# it can quickly provision ServiceAccounts, ConfigMaps and other resources that
+# the agentgateway controller depends on during startup.
+kubeadmConfigPatches:
+  - |
+    kind: ClusterConfiguration
+    metadata:
+      name: config
+    controllerManager:
+      extraArgs:
+        "kube-api-burst": "500"
+        "kube-api-qps": "250"
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker
