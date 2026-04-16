@@ -22,7 +22,7 @@ use url::form_urlencoded;
 #[apply(schema!)]
 pub enum BackendAuth {
 	Passthrough {
-		#[serde(default, rename = "authorizationLocation")]
+		#[serde(default)]
 		location: AuthorizationLocation,
 	},
 	Key {
@@ -32,7 +32,7 @@ pub enum BackendAuth {
 			deserialize_with = "deser_key_from_file"
 		)]
 		value: SecretString,
-		#[serde(default, rename = "authorizationLocation")]
+		#[serde(default)]
 		location: AuthorizationLocation,
 	},
 	#[serde(rename = "gcp")]
@@ -82,9 +82,7 @@ pub async fn apply_backend_auth(
 	req: &mut Request,
 ) -> Result<(), ProxyError> {
 	match auth {
-		BackendAuth::Passthrough {
-			location,
-		} => {
+		BackendAuth::Passthrough { location } => {
 			// They should have a JWT policy defined. That will strip the token. Here we add it back
 			// TODO: should we also support API key, etc?
 			if let Some(token) = req

@@ -1132,11 +1132,11 @@ where
 	#[derive(serde::Deserialize)]
 	#[serde(untagged)]
 	enum BackendAuthCompat {
-		Full(BackendAuth),
 		PlainKey {
 			#[serde(deserialize_with = "deser_key_from_file")]
 			key: SecretString,
 		},
+		Full(BackendAuth),
 	}
 
 	Option::<BackendAuthCompat>::deserialize(deserializer).map(|auth| {
@@ -1342,7 +1342,7 @@ impl LocalBackendPolicies {
 			pols.push(BackendPolicy::BackendTLS(p.try_into()?))
 		}
 		if let Some(p) = backend_auth {
-			pols.push(BackendPolicy::BackendAuth(p.into()))
+			pols.push(BackendPolicy::BackendAuth(p))
 		}
 		if let Some(mut p) = ai {
 			p.compile_model_alias_patterns();
@@ -2631,7 +2631,7 @@ pub(crate) async fn split_policies(
 		backend_policies.push(BackendPolicy::Tunnel(p))
 	}
 	if let Some(p) = backend_auth {
-		backend_policies.push(BackendPolicy::BackendAuth(p.into()))
+		backend_policies.push(BackendPolicy::BackendAuth(p))
 	}
 
 	// Route policies

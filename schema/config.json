@@ -2486,7 +2486,7 @@
             "passthrough": {
               "type": "object",
               "properties": {
-                "authorizationLocation": {
+                "location": {
                   "$ref": "#/$defs/AuthorizationLocation",
                   "default": {
                     "header": {
@@ -2513,7 +2513,7 @@
                 "value": {
                   "$ref": "#/$defs/FileOrInline"
                 },
-                "authorizationLocation": {
+                "location": {
                   "$ref": "#/$defs/AuthorizationLocation",
                   "default": {
                     "header": {

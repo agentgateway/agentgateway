@@ -309,7 +309,7 @@ async fn stream_to_stream_single_tls() {
 		false,
 		vec![BackendPolicy::BackendAuth(BackendAuth::Key {
 			value: SecretString::new("my-key".into()),
-			authorization_location: crate::http::auth::AuthorizationLocation::default(),
+			location: crate::http::auth::AuthorizationLocation::default(),
 		})],
 	)
 	.await;

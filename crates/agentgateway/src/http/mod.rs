@@ -647,16 +647,25 @@ where
 	}
 
 	let updated = updated.finish();
-	parts.path_and_query = Some(
-		if updated.is_empty() {
-			path.to_string()
-		} else {
-			format!("{path}?{updated}")
-		}
-		.parse()?,
-	);
-	*uri = Uri::from_parts(parts)?;
-	Ok(())
+	let new_path: Result<PathAndQuery, _> = if updated.is_empty() {
+		path.to_string()
+	} else {
+		format!("{path}?{updated}")
+	}
+	.parse();
+	match new_path {
+		Ok(p) => {
+			parts.path_and_query = Some(p);
+			*uri = Uri::from_parts(parts)?;
+			Ok(())
+		},
+		Err(e) => {
+			// Just a backup, in the event that somehow our new param was invalid we still set the URI
+			// so its not wiped out
+			*uri = Uri::from_parts(parts)?;
+			Err(e.into())
+		},
+	}
 }
 
 #[derive(Debug)]

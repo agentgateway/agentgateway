@@ -1112,7 +1112,7 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 		location: Some(strng::new("us-central1")),
 		policies: vec![BackendPolicy::BackendAuth(BackendAuth::Key {
 			value: SecretString::new("user-provided-api-key".into()),
-			authorization_location: crate::http::auth::AuthorizationLocation::default(),
+			location: crate::http::auth::AuthorizationLocation::default(),
 		})],
 	};
 
@@ -1126,7 +1126,7 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 			resolved.backend_auth,
 			Some(BackendAuth::Key {
 				value: _,
-				authorization_location: _
+				location: _
 			})
 		),
 		"Expected user-provided Key auth to take precedence over \

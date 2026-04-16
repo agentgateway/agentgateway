@@ -32,7 +32,7 @@ async fn test_backend_auth_passthrough_happy_path() {
 	apply_backend_auth(
 		&backend_info,
 		&BackendAuth::Passthrough {
-			authorization_location: AuthorizationLocation::default(),
+			location: AuthorizationLocation::default(),
 		},
 		&mut req,
 	)
@@ -69,7 +69,7 @@ async fn test_backend_auth_key() {
 
 	let key_auth = BackendAuth::Key {
 		value: SecretString::new("my-secret-key".into()),
-		authorization_location: AuthorizationLocation::default(),
+		location: AuthorizationLocation::default(),
 	};
 	apply_backend_auth(&backend_info, &key_auth, &mut req)
 		.await
@@ -104,7 +104,7 @@ async fn test_backend_auth_key_query_parameter() {
 
 	let key_auth = BackendAuth::Key {
 		value: SecretString::new("my-secret-key".into()),
-		authorization_location: AuthorizationLocation::QueryParameter { name: "key".into() },
+		location: AuthorizationLocation::QueryParameter { name: "key".into() },
 	};
 	apply_backend_auth(&backend_info, &key_auth, &mut req)
 		.await

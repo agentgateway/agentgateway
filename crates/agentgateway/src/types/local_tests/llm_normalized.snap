@@ -1,10 +1,5 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
-<<<<<<< HEAD
-assertion_line: 137
-=======
-assertion_line: 136
->>>>>>> 6efe2bdc9 (auth: add location override for inserting and extracting auth credentials)
 description: "Config normalization test for llm: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
@@ -93,8 +88,8 @@ backends:
                       - backendTLS: ~
                       - backendAuth:
                           key:
-                            key: "<redacted>"
-                            authorizationLocation:
+                            value: "<redacted>"
+                            location:
                               header:
                                 name: authorization
                                 prefix: "Bearer "
