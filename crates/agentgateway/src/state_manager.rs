@@ -152,11 +152,11 @@ impl LocalClient {
 						|| (current_config_path.is_some() && current_config_path != real_config_path))
 				}) {
 					real_config_path = current_config_path.clone();
-					info!("Config file changed, reloading...");
+					debug!("Config file changed, reloading...");
 					match lc.reload_config(next_state.clone()).await {
 						Ok(nxt) => {
 							next_state = nxt;
-							info!("Config reloaded successfully")
+							debug!("Config reloaded successfully")
 						},
 						Err(e) => {
 							error!("Failed to reload config: {}", e)
