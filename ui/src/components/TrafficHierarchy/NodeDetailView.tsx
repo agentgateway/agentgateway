@@ -1024,6 +1024,26 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         return;
       }
 
+      // Handle MCP config policy updates
+      if (selected.type === "mcpPolicy") { 
+        const form = getFormForPolicy(selected.node.policyType, "mcpPolicy") as any;
+        const dataToSave = form?.transformBeforeSubmit ? form.transformBeforeSubmit(fd) : fd;
+        if (!hierarchy.mcp) throw new Error("MCP config not found");
+        const currentPolicies = hierarchy.mcp.policies.reduce((acc, p) => { 
+          acc[p.policyType] = p.policy;
+          return acc;
+        }, {} as Record<string, unknown>);
+        await api.createOrUpdateMCP({
+          ...hierarchy.mcp.config,
+          targets: hierarchy.mcp.targets.map((t) => t.target),
+          policies: { ...currentPolicies, [selected.node.policyType]: dataToSave },
+        } as any);
+        toast.success(`${getPolicyLabel(selected.node.policyType)} policy updated`);
+        await mutate();
+        navigate(`${basePath}/mcp/policy/${selected.node.policyType}`);
+        return;
+      }
+
       const { port, li, ri, bi, isTcpRoute } = urlParams;
 
       // Guard: these types require a port
