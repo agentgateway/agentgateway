@@ -1,7 +1,6 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
-assertion_line: 48
-description: "Config normalization test for eviction: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+description: "Config normalization test for health: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
   - key: bind/3000
@@ -49,6 +48,7 @@ backends:
           stateful: true
           alwaysUsePrefix: false
           failureMode: failClosed
+          sessionIdleTtl: 30m0s
 route_groups: []
 workloads: []
 services: []

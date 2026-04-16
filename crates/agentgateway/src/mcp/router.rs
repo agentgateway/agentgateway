@@ -106,7 +106,8 @@ impl App {
 				session_idle_ttl: backend.session_idle_ttl,
 			}
 		};
-		let sm = self.session.clone();
+		let sessions = self.session.clone();
+		sessions.ensure_idle_running();
 		let client = PolicyClient { inputs: pi.clone() };
 		let authorization_policies = backend_policies
 			.mcp_authorization
@@ -138,7 +139,7 @@ impl App {
 		if req.uri().path() == "/sse" {
 			// Legacy handling
 			// Assume this is streamable HTTP otherwise
-			let sse = LegacySSEService::new(sm);
+			let sse = LegacySSEService::new(sessions);
 			Box::pin(sse.handle(
 				req,
 				RelayInputs {
@@ -150,7 +151,7 @@ impl App {
 			.await
 		} else {
 			let streamable = StreamableHttpService::new(
-				sm,
+				sessions,
 				StreamableHttpServerConfig {
 					stateful_mode: backend.stateful,
 				},

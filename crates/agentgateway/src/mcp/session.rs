@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::sync::Arc;
-use std::sync::Mutex as StdMutex;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use ::http::StatusCode;
@@ -521,7 +520,7 @@ impl Session {
 pub struct SessionManager {
 	encoder: http::sessionpersistence::Encoder,
 	sessions: Arc<RwLock<HashMap<String, SessionEntry>>>,
-	idle_reaper: Option<tokio::task::AbortHandle>,
+	idle_reaper: OnceLock<tokio::task::AbortHandle>,
 }
 
 fn session_id() -> Arc<str> {
@@ -530,13 +529,17 @@ fn session_id() -> Arc<str> {
 
 impl SessionManager {
 	pub fn new(encoder: http::sessionpersistence::Encoder) -> Arc<Self> {
-		let sessions = Arc::new(RwLock::new(HashMap::new()));
-		let task = tokio::spawn(run_idle_reaper(sessions.clone()));
 		Arc::new(Self {
 			encoder,
-			sessions,
-			idle_reaper: Some(task.abort_handle()),
+			sessions: Arc::new(RwLock::new(HashMap::new())),
+			idle_reaper: OnceLock::new(),
 		})
+	}
+
+	pub fn ensure_idle_running(&self) {
+		self
+			.idle_reaper
+			.get_or_init(|| tokio::spawn(run_idle_reaper(self.sessions.clone())).abort_handle());
 	}
 
 	pub fn get_session(&self, id: &str, builder: RelayInputs) -> Option<Session> {
