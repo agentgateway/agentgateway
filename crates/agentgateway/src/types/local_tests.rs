@@ -148,6 +148,11 @@ async fn test_mcp_config() {
 }
 
 #[tokio::test]
+async fn test_named_mcp_backend_config() {
+	test_config_parsing("named_mcp_backend").await;
+}
+
+#[tokio::test]
 async fn test_llm_config() {
 	test_config_parsing("llm").await;
 }

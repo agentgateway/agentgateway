@@ -595,8 +595,11 @@ impl TestBind {
 			.transpose()
 			.unwrap()
 			.unwrap_or_default();
+		let local::FullLocalBackendSpec::Opaque(host) = b.spec else {
+			panic!("attach_backend only supports Opaque (host) backends");
+		};
 		let bps = BackendWithPolicies {
-			backend: Backend::Opaque(crate::types::local::local_name(b.name), b.host),
+			backend: Backend::Opaque(crate::types::local::local_name(b.name), host),
 			inline_policies: policies,
 		};
 		self

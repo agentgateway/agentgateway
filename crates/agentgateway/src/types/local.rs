@@ -514,9 +514,34 @@ fn default_weight() -> usize {
 #[apply(schema_de!)]
 pub struct FullLocalBackend {
 	pub name: BackendKey,
-	pub host: Target,
+	#[serde(flatten)]
+	pub spec: FullLocalBackendSpec,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub policies: Option<LocalBackendPolicies>,
+}
+
+#[apply(schema_de!)]
+#[allow(clippy::large_enum_variant)]
+pub enum FullLocalBackendSpec {
+	#[serde(rename = "host")]
+	Opaque(Target),
+	#[serde(rename = "mcp")]
+	MCP(LocalMcpBackend),
+	#[serde(rename = "ai")]
+	AI(LocalAIBackend),
+	#[serde(rename = "aws")]
+	Aws(LocalAwsBackend),
+}
+
+impl From<FullLocalBackendSpec> for LocalBackend {
+	fn from(spec: FullLocalBackendSpec) -> Self {
+		match spec {
+			FullLocalBackendSpec::Opaque(t) => LocalBackend::Opaque(t),
+			FullLocalBackendSpec::MCP(m) => LocalBackend::MCP(m),
+			FullLocalBackendSpec::AI(a) => LocalBackend::AI(a),
+			FullLocalBackendSpec::Aws(a) => LocalBackend::Aws(a),
+		}
+	}
 }
 
 #[apply(schema_de!)]
@@ -1455,10 +1480,27 @@ async fn convert(
 			.map(|p| p.translate())
 			.transpose()?
 			.unwrap_or_default();
-		all_backends.push(BackendWithPolicies {
-			backend: Backend::Opaque(local_name(b.name), b.host),
-			inline_policies: policies,
-		})
+		let name = local_name(b.name);
+		let lb: LocalBackend = b.spec.into();
+		let mut bws = lb.as_backends(name.clone(), client.clone()).await?;
+
+		// as_backends may expand a single LocalBackend into multiple Backends (e.g. MCP)
+		// attach the policies to the "main" one
+		// do not use `Backend::name` as it may create a computed name, not based
+		if let Some(primary_bw) = bws.iter_mut().find(|bw| match &bw.backend {
+			Backend::Opaque(n, _)
+			| Backend::MCP(n, _)
+			| Backend::AI(n, _)
+			| Backend::Aws(n, _)
+			| Backend::Dynamic(n, _) => n == &name,
+			Backend::Service(_, _) | Backend::Invalid => false,
+		}) {
+			primary_bw.inline_policies.extend_from_slice(&policies);
+		} else if cfg!(debug_assertions) {
+			panic!("as_backends did not return a backend with the expected name: {name}");
+		}
+
+		all_backends.extend(bws);
 	}
 
 	// Convert llm config if present
