@@ -203,7 +203,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			auth,
 			ca_cert: ca_root_cert,
 			ca_headers: ca_headers?,
-			allowed_trust_domains,
+			allowed_trust_domains: allowed_trust_domains.into(),
 		})
 	} else {
 		None

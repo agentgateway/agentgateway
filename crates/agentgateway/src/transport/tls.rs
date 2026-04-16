@@ -547,11 +547,14 @@ pub mod trustdomain {
 	#[derive(Debug)]
 	pub struct TrustDomainVerifier {
 		base: Arc<dyn ClientCertVerifier>,
-		allowed_trust_domains: Vec<Strng>,
+		allowed_trust_domains: Arc<[Strng]>,
 	}
 
 	impl TrustDomainVerifier {
-		pub fn new(base: Arc<dyn ClientCertVerifier>, allowed_trust_domains: Vec<Strng>) -> Arc<Self> {
+		pub fn new(
+			base: Arc<dyn ClientCertVerifier>,
+			allowed_trust_domains: Arc<[Strng]>,
+		) -> Arc<Self> {
 			Arc::new(Self {
 				base,
 				allowed_trust_domains,
@@ -720,7 +723,7 @@ pub mod trustdomain {
 		}
 
 		fn verifier(domains: &[&str]) -> Arc<TrustDomainVerifier> {
-			let allowed: Vec<Strng> = domains.iter().map(strng::new).collect();
+			let allowed: Arc<[Strng]> = domains.iter().map(strng::new).collect();
 			TrustDomainVerifier::new(Arc::new(NopClientVerifier), allowed)
 		}
 

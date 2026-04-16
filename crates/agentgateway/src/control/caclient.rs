@@ -66,7 +66,7 @@ pub struct Config {
 	pub auth: AuthSource,
 	pub ca_cert: RootCert,
 	pub ca_headers: Vec<(String, String)>,
-	pub allowed_trust_domains: Vec<Strng>,
+	pub allowed_trust_domains: Arc<[Strng]>,
 }
 
 #[derive(Clone, Debug)]
@@ -84,7 +84,7 @@ pub struct WorkloadCertificate {
 	private_key: PrivateKeyDer<'static>,
 	expiry: Expiration,
 	identity: Identity,
-	allowed_trust_domains: Vec<Strng>,
+	allowed_trust_domains: Arc<[Strng]>,
 }
 
 impl WorkloadCertificate {
@@ -92,7 +92,7 @@ impl WorkloadCertificate {
 		key: &[u8],
 		cert: &[u8],
 		chain: Vec<&[u8]>,
-		allowed_trust_domains: Vec<Strng>,
+		allowed_trust_domains: Arc<[Strng]>,
 	) -> Result<WorkloadCertificate, Error> {
 		let cert = parse_cert(cert.to_vec())?;
 		let mut roots_store = RootCertStore::empty();
@@ -199,9 +199,10 @@ impl WorkloadCertificate {
 		)
 		.build()?;
 		// Verify the client's SPIFFE trust domain is in the allowed set.
-		// TrustDomainVerifier treats an empty allow-list as "check disabled" and
-		// falls back to CA-level trust only; the config-populated list used here
-		// normally includes the local trust domain.
+		// allowed_trust_domains always contains at least the local trust domain (populated
+		// at config build time), so trust-domain verification is always enforced here.
+		// TrustDomainVerifier's empty-list bypass is a safety valve that cannot be reached
+		// through normal Config construction.
 		let client_cert_verifier = transport::tls::trustdomain::TrustDomainVerifier::new(
 			raw_client_cert_verifier,
 			self.allowed_trust_domains.clone(),
