@@ -1,0 +1,64 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: mcp-service-backendref
+spec:
+  mcp:
+    targets:
+    - name: explicit-service
+      static:
+        backendRef:
+          name: mcp-service-http
+        port: 9090
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-service-http
+  namespace: default
+spec:
+  ports:
+  - name: mcp-http
+    port: 9090
+    appProtocol: agentgateway.dev/mcp
+---
+# Output
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: default/mcp-service-backendref
+      mcp:
+        targets:
+        - backend:
+            port: 9090
+            service:
+              hostname: mcp-service-http.default.svc.cluster.local
+              namespace: default
+          name: explicit-service
+      name:
+        name: mcp-service-backendref
+        namespace: default
+- canonical: true
+  hostname: mcp-service-http.default.svc.cluster.local
+  name: mcp-service-http
+  namespace: default
+  ports:
+  - servicePort: 9090
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: mcp-service-backendref
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

@@ -30,6 +30,7 @@ fn make_descriptor_entry(entries: Vec<(&str, &str)>, limit_type: RateLimitType) 
 	DescriptorEntry {
 		entries: Arc::new(descriptors),
 		limit_type,
+		limit_override: None,
 	}
 }
 
@@ -213,9 +214,36 @@ fn build_request_cost_propagated_to_hits_addend() {
 		.body(crate::http::Body::empty())
 		.unwrap();
 
-	let result = rl.build_request(&req, RateLimitType::Tokens, Some(42));
-	assert!(result.is_some());
-	assert_eq!(result.unwrap().descriptors[0].hits_addend, Some(42));
+	let result = rl
+		.build_request(&req, RateLimitType::Tokens, Some(42))
+		.unwrap();
+	assert_eq!(result.descriptors[0].hits_addend, Some(42));
+}
+
+#[test]
+fn build_request_limit_override_evaluates() {
+	let mut entry = make_descriptor_entry(vec![("user", r#""test-user""#)], RateLimitType::Requests);
+	entry.limit_override = Some(Arc::new(
+		cel::Expression::new_strict(r#"{"unit":"minute","requestsPerUnit":5}"#)
+			.expect("valid CEL expression"),
+	));
+	let rl = make_rate_limit(vec![entry]);
+
+	let req = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri("http://example.com/mcp")
+		.body(crate::http::Body::empty())
+		.unwrap();
+
+	let result = rl
+		.build_request(&req, RateLimitType::Requests, None)
+		.unwrap();
+	let limit = result.descriptors[0]
+		.limit
+		.as_ref()
+		.expect("limit override should be set");
+	assert_eq!(limit.requests_per_unit, 5);
+	assert_eq!(limit.unit, proto::RateLimitUnit::Minute as i32);
 }
 
 /// Simulates the DELETE disconnect scenario: a DELETE request with no body

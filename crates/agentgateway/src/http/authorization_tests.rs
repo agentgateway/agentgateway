@@ -184,7 +184,10 @@ fn test_network_authorization_allows_source_cidr() {
 	let source = SourceContext {
 		address: IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)),
 		port: 15000,
+		raw_address: IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)),
+		raw_port: 15000,
 		tls: None,
+		unverified_workload: None,
 	};
 
 	assert_matches!(network_authz.apply(&source), Ok(()));
@@ -202,7 +205,10 @@ fn test_network_authorization_deny_takes_precedence() {
 	let source = SourceContext {
 		address: IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)),
 		port: 15000,
+		raw_address: IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)),
+		raw_port: 15000,
 		tls: None,
+		unverified_workload: None,
 	};
 
 	assert_matches!(network_authz.apply(&source), Err(_));

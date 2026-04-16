@@ -105,10 +105,85 @@ pub struct SourceContext {
 	#[serde(default)]
 	/// The port of the downstream connection.
 	pub port: u16,
+	#[serde(default = "dummy_address", rename = "rawAddress")]
+	#[dynamic(rename = "rawAddress")]
+	/// The original TCP peer IP address of the downstream connection.
+	/// This can differ from the `address` when using tunneling protocols like PROXY.
+	pub raw_address: IpAddr,
+	#[serde(default, rename = "rawPort")]
+	#[dynamic(rename = "rawPort")]
+	/// The original TCP peer port of the downstream connection.
+	/// This can differ from the `port` when using tunneling protocols like PROXY.
+	pub raw_port: u16,
 	/// The (Istio SPIFFE) identity of the downstream connection, if available.
 	#[serde(flatten, default, deserialize_with = "none_if_empty")]
 	#[dynamic(flatten)]
 	pub tls: Option<crate::transport::tls::TlsInfo>,
+	/// The workload context of the downstream connection, resolved from the
+	/// workload discovery store by source IP. Available when the source pod is
+	/// known to the controller's workload discovery store.
+	///
+	/// Fields are nested under `unverified` to signal that they are derived
+	/// from the source IP (not cryptographically authenticated). Policy
+	/// authors should prefer `source.identity.*` for trust-sensitive checks.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub unverified_workload: Option<WorkloadContext>,
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+/// Workload context wrapper. All fields live under `unverified` to make it
+/// clear that the data is resolved by IP, not cryptographically verified.
+pub struct WorkloadContext {
+	/// The pod name of the source workload.
+	#[serde(default)]
+	pub name: Strng,
+	/// The namespace of the source workload.
+	#[serde(default)]
+	pub namespace: Strng,
+	/// The service account of the source workload.
+	#[serde(default)]
+	pub service_account: Strng,
+}
+
+impl SourceContext {
+	pub fn from_tcp_connection(
+		tcp: &crate::transport::stream::TCPConnectionInfo,
+		tls: Option<crate::transport::tls::TlsInfo>,
+		unverified_workload: Option<WorkloadContext>,
+	) -> Self {
+		let raw_peer_addr = tcp.raw_peer_addr.unwrap_or(tcp.peer_addr);
+		Self {
+			address: tcp.peer_addr.ip(),
+			port: tcp.peer_addr.port(),
+			raw_address: raw_peer_addr.ip(),
+			raw_port: raw_peer_addr.port(),
+			tls,
+			unverified_workload,
+		}
+	}
+}
+
+impl WorkloadContext {
+	/// Resolve the source workload from the discovery store by IP address.
+	pub fn from_stores(
+		stores: &crate::Stores,
+		network: &Strng,
+		addr: IpAddr,
+	) -> Option<WorkloadContext> {
+		let discovery = stores.read_discovery();
+		discovery
+			.workloads
+			.find_address(&crate::types::discovery::NetworkAddress {
+				network: network.clone(),
+				address: addr,
+			})
+			.map(|w| WorkloadContext {
+				name: w.name.clone(),
+				namespace: w.namespace.clone(),
+				service_account: w.service_account.clone(),
+			})
+	}
 }
 fn none_if_empty<'de, D>(deserializer: D) -> Result<Option<TlsInfo>, D::Error>
 where
@@ -312,13 +387,13 @@ impl<'a> Executor<'a> {
 	}
 	pub fn new_tcp_logger(
 		source_context: Option<&'a SourceContext>,
-		end_time: Option<&'a RequestTime>,
+		end_time: &'a RequestTime,
 	) -> Self {
 		let mut this = Self::new_empty();
 		// For TCP connections, set the source context directly
 		this.source = ExtensionOrDirect::Direct(source_context);
 		if let Some(f) = this.request.as_mut() {
-			f.end_time = end_time;
+			f.end_time = Some(end_time);
 		}
 		this
 	}
@@ -788,6 +863,20 @@ pub struct LLMContext {
 	#[dynamic(rename = "inputTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub input_tokens: Option<u64>,
+	/// The number of image tokens in the input/prompt.
+	#[dynamic(rename = "inputImageTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub input_image_tokens: Option<u64>,
+	/// The number of text tokens in the input/prompt.
+	/// Note: this field is only set in multi-modal calls where the total token count is split out by
+	/// text/image/audio; for standard all-text calls, this is unset.
+	#[dynamic(rename = "inputTextTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub input_text_tokens: Option<u64>,
+	/// The number of audio tokens in the input/prompt.
+	#[dynamic(rename = "inputAudioTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub input_audio_tokens: Option<u64>,
 	/// The number of tokens in the input/prompt read from cache (savings)
 	#[dynamic(rename = "cachedInputTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -801,6 +890,20 @@ pub struct LLMContext {
 	#[dynamic(rename = "outputTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub output_tokens: Option<u64>,
+	/// The number of image tokens in the output/completion.
+	#[dynamic(rename = "outputImageTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_image_tokens: Option<u64>,
+	/// The number of text tokens in the output/completion.
+	#[dynamic(rename = "outputTextTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_text_tokens: Option<u64>,
+	/// The number of audio tokens in the output/completion.
+	/// Note: this field is only set in multi-modal calls where the total token count is split out by
+	/// text/image/audio; for standard all-text calls, this is unset.
+	#[dynamic(rename = "outputAudioTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_audio_tokens: Option<u64>,
 	/// The number of reasoning tokens in the output/completion.
 	#[dynamic(rename = "reasoningTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -809,6 +912,10 @@ pub struct LLMContext {
 	#[dynamic(rename = "totalTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub total_tokens: Option<u64>,
+	/// The service tier the provider served the request under.
+	#[dynamic(rename = "serviceTier")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub service_tier: Option<Strng>,
 	// For now, not exposed to CEL; only used to piggy-back this field for metrics.
 	#[serde(skip)]
 	#[dynamic(skip)]
@@ -833,12 +940,19 @@ impl From<llm::LLMInfo> for LLMContext {
 		let resp = value.response;
 		let mut base = LLMContext {
 			output_tokens: resp.output_tokens,
+			output_image_tokens: resp.output_image_tokens,
+			output_text_tokens: resp.output_text_tokens,
+			output_audio_tokens: resp.output_audio_tokens,
 			count_tokens: resp.count_tokens,
 			total_tokens: resp.total_tokens,
 			first_token: resp.first_token,
 			reasoning_tokens: resp.reasoning_tokens,
+			input_image_tokens: resp.input_image_tokens,
+			input_text_tokens: resp.input_text_tokens,
+			input_audio_tokens: resp.input_audio_tokens,
 			cached_input_tokens: resp.cached_input_tokens,
 			cache_creation_input_tokens: resp.cache_creation_input_tokens,
+			service_tier: resp.service_tier.clone(),
 			response_model: resp.provider_model.clone(),
 			// Not always set
 			completion: resp.completion.clone(),
@@ -875,11 +989,18 @@ impl From<llm::LLMRequest> for LLMContext {
 			count_tokens: None,
 			response_model: None,
 			output_tokens: None,
+			output_image_tokens: None,
+			output_text_tokens: None,
+			output_audio_tokens: None,
 			total_tokens: None,
 			completion: None,
 			reasoning_tokens: None,
+			input_image_tokens: None,
+			input_text_tokens: None,
+			input_audio_tokens: None,
 			cached_input_tokens: None,
 			cache_creation_input_tokens: None,
+			service_tier: None,
 		}
 	}
 }
@@ -1414,12 +1535,19 @@ pub fn full_example_executor() -> ExecutorSerde {
 		source: Some(SourceContext {
 			address: "127.0.0.1".parse().unwrap(),
 			port: 12345,
+			raw_address: "127.0.0.1".parse().unwrap(),
+			raw_port: 12345,
 			tls: Some(TlsInfo {
 				identity: None,
 				subject_alt_names: vec!["san".into()],
 				issuer: Default::default(),
 				subject: Default::default(),
 				subject_cn: Some("cn".into()),
+			}),
+			unverified_workload: Some(WorkloadContext {
+				name: "pod-1".into(),
+				namespace: "ns-1".into(),
+				service_account: "sa-1".into(),
 			}),
 		}),
 		jwt: Some(jwt::Claims {
@@ -1446,11 +1574,18 @@ pub fn full_example_executor() -> ExecutorSerde {
 			response_model: Some("gpt-4-turbo".into()),
 			provider: "fake-ai".into(),
 			input_tokens: Some(100),
+			input_image_tokens: Some(60),
+			input_text_tokens: Some(40),
+			input_audio_tokens: Some(5),
 			cached_input_tokens: Some(20),
 			cache_creation_input_tokens: Some(10),
 			output_tokens: Some(50),
+			output_image_tokens: Some(30),
+			output_text_tokens: Some(20),
+			output_audio_tokens: Some(3),
 			reasoning_tokens: Some(30),
 			total_tokens: Some(150),
+			service_tier: Some("default".into()),
 			first_token: None,
 			count_tokens: Some(10),
 

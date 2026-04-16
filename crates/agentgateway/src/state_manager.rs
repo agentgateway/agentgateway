@@ -35,13 +35,14 @@ impl StateManager {
 		awaiting_ready: tokio::sync::watch::Sender<()>,
 	) -> anyhow::Result<Self> {
 		let xds = &config.xds;
-		let stores = Stores::with_ipv6_enabled(config.ipv6_enabled);
+		let stores = Stores::new(config.ipv6_enabled, config.threading_mode);
 		let xds_client = if let Some(addr) = &xds.address {
 			let connector = control::grpc_connector(
 				client.clone(),
 				addr.clone(),
 				xds.auth.clone(),
 				xds.ca_cert.clone(),
+				vec![],
 			)
 			.await?;
 			Some(

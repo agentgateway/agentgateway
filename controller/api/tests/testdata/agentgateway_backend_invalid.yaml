@@ -41,6 +41,28 @@ spec:
           matchExpressions:
           - 'true'
 ---
+_err: unknown fields
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-static-target-authentication
+spec:
+  mcp:
+    targets:
+    - name: target
+      static:
+        host: example.com
+        port: 443
+        policies:
+          mcp:
+            authentication:
+              issuer: https://issuer.example.com/
+              jwks:
+                backendRef:
+                  name: jwks
+                  port: 443
+                jwksPath: /.well-known/jwks.json
+---
 _err: path and pathPrefix are mutually exclusive
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
@@ -74,3 +96,46 @@ spec:
     provider:
       openai: {}
       host: example.com
+---
+_err: exactly one of the fields in [host backendRef] must be set
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-backend-ref-missing-port
+spec:
+  mcp:
+    targets:
+    - name: bad-ref
+      static:
+        host: mcp.example.com
+        backendRef:
+          name: mcp-service
+        port: 8080
+---
+_err: exactly one of the fields in [host backendRef] must be set
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-backend-ref-no-target
+spec:
+  mcp:
+    targets:
+    - name: bad-ref
+      static:
+        port: 8080
+---
+_err: mcp target policies may not be used with backendRef
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-backend-ref-with-policies
+spec:
+  mcp:
+    targets:
+    - name: bad-ref
+      static:
+        backendRef:
+          name: mcp-service
+        port: 8080
+        policies:
+          tls: {}

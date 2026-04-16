@@ -1,6 +1,6 @@
 use std::cmp;
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
@@ -1031,7 +1031,7 @@ impl From<SimpleBackend> for SimpleBackendWithPolicies {
 }
 
 #[derive(Eq, PartialEq)]
-#[apply(schema_ser!)]
+#[apply(schema_ser_schema!)]
 #[cfg_attr(feature = "schema", schemars(with = "SimpleLocalBackend"))]
 pub enum SimpleBackendReference {
 	Service { name: NamespacedHostname, port: u16 },
@@ -2037,7 +2037,8 @@ pub enum TrafficPolicy {
 	RemoteRateLimit(remoteratelimit::RemoteRateLimit),
 	ExtAuthz(ext_authz::ExtAuthz),
 	ExtProc(ext_proc::ExtProc),
-	JwtAuth(crate::http::jwt::Jwt),
+	JwtAuth(JwtAuthentication),
+	Oidc(crate::http::oidc::OidcPolicy),
 	BasicAuth(crate::http::basicauth::BasicAuthentication),
 	APIKey(crate::http::apikey::APIKeyAuthentication),
 	Transformation(crate::http::transformation_cel::Transformation),
@@ -2125,6 +2126,49 @@ impl ResourceMetadata {
 		}
 
 		Value::Object(map)
+	}
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JwtAuthentication {
+	#[serde(flatten)]
+	pub jwt: crate::http::jwt::Jwt,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub mcp: Option<McpAuthentication>,
+}
+
+impl JwtAuthentication {
+	pub async fn apply(
+		&self,
+		client: &crate::proxy::httpproxy::PolicyClient,
+		log: Option<&mut crate::telemetry::log::RequestLog>,
+		req: &mut crate::http::Request,
+	) -> Result<(), crate::proxy::ProxyResponse> {
+		if let Some(auth) = &self.mcp {
+			if !crate::mcp::auth::is_well_known_endpoint(req.uri().path()) {
+				self.jwt.apply(log, req).await.map_err(|e| {
+					crate::proxy::ProxyResponse::from(crate::mcp::auth::create_auth_required_response(
+						crate::proxy::ProxyError::JwtAuthenticationFailure(e),
+						req,
+						auth,
+					))
+				})?;
+			}
+
+			if let Some(resp) = crate::mcp::auth::handle_mcp_request(req, auth, client).await? {
+				return Err(crate::proxy::ProxyResponse::DirectResponse(Box::new(resp)));
+			}
+			return Ok(());
+		}
+
+		self
+			.jwt
+			.apply(log, req)
+			.await
+			.map_err(crate::proxy::ProxyError::JwtAuthenticationFailure)
+			.map_err(crate::proxy::ProxyResponse::from)?;
+		Ok(())
 	}
 }
 
@@ -2261,13 +2305,11 @@ impl serde::Serialize for Target {
 	}
 }
 
-impl TryFrom<(&str, u16)> for Target {
-	type Error = anyhow::Error;
-
-	fn try_from((host, port): (&str, u16)) -> Result<Self, Self::Error> {
+impl From<(&str, u16)> for Target {
+	fn from((host, port): (&str, u16)) -> Self {
 		match host.parse::<IpAddr>() {
-			Ok(target) => Ok(Target::Address(SocketAddr::new(target, port))),
-			Err(_) => Ok(Target::Hostname(host.into(), port)),
+			Ok(target) => Target::Address(SocketAddr::new(target, port)),
+			Err(_) => Target::Hostname(host.into(), port),
 		}
 	}
 }
@@ -2284,7 +2326,7 @@ impl TryFrom<&str> for Target {
 			anyhow::bail!("invalid host:port: {hostport}");
 		};
 		let port: u16 = port.parse()?;
-		(host, port).try_into()
+		Ok((host, port).into())
 	}
 }
 

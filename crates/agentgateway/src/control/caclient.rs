@@ -65,6 +65,7 @@ pub struct Config {
 	pub identity: Identity,
 	pub auth: AuthSource,
 	pub ca_cert: RootCert,
+	pub ca_headers: Vec<(String, String)>,
 }
 
 #[derive(Clone, Debug)]
@@ -184,7 +185,7 @@ impl WorkloadCertificate {
 	pub fn hbone_termination(&self) -> Result<ServerConfig, Error> {
 		let Identity::Spiffe { trust_domain, .. } = &self.identity;
 
-		// TODO: this istoo expensive to build per request
+		// TODO: this is too expensive to build per request
 		let roots = self.roots.clone();
 		let raw_client_cert_verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
 			roots.clone(),
@@ -195,7 +196,7 @@ impl WorkloadCertificate {
 			raw_client_cert_verifier,
 			Some(trust_domain.clone()),
 		);
-		let sc = ServerConfig::builder_with_provider(transport::tls::provider())
+		let mut sc = ServerConfig::builder_with_provider(transport::tls::provider())
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
 			.expect("server config must be valid")
 			.with_client_cert_verifier(client_cert_verifier)
@@ -203,6 +204,7 @@ impl WorkloadCertificate {
 				self.chain.iter().map(|c| c.der.clone()).collect(),
 				self.private_key.clone_key(),
 			)?;
+		sc.alpn_protocols = vec![b"h2".into()];
 		Ok(sc)
 	}
 }
@@ -330,13 +332,27 @@ impl CaClient {
 	pub fn new(client: client::Client, config: Config) -> Result<Self, Error> {
 		let (state_tx, state_rx) = watch::channel(CertificateState::NotReady);
 
+		let headers: Vec<(http::header::HeaderName, http::HeaderValue)> = config
+			.ca_headers
+			.iter()
+			.map(|(k, v)| {
+				Ok((
+					http::header::HeaderName::from_str(k)
+						.map_err(|e| Error::CaClientCreation(Arc::new(anyhow::Error::new(e))))?,
+					http::HeaderValue::from_str(v)
+						.map_err(|e| Error::CaClientCreation(Arc::new(anyhow::Error::new(e))))?,
+				))
+			})
+			.collect::<Result<_, Error>>()?;
+
 		// Start the fetcher task
 		let fetcher_handle = tokio::spawn({
 			let config = config.clone();
 			let state_tx = state_tx.clone();
+			let headers = headers.clone();
 
 			async move {
-				Self::run_fetcher(client, config, state_tx).await;
+				Self::run_fetcher(client, config, state_tx, headers).await;
 			}
 		});
 
@@ -377,11 +393,14 @@ impl CaClient {
 		client: client::Client,
 		config: Config,
 		state_tx: watch::Sender<CertificateState>,
+		headers: Vec<(http::header::HeaderName, http::HeaderValue)>,
 	) {
 		let mut interval = tokio::time::interval(Duration::from_secs(30)); // Check every 30 seconds
 
 		// Start with an immediate fetch
-		if let Err(e) = Self::fetch_and_update_certificate(client.clone(), &config, &state_tx).await {
+		if let Err(e) =
+			Self::fetch_and_update_certificate(client.clone(), &config, &state_tx, headers.clone()).await
+		{
 			error!("Initial certificate fetch failed: {:?}", e);
 			let _ = state_tx.send(CertificateState::Error(e));
 		}
@@ -404,7 +423,14 @@ impl CaClient {
 			if should_renew {
 				info!("Renewing certificate for identity: {}", config.identity);
 
-				match Self::fetch_and_update_certificate(client.clone(), &config, &state_tx).await {
+				match Self::fetch_and_update_certificate(
+					client.clone(),
+					&config,
+					&state_tx,
+					headers.clone(),
+				)
+				.await
+				{
 					Ok(_) => {
 						info!(
 							"Successfully renewed certificate for identity: {}",
@@ -427,6 +453,7 @@ impl CaClient {
 		client: client::Client,
 		config: &Config,
 		state_tx: &watch::Sender<CertificateState>,
+		headers: Vec<(http::header::HeaderName, http::HeaderValue)>,
 	) -> Result<(), Error> {
 		info!("Fetching certificate for identity: {}", config.identity);
 
@@ -435,6 +462,7 @@ impl CaClient {
 			config.address.clone(),
 			config.auth.clone(),
 			config.ca_cert.clone(),
+			headers.clone(),
 		)
 		.await
 		.map_err(|e| Error::CaClientCreation(Arc::new(e)))?;

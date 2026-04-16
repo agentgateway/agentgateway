@@ -35,7 +35,7 @@ type AgentgatewayPolicy struct {
 
 	// status defines the current state of AgentgatewayPolicy.
 	// +optional
-	Status gwv1.PolicyStatus `json:"status,omitempty"`
+	Status gwv1.PolicyStatus `json:"status,omitzero"`
 	// TODO: embed this into a typed Status field when
 	// https://github.com/kubernetes/kubernetes/issues/131533 is resolved
 }
@@ -51,6 +51,7 @@ type AgentgatewayPolicyList struct {
 // +kubebuilder:validation:XValidation:rule="has(self.traffic) || has(self.frontend) || has(self.backend)",message="At least one of traffic, frontend, or backend must be provided."
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.mcp) || ((!has(self.targetRefs) || !self.targetRefs.exists(t, t.kind == 'Service')) && (!has(self.targetSelectors) || !self.targetSelectors.exists(t, t.kind == 'Service')))",message="backend.mcp may not be used with a Service target"
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.ai) || ((!has(self.targetRefs) || !self.targetRefs.exists(t, t.kind == 'Service')) && (!has(self.targetSelectors) || !self.targetSelectors.exists(t, t.kind == 'Service')))",message="backend.ai may not be used with a Service target"
+// +kubebuilder:validation:XValidation:rule="!(has(self.traffic) && has(self.traffic.jwtAuthentication) && has(self.backend) && has(self.backend.mcp) && has(self.backend.mcp.authentication))",message="traffic.jwtAuthentication may not be used with backend.mcp.authentication in the same policy"
 // +kubebuilder:validation:XValidation:rule="has(self.frontend) && has(self.targetRefs) ? self.targetRefs.all(t, t.kind == 'Gateway' && !has(t.sectionName)) : true",message="the 'frontend' field can only target a Gateway"
 // +kubebuilder:validation:XValidation:rule="has(self.frontend) && has(self.targetSelectors) ? self.targetSelectors.all(t, t.kind == 'Gateway' && !has(t.sectionName)) : true",message="the 'frontend' field can only target a Gateway"
 // +kubebuilder:validation:XValidation:rule="has(self.traffic) && has(self.targetRefs) ? self.targetRefs.all(t, t.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute', 'ListenerSet']) : true",message="the 'traffic' field can only target a Gateway, ListenerSet, GRPCRoute, or HTTPRoute"
@@ -220,16 +221,6 @@ type BackendEviction struct {
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
-type BackendWithMCP struct {
-	BackendSimple `json:",inline"`
-
-	// `mcp` specifies settings for MCP workloads. This is only applicable when
-	// connecting to a `Backend` of type `mcp`.
-	// +optional
-	MCP *BackendMCP `json:"mcp,omitempty"`
-}
-
-// +kubebuilder:validation:AtLeastOneFieldSet
 type BackendWithAI struct {
 	BackendSimple `json:",inline"`
 
@@ -250,6 +241,10 @@ type BackendFull struct {
 
 	// `mcp` specifies settings for MCP workloads. This is only applicable when
 	// connecting to a `Backend` of type `mcp`.
+	//
+	// This field is deprecated; prefer to use traffic policy `jwtAuthentication.mcp`, which ensures authentication runs before
+	// other policies such as transformation and rate limiting.
+	//
 	// +optional
 	MCP *BackendMCP `json:"mcp,omitempty"`
 }
@@ -666,15 +661,24 @@ const (
 	JWTAuthenticationModePermissive JWTAuthenticationMode = "Permissive"
 )
 
+// +kubebuilder:validation:XValidation:rule="!has(self.mcp) || size(self.providers) == 1",message="jwtAuthentication.mcp requires exactly one provider"
+// +kubebuilder:validation:XValidation:rule="!has(self.mcp) || !has(self.mode) || self.mode == 'Strict'",message="jwtAuthentication.mcp requires mode Strict"
 type JWTAuthentication struct {
 	// `mode` is the validation mode for JWT authentication.
 	// +kubebuilder:default=Strict
 	// +optional
 	Mode JWTAuthenticationMode `json:"mode,omitempty"`
+
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +required
 	Providers []JWTProvider `json:"providers"`
+
+	// `mcp` optionally enables MCP OAuth metadata endpoint handling
+	// and MCP-specific authentication behavior on top of standard JWT validation.
+	// When set, the gateway will serve the MCP OAuth metadata discovery endpoints.
+	// +optional
+	MCP *JWTMCPConfig `json:"mcp,omitempty"`
 }
 
 type JWTProvider struct {
@@ -694,6 +698,19 @@ type JWTProvider struct {
 	// JWT.
 	// +required
 	JWKS JWKS `json:"jwks"`
+}
+
+// JWTMCPConfig holds MCP-specific extensions for JWT authentication.
+type JWTMCPConfig struct {
+	// `resourceMetadata` defines the metadata to use for MCP resources,
+	// served at the MCP OAuth metadata endpoints.
+	// +optional
+	ResourceMetadata map[string]apiextensionsv1.JSON `json:"resourceMetadata,omitempty"`
+
+	// `provider` specifies the identity provider to use for MCP authentication flows.
+	// +kubebuilder:validation:Enum=Auth0;Keycloak
+	// +optional
+	Provider *McpIDP `json:"provider,omitempty"`
 }
 
 // +kubebuilder:validation:ExactlyOneOf=remote;inline

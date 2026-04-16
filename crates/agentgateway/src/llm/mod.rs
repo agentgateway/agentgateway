@@ -26,7 +26,7 @@ use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::*;
 
 pub mod anthropic;
-pub mod azureopenai;
+pub mod azure;
 pub mod bedrock;
 pub mod gemini;
 pub mod openai;
@@ -36,10 +36,20 @@ mod conversion;
 pub mod policy;
 mod types;
 
+use crate::store;
 pub use types::SimpleChatCompletionMessage;
 
 #[cfg(test)]
 mod tests;
+
+fn normalize_sse_response_headers(mut resp: Response) -> Response {
+	resp.headers_mut().insert(
+		header::CONTENT_TYPE,
+		HeaderValue::from_static("text/event-stream"),
+	);
+	resp.headers_mut().remove(header::CONTENT_LENGTH);
+	resp
+}
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -120,7 +130,7 @@ pub enum AIProvider {
 	Vertex(vertex::Provider),
 	Anthropic(anthropic::Provider),
 	Bedrock(bedrock::Provider),
-	AzureOpenAI(azureopenai::Provider),
+	Azure(azure::Provider),
 }
 
 #[apply(schema!)]
@@ -130,7 +140,7 @@ pub enum LocalModelAIProvider {
 	Vertex,
 	Anthropic,
 	Bedrock,
-	AzureOpenAI,
+	Azure,
 }
 
 trait Provider {
@@ -225,12 +235,24 @@ impl LLMInfo {
 pub struct LLMResponse {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub input_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub input_image_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub input_text_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub input_audio_tokens: Option<u64>,
 	/// count_tokens contains the number of tokens in the request, when using the token counting endpoint
 	/// These are not counted as 'input tokens' since they do not consume input tokens.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub count_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub output_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_image_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_text_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_audio_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub total_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -239,7 +261,8 @@ pub struct LLMResponse {
 	pub cache_creation_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cached_input_tokens: Option<u64>,
-
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub service_tier: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub provider_model: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -265,7 +288,7 @@ impl AIProvider {
 			AIProvider::Gemini(_p) => gemini::Provider::NAME,
 			AIProvider::Vertex(_p) => vertex::Provider::NAME,
 			AIProvider::Bedrock(_p) => bedrock::Provider::NAME,
-			AIProvider::AzureOpenAI(_p) => azureopenai::Provider::NAME,
+			AIProvider::Azure(_p) => azure::Provider::NAME,
 		}
 	}
 	pub fn override_model(&self) -> Option<Strng> {
@@ -275,7 +298,7 @@ impl AIProvider {
 			AIProvider::Gemini(p) => p.model.clone(),
 			AIProvider::Vertex(p) => p.model.clone(),
 			AIProvider::Bedrock(p) => p.model.clone(),
-			AIProvider::AzureOpenAI(p) => p.model.clone(),
+			AIProvider::Azure(p) => p.model.clone(),
 		}
 	}
 	pub fn default_connector(&self) -> (Target, BackendPolicies) {
@@ -304,7 +327,7 @@ impl AIProvider {
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
 			},
-			AIProvider::AzureOpenAI(p) => {
+			AIProvider::Azure(p) => {
 				let bp = BackendPolicies {
 					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
 					backend_auth: Some(BackendAuth::Azure(AzureAuth::Implicit {
@@ -430,7 +453,7 @@ impl AIProvider {
 				})?;
 				Ok(())
 			}),
-			AIProvider::AzureOpenAI(provider) => http::modify_req(req, |req| {
+			AIProvider::Azure(provider) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if let Some(l) = llm_request {
 						let path = provider.get_path_for_model(route_type, l.request_model.as_str());
@@ -456,7 +479,7 @@ impl AIProvider {
 				let request_model = llm_request.map(|l| l.request_model.as_str());
 				Authority::from_str(&provider.get_host(request_model))?
 			},
-			AIProvider::AzureOpenAI(provider) => Authority::from_str(&provider.get_host())?,
+			AIProvider::Azure(provider) => Authority::from_str(&provider.get_host())?,
 			AIProvider::Bedrock(provider) => {
 				// Store the region in request extensions so AWS signing can use it.
 				return http::modify_req(req, |req| {
@@ -739,10 +762,13 @@ impl AIProvider {
 				// All providers support completions input
 			},
 			(
-				AIProvider::OpenAI(_) | AIProvider::AzureOpenAI(_) | AIProvider::Bedrock(_),
+				AIProvider::OpenAI(_)
+				| AIProvider::Azure(_)
+				| AIProvider::Bedrock(_)
+				| AIProvider::Gemini(_),
 				InputFormat::Responses,
 			) => {
-				// OpenAI supports responses input (Bedrock supports responses input via translation)
+				// OpenAI supports responses input (Bedrock & Gemini support responses input via translation)
 			},
 			(
 				AIProvider::Anthropic(_)
@@ -750,11 +776,11 @@ impl AIProvider {
 				| AIProvider::Vertex(_)
 				| AIProvider::OpenAI(_)
 				| AIProvider::Gemini(_)
-				| AIProvider::AzureOpenAI(_),
+				| AIProvider::Azure(_),
 				InputFormat::Messages,
 			) => {
 				// Anthropic supports messages input (Bedrock & Vertex support assuming serving Anthropic models)
-				// OpenAI/Gemini/AzureOpenAI support messages via translation to chat completions
+				// OpenAI/Gemini/Azure support messages via translation to chat completions
 			},
 			(
 				AIProvider::Anthropic(_) | AIProvider::Bedrock(_) | AIProvider::Vertex(_),
@@ -765,7 +791,7 @@ impl AIProvider {
 			(
 				AIProvider::OpenAI(_)
 				| AIProvider::Gemini(_)
-				| AIProvider::AzureOpenAI(_)
+				| AIProvider::Azure(_)
 				| AIProvider::Bedrock(_)
 				| AIProvider::Vertex(_),
 				InputFormat::Embeddings,
@@ -831,14 +857,22 @@ impl AIProvider {
 			}
 		} else {
 			match self {
-				AIProvider::Vertex(provider) if provider.is_anthropic_model(Some(request_model)) => {
-					let body = req.to_anthropic()?;
-					provider.prepare_anthropic_message_body(body)?
+				AIProvider::OpenAI(_) | AIProvider::Azure(_) => req.to_openai()?,
+				AIProvider::Vertex(p) => {
+					if p.is_anthropic_model(Some(request_model)) {
+						let body = req.to_anthropic()?;
+						p.prepare_anthropic_message_body(body)?
+					} else {
+						req.to_vertex(p)?
+					}
 				},
-				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_) => {
-					req.to_openai()?
+				AIProvider::Gemini(_) => {
+					if original_format == InputFormat::Responses {
+						req.to_openai_chat_completions()?
+					} else {
+						req.to_openai()?
+					}
 				},
-				AIProvider::Vertex(p) => req.to_vertex(p)?,
 				AIProvider::Anthropic(_) => req.to_anthropic()?,
 				AIProvider::Bedrock(p) => req.to_bedrock(
 					p,
@@ -1020,7 +1054,7 @@ impl AIProvider {
 			)),
 			// Completions with OpenAI: just passthrough
 			(
-				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
+				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Azure(_),
 				InputFormat::Completions,
 			) => Ok(Box::new(
 				serde_json::from_slice::<types::completions::Response>(bytes).map_err(|e| {
@@ -1032,8 +1066,8 @@ impl AIProvider {
 					AIError::ResponseParsing(e)
 				})?,
 			)),
-			// Responses with OpenAI/AzureOpenAI: just passthrough
-			(AIProvider::OpenAI(_) | AIProvider::AzureOpenAI(_), InputFormat::Responses) => Ok(Box::new(
+			// Responses with OpenAI/Azure: just passthrough
+			(AIProvider::OpenAI(_) | AIProvider::Azure(_), InputFormat::Responses) => Ok(Box::new(
 				serde_json::from_slice::<types::responses::Response>(bytes).map_err(|e| {
 					warn!(
 						error = %e,
@@ -1059,9 +1093,9 @@ impl AIProvider {
 				serde_json::from_slice::<types::messages::Response>(bytes)
 					.map_err(AIError::ResponseParsing)?,
 			)),
-			// OpenAI/Gemini/AzureOpenAI messages: translate from chat completions
+			// OpenAI/Gemini/Azure messages: translate from chat completions
 			(
-				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
+				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Azure(_),
 				InputFormat::Messages,
 			) => conversion::completions::from_messages::translate_response(bytes),
 			// Supported paths with conversion...
@@ -1086,6 +1120,9 @@ impl AIProvider {
 							.map_err(AIError::ResponseParsing)?,
 					))
 				}
+			},
+			(AIProvider::Gemini(_), InputFormat::Responses) => {
+				conversion::openai_compat::to_responses::translate_response(bytes, &req.request_model)
 			},
 			(_, InputFormat::Responses) => Err(AIError::UnsupportedConversion(strng::literal!(
 				"this provider does not support Responses"
@@ -1137,11 +1174,16 @@ impl AIProvider {
 			parts.headers.remove(header::TRANSFER_ENCODING);
 		}
 		let resp = Response::from_parts(parts, body);
+		let resp = if matches!(input_format, InputFormat::Detect) {
+			resp
+		} else {
+			normalize_sse_response_headers(resp)
+		};
 
 		Ok(match (self, input_format) {
 			// Completions with OpenAI: just passthrough
 			(
-				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
+				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Azure(_),
 				InputFormat::Completions,
 			) => conversion::completions::passthrough_stream(
 				AmendOnDrop::new(log, rate_limit),
@@ -1168,13 +1210,17 @@ impl AIProvider {
 			},
 			// Responses with OpenAI: just passthrough
 			(
-				AIProvider::OpenAI(_)
-				| AIProvider::Gemini(_)
-				| AIProvider::AzureOpenAI(_)
-				| AIProvider::Vertex(_),
+				AIProvider::OpenAI(_) | AIProvider::Azure(_) | AIProvider::Vertex(_),
 				InputFormat::Responses,
 			) => resp.map(|b| {
 				conversion::responses::passthrough_stream(b, buffer, AmendOnDrop::new(log, rate_limit))
+			}),
+			(AIProvider::Gemini(_), InputFormat::Responses) => resp.map(|b| {
+				conversion::openai_compat::to_responses::translate_stream(
+					b,
+					buffer,
+					AmendOnDrop::new(log, rate_limit),
+				)
 			}),
 			// Vertex messages: passthrough only for Anthropic models, otherwise translate from completions
 			(AIProvider::Vertex(_), InputFormat::Messages) if is_vertex_anthropic => resp.map(|b| {
@@ -1191,9 +1237,9 @@ impl AIProvider {
 			(AIProvider::Anthropic(_), InputFormat::Messages) => resp.map(|b| {
 				conversion::messages::passthrough_stream(b, buffer, AmendOnDrop::new(log, rate_limit))
 			}),
-			// OpenAI/Gemini/AzureOpenAI messages: translate from chat completions
+			// OpenAI/Gemini/Azure messages: translate from chat completions
 			(
-				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::AzureOpenAI(_),
+				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Azure(_),
 				InputFormat::Messages,
 			) => resp.map(|b| {
 				conversion::completions::from_messages::translate_stream(
@@ -1298,7 +1344,7 @@ impl AIProvider {
 	) -> Result<Bytes, AIError> {
 		match (self, req.input_format) {
 			(
-				AIProvider::OpenAI(_) | AIProvider::AzureOpenAI(_),
+				AIProvider::OpenAI(_) | AIProvider::Azure(_),
 				InputFormat::Completions | InputFormat::Responses | InputFormat::Embeddings,
 			) => {
 				// Passthrough; nothing needed
@@ -1306,6 +1352,9 @@ impl AIProvider {
 			},
 			(AIProvider::Gemini(_), InputFormat::Completions) => {
 				conversion::completions::translate_google_error(bytes)
+			},
+			(AIProvider::Gemini(_), InputFormat::Responses) => {
+				conversion::gemini::from_responses::translate_error(bytes)
 			},
 			(AIProvider::Gemini(_), InputFormat::Embeddings) => {
 				// Passthrough; Gemini embeddings endpoint already returns OpenAI-compatible errors.
@@ -1322,7 +1371,7 @@ impl AIProvider {
 				// Passthrough; Vertex embeddings endpoint already returns OpenAI-compatible errors.
 				Ok(bytes.clone())
 			},
-			(AIProvider::OpenAI(_) | AIProvider::AzureOpenAI(_), InputFormat::Messages) => {
+			(AIProvider::OpenAI(_) | AIProvider::Azure(_), InputFormat::Messages) => {
 				conversion::completions::from_messages::translate_error(bytes, status)
 			},
 			(AIProvider::Gemini(_), InputFormat::Messages) => {

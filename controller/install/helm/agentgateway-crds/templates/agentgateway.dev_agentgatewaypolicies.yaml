@@ -5030,6 +5030,9 @@ spec:
                     description: |-
                       `mcp` specifies settings for MCP workloads. This is only applicable when
                       connecting to a `Backend` of type `mcp`.
+
+                      This field is deprecated; prefer to use traffic policy `jwtAuthentication.mcp`, which ensures authentication runs before
+                      other policies such as transformation and rate limiting.
                     properties:
                       authentication:
                         description: '`authentication` defines `MCPBackend`-specific
@@ -7612,6 +7615,27 @@ spec:
                     description: '`jwtAuthentication` authenticates users based on
                       JWT tokens.'
                     properties:
+                      mcp:
+                        description: |-
+                          `mcp` optionally enables MCP OAuth metadata endpoint handling
+                          and MCP-specific authentication behavior on top of standard JWT validation.
+                          When set, the gateway will serve the MCP OAuth metadata discovery endpoints.
+                        properties:
+                          provider:
+                            description: '`provider` specifies the identity provider
+                              to use for MCP authentication flows.'
+                            enum:
+                            - Auth0
+                            - Keycloak
+                            type: string
+                          resourceMetadata:
+                            additionalProperties:
+                              x-kubernetes-preserve-unknown-fields: true
+                            description: |-
+                              `resourceMetadata` defines the metadata to use for MCP resources,
+                              served at the MCP OAuth metadata endpoints.
+                            type: object
+                        type: object
                       mode:
                         default: Strict
                         description: '`mode` is the validation mode for JWT authentication.'
@@ -7768,6 +7792,11 @@ spec:
                     required:
                     - providers
                     type: object
+                    x-kubernetes-validations:
+                    - message: jwtAuthentication.mcp requires exactly one provider
+                      rule: '!has(self.mcp) || size(self.providers) == 1'
+                    - message: jwtAuthentication.mcp requires mode Strict
+                      rule: '!has(self.mcp) || !has(self.mode) || self.mode == ''Strict'''
                   phase:
                     description: |-
                       The phase to apply the traffic policy to. If the phase is `PreRouting`,
@@ -8365,6 +8394,10 @@ spec:
               rule: '!has(self.backend) || !has(self.backend.ai) || ((!has(self.targetRefs)
                 || !self.targetRefs.exists(t, t.kind == ''Service'')) && (!has(self.targetSelectors)
                 || !self.targetSelectors.exists(t, t.kind == ''Service'')))'
+            - message: traffic.jwtAuthentication may not be used with backend.mcp.authentication
+                in the same policy
+              rule: '!(has(self.traffic) && has(self.traffic.jwtAuthentication) &&
+                has(self.backend) && has(self.backend.mcp) && has(self.backend.mcp.authentication))'
             - message: the 'frontend' field can only target a Gateway
               rule: 'has(self.frontend) && has(self.targetRefs) ? self.targetRefs.all(t,
                 t.kind == ''Gateway'' && !has(t.sectionName)) : true'

@@ -1,0 +1,80 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: be
+  namespace: default
+spec:
+  static:
+    host: primary.example.com
+    port: 80
+  policies:
+    tunnel:
+      backendRef:
+        name: policy-be
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: policy-be
+  namespace: default
+spec:
+  static:
+    host: policy.example.com
+    port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+  - kind: AgentgatewayBackend
+    name: policy-be
+    group: agentgateway.dev
+  backend:
+    tls:
+      mtlsCertificateRef:
+        - name: mtls
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendTls: {}
+      key: default/agw:tls:default/policy-be
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        backend:
+          name: policy-be
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: secret default/mtls not found
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

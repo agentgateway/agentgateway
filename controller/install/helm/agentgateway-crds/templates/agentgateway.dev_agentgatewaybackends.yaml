@@ -89,6 +89,55 @@ spec:
                                     minLength: 1
                                     type: string
                                 type: object
+                              azure:
+                                description: |-
+                                  Azure provider with resource-based configuration.
+                                  Supports both Azure OpenAI and Azure AI Foundry resource types.
+                                properties:
+                                  apiVersion:
+                                    description: |-
+                                      The version of the Azure OpenAI API to use.
+                                      If unset, defaults to `v1`.
+                                    maxLength: 64
+                                    minLength: 1
+                                    type: string
+                                  model:
+                                    description: |-
+                                      Optional: Override the model name, such as `gpt-4o-mini`.
+                                      If unset, the model name is taken from the request.
+                                    maxLength: 256
+                                    minLength: 1
+                                    type: string
+                                  projectName:
+                                    description: |-
+                                      The Foundry project name, required when `resourceType` is `Foundry`.
+                                      Used to construct paths: /api/projects/{projectName}/openai/v1/...
+                                    maxLength: 256
+                                    minLength: 1
+                                    type: string
+                                  resourceName:
+                                    description: |-
+                                      The Azure resource name used to construct the endpoint host.
+                                      For OpenAI: {resourceName}.openai.azure.com
+                                      For Foundry: {resourceName}-resource.services.ai.azure.com
+                                    maxLength: 256
+                                    minLength: 1
+                                    type: string
+                                  resourceType:
+                                    description: The type of Azure endpoint. Determines
+                                      the host suffix.
+                                    enum:
+                                    - OpenAI
+                                    - Foundry
+                                    type: string
+                                required:
+                                - resourceName
+                                - resourceType
+                                type: object
+                                x-kubernetes-validations:
+                                - message: projectName is required when resourceType
+                                    is Foundry
+                                  rule: self.resourceType != 'Foundry' || has(self.projectName)
                               azureopenai:
                                 description: Azure OpenAI provider
                                 properties:
@@ -6387,8 +6436,8 @@ spec:
                             - message: pathPrefix requires host to be set
                               rule: 'has(self.pathPrefix) ? has(self.host) : true'
                             - message: exactly one of the fields in [openai azureopenai
-                                anthropic gemini vertexai bedrock] must be set
-                              rule: '[has(self.openai),has(self.azureopenai),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock)].filter(x,x==true).size()
+                                azure anthropic gemini vertexai bedrock] must be set
+                              rule: '[has(self.openai),has(self.azureopenai),has(self.azure),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock)].filter(x,x==true).size()
                                 == 1'
                           maxItems: 16
                           minItems: 1
@@ -6418,6 +6467,54 @@ spec:
                             minLength: 1
                             type: string
                         type: object
+                      azure:
+                        description: |-
+                          Azure provider with resource-based configuration.
+                          Supports both Azure OpenAI and Azure AI Foundry resource types.
+                        properties:
+                          apiVersion:
+                            description: |-
+                              The version of the Azure OpenAI API to use.
+                              If unset, defaults to `v1`.
+                            maxLength: 64
+                            minLength: 1
+                            type: string
+                          model:
+                            description: |-
+                              Optional: Override the model name, such as `gpt-4o-mini`.
+                              If unset, the model name is taken from the request.
+                            maxLength: 256
+                            minLength: 1
+                            type: string
+                          projectName:
+                            description: |-
+                              The Foundry project name, required when `resourceType` is `Foundry`.
+                              Used to construct paths: /api/projects/{projectName}/openai/v1/...
+                            maxLength: 256
+                            minLength: 1
+                            type: string
+                          resourceName:
+                            description: |-
+                              The Azure resource name used to construct the endpoint host.
+                              For OpenAI: {resourceName}.openai.azure.com
+                              For Foundry: {resourceName}-resource.services.ai.azure.com
+                            maxLength: 256
+                            minLength: 1
+                            type: string
+                          resourceType:
+                            description: The type of Azure endpoint. Determines the
+                              host suffix.
+                            enum:
+                            - OpenAI
+                            - Foundry
+                            type: string
+                        required:
+                        - resourceName
+                        - resourceType
+                        type: object
+                        x-kubernetes-validations:
+                        - message: projectName is required when resourceType is Foundry
+                          rule: self.resourceType != 'Foundry' || has(self.projectName)
                       azureopenai:
                         description: Azure OpenAI provider
                         properties:
@@ -6583,9 +6680,9 @@ spec:
                       rule: '!(has(self.path) && has(self.pathPrefix))'
                     - message: pathPrefix requires host to be set
                       rule: 'has(self.pathPrefix) ? has(self.host) : true'
-                    - message: exactly one of the fields in [openai azureopenai anthropic
-                        gemini vertexai bedrock] must be set
-                      rule: '[has(self.openai),has(self.azureopenai),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock)].filter(x,x==true).size()
+                    - message: exactly one of the fields in [openai azureopenai azure
+                        anthropic gemini vertexai bedrock] must be set
+                      rule: '[has(self.openai),has(self.azureopenai),has(self.azure),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock)].filter(x,x==true).size()
                         == 1'
                 type: object
                 x-kubernetes-validations:
@@ -6773,6 +6870,23 @@ spec:
                             in-cluster `Service` resources, it is recommended to use `selector`
                             instead.
                           properties:
+                            backendRef:
+                              description: |-
+                                `backendRef` references a namespace-local `Service` resource by name.
+                                When set, this replaces `host` only; `port`, `path`, and `protocol`
+                                remain configured on this target.
+                              properties:
+                                name:
+                                  default: ""
+                                  description: |-
+                                    Name of the referent.
+                                    This field is effectively required, but due to backwards compatibility is
+                                    allowed to be empty. Instances of this type with an empty value here are
+                                    almost certainly wrong.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
                             host:
                               description: Host is the hostname or IP address of the
                                 MCP target.
@@ -6793,6 +6907,8 @@ spec:
                                 Policies may also be set in `AgentgatewayPolicy`, or in the top-level
                                 `AgentgatewayBackend`. Policies are merged on a field-level basis, with
                                 order: `AgentgatewayPolicy` < `AgentgatewayBackend` < `AgentgatewayBackend` MCP (this field).
+                                This field may only be used with host-based static targets, not
+                                `backendRef`.
                               properties:
                                 auth:
                                   description: '`auth` defines settings for managing
@@ -7023,223 +7139,6 @@ spec:
                                       - HTTP2
                                       type: string
                                   type: object
-                                mcp:
-                                  description: |-
-                                    `mcp` specifies settings for MCP workloads. This is only applicable when
-                                    connecting to a `Backend` of type `mcp`.
-                                  properties:
-                                    authentication:
-                                      description: '`authentication` defines `MCPBackend`-specific
-                                        authentication rules.'
-                                      properties:
-                                        audiences:
-                                          description: |-
-                                            `audiences` specifies the list of allowed audiences that are allowed
-                                            access. This corresponds to the `aud` claim
-                                            (https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3).
-                                            If unset, any audience is allowed.
-                                          items:
-                                            type: string
-                                          maxItems: 64
-                                          minItems: 1
-                                          type: array
-                                        issuer:
-                                          description: |-
-                                            `issuer` identifies the IdP that issued the JWT. This corresponds to the
-                                            `iss` claim (https://tools.ietf.org/html/rfc7519#section-4.1.1).
-                                          maxLength: 256
-                                          minLength: 1
-                                          type: string
-                                        jwks:
-                                          description: |-
-                                            `jwks` defines the remote JSON Web Key used to validate the signature of
-                                            the JWT.
-                                          properties:
-                                            backendRef:
-                                              description: |-
-                                                `backendRef` references the remote JWKS server to reach.
-                                                Supported types are `Service` and static `Backend`. An
-                                                `AgentgatewayPolicy` containing backend TLS config can then be attached
-                                                to the `Service` or `Backend` in order to set TLS options for a
-                                                connection to the remote `jwks` source.
-                                              properties:
-                                                group:
-                                                  default: ""
-                                                  description: |-
-                                                    Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                    When unspecified or empty string, core API group is inferred.
-                                                  maxLength: 253
-                                                  pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                                  type: string
-                                                kind:
-                                                  default: Service
-                                                  description: |-
-                                                    Kind is the Kubernetes resource kind of the referent. For example
-                                                    "Service".
-
-                                                    Defaults to "Service" when not specified.
-
-                                                    ExternalName services can refer to CNAME DNS records that may live
-                                                    outside of the cluster and as such are difficult to reason about in
-                                                    terms of conformance. They also may not be safe to forward to (see
-                                                    CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                    support ExternalName Services.
-
-                                                    Support: Core (Services with a type other than ExternalName)
-
-                                                    Support: Implementation-specific (Services with type ExternalName)
-                                                  maxLength: 63
-                                                  minLength: 1
-                                                  pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                                  type: string
-                                                name:
-                                                  description: Name is the name of
-                                                    the referent.
-                                                  maxLength: 253
-                                                  minLength: 1
-                                                  type: string
-                                                namespace:
-                                                  description: |-
-                                                    Namespace is the namespace of the backend. When unspecified, the local
-                                                    namespace is inferred.
-
-                                                    Note that when a namespace different than the local namespace is specified,
-                                                    a ReferenceGrant object is required in the referent namespace to allow that
-                                                    namespace's owner to accept the reference. See the ReferenceGrant
-                                                    documentation for details.
-
-                                                    Support: Core
-                                                  maxLength: 63
-                                                  minLength: 1
-                                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                                  type: string
-                                                port:
-                                                  description: |-
-                                                    Port specifies the destination port number to use for this resource.
-                                                    Port is required when the referent is a Kubernetes Service. In this
-                                                    case, the port number is the service port number, not the target port.
-                                                    For other resources, destination port might be derived from the referent
-                                                    resource or this field.
-                                                  format: int32
-                                                  maximum: 65535
-                                                  minimum: 1
-                                                  type: integer
-                                              required:
-                                              - name
-                                              type: object
-                                              x-kubernetes-validations:
-                                              - message: Must have port for Service
-                                                  reference
-                                                rule: '(size(self.group) == 0 && self.kind
-                                                  == ''Service'') ? has(self.port)
-                                                  : true'
-                                            cacheDuration:
-                                              default: 5m
-                                              type: string
-                                              x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
-                                              - message: cacheDuration must be at
-                                                  least 5m.
-                                                rule: duration(self) >= duration('5m')
-                                            jwksPath:
-                                              description: |-
-                                                Path to the IdP `jwks` endpoint, relative to the root, commonly
-                                                `".well-known/jwks.json"`.
-                                              maxLength: 2000
-                                              minLength: 1
-                                              type: string
-                                          required:
-                                          - backendRef
-                                          - jwksPath
-                                          type: object
-                                        mode:
-                                          default: Strict
-                                          description: '`mode` is the validation mode
-                                            for JWT authentication.'
-                                          enum:
-                                          - Strict
-                                          - Optional
-                                          - Permissive
-                                          type: string
-                                        provider:
-                                          description: '`provider` specifies the identity
-                                            provider to use for authentication.'
-                                          enum:
-                                          - Auth0
-                                          - Keycloak
-                                          type: string
-                                        resourceMetadata:
-                                          additionalProperties:
-                                            x-kubernetes-preserve-unknown-fields: true
-                                          description: ResourceMetadata defines the
-                                            metadata to use for MCP resources.
-                                          type: object
-                                      required:
-                                      - jwks
-                                      type: object
-                                    authorization:
-                                      description: |-
-                                        authorization defines MCPBackend level authorization. Unlike authorization at the HTTP level, which will reject
-                                        unauthorized requests with a `403` error, this policy works at the
-                                        `MCPBackend` level.
-
-                                        List operations, such as `list_tools`, will have each item evaluated.
-                                        Items that do not meet the rule will be filtered.
-
-                                        Get or call operations, such as `call_tool`, will evaluate the specific
-                                        item and reject requests that do not meet the rule.
-                                      properties:
-                                        action:
-                                          default: Allow
-                                          description: |-
-                                            `action` defines whether the rule allows, denies, or requires the request if
-                                            matched. If unspecified, the default is `Allow`.
-                                            Require policies are conjunctive across merged policies: all require policies must match.
-                                          enum:
-                                          - Allow
-                                          - Deny
-                                          - Require
-                                          type: string
-                                        policy:
-                                          description: |-
-                                            `policy` specifies the authorization rule to evaluate.
-
-                                            * For `Allow` rules: any policy allows the request.
-                                            * For `Require` rules: all policies must match for the request to be allowed.
-                                            * For `Deny` rules: any matching policy denies the request. Note: a CEL expression that fails to evaluate is not
-                                            considered to match, making this a risky policy; prefer to use `Require`.
-
-                                            The presence of at least one `Allow` rule triggers a deny-by-default policy, requiring at least 1 match to allow.
-                                            With no rules, all requires are allowed.
-                                          properties:
-                                            matchExpressions:
-                                              description: |-
-                                                MatchExpressions defines a set of conditions that must be satisfied for the rule to match.
-                                                These expressions should be in the form of a Common Expression Language
-                                                (`CEL`) expression.
-                                              items:
-                                                description: CELExpression represents
-                                                  a Common Expression Language (CEL)
-                                                  expression.
-                                                maxLength: 16384
-                                                minLength: 1
-                                                type: string
-                                              maxItems: 256
-                                              minItems: 1
-                                              type: array
-                                          required:
-                                          - matchExpressions
-                                          type: object
-                                      required:
-                                      - policy
-                                      type: object
-                                  type: object
-                                  x-kubernetes-validations:
-                                  - message: at least one of the fields in [authentication
-                                      authorization] must be set
-                                    rule: '[has(self.authentication),has(self.authorization)].filter(x,x==true).size()
-                                      >= 1'
                                 tcp:
                                   description: tcp defines settings for managing TCP
                                     connections to the backend.
@@ -7756,12 +7655,6 @@ spec:
                                   - backendRef
                                   type: object
                               type: object
-                              x-kubernetes-validations:
-                              - message: at least one of the fields in [auth health
-                                  http mcp tcp tls transformation tunnel] must be
-                                  set
-                                rule: '[has(self.auth),has(self.health),has(self.http),has(self.mcp),has(self.tcp),has(self.tls),has(self.transformation),has(self.tunnel)].filter(x,x==true).size()
-                                  >= 1'
                             port:
                               description: Port is the port number of the MCP target.
                               format: int32
@@ -7777,9 +7670,15 @@ spec:
                               - SSE
                               type: string
                           required:
-                          - host
                           - port
                           type: object
+                          x-kubernetes-validations:
+                          - message: mcp target policies may not be used with backendRef
+                            rule: '!has(self.backendRef) || !has(self.policies)'
+                          - message: exactly one of the fields in [host backendRef]
+                              must be set
+                            rule: '[has(self.host),has(self.backendRef)].filter(x,x==true).size()
+                              == 1'
                       required:
                       - name
                       type: object
@@ -12756,6 +12655,9 @@ spec:
                     description: |-
                       `mcp` specifies settings for MCP workloads. This is only applicable when
                       connecting to a `Backend` of type `mcp`.
+
+                      This field is deprecated; prefer to use traffic policy `jwtAuthentication.mcp`, which ensures authentication runs before
+                      other policies such as transformation and rate limiting.
                     properties:
                       authentication:
                         description: '`authentication` defines `MCPBackend`-specific

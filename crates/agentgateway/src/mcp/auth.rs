@@ -7,6 +7,7 @@ use http::uri::PathAndQuery;
 use tracing::{debug, warn};
 
 use crate::http::jwt::Claims;
+use crate::http::oauth::{authorization_server_metadata_url, openid_configuration_metadata_url};
 use crate::http::*;
 use crate::json;
 use crate::json::from_body_with_limit;
@@ -14,7 +15,7 @@ use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{McpAuthentication, McpIDP};
 
-pub(super) fn is_well_known_endpoint(path: &str) -> bool {
+pub(crate) fn is_well_known_endpoint(path: &str) -> bool {
 	path.starts_with("/.well-known/oauth-protected-resource")
 		|| path.starts_with("/.well-known/oauth-authorization-server")
 }
@@ -48,7 +49,7 @@ pub(super) async fn apply_token_validation(
 	Ok(())
 }
 
-pub(super) async fn enforce_authentication(
+pub(crate) async fn enforce_authentication(
 	req: &mut Request,
 	auth: &McpAuthentication,
 	client: &PolicyClient,
@@ -58,6 +59,14 @@ pub(super) async fn enforce_authentication(
 		apply_token_validation(req, auth).await?;
 	}
 
+	handle_mcp_request(req, auth, client).await
+}
+
+pub(crate) async fn handle_mcp_request(
+	req: &mut Request,
+	auth: &McpAuthentication,
+	client: &PolicyClient,
+) -> Result<Option<Response>, ProxyError> {
 	match req.uri().path() {
 		// TODO: indicate this is a DirectResponse
 		path if path.ends_with("client-registration") => Ok(Some(
@@ -88,7 +97,7 @@ pub(super) async fn enforce_authentication(
 	}
 }
 
-pub(super) fn create_auth_required_response(
+pub(crate) fn create_auth_required_response(
 	inner: ProxyError,
 	req: &Request,
 	auth: &McpAuthentication,
@@ -193,7 +202,7 @@ pub(super) async fn authorization_server_metadata(
 	// exposes OpenID Provider Metadata at {issuer}/.well-known/openid-configuration (OIDC Discovery).
 	let metadata_uri = match &auth.provider {
 		Some(McpIDP::Keycloak { .. }) => openid_configuration_metadata_url(&auth.issuer),
-		_ => rfc8414_metadata_url(&auth.issuer),
+		_ => authorization_server_metadata_url(&auth.issuer),
 	};
 	let ureq = ::http::Request::builder()
 		.uri(metadata_uri)
@@ -286,94 +295,4 @@ pub(super) async fn client_registration(
 	);
 
 	Ok(upstream)
-}
-
-/// Construct the OAuth Authorization Server Metadata URL per RFC 8414 Section 3.
-///
-/// For issuers with a path component, the well-known suffix is inserted between
-/// the origin and the path:
-///   issuer: https://idp.example.com/application/o/myapp
-///   result: https://idp.example.com/.well-known/oauth-authorization-server/application/o/myapp
-///
-/// For root issuers (no path), this produces the same result as before:
-///   issuer: https://idp.example.com
-///   result: https://idp.example.com/.well-known/oauth-authorization-server
-/// OpenID Connect Discovery 1.0 metadata document URL.
-fn openid_configuration_metadata_url(issuer: &str) -> String {
-	format!(
-		"{}/.well-known/openid-configuration",
-		issuer.trim_end_matches('/')
-	)
-}
-
-fn rfc8414_metadata_url(issuer: &str) -> String {
-	match url::Url::parse(issuer) {
-		Ok(parsed) => {
-			let origin = parsed.origin().ascii_serialization();
-			let path = parsed.path();
-			if path == "/" {
-				format!("{origin}/.well-known/oauth-authorization-server")
-			} else {
-				format!("{origin}/.well-known/oauth-authorization-server{path}")
-			}
-		},
-		// Fallback to previous behavior if URL parsing fails, normalizing trailing slashes
-		Err(_) => {
-			let normalized = issuer.trim_end_matches('/');
-			format!("{normalized}/.well-known/oauth-authorization-server")
-		},
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn test_openid_configuration_metadata_url_keycloak_realm() {
-		assert_eq!(
-			openid_configuration_metadata_url("http://keycloak:8080/realms/test"),
-			"http://keycloak:8080/realms/test/.well-known/openid-configuration"
-		);
-	}
-
-	#[test]
-	fn test_openid_configuration_metadata_url_trailing_slash() {
-		assert_eq!(
-			openid_configuration_metadata_url("http://keycloak:8080/realms/mcp/"),
-			"http://keycloak:8080/realms/mcp/.well-known/openid-configuration"
-		);
-	}
-
-	#[test]
-	fn test_rfc8414_metadata_url_path_based() {
-		assert_eq!(
-			rfc8414_metadata_url("https://idp.example.com/application/o/myapp"),
-			"https://idp.example.com/.well-known/oauth-authorization-server/application/o/myapp"
-		);
-	}
-
-	#[test]
-	fn test_rfc8414_metadata_url_trailing_slash() {
-		assert_eq!(
-			rfc8414_metadata_url("https://idp.example.com/application/o/myapp/"),
-			"https://idp.example.com/.well-known/oauth-authorization-server/application/o/myapp/"
-		);
-	}
-
-	#[test]
-	fn test_rfc8414_metadata_url_root_issuer() {
-		assert_eq!(
-			rfc8414_metadata_url("https://idp.example.com"),
-			"https://idp.example.com/.well-known/oauth-authorization-server"
-		);
-	}
-
-	#[test]
-	fn test_rfc8414_metadata_url_root_issuer_trailing_slash() {
-		assert_eq!(
-			rfc8414_metadata_url("https://idp.example.com/"),
-			"https://idp.example.com/.well-known/oauth-authorization-server"
-		);
-	}
 }

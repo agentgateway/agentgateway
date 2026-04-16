@@ -42,6 +42,9 @@ binds:
                     "*": passthrough
                     /v1/chat/completions: completions
                     /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
                     /v1/messages: messages
                     /v1/responses: responses
                     /v1/responses/compact: detect
@@ -70,6 +73,9 @@ binds:
                     "*": passthrough
                     /v1/chat/completions: completions
                     /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
                     /v1/messages: messages
                     /v1/responses: responses
                     /v1/responses/compact: detect
@@ -95,6 +101,9 @@ binds:
                     "*": passthrough
                     /v1/chat/completions: completions
                     /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
                     /v1/messages: messages
                     /v1/responses: responses
                     /v1/responses/compact: detect
@@ -120,6 +129,9 @@ binds:
                     "*": passthrough
                     /v1/chat/completions: completions
                     /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
                     /v1/messages: messages
                     /v1/responses: responses
                     /v1/responses/compact: detect
@@ -289,9 +301,10 @@ backends:
                   endpoint:
                     name: gpt-7-max
                     provider:
-                      azureOpenAI:
+                      azure:
                         model: gpt-3.5-turbo
-                        host: my-azure-openai-endpoint.openai.azure.com
+                        resourceName: my-azure-openai-endpoint
+                        resourceType: openAI
                         apiVersion: v1
                     hostOverride: ~
                     pathOverride: ~

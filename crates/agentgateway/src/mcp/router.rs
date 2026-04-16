@@ -87,6 +87,7 @@ impl App {
 					let backend_policies = backend_policies
 						.clone()
 						.merge(binds.sub_backend_policies(sub_backend_target, inline_pols));
+					tracing::trace!("merged policies {:?}", backend_policies);
 					Ok::<_, ProxyError>(Arc::new(McpTarget {
 						name: t.name.clone(),
 						spec: t.spec.clone(),

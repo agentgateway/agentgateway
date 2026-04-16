@@ -173,6 +173,8 @@ pub mod from_completions {
 	use std::time::Instant;
 
 	use bytes::Bytes;
+	use futures_util::StreamExt;
+	use futures_util::stream::{self, BoxStream};
 	use itertools::Itertools;
 	use types::bedrock;
 	use types::completions::typed as completions;
@@ -556,7 +558,10 @@ pub mod from_completions {
 
 		if let Some(caching) = prompt_caching {
 			if caching.cache_messages && supports_caching {
-				helpers::insert_cache_point_in_last_user_message(&mut bedrock_request.messages);
+				helpers::insert_message_cache_point(
+					&mut bedrock_request.messages,
+					caching.cache_message_offset,
+				);
 			}
 			if caching.cache_tools
 				&& supports_caching
@@ -678,7 +683,7 @@ pub mod from_completions {
 		let mut tool_calls: HashMap<i32, String> = HashMap::new();
 		let model = model.to_string();
 		let message_id = message_id.to_string();
-		parse::aws_sse::transform(b, buffer_limit, move |f| {
+		let body = parse::aws_sse::transform(b, buffer_limit, move |f| {
 			let res = bedrock::ConverseStreamOutput::deserialize(f).ok()?;
 			let mk = |choices: Vec<completions::ChatChoiceStream>, usage: Option<completions::Usage>| {
 				Some(completions::StreamResponse {
@@ -833,6 +838,8 @@ pub mod from_completions {
 								cache_creation_input_tokens: usage.cache_write_input_tokens.map(|i| i as u64),
 								prompt_tokens_details: usage.cache_read_input_tokens.map(|i| UsagePromptDetails {
 									cached_tokens: Some(i as u64),
+									audio_tokens: None,
+									rest: Default::default(),
 								}),
 								// TODO: can we get reasoning tokens?
 								completion_tokens_details: None,
@@ -843,7 +850,31 @@ pub mod from_completions {
 					}
 				},
 			}
-		})
+		});
+
+		append_done_on_success(body.into_data_stream())
+	}
+
+	pub(super) fn append_done_on_success<S>(stream: S) -> Body
+	where
+		S: futures_core::Stream<Item = Result<Bytes, axum_core::Error>> + Send + 'static,
+	{
+		let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
+		let stream = stream::unfold(
+			(Some(stream.boxed()), Some(done)),
+			|(stream, done): (
+				Option<BoxStream<'static, Result<Bytes, axum_core::Error>>>,
+				Option<Bytes>,
+			)| async move {
+				let mut stream = stream?;
+				match stream.next().await {
+					Some(Ok(chunk)) => Some((Ok(chunk), (Some(stream), done))),
+					Some(Err(err)) => Some((Err(err), (None, None))),
+					None => done.map(|done| (Ok(done), (None, None))),
+				}
+			},
+		);
+		Body::from_stream(stream)
 	}
 
 	pub fn translate_stop_reason(
@@ -1373,7 +1404,10 @@ pub mod from_messages {
 								output_tokens: 0,
 								cache_creation_input_tokens: None,
 								cache_read_input_tokens: None,
+								service_tier: None,
 							},
+							input_audio_tokens: None,
+							output_audio_tokens: None,
 						},
 					};
 					let (event_name, event_data) = event.into_sse_tuple();
@@ -2019,7 +2053,7 @@ pub mod from_responses {
 		// Apply user message and tool caching
 		if let Some(caching) = prompt_caching {
 			if caching.cache_messages && supports_caching {
-				insert_cache_point_in_last_user_message(&mut bedrock_request.messages);
+				insert_message_cache_point(&mut bedrock_request.messages, caching.cache_message_offset);
 			}
 			if caching.cache_tools
 				&& supports_caching
@@ -2165,8 +2199,12 @@ pub mod from_responses {
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
 
-		// Track tool calls for streaming: (index -> (item_id, name, json_buffer))
-		let mut tool_calls: HashMap<i32, (String, String, String)> = HashMap::new();
+		// Track tool calls for streaming: (content_block_index -> (item_id, name, json_buffer, output_index))
+		// output_index is the stable position of this tool call in the response output array.
+		let mut tool_calls: HashMap<i32, (String, String, String, u32)> = HashMap::new();
+
+		// Message item is always output_index 0; tool call items get sequential indices from 1.
+		let mut next_output_index: u32 = 1;
 
 		// Track sequence numbers and item IDs
 		let mut sequence_number: u64 = 0;
@@ -2226,6 +2264,7 @@ pub mod from_responses {
 								content: Vec::new(),
 								id: message_item_id.clone(),
 								role: AssistantRole::Assistant,
+								phase: None,
 								status: OutputStatus::InProgress,
 							}),
 						});
@@ -2239,19 +2278,27 @@ pub mod from_responses {
 					match start.start {
 						Some(bedrock::ContentBlockStart::ToolUse(tu)) => {
 							let tool_call_item_id = format!("call_{:016x}", rand::rng().random::<u64>());
+							let output_index = next_output_index;
+							next_output_index += 1;
 							tool_calls.insert(
 								start.content_block_index,
-								(tool_call_item_id.clone(), tu.name.clone(), String::new()),
+								(
+									tool_call_item_id.clone(),
+									tu.name.clone(),
+									String::new(),
+									output_index,
+								),
 							);
 
 							sequence_number += 1;
 							let item_added_event =
 								ResponseStreamEvent::ResponseOutputItemAdded(ResponseOutputItemAddedEvent {
 									sequence_number,
-									output_index: start.content_block_index as u32,
+									output_index,
 									item: OutputItem::FunctionCall(FunctionToolCall {
 										arguments: String::new(),
 										call_id: tool_call_item_id.clone(),
+										namespace: None,
 										name: tu.name,
 										id: Some(tool_call_item_id),
 										status: Some(OutputStatus::InProgress),
@@ -2266,7 +2313,7 @@ pub mod from_responses {
 								ResponseStreamEvent::ResponseContentPartAdded(ResponseContentPartAddedEvent {
 									sequence_number,
 									item_id: message_item_id.clone(),
-									output_index: start.content_block_index as u32,
+									output_index: 0,
 									content_index: 0,
 									part: make_output_part(String::new()),
 								});
@@ -2293,7 +2340,7 @@ pub mod from_responses {
 									ResponseStreamEvent::ResponseOutputTextDelta(ResponseTextDeltaEvent {
 										sequence_number,
 										item_id: message_item_id.clone(),
-										output_index: delta.content_block_index as u32,
+										output_index: 0,
 										content_index: 0,
 										delta: text,
 										logprobs: None,
@@ -2307,7 +2354,7 @@ pub mod from_responses {
 										ResponseStreamEvent::ResponseOutputTextDelta(ResponseTextDeltaEvent {
 											sequence_number,
 											item_id: message_item_id.clone(),
-											output_index: delta.content_block_index as u32,
+											output_index: 0,
 											content_index: 0,
 											delta: t,
 											logprobs: None,
@@ -2320,7 +2367,7 @@ pub mod from_responses {
 										ResponseStreamEvent::ResponseOutputTextDelta(ResponseTextDeltaEvent {
 											sequence_number,
 											item_id: message_item_id.clone(),
-											output_index: delta.content_block_index as u32,
+											output_index: 0,
 											content_index: 0,
 											delta: "[REDACTED]".to_string(),
 											logprobs: None,
@@ -2330,7 +2377,7 @@ pub mod from_responses {
 								_ => {},
 							},
 							bedrock::ContentBlockDelta::ToolUse(tu) => {
-								if let Some((item_id, _name, buffer)) =
+								if let Some((item_id, _name, buffer, output_index)) =
 									tool_calls.get_mut(&delta.content_block_index)
 								{
 									buffer.push_str(&tu.input);
@@ -2340,7 +2387,7 @@ pub mod from_responses {
 										ResponseFunctionCallArgumentsDeltaEvent {
 											sequence_number,
 											item_id: item_id.clone(),
-											output_index: delta.content_block_index as u32,
+											output_index: *output_index,
 											delta: tu.input,
 										},
 									);
@@ -2354,15 +2401,18 @@ pub mod from_responses {
 				},
 				bedrock::ConverseStreamOutput::ContentBlockStop(stop) => {
 					let mut events: Vec<(&'static str, ResponseStreamEvent)> = Vec::new();
+					let was_tracked = seen_blocks.remove(&stop.content_block_index);
 
-					if let Some((item_id, name, buffer)) = tool_calls.remove(&stop.content_block_index) {
+					if let Some((item_id, name, buffer, output_index)) =
+						tool_calls.remove(&stop.content_block_index)
+					{
 						sequence_number += 1;
 						let args_done_event = ResponseStreamEvent::ResponseFunctionCallArgumentsDone(
 							ResponseFunctionCallArgumentsDoneEvent {
 								name: Some(name.clone()),
 								sequence_number,
 								item_id: item_id.clone(),
-								output_index: stop.content_block_index as u32,
+								output_index,
 								arguments: buffer.clone(),
 							},
 						);
@@ -2372,23 +2422,24 @@ pub mod from_responses {
 						let item_done_event =
 							ResponseStreamEvent::ResponseOutputItemDone(ResponseOutputItemDoneEvent {
 								sequence_number,
-								output_index: stop.content_block_index as u32,
+								output_index,
 								item: OutputItem::FunctionCall(FunctionToolCall {
 									arguments: buffer,
 									call_id: item_id.clone(),
+									namespace: None,
 									name,
 									id: Some(item_id),
 									status: Some(OutputStatus::Completed),
 								}),
 							});
 						events.push(("event", item_done_event));
-					} else if seen_blocks.remove(&stop.content_block_index) {
+					} else if was_tracked {
 						sequence_number += 1;
 						let part_done_event =
 							ResponseStreamEvent::ResponseContentPartDone(ResponseContentPartDoneEvent {
 								sequence_number,
 								item_id: message_item_id.clone(),
-								output_index: stop.content_block_index as u32,
+								output_index: 0,
 								content_index: 0,
 								part: make_output_part(String::new()),
 							});
@@ -2425,6 +2476,7 @@ pub mod from_responses {
 								content: Vec::new(),
 								id: message_item_id.clone(),
 								role: AssistantRole::Assistant,
+								phase: None,
 								status: OutputStatus::Completed,
 							}),
 						});
@@ -2561,7 +2613,7 @@ mod helpers {
 		(word_count * 13) / 10
 	}
 
-	pub fn insert_cache_point_in_last_user_message(messages: &mut [bedrock::Message]) {
+	pub fn insert_message_cache_point(messages: &mut [bedrock::Message], offset: usize) {
 		// Strategy: Cache everything BEFORE the last message (not including it)
 		// This caches the conversation history but not the current turn's input
 		//
@@ -2572,6 +2624,10 @@ mod helpers {
 		// This way:
 		//   - Conversation history: cached (cheap reads on subsequent turns)
 		//   - Current input: full price (it's new each turn anyway)
+		//
+		// The `offset` parameter shifts the cache point further back:
+		//   offset 0 → second-to-last message (default)
+		//   offset N → N additional messages back from default, clamped to bounds
 
 		let len = messages.len();
 
@@ -2580,16 +2636,16 @@ mod helpers {
 			return;
 		}
 
-		// Insert cache point in the second-to-last message
-		// This caches all history BEFORE the current turn
-		let second_to_last_idx = len - 2;
-		messages[second_to_last_idx]
+		// Clamp so the index never goes below 0
+		let target_idx = (len - 2).saturating_sub(offset);
+		messages[target_idx]
 			.content
 			.push(bedrock::ContentBlock::CachePoint(create_cache_point()));
 
 		tracing::debug!(
-			"Inserted cachePoint before last message (in message at index {})",
-			second_to_last_idx
+			"Inserted cachePoint in message at index {} (offset={})",
+			target_idx,
+			offset
 		);
 	}
 
@@ -2796,6 +2852,8 @@ impl ConverseResponseAdapter {
 					.cache_read_input_tokens
 					.map(|i| UsagePromptDetails {
 						cached_tokens: Some(i as u64),
+						audio_tokens: None,
+						rest: Default::default(),
 					}),
 				cache_creation_input_tokens: token_usage.cache_write_input_tokens.map(|i| i as u64),
 			})
@@ -2858,6 +2916,7 @@ impl ConverseResponseAdapter {
 						responsest::FunctionToolCall {
 							arguments: arguments_str,
 							call_id: tool_use.tool_use_id.clone(),
+							namespace: None,
 							name: tool_use.name.clone(),
 							id: Some(tool_use.tool_use_id.clone()),
 							status: Some(responsest::OutputStatus::Completed),
@@ -2876,6 +2935,7 @@ impl ConverseResponseAdapter {
 			outputs.push(responsest::OutputItem::Message(responsest::OutputMessage {
 				id: format!("msg_{:016x}", rand::rng().random::<u64>()),
 				role: responsest::AssistantRole::Assistant,
+				phase: None,
 				content: text_parts,
 				status: responsest::OutputStatus::Completed,
 			}));
@@ -2997,12 +3057,14 @@ impl ConverseResponseAdapter {
 				output_tokens: u.output_tokens,
 				cache_creation_input_tokens: u.cache_write_input_tokens,
 				cache_read_input_tokens: u.cache_read_input_tokens,
+				service_tier: None,
 			})
 			.unwrap_or(messagest::Usage {
 				input_tokens: 0,
 				output_tokens: 0,
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
+				service_tier: None,
 			});
 
 		Ok(messagest::MessagesResponse {
@@ -3014,6 +3076,8 @@ impl ConverseResponseAdapter {
 			stop_reason: Some(from_messages::translate_stop_reason(self.stop_reason)),
 			stop_sequence: None,
 			usage,
+			input_audio_tokens: None,
+			output_audio_tokens: None,
 		})
 	}
 }

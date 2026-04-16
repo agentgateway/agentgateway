@@ -2,22 +2,26 @@ use std::net::SocketAddr;
 
 use agent_core::strng;
 use itertools::Itertools;
+use openapiv3::OpenAPI;
 use rmcp::RoleClient;
-use rmcp::model::InitializeRequestParams;
+use rmcp::model::{ClientJsonRpcMessage, InitializeRequestParams, RequestId};
 use rmcp::service::RunningService;
 use rmcp::transport::StreamableHttpServerConfig;
 use secrecy::SecretString;
 
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::{PolicySet, RuleSet};
+use crate::http::sessionpersistence::MCPSession;
 use crate::mcp::FailureMode;
 use crate::mcp::McpAuthorization;
 use crate::mcp::handler::Relay;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::test_helpers::extauthmock::{ExtAuthMock, deny_response};
 use crate::test_helpers::proxymock::{
 	BIND_KEY, TestBind, basic_named_route, basic_route, setup_proxy_test, simple_bind,
 };
+use crate::test_helpers::ratelimitmock::{RateLimitMock, over_limit_response};
 use crate::types::agent::{BackendPolicy, FrontendPolicy, PolicyTarget, TargetedPolicy};
 use crate::*;
 
@@ -136,6 +140,145 @@ async fn stream_to_multiplex() {
 			.await
 			.is_err()
 	);
+}
+
+#[tokio::test]
+async fn stateless_multiplex_tool_call_initializes_only_target() {
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			false,
+		)
+		.with_bind(simple_bind(basic_named_route(strng::new("/mcp"))));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+	let a_init_before = mock_a.init_count().await;
+	let b_init_before = mock_b.init_count().await;
+
+	// A direct tool call to one target should initialize only that target.
+	let _ = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("a_echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+	let a_init_after = mock_a.init_count().await;
+	let b_init_after = mock_b.init_count().await;
+	assert_eq!(a_init_after, a_init_before + 1);
+	assert_eq!(b_init_after, b_init_before);
+}
+
+#[tokio::test]
+async fn stateless_multiplex_get_prompt_initializes_only_target() {
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			false,
+		)
+		.with_bind(simple_bind(basic_named_route(strng::new("/mcp"))));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+	let a_init_before = mock_a.init_count().await;
+	let b_init_before = mock_b.init_count().await;
+
+	let _ = client
+		.get_prompt(
+			rmcp::model::GetPromptRequestParams::new("a_example_prompt").with_arguments(
+				serde_json::json!({"message": "hello"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+
+	let a_init_after = mock_a.init_count().await;
+	let b_init_after = mock_b.init_count().await;
+	assert_eq!(a_init_after, a_init_before + 1);
+	assert_eq!(b_init_after, b_init_before);
+}
+
+#[tokio::test]
+async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("a", mock_a.addr),
+				fake_streamable_target("b", mock_b.addr),
+			],
+			stateful: false,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+	let session_manager =
+		super::session::SessionManager::new(http::sessionpersistence::Encoder::base64());
+	let mut session = session_manager.create_stateless_session(relay);
+	let parts = ::http::Request::<()>::builder()
+		.method(http::Method::POST)
+		.uri("http://example.test/mcp")
+		.body(())
+		.unwrap()
+		.into_parts()
+		.0;
+
+	session
+		.stateless_send_and_initialize(
+			parts.clone(),
+			ClientJsonRpcMessage::request(
+				rmcp::model::CallToolRequest::new(
+					rmcp::model::CallToolRequestParams::new("a_echo").with_arguments(
+						serde_json::json!({"hi": "world"})
+							.as_object()
+							.cloned()
+							.unwrap(),
+					),
+				)
+				.into(),
+				RequestId::Number(1),
+			),
+		)
+		.await
+		.unwrap();
+
+	let sessions = match http::sessionpersistence::SessionState::decode(
+		session.id.as_ref(),
+		&http::sessionpersistence::Encoder::base64(),
+	)
+	.unwrap()
+	{
+		http::sessionpersistence::SessionState::MCP(state) => state.sessions,
+		_ => panic!("expected MCP session state"),
+	};
+	assert_eq!(sessions.len(), 2);
+	assert_eq!(sessions[0].target_name.as_deref(), Some("a"));
+	assert!(sessions[0].session.is_some());
+	assert_eq!(sessions[1].target_name.as_deref(), Some("b"));
+	assert!(sessions[1].session.is_none());
+
+	let response = session.delete_session(parts).await.unwrap();
+	assert_eq!(response.status(), http::StatusCode::ACCEPTED);
+	assert_eq!(mock_b.init_count().await, 0);
 }
 
 #[tokio::test]
@@ -614,7 +757,7 @@ async fn setup_access_log_mcp_proxy(mock: &MockServer) -> (TestBind, SocketAddr)
 		t.pi
 			.stores
 			.read_binds()
-			.listener_frontend_policies(&listener_name)
+			.listener_frontend_policies(&listener_name, None)
 			.access_log
 			.is_some()
 	);
@@ -866,7 +1009,14 @@ pub async fn mcp_sse_client(s: SocketAddr) -> LegacyService {
 
 struct MockServer {
 	addr: SocketAddr,
+	init_counter: std::sync::Arc<tokio::sync::Mutex<i32>>,
 	_cancel: tokio::sync::oneshot::Sender<()>,
+}
+
+impl MockServer {
+	async fn init_count(&self) -> i32 {
+		*self.init_counter.lock().await
+	}
 }
 
 async fn mock_streamable_http_server(stateful: bool) -> MockServer {
@@ -874,9 +1024,13 @@ async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 	use rmcp::transport::streamable_http_server::StreamableHttpService;
 	use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 	agent_core::telemetry::testing::setup_test_logging();
+	let init_counter = std::sync::Arc::new(tokio::sync::Mutex::new(0_i32));
 
 	let service = StreamableHttpService::new(
-		|| Ok(Counter::new()),
+		{
+			let init_counter = init_counter.clone();
+			move || Ok(Counter::new(init_counter.clone()))
+		},
 		LocalSessionManager::default().into(),
 		StreamableHttpServerConfig::default()
 			.with_sse_retry(None)
@@ -895,7 +1049,11 @@ async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 			.await;
 		info!("server stopped");
 	});
-	MockServer { addr, _cancel: tx }
+	MockServer {
+		addr,
+		init_counter,
+		_cancel: tx,
+	}
 }
 
 async fn mock_sse_server() -> MockServer {
@@ -926,7 +1084,11 @@ async fn mock_sse_server() -> MockServer {
 			})
 			.await;
 	});
-	MockServer { addr, _cancel: tx }
+	MockServer {
+		addr,
+		init_counter: std::sync::Arc::new(tokio::sync::Mutex::new(0)),
+		_cancel: tx,
+	}
 }
 mod mockserver {
 	use std::sync::Arc;
@@ -968,6 +1130,7 @@ mod mockserver {
 	#[derive(Clone)]
 	pub struct Counter {
 		counter: Arc<Mutex<i32>>,
+		init_counter: Arc<Mutex<i32>>,
 		tool_router: ToolRouter<Counter>,
 		prompt_router: PromptRouter<Counter>,
 	}
@@ -975,9 +1138,10 @@ mod mockserver {
 	#[tool_router]
 	impl Counter {
 		#[allow(dead_code)]
-		pub fn new() -> Self {
+		pub fn new(init_counter: Arc<Mutex<i32>>) -> Self {
 			Self {
 				counter: Arc::new(Mutex::new(0)),
+				init_counter,
 				tool_router: Self::tool_router(),
 				prompt_router: Self::prompt_router(),
 			}
@@ -1045,6 +1209,14 @@ mod mockserver {
 					.get("authorization")
 					.map(|s| String::from_utf8_lossy(s.as_bytes()))
 					.unwrap_or_default(),
+			)]))
+		}
+
+		#[tool(description = "Get initialize call count")]
+		async fn get_init_count(&self) -> Result<CallToolResult, McpError> {
+			let init_counter = self.init_counter.lock().await;
+			Ok(CallToolResult::success(vec![Content::text(
+				init_counter.to_string(),
 			)]))
 		}
 	}
@@ -1174,6 +1346,8 @@ mod mockserver {
 			_request: InitializeRequestParams,
 			_: RequestContext<RoleServer>,
 		) -> Result<InitializeResult, McpError> {
+			let mut init_counter = self.init_counter.lock().await;
+			*init_counter += 1;
 			Ok(self.get_info())
 		}
 	}
@@ -1553,6 +1727,66 @@ fn fake_streamable_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 	})
 }
 
+fn fake_sse_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
+	Arc::new(McpTarget {
+		name: name.into(),
+		spec: crate::types::agent::McpTargetSpec::Sse(crate::types::agent::SseTargetSpec {
+			backend: crate::types::agent::SimpleBackendReference::Backend(strng::format!(
+				"/unused-{name}"
+			)),
+			path: "/sse".to_string(),
+		}),
+		backend_policies: Default::default(),
+		backend: Some(crate::types::agent::SimpleBackend::Opaque(
+			crate::types::agent::ResourceName::new(strng::format!("backend-{name}"), "".into()),
+			crate::types::agent::Target::Address(addr),
+		)),
+		always_use_prefix: false,
+	})
+}
+
+fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
+	let schema: OpenAPI = serde_json::from_value(serde_json::json!({
+		"openapi": "3.0.0",
+		"info": {
+			"title": "Test API",
+			"version": "1.0.0"
+		},
+		"paths": {}
+	}))
+	.expect("valid OpenAPI schema");
+
+	Arc::new(McpTarget {
+		name: name.into(),
+		spec: crate::types::agent::McpTargetSpec::OpenAPI(crate::types::agent::OpenAPITarget {
+			backend: crate::types::agent::SimpleBackendReference::Backend(strng::format!(
+				"/unused-{name}"
+			)),
+			schema: Arc::new(schema),
+		}),
+		backend_policies: Default::default(),
+		backend: Some(crate::types::agent::SimpleBackend::Opaque(
+			crate::types::agent::ResourceName::new(strng::format!("backend-{name}"), "".into()),
+			crate::types::agent::Target::Address(addr),
+		)),
+		always_use_prefix: false,
+	})
+}
+
+fn fake_stdio_target(name: &str) -> Arc<McpTarget> {
+	Arc::new(McpTarget {
+		name: name.into(),
+		spec: crate::types::agent::McpTargetSpec::Stdio {
+			cmd: "cat".into(),
+			args: vec![],
+			env: Default::default(),
+		},
+		backend_policies: Default::default(),
+		backend: None,
+		always_use_prefix: false,
+	})
+}
+
 fn empty_mcp_policies() -> crate::mcp::McpAuthorizationSet {
 	crate::mcp::McpAuthorizationSet::new(crate::http::authorization::RuleSets::from(Vec::new()))
 }
@@ -1567,6 +1801,131 @@ fn persisted_session(
 		session: Some(session.to_string()),
 		backend: Some(backend),
 	}
+}
+
+fn persisted_stateless_session(
+	target_name: &str,
+	backend: SocketAddr,
+) -> http::sessionpersistence::MCPSession {
+	http::sessionpersistence::MCPSession {
+		target_name: Some(target_name.to_string()),
+		session: None,
+		backend: Some(backend),
+	}
+}
+
+#[test]
+fn test_openapi_targets_emit_stateless_session_state() {
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_openapi_target(
+				"openapi",
+				SocketAddr::from(([127, 0, 0, 1], 30031)),
+			)],
+			stateful: true,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	let sessions = relay
+		.get_sessions()
+		.expect("OpenAPI should support stateless sessions");
+	assert_eq!(
+		sessions,
+		vec![MCPSession {
+			target_name: Some("openapi".to_string()),
+			session: None,
+			backend: None,
+		}]
+	);
+
+	let pinned = SocketAddr::from(([127, 0, 0, 1], 31031));
+	relay
+		.set_sessions(vec![persisted_stateless_session("openapi", pinned)])
+		.unwrap();
+
+	let sessions = relay
+		.get_sessions()
+		.expect("OpenAPI session state should still be available");
+	assert_eq!(
+		sessions,
+		vec![MCPSession {
+			target_name: Some("openapi".to_string()),
+			session: None,
+			backend: Some(pinned),
+		}]
+	);
+}
+
+#[test]
+fn test_sse_targets_emit_stateless_session_state() {
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_sse_target(
+				"sse",
+				SocketAddr::from(([127, 0, 0, 1], 30032)),
+			)],
+			stateful: true,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	let sessions = relay
+		.get_sessions()
+		.expect("SSE should support stateless sessions");
+	assert_eq!(
+		sessions,
+		vec![MCPSession {
+			target_name: Some("sse".to_string()),
+			session: None,
+			backend: None,
+		}]
+	);
+
+	let pinned = SocketAddr::from(([127, 0, 0, 1], 31032));
+	relay
+		.set_sessions(vec![persisted_stateless_session("sse", pinned)])
+		.unwrap();
+
+	let sessions = relay
+		.get_sessions()
+		.expect("SSE session state should still be available");
+	assert_eq!(
+		sessions,
+		vec![MCPSession {
+			target_name: Some("sse".to_string()),
+			session: None,
+			backend: Some(pinned),
+		}]
+	);
+}
+
+#[tokio::test]
+async fn test_stdio_targets_remain_non_stateless() {
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_stdio_target("stdio")],
+			stateful: false,
+			failure_mode: FailureMode::FailClosed,
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+
+	assert!(relay.get_sessions().is_none());
 }
 
 #[tokio::test]
@@ -1938,5 +2297,170 @@ async fn test_runtime_fanout_fail_open_all_fail() {
 		res.is_ok(),
 		"expected success with FailOpen even if ALL upstreams error mid-request: {:?}",
 		res.err()
+	);
+}
+
+#[tokio::test]
+async fn mcp_local_ratelimit() {
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind(basic_route(mock.addr)));
+
+	// Attach local rate limit policy
+	// MCP protocol overhead: initialize + notification + SSE GET = 3 requests
+	// Allow 5 total: overhead (3) + tool calls (2), then rate limit the 6th
+	t.attach_route_policy(serde_json::json!({
+		"localRateLimit": [{
+			"maxTokens": 5,
+			"tokensPerFill": 1,
+			"fillInterval": "10s",
+			"type": "requests"
+		}]
+	}))
+	.await;
+
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = mcp_streamable_client(io).await;
+
+	// First two calls should succeed
+	let result1 = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo")
+				.with_arguments(serde_json::json!({"n": 1}).as_object().cloned().unwrap()),
+		)
+		.await;
+	assert!(result1.is_ok(), "First request should succeed");
+
+	let result2 = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo")
+				.with_arguments(serde_json::json!({"n": 2}).as_object().cloned().unwrap()),
+		)
+		.await;
+	assert!(result2.is_ok(), "Second request should succeed");
+
+	// Third call should be rate limited
+	let result3 = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo")
+				.with_arguments(serde_json::json!({"n": 3}).as_object().cloned().unwrap()),
+		)
+		.await;
+	assert!(result3.is_err(), "Third request should be rate limited");
+}
+
+#[tokio::test]
+async fn mcp_extauth_deny() {
+	struct DenyAllAuthz;
+
+	#[async_trait::async_trait]
+	impl crate::test_helpers::extauthmock::Handler for DenyAllAuthz {
+		async fn check(
+			&mut self,
+			_request: &crate::http::ext_authz::proto::CheckRequest,
+		) -> Result<crate::http::ext_authz::proto::CheckResponse, tonic::Status> {
+			deny_response(
+				crate::http::ext_authz::proto::StatusCode::Forbidden,
+				"denied by mock ext_authz",
+			)
+		}
+	}
+
+	let authz = ExtAuthMock::new(|| DenyAllAuthz).spawn().await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind(basic_route(mock.addr)));
+
+	// Attach extAuthz policy pointing to our mock server
+	t.attach_route_policy(serde_json::json!({
+		"extAuthz": {
+			"host": authz.address.to_string(),
+			"protocol": {
+				"grpc": {}
+			}
+		}
+	}))
+	.await;
+
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	// Client should fail to initialize due to ext_authz denial
+	let result = try_mcp_streamable_client(io).await;
+	let err = result.expect_err("Client initialization should be denied by ext_authz");
+	let err_msg = err.to_string();
+	assert!(
+		err_msg.contains("403") && err_msg.contains("denied by mock ext_authz"),
+		"Expected 403 denial from ext_authz, got: {err_msg}"
+	);
+}
+
+async fn try_mcp_streamable_client(
+	s: SocketAddr,
+) -> Result<RunningService<RoleClient, InitializeRequestParams>, rmcp::service::ClientInitializeError>
+{
+	use rmcp::ServiceExt;
+	use rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
+	use rmcp::transport::StreamableHttpClientTransport;
+	let transport =
+		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
+	let client_info = ClientInfo::new(
+		ClientCapabilities::default(),
+		Implementation::new("test client".to_string(), "0.0.1".to_string()),
+	);
+
+	client_info.serve(transport).await
+}
+
+#[tokio::test]
+async fn mcp_remote_ratelimit_deny() {
+	struct DenyAllRateLimit;
+
+	#[async_trait::async_trait]
+	impl crate::test_helpers::ratelimitmock::Handler for DenyAllRateLimit {
+		async fn should_rate_limit(
+			&mut self,
+			_request: &crate::http::remoteratelimit::proto::RateLimitRequest,
+		) -> Result<crate::http::remoteratelimit::proto::RateLimitResponse, tonic::Status> {
+			over_limit_response(b"rate limit exceeded by mock".to_vec())
+		}
+	}
+
+	let ratelimit = RateLimitMock::new(|| DenyAllRateLimit).spawn().await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind(basic_route(mock.addr)));
+
+	// Attach remoteRateLimit policy pointing to our mock server
+	t.attach_route_policy(serde_json::json!({
+		"remoteRateLimit": {
+			"host": ratelimit.address.to_string(),
+			"domain": "test",
+			"descriptors": [{
+				"entries": [
+					{"key": "generic_key", "value": "\"test\""}
+				],
+				"type": "requests"
+			}]
+		}
+	}))
+	.await;
+
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	// Client should fail to initialize due to rate limit denial
+	let result = try_mcp_streamable_client(io).await;
+	let err = result.expect_err("Client initialization should be rate limited");
+	let err_msg = err.to_string();
+	assert!(
+		err_msg.contains("429") && err_msg.contains("rate limit exceeded by mock"),
+		"Expected 429 rate limit from remote service, got: {err_msg}"
 	);
 }

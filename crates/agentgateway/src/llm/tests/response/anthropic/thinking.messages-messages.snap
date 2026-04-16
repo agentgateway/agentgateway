@@ -37,11 +37,11 @@ info:
       "output_tokens": 251,
       "cache_creation_input_tokens": 1,
       "cache_read_input_tokens": 2,
+      "service_tier": "standard",
       "cache_creation": {
         "ephemeral_5m_input_tokens": 0,
         "ephemeral_1h_input_tokens": 0
-      },
-      "service_tier": "standard"
+      }
     },
     "content": [
       {
@@ -61,6 +61,7 @@ info:
     "total_tokens": 298,
     "cache_creation_input_tokens": 1,
     "cached_input_tokens": 2,
+    "service_tier": "standard",
     "provider_model": "claude-opus-4-6"
   }
 }

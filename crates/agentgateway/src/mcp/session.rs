@@ -11,7 +11,8 @@ use futures_util::StreamExt;
 use headers::HeaderMapExt;
 use rmcp::model::{
 	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, Implementation,
-	ProtocolVersion, RequestId, ServerJsonRpcMessage,
+	InitializeRequest, JsonRpcRequest, ProtocolVersion, RequestId, RootsCapabilities,
+	ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE};
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
@@ -47,6 +48,7 @@ impl Session {
 		};
 		Self::handle_error(req_id, self.send_internal(parts, message).await).await
 	}
+
 	/// send a message to upstream server(s), when using stateless mode. In stateless mode, every message
 	/// is wrapped in an InitializeRequest (except the actual InitializeRequest from the downstream).
 	/// This ensures servers that require an InitializeRequest behave correctly.
@@ -56,28 +58,68 @@ impl Session {
 		parts: Parts,
 		message: ClientJsonRpcMessage,
 	) -> Result<Response, ProxyError> {
-		let is_init = matches!(&message, ClientJsonRpcMessage::Request(r) if matches!(&r.request, &ClientRequest::InitializeRequest(_)));
+		let (req_id, request_type) = match &message {
+			ClientJsonRpcMessage::Request(r) => (Some(r.id.clone()), Some(&r.request)),
+			_ => (None, None),
+		};
+		let is_init = request_type.is_some_and(|r| matches!(r, ClientRequest::InitializeRequest(_)));
 		if !is_init {
-			// first, send the initialize
 			let init_request = rmcp::model::InitializeRequest::new(get_client_info());
-			let _ = self
-				.send(
-					parts.clone(),
-					ClientJsonRpcMessage::request(init_request.into(), RequestId::Number(0)),
-				)
-				.await?;
-
-			// And we need to notify as well.
-			let notification = ClientJsonRpcMessage::notification(
-				rmcp::model::InitializedNotification {
-					method: Default::default(),
-					extensions: Default::default(),
-				}
-				.into(),
-			);
-			let _ = self.send(parts.clone(), notification).await?;
+			// first, determine how widely to send the initialize
+			match request_type {
+				Some(ClientRequest::CallToolRequest(_)) | Some(ClientRequest::GetPromptRequest(_)) => {
+					// Single-target methods only hit one backend, so initialize/initialized should be scoped
+					// to that backend rather than fanning out.
+					let name = match request_type {
+						Some(ClientRequest::CallToolRequest(ctr)) => ctr.params.name.to_string(),
+						Some(ClientRequest::GetPromptRequest(gpr)) => gpr.params.name.clone(),
+						_ => unreachable!("match arm guarantees single-target request type"),
+					};
+					let (service_name, _) = match self.relay.parse_resource_name(&name) {
+						Ok(target) => target,
+						Err(err) => return Self::handle_error(req_id.clone(), Err(err)).await,
+					};
+					let res = self
+						.send_init_single(parts.clone(), init_request, service_name)
+						.await;
+					if let Some(sessions) = self.relay.get_sessions() {
+						let s = http::sessionpersistence::SessionState::MCP(
+							http::sessionpersistence::MCPSessionState::new(sessions),
+						);
+						if let Ok(id) = s.encode(&self.encoder) {
+							self.id = id.into();
+						}
+					}
+					Self::handle_error(Some(RequestId::Number(0)), res).await?;
+					// Now send the initialized notification
+					let _ = Self::handle_error(
+						None,
+						self
+							.send_initialized_notification_single(parts.clone(), service_name)
+							.await,
+					)
+					.await?;
+				},
+				_ => {
+					// We should fan out the initialize request to all MCP servers
+					let _ = self
+						.send(
+							parts.clone(),
+							ClientJsonRpcMessage::request(init_request.into(), RequestId::Number(0)),
+						)
+						.await?;
+					let notification = ClientJsonRpcMessage::notification(
+						rmcp::model::InitializedNotification {
+							method: Default::default(),
+							extensions: Default::default(),
+						}
+						.into(),
+					);
+					let _ = self.send(parts.clone(), notification).await?;
+				},
+			}
 		}
-		// Now we can send the message like normal
+		// Now we can send the message like normal (if it's tools/call, it'll go to the initialized target)
 		self.send(parts, message).await
 	}
 
@@ -179,6 +221,57 @@ impl Session {
 		}
 	}
 
+	async fn send_init_single(
+		&self,
+		parts: Parts,
+		mut init_request: InitializeRequest,
+		service_name: &str,
+	) -> Result<Response, UpstreamError> {
+		let method = init_request.method.as_str().to_string();
+		let ctx = IncomingRequestContext::new(&parts);
+		let (_, log, _) = mcp::handler::setup_request_log(parts, &method);
+		let session_id = self.id.to_string();
+		log.non_atomic_mutate(|l| {
+			l.method_name = Some(method.clone());
+			l.session_id = Some(session_id);
+		});
+
+		init_request.params.capabilities.roots = self.get_roots_capabilities();
+		self
+			.relay
+			.send_single(
+				JsonRpcRequest::new(RequestId::Number(0), init_request.into()),
+				ctx,
+				service_name,
+				Some(log),
+			)
+			.await
+	}
+
+	async fn send_initialized_notification_single(
+		&self,
+		parts: Parts,
+		service_name: &str,
+	) -> Result<Response, UpstreamError> {
+		let initialized = rmcp::model::InitializedNotification {
+			method: Default::default(),
+			extensions: Default::default(),
+		};
+		let method = initialized.method.as_str().to_string();
+		let ctx = IncomingRequestContext::new(&parts);
+		let (_, log, _) = mcp::handler::setup_request_log(parts, &method);
+		let session_id = self.id.to_string();
+		log.non_atomic_mutate(|l| {
+			l.method_name = Some(method.clone());
+			l.session_id = Some(session_id);
+		});
+
+		self
+			.relay
+			.send_notification_single(initialized.into(), ctx, service_name)
+			.await
+	}
+
 	async fn send_internal(
 		&mut self,
 		parts: Parts,
@@ -208,7 +301,7 @@ impl Session {
 						// Instead, we hijack this to tell them not to so they do not send requests that we cannot
 						// actually support
 						// This could probably be more easily done without multiplexing but for now neither supports.
-						ir.params.capabilities.roots = None;
+						ir.params.capabilities.roots = self.get_roots_capabilities();
 
 						let pv = ir.params.protocol_version.clone();
 						let res = self
@@ -237,6 +330,8 @@ impl Session {
 							.send_fanout(r, ctx, self.relay.merge_tools(cel))
 							.await
 					},
+					// TODO(keithmattix): should we forward pings or should we do our own independent pings
+					// as heuristic for the connection pool (and handle client pings as a local reply from agentgateway)?
 					ClientRequest::PingRequest(_) | ClientRequest::SetLevelRequest(_) => {
 						self
 							.relay
@@ -404,6 +499,10 @@ impl Session {
 				"unsupported message type".to_string(),
 			)),
 		}
+	}
+
+	fn get_roots_capabilities(&self) -> Option<RootsCapabilities> {
+		None
 	}
 }
 

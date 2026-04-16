@@ -19,6 +19,8 @@ pub mod csrf;
 pub mod envoy_proto_common;
 pub mod ext_authz;
 pub mod ext_proc;
+pub(crate) mod oauth;
+pub mod oidc;
 pub mod outlierdetection;
 mod peekbody;
 pub mod remoteratelimit;
@@ -31,6 +33,45 @@ pub type Error = axum_core::Error;
 pub type Body = axum_core::body::Body;
 pub type Request = ::http::Request<Body>;
 pub type Response = ::http::Response<Body>;
+
+pub(crate) fn iter_request_cookies(
+	req: &Request,
+) -> impl Iterator<Item = cookie::Cookie<'static>> + '_ {
+	req
+		.headers()
+		.get_all(header::COOKIE)
+		.into_iter()
+		.filter_map(|value| value.to_str().ok())
+		.flat_map(|header_value| {
+			cookie::Cookie::split_parse(header_value.to_owned())
+				.filter_map(Result::ok)
+				.map(cookie::Cookie::into_owned)
+		})
+}
+
+pub(crate) fn read_request_cookie(req: &Request, name: &str) -> Option<String> {
+	let mut matched = None;
+	for cookie in iter_request_cookies(req) {
+		if cookie.name() == name {
+			matched = Some(cookie.value().to_owned());
+		}
+	}
+	matched
+}
+
+pub(crate) fn strip_request_cookies_by_prefix(req: &mut Request, prefix: &str) {
+	let preserved: Vec<String> = iter_request_cookies(req)
+		.filter(|cookie| !cookie.name().starts_with(prefix))
+		.map(|cookie| cookie.to_string())
+		.collect();
+
+	req.headers_mut().remove(header::COOKIE);
+	if !preserved.is_empty() {
+		let hv =
+			HeaderValue::from_str(&preserved.join("; ")).expect("re-joined cookie header is valid");
+		req.headers_mut().insert(header::COOKIE, hv);
+	}
+}
 
 // SendDirectResponse is a Response that has been buffered so that it is Send.
 pub struct SendDirectResponse(pub ::http::Response<Bytes>);
@@ -175,6 +216,7 @@ pub use ::http::uri::{Authority, Scheme};
 pub use ::http::{
 	HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header, status, uri,
 };
+use axum_core::BoxError;
 use bytes::Bytes;
 use cel::Value;
 use http::uri::PathAndQuery;
@@ -569,6 +611,13 @@ pub fn classify_content_type(h: &HeaderMap) -> WellKnownContentTypes {
 	WellKnownContentTypes::Unknown
 }
 
+pub fn get_path_and_query(req: &Uri) -> &str {
+	req
+		.path_and_query()
+		.map(|pq| pq.as_str())
+		.unwrap_or_else(|| req.path())
+}
+
 pub fn get_host(req: &Request) -> Result<&str, ProxyError> {
 	// We expect a normalized request, so this will always be in the URI
 	// TODO: handle absolute HTTP/1.1 form
@@ -705,16 +754,19 @@ pin_project_lite::pin_project! {
 	}
 }
 
-impl<B, D> DropBody<B, D> {
-	pub fn new(body: B, dropper: D) -> Self {
-		Self { body, dropper }
+impl<B, D> DropBody<B, D>
+where
+	D: Send + 'static,
+	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
+	B::Error: Into<BoxError>,
+{
+	#[allow(clippy::new_ret_no_self)]
+	pub fn new(body: B, dropper: D) -> Body {
+		Body::new(Self { body, dropper })
 	}
 }
 
-impl<B: http_body::Body + Debug + Unpin, D> http_body::Body for DropBody<B, D>
-where
-	B::Data: Debug,
-{
+impl<B: http_body::Body + Unpin, D> http_body::Body for DropBody<B, D> {
 	type Data = B::Data;
 	type Error = B::Error;
 
@@ -805,6 +857,9 @@ impl Debug for DebugExtensions<'_> {
 		}
 		if let Some(e) = ext.get::<RequestTime>() {
 			d.field("RequestTime", e);
+		}
+		if let Some(e) = ext.get::<transformation_cel::TransformationMetadata>() {
+			d.field("TransformationMetadata", e);
 		}
 		d.finish()
 	}

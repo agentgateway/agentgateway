@@ -12,13 +12,14 @@ import (
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
@@ -416,67 +417,10 @@ func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy) (
 func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
 	authnPolicy := policy.Spec.Backend.MCP.Authentication
 
-	idp := api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
-	if authnPolicy.McpIDP != nil {
-		if *authnPolicy.McpIDP == agentgateway.Keycloak {
-			idp = api.BackendPolicySpec_McpAuthentication_KEYCLOAK
-		} else if *authnPolicy.McpIDP == agentgateway.Auth0 {
-			idp = api.BackendPolicySpec_McpAuthentication_AUTH0
-		}
-	}
-
-	// default mode is Strict
-	mode := api.BackendPolicySpec_McpAuthentication_STRICT
-	if authnPolicy.Mode == agentgateway.JWTAuthenticationModeStrict {
-		mode = api.BackendPolicySpec_McpAuthentication_STRICT
-	} else if authnPolicy.Mode == agentgateway.JWTAuthenticationModePermissive {
-		mode = api.BackendPolicySpec_McpAuthentication_PERMISSIVE
-	} else if authnPolicy.Mode == agentgateway.JWTAuthenticationModeOptional {
-		mode = api.BackendPolicySpec_McpAuthentication_OPTIONAL
-	}
-
-	var errs []error
-	jwksUrl, _, err := jwks_url.JwksUrlBuilderFactory().BuildJwksUrlAndTlsConfig(ctx.Krt, policy.Name, policy.Namespace, &authnPolicy.JWKS)
-	if err != nil {
-		logger.Error("failed resolving jwks url", "error", err)
-		errs = append(errs, err)
-	}
-	var translatedInlineJwks string
-	if err == nil {
-		translatedInlineJwks, err = resolveRemoteJWKSInline(ctx, jwksUrl)
-	}
-	if err != nil {
-		logger.Error("failed resolving jwks", "jwks_uri", jwksUrl, "error", err)
-		errs = append(errs, err)
-	}
-
-	var extraResourceMetadata map[string]*structpb.Value
-	for k, v := range authnPolicy.ResourceMetadata {
-		if extraResourceMetadata == nil {
-			extraResourceMetadata = make(map[string]*structpb.Value)
-		}
-
-		proto := &structpb.Value{}
-		err := jsonpb.Unmarshal(v.Raw, proto)
-		if err != nil {
-			logger.Error("error converting resource metadata", "key", k, "error", err)
-			errs = append(errs, err)
-			continue
-		}
-
-		extraResourceMetadata[k] = proto
-	}
-
-	mcpAuthn := &api.BackendPolicySpec_McpAuthentication{
-		Issuer:    authnPolicy.Issuer,
-		Audiences: authnPolicy.Audiences,
-		Provider:  idp,
-		ResourceMetadata: &api.BackendPolicySpec_McpAuthentication_ResourceMetadata{
-			Extra: extraResourceMetadata,
-		},
-		JwksInline: translatedInlineJwks,
-		Mode:       mode,
-	}
+	mcpAuthn, err := translateMCPAuthenticationSpec(ctx, types.NamespacedName{
+		Namespace: policy.Namespace,
+		Name:      policy.Name,
+	}, authnPolicy)
 	mcpAuthnPolicy := &api.Policy{
 		Key:  policy.Namespace + "/" + policy.Name + mcpAuthenticationPolicySuffix,
 		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
@@ -493,7 +437,100 @@ func translateBackendMCPAuthentication(ctx PolicyCtx, policy *agentgateway.Agent
 		"policy", policy.Name,
 		"agentgateway_policy", mcpAuthnPolicy.Name)
 
-	return mcpAuthnPolicy, errors.Join(errs...)
+	return mcpAuthnPolicy, err
+}
+
+func translateMCPAuthenticationSpec(
+	ctx PolicyCtx,
+	policy types.NamespacedName,
+	authnPolicy *agentgateway.MCPAuthentication,
+) (*api.BackendPolicySpec_McpAuthentication, error) {
+	idp := translateMcpIDP(authnPolicy.McpIDP)
+
+	// default mode is Strict
+	mode := api.BackendPolicySpec_McpAuthentication_STRICT
+	if authnPolicy.Mode == agentgateway.JWTAuthenticationModeStrict {
+		mode = api.BackendPolicySpec_McpAuthentication_STRICT
+	} else if authnPolicy.Mode == agentgateway.JWTAuthenticationModePermissive {
+		mode = api.BackendPolicySpec_McpAuthentication_PERMISSIVE
+	} else if authnPolicy.Mode == agentgateway.JWTAuthenticationModeOptional {
+		mode = api.BackendPolicySpec_McpAuthentication_OPTIONAL
+	}
+
+	var errs []error
+	translatedInlineJwks, err := resolveJWKSInlineForOwner(
+		ctx,
+		jwks.PolicyBackendMCPAuthenticationLookupOwner(policy.Namespace, policy.Name, authnPolicy.JWKS),
+	)
+	if err != nil {
+		logger.Error("failed resolving jwks", "error", err)
+		errs = append(errs, err)
+	}
+
+	extraResourceMetadata, metadataErr := translateMCPResourceMetadata(authnPolicy.ResourceMetadata)
+	if metadataErr != nil {
+		errs = append(errs, metadataErr)
+	}
+
+	mcpAuthn := &api.BackendPolicySpec_McpAuthentication{
+		Issuer:    authnPolicy.Issuer,
+		Audiences: authnPolicy.Audiences,
+		Provider:  idp,
+		ResourceMetadata: &api.BackendPolicySpec_McpAuthentication_ResourceMetadata{
+			Extra: extraResourceMetadata,
+		},
+		JwksInline: translatedInlineJwks,
+		Mode:       mode,
+	}
+	return mcpAuthn, errors.Join(errs...)
+}
+
+func translateJWTMCPConfig(mcp *agentgateway.JWTMCPConfig) (*api.TrafficPolicySpec_JWT_MCP, error) {
+	extraResourceMetadata, err := translateMCPResourceMetadata(mcp.ResourceMetadata)
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.TrafficPolicySpec_JWT_MCP{
+		Provider: translateMcpIDP(mcp.Provider),
+		ResourceMetadata: &api.BackendPolicySpec_McpAuthentication_ResourceMetadata{
+			Extra: extraResourceMetadata,
+		},
+	}, nil
+}
+
+func translateMcpIDP(provider *agentgateway.McpIDP) api.BackendPolicySpec_McpAuthentication_McpIDP {
+	if provider == nil {
+		return api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
+	}
+	if *provider == agentgateway.Keycloak {
+		return api.BackendPolicySpec_McpAuthentication_KEYCLOAK
+	}
+	if *provider == agentgateway.Auth0 {
+		return api.BackendPolicySpec_McpAuthentication_AUTH0
+	}
+	return api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
+}
+
+func translateMCPResourceMetadata(resourceMetadata map[string]apiextensionsv1.JSON) (map[string]*structpb.Value, error) {
+	var errs []error
+	var extraResourceMetadata map[string]*structpb.Value
+	for k, v := range resourceMetadata {
+		if extraResourceMetadata == nil {
+			extraResourceMetadata = make(map[string]*structpb.Value)
+		}
+
+		proto := &structpb.Value{}
+		err := jsonpb.Unmarshal(v.Raw, proto)
+		if err != nil {
+			logger.Error("error converting resource metadata", "key", k, "error", err)
+			errs = append(errs, err)
+			continue
+		}
+
+		extraResourceMetadata[k] = proto
+	}
+	return extraResourceMetadata, errors.Join(errs...)
 }
 
 // translateBackendAI processes AI configuration and creates corresponding Agw policies
@@ -580,6 +617,9 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 			CacheTools:    aiSpec.PromptCaching.CacheTools,
 		}
 		translatedAIPolicy.PromptCaching.MinTokens = ptr.Of(uint32(aiSpec.PromptCaching.MinTokens)) //nolint:gosec // G115: MinTokens is validated by kubebuilder to be >= 0
+		if aiSpec.PromptCaching.CacheMessageOffset > 0 {
+			translatedAIPolicy.PromptCaching.CacheMessageOffset = ptr.Of(uint32(aiSpec.PromptCaching.CacheMessageOffset)) //nolint:gosec // G115: CacheMessageOffset is validated by kubebuilder to be >= 0
+		}
 	}
 
 	if aiSpec.Routes != nil {

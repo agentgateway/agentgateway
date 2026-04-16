@@ -176,9 +176,12 @@ func newAgentgatewayParametersHelmValuesGenerator(cli apiclient.Client, inputs *
 	return &agentgatewayParametersHelmValuesGenerator{
 		agwParamClient: kclient.NewFilteredDelayed[*agentgateway.AgentgatewayParameters](cli, wellknown.AgentgatewayParametersGVR, filter),
 		gwClassClient:  kclient.NewFilteredDelayed[*gwv1.GatewayClass](cli, wellknown.GatewayClassGVR, filter),
-		secretClient:   kclient.NewFiltered[*corev1.Secret](cli, filter),
-		inputs:         inputs,
-		sessionKeyGen:  generateSessionKey,
+		secretClient: kclient.NewFiltered[*corev1.Secret](cli, kclient.Filter{
+			FieldSelector: apiclient.SecretsFieldSelector,
+			ObjectFilter:  cli.ObjectFilter(),
+		}),
+		inputs:        inputs,
+		sessionKeyGen: generateSessionKey,
 	}
 }
 

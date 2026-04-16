@@ -172,19 +172,7 @@ impl Bound {
 			b.all_shutdown_policies()
 		};
 		for p in sdp {
-			if let Some(t) = p.tracer.get() {
-				t.shutdown()
-			}
-		}
-
-		let access_log_policies = {
-			let b = self.stores.binds.read();
-			b.all_access_log_policies()
-		};
-		for p in access_log_policies {
-			if let Some(logger) = p.logger.get() {
-				logger.shutdown()
-			}
+			p();
 		}
 
 		// Start a drain; this will attempt to end all connections

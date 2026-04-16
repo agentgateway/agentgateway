@@ -572,7 +572,8 @@ impl ExtAuthz {
 					},
 				}
 			},
-			None => Uri::try_from(req.uri().path()).expect("pre-validated"),
+			None => Uri::try_from(http::get_path_and_query(req.uri()))
+				.map_err(|_| ProxyError::ExternalAuthorizationFailed(None))?,
 		};
 
 		// If the user defined their own path expression, use that.

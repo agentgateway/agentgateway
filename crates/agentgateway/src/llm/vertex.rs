@@ -30,34 +30,38 @@ impl Provider {
 	}
 
 	pub fn prepare_anthropic_message_body(&self, body: Vec<u8>) -> Result<Vec<u8>, AIError> {
-		let mut body: Map<String, Value> =
-			serde_json::from_slice(&body).map_err(AIError::RequestMarshal)?;
-
-		body.insert(
-			"anthropic_version".to_string(),
-			Value::String(ANTHROPIC_VERSION.to_string()),
-		);
-		body.remove("model");
-
-		serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
+		self.prepare_anthropic_body(body, |b| {
+			b.remove("model");
+		})
 	}
 
 	pub fn prepare_anthropic_count_tokens_body(&self, body: Vec<u8>) -> Result<Vec<u8>, AIError> {
+		self.prepare_anthropic_body(body, |b| {
+			if let Some(Value::String(model)) = b.get("model") {
+				let normalized = self
+					.configured_model(Some(model))
+					.map(|s| s.to_string())
+					.unwrap_or_else(|| model.clone());
+				b.insert("model".to_string(), Value::String(normalized));
+			}
+		})
+	}
+
+	/// Shared pipeline for Vertex Anthropic requests: parse, inject version,
+	/// apply caller-specific model handling, strip unsupported fields, serialize.
+	fn prepare_anthropic_body(
+		&self,
+		body: Vec<u8>,
+		apply: impl FnOnce(&mut Map<String, Value>),
+	) -> Result<Vec<u8>, AIError> {
 		let mut body: Map<String, Value> =
 			serde_json::from_slice(&body).map_err(AIError::RequestMarshal)?;
-
 		body.insert(
 			"anthropic_version".to_string(),
 			Value::String(ANTHROPIC_VERSION.to_string()),
 		);
-
-		if let Some(Value::String(model)) = body.get("model") {
-			let normalized = self
-				.configured_model(Some(model))
-				.map(|s| s.to_string())
-				.unwrap_or_else(|| model.clone());
-			body.insert("model".to_string(), Value::String(normalized));
-		}
+		apply(&mut body);
+		remove_unsupported_vertex_fields(&mut body);
 		serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
 	}
 
@@ -150,6 +154,34 @@ impl Provider {
 	}
 }
 
+fn remove_unsupported_vertex_fields(body: &mut Map<String, Value>) {
+	body.remove("output_config");
+	body.remove("output_format");
+	// Vertex supports cache_control but not the "scope" child from the prompt-caching-scope beta.
+	for value in body.values_mut() {
+		remove_nested_field(value, "cache_control", "scope");
+	}
+}
+
+fn remove_nested_field(value: &mut Value, key: &str, child: &str) {
+	match value {
+		Value::Object(map) => {
+			if let Some(Value::Object(nested)) = map.get_mut(key) {
+				nested.remove(child);
+			}
+			for v in map.values_mut() {
+				remove_nested_field(v, key, child);
+			}
+		},
+		Value::Array(arr) => {
+			for v in arr {
+				remove_nested_field(v, key, child);
+			}
+		},
+		_ => {},
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -208,5 +240,174 @@ mod tests {
 			region: region.map(strng::new),
 		};
 		assert_eq!(p.get_host(None).as_str(), expected);
+	}
+
+	#[test]
+	fn test_remove_top_level_output_fields() {
+		let mut body: Map<String, Value> = serde_json::from_value(serde_json::json!({
+			"model": "claude-sonnet-4-5-20251001",
+			"output_config": {"format": "json"},
+			"output_format": "markdown",
+			"messages": [{"role": "user", "content": "hello"}]
+		}))
+		.unwrap();
+		remove_unsupported_vertex_fields(&mut body);
+		assert!(!body.contains_key("output_config"));
+		assert!(!body.contains_key("output_format"));
+		assert!(body.contains_key("model"));
+		assert!(body.contains_key("messages"));
+	}
+
+	#[test]
+	fn test_output_fields_preserved_when_nested() {
+		let mut body: Map<String, Value> = serde_json::from_value(serde_json::json!({
+			"messages": [{
+				"role": "user",
+				"content": "hello",
+				"output_config": {"format": "json"},
+				"output_format": "markdown"
+			}]
+		}))
+		.unwrap();
+		remove_unsupported_vertex_fields(&mut body);
+		let msg = body["messages"][0].as_object().unwrap();
+		assert!(msg.contains_key("output_config"));
+		assert!(msg.contains_key("output_format"));
+	}
+
+	#[test]
+	fn test_cache_control_scope_removed_recursively() {
+		let mut body: Map<String, Value> = serde_json::from_value(serde_json::json!({
+			"system": [{
+				"type": "text",
+				"text": "You are helpful.",
+				"cache_control": {"type": "ephemeral", "scope": "turn"}
+			}],
+			"messages": [{
+				"role": "user",
+				"content": [{
+					"type": "text",
+					"text": "hello",
+					"cache_control": {"type": "ephemeral", "scope": "session"}
+				}]
+			}]
+		}))
+		.unwrap();
+		remove_unsupported_vertex_fields(&mut body);
+		let sys_cc = body["system"][0]["cache_control"].as_object().unwrap();
+		assert_eq!(sys_cc.get("type").unwrap(), "ephemeral");
+		assert!(!sys_cc.contains_key("scope"));
+		let msg_cc = body["messages"][0]["content"][0]["cache_control"]
+			.as_object()
+			.unwrap();
+		assert_eq!(msg_cc.get("type").unwrap(), "ephemeral");
+		assert!(!msg_cc.contains_key("scope"));
+	}
+
+	#[test]
+	fn test_cache_control_without_scope_untouched() {
+		let mut body: Map<String, Value> = serde_json::from_value(serde_json::json!({
+			"messages": [{
+				"role": "user",
+				"content": [{
+					"type": "text",
+					"text": "hello",
+					"cache_control": {"type": "ephemeral"}
+				}]
+			}]
+		}))
+		.unwrap();
+		let expected = body.clone();
+		remove_unsupported_vertex_fields(&mut body);
+		assert_eq!(body, expected);
+	}
+
+	#[test]
+	fn test_cache_control_non_object_untouched() {
+		let mut body: Map<String, Value> = serde_json::from_value(serde_json::json!({
+			"messages": [{
+				"role": "user",
+				"content": [{
+					"type": "text",
+					"text": "hello",
+					"cache_control": "enabled"
+				}]
+			}]
+		}))
+		.unwrap();
+		let expected = body.clone();
+		remove_unsupported_vertex_fields(&mut body);
+		assert_eq!(body, expected);
+	}
+
+	#[test]
+	fn test_realistic_anthropic_messages_body() {
+		let mut body: Map<String, Value> = serde_json::from_value(serde_json::json!({
+			"model": "claude-sonnet-4-5-20251001",
+			"max_tokens": 1024,
+			"output_config": {"format": "json"},
+			"output_format": "markdown",
+			"system": [{
+				"type": "text",
+				"text": "You are a helpful assistant.",
+				"cache_control": {"type": "ephemeral", "scope": "turn"}
+			}],
+			"messages": [
+				{
+					"role": "user",
+					"content": [
+						{
+							"type": "text",
+							"text": "What is 2+2?",
+							"cache_control": {"type": "ephemeral", "scope": "session"}
+						},
+						{
+							"type": "image",
+							"source": {"type": "base64", "data": "abc"},
+							"cache_control": {"type": "ephemeral"}
+						}
+					]
+				},
+				{
+					"role": "assistant",
+					"content": [{"type": "text", "text": "4"}]
+				}
+			]
+		}))
+		.unwrap();
+		remove_unsupported_vertex_fields(&mut body);
+
+		// Top-level fields removed
+		assert!(!body.contains_key("output_config"));
+		assert!(!body.contains_key("output_format"));
+		// Preserved fields
+		assert_eq!(body["max_tokens"], 1024);
+		assert_eq!(body["model"], "claude-sonnet-4-5-20251001");
+
+		// System cache_control: scope removed, type kept
+		let sys_cc = body["system"][0]["cache_control"].as_object().unwrap();
+		assert_eq!(sys_cc.len(), 1);
+		assert_eq!(sys_cc["type"], "ephemeral");
+
+		// First user content block: scope removed
+		let user_cc = body["messages"][0]["content"][0]["cache_control"]
+			.as_object()
+			.unwrap();
+		assert_eq!(user_cc.len(), 1);
+		assert_eq!(user_cc["type"], "ephemeral");
+
+		// Second user content block: no scope, so unchanged (still has type)
+		let img_cc = body["messages"][0]["content"][1]["cache_control"]
+			.as_object()
+			.unwrap();
+		assert_eq!(img_cc.len(), 1);
+		assert_eq!(img_cc["type"], "ephemeral");
+
+		// Assistant content untouched (no cache_control)
+		assert!(
+			body["messages"][1]["content"][0]
+				.get("cache_control")
+				.is_none()
+		);
 	}
 }

@@ -23,7 +23,7 @@ spec:
   ports:
   - name: mcp-http
     port: 9090
-    appProtocol: kgateway.dev/mcp
+    appProtocol: agentgateway.dev/mcp
 ---
 # Output
 output:

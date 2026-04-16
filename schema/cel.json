@@ -223,6 +223,33 @@
           "format": "uint64",
           "minimum": 0
         },
+        "inputImageTokens": {
+          "description": "The number of image tokens in the input/prompt.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "inputTextTokens": {
+          "description": "The number of text tokens in the input/prompt.\nNote: this field is only set in multi-modal calls where the total token count is split out by\ntext/image/audio; for standard all-text calls, this is unset.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "inputAudioTokens": {
+          "description": "The number of audio tokens in the input/prompt.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
         "cachedInputTokens": {
           "description": "The number of tokens in the input/prompt read from cache (savings)",
           "type": [
@@ -250,6 +277,33 @@
           "format": "uint64",
           "minimum": 0
         },
+        "outputImageTokens": {
+          "description": "The number of image tokens in the output/completion.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "outputTextTokens": {
+          "description": "The number of text tokens in the output/completion.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "outputAudioTokens": {
+          "description": "The number of audio tokens in the output/completion.\nNote: this field is only set in multi-modal calls where the total token count is split out by\ntext/image/audio; for standard all-text calls, this is unset.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
         "reasoningTokens": {
           "description": "The number of reasoning tokens in the output/completion.",
           "type": [
@@ -267,6 +321,13 @@
           ],
           "format": "uint64",
           "minimum": 0
+        },
+        "serviceTier": {
+          "description": "The service tier the provider served the request under.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "countTokens": {
           "description": "The number of tokens in the request, when using the token counting endpoint\nThese are not counted as 'input tokens' since they do not consume input tokens.",
@@ -407,6 +468,20 @@
           "maximum": 65535,
           "default": 0
         },
+        "rawAddress": {
+          "description": "The original TCP peer IP address of the downstream connection.\nThis can differ from the `address` when using tunneling protocols like PROXY.",
+          "type": "string",
+          "format": "ip",
+          "default": "0.0.0.0"
+        },
+        "rawPort": {
+          "description": "The original TCP peer port of the downstream connection.\nThis can differ from the `port` when using tunneling protocols like PROXY.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 0
+        },
         "identity": {
           "description": "The (Istio SPIFFE) identity of the downstream connection, if available.",
           "type": [
@@ -460,6 +535,31 @@
             "null"
           ],
           "default": null
+        },
+        "unverifiedWorkload": {
+          "description": "The workload context of the downstream connection, resolved from the\nworkload discovery store by source IP. Available when the source pod is\nknown to the controller's workload discovery store.\n\nFields are nested under `unverified` to signal that they are derived\nfrom the source IP (not cryptographically authenticated). Policy\nauthors should prefer `source.identity.*` for trust-sensitive checks.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "name": {
+              "description": "The pod name of the source workload.",
+              "type": "string",
+              "default": ""
+            },
+            "namespace": {
+              "description": "The namespace of the source workload.",
+              "type": "string",
+              "default": ""
+            },
+            "serviceAccount": {
+              "description": "The service account of the source workload.",
+              "type": "string",
+              "default": ""
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

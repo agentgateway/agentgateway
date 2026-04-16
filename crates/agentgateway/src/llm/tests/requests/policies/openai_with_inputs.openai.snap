@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
+assertion_line: 136
 description: src/llm/tests/requests/policies/openai_with_inputs.json
 info:
   model: gpt-4o
@@ -40,13 +41,13 @@ info:
     },
     {
       "type": "message",
+      "role": "user",
       "content": [
         {
           "type": "input_text",
           "text": "Hello, world"
         }
-      ],
-      "role": "user"
+      ]
     },
     {
       "type": "message",

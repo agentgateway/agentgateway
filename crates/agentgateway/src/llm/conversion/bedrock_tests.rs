@@ -1,10 +1,38 @@
+use std::io;
+
 use agent_core::strng;
+use bytes::Bytes;
 use http::HeaderMap;
+use http_body_util::BodyExt;
 use serde_json::json;
 
 use super::*;
 use crate::llm::bedrock::Provider;
 use crate::llm::types;
+
+#[tokio::test]
+async fn test_append_done_on_success_omits_done_after_error() {
+	let mut body = super::from_completions::append_done_on_success(futures_util::stream::iter(vec![
+		Ok::<_, axum_core::Error>(Bytes::from_static(b"data: chunk\n\n")),
+		Err(axum_core::Error::new(io::Error::other("boom"))),
+	]));
+
+	let first = body
+		.frame()
+		.await
+		.expect("first frame should be present")
+		.expect("first frame should succeed")
+		.into_data()
+		.expect("first frame should contain data");
+	assert_eq!(first, Bytes::from_static(b"data: chunk\n\n"));
+
+	let second = body.frame().await.expect("error frame should be present");
+	assert!(second.is_err(), "upstream error should be forwarded");
+	assert!(
+		body.frame().await.is_none(),
+		"stream must terminate after an upstream error without appending [DONE]"
+	);
+}
 
 #[test]
 fn test_extract_beta_headers_variants() {
@@ -1224,4 +1252,78 @@ fn test_embeddings_error_translation() {
 
 	assert_eq!(error_resp["error"]["type"], "invalid_request_error");
 	assert_eq!(error_resp["error"]["message"], "Model not found");
+}
+
+fn make_message(role: types::bedrock::Role, text: &str) -> types::bedrock::Message {
+	types::bedrock::Message {
+		role,
+		content: vec![types::bedrock::ContentBlock::Text(text.to_string())],
+	}
+}
+
+fn has_cache_point(msg: &types::bedrock::Message) -> bool {
+	msg
+		.content
+		.iter()
+		.any(|b| matches!(b, types::bedrock::ContentBlock::CachePoint(_)))
+}
+
+#[test]
+fn test_insert_cache_point_default_offset() {
+	let mut msgs = vec![
+		make_message(types::bedrock::Role::User, "Hello"),
+		make_message(types::bedrock::Role::Assistant, "Hi"),
+		make_message(types::bedrock::Role::User, "How are you?"),
+	];
+	helpers::insert_message_cache_point(&mut msgs, 0);
+	assert!(has_cache_point(&msgs[1]));
+	assert!(!has_cache_point(&msgs[0]));
+	assert!(!has_cache_point(&msgs[2]));
+}
+
+#[test]
+fn test_insert_cache_point_offset_shifts_back() {
+	let mut msgs = vec![
+		make_message(types::bedrock::Role::User, "a"),
+		make_message(types::bedrock::Role::Assistant, "b"),
+		make_message(types::bedrock::Role::User, "c"),
+		make_message(types::bedrock::Role::Assistant, "d"),
+		make_message(types::bedrock::Role::User, "e"),
+	];
+	helpers::insert_message_cache_point(&mut msgs, 2);
+	// default position is index 3 (len-2), offset 2 → index 1
+	assert!(has_cache_point(&msgs[1]));
+	for (i, msg) in msgs.iter().enumerate() {
+		if i != 1 {
+			assert!(!has_cache_point(msg));
+		}
+	}
+}
+
+#[test]
+fn test_insert_cache_point_offset_clamps_to_zero() {
+	let mut msgs = vec![
+		make_message(types::bedrock::Role::User, "a"),
+		make_message(types::bedrock::Role::Assistant, "b"),
+		make_message(types::bedrock::Role::User, "c"),
+	];
+	// offset 100 should clamp to index 0
+	helpers::insert_message_cache_point(&mut msgs, 100);
+	assert!(has_cache_point(&msgs[0]));
+	assert!(!has_cache_point(&msgs[1]));
+	assert!(!has_cache_point(&msgs[2]));
+}
+
+#[test]
+fn test_insert_cache_point_single_message_noop() {
+	let mut msgs = vec![make_message(types::bedrock::Role::User, "only")];
+	helpers::insert_message_cache_point(&mut msgs, 0);
+	assert!(!has_cache_point(&msgs[0]));
+}
+
+#[test]
+fn test_insert_cache_point_empty_messages_noop() {
+	let mut msgs: Vec<types::bedrock::Message> = vec![];
+	helpers::insert_message_cache_point(&mut msgs, 0);
+	assert!(msgs.is_empty());
 }

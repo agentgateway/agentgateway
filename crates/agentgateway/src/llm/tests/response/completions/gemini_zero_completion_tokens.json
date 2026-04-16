@@ -1,0 +1,20 @@
+{
+  "model": "gemini-2.5-flash",
+  "usage": {
+    "prompt_tokens": 7,
+    "completion_tokens": 0,
+    "total_tokens": 8
+  },
+  "choices": [
+    {
+      "message": {
+        "role": "assistant"
+      },
+      "finish_reason": "length",
+      "index": 0
+    }
+  ],
+  "created": 1775595226,
+  "id": "2m7Vaca_HdfC1MkP1trPwAM",
+  "object": "chat.completion"
+}

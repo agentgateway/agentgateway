@@ -1,4 +1,14 @@
 apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: be
+  namespace: default
+spec:
+  static:
+    host: be.example.com
+    port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
   name: agw
@@ -16,15 +26,6 @@ spec:
          restoreHealth: 100
          consecutiveFailures: 3
          healthThreshold: 50
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: webhook
-  namespace: default
-spec:
-  ports:
-    - port: 80
 ---
 # Output
 output:
@@ -60,8 +61,10 @@ status:
   status:
     ancestors:
     - ancestorRef:
-        group: agentgateway.dev
-        name: StatusSummary
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
       conditions:
       - lastTransitionTime: fake
         message: Policy accepted
@@ -69,8 +72,8 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: 'Policy is not attached: AgentgatewayBackend default/be not found'
-        reason: Pending
-        status: "False"
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
         type: Attached
       controllerName: agentgateway.dev/agentgateway

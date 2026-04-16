@@ -1,6 +1,6 @@
 use crate::*;
 
-#[apply(schema!)]
+#[apply(schema_ser!)]
 pub struct Policy {}
 
 #[apply(schema!)]
@@ -59,6 +59,7 @@ impl MCPSessionState {
 }
 
 #[apply(schema!)]
+#[derive(Eq, PartialEq)]
 pub struct MCPSession {
 	#[serde(default, rename = "t", skip_serializing_if = "Option::is_none")]
 	pub target_name: Option<String>,
@@ -186,6 +187,9 @@ mod aes {
 		pub fn decrypt(&self, encoded: &str) -> Result<Vec<u8>, Error> {
 			// Base64 decode
 			let data = STANDARD.decode(encoded).map_err(|_| Error::InvalidFormat)?;
+			if data.len() < 12 {
+				return Err(Error::InvalidFormat);
+			}
 
 			// Extract nonce and ciphertext
 			let (nonce_bytes, ciphertext) = data.split_at(12);
@@ -210,5 +214,19 @@ mod aes {
 		DecryptionFailed,
 		#[error("invalid format")]
 		InvalidFormat,
+	}
+
+	#[cfg(test)]
+	mod tests {
+		use base64::Engine;
+
+		use super::{Encoder, Error};
+
+		#[test]
+		fn short_ciphertexts_fail_cleanly() {
+			let encoder = Encoder::new(&[0u8; 32]).expect("encoder");
+			let short = base64::engine::general_purpose::STANDARD.encode([0u8; 11]);
+			assert!(matches!(encoder.decrypt(&short), Err(Error::InvalidFormat)));
+		}
 	}
 }

@@ -12,7 +12,12 @@ updates:
       cargo-weekly:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "nom"
+      - dependency-name: "criterion"
     open-pull-requests-limit: 1
+    cooldown:
+      default-days: 7
 
   # Disable regular version updates while still allowing Dependabot security PRs.
   - package-ecosystem: "gomod"
@@ -22,6 +27,8 @@ updates:
       time: "09:00"
       timezone: "America/Los_Angeles"
     open-pull-requests-limit: 0
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "gomod"
     directory: "/api"
@@ -30,6 +37,8 @@ updates:
       time: "09:00"
       timezone: "America/Los_Angeles"
     open-pull-requests-limit: 0
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "gomod"
     directory: "/tools"
@@ -38,6 +47,8 @@ updates:
       time: "09:00"
       timezone: "America/Los_Angeles"
     open-pull-requests-limit: 0
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "npm"
     directory: "/ui"
@@ -46,6 +57,8 @@ updates:
       time: "09:00"
       timezone: "America/Los_Angeles"
     open-pull-requests-limit: 0
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "docker"
     directory: "/"
@@ -54,6 +67,8 @@ updates:
       time: "09:00"
       timezone: "America/Los_Angeles"
     open-pull-requests-limit: 0
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "docker"
     directory: "/controller/hack/testbox"
@@ -62,6 +77,8 @@ updates:
       time: "09:00"
       timezone: "America/Los_Angeles"
     open-pull-requests-limit: 0
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "uv"
     directory: "/examples/a2a/strands-agents"
@@ -70,6 +87,8 @@ updates:
       time: "09:00"
       timezone: "America/Los_Angeles"
     open-pull-requests-limit: 0
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -78,3 +97,5 @@ updates:
       time: "09:00"
       timezone: "America/Los_Angeles"
     open-pull-requests-limit: 0
+    cooldown:
+      default-days: 7

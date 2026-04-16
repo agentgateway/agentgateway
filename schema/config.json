@@ -1215,6 +1215,17 @@
             }
           ]
         },
+        "oidc": {
+          "description": "Authenticate incoming browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "basicAuth": {
           "description": "Authenticate incoming requests using Basic Authentication with htpasswd.",
           "anyOf": [
@@ -1709,12 +1720,7 @@
           "default": "strict"
         },
         "jwtValidationOptions": {
-          "$ref": "#/$defs/JWTValidationOptions",
-          "default": {
-            "requiredClaims": [
-              "exp"
-            ]
-          }
+          "$ref": "#/$defs/JWTValidationOptions"
         }
       },
       "additionalProperties": false,
@@ -2147,30 +2153,6 @@
           ],
           "default": null
         },
-        "responseHeaderModifier": {
-          "description": "Headers to be modified in the response.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "requestRedirect": {
-          "description": "Directly respond to the request with a redirect.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestRedirect"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
         "transformations": {
           "description": "Modify requests and responses sent to and from the backend.",
           "anyOf": [
@@ -2223,18 +2205,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/TCP"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "health": {
-          "description": "Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalHealthPolicy"
             },
             {
               "type": "null"
@@ -2761,64 +2731,6 @@
         "nanos"
       ]
     },
-    "LocalHealthPolicy": {
-      "description": "Local/config health policy with CEL as string; converted to Policy by compiling the expression.\nMirrors the proto `Health` message structure.",
-      "type": "object",
-      "properties": {
-        "unhealthyExpression": {
-          "description": "CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.\nWhen unset, any 5xx or connection failure is treated as unhealthy.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "eviction": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalEviction"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "LocalEviction": {
-      "description": "Local/config eviction sub-policy with duration as string; mirrors `Eviction`.",
-      "type": "object",
-      "properties": {
-        "duration": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "restoreHealth": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        },
-        "consecutiveFailures": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int32"
-        },
-        "healthThreshold": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        }
-      },
-      "additionalProperties": false
-    },
     "Tunnel": {
       "type": "object",
       "properties": {
@@ -3136,6 +3048,12 @@
           "format": "uint",
           "minimum": 0,
           "default": 1024
+        },
+        "cacheMessageOffset": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 0
         }
       },
       "additionalProperties": false
@@ -3335,6 +3253,17 @@
         "type": {
           "$ref": "#/$defs/RateLimitType",
           "default": "requests"
+        },
+        "limitOverride": {
+          "description": "limitOverride determines the optional expression to determine the limit of the request.\nThis tells the remote server what limit to apply to the request.\nThe expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:\n`{\"unit\":\"second\",\"requestsPerUnit\":100}`.\nValid units: second, minute, hour, day, month, year\nIf the expression fails to evaluate, the descriptor is skipped.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -3416,12 +3345,7 @@
               "$ref": "#/$defs/FileInlineOrRemote"
             },
             "jwtValidationOptions": {
-              "$ref": "#/$defs/JWTValidationOptions",
-              "default": {
-                "requiredClaims": [
-                  "exp"
-                ]
-              }
+              "$ref": "#/$defs/JWTValidationOptions"
             }
           },
           "additionalProperties": false,
@@ -3470,18 +3394,107 @@
           "$ref": "#/$defs/FileInlineOrRemote"
         },
         "jwtValidationOptions": {
-          "$ref": "#/$defs/JWTValidationOptions",
-          "default": {
-            "requiredClaims": [
-              "exp"
-            ]
-          }
+          "$ref": "#/$defs/JWTValidationOptions"
         }
       },
       "additionalProperties": false,
       "required": [
         "issuer",
         "jwks"
+      ]
+    },
+    "LocalOidcConfig": {
+      "description": "Browser-based OIDC authentication policy.\n\nExplicit mode is still OIDC: it supplies provider metadata manually instead of using discovery.\nUnauthenticated non-callback requests always redirect to the provider login flow. Routes that\nneed non-redirect authentication behavior should use a different auth policy.",
+      "type": "object",
+      "properties": {
+        "issuer": {
+          "description": "Issuer used for discovery and ID token validation.",
+          "type": "string"
+        },
+        "discovery": {
+          "description": "Optional discovery document override. If omitted, discovery uses\n`${issuer}/.well-known/openid-configuration`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileInlineOrRemote"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorizationEndpoint": {
+          "description": "Authorization endpoint used to start the browser login flow.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "tokenEndpoint": {
+          "description": "Token endpoint used to exchange the authorization code.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "tokenEndpointAuth": {
+          "description": "Token endpoint client authentication method for explicit provider configuration.\n\nDiscovery mode derives this from provider metadata. Explicit mode defaults to\n`clientSecretBasic` when omitted.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenEndpointAuth"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "jwks": {
+          "description": "JWKS source used to validate returned ID tokens.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileInlineOrRemote"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clientId": {
+          "description": "OAuth2 client identifier used for authorization and token exchange.",
+          "type": "string"
+        },
+        "clientSecret": {
+          "description": "OAuth2 client secret used for token exchange.",
+          "type": "string"
+        },
+        "redirectURI": {
+          "description": "Absolute callback URI handled by the gateway.\nThis policy always redirects unauthenticated non-callback requests back through this login\nflow.",
+          "type": "string"
+        },
+        "scopes": {
+          "description": "Additional OAuth2 scopes to request. `openid` is always included.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "issuer",
+        "clientId",
+        "clientSecret",
+        "redirectURI"
+      ]
+    },
+    "TokenEndpointAuth": {
+      "type": "string",
+      "enum": [
+        "clientSecretBasic",
+        "clientSecretPost"
       ]
     },
     "LocalBasicAuth": {
@@ -4362,30 +4375,6 @@
           ],
           "default": null
         },
-        "responseHeaderModifier": {
-          "description": "Headers to be modified in the response.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "requestRedirect": {
-          "description": "Directly respond to the request with a redirect.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestRedirect"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
         "transformations": {
           "description": "Modify requests and responses sent to and from the backend.",
           "anyOf": [
@@ -4438,18 +4427,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/TCP"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "health": {
-          "description": "Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalHealthPolicy"
             },
             {
               "type": "null"
@@ -4651,12 +4628,12 @@
         {
           "type": "object",
           "properties": {
-            "azureOpenAI": {
+            "azure": {
               "$ref": "#/$defs/Provider6"
             }
           },
           "required": [
-            "azureOpenAI"
+            "azure"
           ],
           "additionalProperties": false
         }
@@ -4759,10 +4736,22 @@
             "null"
           ]
         },
-        "host": {
+        "resourceName": {
+          "description": "The Azure resource name used to construct the endpoint host.",
           "type": "string"
         },
+        "resourceType": {
+          "description": "The type of Azure endpoint. Determines the host suffix.",
+          "$ref": "#/$defs/AzureResourceType"
+        },
         "apiVersion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "projectName": {
+          "description": "The Foundry project name, required when `resourceType` is `foundry`.\nUsed to construct paths: `/api/projects/{projectName}/openai/v1/...`.\nThis is distinct from `resourceName` which is used for the host.",
           "type": [
             "string",
             "null"
@@ -4771,7 +4760,23 @@
       },
       "additionalProperties": false,
       "required": [
-        "host"
+        "resourceName",
+        "resourceType"
+      ]
+    },
+    "AzureResourceType": {
+      "description": "The type of Azure endpoint to connect to.",
+      "oneOf": [
+        {
+          "description": "Azure OpenAI Service endpoint: `{resourceName}.openai.azure.com`",
+          "type": "string",
+          "const": "openAI"
+        },
+        {
+          "description": "Azure AI Foundry (project) endpoint: `{resourceName}-resource.services.ai.azure.com`\nRequires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`",
+          "type": "string",
+          "const": "foundry"
+        }
       ]
     },
     "LocalBackendPolicies": {
@@ -4782,30 +4787,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "responseHeaderModifier": {
-          "description": "Headers to be modified in the response.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "requestRedirect": {
-          "description": "Directly respond to the request with a redirect.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestRedirect"
             },
             {
               "type": "null"
@@ -4872,18 +4853,6 @@
           ],
           "default": null
         },
-        "health": {
-          "description": "Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalHealthPolicy"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
         "backendTunnel": {
           "description": "Specify a tunnel to use when connecting to the backend",
           "anyOf": [
@@ -4895,6 +4864,41 @@
             }
           ],
           "default": null
+        },
+        "responseHeaderModifier": {
+          "description": "Headers to be modified in the response.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeaderModifier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "requestRedirect": {
+          "description": "Directly respond to the request with a redirect.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequestRedirect"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "health": {
+          "description": "Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalHealthPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "mcpAuthorization": {
           "description": "Authorization policies for MCP access.",
@@ -4931,6 +4935,64 @@
             }
           ],
           "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalHealthPolicy": {
+      "description": "Local/config health policy with CEL as string; converted to Policy by compiling the expression.\nMirrors the proto `Health` message structure.",
+      "type": "object",
+      "properties": {
+        "unhealthyExpression": {
+          "description": "CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.\nWhen unset, any 5xx or connection failure is treated as unhealthy.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "eviction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalEviction"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalEviction": {
+      "description": "Local/config eviction sub-policy with duration as string; mirrors `Eviction`.",
+      "type": "object",
+      "properties": {
+        "duration": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "restoreHealth": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "consecutiveFailures": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "healthThreshold": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
         }
       },
       "additionalProperties": false
@@ -5166,6 +5228,17 @@
     "LocalGatewayPolicy": {
       "type": "object",
       "properties": {
+        "oidc": {
+          "description": "Authenticate incoming browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "jwtAuth": {
           "description": "Authenticate incoming JWT requests.",
           "anyOf": [
@@ -6086,8 +6159,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "backendTunnel": {
           "description": "backendTunnel configures tunneling when connecting to the LLM provider.",
@@ -6146,8 +6218,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "awsRegion": {
           "type": [
@@ -6167,15 +6238,33 @@
             "null"
           ]
         },
-        "azureHost": {
-          "description": "For Azure: the host of the deployment",
+        "azureResourceName": {
+          "description": "For Azure: the resource name of the deployment",
           "type": [
             "string",
             "null"
           ]
         },
+        "azureResourceType": {
+          "description": "For Azure: the type of Azure endpoint (openAI or foundry)",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AzureResourceType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "azureApiVersion": {
           "description": "For Azure: the API version to use",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "azureProjectName": {
+          "description": "For Azure: the Foundry project name (required for foundry resource type)",
           "type": [
             "string",
             "null"
@@ -6224,7 +6313,7 @@
         "vertex",
         "anthropic",
         "bedrock",
-        "azureOpenAI"
+        "azure"
       ]
     },
     "LLMRouteMatch": {
@@ -6242,6 +6331,17 @@
     "LocalLLMPolicy": {
       "type": "object",
       "properties": {
+        "oidc": {
+          "description": "Authenticate incoming browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "jwtAuth": {
           "description": "Authenticate incoming JWT requests.",
           "anyOf": [

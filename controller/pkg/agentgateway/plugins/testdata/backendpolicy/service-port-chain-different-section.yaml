@@ -1,0 +1,156 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: svc-port
+  namespace: default
+spec:
+  parentRefs:
+    - name: test
+  rules:
+    - backendRefs:
+        - name: svc-a
+          port: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-a
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 8080
+    - name: admin
+      port: 9090
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: policy-be
+  namespace: default
+spec:
+  static:
+    host: policy.example.com
+    port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: chain-source
+  namespace: default
+spec:
+  targetRefs:
+    - kind: Service
+      name: svc-a
+      group: ""
+      sectionName: "9090"
+  backend:
+    tunnel:
+      backendRef:
+        name: policy-be
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: chain-target
+  namespace: default
+spec:
+  targetRefs:
+    - kind: AgentgatewayBackend
+      name: policy-be
+      group: agentgateway.dev
+  backend:
+    http:
+      version: HTTP2
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendTunnel:
+          proxy:
+            backend: default/policy-be
+      key: default/chain-source:backend-tunnel:default/svc-a.default.svc.cluster.local/9090
+      name:
+        kind: AgentgatewayPolicy
+        name: chain-source
+        namespace: default
+      target:
+        service:
+          hostname: svc-a.default.svc.cluster.local
+          namespace: default
+          port: 9090
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendHttp:
+          version: HTTP2
+      key: default/chain-target:backend-http:default/policy-be
+      name:
+        kind: AgentgatewayPolicy
+        name: chain-target
+        namespace: default
+      target:
+        backend:
+          name: policy-be
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: chain-source
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: chain-target
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

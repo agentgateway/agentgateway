@@ -33,11 +33,18 @@
 |`llm.responseModel`|string|The model that actually served the LLM response.|
 |`llm.provider`|string|The provider of the LLM.|
 |`llm.inputTokens`|integer|The number of tokens in the input/prompt.|
+|`llm.inputImageTokens`|integer|The number of image tokens in the input/prompt.|
+|`llm.inputTextTokens`|integer|The number of text tokens in the input/prompt.<br>Note: this field is only set in multi-modal calls where the total token count is split out by<br>text/image/audio; for standard all-text calls, this is unset.|
+|`llm.inputAudioTokens`|integer|The number of audio tokens in the input/prompt.|
 |`llm.cachedInputTokens`|integer|The number of tokens in the input/prompt read from cache (savings)|
 |`llm.cacheCreationInputTokens`|integer|Tokens written to cache (costs)<br>Not present with OpenAI|
 |`llm.outputTokens`|integer|The number of tokens in the output/completion.|
+|`llm.outputImageTokens`|integer|The number of image tokens in the output/completion.|
+|`llm.outputTextTokens`|integer|The number of text tokens in the output/completion.|
+|`llm.outputAudioTokens`|integer|The number of audio tokens in the output/completion.<br>Note: this field is only set in multi-modal calls where the total token count is split out by<br>text/image/audio; for standard all-text calls, this is unset.|
 |`llm.reasoningTokens`|integer|The number of reasoning tokens in the output/completion.|
 |`llm.totalTokens`|integer|The total number of tokens for the request.|
+|`llm.serviceTier`|string|The service tier the provider served the request under.|
 |`llm.countTokens`|integer|The number of tokens in the request, when using the token counting endpoint<br>These are not counted as 'input tokens' since they do not consume input tokens.|
 |`llm.prompt`|[]object|The prompt sent to the LLM. Warning: accessing this has some performance impacts for large prompts.|
 |`llm.prompt[].role`|string||
@@ -56,6 +63,8 @@
 |`source`|object|`source` contains attributes about the source of the request.|
 |`source.address`|string|The IP address of the downstream connection.|
 |`source.port`|integer|The port of the downstream connection.|
+|`source.rawAddress`|string|The original TCP peer IP address of the downstream connection.<br>This can differ from the `address` when using tunneling protocols like PROXY.|
+|`source.rawPort`|integer|The original TCP peer port of the downstream connection.<br>This can differ from the `port` when using tunneling protocols like PROXY.|
 |`source.identity`|object|The (Istio SPIFFE) identity of the downstream connection, if available.|
 |`source.identity.trustDomain`|string|The trust domain of the identity.|
 |`source.identity.namespace`|string|The namespace of the identity.|
@@ -64,6 +73,10 @@
 |`source.issuer`|string|The issuer from the downstream certificate, if available.|
 |`source.subject`|string|The subject from the downstream certificate, if available.|
 |`source.subjectCn`|string|The CN of the subject from the downstream certificate, if available.|
+|`source.unverifiedWorkload`|object|The workload context of the downstream connection, resolved from the<br>workload discovery store by source IP. Available when the source pod is<br>known to the controller's workload discovery store.<br><br>Fields are nested under `unverified` to signal that they are derived<br>from the source IP (not cryptographically authenticated). Policy<br>authors should prefer `source.identity.*` for trust-sensitive checks.|
+|`source.unverifiedWorkload.name`|string|The pod name of the source workload.|
+|`source.unverifiedWorkload.namespace`|string|The namespace of the source workload.|
+|`source.unverifiedWorkload.serviceAccount`|string|The service account of the source workload.|
 |`mcp`|object|`mcp` contains attributes about the MCP request.<br>Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.<br>Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.|
 |`mcp.methodName`|string||
 |`mcp.sessionId`|string||

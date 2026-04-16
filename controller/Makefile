@@ -106,7 +106,11 @@ fmt:  ## Format the code with golangci-lint
 
 .PHONY: fmt-changed
 fmt-changed: ## Format only the changed code with golangci-lint (skip deleted files)
-	git status -s -uno | awk '{print $$2}' | grep '.*.go$$' | xargs -r -I{} bash -lc '[ -f "{}" ] && $(CUSTOM_GOLANGCI_LINT_FMT) "{}" || true'
+	@if git -C .. rev-parse --show-toplevel >/dev/null 2>&1; then \
+		git -C .. status -s -uno | awk '{print $$2}'; \
+	else \
+		jj -R .. diff --name-only 2>/dev/null; \
+	fi | sed 's#^controller/##' | awk '/.*\.go$$/' | xargs -r -I{} bash -lc '[ -f "{}" ] && $(CUSTOM_GOLANGCI_LINT_FMT) "{}" || true'
 
 # must be a separate target so that make waits for it to complete before moving on
 .PHONY: mod-download
@@ -461,6 +465,7 @@ HELM ?= helm
 HELM_CHART_VERSION_NO_V ?= $(patsubst v%,%,$(VERSION))
 HELM_CHART_VERSION_V ?= v$(HELM_CHART_VERSION_NO_V)
 HELM_PACKAGE_ARGS ?= --version $(HELM_CHART_VERSION_NO_V) --app-version $(HELM_CHART_VERSION_NO_V)
+EXTRA_HELM_TAG ?=
 HELM_CHART_DIR_AGW=install/helm/agentgateway
 HELM_CHART_DIR_AGW_CRD=install/helm/agentgateway-crds
 HELM_ADDITIONAL_VALUES ?= hack/helm/dev.yaml
@@ -490,18 +495,29 @@ release-charts: package-agentgateway-charts
 	mkdir -p $(TEST_ASSET_DIR); \
 	$(HELM) package --version $(HELM_CHART_VERSION_V) --app-version $(HELM_CHART_VERSION_V) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_CRD); \
 	$(HELM) repo index $(TEST_ASSET_DIR);
+	@if [ -n "$(EXTRA_HELM_TAG)" ]; then \
+		mkdir -p $(TEST_ASSET_DIR); \
+		$(HELM) package --version $(EXTRA_HELM_TAG) --app-version $(VERSION) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW); \
+		$(HELM) repo index $(TEST_ASSET_DIR); \
+		mkdir -p $(TEST_ASSET_DIR); \
+		$(HELM) package --version $(EXTRA_HELM_TAG) --app-version $(VERSION) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_CRD); \
+		$(HELM) repo index $(TEST_ASSET_DIR); \
+	fi
 	@for chart in $(CHART_NAMES); do \
 		$(HELM) push $(TEST_ASSET_DIR)/$$chart-$(HELM_CHART_VERSION_NO_V).tgz oci://$(IMAGE_REGISTRY)/charts; \
 		$(HELM) push $(TEST_ASSET_DIR)/$$chart-$(HELM_CHART_VERSION_V).tgz oci://$(IMAGE_REGISTRY)/charts; \
+		if [ -n "$(EXTRA_HELM_TAG)" ]; then \
+			$(HELM) push $(TEST_ASSET_DIR)/$$chart-$(EXTRA_HELM_TAG).tgz oci://$(IMAGE_REGISTRY)/charts; \
+		fi; \
 	done;
 
 .PHONY: deploy-agentgateway-crd-chart
 deploy-agentgateway-crd-chart: ## Deploy the agentgateway crd chart
-	$(HELM) upgrade --install agentgateway-crds $(TEST_ASSET_DIR)/agentgateway-crds-$(VERSION).tgz --namespace $(INSTALL_NAMESPACE) --create-namespace
+	$(HELM) upgrade --install agentgateway-crds $(TEST_ASSET_DIR)/agentgateway-crds-$(HELM_CHART_VERSION_NO_V).tgz --namespace $(INSTALL_NAMESPACE) --create-namespace
 
 .PHONY: deploy-agentgateway-chart
 deploy-agentgateway-chart: ## Deploy the agentgateway chart
-	$(HELM) upgrade --install agentgateway $(TEST_ASSET_DIR)/agentgateway-$(VERSION).tgz \
+	$(HELM) upgrade --install agentgateway $(TEST_ASSET_DIR)/agentgateway-$(HELM_CHART_VERSION_NO_V).tgz \
 	--namespace $(INSTALL_NAMESPACE) --create-namespace \
 	--set image.registry=$(IMAGE_REGISTRY) \
 	--set image.tag=$(VERSION) \

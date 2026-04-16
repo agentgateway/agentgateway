@@ -1,6 +1,7 @@
 package agentgateway
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -184,7 +185,7 @@ type NamedLLMProvider struct {
 }
 
 // LLMProvider specifies the target large language model provider that the backend should route requests to.
-// +kubebuilder:validation:ExactlyOneOf=openai;azureopenai;anthropic;gemini;vertexai;bedrock
+// +kubebuilder:validation:ExactlyOneOf=openai;azureopenai;azure;anthropic;gemini;vertexai;bedrock
 // +kubebuilder:validation:XValidation:rule="has(self.host) || has(self.port) ? has(self.host) && has(self.port) : true",message="both host and port must be set together"
 // +kubebuilder:validation:XValidation:rule="!(has(self.path) && has(self.pathPrefix))",message="path and pathPrefix are mutually exclusive"
 // +kubebuilder:validation:XValidation:rule="has(self.pathPrefix) ? has(self.host) : true",message="pathPrefix requires host to be set"
@@ -196,6 +197,11 @@ type LLMProvider struct {
 	// Azure OpenAI provider
 	// +optional
 	AzureOpenAI *AzureOpenAIConfig `json:"azureopenai,omitempty"`
+
+	// Azure provider with resource-based configuration.
+	// Supports both Azure OpenAI and Azure AI Foundry resource types.
+	// +optional
+	Azure *AzureConfig `json:"azure,omitempty"`
 
 	// Anthropic provider
 	// +optional
@@ -266,6 +272,46 @@ type AzureOpenAIConfig struct {
 	// If unset, defaults to `v1`.
 	// +optional
 	ApiVersion *TinyString `json:"apiVersion,omitempty"`
+}
+
+// AzureResourceType specifies the type of Azure endpoint.
+// +kubebuilder:validation:Enum=OpenAI;Foundry
+type AzureResourceType string
+
+const (
+	// AzureResourceTypeOpenAI uses the Azure OpenAI endpoint: {resourceName}.openai.azure.com
+	AzureResourceTypeOpenAI AzureResourceType = "OpenAI"
+	// AzureResourceTypeFoundry uses the Azure AI Foundry endpoint: {resourceName}-resource.services.ai.azure.com
+	AzureResourceTypeFoundry AzureResourceType = "Foundry"
+)
+
+// AzureConfig settings for Azure AI backends, supporting both Azure OpenAI and Azure AI Foundry.
+// +kubebuilder:validation:XValidation:message="projectName is required when resourceType is Foundry",rule="self.resourceType != 'Foundry' || has(self.projectName)"
+type AzureConfig struct {
+	// The Azure resource name used to construct the endpoint host.
+	// For OpenAI: {resourceName}.openai.azure.com
+	// For Foundry: {resourceName}-resource.services.ai.azure.com
+	// +required
+	ResourceName ShortString `json:"resourceName"`
+
+	// The type of Azure endpoint. Determines the host suffix.
+	// +required
+	ResourceType AzureResourceType `json:"resourceType"`
+
+	// Optional: Override the model name, such as `gpt-4o-mini`.
+	// If unset, the model name is taken from the request.
+	// +optional
+	Model *ShortString `json:"model,omitempty"`
+
+	// The version of the Azure OpenAI API to use.
+	// If unset, defaults to `v1`.
+	// +optional
+	ApiVersion *TinyString `json:"apiVersion,omitempty"`
+
+	// The Foundry project name, required when `resourceType` is `Foundry`.
+	// Used to construct paths: /api/projects/{projectName}/openai/v1/...
+	// +optional
+	ProjectName *ShortString `json:"projectName,omitempty"`
 }
 
 // GeminiConfig settings for the [Gemini](https://ai.google.dev/gemini-api/docs) LLM provider.
@@ -417,10 +463,18 @@ type McpSelector struct {
 }
 
 // McpTarget defines a single MCPBackend target configuration.
+// +kubebuilder:validation:ExactlyOneOf=host;backendRef
+// +kubebuilder:validation:XValidation:rule="!has(self.backendRef) || !has(self.policies)",message="mcp target policies may not be used with backendRef"
 type McpTarget struct {
 	// Host is the hostname or IP address of the MCP target.
-	// +required
-	Host ShortString `json:"host"`
+	// +optional
+	Host *ShortString `json:"host,omitempty"`
+
+	// `backendRef` references a namespace-local `Service` resource by name.
+	// When set, this replaces `host` only; `port`, `path`, and `protocol`
+	// remain configured on this target.
+	// +optional
+	BackendRef *corev1.LocalObjectReference `json:"backendRef,omitempty"`
 
 	// Port is the port number of the MCP target.
 	// +kubebuilder:validation:Minimum=1
@@ -443,8 +497,10 @@ type McpTarget struct {
 	// Policies may also be set in `AgentgatewayPolicy`, or in the top-level
 	// `AgentgatewayBackend`. Policies are merged on a field-level basis, with
 	// order: `AgentgatewayPolicy` < `AgentgatewayBackend` < `AgentgatewayBackend` MCP (this field).
+	// This field may only be used with host-based static targets, not
+	// `backendRef`.
 	// +optional
-	Policies *BackendWithMCP `json:"policies,omitempty"`
+	Policies *BackendSimple `json:"policies,omitempty"`
 }
 
 // MCPProtocol defines the protocol to use for the `MCPBackend` target.

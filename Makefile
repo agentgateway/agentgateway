@@ -2,8 +2,8 @@
 DOCKER_REGISTRY ?= ghcr.io
 DOCKER_REPO ?= agentgateway
 IMAGE_NAME ?= agentgateway
-VERSION ?= $(shell git describe --tags --always --dirty)
-GIT_REVISION ?= $(shell git rev-parse HEAD)
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || jj log -r @ -T 'commit_id.shortest(12)' --no-graph 2>/dev/null || echo unknown)
+GIT_REVISION ?= $(shell git rev-parse HEAD 2>/dev/null || jj log -r @ -T 'commit_id' --no-graph 2>/dev/null || echo unknown)
 IMAGE_TAG ?= $(VERSION)
 IMAGE_FULL_NAME ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
 DOCKER_BUILDER ?= docker

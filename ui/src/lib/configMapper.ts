@@ -180,9 +180,12 @@ function routeBackendMatchesA2aPolicy(rb: any, targets: A2aPolicyTarget[]): bool
   // RouteBackendReference, so fields appear at the top level of rb.
   if (rb.service) {
     const svc = rb.service;
-    const name = svc.name;
-    const rbHostname = typeof name === "string" ? name : (name?.hostname ?? "");
-    const rbNamespace = typeof name === "object" ? (name?.namespace ?? "") : "";
+    // NamespacedHostname always serializes as "namespace/hostname" string
+    // (see crates/agentgateway/src/types/discovery.rs Display impl).
+    const name: string = typeof svc.name === "string" ? svc.name : "";
+    const slashIdx = name.indexOf("/");
+    const rbNamespace = slashIdx >= 0 ? name.substring(0, slashIdx) : "";
+    const rbHostname = slashIdx >= 0 ? name.substring(slashIdx + 1) : name;
     const rbPort = typeof svc.port === "number" ? svc.port : undefined;
 
     return targets.some(

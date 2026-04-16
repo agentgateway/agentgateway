@@ -1,0 +1,14 @@
+- key: test-ns/service-mcp-backend-legacy
+  mcp:
+    targets:
+    - backend:
+        port: 8080
+        service:
+          hostname: mcp-service-legacy.test-ns.svc.cluster.local
+          namespace: test-ns
+      name: mcp-service-legacy-mcp
+      path: /legacy/mcp/path
+      protocol: STREAMABLE_HTTP
+  name:
+    name: service-mcp-backend-legacy
+    namespace: test-ns

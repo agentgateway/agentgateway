@@ -450,12 +450,36 @@ fn from_span_data(
 	}]
 }
 
-/// Initialize defaults using gateway name/namespace from config
+/// Initialize defaults using gateway name/namespace from config.
+///
+/// Per the OpenTelemetry specification, the standardized environment variables
+/// `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` are also respected.
+/// Config-derived values take precedence over env vars, which in turn take
+/// precedence over the compiled-in defaults.
 pub fn set_resource_defaults_from_config(cfg: &crate::Config) {
 	let pm = &cfg.proxy_metadata;
 	let mut attrs: Vec<KeyValue> = Vec::new();
+
+	// Start with attributes from OTEL_RESOURCE_ATTRIBUTES (lowest precedence).
+	// Format: key1=value1,key2=value2
+	if let Ok(env_attrs) = std::env::var("OTEL_RESOURCE_ATTRIBUTES") {
+		for pair in env_attrs.split(',') {
+			let pair = pair.trim();
+			if let Some((k, v)) = pair.split_once('=') {
+				let k = k.trim();
+				let v = v.trim();
+				if !k.is_empty() {
+					attrs.push(KeyValue::new(k.to_string(), v.to_string()));
+				}
+			}
+		}
+	}
+
+	// Config-derived attributes override env-sourced ones.
 	let mut push_if_present = |k: &'static str, v: &str| {
 		if !v.is_empty() {
+			// Remove any env-sourced duplicate so config wins.
+			attrs.retain(|kv| kv.key.as_str() != k);
 			attrs.push(KeyValue::new(k, v.to_string()));
 		}
 	};
@@ -464,22 +488,41 @@ pub fn set_resource_defaults_from_config(cfg: &crate::Config) {
 	push_if_present("k8s.namespace.name", pm.pod_namespace.as_str());
 	push_if_present("k8s.node.name", pm.node_name.as_str());
 	if let Some(instance_ip) = &pm.instance_ip {
+		attrs.retain(|kv| kv.key.as_str() != "k8s.pod.ip");
 		attrs.push(KeyValue::new("k8s.pod.ip", instance_ip.clone()));
 	}
 	// `node_id` is derived from pod name/namespace, only set if we have those set
 	if !pm.node_id.is_empty() && !pm.pod_name.is_empty() && !pm.pod_namespace.is_empty() {
+		attrs.retain(|kv| kv.key.as_str() != "service.instance.id");
 		attrs.push(KeyValue::new("service.instance.id", pm.node_id.clone()));
 	}
 	if let Some(ref self_id) = cfg.self_addr {
+		attrs.retain(|kv| kv.key.as_str() != "host.name");
 		attrs.push(KeyValue::new("host.name", self_id.hostname().to_string()));
 	}
 	// Use gateway name/namespace as authoritative service identity
-	let service_name = cfg.xds.gateway.to_string();
-	let service_namespace = cfg.xds.namespace.to_string();
-	attrs.push(KeyValue::new("service.namespace", service_namespace));
+	let (service_name, service_namespace) = if cfg.xds.address.is_some() {
+		(cfg.xds.gateway.to_string(), cfg.xds.namespace.to_string())
+	} else {
+		(Default::default(), Default::default())
+	};
+
+	if !service_namespace.is_empty() {
+		attrs.retain(|kv| kv.key.as_str() != "service.namespace");
+		attrs.push(KeyValue::new("service.namespace", service_namespace));
+	}
+
+	// Resolve service name: config > OTEL_SERVICE_NAME env > default
+	let resolved_service_name = if service_name.is_empty() {
+		std::env::var("OTEL_SERVICE_NAME")
+			.ok()
+			.filter(|s| !s.is_empty())
+	} else {
+		Some(service_name)
+	};
 
 	let _ = GLOBAL_RESOURCE_DEFAULTS.set(GlobalResourceDefaults {
-		service_name: Some(service_name),
+		service_name: resolved_service_name,
 		attrs,
 	});
 }

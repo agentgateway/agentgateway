@@ -114,9 +114,8 @@ impl Debug for Jwt {
 	}
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(untagged, deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_de!)]
+#[serde(untagged)]
 pub enum LocalJwtConfig {
 	#[serde(rename_all = "camelCase")]
 	Multi {
@@ -136,9 +135,7 @@ pub enum LocalJwtConfig {
 	},
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_de!)]
 pub struct ProviderConfig {
 	pub issuer: String,
 	pub audiences: Option<Vec<String>>,
@@ -175,9 +172,8 @@ pub enum Mode {
 /// when the `exp` claim is present, regardless of this setting).
 ///
 /// Defaults to `["exp"]`.
-#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[derive(Eq, PartialEq)]
+#[apply(schema_de!)]
 pub struct JWTValidationOptions {
 	/// Claims that must be present in the token before validation.
 	/// Only "exp", "nbf", "aud", "iss", "sub" are enforced; others

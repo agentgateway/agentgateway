@@ -63,6 +63,20 @@ kind: AgentgatewayBackend
 metadata:
   name: mcp-full
 spec:
+  policies:
+    mcp:
+      authorization:
+        action: Deny
+        policy:
+          matchExpressions:
+            - 'mcp.tool.name == "hello"'
+      authentication:
+        issuer: https://issuer.example.com/
+        jwks:
+          backendRef:
+            name: jwks
+            port: 443
+          jwksPath: /.well-known/jwks.json
   mcp:
     targets:
     - name: everything
@@ -71,12 +85,6 @@ spec:
         port: 443
         policies:
           tls: {}
-          mcp:
-            authorization:
-              action: Deny
-              policy:
-                matchExpressions:
-                - 'mcp.tool.name == "hello"'
     - name: k8s
       selector:
         namespaces:
@@ -137,10 +145,23 @@ spec:
       static:
         host: example.com
         port: 443
-        policies:
-          mcp:
-            authorization:
-              action: Require
-              policy:
-                matchExpressions:
-                - 'mcp.tool.name == "hello"'
+  policies:
+    mcp:
+      authorization:
+        action: Require
+        policy:
+          matchExpressions:
+          - 'mcp.tool.name == "hello"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-backend-ref
+spec:
+  mcp:
+    targets:
+    - name: local-svc
+      static:
+        backendRef:
+          name: mcp-service
+        port: 8080

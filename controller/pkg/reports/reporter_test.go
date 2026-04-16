@@ -17,7 +17,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
-const fakeCondition = "kgateway.dev/SomeCondition"
+const fakeCondition = "agentgateway.dev/SomeCondition"
 
 var ctx = context.Background()
 
@@ -41,7 +41,7 @@ func TestBuildGatewayStatus(t *testing.T) {
 	t.Run("preserve conditions set externally", func(t *testing.T) {
 		gw := gw()
 		gw.Status.Conditions = append(gw.Status.Conditions, metav1.Condition{
-			Type:   "gateway.kgateway.dev/SomeCondition",
+			Type:   "gateway.agentgateway.dev/SomeCondition",
 			Status: metav1.ConditionFalse,
 		})
 		rm := reports.NewReportMap()

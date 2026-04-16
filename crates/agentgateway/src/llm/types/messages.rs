@@ -43,14 +43,14 @@ pub enum ContentBlock {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(untagged)]
 pub enum ContentPart {
 	Text {
+		r#type: String,
 		text: String,
 		#[serde(flatten, default)]
 		rest: serde_json::Value,
 	},
-	#[serde(untagged)]
 	Unknown(serde_json::Value),
 }
 
@@ -62,14 +62,14 @@ pub enum TextBlock {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(untagged)]
 pub enum TextPart {
 	Text {
+		r#type: String,
 		text: String,
 		#[serde(flatten, default)]
 		rest: serde_json::Value,
 	},
-	#[serde(untagged)]
 	Unknown(serde_json::Value),
 }
 
@@ -83,6 +83,10 @@ pub struct Response {
 	pub stop_sequence: Option<String>,
 	pub usage: Usage,
 	pub content: Vec<Content>,
+	#[serde(skip)]
+	pub input_audio_tokens: Option<u64>,
+	#[serde(skip)]
+	pub output_audio_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -103,6 +107,8 @@ pub struct Usage {
 	pub cache_creation_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cache_read_input_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub service_tier: Option<String>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -233,6 +239,7 @@ impl RequestType for Request {
 				system_prompts
 					.into_iter()
 					.map(|p| TextPart::Text {
+						r#type: "text".to_string(),
 						text: p.content.to_string(),
 						rest: Default::default(),
 					})
@@ -282,6 +289,7 @@ pub fn prepend_prompts_helper(
 		let mut items: Vec<TextPart> = match std::mem::take(system) {
 			Some(TextBlock::Array(existing)) => existing,
 			Some(TextBlock::Text(text)) => vec![TextPart::Text {
+				r#type: "text".to_string(),
 				text,
 				rest: Default::default(),
 			}],
@@ -291,6 +299,7 @@ pub fn prepend_prompts_helper(
 		items.splice(
 			0..0,
 			system_prompts.into_iter().map(|p| TextPart::Text {
+				r#type: "text".to_string(),
 				text: p.content.to_string(),
 				rest: Default::default(),
 			}),
@@ -316,6 +325,7 @@ pub fn append_prompts_helper(
 	if !system_prompts.is_empty() {
 		let mut items: Vec<TextPart> = match std::mem::take(system) {
 			Some(TextBlock::Text(text)) => vec![TextPart::Text {
+				r#type: "text".to_string(),
 				text,
 				rest: Default::default(),
 			}],
@@ -324,6 +334,7 @@ pub fn append_prompts_helper(
 		};
 
 		items.extend(system_prompts.into_iter().map(|p| TextPart::Text {
+			r#type: "text".to_string(),
 			text: p.content.to_string(),
 			rest: Default::default(),
 		}));
@@ -350,13 +361,20 @@ impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
 		LLMResponse {
 			input_tokens: Some(self.usage.input_tokens),
+			input_image_tokens: None,
+			input_text_tokens: None,
+			input_audio_tokens: self.input_audio_tokens,
 			output_tokens: Some(self.usage.output_tokens),
+			output_image_tokens: None,
+			output_text_tokens: None,
+			output_audio_tokens: self.output_audio_tokens,
 			total_tokens: Some(self.usage.output_tokens + self.usage.input_tokens),
 			provider_model: Some(strng::new(&self.model)),
 			count_tokens: None,
 			reasoning_tokens: None,
 			cache_creation_input_tokens: self.usage.cache_creation_input_tokens,
 			cached_input_tokens: self.usage.cache_read_input_tokens,
+			service_tier: self.usage.service_tier.as_deref().map(Into::into),
 			completion: if include_completion_in_log {
 				Some(
 					self
@@ -763,6 +781,12 @@ pub mod typed {
 		///
 		/// For example, output_tokens will be non-zero, even for an empty string response from Claude.
 		pub usage: Usage,
+
+		// Internal fields not shown to user but used for our internal accounting.
+		#[serde(skip)]
+		pub input_audio_tokens: Option<usize>,
+		#[serde(skip)]
+		pub output_audio_tokens: Option<usize>,
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug)]
@@ -904,7 +928,7 @@ pub mod typed {
 	}
 
 	/// Billing and rate-limit usage.
-	#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+	#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 	pub struct Usage {
 		/// The number of input tokens which were used.
 		pub input_tokens: usize,
@@ -919,6 +943,10 @@ pub mod typed {
 		/// The number of input tokens read from the cache.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_read_input_tokens: Option<usize>,
+
+		/// The service tier used to serve the request.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub service_tier: Option<String>,
 	}
 
 	/// Tool definition
@@ -972,11 +1000,18 @@ pub mod typed {
 		fn to_llm_response(&self, include_completion_in_log: bool) -> crate::llm::LLMResponse {
 			crate::llm::LLMResponse {
 				input_tokens: Some(self.usage.input_tokens as u64),
+				input_image_tokens: None,
+				input_text_tokens: None,
+				input_audio_tokens: self.input_audio_tokens.map(|i| i as u64),
 				output_tokens: Some(self.usage.output_tokens as u64),
+				output_image_tokens: None,
+				output_text_tokens: None,
+				output_audio_tokens: self.output_audio_tokens.map(|i| i as u64),
 				total_tokens: Some((self.usage.input_tokens + self.usage.output_tokens) as u64),
 				reasoning_tokens: None,
 				cache_creation_input_tokens: self.usage.cache_creation_input_tokens.map(|i| i as u64),
 				cached_input_tokens: self.usage.cache_read_input_tokens.map(|i| i as u64),
+				service_tier: self.usage.service_tier.as_deref().map(Into::into),
 				provider_model: Some(agent_core::strng::new(&self.model)),
 				count_tokens: None,
 				completion: if include_completion_in_log {

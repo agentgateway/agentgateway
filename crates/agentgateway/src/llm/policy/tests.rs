@@ -161,6 +161,7 @@ fn test_prompt_caching_policy_deserialization() {
 	assert!(caching.cache_messages);
 	assert!(!caching.cache_tools);
 	assert_eq!(caching.min_tokens, Some(1024));
+	assert_eq!(caching.cache_message_offset, 0);
 }
 
 #[test]
@@ -179,6 +180,7 @@ fn test_prompt_caching_policy_defaults() {
 	assert!(caching.cache_messages); // Default: true
 	assert!(!caching.cache_tools); // Default: false
 	assert_eq!(caching.min_tokens, Some(1024)); // Default: 1024
+	assert_eq!(caching.cache_message_offset, 0); // Default: 0
 }
 
 #[test]
@@ -210,6 +212,24 @@ fn test_prompt_caching_explicit_disable() {
 
 	// Should be None when explicitly set to null
 	assert!(policy.prompt_caching.is_none());
+}
+
+#[test]
+fn test_prompt_caching_with_offset() {
+	use serde_json::json;
+
+	let json = json!({
+		"promptCaching": {
+			"cacheMessages": true,
+			"cacheMessageOffset": 4
+		}
+	});
+
+	let policy: Policy = serde_json::from_value(json).unwrap();
+	let caching = policy.prompt_caching.unwrap();
+
+	assert!(caching.cache_messages);
+	assert_eq!(caching.cache_message_offset, 4);
 }
 
 #[test]
@@ -1012,4 +1032,122 @@ mod prompt_guard_config_tests {
 			b"Content blocked by security policy"
 		);
 	}
+}
+
+#[test]
+fn test_bedrock_guardrails_user_credentials_take_precedence() {
+	use crate::http::auth::{AwsAuth, BackendAuth};
+	use crate::store::BindStore;
+	use crate::types::agent::BackendPolicy;
+	use secrecy::SecretString;
+
+	let guardrails = BedrockGuardrails {
+		guardrail_identifier: strng::new("test-guardrail"),
+		guardrail_version: strng::new("1"),
+		region: strng::new("us-east-1"),
+		policies: vec![BackendPolicy::BackendAuth(BackendAuth::Aws(
+			AwsAuth::ExplicitConfig {
+				access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()),
+				secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
+				region: Some("us-east-1".to_string()),
+				session_token: None,
+			},
+		))],
+	};
+
+	let pols = guardrails.build_request_policies();
+
+	// Resolve through the real policy resolution code (same path as call_with_explicit_policies)
+	let store = BindStore::default();
+	let resolved = store.inline_backend_policies(&pols);
+
+	assert!(
+		matches!(
+			resolved.backend_auth,
+			Some(BackendAuth::Aws(AwsAuth::ExplicitConfig { .. }))
+		),
+		"Expected user-provided explicit AWS credentials to take precedence over \
+		 the implicit fallback, but got: {:?}",
+		resolved.backend_auth
+	);
+}
+
+#[test]
+fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
+	use crate::http::auth::{AwsAuth, BackendAuth};
+	use crate::store::BindStore;
+
+	let guardrails = BedrockGuardrails {
+		guardrail_identifier: strng::new("test-guardrail"),
+		guardrail_version: strng::new("1"),
+		region: strng::new("us-west-2"),
+		policies: vec![],
+	};
+
+	let pols = guardrails.build_request_policies();
+
+	let store = BindStore::default();
+	let resolved = store.inline_backend_policies(&pols);
+
+	assert!(
+		matches!(
+			resolved.backend_auth,
+			Some(BackendAuth::Aws(AwsAuth::Implicit {}))
+		),
+		"Expected implicit AWS auth when no user credentials are provided, but got: {:?}",
+		resolved.backend_auth
+	);
+}
+
+#[test]
+fn test_google_model_armor_user_credentials_take_precedence() {
+	use crate::http::auth::BackendAuth;
+	use crate::store::BindStore;
+	use crate::types::agent::BackendPolicy;
+	use secrecy::SecretString;
+
+	let model_armor = GoogleModelArmor {
+		template_id: strng::new("test-template"),
+		project_id: strng::new("test-project"),
+		location: Some(strng::new("us-central1")),
+		policies: vec![BackendPolicy::BackendAuth(BackendAuth::Key(
+			SecretString::new("user-provided-api-key".into()),
+		))],
+	};
+
+	let pols = model_armor.build_request_policies();
+
+	let store = BindStore::default();
+	let resolved = store.inline_backend_policies(&pols);
+
+	assert!(
+		matches!(resolved.backend_auth, Some(BackendAuth::Key(_))),
+		"Expected user-provided Key auth to take precedence over \
+		 the implicit GCP fallback, but got: {:?}",
+		resolved.backend_auth
+	);
+}
+
+#[test]
+fn test_google_model_armor_implicit_auth_used_when_no_user_credentials() {
+	use crate::http::auth::BackendAuth;
+	use crate::store::BindStore;
+
+	let model_armor = GoogleModelArmor {
+		template_id: strng::new("test-template"),
+		project_id: strng::new("test-project"),
+		location: None,
+		policies: vec![],
+	};
+
+	let pols = model_armor.build_request_policies();
+
+	let store = BindStore::default();
+	let resolved = store.inline_backend_policies(&pols);
+
+	assert!(
+		matches!(resolved.backend_auth, Some(BackendAuth::Gcp(_))),
+		"Expected implicit GCP auth when no user credentials are provided, but got: {:?}",
+		resolved.backend_auth
+	);
 }

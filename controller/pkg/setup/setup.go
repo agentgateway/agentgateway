@@ -24,9 +24,9 @@ import (
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/pkg/admin"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
-	agentjwksstore "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwksstore"
 	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/policyselection"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/common"
 	"github.com/agentgateway/agentgateway/controller/pkg/controller"
@@ -216,8 +216,15 @@ func (s *setup) Start(ctx context.Context) error {
 		return err
 	}
 
-	jwksUrlFactory := jwks_url.NewJwksUrlFactory(agwCollections.ConfigMaps, agwCollections.Backends, agwCollections.AgentgatewayPolicies)
-	jwks_url.JwksUrlBuilderFactory = func() jwks_url.JwksUrlBuilder { return jwksUrlFactory }
+	policySelector := policyselection.NewSelector(agwCollections.AgentgatewayPolicies, agwCollections.BackendTLSPolicies)
+	resolver := remotehttp.NewResolver(remotehttp.Inputs{
+		ConfigMaps:     agwCollections.ConfigMaps,
+		Services:       agwCollections.Services,
+		Backends:       agwCollections.Backends,
+		PolicySelector: policySelector,
+	})
+	persistedJWKS := jwks.NewPersistedEntries(s.APIClient, krtOpts, jwks.DefaultJwksStorePrefix, namespaces.GetPodNamespace())
+	jwksLookup := jwks.NewLookup(persistedJWKS, jwks.NewResolver(resolver))
 
 	for _, mgrCfgFunc := range s.ExtraManagerConfig {
 		err := mgrCfgFunc(mgr)
@@ -242,12 +249,12 @@ func (s *setup) Start(ctx context.Context) error {
 
 	// build jwks store if it doesn't exist
 	if !runnablesRegistry.Contains(jwks.RunnableName) {
-		if err := buildJwksStore(ctx, mgr, s.APIClient, agwCollections); err != nil {
+		if err := buildJwksStore(ctx, mgr, s.APIClient, agwCollections, persistedJWKS, resolver); err != nil {
 			return fmt.Errorf("error creating jwks store %w", err)
 		}
 	}
 
-	agw, err := s.buildSyncer(ctx, mgr, setupOpts, agwCollections)
+	agw, err := s.buildSyncer(ctx, mgr, setupOpts, agwCollections, resolver, jwksLookup)
 	if err != nil {
 		return err
 	}
@@ -273,6 +280,8 @@ func (s *setup) buildSyncer(
 	mgr manager.Manager,
 	setupOpts *controller.SetupOpts,
 	agwCollections *agwplugins.AgwCollections,
+	resolver remotehttp.Resolver,
+	jwksLookup jwks.Lookup,
 ) (*syncer.Syncer, error) {
 	slog.Info("creating krt collections")
 	krtOpts := krtutil.NewKrtOptions(ctx.Done(), setupOpts.KrtDebugger)
@@ -299,6 +308,8 @@ func (s *setup) buildSyncer(
 		Dev:                            logging.MustGetLevel(logging.DefaultComponent) <= logging.LevelTrace,
 		KrtOptions:                     krtOpts,
 		AgwCollections:                 agwCollections,
+		Resolver:                       resolver,
+		JWKSLookup:                     jwksLookup,
 		ExtraAgwResourceStatusHandlers: s.ExtraStatusHandlers,
 		GatewayControllerExtension:     s.GatewayControllerExtension,
 		AgentgatewaySyncerOptions:      s.AgentGatewaySyncerOptions,
@@ -342,19 +353,27 @@ func SetupLogging(levelStr string) {
 	})
 }
 
-func buildJwksStore(ctx context.Context, mgr manager.Manager, apiClient apiclient.Client, agwCollections *agwplugins.AgwCollections) error {
-	jwksStorePolicyCtrl := agentjwksstore.NewJWKSStorePolicyController(apiClient, agwCollections, jwks_url.JwksUrlBuilderFactory)
-	if err := mgr.Add(jwksStorePolicyCtrl); err != nil {
-		return err
-	}
-	jwksStorePolicyCtrl.Init(ctx)
+func buildJwksStore(
+	ctx context.Context,
+	mgr manager.Manager,
+	apiClient apiclient.Client,
+	agwCollections *agwplugins.AgwCollections,
+	persistedJWKS *jwks.PersistedEntries,
+	resolver remotehttp.Resolver,
+) error {
+	jwksCollections := jwks.NewCollections(jwks.CollectionInputs{
+		AgentgatewayPolicies: agwCollections.AgentgatewayPolicies,
+		Backends:             agwCollections.Backends,
+		Resolver:             jwks.NewResolver(resolver),
+		KrtOpts:              agwCollections.KrtOpts,
+	})
 
-	jwksStore := jwks.BuildJwksStore(apiClient, agwCollections.KrtOpts, jwksStorePolicyCtrl.JwksChanges(), jwks.DefaultJwksStorePrefix, namespaces.GetPodNamespace())
+	jwksStore := jwks.NewStore(jwksCollections.SharedRequests, persistedJWKS, jwks.DefaultJwksStorePrefix)
 	if err := mgr.Add(jwksStore); err != nil {
 		return err
 	}
 
-	jwksStoreCMCtrl := agentjwksstore.NewJWKSStoreConfigMapsController(apiClient, jwks.DefaultJwksStorePrefix, namespaces.GetPodNamespace(), jwksStore)
+	jwksStoreCMCtrl := jwks.NewConfigMapController(apiClient, jwks.DefaultJwksStorePrefix, namespaces.GetPodNamespace(), jwksStore, persistedJWKS)
 	jwksStoreCMCtrl.Init(ctx)
 	if err := mgr.Add(jwksStoreCMCtrl); err != nil {
 		return err

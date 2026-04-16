@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use self::typed::{
-	EasyInputContent, EasyInputMessage, InputContent, InputItem, InputMessage, InputParam as Input,
-	InputRole, InputTextContent, Item, MessageItem, OutputItem, OutputMessageContent as Content,
-	OutputTextContent as OutputText, Role,
+	EasyInputContent, EasyInputMessage, InputContent, InputItem, InputMessage, InputRole,
+	InputTextContent, OutputItem, OutputMessageContent as Content, OutputTextContent as OutputText,
+	Role,
 };
 use super::*;
 use crate::llm::{
@@ -11,10 +12,73 @@ use crate::llm::{
 	conversion,
 };
 
+/// Raw Responses API input — preserves the wire format for passthrough fidelity.
+/// Typed deserialization would reject unknown item shapes (e.g. assistant history).
+#[derive(Debug, Deserialize, Clone, Serialize)]
+#[serde(untagged)]
+pub enum RequestInput {
+	Text(String),
+	Items(Vec<RawInputItem>),
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize, PartialEq)]
+#[serde(transparent)]
+pub struct RawInputItem(Value);
+
+impl RawInputItem {
+	fn from_typed(item: InputItem) -> Self {
+		Self(serde_json::to_value(item).expect("responses input item should serialize"))
+	}
+
+	fn from_user_text(text: String) -> Self {
+		Self::from_typed(InputItem::from(InputMessage {
+			content: vec![InputContent::InputText(InputTextContent { text })],
+			role: InputRole::User,
+			status: None,
+		}))
+	}
+
+	fn from_simple_message(msg: SimpleChatCompletionMessage) -> Self {
+		Self::from_typed(InputItem::from(msg))
+	}
+
+	fn as_simple_message(&self) -> Option<SimpleChatCompletionMessage> {
+		let role = self.0.get("role")?.as_str()?;
+		let role = match role {
+			"user" => strng::literal!("user"),
+			"assistant" => strng::literal!("assistant"),
+			"system" => strng::literal!("system"),
+			"developer" => strng::literal!("developer"),
+			_ => return None,
+		};
+
+		let content = match self.0.get("content")? {
+			Value::String(text) => strng::new(text),
+			Value::Array(parts) => {
+				let text = parts
+					.iter()
+					.filter_map(|part| {
+						let part_type = part.get("type")?.as_str()?;
+						match part_type {
+							"input_text" | "output_text" => part.get("text")?.as_str(),
+							_ => None,
+						}
+					})
+					.collect::<Vec<_>>()
+					.join("\n");
+				strng::new(&text)
+			},
+			_ => return None,
+		};
+
+		Some(SimpleChatCompletionMessage { role, content })
+	}
+}
+
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Request {
 	// Required field for prompt enrichment/guards
-	pub input: Input,
+	pub input: RequestInput,
 
 	// Fields we actually read for routing/telemetry
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -55,6 +119,8 @@ pub struct Response {
 	pub status: String,
 	pub output: Vec<OutputItem>,
 	pub model: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub service_tier: Option<String>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub usage: Option<Usage>,
 	#[serde(flatten, default)]
@@ -201,6 +267,7 @@ impl From<SimpleChatCompletionMessage> for InputItem {
 				r#type: Default::default(),
 				role: Role::Assistant,
 				content: EasyInputContent::Text(msg.content.to_string()),
+				phase: None,
 			}),
 			"system" => InputItem::from(InputMessage {
 				content: vec![InputContent::InputText(InputTextContent {
@@ -228,16 +295,10 @@ impl From<SimpleChatCompletionMessage> for InputItem {
 }
 
 impl Request {
-	fn take_input_as_items(&mut self) -> Vec<InputItem> {
-		match std::mem::replace(&mut self.input, Input::Items(Vec::new())) {
-			Input::Text(text) => {
-				vec![InputItem::from(InputMessage {
-					content: vec![InputContent::InputText(InputTextContent { text })],
-					role: InputRole::User,
-					status: None,
-				})]
-			},
-			Input::Items(items) => items,
+	fn take_input_as_items(&mut self) -> Vec<RawInputItem> {
+		match std::mem::replace(&mut self.input, RequestInput::Items(Vec::new())) {
+			RequestInput::Text(text) => vec![RawInputItem::from_user_text(text)],
+			RequestInput::Items(items) => items,
 		}
 	}
 }
@@ -249,15 +310,18 @@ impl RequestType for Request {
 
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
 		let mut items = self.take_input_as_items();
-		let prepend_items: Vec<InputItem> = prompts.into_iter().map(Into::into).collect();
+		let prepend_items: Vec<RawInputItem> = prompts
+			.into_iter()
+			.map(RawInputItem::from_simple_message)
+			.collect();
 		items.splice(0..0, prepend_items);
-		self.input = Input::Items(items);
+		self.input = RequestInput::Items(items);
 	}
 
 	fn append_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
 		let mut items = self.take_input_as_items();
-		items.extend(prompts.into_iter().map(Into::into));
-		self.input = Input::Items(items);
+		items.extend(prompts.into_iter().map(RawInputItem::from_simple_message));
+		self.input = RequestInput::Items(items);
 	}
 
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
@@ -291,88 +355,35 @@ impl RequestType for Request {
 
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage> {
 		match &self.input {
-			Input::Text(text) => {
+			RequestInput::Text(text) => {
 				vec![SimpleChatCompletionMessage {
 					role: strng::literal!("user"),
 					content: strng::new(text),
 				}]
 			},
-			Input::Items(items) => items
+			RequestInput::Items(items) => items
 				.iter()
-				.filter_map(|item| match item {
-					InputItem::EasyMessage(msg) => {
-						let content = match &msg.content {
-							EasyInputContent::Text(text) => strng::new(text),
-							EasyInputContent::ContentList(parts) => {
-								let text = parts
-									.iter()
-									.filter_map(|part| match part {
-										InputContent::InputText(input_text) => Some(input_text.text.as_str()),
-										_ => None,
-									})
-									.collect::<Vec<_>>()
-									.join("\n");
-								strng::new(&text)
-							},
-						};
-
-						let role = match msg.role {
-							Role::User => strng::literal!("user"),
-							Role::Assistant => strng::literal!("assistant"),
-							Role::System => strng::literal!("system"),
-							Role::Developer => strng::literal!("developer"),
-						};
-
-						Some(SimpleChatCompletionMessage { role, content })
-					},
-					InputItem::Item(Item::Message(MessageItem::Input(msg))) => {
-						let text = msg
-							.content
-							.iter()
-							.filter_map(|part| match part {
-								InputContent::InputText(input_text) => Some(input_text.text.as_str()),
-								_ => None,
-							})
-							.collect::<Vec<_>>()
-							.join("\n");
-						let role = match msg.role {
-							InputRole::User => strng::literal!("user"),
-							InputRole::System => strng::literal!("system"),
-							InputRole::Developer => strng::literal!("developer"),
-						};
-						Some(SimpleChatCompletionMessage {
-							role,
-							content: strng::new(&text),
-						})
-					},
-					InputItem::Item(Item::Message(MessageItem::Output(msg))) => {
-						let text = msg
-							.content
-							.iter()
-							.filter_map(|part| match part {
-								Content::OutputText(output_text) => Some(output_text.text.as_str()),
-								_ => None,
-							})
-							.collect::<Vec<_>>()
-							.join("\n");
-						Some(SimpleChatCompletionMessage {
-							role: strng::literal!("assistant"),
-							content: strng::new(&text),
-						})
-					},
-					_ => None,
-				})
+				.filter_map(RawInputItem::as_simple_message)
 				.collect(),
 		}
 	}
 
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
-		self.input = Input::Items(messages.into_iter().map(Into::into).collect());
+		self.input = RequestInput::Items(
+			messages
+				.into_iter()
+				.map(RawInputItem::from_simple_message)
+				.collect(),
+		);
 	}
 
 	fn to_openai(&self) -> Result<Vec<u8>, AIError> {
 		// Passthrough - just serialize
 		serde_json::to_vec(&self).map_err(AIError::RequestMarshal)
+	}
+
+	fn to_openai_chat_completions(&self) -> Result<Vec<u8>, AIError> {
+		conversion::openai_compat::from_responses::translate(self)
 	}
 
 	fn to_bedrock(
@@ -393,7 +404,16 @@ impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
+			input_image_tokens: None,
+			input_text_tokens: None,
+			input_audio_tokens: None,
 			output_tokens: self.usage.as_ref().map(|u| u.output_tokens),
+			// Note: responses supports image generation, but it does not report image generation as tokens.
+			// Instead there is a cost based on the image parameters (https://platform.openai.com/docs/guides/image-generation#calculating-costs)
+			// which we do not currently emit.
+			output_image_tokens: None,
+			output_text_tokens: None,
+			output_audio_tokens: None,
 			count_tokens: None,
 			total_tokens: self
 				.usage
@@ -410,6 +430,7 @@ impl ResponseType for Response {
 					.and_then(|d| d.cached_tokens)
 			}),
 			cache_creation_input_tokens: None,
+			service_tier: self.service_tier.as_deref().map(Into::into),
 			provider_model: Some(strng::new(&self.model)),
 			completion: if include_completion_in_log {
 				Some(

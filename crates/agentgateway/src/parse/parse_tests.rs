@@ -178,16 +178,12 @@ async fn test_sse_json_transform() {
 
 	// The result should contain the transformed SSE data
 	let result_str = String::from_utf8_lossy(&result.to_bytes()).to_string();
-	// TODO: fork or modify the library to not write empty events
 	assert_eq!(
 		result_str,
-		r#"event: 
-data: {"message":1,"error":"","status":"processed_input"}
+		r#"data: {"message":1,"error":"","status":"processed_input"}
 
-event: 
 data: {"message":2,"error":"","status":"processed_input"}
 
-event: 
 data: [DONE]
 
 "#

@@ -13,7 +13,6 @@ use rmcp::transport::TokioChildProcess;
 use thiserror::Error;
 use tokio::process::Command;
 
-use crate::http::jwt::Claims;
 use crate::mcp::FailureMode;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
@@ -27,7 +26,7 @@ use crate::*;
 #[derive(Debug, Clone)]
 pub struct IncomingRequestContext {
 	headers: http::HeaderMap,
-	claims: Option<Claims>,
+	ext: ::http::Extensions,
 }
 
 impl IncomingRequestContext {
@@ -35,14 +34,13 @@ impl IncomingRequestContext {
 	pub fn empty() -> Self {
 		Self {
 			headers: http::HeaderMap::new(),
-			claims: None,
+			ext: ::http::Extensions::new(),
 		}
 	}
 	pub fn new(parts: &::http::request::Parts) -> Self {
-		let claims = parts.extensions.get::<Claims>().cloned();
 		Self {
 			headers: parts.headers.clone(),
-			claims,
+			ext: parts.extensions.clone(),
 		}
 	}
 	pub fn apply(&self, req: &mut http::Request) {
@@ -55,9 +53,7 @@ impl IncomingRequestContext {
 				req.headers_mut().insert(k.clone(), v.clone());
 			}
 		}
-		if let Some(claims) = self.claims.as_ref() {
-			req.extensions_mut().insert(claims.clone());
-		}
+		req.extensions_mut().extend(self.ext.clone());
 	}
 }
 
@@ -105,6 +101,8 @@ impl Upstream {
 	pub fn get_session_state(&self) -> Option<http::sessionpersistence::MCPSession> {
 		match self {
 			Upstream::McpStreamable(c) => Some(c.get_session_state()),
+			Upstream::McpSSE(c) => Some(c.get_session_state()),
+			Upstream::OpenAPI(c) => Some(c.get_session_state()),
 			_ => None,
 		}
 	}
@@ -112,9 +110,9 @@ impl Upstream {
 	pub fn set_session_id(&self, id: Option<&str>, pinned: Option<SocketAddr>) {
 		match self {
 			Upstream::McpStreamable(c) => c.set_session_id(id, pinned),
-			Upstream::McpSSE(_) => {},
+			Upstream::McpSSE(c) => c.set_session_id(id, pinned),
 			Upstream::McpStdio(_) => {},
-			Upstream::OpenAPI(_) => {},
+			Upstream::OpenAPI(c) => c.set_session_id(id, pinned),
 		}
 	}
 
@@ -124,7 +122,9 @@ impl Upstream {
 				c.stop().await?;
 			},
 			Upstream::McpStreamable(c) => {
-				c.send_delete(ctx).await?;
+				if c.has_session_id() {
+					c.send_delete(ctx).await?;
+				}
 			},
 			Upstream::McpSSE(c) => {
 				c.stop().await?;

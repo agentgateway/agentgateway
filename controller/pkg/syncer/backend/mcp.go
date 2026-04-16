@@ -103,6 +103,12 @@ func TranslateMCPSelectorTargets(
 				targetName = service.Name + "-" + port.Name
 			}
 
+			path := service.Annotations[apiannotations.MCPServiceHTTPPath]
+			// use legacy annotation for backwards compatibility
+			if path == "" && service.Annotations[apiannotations.LegacyMCPServiceHTTPPath] != "" {
+				path = service.Annotations[apiannotations.LegacyMCPServiceHTTPPath]
+			}
+
 			svcHostname := kubeutils.ServiceFQDN(service.ObjectMeta)
 			mcpTargets = append(mcpTargets, &api.MCPTarget{
 				Name: targetName,
@@ -116,9 +122,27 @@ func TranslateMCPSelectorTargets(
 					Port: uint32(port.Port), //nolint:gosec // G115: Kubernetes service ports are always positive
 				},
 				Protocol: toMCPProtocol(appProtocol),
-				Path:     service.Annotations[apiannotations.MCPServiceHTTPPath],
+				Path:     path,
 			})
 		}
 	}
 	return mcpTargets, nil
+}
+
+func ResolveMCPBackendRefHost(
+	ctx plugins.PolicyCtx,
+	namespace string,
+	ref *corev1.LocalObjectReference,
+) (string, error) {
+	if ref == nil || ref.Name == "" {
+		return "", fmt.Errorf("mcp backendRef name is required")
+	}
+
+	key := namespace + "/" + ref.Name
+	service := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Services, krt.FilterKey(key)))
+	if service == nil {
+		return "", fmt.Errorf("mcp backendRef service %s not found", key)
+	}
+
+	return kubeutils.ServiceFQDN(service.ObjectMeta), nil
 }

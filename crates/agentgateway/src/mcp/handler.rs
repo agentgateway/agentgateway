@@ -25,7 +25,7 @@ use rmcp::model::{
 	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
 	ProtocolVersion, RequestId, ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerResult,
 };
-use tracing::warn;
+use tracing::{debug, warn};
 
 const DELIMITER: &str = "_";
 
@@ -410,7 +410,19 @@ impl Relay {
 				Ok(s) => streams.push((name, s)),
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
-						warn!("upstream '{}' failed for GET stream, skipping: {}", name, e);
+						let is_405 = if let UpstreamError::Http(ClientError::Status(ref r)) = e
+							&& r.status() == StatusCode::METHOD_NOT_ALLOWED
+						{
+							true
+						} else {
+							false
+						};
+						if !is_405 {
+							// per spec, a 405 is a valid response to say a GET stream is not supported so avoid log spam.
+							warn!("upstream '{}' failed for GET stream, skipping: {}", name, e);
+						} else {
+							debug!("upstream '{}' failed for GET stream, skipping: {}", name, e);
+						}
 					} else {
 						return Err(e);
 					}
@@ -486,6 +498,22 @@ impl Relay {
 
 		Ok(accepted_response())
 	}
+
+	pub async fn send_notification_single(
+		&self,
+		r: ClientNotification,
+		ctx: IncomingRequestContext,
+		service_name: &str,
+	) -> Result<Response, UpstreamError> {
+		let Ok(us) = self.upstreams.get(service_name) else {
+			return Err(UpstreamError::InvalidRequest(format!(
+				"unknown service {service_name}"
+			)));
+		};
+		us.generic_notification(r, &ctx).await?;
+		Ok(accepted_response())
+	}
+
 	fn get_info(
 		pv: ProtocolVersion,
 		multiplexing: bool,
