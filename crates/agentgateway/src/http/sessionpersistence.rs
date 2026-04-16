@@ -1,6 +1,6 @@
 use crate::*;
 
-#[apply(schema!)]
+#[apply(schema_ser!)]
 pub struct Policy {}
 
 #[apply(schema!)]

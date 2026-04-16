@@ -76,8 +76,7 @@ pub enum FailureMode {
 	FailOpen,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser!)]
 pub struct InferenceRouting {
 	pub target: Arc<SimpleBackendReference>,
 	pub failure_mode: FailureMode,

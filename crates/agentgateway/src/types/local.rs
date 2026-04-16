@@ -344,13 +344,13 @@ pub struct LocalLLMModels {
 	matches: Vec<LLMRouteMatch>,
 }
 
-#[apply(schema!)]
+#[apply(schema_de!)]
 pub struct LLMRouteMatch {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub headers: Vec<HeaderMatch>,
 }
 
-#[apply(schema!)]
+#[apply(schema_de!)]
 pub struct SecretFromFile(
 	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
 	#[serde(
@@ -444,9 +444,8 @@ enum LocalListenerProtocol {
 	HBONE,
 }
 
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[derive(Default)]
+#[apply(schema_de!)]
 pub struct LocalTLSServerConfig {
 	pub cert: PathBuf,
 	pub key: PathBuf,

@@ -1031,7 +1031,7 @@ impl From<SimpleBackend> for SimpleBackendWithPolicies {
 }
 
 #[derive(Eq, PartialEq)]
-#[apply(schema_ser!)]
+#[apply(schema_ser_schema!)]
 #[cfg_attr(feature = "schema", schemars(with = "SimpleLocalBackend"))]
 pub enum SimpleBackendReference {
 	Service { name: NamespacedHostname, port: u16 },

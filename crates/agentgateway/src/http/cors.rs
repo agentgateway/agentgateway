@@ -73,7 +73,7 @@ where
 	}
 }
 
-#[apply(schema_ser!)]
+#[apply(schema_ser_schema!)]
 #[cfg_attr(feature = "schema", schemars(with = "CorsSerde"))]
 pub struct Cors {
 	allow_credentials: bool,
@@ -98,9 +98,7 @@ impl<'de> serde::Deserialize<'de> for Cors {
 	}
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_de!)]
 pub struct CorsSerde {
 	#[serde(default)]
 	pub allow_credentials: bool,

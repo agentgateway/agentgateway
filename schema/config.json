@@ -1720,12 +1720,7 @@
           "default": "strict"
         },
         "jwtValidationOptions": {
-          "$ref": "#/$defs/JWTValidationOptions",
-          "default": {
-            "requiredClaims": [
-              "exp"
-            ]
-          }
+          "$ref": "#/$defs/JWTValidationOptions"
         }
       },
       "additionalProperties": false,
@@ -3228,12 +3223,7 @@
               "$ref": "#/$defs/FileInlineOrRemote"
             },
             "jwtValidationOptions": {
-              "$ref": "#/$defs/JWTValidationOptions",
-              "default": {
-                "requiredClaims": [
-                  "exp"
-                ]
-              }
+              "$ref": "#/$defs/JWTValidationOptions"
             }
           },
           "additionalProperties": false,
@@ -3282,12 +3272,7 @@
           "$ref": "#/$defs/FileInlineOrRemote"
         },
         "jwtValidationOptions": {
-          "$ref": "#/$defs/JWTValidationOptions",
-          "default": {
-            "requiredClaims": [
-              "exp"
-            ]
-          }
+          "$ref": "#/$defs/JWTValidationOptions"
         }
       },
       "additionalProperties": false,
@@ -4791,8 +4776,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "mcpAuthorization": {
           "description": "Authorization policies for MCP access.",
@@ -6053,8 +6037,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "backendTunnel": {
           "description": "backendTunnel configures tunneling when connecting to the LLM provider.",
@@ -6113,8 +6096,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "awsRegion": {
           "type": [

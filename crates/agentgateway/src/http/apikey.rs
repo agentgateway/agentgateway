@@ -79,7 +79,6 @@ impl PartialEq for APIKey {
 impl Eq for APIKey {}
 
 #[apply(schema_ser!)]
-#[cfg_attr(feature = "schema", schemars(with = "LocalAPIKeys"))]
 pub struct APIKeyAuthentication {
 	// A map of API keys to the metadata for that key
 	#[serde(serialize_with = "ser_redact")]
