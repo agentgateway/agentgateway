@@ -192,6 +192,9 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				allowed_trust_domains.push(domain.into());
 			}
 		}
+		let skip_validate_trust_domain = parse::<bool>("SKIP_VALIDATE_TRUST_DOMAIN")?
+			.or(raw.skip_validate_trust_domain)
+			.unwrap_or(false);
 		Some(caclient::Config {
 			address: addr,
 			secret_ttl: Duration::from_secs(86400),
@@ -204,6 +207,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			ca_cert: ca_root_cert,
 			ca_headers: ca_headers?,
 			allowed_trust_domains: allowed_trust_domains.into(),
+			skip_validate_trust_domain,
 		})
 	} else {
 		None

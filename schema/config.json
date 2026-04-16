@@ -134,6 +134,13 @@
             "null"
           ]
         },
+        "skipValidateTrustDomain": {
+          "description": "When true, skip SPIFFE trust-domain verification on inbound HBONE connections.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "serviceAccount": {
           "type": [
             "string",
