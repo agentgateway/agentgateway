@@ -426,20 +426,6 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.add`|object||
@@ -501,13 +487,6 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
@@ -716,20 +695,6 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.add`|object||
@@ -791,13 +756,6 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
@@ -1734,20 +1692,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.add`|object||
@@ -1809,13 +1753,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
@@ -2024,20 +1961,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.add`|object||
@@ -2099,13 +2022,6 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
@@ -2539,20 +2455,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.add`|object||
@@ -2614,13 +2516,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
@@ -2829,20 +2724,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.add`|object||
@@ -2904,13 +2785,6 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
@@ -3320,20 +3194,6 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.add`|object||
@@ -3395,13 +3255,6 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
@@ -3610,20 +3463,6 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.add`|object||
@@ -3685,13 +3524,6 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.duration`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
@@ -4577,20 +4409,6 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path`|object||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.request`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.add`|object||
@@ -4652,13 +4470,6 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.duration`|string||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
@@ -4867,20 +4678,6 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path`|object||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.request`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.add`|object||
@@ -4942,13 +4739,6 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.duration`|string||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
@@ -5751,20 +5541,6 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path`|object||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.add`|object||
@@ -5826,13 +5602,6 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.duration`|string||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
@@ -6041,20 +5810,6 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path`|object||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.add`|object||
@@ -6116,13 +5871,6 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.duration`|string||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
@@ -6483,20 +6231,6 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`llm.models[].guardrails.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.path`|object||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.request`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.request.add`|object||
@@ -6558,13 +6292,6 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`llm.models[].guardrails.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`llm.models[].guardrails.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`llm.models[].guardrails.request[].azureContentSafety.policies.health.eviction.duration`|string||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
@@ -6773,20 +6500,6 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`llm.models[].guardrails.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.path`|object||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.request`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.request.add`|object||
@@ -6848,13 +6561,6 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`llm.models[].guardrails.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`llm.models[].guardrails.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`llm.models[].guardrails.response[].azureContentSafety.policies.health.eviction.duration`|string||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
@@ -7562,20 +7268,6 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path`|object||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.add`|object||
@@ -7637,13 +7329,6 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.duration`|string||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service`|object||
@@ -7852,20 +7537,6 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.set`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.remove`|[]string||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier`|object|Headers to be modified in the response.|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.add`|object||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.set`|object||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.responseHeaderModifier.remove`|[]string||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect`|object|Directly respond to the request with a redirect.|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.scheme`|string||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority`|string||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.full`|string||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.host`|string||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.authority.port`|integer||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path`|object||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.full`|string||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.path.prefix`|string||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestRedirect.status`|integer||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.add`|object||
@@ -7927,13 +7598,6 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.secs`|integer||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.connectTimeout.nanos`|integer||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.health`|object|Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.duration`|string||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.restoreHealth`|number||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.consecutiveFailures`|integer||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.health.eviction.healthThreshold`|number||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service`|object||

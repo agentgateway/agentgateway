@@ -243,7 +243,7 @@ async fn send_content_safety_request<Req: Serialize, Resp: serde::de::Deserializ
 	);
 
 	let resp = client
-		.call_with_explicit_policies(req, mock_be, pols)
+		.call_with_explicit_policies_list(req, mock_be, pols)
 		.await?;
 
 	let status = resp.status();
