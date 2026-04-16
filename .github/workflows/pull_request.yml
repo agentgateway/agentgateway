@@ -18,7 +18,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CI: true
-  RUST_VERSION: "1.93.1"
+  RUST_VERSION: "1.95.0"
   GO_VERSION: "1.26.2"
 
 jobs:

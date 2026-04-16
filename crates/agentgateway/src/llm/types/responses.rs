@@ -503,7 +503,7 @@ impl ResponseType for Response {
 			anyhow::bail!("webhook response message count mismatch");
 		}
 
-		for (msg, wh) in message_outputs.into_iter().zip(choices.into_iter()) {
+		for (msg, wh) in message_outputs.into_iter().zip(choices) {
 			// Replace message content with webhook's modified content
 			msg.content = vec![Content::OutputText(OutputText {
 				annotations: vec![],

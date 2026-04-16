@@ -228,7 +228,7 @@ impl Parser {
 
 		let mut errors = parse_errors.take();
 		errors.extend(self.errors);
-		errors.sort_by(|a, b| a.pos.cmp(&b.pos));
+		errors.sort_by_key(|a| a.pos);
 
 		if errors.is_empty() {
 			r.map_err(|e| ParseErrors { errors: vec![e] })
