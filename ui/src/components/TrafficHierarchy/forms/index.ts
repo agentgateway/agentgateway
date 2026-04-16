@@ -13,6 +13,7 @@ import * as basicAuthPolicyForm from "./basicAuthPolicyForm";
 import * as bindForm from "./bindForm";
 import * as corsPolicyForm from "./corsPolicyForm";
 import * as extAuthzPolicyForm from "./extAuthzPolicyForm";
+import * as extProcPolicyForm from "./extProcPolicyForm";
 import * as frontendPoliciesForm from "./frontendPoliciesForm";
 import * as genericPolicyForm from "./genericPolicyForm";
 import * as jwtAuthPolicyForm from "./jwtAuthPolicyForm";
@@ -29,7 +30,8 @@ import * as routeForm from "./routeForm";
 import * as routePolicyForm from "./routePolicyForm";
 import * as topLevelBackendForm from "./topLevelBackendForm";
 import * as transformationsPolicyForm from "./transformationsPolicyForm";
-import * as extProcPolicyForm from "./extProcPolicyForm";
+import * as urlRewritePolicyForm from "./urlRewritePolicyForm";
+import * as requestRedirectPolicyForm from "./requestRedirectPolicyForm";
 
 export const forms = {
   bind: bindForm,
@@ -57,6 +59,8 @@ export const forms = {
   mcpAuthenticationPolicy: mcpAuthenticationPolicyForm,
   extAuthzPolicy: extAuthzPolicyForm,
   extProcPolicy: extProcPolicyForm,
+  urlRewritePolicy: urlRewritePolicyForm,
+  requestRedirectPolicy: requestRedirectPolicyForm,
 };
 
 const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = { 
@@ -72,6 +76,8 @@ const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = {
   mcpAuthentication: "mcpAuthenticationPolicy",
   extAuthz: "extAuthzPolicy",
   extProc: "extProcPolicy",
+  urlRewrite: "urlRewritePolicy",
+  requestRedirect: "requestRedirectPolicy",
 }
 
 export function getFormForPolicy(policyType: string, fallback: keyof typeof forms = "routePolicy") { 
@@ -131,4 +137,6 @@ export const resourceLabels: Record<
   mcpAuthenticationPolicy: { singular: "MCP Authentication Policy", plural: "MCP Authentication Policies" },
   extAuthzPolicy: { singular: "External Auth Policy", plural: "External Auth Policies" },
   extProcPolicy: { singular: "External Processor Policy", plural: "External Processor Policies" },
+  urlRewritePolicy: { singular: "URL Rewrite Policy", plural: "URL Rewrite Policies" },
+  requestRedirectPolicy: { singular: "Request Redirect Policy", plural: "Request Redirect Policies" },
 };

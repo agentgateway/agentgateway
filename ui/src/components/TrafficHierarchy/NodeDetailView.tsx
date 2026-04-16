@@ -863,7 +863,10 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           : backendData;
         setFormData(transformedData as Record<string, unknown>);
       } else if (sel.type === "policy") {
-        setFormData(sel.node.policy as Record<string, unknown>);
+        const raw = sel.node.policy as Record<string, unknown>;
+        const formConfig = getFormForPolicy(sel.node.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(raw) : raw;
+        setFormData(transformed as Record<string, unknown>);
       } else if (sel.type === "listenerPolicy") { 
         const raw = sel.listener.listener.policies as Record<string, unknown> ?? {};
         setFormData((raw[sel.policyType] ?? {}) as Record<string, unknown>);
@@ -912,7 +915,10 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           : backendData;
         setFormData(transformedData as Record<string, unknown>);
       } else if (selected.type === "policy") {
-        setFormData(selected.node.policy as Record<string, unknown>);
+        const raw = selected.node.policy as Record<string, unknown>;
+        const formConfig = getFormForPolicy(selected.node.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(raw) : raw;
+        setFormData(transformed as Record<string, unknown>);
       } else if (selected.type === "listenerPolicy") { 
         const raw = selected.listener.listener.policies as Record<string, unknown> ?? {};
         setFormData((raw[selected.policyType] ?? {}) as Record<string, unknown>);
@@ -1052,12 +1058,18 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       }
 
       // Apply form-specific transformation if available
-      const policyType = (selected as any).policyType as string | undefined;
-      const form = (selected.type === "listenerPolicy" || selected.type === "backendPolicy") 
-        ? (getFormForPolicy(policyType ?? "", "routePolicy") as any) 
-        : selected.type !== "llmPolicy" 
-          ? (forms[selected.type] as any) 
-          : undefined;
+      const policyType = (
+        selected.type === "listenerPolicy" || selected.type === "backendPolicy"
+          ? selected.policyType
+          : (selected as any).node?.policyType
+      ) as string | undefined;
+      const form = (
+        selected.type === "listenerPolicy" ||
+        selected.type === "backendPolicy" ||
+        selected.type === "policy"
+      )
+        ? (getFormForPolicy(policyType ?? "", "routePolicy") as any)
+        : (forms[selected.type] as any);
       let dataToSave = fd;
       if (form?.transformBeforeSubmit) { 
         dataToSave = form.transformBeforeSubmit(fd) as Record<string, unknown>;
