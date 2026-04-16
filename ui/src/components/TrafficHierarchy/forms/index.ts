@@ -6,14 +6,18 @@
  * but are handcrafted TypeScript schemas that use the types from config.d.ts.
  */
 
+import * as apiKeyPolicyForm from "./apiKeyPolicyForm";
 import * as authorizationPolicyForm from "./authorizationPolicyForm";
 import * as backendForm from "./backendForm";
+import * as basicAuthPolicyForm from "./basicAuthPolicyForm";
 import * as bindForm from "./bindForm";
 import * as corsPolicyForm from "./corsPolicyForm";
 import * as frontendPoliciesForm from "./frontendPoliciesForm";
 import * as genericPolicyForm from "./genericPolicyForm";
+import * as jwtAuthPolicyForm from "./jwtAuthPolicyForm";
 import * as listenerForm from "./listenerForm";
 import * as llmForm from "./llmForm";
+import * as mcpAuthenticationPolicyForm from "./mcpAuthenticationPolicyForm";
 import * as mcpForm from "./mcpForm";
 import * as mcpTargetForm from "./mcpTargetForm";
 import * as modelForm from "./modelForm";
@@ -45,6 +49,10 @@ export const forms = {
   mcpTarget: mcpTargetForm,
   authorizationPolicy: authorizationPolicyForm,
   transformationsPolicy: transformationsPolicyForm,
+  jwtAuthPolicy: jwtAuthPolicyForm,
+  basicAuthPolicy: basicAuthPolicyForm,
+  apiKeyPolicy: apiKeyPolicyForm,
+  mcpAuthenticationPolicy: mcpAuthenticationPolicyForm,
 };
 
 const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = { 
@@ -54,6 +62,10 @@ const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = {
   authorization: "authorizationPolicy",
   mcpAuthorization: "authorizationPolicy",
   transformations: "transformationsPolicy",
+  jwtAuth: "jwtAuthPolicy",
+  basicAuth: "basicAuthPolicy",
+  apiKey: "apiKeyPolicy",
+  mcpAuthentication: "mcpAuthenticationPolicy",
 }
 
 export function getFormForPolicy(policyType: string, fallback: keyof typeof forms = "routePolicy") { 
