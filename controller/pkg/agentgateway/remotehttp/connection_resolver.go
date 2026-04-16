@@ -55,13 +55,10 @@ func (r *defaultResolver) resolveConnection(
 		}
 
 		var connectHost string
-		switch {
-		case backend.Spec.Static.UnixPath != nil:
+		if backend.Spec.Static.UnixPath != nil {
 			connectHost = "unix://" + *backend.Spec.Static.UnixPath
-		case backend.Spec.Static.Host != nil && backend.Spec.Static.Port != nil:
-			connectHost = fmt.Sprintf("%s:%d", *backend.Spec.Static.Host, *backend.Spec.Static.Port)
-		default:
-			return nil, fmt.Errorf("static backend %s must specify either unixPath or both host and port", backendNN)
+		} else {
+			connectHost = fmt.Sprintf("%s:%d", backend.Spec.Static.Host, backend.Spec.Static.Port)
 		}
 
 		conn := &connection{
@@ -144,14 +141,11 @@ func (r *defaultResolver) resolveTunnelProxy(
 		if backend.Spec.Static.UnixPath != nil {
 			return nil, fmt.Errorf("unix domain socket backends are not supported as tunnel proxies; backend: %s", nn)
 		}
-		if backend.Spec.Static.Host == nil {
-			return nil, fmt.Errorf("host is required for TCP tunnel proxy backend: %s", nn)
-		}
 		var port int32
 		if p := ptr.OrEmpty(backendRef.Port); p != 0 {
 			port = int32(p)
-		} else if backend.Spec.Static.Port != nil {
-			port = *backend.Spec.Static.Port
+		} else if backend.Spec.Static.Port != 0 {
+			port = backend.Spec.Static.Port
 		} else {
 			return nil, fmt.Errorf("port is required for TCP tunnel proxy backend: %s", nn)
 		}
@@ -171,7 +165,7 @@ func (r *defaultResolver) resolveTunnelProxy(
 		}
 
 		return &tunnelProxy{
-			host: fmt.Sprintf("%s:%d", *backend.Spec.Static.Host, port),
+			host: fmt.Sprintf("%s:%d", backend.Spec.Static.Host, port),
 			tls:  proxyTLS,
 		}, nil
 

@@ -123,8 +123,8 @@ func BuildAgwBackend(
 		case b.UnixPath != nil:
 			sb.UnixPath = *b.UnixPath
 		default:
-			sb.Host = ptr.OrEmpty(b.Host)
-			sb.Port = ptr.OrDefault(b.Port, 0)
+			sb.Host = string(b.Host)
+			sb.Port = b.Port
 		}
 		return []*api.Backend{{
 			Key:  backend.Namespace + "/" + backend.Name,
