@@ -2348,3 +2348,92 @@ async fn waypoint_tcp_gateway_policy_authz_deny() {
 		.await
 		.expect_err("should be denied by network authorization");
 }
+
+/// `/v1/models` with an explicit provider `model` plus non-wildcard modelAliases
+/// returns a synthetic OpenAI-compatible catalog without contacting upstream.
+#[tokio::test]
+async fn llm_models_synthetic_response() {
+	let mock = simple_mock().await;
+	let (mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider {
+			model: Some(strng::new("gpt-4o")),
+		}),
+		false,
+		"{}",
+	);
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"/v1/models": "models",
+				},
+				"modelAliases": {
+					"smart": "gpt-4o",
+					"gpt-*": "gpt-4o",
+				},
+			}
+		}))
+		.await;
+
+	let res = send_request(io, Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(
+		res
+			.headers()
+			.get(header::CONTENT_TYPE)
+			.map(|v| v.to_str().unwrap()),
+		Some("application/json")
+	);
+	let body = read_body_raw(res.into_body()).await;
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(body["object"], "list");
+	let ids: Vec<&str> = body["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|m| m["id"].as_str().unwrap())
+		.collect();
+	// Explicit model + non-wildcard alias, wildcard alias excluded.
+	assert_eq!(ids, vec!["gpt-4o", "smart"]);
+	let owners: Vec<&str> = body["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|m| m["owned_by"].as_str().unwrap())
+		.collect();
+	assert!(owners.iter().all(|o| *o == "openai"));
+	// Upstream must not have been contacted.
+	assert!(mock.received_requests().await.unwrap().is_empty());
+}
+
+/// `/v1/models` with no explicit provider model and no aliases falls through
+/// to the upstream's real catalog (path-translating passthrough).
+#[tokio::test]
+async fn llm_models_fallthrough_to_upstream() {
+	let upstream_body =
+		br#"{"object":"list","data":[{"id":"from-upstream","object":"model","owned_by":"openai"}]}"#;
+	let mock = body_mock(upstream_body).await;
+	let (mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider { model: None }),
+		false,
+		"{}",
+	);
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"/v1/models": "models",
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request(io, Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body_raw(res.into_body()).await;
+	assert_eq!(body.as_ref(), upstream_body);
+	// The upstream should have been contacted exactly once.
+	assert_eq!(mock.received_requests().await.unwrap().len(), 1);
+}

@@ -656,67 +656,93 @@ impl HTTPProxy {
 		.snapshot_on_err(log, &mut req)?;
 
 		// If the route resolves to Models and the gateway has explicit knowledge of
-		// which models are available (via explicit provider `model` fields or route-level
-		// aliases), return a synthetic response scoped to this route's backends.
+		// which models are available (via explicit provider `model` fields or
+		// modelAliases on either the route or its backends), return a synthetic
+		// response scoped to this route's backends.
 		// If no explicit knowledge exists, fall through and forward to upstream so the
 		// client gets the provider's real catalog.
-		if let Some(RouteType::Models) = route_policies
-			.llm
-			.as_ref()
-			.map(|p| p.resolve_route(req.uri().path()))
+		//
+		// Resolving the route type requires inspecting each backend's resolved LLM
+		// policy because `routes` and `modelAliases` are backend-phase config
+		// (`AgentgatewayBackend.spec.policies.ai`) and aren't merged into route-level
+		// policies until after backend selection.
 		{
-			let mut models: std::collections::BTreeSet<(Strng, Strng)> =
-				std::collections::BTreeSet::new();
+			let path = req.uri().path();
+			let mut llm_policies: Vec<Arc<llm::Policy>> = Vec::new();
+			if let Some(p) = route_policies.llm.as_ref() {
+				llm_policies.push(p.clone());
+			}
+
+			// Dedup by model id; first seen (owner, explicit vs alias) wins.
+			let mut models: std::collections::BTreeMap<Strng, Strng> = std::collections::BTreeMap::new();
 			let mut fallback_owner: Option<Strng> = None;
 
 			for backend_ref in &selected_route.backends {
-				if let Ok(resolved) = resolve_backend(backend_ref.clone(), self.inputs.as_ref())
-					&& let Backend::AI(_, ai_backend) = &resolved.backend.backend
-				{
-					for (provider, _info) in ai_backend.providers.iter().iter() {
-						let owner = provider.provider.provider();
-						fallback_owner.get_or_insert_with(|| owner.clone());
-						if let Some(m) = provider.provider.override_model() {
-							models.insert((m, owner));
+				if let Ok(resolved) = resolve_backend(backend_ref.clone(), self.inputs.as_ref()) {
+					let backend_policies = get_backend_policies(
+						self.inputs.as_ref(),
+						&resolved.backend,
+						&resolved.inline_policies,
+						Some(route_path.clone()),
+					);
+					if let Some(p) = backend_policies.llm {
+						llm_policies.push(p);
+					}
+					if let Backend::AI(_, ai_backend) = &resolved.backend.backend {
+						for (provider, _info) in ai_backend.providers.iter().iter() {
+							let owner = provider.provider.provider();
+							fallback_owner.get_or_insert_with(|| owner.clone());
+							if let Some(m) = provider.provider.override_model() {
+								models.entry(m).or_insert(owner);
+							}
 						}
 					}
 				}
 			}
 
-			if let Some(policy) = route_policies.llm.as_ref() {
-				let owner = fallback_owner
+			let is_models_route = llm_policies
+				.iter()
+				.any(|p| p.resolve_route(path) == RouteType::Models);
+
+			if is_models_route {
+				let alias_owner = fallback_owner
 					.clone()
 					.unwrap_or_else(|| strng::literal!("openai"));
-				for alias in policy.model_aliases.keys() {
-					if !alias.contains('*') {
-						models.insert((alias.clone(), owner.clone()));
+				for policy in &llm_policies {
+					for alias in policy.model_aliases.keys() {
+						if !alias.contains('*') {
+							models
+								.entry(alias.clone())
+								.or_insert_with(|| alias_owner.clone());
+						}
 					}
 				}
-			}
 
-			if !models.is_empty() {
-				let data: Vec<_> = models
-					.iter()
-					.map(|(id, owned_by)| {
-						serde_json::json!({
-							"id": id,
-							"object": "model",
-							"created": 0,
-							"owned_by": owned_by,
+				if !models.is_empty() {
+					let data: Vec<_> = models
+						.iter()
+						.map(|(id, owned_by)| {
+							serde_json::json!({
+								"id": id,
+								"object": "model",
+								"created": 0,
+								"owned_by": owned_by,
+							})
 						})
-					})
-					.collect();
-				let body = serde_json::json!({ "object": "list", "data": data });
+						.collect();
+					let body = serde_json::json!({ "object": "list", "data": data });
 
-				return Ok(
-					::http::Response::builder()
-						.status(::http::StatusCode::OK)
-						.header(::http::header::CONTENT_TYPE, "application/json")
-						.body(http::Body::from(body.to_string()))
-						.expect("Failed to build models response"),
-				);
+					let mut response = ::http::Response::new(http::Body::from(body.to_string()));
+					*response.status_mut() = ::http::StatusCode::OK;
+					response.headers_mut().insert(
+						::http::header::CONTENT_TYPE,
+						::http::HeaderValue::from_static("application/json"),
+					);
+					return Err::<Response, _>(ProxyResponse::DirectResponse(Box::new(response)))
+						.snapshot_on_err(log, &mut req);
+				}
+				// Fall through: Models route but nothing explicit to advertise, forward upstream.
 			}
-			// Fall through: no explicit models or aliases configured, forward upstream.
 		}
 
 		let selected_backend = select_backend(selected_route.as_ref(), &req)
