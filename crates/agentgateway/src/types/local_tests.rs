@@ -154,6 +154,11 @@ async fn test_named_mcp_backend_config() {
 }
 
 #[tokio::test]
+async fn test_mcp_to_aws_backend_config() {
+	test_config_parsing("mcp_to_aws_backend").await;
+}
+
+#[tokio::test]
 async fn test_llm_config() {
 	test_config_parsing("llm").await;
 }
@@ -419,6 +424,101 @@ policies:
 		err
 			.to_string()
 			.contains("cannot mix gateway-phase oidc with route-phase oidc"),
+		"{err}"
+	);
+}
+
+#[tokio::test]
+async fn test_mcp_named_backend_reference_reuses_existing_backend() {
+	let normalized = normalize_test_yaml(
+		r#"
+backends:
+- name: shared-upstream
+  host: example.com:443
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - mcp:
+          targets:
+          - name: remote
+            mcp:
+              backend: shared-upstream
+              path: /mcp
+"#,
+	)
+	.await
+	.expect("named MCP backend reference should normalize");
+
+	assert_eq!(
+		normalized.backends.len(),
+		2,
+		"should keep the explicit backend plus the MCP backend, without a synthetic target backend"
+	);
+
+	let mcp_backend = normalized
+		.backends
+		.iter()
+		.find(|backend| matches!(backend.backend, crate::types::agent::Backend::MCP(_, _)))
+		.expect("normalized MCP backend");
+
+	let crate::types::agent::Backend::MCP(_, mcp_backend) = &mcp_backend.backend else {
+		panic!("expected MCP backend");
+	};
+	let target = mcp_backend.targets.first().expect("remote target");
+	let crate::types::agent::McpTargetSpec::Mcp(target_spec) = &target.spec else {
+		panic!("expected streamable MCP target");
+	};
+	assert_eq!(
+		target_spec.backend,
+		crate::types::agent::SimpleBackendReference::Backend("shared-upstream".into())
+	);
+	assert_eq!(target_spec.path, "/mcp");
+}
+
+#[tokio::test]
+async fn test_mcp_named_backend_reference_requires_path_for_mcp() {
+	let err = normalize_test_yaml(
+		r#"
+backends:
+- name: shared-upstream
+  host: example.com:443
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - mcp:
+          targets:
+          - name: remote
+            mcp:
+              backend: shared-upstream
+"#,
+	)
+	.await
+	.expect_err("named MCP backend reference should require a path");
+
+	assert!(
+		err
+			.to_string()
+			.contains("path is required when backend is set"),
+		"{err}"
+	);
+}
+
+#[test]
+fn test_mcp_backend_host_rejects_mixed_host_and_backend() {
+	let err = serde_json::from_value::<super::McpBackendHost>(serde_json::json!({
+		"host": "https://example.com/mcp",
+		"backend": "shared-upstream"
+	}))
+	.expect_err("mixed host and backend should be rejected");
+
+	assert!(
+		err
+			.to_string()
+			.contains("cannot mix host/port with backend for MCP target backend configuration"),
 		"{err}"
 	);
 }

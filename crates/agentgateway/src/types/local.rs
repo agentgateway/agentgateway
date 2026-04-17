@@ -738,36 +738,43 @@ impl LocalBackend {
 				let mut backends = vec![];
 				for (idx, t) in tgt.targets.iter().enumerate() {
 					let name = strng::format!("mcp/{}/{}", name.clone(), idx);
+					let mut process_backend = |backend: McpBackendHost| {
+						Ok(match backend.process()? {
+							ProcessedMcpBackendHost::Inline { backend, path, tls } => {
+								let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
+								if let Some(b) = be {
+									backends.push(Self::make_mcp_backend(b, t.policies.clone(), tls)?);
+								}
+								(bref, Some(path))
+							},
+							ProcessedMcpBackendHost::Reference { .. } if t.policies.is_some() => {
+								anyhow::bail!(
+									"cannot use backend reference when policies are defined for an MCP target"
+								);
+							},
+							ProcessedMcpBackendHost::Reference { backend, path } => (backend, path),
+						})
+					};
+
 					let spec = match t.spec.clone() {
 						LocalMcpTargetSpec::Sse { backend } => {
-							let (backend, path, tls) = backend.process()?;
-							let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
-							if let Some(b) = be {
-								backends.push(Self::make_mcp_backend(b, t.policies.clone(), tls)?);
-							}
+							let (bref, path) = process_backend(backend)?;
 							McpTargetSpec::Sse(SseTargetSpec {
 								backend: bref,
-								path: path.clone(),
+								path: path.ok_or_else(|| anyhow!("path is required when backend is set"))?,
 							})
 						},
 						LocalMcpTargetSpec::Mcp { backend } => {
-							let (backend, path, tls) = backend.process()?;
-							let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
-							if let Some(b) = be {
-								backends.push(Self::make_mcp_backend(b, t.policies.clone(), tls)?);
-							}
+							let (bref, path) = process_backend(backend)?;
 							McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
 								backend: bref,
-								path: path.clone(),
+								path: path.ok_or_else(|| anyhow!("path is required when backend is set"))?,
 							})
 						},
 						LocalMcpTargetSpec::Stdio { cmd, args, env } => McpTargetSpec::Stdio { cmd, args, env },
 						LocalMcpTargetSpec::OpenAPI { backend, schema } => {
-							let (backend, _, tls) = backend.process()?;
-							let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
-							if let Some(b) = be {
-								backends.push(Self::make_mcp_backend(b, t.policies.clone(), tls)?);
-							}
+							let (bref, _) = process_backend(backend)?;
+
 							let openapi_schema = schema.load_openapi_schema(client.clone()).await?;
 							McpTargetSpec::OpenAPI(OpenAPITarget {
 								backend: bref,
@@ -875,44 +882,110 @@ pub struct LocalMcpTarget {
 	pub policies: Option<MCPLocalBackendPolicies>,
 }
 
-#[apply(schema_de!)]
-// Ideally this would be an enum of Simple|Explicit, but serde bug prevents it:
-// https://github.com/serde-rs/serde/issues/1600
-pub struct McpBackendHost {
-	host: String,
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(with = "McpBackendHostSerde"))]
+pub enum McpBackendHost {
+	Host {
+		host: String,
+		port: Option<u16>,
+		path: Option<String>,
+	},
+	Backend {
+		backend: BackendKey,
+		path: Option<String>,
+	},
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+struct McpBackendHostSerde {
+	host: Option<String>,
 	port: Option<u16>,
 	path: Option<String>,
+	backend: Option<BackendKey>,
+}
+
+pub enum ProcessedMcpBackendHost {
+	Inline {
+		backend: Target,
+		path: String,
+		tls: bool,
+	},
+	Reference {
+		backend: SimpleBackendReference,
+		path: Option<String>,
+	},
+}
+
+impl<'de> serde::Deserialize<'de> for McpBackendHost {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let raw = McpBackendHostSerde::deserialize(deserializer)?;
+		match (raw.host, raw.port, raw.path, raw.backend) {
+			(Some(host), port, path, None) => Ok(Self::Host { host, port, path }),
+			(None, None, path, Some(backend)) => Ok(Self::Backend { backend, path }),
+			(None, Some(_), _, Some(_)) | (Some(_), _, _, Some(_)) => Err(serde::de::Error::custom(
+				"cannot mix host/port with backend for MCP target backend configuration",
+			)),
+			(None, Some(_), _, None) => Err(serde::de::Error::custom(
+				"host is required when port is set for MCP target backend configuration",
+			)),
+			(None, None, Some(_), None) => Err(serde::de::Error::custom(
+				"host or backend is required when path is set for MCP target backend configuration",
+			)),
+			(None, None, None, None) => Err(serde::de::Error::custom(
+				"host or backend is required for MCP target backend configuration",
+			)),
+		}
+	}
 }
 
 impl McpBackendHost {
-	pub fn process(&self) -> anyhow::Result<(Target, String, bool)> {
-		let McpBackendHost { host, port, path } = self;
-		Ok(match (host, port, path) {
-			(host, Some(port), Some(path)) => {
-				let b = Target::from((host.as_str(), *port));
-				(b, path.clone(), false)
+	pub fn process(&self) -> anyhow::Result<ProcessedMcpBackendHost> {
+		Ok(match self {
+			McpBackendHost::Backend { backend, path } => ProcessedMcpBackendHost::Reference {
+				backend: SimpleBackendReference::Backend(backend.clone()),
+				path: path.clone(),
 			},
-			(host, None, None) => {
-				let uri = Uri::try_from(host.as_str())?;
-				let Some(host) = uri.host() else {
-					anyhow::bail!("no host")
-				};
-				let scheme = uri.scheme().unwrap_or(&http::Scheme::HTTP);
-				let port = uri.port_u16();
-				let path = uri.path();
-				let port = match (scheme, port) {
-					(s, p) if s == &http::Scheme::HTTP => p.unwrap_or(80),
-					(s, p) if s == &http::Scheme::HTTPS => p.unwrap_or(443),
-					(_, _) => {
-						anyhow::bail!("invalid scheme: {:?}", scheme);
-					},
-				};
+			McpBackendHost::Host { host, port, path } => match (host, port, path) {
+				(host, Some(port), Some(path)) => {
+					let b = Target::from((host.as_str(), *port));
+					ProcessedMcpBackendHost::Inline {
+						backend: b,
+						path: path.clone(),
+						tls: false,
+					}
+				},
+				(host, None, None) => {
+					let uri = Uri::try_from(host.as_str())?;
+					let Some(host) = uri.host() else {
+						anyhow::bail!("no host")
+					};
+					let scheme = uri.scheme().unwrap_or(&http::Scheme::HTTP);
+					let port = uri.port_u16();
+					let path = uri.path();
+					let port = match (scheme, port) {
+						(s, p) if s == &http::Scheme::HTTP => p.unwrap_or(80),
+						(s, p) if s == &http::Scheme::HTTPS => p.unwrap_or(443),
+						(_, _) => {
+							anyhow::bail!("invalid scheme: {:?}", scheme);
+						},
+					};
 
-				let b = Target::from((host, port));
-				(b, path.to_string(), scheme == &http::Scheme::HTTPS)
-			},
-			_ => {
-				anyhow::bail!("if port or path is set, both must be set; otherwise, use only host")
+					let b = Target::from((host, port));
+					ProcessedMcpBackendHost::Inline {
+						backend: b,
+						path: path.to_string(),
+						tls: scheme == &http::Scheme::HTTPS,
+					}
+				},
+				_ => {
+					anyhow::bail!("if port or path is set, both must be set; otherwise, use only host")
+				},
 			},
 		})
 	}

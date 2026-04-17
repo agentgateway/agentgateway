@@ -1,6 +1,6 @@
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentCoreConfig {
 	pub agent_runtime_arn: String,

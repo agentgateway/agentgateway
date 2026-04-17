@@ -1009,6 +1009,7 @@ impl From<SimpleBackend> for Backend {
 		match value {
 			SimpleBackend::Service(svc, port) => Backend::Service(svc, port),
 			SimpleBackend::Opaque(name, target) => Backend::Opaque(name, target),
+			SimpleBackend::Aws(name, cfg) => Backend::Aws(name, cfg),
 			SimpleBackend::Invalid => Backend::Invalid,
 		}
 	}
@@ -1020,6 +1021,7 @@ pub enum SimpleBackend {
 	Service(Arc<Service>, u16),
 	#[serde(rename = "host")]
 	Opaque(ResourceName, Target), // Hostname or IP
+	Aws(ResourceName, crate::aws::AwsBackendConfig),
 	Invalid,
 }
 
@@ -1028,6 +1030,7 @@ impl fmt::Display for SimpleBackend {
 		match self {
 			SimpleBackend::Service(service, port) => write!(f, "{}:{}", service.hostname, port),
 			SimpleBackend::Opaque(name, _) => write!(f, "{}", name),
+			SimpleBackend::Aws(name, _) => write!(f, "{}", name),
 			SimpleBackend::Invalid => write!(f, "invalid"),
 		}
 	}
@@ -1040,6 +1043,7 @@ impl TryFrom<Backend> for SimpleBackend {
 		match value {
 			Backend::Service(svc, port) => Ok(SimpleBackend::Service(svc, port)),
 			Backend::Opaque(name, tgt) => Ok(SimpleBackend::Opaque(name, tgt)),
+			Backend::Aws(rn, cfg) => Ok(SimpleBackend::Aws(rn, cfg)),
 			Backend::Invalid => Ok(SimpleBackend::Invalid),
 			_ => anyhow::bail!("unsupported backend type"),
 		}
@@ -1097,6 +1101,7 @@ impl SimpleBackend {
 			SimpleBackend::Service(svc, port) => {
 				format!("{}:{port}", svc.hostname)
 			},
+			SimpleBackend::Aws(_, cfg) => format!("{}:{}", cfg.get_host(), 443),
 			SimpleBackend::Opaque(_, tgt) => tgt.hostport(),
 			SimpleBackend::Invalid => "invalid".to_string(),
 		}
@@ -1114,6 +1119,11 @@ impl SimpleBackend {
 				namespace: name.namespace.as_ref(),
 				section: None,
 			},
+			SimpleBackend::Aws(name, _) => BackendTargetRef::Backend {
+				name: name.name.as_ref(),
+				namespace: name.namespace.as_ref(),
+				section: None,
+			},
 			SimpleBackend::Invalid => BackendTargetRef::Invalid,
 		}
 	}
@@ -1122,6 +1132,7 @@ impl SimpleBackend {
 		match self {
 			SimpleBackend::Service(_, _) => cel::BackendType::Service,
 			SimpleBackend::Opaque(_, _) => cel::BackendType::Static,
+			SimpleBackend::Aws(_, _) => cel::BackendType::Dynamic,
 			SimpleBackend::Invalid => cel::BackendType::Unknown,
 		}
 	}
@@ -2815,5 +2826,81 @@ jwtValidationOptions:
 			},
 			_ => panic!("Expected LocalJwtConfig::Single"),
 		}
+	}
+
+	fn make_aws_config() -> crate::aws::AwsBackendConfig {
+		crate::aws::AwsBackendConfig {
+			service: crate::aws::AwsService::AgentCore(
+				crate::agentcore::AgentCoreConfig::new(
+					"arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123".to_string(),
+					None,
+				)
+				.unwrap(),
+			),
+		}
+	}
+
+	fn make_aws_simple_backend() -> SimpleBackend {
+		SimpleBackend::Aws(
+			ResourceName::new(strng::new("test-aws"), strng::new("ns")),
+			make_aws_config(),
+		)
+	}
+
+	#[test]
+	fn test_simple_backend_aws_to_backend_conversion() {
+		let sb = make_aws_simple_backend();
+		let backend: Backend = sb.into();
+		assert!(
+			matches!(backend, Backend::Aws(ref name, ref config) if name.name.as_str() == "test-aws" && config == &make_aws_config())
+		);
+	}
+
+	#[test]
+	fn test_backend_aws_to_simple_backend_roundtrip() {
+		let backend = Backend::Aws(
+			ResourceName::new(strng::new("test-aws"), strng::new("ns")),
+			make_aws_config(),
+		);
+		let sb: SimpleBackend = backend.try_into().unwrap();
+		assert!(
+			matches!(sb, SimpleBackend::Aws(ref name, ref config) if name.name.as_str() == "test-aws" && config == &make_aws_config())
+		);
+	}
+
+	#[test]
+	fn test_simple_backend_aws_display() {
+		let sb = make_aws_simple_backend();
+		assert_eq!(sb.to_string(), "ns/test-aws");
+	}
+
+	#[test]
+	fn test_simple_backend_aws_hostport() {
+		let sb = make_aws_simple_backend();
+		assert_eq!(
+			sb.hostport(),
+			"bedrock-agentcore.us-east-1.amazonaws.com:443"
+		);
+	}
+
+	#[test]
+	fn test_simple_backend_aws_target_ref() {
+		let sb = make_aws_simple_backend();
+		assert_eq!(
+			sb.target(),
+			BackendTargetRef::Backend {
+				name: "test-aws",
+				namespace: "ns",
+				section: None,
+			}
+		);
+	}
+
+	#[test]
+	fn test_simple_backend_aws_backend_type() {
+		let sb = make_aws_simple_backend();
+		assert_eq!(sb.backend_type(), cel::BackendType::Dynamic);
+		assert_eq!(sb.backend_info().backend_type, cel::BackendType::Dynamic);
+		assert_eq!(sb.backend_info().backend_name, strng::new("ns/test-aws"));
 	}
 }
