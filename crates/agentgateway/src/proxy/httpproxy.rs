@@ -1899,7 +1899,8 @@ fn should_retry(res: &Result<Response, SnapshottedProxyResponse>, pol: &retry::P
 
 #[cfg(test)]
 mod tests {
-	use super::{resolved_workload_target_hostname, select_service_target_port};
+	use super::{hop_by_hop_headers, resolved_workload_target_hostname, select_service_target_port};
+	use crate::http;
 	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
 	use std::collections::{HashMap, HashSet};
 	use std::net::SocketAddr;
@@ -2012,6 +2013,52 @@ mod tests {
 
 		assert_eq!(seen, HashSet::from([8000, 8001]));
 	}
+
+	#[test]
+	fn hop_by_hop_headers_removes_connection_nominated_headers() {
+		let mut req = ::http::Request::builder()
+			.uri("http://app/")
+			.header("connection", "x-internal-auth, x-original-url")
+			.header("x-internal-auth", "1")
+			.header("x-original-url", "/admin")
+			.body(http::Body::empty())
+			.expect("request should build");
+
+		assert!(hop_by_hop_headers(&mut req).is_none());
+		assert!(!req.headers().contains_key("connection"));
+		assert!(!req.headers().contains_key("x-internal-auth"));
+		assert!(!req.headers().contains_key("x-original-url"));
+	}
+
+	#[test]
+	fn hop_by_hop_headers_preserves_upgrade_and_trailers_after_stripping() {
+		let mut req = ::http::Request::builder()
+			.uri("http://app/")
+			.header("connection", "keep-alive, upgrade, x-original-url")
+			.header("upgrade", "websocket")
+			.header("te", "trailers")
+			.header("x-original-url", "/admin")
+			.body(http::Body::empty())
+			.expect("request should build");
+
+		assert!(hop_by_hop_headers(&mut req).is_none());
+		assert_eq!(
+			req
+				.headers()
+				.get("connection")
+				.and_then(|v| v.to_str().ok()),
+			Some("upgrade")
+		);
+		assert_eq!(
+			req.headers().get("upgrade").and_then(|v| v.to_str().ok()),
+			Some("websocket")
+		);
+		assert_eq!(
+			req.headers().get("te").and_then(|v| v.to_str().ok()),
+			Some("trailers")
+		);
+		assert!(!req.headers().contains_key("x-original-url"));
+	}
 }
 
 pub fn maybe_set_grpc_status(status: &AsyncLog<u8>, headers: &HeaderMap) {
@@ -2053,6 +2100,18 @@ static HOP_HEADERS: [HeaderName; 9] = [
 	header::UPGRADE,
 ];
 
+fn connection_header_tokens(headers: &HeaderMap) -> Vec<HeaderName> {
+	headers
+		.get_all(header::CONNECTION)
+		.into_iter()
+		.filter_map(|value| value.to_str().ok())
+		.flat_map(|value| value.split(','))
+		.map(str::trim)
+		.filter(|token| !token.is_empty())
+		.filter_map(|token| HeaderName::from_bytes(token.as_bytes()).ok())
+		.collect()
+}
+
 #[derive(Clone)]
 struct RequestUpgrade {
 	upgrade_type: HeaderValue,
@@ -2066,7 +2125,11 @@ fn hop_by_hop_headers(req: &mut Request) -> Option<RequestUpgrade> {
 		.and_then(|h| h.to_str().ok())
 		.map(|s| s.contains("trailers"))
 		.unwrap_or(false);
+	let connection_headers = connection_header_tokens(req.headers());
 	let upgrade_type = get_upgrade_type(req.headers());
+	for h in connection_headers {
+		req.headers_mut().remove(h);
+	}
 	for h in HOP_HEADERS.iter() {
 		req.headers_mut().remove(h);
 	}
