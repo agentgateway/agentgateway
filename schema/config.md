@@ -8683,10 +8683,12 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].sse.host`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].sse.port`|integer||
 |`routeGroups[].routes[].backends[].mcp.targets[].sse.path`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].sse.backend`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].mcp`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].mcp.host`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].mcp.port`|integer||
 |`routeGroups[].routes[].backends[].mcp.targets[].mcp.path`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].mcp.backend`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].stdio`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].stdio.cmd`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].stdio.args`|[]string||
@@ -8695,6 +8697,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.host`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.port`|integer||
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.path`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].openapi.backend`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema.file`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema.url`|string||
