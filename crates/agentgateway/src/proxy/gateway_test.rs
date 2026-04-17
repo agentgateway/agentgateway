@@ -2644,6 +2644,10 @@ async fn llm_models_fallthrough_to_upstream() {
 	assert_eq!(res.status(), 200);
 	let body = read_body_raw(res.into_body()).await;
 	assert_eq!(body.as_ref(), upstream_body);
-	// The upstream should have been contacted exactly once.
-	assert_eq!(mock.received_requests().await.unwrap().len(), 1);
+	// Exactly one upstream hit, and the path must be preserved — a regression
+	// that rewrites to `/v1/chat/completions` would otherwise pass since the
+	// mock matches any path.
+	let requests = mock.received_requests().await.unwrap();
+	assert_eq!(requests.len(), 1);
+	assert_eq!(requests[0].url.path(), "/v1/models");
 }

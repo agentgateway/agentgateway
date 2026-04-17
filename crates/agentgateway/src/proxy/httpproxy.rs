@@ -671,16 +671,14 @@ impl HTTPProxy {
 		//
 		// Pre-filter to keep this off hot paths:
 		//   * Non-GET methods (completions/embeddings/messages are all POST).
-		//   * GETs whose route-level LLM policy already classifies the path as
-		//     something other than Models. When there's no route-level LLM policy
-		//     we can't decide without inspecting each backend, so we enter the
-		//     per-backend loop — this preserves backend-only `ai.routes` configs.
+		//   * GETs whose path clearly is not a models listing request.
+		//
+		// Do not consult the route-level LLM policy here: backend-level `ai.routes`
+		// can replace the route-level mapping during `merge_backend_policies`, so
+		// the effective policy for a backend can still resolve `/.../models` to
+		// `RouteType::Models` even when the route-level policy alone would not.
 		let path = req.uri().path();
-		let maybe_models_route = req.method() == ::http::Method::GET
-			&& route_policies
-				.llm
-				.as_ref()
-				.is_none_or(|p| p.resolve_route(path) == RouteType::Models);
+		let maybe_models_route = req.method() == ::http::Method::GET && path.ends_with("/models");
 
 		if maybe_models_route {
 			let base: Arc<LLMRequestPolicies> = Arc::new(LLMRequestPolicies {
