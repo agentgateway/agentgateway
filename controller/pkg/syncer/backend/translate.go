@@ -295,11 +295,27 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 				mcpTarget.Protocol = api.MCPTarget_STREAMABLE_HTTP
 			}
 
+			if rc := target.ResponseCompression; rc != nil && rc.Enabled {
+				mcpTarget.ResponseCompression = &api.MCPTarget_ResponseCompression{
+					Enabled: rc.Enabled,
+					Format:  rc.Format,
+				}
+			}
+
 			mcpTargets = append(mcpTargets, mcpTarget)
 		} else if s := target.Selector; s != nil {
 			targets, err := TranslateMCPSelectorTargets(ctx, be.Namespace, target.Selector)
 			if err != nil {
 				return nil, err
+			}
+			// Apply responseCompression from the target selector to each generated target
+			if rc := target.ResponseCompression; rc != nil && rc.Enabled {
+				for _, t := range targets {
+					t.ResponseCompression = &api.MCPTarget_ResponseCompression{
+						Enabled: rc.Enabled,
+						Format:  rc.Format,
+					}
+				}
 			}
 			mcpTargets = append(mcpTargets, targets...)
 		}

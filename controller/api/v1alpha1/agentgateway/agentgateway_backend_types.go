@@ -444,6 +444,21 @@ type McpTargetSelector struct {
 	// instead.
 	// +optional
 	Static *McpTarget `json:"static,omitempty"`
+
+	// ResponseCompression configures response compression for the target.
+	// +optional
+	ResponseCompression *ResponseCompression `json:"responseCompression,omitempty"`
+}
+
+// ResponseCompression configures response compression.
+type ResponseCompression struct {
+	// Enabled determines if response compression is enabled.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Format specifies the format to use for compression (e.g., markdown).
+	// +optional
+	Format string `json:"format,omitempty"`
 }
 
 const (

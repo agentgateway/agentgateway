@@ -29,6 +29,7 @@ use crate::http::{
 };
 use crate::mcp::FailureMode;
 use crate::mcp::McpAuthorization;
+use crate::mcp::compress::CompressionFormat;
 use crate::telemetry::log::OrderedStringMap;
 use crate::transport::tls;
 use crate::types::discovery::{NamespacedHostname, Service};
@@ -1263,6 +1264,8 @@ impl McpTargetSpec {
 pub struct SseTargetSpec {
 	pub backend: SimpleBackendReference,
 	pub path: String,
+	#[serde(default)]
+	pub response_compression: Option<CompressionFormat>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1271,6 +1274,8 @@ pub struct SseTargetSpec {
 pub struct StreamableHTTPTargetSpec {
 	pub backend: SimpleBackendReference,
 	pub path: String,
+	#[serde(default)]
+	pub response_compression: Option<CompressionFormat>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1281,6 +1286,8 @@ pub struct OpenAPITarget {
 	#[serde(skip_serializing)]
 	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
 	pub schema: Arc<OpenAPI>,
+	#[serde(default)]
+	pub response_compression: Option<CompressionFormat>,
 }
 
 #[derive(Debug, Clone, Default)]

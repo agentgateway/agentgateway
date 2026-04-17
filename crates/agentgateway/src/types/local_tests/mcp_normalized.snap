@@ -66,6 +66,7 @@ backends:
                 backend:
                   backend: /mcp//ns/name/bind/3000/listener0/default/route0/backend0/1
                 path: /mcp
+                responseCompression: ~
               name: remote
           stateful: true
           alwaysUsePrefix: false

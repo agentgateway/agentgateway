@@ -1223,6 +1223,9 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema.file`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema.url`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].name`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].responseCompression`|object|Configure response compression for this MCP target (Kubernetes CRD only).|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].responseCompression.enabled`|boolean|Whether response compression is enabled.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].responseCompression.format`|string|Compression format: `markdown`, `tsv`, `csv`, or `none`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier.add`|object||

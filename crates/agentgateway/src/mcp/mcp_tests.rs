@@ -216,6 +216,7 @@ async fn stateless_multiplex_get_prompt_initializes_only_target() {
 async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 	let mock_a = mock_streamable_http_server(true).await;
 	let mock_b = mock_streamable_http_server(true).await;
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![
@@ -227,8 +228,10 @@ async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 	let session_manager =
@@ -1616,6 +1619,7 @@ async fn test_zero_targets_fail_closed() {
 	};
 	let client = PolicyClient {
 		inputs: setup_proxy_test("{}").unwrap().pi,
+		span_writer: Default::default(),
 	};
 	let err = crate::mcp::upstream::UpstreamGroup::new(client, backend).unwrap_err();
 	assert!(matches!(err, crate::mcp::Error::NoBackends));
@@ -1630,6 +1634,7 @@ async fn test_zero_targets_fail_open() {
 	};
 	let client = PolicyClient {
 		inputs: setup_proxy_test("{}").unwrap().pi,
+		span_writer: Default::default(),
 	};
 	crate::mcp::upstream::UpstreamGroup::new(client, backend).unwrap();
 }
@@ -1667,6 +1672,7 @@ async fn test_setup_partial_success_fail_open() {
 	};
 	let client = PolicyClient {
 		inputs: setup_proxy_test("{}").unwrap().pi,
+		span_writer: Default::default(),
 	};
 	let group = crate::mcp::upstream::UpstreamGroup::new(client, backend).unwrap();
 	assert_eq!(group.size(), 1);
@@ -1704,6 +1710,7 @@ async fn test_all_targets_fail_open_still_errors() {
 	};
 	let client = PolicyClient {
 		inputs: setup_proxy_test("{}").unwrap().pi,
+		span_writer: Default::default(),
 	};
 	let err = crate::mcp::upstream::UpstreamGroup::new(client, backend).unwrap_err();
 	assert!(matches!(err, crate::mcp::Error::NoBackends));
@@ -1717,6 +1724,7 @@ fn fake_streamable_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 				"/unused-{name}"
 			)),
 			path: "/mcp".to_string(),
+			response_compression: None,
 		}),
 		backend_policies: Default::default(),
 		backend: Some(crate::types::agent::SimpleBackend::Opaque(
@@ -1735,6 +1743,7 @@ fn fake_sse_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 				"/unused-{name}"
 			)),
 			path: "/sse".to_string(),
+			response_compression: None,
 		}),
 		backend_policies: Default::default(),
 		backend: Some(crate::types::agent::SimpleBackend::Opaque(
@@ -1763,6 +1772,7 @@ fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 				"/unused-{name}"
 			)),
 			schema: Arc::new(schema),
+			response_compression: None,
 		}),
 		backend_policies: Default::default(),
 		backend: Some(crate::types::agent::SimpleBackend::Opaque(
@@ -1816,6 +1826,7 @@ fn persisted_stateless_session(
 
 #[test]
 fn test_openapi_targets_emit_stateless_session_state() {
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![fake_openapi_target(
@@ -1827,8 +1838,10 @@ fn test_openapi_targets_emit_stateless_session_state() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 
@@ -1864,6 +1877,7 @@ fn test_openapi_targets_emit_stateless_session_state() {
 
 #[test]
 fn test_sse_targets_emit_stateless_session_state() {
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![fake_sse_target(
@@ -1875,8 +1889,10 @@ fn test_sse_targets_emit_stateless_session_state() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 
@@ -1912,6 +1928,7 @@ fn test_sse_targets_emit_stateless_session_state() {
 
 #[tokio::test]
 async fn test_stdio_targets_remain_non_stateless() {
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![fake_stdio_target("stdio")],
@@ -1920,8 +1937,10 @@ async fn test_stdio_targets_remain_non_stateless() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 
@@ -1932,6 +1951,7 @@ async fn test_stdio_targets_remain_non_stateless() {
 async fn test_fanout_deletion_fail_open_skips_failed_upstreams() {
 	let good = mock_streamable_http_server(true).await;
 	let bad_addr = SocketAddr::from(([127, 0, 0, 1], 31999));
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![
@@ -1943,8 +1963,10 @@ async fn test_fanout_deletion_fail_open_skips_failed_upstreams() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 
@@ -1965,6 +1987,7 @@ async fn test_fanout_deletion_fail_open_skips_failed_upstreams() {
 
 #[test]
 fn test_set_sessions_matches_by_target_name() {
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![
@@ -1976,8 +1999,10 @@ fn test_set_sessions_matches_by_target_name() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 
@@ -2014,6 +2039,7 @@ fn test_set_sessions_matches_by_target_name() {
 
 #[test]
 fn test_set_sessions_rejects_mismatched_target_set() {
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![
@@ -2025,8 +2051,10 @@ fn test_set_sessions_rejects_mismatched_target_set() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 
@@ -2058,6 +2086,7 @@ fn test_merge_initialize_merges_upstream_instructions_when_multiplexing() {
 		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
 	};
 
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![
@@ -2069,8 +2098,10 @@ fn test_merge_initialize_merges_upstream_instructions_when_multiplexing() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 
@@ -2132,6 +2163,7 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
 	};
 
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![fake_streamable_target(
@@ -2143,8 +2175,10 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 
@@ -2183,6 +2217,7 @@ fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
 	};
 
+	let test_pi = setup_proxy_test("{}").unwrap().pi;
 	let relay = Relay::new(
 		McpBackendGroup {
 			targets: vec![fake_streamable_target(
@@ -2194,8 +2229,10 @@ fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 		},
 		empty_mcp_policies(),
 		PolicyClient {
-			inputs: setup_proxy_test("{}").unwrap().pi,
+			inputs: test_pi.clone(),
+			span_writer: Default::default(),
 		},
+		test_pi.metrics.clone(),
 	)
 	.unwrap();
 

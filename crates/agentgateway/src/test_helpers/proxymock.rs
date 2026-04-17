@@ -507,11 +507,13 @@ impl TestBind {
 						McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
 							backend: sb,
 							path: "/mcp".to_string(),
+							response_compression: None,
 						})
 					} else {
 						McpTargetSpec::Sse(SseTargetSpec {
 							backend: sb,
 							path: "/sse".to_string(),
+							response_compression: None,
 						})
 					},
 				})],
@@ -553,11 +555,13 @@ impl TestBind {
 								McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
 									backend: sb,
 									path: "/mcp".to_string(),
+									response_compression: None,
 								})
 							} else {
 								McpTargetSpec::Sse(SseTargetSpec {
 									backend: sb,
 									path: "/sse".to_string(),
+									response_compression: None,
 								})
 							},
 						})

@@ -819,8 +819,9 @@ impl AIProvider {
 			if original_format.supports_prompt_guard() {
 				let http_headers = &parts.headers;
 				let claims = parts.extensions.get::<Claims>().cloned();
+				let sw = log.as_ref().map(|l| l.span_writer()).unwrap_or_default();
 				if let Some(dr) = p
-					.apply_prompt_guard(backend_info, &mut req, http_headers, claims)
+					.apply_prompt_guard(backend_info, &mut req, http_headers, claims, sw)
 					.await
 					.map_err(|e| {
 						warn!("failed to call prompt guard webhook: {e}");

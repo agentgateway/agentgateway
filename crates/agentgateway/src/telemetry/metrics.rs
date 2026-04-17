@@ -13,6 +13,7 @@ use prometheus_client::registry::{Metric, Registry, Unit};
 use tracing::{debug, trace};
 
 use crate::mcp::MCPOperation;
+use crate::mcp::compress::CompressionFormat;
 use crate::proxy::ProxyResponseReason;
 use crate::types::agent::TransportProtocol;
 
@@ -116,6 +117,12 @@ pub struct ConnectLabels {
 	pub transport: DefaultedUnknown<RichStrng>,
 }
 
+#[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct CompressionLabels {
+	pub target: DefaultedUnknown<RichStrng>,
+	pub format: DefaultedUnknown<EncodeDisplay<CompressionFormat>>,
+}
+
 type Counter = Family<HTTPLabels, counter::Counter>;
 type Histogram<T> = Family<T, prometheus_client::metrics::histogram::Histogram>;
 type TCPCounter = Family<TCPLabels, counter::Counter>;
@@ -151,6 +158,16 @@ pub struct Metrics {
 
 	// metrics for request retries
 	pub retries: Counter,
+
+	// MCP response compression metrics
+	pub mcp_response_compression_original_bytes:
+		Family<CompressionLabels, prometheus_client::metrics::histogram::Histogram>,
+	pub mcp_response_compression_compressed_bytes:
+		Family<CompressionLabels, prometheus_client::metrics::histogram::Histogram>,
+	pub mcp_response_compression_ratio:
+		Family<CompressionLabels, prometheus_client::metrics::histogram::Histogram>,
+	pub mcp_response_compression_total: Family<CompressionLabels, counter::Counter>,
+	pub mcp_response_compression_skipped_total: Family<CompressionLabels, counter::Counter>,
 }
 
 // FilteredRegistry is a wrapper around Registry that allows to filter out certain metrics.
@@ -366,6 +383,59 @@ impl Metrics {
 				);
 				m
 			},
+			mcp_response_compression_original_bytes: {
+				let m = Family::<CompressionLabels, _>::new_with_constructor(move || {
+					PromHistogram::new(COMPRESSION_BYTES_BUCKET)
+				});
+				registry.register_with_unit(
+					"mcp_response_compression_original",
+					"Original response size before compression",
+					Unit::Bytes,
+					m.clone(),
+				);
+				m
+			},
+			mcp_response_compression_compressed_bytes: {
+				let m = Family::<CompressionLabels, _>::new_with_constructor(move || {
+					PromHistogram::new(COMPRESSION_BYTES_BUCKET)
+				});
+				registry.register_with_unit(
+					"mcp_response_compression_compressed",
+					"Response size after compression",
+					Unit::Bytes,
+					m.clone(),
+				);
+				m
+			},
+			mcp_response_compression_ratio: {
+				let m = Family::<CompressionLabels, _>::new_with_constructor(move || {
+					PromHistogram::new(COMPRESSION_RATIO_BUCKET)
+				});
+				registry.register(
+					"mcp_response_compression_ratio",
+					"Compression ratio (compressed / original)",
+					m.clone(),
+				);
+				m
+			},
+			mcp_response_compression_total: {
+				let m = Family::<CompressionLabels, _>::default();
+				registry.register(
+					"mcp_response_compression",
+					"Total number of MCP response compressions performed",
+					m.clone(),
+				);
+				m
+			},
+			mcp_response_compression_skipped_total: {
+				let m = Family::<CompressionLabels, _>::default();
+				registry.register(
+					"mcp_response_compression_skipped",
+					"Total number of MCP responses that did not qualify for compression",
+					m.clone(),
+				);
+				m
+			},
 			retries: build(
 				&mut registry,
 				"retries",
@@ -423,3 +493,10 @@ const OUTPUT_TOKEN_BUCKET: [f64; 14] = [
 const FIRST_TOKEN_BUCKET: [f64; 16] = [
 	0.001, 0.005, 0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0,
 ];
+// Byte-size buckets for MCP response compression (256B to 16MB, exponential)
+const COMPRESSION_BYTES_BUCKET: [f64; 12] = [
+	256., 1024., 4096., 16384., 65536., 262144., 524288., 1048576., 2097152., 4194304., 8388608.,
+	16777216.,
+];
+// Ratio buckets for compression ratio (0.0 = perfect compression, 1.0 = no compression)
+const COMPRESSION_RATIO_BUCKET: [f64; 10] = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1.0];

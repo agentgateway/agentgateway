@@ -1295,10 +1295,15 @@ message MCPTarget {
     SSE = 1;
     STREAMABLE_HTTP = 2;
   }
+  message ResponseCompression {
+    bool enabled = 1;
+    string format = 2;
+  }
   string name = 1;
   BackendReference backend = 2;
   string path = 3;
   Protocol protocol = 4;
+  ResponseCompression response_compression = 5;
 }
 
 message BackendReference {
