@@ -13,7 +13,7 @@ use crate::telemetry::metrics::TCPLabels;
 use crate::transport::stream::{Socket, TCPConnectionInfo, TLSConnectionInfo, WaypointTLSInfo};
 use crate::types::agent::{
 	BackendPolicy, BindKey, Listener, ListenerProtocol, SimpleBackend, SimpleBackendReference,
-	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference,
+	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference, Target,
 	TransportProtocol,
 };
 use crate::types::discovery::{NetworkAddress, WaypointIdentity, gatewayaddress::Destination};
@@ -224,6 +224,22 @@ impl TCPProxy {
 				transport_override: None,
 				network_gateway: None,
 				backend_policies,
+			},
+			SimpleBackend::Aws(_, config) => {
+				let default_policies = BackendPolicies {
+					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
+					backend_auth: Some(http::auth::BackendAuth::Aws(
+						http::auth::AwsAuth::Implicit {},
+					)),
+					..Default::default()
+				};
+				BackendCall {
+					target: Target::Hostname(config.get_host().into(), 443),
+					http_version_override: None,
+					transport_override: None,
+					network_gateway: None,
+					backend_policies: default_policies.merge(backend_policies),
+				}
 			},
 			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
 		};

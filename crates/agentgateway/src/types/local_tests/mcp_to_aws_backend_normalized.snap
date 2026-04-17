@@ -1,0 +1,61 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+assertion_line: 136
+description: "Config normalization test for mcp_to_aws_backend: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/3000
+    address: "[::]:3000"
+    protocol: http
+    tunnelProtocol: direct
+    listeners:
+      ns/name/bind/3000/listener0:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: ""
+        key: ns/name/bind/3000/listener0
+        listenerName: listener0
+        protocol: HTTP
+        routes:
+          ns/name/bind/3000/listener0/default/route0:
+            backends:
+              - backend: /shared-mcp
+                weight: 1
+            key: ns/name/bind/3000/listener0/default/route0
+            matches:
+              - path:
+                  pathPrefix: /
+            name: route0
+            namespace: default
+        tcpRoutes: {}
+policies: []
+backends:
+  - backend:
+      mcp:
+        name: shared-mcp
+        namespace: ""
+        target:
+          targets:
+            - mcp:
+                backend:
+                  backend: /aws-agent-core-mcp-target
+                path: /mcp
+              name: default
+          stateful: true
+          alwaysUsePrefix: false
+          failureMode: failClosed
+  - backend:
+      aws:
+        name: aws-agent-core-mcp-target
+        namespace: ""
+        target:
+          agentCore:
+            agentRuntimeArn: "arn:aws:bedrock-agentcore:us-east-1:12345678:runtime/mcp-runtime"
+            qualifier: ~
+            region: us-east-1
+            accountId: "12345678"
+    inlinePolicies:
+      - backendAuth:
+          aws: {}
+workloads: []
+services: []

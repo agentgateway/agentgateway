@@ -1009,6 +1009,7 @@ impl From<SimpleBackend> for Backend {
 		match value {
 			SimpleBackend::Service(svc, port) => Backend::Service(svc, port),
 			SimpleBackend::Opaque(name, target) => Backend::Opaque(name, target),
+			SimpleBackend::Aws(name, cfg) => Backend::Aws(name, cfg),
 			SimpleBackend::Invalid => Backend::Invalid,
 		}
 	}
@@ -1020,6 +1021,7 @@ pub enum SimpleBackend {
 	Service(Arc<Service>, u16),
 	#[serde(rename = "host")]
 	Opaque(ResourceName, Target), // Hostname or IP
+	Aws(ResourceName, crate::aws::AwsBackendConfig),
 	Invalid,
 }
 
@@ -1028,6 +1030,7 @@ impl fmt::Display for SimpleBackend {
 		match self {
 			SimpleBackend::Service(service, port) => write!(f, "{}:{}", service.hostname, port),
 			SimpleBackend::Opaque(name, _) => write!(f, "{}", name),
+			SimpleBackend::Aws(name, _) => write!(f, "{}", name),
 			SimpleBackend::Invalid => write!(f, "invalid"),
 		}
 	}
@@ -1040,6 +1043,7 @@ impl TryFrom<Backend> for SimpleBackend {
 		match value {
 			Backend::Service(svc, port) => Ok(SimpleBackend::Service(svc, port)),
 			Backend::Opaque(name, tgt) => Ok(SimpleBackend::Opaque(name, tgt)),
+			Backend::Aws(rn, cfg) => Ok(SimpleBackend::Aws(rn, cfg)),
 			Backend::Invalid => Ok(SimpleBackend::Invalid),
 			_ => anyhow::bail!("unsupported backend type"),
 		}
@@ -1097,6 +1101,7 @@ impl SimpleBackend {
 			SimpleBackend::Service(svc, port) => {
 				format!("{}:{port}", svc.hostname)
 			},
+			SimpleBackend::Aws(_, cfg) => format!("{}:{}", cfg.get_host(), 443),
 			SimpleBackend::Opaque(_, tgt) => tgt.hostport(),
 			SimpleBackend::Invalid => "invalid".to_string(),
 		}
@@ -1114,6 +1119,11 @@ impl SimpleBackend {
 				namespace: name.namespace.as_ref(),
 				section: None,
 			},
+			SimpleBackend::Aws(name, _) => BackendTargetRef::Backend {
+				name: name.name.as_ref(),
+				namespace: name.namespace.as_ref(),
+				section: None,
+			},
 			SimpleBackend::Invalid => BackendTargetRef::Invalid,
 		}
 	}
@@ -1122,6 +1132,7 @@ impl SimpleBackend {
 		match self {
 			SimpleBackend::Service(_, _) => cel::BackendType::Service,
 			SimpleBackend::Opaque(_, _) => cel::BackendType::Static,
+			SimpleBackend::Aws(_, _) => cel::BackendType::Dynamic,
 			SimpleBackend::Invalid => cel::BackendType::Unknown,
 		}
 	}
