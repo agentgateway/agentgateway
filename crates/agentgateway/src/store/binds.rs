@@ -1450,6 +1450,7 @@ impl StoreUpdater {
 			},
 		}
 	}
+	#[allow(clippy::too_many_arguments)]
 	pub fn sync_local(
 		&self,
 		binds: Vec<Bind>,
