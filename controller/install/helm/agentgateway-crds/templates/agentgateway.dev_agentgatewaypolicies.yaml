@@ -8399,6 +8399,11 @@ spec:
               rule: '!has(self.backend) || !has(self.backend.mcp) || ((!has(self.targetRefs)
                 || !self.targetRefs.exists(t, t.kind == ''Service'')) && (!has(self.targetSelectors)
                 || !self.targetSelectors.exists(t, t.kind == ''Service'')))'
+            - message: backend.mcp may not target an AgentgatewayBackend sectionName
+              rule: '!has(self.backend) || !has(self.backend.mcp) || ((!has(self.targetRefs)
+                || !self.targetRefs.exists(t, t.kind == ''AgentgatewayBackend'' &&
+                has(t.sectionName))) && (!has(self.targetSelectors) || !self.targetSelectors.exists(t,
+                t.kind == ''AgentgatewayBackend'' && has(t.sectionName))))'
             - message: backend.ai may not be used with a Service target
               rule: '!has(self.backend) || !has(self.backend.ai) || ((!has(self.targetRefs)
                 || !self.targetRefs.exists(t, t.kind == ''Service'')) && (!has(self.targetSelectors)
