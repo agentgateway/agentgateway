@@ -707,7 +707,7 @@ impl sse_stream::Timer for TokioSseTimer {
 
 fn get_client_info() -> ClientInfo {
 	let mut client_info = ClientInfo::default();
-	client_info.protocol_version = ProtocolVersion::V_2025_06_18;
+	client_info.protocol_version = ProtocolVersion::V_2025_11_25;
 	client_info.capabilities = rmcp::model::ClientCapabilities::default();
 	client_info.client_info =
 		Implementation::new("agentgateway", BuildInfo::new().version.to_string());

@@ -1142,8 +1142,7 @@ mod mockserver {
 	use std::sync::Arc;
 
 	use http::request::Parts;
-	use rmcp::handler::server::router::prompt::PromptRouter;
-	use rmcp::handler::server::router::tool::ToolRouter;
+
 	use rmcp::handler::server::wrapper::Parameters;
 	use rmcp::model::*;
 	use rmcp::service::RequestContext;
@@ -1179,19 +1178,14 @@ mod mockserver {
 	pub struct Counter {
 		counter: Arc<Mutex<i32>>,
 		init_counter: Arc<Mutex<i32>>,
-		tool_router: ToolRouter<Counter>,
-		prompt_router: PromptRouter<Counter>,
 	}
 
 	#[tool_router]
 	impl Counter {
-		#[allow(dead_code)]
 		pub fn new(init_counter: Arc<Mutex<i32>>) -> Self {
 			Self {
 				counter: Arc::new(Mutex::new(0)),
 				init_counter,
-				tool_router: Self::tool_router(),
-				prompt_router: Self::prompt_router(),
 			}
 		}
 
