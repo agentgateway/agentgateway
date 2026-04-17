@@ -6032,9 +6032,6 @@
         "name": {
           "type": "string"
         },
-        "host": {
-          "type": "string"
-        },
         "policies": {
           "anyOf": [
             {
@@ -6046,10 +6043,55 @@
           ]
         }
       },
-      "additionalProperties": false,
       "required": [
-        "name",
-        "host"
+        "name"
+      ],
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "host": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mcp": {
+              "$ref": "#/$defs/LocalMcpBackend"
+            }
+          },
+          "required": [
+            "mcp"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ai": {
+              "$ref": "#/$defs/LocalAIBackend"
+            }
+          },
+          "required": [
+            "ai"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "aws": {
+              "$ref": "#/$defs/LocalAwsBackend"
+            }
+          },
+          "required": [
+            "aws"
+          ]
+        }
       ]
     },
     "LocalLLMConfig": {
