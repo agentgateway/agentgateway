@@ -828,7 +828,10 @@ async fn tool_call_exposes_payload_fields_to_access_log_cel() {
 	assert_eq!(result_json["hi"], "world");
 	assert!(log.get("mcp_error_cel").is_none());
 
-	assert!(log.get("gen_ai.tool.name").is_none());
+	assert_eq!(
+		log.get("gen_ai.tool.name"),
+		Some(&serde_json::json!("echo"))
+	);
 	assert!(log.get("gen_ai.tool.call.arguments").is_none());
 	assert!(log.get("gen_ai.tool.call.result").is_none());
 }
@@ -881,7 +884,10 @@ async fn tool_call_error_exposes_error_payload_to_access_log_cel() {
 			.is_some_and(|message| message.contains("tool"))
 	);
 	assert!(log.get("mcp_result_cel").is_none());
-	assert!(log.get("gen_ai.tool.name").is_none());
+	assert_eq!(
+		log.get("gen_ai.tool.name"),
+		Some(&serde_json::json!("does_not_exist"))
+	);
 	assert!(log.get("gen_ai.tool.call.arguments").is_none());
 	assert!(log.get("gen_ai.tool.call.result").is_none());
 }
@@ -931,7 +937,10 @@ async fn legacy_sse_tool_call_exposes_arguments_without_terminal_payloads() {
 	assert!(log.get("mcp_result_cel").is_none());
 	assert!(log.get("mcp_error_cel").is_none());
 
-	assert!(log.get("gen_ai.tool.name").is_none());
+	assert_eq!(
+		log.get("gen_ai.tool.name"),
+		Some(&serde_json::json!("echo"))
+	);
 	assert!(log.get("gen_ai.tool.call.arguments").is_none());
 	assert!(log.get("gen_ai.tool.call.result").is_none());
 }

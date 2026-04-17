@@ -891,6 +891,20 @@ impl Drop for DropOnLog {
 				None
 			}
 		});
+		let mcp_tool_name = mcp.as_ref().and_then(|m| {
+			if matches!(m.resource_type(), Some(MCPOperation::Tool)) {
+				m.resource_name().map(str::to_owned)
+			} else {
+				None
+			}
+		});
+		let mcp_prompt_name = mcp.as_ref().and_then(|m| {
+			if matches!(m.resource_type(), Some(MCPOperation::Prompt)) {
+				m.resource_name().map(str::to_owned)
+			} else {
+				None
+			}
+		});
 
 		let mut kv = vec![
 			("gateway", route_identifier.gateway.as_deref().map(display)),
@@ -938,6 +952,8 @@ impl Drop for DropOnLog {
 			("mcp.target", mcp_target.as_ref().map(display)),
 			("mcp.resource.type", mcp_resource_type.as_ref().map(display)),
 			("mcp.resource.uri", mcp_resource_uri.as_ref().map(display)),
+			("gen_ai.tool.name", mcp_tool_name.as_ref().map(display)),
+			("gen_ai.prompt.name", mcp_prompt_name.as_ref().map(display)),
 			(
 				"mcp.session.id",
 				mcp
