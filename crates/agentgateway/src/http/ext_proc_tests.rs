@@ -28,11 +28,10 @@ use wiremock::MockServer;
 #[tokio::test]
 async fn nop_ext_proc() {
 	let mock = body_mock(b"").await;
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock(
+		&mock,
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(NopExtProc::default),
-		"{}",
 	)
 	.await;
 	let res = send_request(io, Method::POST, "http://lo").await;
@@ -44,11 +43,10 @@ async fn nop_ext_proc() {
 #[tokio::test]
 async fn nop_ext_proc_body() {
 	let mock = body_mock(b"original").await;
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock(
+		&mock,
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(NopExtProc::default),
-		"{}",
 	)
 	.await;
 	let res = send_request_body(io, Method::GET, "http://lo", b"request").await;
@@ -61,11 +59,10 @@ async fn nop_ext_proc_body() {
 #[tokio::test]
 async fn body_based_router() {
 	let mock = simple_mock().await;
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock(
+		&mock,
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(|| BBRExtProc::new(false)),
-		"{}",
 	)
 	.await;
 	let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
@@ -85,11 +82,10 @@ async fn body_based_router() {
 #[tokio::test]
 async fn body_based_router_buffer_body() {
 	let mock = simple_mock().await;
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock(
+		&mock,
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(|| BBRExtProc::new(true)),
-		"{}",
 	)
 	.await;
 	let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
@@ -109,11 +105,10 @@ async fn body_based_router_buffer_body() {
 #[tokio::test]
 async fn immediate_response_request() {
 	let mock = simple_mock().await;
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock(
+		&mock,
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(ImmediateResponseExtProc::default),
-		"{}",
 	)
 	.await;
 	let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
@@ -125,11 +120,10 @@ async fn immediate_response_request() {
 #[tokio::test]
 async fn immediate_response_request_body_is_deferred_to_response() {
 	let mock = simple_mock().await;
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock(
+		&mock,
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(ImmediateResponseRequestBodyExtProc::default),
-		"{}",
 	)
 	.await;
 	let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
@@ -141,11 +135,10 @@ async fn immediate_response_request_body_is_deferred_to_response() {
 #[tokio::test]
 async fn immediate_response_response() {
 	let mock = simple_mock().await;
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock(
+		&mock,
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(ImmediateResponseExtProcResponse::default),
-		"{}",
 	)
 	.await;
 	let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
@@ -157,11 +150,10 @@ async fn immediate_response_response() {
 #[tokio::test]
 async fn failure_fail_closed() {
 	let mock = simple_mock().await;
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock(
+		&mock,
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(FailureExtProcResponse::default),
-		"{}",
 	)
 	.await;
 	let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
@@ -173,11 +165,10 @@ async fn failure_fail_closed() {
 #[tokio::test]
 async fn failure_fail_open_body() {
 	let mock = simple_mock().await;
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock(
+		&mock,
 		ext_proc::FailureMode::FailOpen,
 		ExtProcMock::new(FailureExtProcResponse::default),
-		"{}",
 	)
 	.await;
 
@@ -189,11 +180,10 @@ async fn failure_fail_open_body() {
 #[tokio::test]
 async fn failure_fail_open() {
 	let mock = simple_mock().await;
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock(
+		&mock,
 		ext_proc::FailureMode::FailOpen,
 		ExtProcMock::new(FailureExtProcResponse::default),
-		"{}",
 	)
 	.await;
 
@@ -204,11 +194,10 @@ async fn failure_fail_open() {
 #[tokio::test]
 async fn dynamic_metadata() {
 	let mock = body_mock(b"").await;
-	let (_mock, _ext_proc, mut bind, _io) = setup_ext_proc_mock(
-		mock,
+	let (_ext_proc, mut bind, _io) = setup_ext_proc_mock(
+		&mock,
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(DynamicMetadataExtProc::default),
-		"{}",
 	)
 	.await;
 	bind
@@ -239,41 +228,25 @@ async fn dynamic_metadata() {
 }
 
 pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
-	mock: MockServer,
+	mock: &MockServer,
 	failure_mode: ext_proc::FailureMode,
 	mock_ext_proc: ExtProcMock<T>,
-	config: &str,
-) -> (
-	MockServer,
-	MockInstance,
-	TestBind,
-	Client<MemoryConnector, Body>,
-) {
-	setup_ext_proc_mock_with_meta(mock, failure_mode, mock_ext_proc, config, None, None, None).await
+) -> (MockInstance, TestBind, Client<MemoryConnector, Body>) {
+	setup_ext_proc_mock_with_meta(mock, failure_mode, mock_ext_proc, None, None, None).await
 }
 
 pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
-	mock: MockServer,
+	mock: &MockServer,
 	failure_mode: ext_proc::FailureMode,
 	mock_ext_proc: ExtProcMock<T>,
-	config: &str,
 	metadata_context: Option<HashMap<String, HashMap<String, Arc<Expression>>>>,
 	request_attributes: Option<HashMap<String, Arc<Expression>>>,
 	response_attributes: Option<HashMap<String, Arc<Expression>>>,
-) -> (
-	MockServer,
-	MockInstance,
-	TestBind,
-	Client<MemoryConnector, Body>,
-) {
+) -> (MockInstance, TestBind, Client<MemoryConnector, Body>) {
 	let ext_proc = mock_ext_proc.spawn().await;
 
-	let t = setup_proxy_test(config)
-		.unwrap()
-		.with_backend(*mock.address())
+	let t = base_gateway(&mock)
 		.with_backend(ext_proc.address)
-		.with_bind(simple_bind())
-		.with_route(basic_route(*mock.address()))
 		.attach_route_policy_builder(json!({
 			"extProc": {
 				"host": ext_proc.address,
@@ -285,7 +258,7 @@ pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
 		}))
 		.await;
 	let io = t.serve_http(strng::new("bind"));
-	(mock, ext_proc, t, io)
+	(ext_proc, t, io)
 }
 
 #[derive(Debug, Default)]
@@ -1351,11 +1324,10 @@ async fn header_append_action_mock() {
 		),
 		("x-new", b"added", HeaderAppendAction::AppendIfExistsOrAdd),
 	]);
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock(
+		&mock,
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(move || handler.clone()),
-		"{}",
 	)
 	.await;
 	let res = send_request(io, Method::GET, "http://lo").await;
@@ -1677,11 +1649,10 @@ async fn test_attributes_empty_without_config() {
 	let tracker = MetadataTracker::new();
 	let requests = tracker.requests.clone();
 
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock(
+		&mock,
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(move || tracker.clone()),
-		"{}",
 	)
 	.await;
 	let res = send_request_body(io, Method::POST, "http://lo", b"request body").await;
@@ -1742,11 +1713,10 @@ impl Handler for DynamicMetadataResponder {
 #[tokio::test]
 async fn test_dynamic_metadata_response() {
 	let mock = simple_mock().await;
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock(
+		&mock,
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(|| DynamicMetadataResponder),
-		"{}",
 	)
 	.await;
 	let res = send_request(io, Method::GET, "http://lo").await;
@@ -1774,11 +1744,10 @@ async fn test_cel_metadata_context_evaluation() {
 		.into(),
 	)]);
 
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_meta(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock_with_meta(
+		&mock,
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(move || tracker.clone()),
-		"{}",
 		Some(meta),
 		None,
 		None,
@@ -1818,11 +1787,10 @@ async fn test_cel_req_attributes() {
 	let tracker = MetadataTracker::new();
 	let requests = tracker.requests.clone();
 
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_meta(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock_with_meta(
+		&mock,
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(move || tracker.clone()),
-		"{}",
 		None,
 		Some(
 			[(
@@ -1866,11 +1834,10 @@ async fn test_cel_resp_attributes() {
 	let tracker = MetadataTracker::new();
 	let requests = tracker.requests.clone();
 
-	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_meta(
-		mock,
+	let (_ext_proc, _bind, io) = setup_ext_proc_mock_with_meta(
+		&mock,
 		ext_proc::FailureMode::FailClosed,
 		ExtProcMock::new(move || tracker.clone()),
-		"{}",
 		None,
 		None,
 		Some(
