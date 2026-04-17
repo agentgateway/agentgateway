@@ -37,8 +37,8 @@ use crate::types::agent::{
 	Backend, BackendPolicy, BackendReference, BackendTarget, BackendWithPolicies, Bind, BindKey,
 	BindProtocol, Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget, McpTargetSpec,
 	PathMatch, PolicyPhase, PolicyTarget, ResourceName, Route, RouteBackendReference, RouteMatch,
-	RouteName, RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy,
+	RouteName, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	TCPRouteBackendReference, Target, TargetedPolicy,
 };
 use crate::types::local;
 use crate::types::local::LocalNamedAIProvider;
@@ -116,17 +116,16 @@ pub fn base_gateway(mock: &MockServer) -> TestBind {
 	setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(simple_bind(basic_route(*mock.address())))
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()))
 }
 
 pub fn setup_tcp_mock(mock: MockServer) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(simple_tcp_bind(basic_named_tcp_route(strng::format!(
-			"/{}",
-			mock.address()
-		))));
+		.with_bind(simple_tcp_bind())
+		.with_tcp_route(basic_named_tcp_route(strng::format!("/{}", mock.address())));
 	let io = t.serve_http(BIND_KEY);
 	(mock, t, io)
 }
@@ -155,7 +154,9 @@ pub fn setup_llm_named_provider_mock(
 		be,
 	);
 	t.pi.stores.binds.write().insert_backend(b.name(), b.into());
-	let t = t.with_bind(simple_bind(basic_route(*mock.address())));
+	let t = t
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
 	let io = t.serve_http(BIND_KEY);
 	(mock, t, io)
 }
@@ -228,7 +229,7 @@ pub fn basic_named_tcp_route(target: Strng) -> TCPRoute {
 pub const BIND_KEY: Strng = strng::literal!("bind");
 pub const LISTENER_KEY: Strng = strng::literal!("listener");
 
-pub fn simple_bind(route: Route) -> Bind {
+pub fn simple_bind() -> Bind {
 	Bind {
 		key: BIND_KEY,
 		// not really used
@@ -238,8 +239,6 @@ pub fn simple_bind(route: Route) -> Bind {
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTP,
-			tcp_routes: Default::default(),
-			routes: RouteSet::from_list(vec![route]),
 		}]),
 		protocol: BindProtocol::http,
 		tunnel_protocol: Default::default(),
@@ -260,26 +259,22 @@ pub fn waypoint_bind(protocol: ListenerProtocol) -> Bind {
 			},
 			hostname: Default::default(),
 			protocol,
-			tcp_routes: Default::default(),
-			routes: Default::default(),
 		}]),
 		protocol: BindProtocol::http,
 		tunnel_protocol: Default::default(),
 	}
 }
 
-pub fn simple_tcp_bind(route: TCPRoute) -> Bind {
+pub fn simple_tcp_bind() -> Bind {
 	Bind {
 		key: BIND_KEY,
 		// not really used
 		address: "127.0.0.1:0".parse().unwrap(),
 		listeners: ListenerSet::from_list([Listener {
-			key: Default::default(),
+			key: LISTENER_KEY,
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::TCP,
-			tcp_routes: TCPRouteSet::from_list(vec![route]),
-			routes: Default::default(),
 		}]),
 		protocol: BindProtocol::tcp,
 		tunnel_protocol: Default::default(),
@@ -401,7 +396,9 @@ impl tower::Service<Uri> for MemoryConnector {
 
 impl TestBind {
 	pub fn with_bind(self, bind: Bind) -> Self {
-		self.pi.stores.binds.write().insert_bind(bind);
+		let mut binds = self.pi.stores.binds.write();
+		binds.insert_bind(bind);
+		drop(binds);
 		self
 	}
 	pub fn inputs(&self) -> Arc<ProxyInputs> {
@@ -409,6 +406,31 @@ impl TestBind {
 	}
 	pub fn with_route(self, r: Route) -> Self {
 		self.pi.stores.binds.write().insert_route(r, LISTENER_KEY);
+		self
+	}
+
+	pub fn with_tcp_route(self, r: TCPRoute) -> Self {
+		self
+			.pi
+			.stores
+			.binds
+			.write()
+			.insert_tcp_route(r, LISTENER_KEY);
+		self
+	}
+
+	pub fn with_route_for_listener(self, listener_key: Strng, r: Route) -> Self {
+		self.pi.stores.binds.write().insert_route(r, listener_key);
+		self
+	}
+
+	pub fn with_tcp_route_for_listener(self, listener_key: Strng, r: TCPRoute) -> Self {
+		self
+			.pi
+			.stores
+			.binds
+			.write()
+			.insert_tcp_route(r, listener_key);
 		self
 	}
 

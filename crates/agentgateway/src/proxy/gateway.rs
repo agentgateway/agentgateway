@@ -1043,8 +1043,6 @@ impl Gateway {
 					},
 					hostname: Default::default(),
 					protocol: ListenerProtocol::HBONE,
-					tcp_routes: Default::default(),
-					routes: Default::default(),
 				})
 			});
 

@@ -25,10 +25,10 @@ use crate::types::agent::{
 	JwtAuthentication, Listener, ListenerKey, ListenerName, ListenerProtocol, ListenerSet,
 	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpTarget, McpTargetName,
 	McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType, ResourceName,
-	Route, RouteBackendReference, RouteBackendTarget, RouteGroupKey, RouteMatch, RouteName, RouteSet,
+	Route, RouteBackendReference, RouteBackendTarget, RouteGroupKey, RouteMatch, RouteName,
 	ServerTLSConfig, SimpleBackend, SimpleBackendReference, SimpleBackendWithPolicies, SseTargetSpec,
-	StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, TCPRouteSet, Target,
-	TargetedPolicy, TracingConfig, TrafficPolicy, TunnelProtocol, TypedResourceName,
+	StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, Target, TargetedPolicy,
+	TracingConfig, TrafficPolicy, TunnelProtocol, TypedResourceName,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
@@ -239,6 +239,8 @@ fn merge_deprecated_frontend_policies(
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct NormalizedLocalConfig {
 	pub binds: Vec<Bind>,
+	pub listener_routes: Vec<(ListenerKey, Vec<Route>)>,
+	pub listener_tcp_routes: Vec<(ListenerKey, Vec<TCPRoute>)>,
 	pub policies: Vec<TargetedPolicy>,
 	pub backends: Vec<BackendWithPolicies>,
 	pub route_groups: Vec<(RouteGroupKey, Vec<Route>)>,
@@ -1512,11 +1514,13 @@ async fn convert(
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
 	let mut all_binds = vec![];
+	let mut all_listener_routes = vec![];
+	let mut all_listener_tcp_routes = vec![];
 	for b in binds {
 		let bind_name = strng::format!("bind/{}", b.port);
 		let mut ls = ListenerSet::default();
 		for (idx, l) in b.listeners.into_iter().enumerate() {
-			let (l, pol, backends) = convert_listener(
+			let (l, routes, tcp_routes, pol, backends) = convert_listener(
 				client.clone(),
 				config,
 				idx,
@@ -1525,6 +1529,8 @@ async fn convert(
 				gateway.clone(),
 			)
 			.await?;
+			all_listener_routes.push((l.key.clone(), routes));
+			all_listener_tcp_routes.push((l.key.clone(), tcp_routes));
 			all_policies.extend_from_slice(&pol);
 			all_backends.extend_from_slice(&backends);
 			ls.insert(l)
@@ -1607,15 +1613,19 @@ async fn convert(
 
 	// Convert llm config if present
 	if let Some(llm_config) = llm {
-		let (llm_bind, llm_policies, llm_backends) =
+		let (llm_bind, llm_routes, llm_policies, llm_backends) =
 			convert_llm_config(client.clone(), config, gateway.clone(), llm_config).await?;
+		all_listener_routes.push((strng::new("llm"), llm_routes));
+		all_listener_tcp_routes.push((strng::new("llm"), Vec::new()));
 		all_binds.push(llm_bind);
 		all_policies.extend_from_slice(&llm_policies);
 		all_backends.extend_from_slice(&llm_backends);
 	}
 	if let Some(mcp_config) = mcp {
-		let (mcp_bind, mcp_policies, mcp_backends) =
+		let (mcp_bind, mcp_routes, mcp_policies, mcp_backends) =
 			convert_mcp_config(client.clone(), config, gateway.clone(), mcp_config).await?;
+		all_listener_routes.push((strng::new("mcp"), mcp_routes));
+		all_listener_tcp_routes.push((strng::new("mcp"), Vec::new()));
 		all_binds.push(mcp_bind);
 		all_policies.extend_from_slice(&mcp_policies);
 		all_backends.extend_from_slice(&mcp_backends);
@@ -1641,97 +1651,15 @@ async fn convert(
 
 	let normalized = NormalizedLocalConfig {
 		binds: all_binds,
+		listener_routes: all_listener_routes,
+		listener_tcp_routes: all_listener_tcp_routes,
 		policies: all_policies,
 		backends: all_backends.into_iter().collect(),
 		route_groups: all_route_groups,
 		workloads,
 		services,
 	};
-	validate_listener_oidc_modes(&normalized)?;
 	Ok(normalized)
-}
-
-#[derive(Default)]
-struct ListenerOidcModes {
-	has_gateway_phase_oidc: bool,
-	has_route_phase_oidc: bool,
-}
-
-fn validate_listener_oidc_modes(normalized: &NormalizedLocalConfig) -> anyhow::Result<()> {
-	let mut listener_modes: HashMap<ListenerName, ListenerOidcModes> = HashMap::new();
-	let mut route_listeners: HashMap<RouteName, ListenerName> = HashMap::new();
-	let listeners: Vec<ListenerName> = normalized
-		.binds
-		.iter()
-		.flat_map(|bind| bind.listeners.iter())
-		.map(|listener| listener.name.clone())
-		.collect();
-
-	for bind in &normalized.binds {
-		for listener in bind.listeners.iter() {
-			for route in listener.routes.iter() {
-				route_listeners.insert(route.name.clone(), listener.name.clone());
-				if route
-					.inline_policies
-					.iter()
-					.any(|policy| matches!(policy, TrafficPolicy::Oidc(_)))
-				{
-					listener_modes
-						.entry(listener.name.clone())
-						.or_default()
-						.has_route_phase_oidc = true;
-				}
-			}
-		}
-	}
-
-	for policy in &normalized.policies {
-		let PolicyType::Traffic(traffic) = &policy.policy else {
-			continue;
-		};
-		if !matches!(traffic.policy, TrafficPolicy::Oidc(_)) {
-			continue;
-		}
-
-		let affected_listeners: Vec<ListenerName> = match &policy.target {
-			PolicyTarget::Gateway(target) => listeners
-				.iter()
-				.filter(|listener| {
-					listener.gateway_name == target.gateway_name
-						&& listener.gateway_namespace == target.gateway_namespace
-						&& target
-							.listener_name
-							.as_ref()
-							.is_none_or(|name| listener.listener_name == *name)
-				})
-				.cloned()
-				.collect(),
-			PolicyTarget::Route(route) => route_listeners.get(route).into_iter().cloned().collect(),
-			PolicyTarget::Backend(_) => Vec::new(),
-		};
-
-		for listener in affected_listeners {
-			let modes = listener_modes.entry(listener).or_default();
-			match traffic.phase {
-				PolicyPhase::Gateway => modes.has_gateway_phase_oidc = true,
-				PolicyPhase::Route => modes.has_route_phase_oidc = true,
-			}
-		}
-	}
-
-	if let Some((listener, _)) = listener_modes
-		.iter()
-		.find(|(_, modes)| modes.has_gateway_phase_oidc && modes.has_route_phase_oidc)
-	{
-		bail!(
-			"listener '{}/{}/{}' cannot mix gateway-phase oidc with route-phase oidc",
-			listener.gateway_namespace,
-			listener.gateway_name,
-			listener.listener_name
-		);
-	}
-
-	Ok(())
 }
 
 static STARTUP_TIMESTAMP: OnceLock<u64> = OnceLock::new();
@@ -1770,7 +1698,12 @@ async fn convert_llm_config(
 	config: &crate::Config,
 	gateway: ListenerTarget,
 	llm_config: LocalLLMConfig,
-) -> anyhow::Result<(Bind, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
+) -> anyhow::Result<(
+	Bind,
+	Vec<Route>,
+	Vec<TargetedPolicy>,
+	Vec<BackendWithPolicies>,
+)> {
 	const DEFAULT_LLM_PORT: u16 = 4000;
 	let LocalLLMConfig {
 		port,
@@ -1781,7 +1714,7 @@ async fn convert_llm_config(
 
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
-	let mut routes = RouteSet::default();
+	let mut routes = Vec::new();
 	let (listener_gateway_policies, listener_route_policies) = if let Some(pol) = policies {
 		let LocalLLMPolicy {
 			gateway,
@@ -1900,7 +1833,7 @@ json(request.body).model
 			}),
 		],
 	};
-	routes.insert(model_list_route);
+	routes.push(model_list_route);
 
 	// Create routes and backends for each model
 	for (idx, model_config) in models.iter().enumerate() {
@@ -2106,7 +2039,7 @@ json(request.body).model
 				..Default::default()
 			}))],
 		};
-		routes.insert(model_route);
+		routes.push(model_route);
 	}
 
 	// Create listener
@@ -2122,8 +2055,6 @@ json(request.body).model
 		name: listener_name.clone(),
 		hostname: strng::new("*"),
 		protocol: ListenerProtocol::HTTP,
-		routes,
-		tcp_routes: Default::default(),
 	};
 
 	if !listener_gateway_policies.is_empty() || !listener_route_policies.is_empty() {
@@ -2184,7 +2115,7 @@ json(request.body).model
 		tunnel_protocol: TunnelProtocol::Direct,
 	};
 
-	Ok((bind, all_policies, all_backends))
+	Ok((bind, routes, all_policies, all_backends))
 }
 
 async fn convert_mcp_config(
@@ -2192,7 +2123,12 @@ async fn convert_mcp_config(
 	config: &crate::Config,
 	gateway: ListenerTarget,
 	mcp_config: LocalSimpleMcpConfig,
-) -> anyhow::Result<(Bind, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
+) -> anyhow::Result<(
+	Bind,
+	Vec<Route>,
+	Vec<TargetedPolicy>,
+	Vec<BackendWithPolicies>,
+)> {
 	const DEFAULT_MCP_PORT: u16 = 3000;
 	let LocalSimpleMcpConfig {
 		port,
@@ -2208,7 +2144,7 @@ async fn convert_mcp_config(
 		ResolvedPolicies::default()
 	};
 
-	let mut routes = RouteSet::default();
+	let mut routes = Vec::new();
 	let route = Route {
 		key: route_key.clone(),
 		service_key: None,
@@ -2227,7 +2163,7 @@ async fn convert_mcp_config(
 		}],
 		inline_policies: resolved_policies.route_policies,
 	};
-	routes.insert(route);
+	routes.push(route);
 
 	let listener_key: ListenerKey = strng::new("mcp");
 	let listener_name = ListenerName {
@@ -2241,8 +2177,6 @@ async fn convert_mcp_config(
 		name: listener_name,
 		hostname: strng::new("*"),
 		protocol: ListenerProtocol::HTTP,
-		routes,
-		tcp_routes: Default::default(),
 	};
 
 	let mut listener_set = ListenerSet::default();
@@ -2270,7 +2204,7 @@ async fn convert_mcp_config(
 		)
 		.await?;
 
-	Ok((bind, vec![], backends))
+	Ok((bind, routes, vec![], backends))
 }
 
 fn detect_bind_protocol(listeners: &ListenerSet) -> BindProtocol {
@@ -2302,7 +2236,13 @@ async fn convert_listener(
 	l: LocalListener,
 	bind_key: Strng,
 	gateway: ListenerTarget,
-) -> anyhow::Result<(Listener, Vec<TargetedPolicy>, Vec<BackendWithPolicies>)> {
+) -> anyhow::Result<(
+	Listener,
+	Vec<Route>,
+	Vec<TCPRoute>,
+	Vec<TargetedPolicy>,
+	Vec<BackendWithPolicies>,
+)> {
 	let LocalListener {
 		name,
 		policies,
@@ -2371,19 +2311,19 @@ async fn convert_listener(
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
 
-	let mut rs = RouteSet::default();
+	let mut rs = Vec::new();
 	for (idx, l) in routes.into_iter().flatten().enumerate() {
 		let (route, backends) = convert_route(client.clone(), config, l, idx, key.clone()).await?;
 		all_backends.extend_from_slice(&backends);
-		rs.insert(route)
+		rs.push(route)
 	}
 
-	let mut trs = TCPRouteSet::default();
+	let mut trs = Vec::new();
 	for (idx, l) in tcp_routes.into_iter().flatten().enumerate() {
 		let (route, policies, backends) = convert_tcp_route(l, idx, key.clone()).await?;
 		all_policies.extend_from_slice(&policies);
 		all_backends.extend_from_slice(&backends);
-		trs.insert(route)
+		trs.push(route)
 	}
 
 	if let Some(pol) = policies {
@@ -2411,10 +2351,8 @@ async fn convert_listener(
 		name,
 		hostname,
 		protocol,
-		routes: rs,
-		tcp_routes: trs,
 	};
-	Ok((l, all_policies, all_backends))
+	Ok((l, rs, trs, all_policies, all_backends))
 }
 
 pub async fn convert_route(

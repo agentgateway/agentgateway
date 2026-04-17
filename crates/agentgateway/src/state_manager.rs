@@ -199,6 +199,8 @@ impl LocalClient {
 		// Sync the state
 		let next_binds = self.stores.binds.sync_local(
 			config.binds,
+			config.listener_routes,
+			config.listener_tcp_routes,
 			config.policies,
 			config.backends,
 			config.route_groups,

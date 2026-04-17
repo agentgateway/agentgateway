@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
+assertion_line: 137
 description: "Config normalization test for llm: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
@@ -15,18 +16,20 @@ binds:
         key: ns/name/bind/8080/llm
         listenerName: llm
         protocol: HTTP
-        routes:
-          ns/name/bind/8080/llm/default/route0:
-            backends:
-              - backend: /ns/name/bind/8080/llm/default/route0/backend0
-                weight: 1
-            key: ns/name/bind/8080/llm/default/route0
-            matches:
-              - path:
-                  pathPrefix: /
-            name: route0
-            namespace: default
-        tcpRoutes: {}
+listener_routes:
+  - - ns/name/bind/8080/llm
+    - - backends:
+          - backend: /ns/name/bind/8080/llm/default/route0/backend0
+            weight: 1
+        key: ns/name/bind/8080/llm/default/route0
+        matches:
+          - path:
+              pathPrefix: /
+        name: route0
+        namespace: default
+listener_tcp_routes:
+  - - ns/name/bind/8080/llm
+    - []
 policies: []
 backends:
   - backend:

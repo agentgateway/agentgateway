@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
+assertion_line: 137
 description: "Config normalization test for llm_simple: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
@@ -15,139 +16,137 @@ binds:
         key: llm
         listenerName: llm
         protocol: HTTP
-        routes:
-          "llm:admin:model-list":
-            inlinePolicies:
-              - responseHeaderModifier:
-                  set:
-                    Content-Type: application/json
-              - directResponse:
-                  body: eyJkYXRhIjpbeyJpZCI6ImNsYXVkZS0zLWhhaWt1Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJnZW1pbmktMC41LXBybyIsIm9iamVjdCI6Im1vZGVsIiwiY3JlYXRlZCI6MCwib3duZWRfYnkiOiJvcGVuYWkifSx7ImlkIjoiZ3B0LTctbWF4Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJncHQtMy41LXR1cmJvIiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9XSwib2JqZWN0IjoibGlzdCJ9
-                  status: 200
-            key: "llm:admin:model-list"
-            matches:
-              - path:
-                  pathPrefix: /v1/models
-              - path:
-                  pathPrefix: /models
-            name: "admin:model-list"
-            namespace: internal
-          "llm:model:000000:claude-3-haiku":
-            backends:
-              - backend: "/llm:model:claude-3-haiku:0"
-                weight: 1
-            inlinePolicies:
-              - ai:
-                  routes:
-                    "*": passthrough
-                    /v1/chat/completions: completions
-                    /v1/embeddings: embeddings
-                    /v1/images/edits: detect
-                    /v1/images/generations: detect
-                    /v1/images/variations: detect
-                    /v1/messages: messages
-                    /v1/responses: responses
-                    /v1/responses/compact: detect
-                    ":rawPredict": messages
-                    ":streamRawPredict": messages
-            key: "llm:model:000000:claude-3-haiku"
-            matches:
-              - headers:
-                  - name: x-org
-                    value:
-                      exact: engineering
-                  - name: x-gateway-model-name
-                    value:
-                      exact: claude-3-haiku
-                path:
-                  pathPrefix: /
-            name: "model:claude-3-haiku"
-            namespace: internal
-          "llm:model:000001:gemini-0.5-pro":
-            backends:
-              - backend: "/llm:model:gemini-0.5-pro:1"
-                weight: 1
-            inlinePolicies:
-              - ai:
-                  routes:
-                    "*": passthrough
-                    /v1/chat/completions: completions
-                    /v1/embeddings: embeddings
-                    /v1/images/edits: detect
-                    /v1/images/generations: detect
-                    /v1/images/variations: detect
-                    /v1/messages: messages
-                    /v1/responses: responses
-                    /v1/responses/compact: detect
-                    ":rawPredict": messages
-                    ":streamRawPredict": messages
-            key: "llm:model:000001:gemini-0.5-pro"
-            matches:
-              - headers:
-                  - name: x-gateway-model-name
-                    value:
-                      exact: gemini-0.5-pro
-                path:
-                  pathPrefix: /
-            name: "model:gemini-0.5-pro"
-            namespace: internal
-          "llm:model:000002:gpt-7-max":
-            backends:
-              - backend: "/llm:model:gpt-7-max:2"
-                weight: 1
-            inlinePolicies:
-              - ai:
-                  routes:
-                    "*": passthrough
-                    /v1/chat/completions: completions
-                    /v1/embeddings: embeddings
-                    /v1/images/edits: detect
-                    /v1/images/generations: detect
-                    /v1/images/variations: detect
-                    /v1/messages: messages
-                    /v1/responses: responses
-                    /v1/responses/compact: detect
-                    ":rawPredict": messages
-                    ":streamRawPredict": messages
-            key: "llm:model:000002:gpt-7-max"
-            matches:
-              - headers:
-                  - name: x-gateway-model-name
-                    value:
-                      exact: gpt-7-max
-                path:
-                  pathPrefix: /
-            name: "model:gpt-7-max"
-            namespace: internal
-          "llm:model:000003:gpt-3.5-turbo":
-            backends:
-              - backend: "/llm:model:gpt-3.5-turbo:3"
-                weight: 1
-            inlinePolicies:
-              - ai:
-                  routes:
-                    "*": passthrough
-                    /v1/chat/completions: completions
-                    /v1/embeddings: embeddings
-                    /v1/images/edits: detect
-                    /v1/images/generations: detect
-                    /v1/images/variations: detect
-                    /v1/messages: messages
-                    /v1/responses: responses
-                    /v1/responses/compact: detect
-                    ":rawPredict": messages
-                    ":streamRawPredict": messages
-            key: "llm:model:000003:gpt-3.5-turbo"
-            matches:
-              - headers:
-                  - name: x-gateway-model-name
-                    value:
-                      exact: gpt-3.5-turbo
-                path:
-                  pathPrefix: /
-            name: "model:gpt-3.5-turbo"
-            namespace: internal
-        tcpRoutes: {}
+listener_routes:
+  - - llm
+    - - inlinePolicies:
+          - responseHeaderModifier:
+              set:
+                Content-Type: application/json
+          - directResponse:
+              body: eyJkYXRhIjpbeyJpZCI6ImNsYXVkZS0zLWhhaWt1Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJnZW1pbmktMC41LXBybyIsIm9iamVjdCI6Im1vZGVsIiwiY3JlYXRlZCI6MCwib3duZWRfYnkiOiJvcGVuYWkifSx7ImlkIjoiZ3B0LTctbWF4Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJncHQtMy41LXR1cmJvIiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9XSwib2JqZWN0IjoibGlzdCJ9
+              status: 200
+        key: "llm:admin:model-list"
+        matches:
+          - path:
+              pathPrefix: /v1/models
+          - path:
+              pathPrefix: /models
+        name: "admin:model-list"
+        namespace: internal
+      - backends:
+          - backend: "/llm:model:claude-3-haiku:0"
+            weight: 1
+        inlinePolicies:
+          - ai:
+              routes:
+                "*": passthrough
+                /v1/chat/completions: completions
+                /v1/embeddings: embeddings
+                /v1/images/edits: detect
+                /v1/images/generations: detect
+                /v1/images/variations: detect
+                /v1/messages: messages
+                /v1/responses: responses
+                /v1/responses/compact: detect
+                ":rawPredict": messages
+                ":streamRawPredict": messages
+        key: "llm:model:000000:claude-3-haiku"
+        matches:
+          - headers:
+              - name: x-org
+                value:
+                  exact: engineering
+              - name: x-gateway-model-name
+                value:
+                  exact: claude-3-haiku
+            path:
+              pathPrefix: /
+        name: "model:claude-3-haiku"
+        namespace: internal
+      - backends:
+          - backend: "/llm:model:gemini-0.5-pro:1"
+            weight: 1
+        inlinePolicies:
+          - ai:
+              routes:
+                "*": passthrough
+                /v1/chat/completions: completions
+                /v1/embeddings: embeddings
+                /v1/images/edits: detect
+                /v1/images/generations: detect
+                /v1/images/variations: detect
+                /v1/messages: messages
+                /v1/responses: responses
+                /v1/responses/compact: detect
+                ":rawPredict": messages
+                ":streamRawPredict": messages
+        key: "llm:model:000001:gemini-0.5-pro"
+        matches:
+          - headers:
+              - name: x-gateway-model-name
+                value:
+                  exact: gemini-0.5-pro
+            path:
+              pathPrefix: /
+        name: "model:gemini-0.5-pro"
+        namespace: internal
+      - backends:
+          - backend: "/llm:model:gpt-7-max:2"
+            weight: 1
+        inlinePolicies:
+          - ai:
+              routes:
+                "*": passthrough
+                /v1/chat/completions: completions
+                /v1/embeddings: embeddings
+                /v1/images/edits: detect
+                /v1/images/generations: detect
+                /v1/images/variations: detect
+                /v1/messages: messages
+                /v1/responses: responses
+                /v1/responses/compact: detect
+                ":rawPredict": messages
+                ":streamRawPredict": messages
+        key: "llm:model:000002:gpt-7-max"
+        matches:
+          - headers:
+              - name: x-gateway-model-name
+                value:
+                  exact: gpt-7-max
+            path:
+              pathPrefix: /
+        name: "model:gpt-7-max"
+        namespace: internal
+      - backends:
+          - backend: "/llm:model:gpt-3.5-turbo:3"
+            weight: 1
+        inlinePolicies:
+          - ai:
+              routes:
+                "*": passthrough
+                /v1/chat/completions: completions
+                /v1/embeddings: embeddings
+                /v1/images/edits: detect
+                /v1/images/generations: detect
+                /v1/images/variations: detect
+                /v1/messages: messages
+                /v1/responses: responses
+                /v1/responses/compact: detect
+                ":rawPredict": messages
+                ":streamRawPredict": messages
+        key: "llm:model:000003:gpt-3.5-turbo"
+        matches:
+          - headers:
+              - name: x-gateway-model-name
+                value:
+                  exact: gpt-3.5-turbo
+            path:
+              pathPrefix: /
+        name: "model:gpt-3.5-turbo"
+        namespace: internal
+listener_tcp_routes:
+  - - llm
+    - []
 policies:
   - key: listener/0
     name: ~

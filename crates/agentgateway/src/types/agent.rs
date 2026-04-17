@@ -59,8 +59,6 @@ pub struct Listener {
 	/// Can be a wildcard
 	pub hostname: Strng,
 	pub protocol: ListenerProtocol,
-	pub routes: RouteSet,
-	pub tcp_routes: TCPRouteSet,
 }
 
 impl Listener {

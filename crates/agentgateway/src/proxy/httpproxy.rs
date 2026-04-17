@@ -87,12 +87,14 @@ fn select_route_chain(
 			});
 		};
 
-		let binds = inputs.stores.binds.read();
-		let rg = binds
-			.lookup_route_group(route_name)
-			.ok_or(ProxyError::RouteNotFound)?;
+		let rg = {
+			let binds = inputs.stores.binds.read();
+			binds
+				.lookup_route_group(route_name)
+				.ok_or(ProxyError::RouteNotFound)?
+		};
 		(selected_route, path_match) =
-			http::route::select_best_route_group(rg, req).ok_or(ProxyError::RouteNotFound)?;
+			http::route::select_best_route_group(rg.as_ref(), req).ok_or(ProxyError::RouteNotFound)?;
 		if !seen.insert(selected_route.key.clone()) {
 			return Err(ProxyError::RouteCycleDetected);
 		}
@@ -2549,7 +2551,7 @@ mod route_chain_tests {
 			.unwrap()
 	}
 
-	fn bind(routes: Vec<Route>) -> Bind {
+	fn bind() -> Bind {
 		Bind {
 			key: proxymock::BIND_KEY,
 			address: "127.0.0.1:0".parse().unwrap(),
@@ -2558,8 +2560,6 @@ mod route_chain_tests {
 				name: Default::default(),
 				hostname: Default::default(),
 				protocol: ListenerProtocol::HTTP,
-				tcp_routes: Default::default(),
-				routes: RouteSet::from_list(routes),
 			}]),
 			protocol: BindProtocol::http,
 			tunnel_protocol: Default::default(),
@@ -2579,12 +2579,13 @@ mod route_chain_tests {
 			"/foo",
 			RouteBackendTarget::RouteGroup(child.key.clone()),
 		);
-		let bind = bind(vec![parent]);
+		let bind = bind();
 		let listener = bind.listeners.get_exactly_one().unwrap();
 		let proxy = proxymock::setup_proxy_test("{}")
 			.unwrap()
 			.with_backend(backend)
 			.with_bind(bind)
+			.with_route(parent)
 			.with_route_group(child.key.clone(), vec![child.clone()]);
 
 		let selected = select_route_chain(
@@ -2620,11 +2621,13 @@ mod route_chain_tests {
 			"/",
 			RouteBackendTarget::RouteGroup(strng::literal!("parent")),
 		);
-		let bind = bind(vec![parent.clone(), child.clone()]);
+		let bind = bind();
 		let listener = bind.listeners.get_exactly_one().unwrap();
 		let proxy = proxymock::setup_proxy_test("{}")
 			.unwrap()
 			.with_bind(bind)
+			.with_route(parent.clone())
+			.with_route(child.clone())
 			.with_route_group(strng::literal!("child"), vec![child])
 			.with_route_group(strng::literal!("parent"), vec![parent]);
 
@@ -2640,9 +2643,12 @@ mod route_chain_tests {
 
 	#[test]
 	fn select_route_chain_allows_backendless_terminal_route() {
-		let bind = bind(vec![route_without_backends("direct", "/")]);
+		let bind = bind();
 		let listener = bind.listeners.get_exactly_one().unwrap();
-		let proxy = proxymock::setup_proxy_test("{}").unwrap().with_bind(bind);
+		let proxy = proxymock::setup_proxy_test("{}")
+			.unwrap()
+			.with_bind(bind)
+			.with_route(route_without_backends("direct", "/"));
 
 		let selected = select_route_chain(
 			proxy.inputs().as_ref(),

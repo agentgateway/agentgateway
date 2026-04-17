@@ -706,8 +706,6 @@ impl Listener {
 				.into(),
 			hostname: s.hostname.clone().into(),
 			protocol,
-			routes: Default::default(),
-			tcp_routes: Default::default(),
 		};
 		Ok((l, strng::new(&s.bind_key)))
 	}

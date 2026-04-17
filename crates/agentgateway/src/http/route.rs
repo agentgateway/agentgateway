@@ -130,24 +130,25 @@ pub fn select_best_route(
 			// the request is rejected (per GAMMA spec).
 			let svc = wps.as_ref();
 			let svc_nh = svc.namespaced_hostname();
-			let (has_svc_routes, svc_route_match) = {
+			let svc_routes = {
 				let binds = stores.read_binds();
-				match binds.get_service_routes(&svc_nh) {
-					Some(svc_routes) => {
-						let mut result = None;
-						for hnm in agent::HostnameMatch::all_matches(&svc.hostname) {
-							result = svc_routes
-								.get_hostname(&hnm)
-								.find(|(_, m)| matches_request(m, request))
-								.map(|(route, matcher)| (route, matcher.path.clone()));
-							if result.is_some() {
-								break;
-							}
+				binds.get_service_routes(&svc_nh)
+			};
+			let (has_svc_routes, svc_route_match) = match svc_routes {
+				Some(svc_routes) => {
+					let mut result = None;
+					for hnm in agent::HostnameMatch::all_matches(&svc.hostname) {
+						result = svc_routes
+							.get_hostname(&hnm)
+							.find(|(_, m)| matches_request(m, request))
+							.map(|(route, matcher)| (route, matcher.path.clone()));
+						if result.is_some() {
+							break;
 						}
-						(true, result)
-					},
-					None => (false, None),
-				}
+					}
+					(true, result)
+				},
+				None => (false, None),
 			};
 			if let Some(result) = svc_route_match {
 				return Some(result);
@@ -188,11 +189,17 @@ pub fn select_best_route(
 		} else {
 			(None, Cow::Borrowed(host))
 		};
-	for hnm in agent::HostnameMatch::all_matches(&host) {
-		let mut candidates = listener.routes.get_hostname(&hnm);
-		let best_match = candidates.find(|(_, m)| matches_request(m, request));
-		if let Some((route, matcher)) = best_match {
-			return Some((route, matcher.path.clone()));
+	let listener_routes = {
+		let binds = stores.read_binds();
+		binds.get_listener_routes(&listener.key)
+	};
+	if let Some(routes) = listener_routes {
+		for hnm in agent::HostnameMatch::all_matches(&host) {
+			let mut candidates = routes.get_hostname(&hnm);
+			let best_match = candidates.find(|(_, m)| matches_request(m, request));
+			if let Some((route, matcher)) = best_match {
+				return Some((route, matcher.path.clone()));
+			}
 		}
 	}
 	default_response

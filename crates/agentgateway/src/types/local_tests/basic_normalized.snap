@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
+assertion_line: 137
 description: "Config normalization test for basic: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
@@ -15,28 +16,30 @@ binds:
         key: ns/name/bind/3000/listener0
         listenerName: listener0
         protocol: HTTP
-        routes:
-          ns/name/bind/3000/listener0/default/route0:
-            backends:
-              - backend: /ns/name/bind/3000/listener0/default/route0/backend0
-                weight: 1
-            inlinePolicies:
-              - cors:
-                  allowCredentials: false
-                  allowHeaders:
-                    - mcp-protocol-version
-                    - content-type
-                    - cache-control
-                  allowOrigins:
-                    - "*"
-                  maxAge: ~
-            key: ns/name/bind/3000/listener0/default/route0
-            matches:
-              - path:
-                  pathPrefix: /
-            name: route0
-            namespace: default
-        tcpRoutes: {}
+listener_routes:
+  - - ns/name/bind/3000/listener0
+    - - backends:
+          - backend: /ns/name/bind/3000/listener0/default/route0/backend0
+            weight: 1
+        inlinePolicies:
+          - cors:
+              allowCredentials: false
+              allowHeaders:
+                - mcp-protocol-version
+                - content-type
+                - cache-control
+              allowOrigins:
+                - "*"
+              maxAge: ~
+        key: ns/name/bind/3000/listener0/default/route0
+        matches:
+          - path:
+              pathPrefix: /
+        name: route0
+        namespace: default
+listener_tcp_routes:
+  - - ns/name/bind/3000/listener0
+    - []
 policies:
   - key: frontend/accessLog
     name: ~

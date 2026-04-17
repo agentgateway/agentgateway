@@ -288,9 +288,15 @@ fn select_best_route(
 	// Assume matches are ordered already (not true today)
 
 	// Try explicit TCP routes first
-	for hnm in agent::HostnameMatch::all_matches_or_none(host) {
-		if let Some(r) = listener.tcp_routes.get_hostname(&hnm) {
-			return Some(Arc::new(r.clone()));
+	let listener_tcp_routes = {
+		let binds = stores.read_binds();
+		binds.get_listener_tcp_routes(&listener.key)
+	};
+	if let Some(listener_tcp_routes) = listener_tcp_routes {
+		for hnm in agent::HostnameMatch::all_matches_or_none(host) {
+			if let Some(r) = listener_tcp_routes.get_hostname(&hnm) {
+				return Some(Arc::new(r.clone()));
+			}
 		}
 	}
 
@@ -302,17 +308,18 @@ fn select_best_route(
 		// over listener-attached routes. If service routes exist but none match,
 		// the request is rejected (per GAMMA spec).
 		let svc_nh = svc.namespaced_hostname();
-		{
+		let svc_tcp_routes = {
 			let binds = stores.read_binds();
-			if let Some(svc_tcp_routes) = binds.get_service_tcp_routes(&svc_nh) {
-				for hnm in agent::HostnameMatch::all_matches(&svc.hostname) {
-					if let Some(r) = svc_tcp_routes.get_hostname(&hnm) {
-						return Some(Arc::new(r.clone()));
-					}
+			binds.get_service_tcp_routes(&svc_nh)
+		};
+		if let Some(svc_tcp_routes) = svc_tcp_routes {
+			for hnm in agent::HostnameMatch::all_matches(&svc.hostname) {
+				if let Some(r) = svc_tcp_routes.get_hostname(&hnm) {
+					return Some(Arc::new(r.clone()));
 				}
-				// GAMMA: service routes exist but none matched -> reject
-				return None;
 			}
+			// GAMMA: service routes exist but none matched -> reject
+			return None;
 		}
 
 		// No service-keyed routes: generate default passthrough
@@ -488,8 +495,6 @@ mod tests {
 			},
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HBONE,
-			tcp_routes: Default::default(),
-			routes: Default::default(),
 		})
 	}
 
@@ -701,8 +706,6 @@ mod tests {
 			},
 			hostname: Default::default(),
 			protocol: ListenerProtocol::TLS(None), // Not HBONE
-			tcp_routes: Default::default(),
-			routes: Default::default(),
 		});
 
 		let route = super::select_best_route(None, listener, &stores, &network, dst, None);

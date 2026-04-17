@@ -71,7 +71,8 @@ async fn stream_to_multiplex() {
 			],
 			true,
 		)
-		.with_bind(simple_bind(basic_named_route(strng::new("/mcp"))));
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
 	let io = t.serve_real_listener(strng::new("bind")).await;
 	let client = mcp_streamable_client(io).await;
 	let tools = client.list_tools(None).await.unwrap();
@@ -153,7 +154,8 @@ async fn stateless_multiplex_tool_call_initializes_only_target() {
 			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
 			false,
 		)
-		.with_bind(simple_bind(basic_named_route(strng::new("/mcp"))));
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
 	let io = t.serve_real_listener(strng::new("bind")).await;
 	let client = mcp_streamable_client(io).await;
 	let a_init_before = mock_a.init_count().await;
@@ -188,7 +190,8 @@ async fn stateless_multiplex_get_prompt_initializes_only_target() {
 			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
 			false,
 		)
-		.with_bind(simple_bind(basic_named_route(strng::new("/mcp"))));
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
 	let io = t.serve_real_listener(strng::new("bind")).await;
 	let client = mcp_streamable_client(io).await;
 	let a_init_before = mock_a.init_count().await;
@@ -1001,7 +1004,8 @@ async fn setup_proxy_policies(
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_mcp_backend_policies(mock.addr, stateful, legacy_sse, policies)
-		.with_bind(simple_bind(basic_route(mock.addr)));
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
 	let io = t.serve_real_listener(BIND_KEY).await;
 	(t, io)
 }
@@ -2348,7 +2352,8 @@ async fn mcp_local_ratelimit() {
 	let mut t = setup_proxy_test("{}")
 		.unwrap()
 		.with_mcp_backend(mock.addr, true, false)
-		.with_bind(simple_bind(basic_route(mock.addr)));
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
 
 	// Attach local rate limit policy
 	// MCP protocol overhead: initialize + notification + SSE GET = 3 requests
@@ -2416,7 +2421,8 @@ async fn mcp_extauth_deny() {
 	let mut t = setup_proxy_test("{}")
 		.unwrap()
 		.with_mcp_backend(mock.addr, true, false)
-		.with_bind(simple_bind(basic_route(mock.addr)));
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
 
 	// Attach extAuthz policy pointing to our mock server
 	t.attach_route_policy(serde_json::json!({
@@ -2478,7 +2484,8 @@ async fn mcp_remote_ratelimit_deny() {
 	let mut t = setup_proxy_test("{}")
 		.unwrap()
 		.with_mcp_backend(mock.addr, true, false)
-		.with_bind(simple_bind(basic_route(mock.addr)));
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
 
 	// Attach remoteRateLimit policy pointing to our mock server
 	t.attach_route_policy(serde_json::json!({
