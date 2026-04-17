@@ -1,5 +1,8 @@
 # yaml-language-server: $schema=../../schema/local.json
 # Top-level named MCP backend referenced by a route via its key.
+config:
+  mcp:
+    sessionTtl: 12m
 binds:
 - port: 3000
   listeners:

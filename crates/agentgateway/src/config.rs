@@ -426,6 +426,13 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			role: ENV.role.clone(),
 			node_id: ENV.node_id.clone(),
 		},
+		mcp: crate::McpConfig {
+			session_ttl: raw
+				.mcp
+				.as_ref()
+				.and_then(|m| m.session_ttl)
+				.unwrap_or(crate::mcp::DEFAULT_SESSION_IDLE_TTL),
+		},
 		session_encoder,
 		oidc_cookie_encoder,
 		hbone: Arc::new(agent_hbone::Config {

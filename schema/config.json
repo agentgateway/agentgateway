@@ -197,6 +197,17 @@
             }
           ]
         },
+        "mcp": {
+          "description": "MCP gateway settings.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawMcpConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "connectionTerminationDeadline": {
           "type": [
             "string",
@@ -340,6 +351,19 @@
       "required": [
         "key"
       ]
+    },
+    "RawMcpConfig": {
+      "type": "object",
+      "properties": {
+        "sessionTtl": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
     },
     "RawTracing": {
       "type": "object",
@@ -4219,12 +4243,6 @@
               "type": "null"
             }
           ]
-        },
-        "sessionIdleTtl": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "additionalProperties": false,
@@ -6584,12 +6602,6 @@
             {
               "type": "null"
             }
-          ]
-        },
-        "sessionIdleTtl": {
-          "type": [
-            "string",
-            "null"
           ]
         },
         "policies": {

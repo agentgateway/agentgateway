@@ -112,7 +112,7 @@ async fn test_config_parsing(test_name: &str) {
 
 	// Create a test client. Ideally we could have a fake one
 	let client = test_client();
-	let config = crate::config::parse_config("{}".to_string(), None).unwrap();
+	let config = crate::config::parse_config(yaml_str.clone(), None).unwrap();
 
 	let normalized = NormalizedLocalConfig::from(
 		&config,

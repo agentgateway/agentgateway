@@ -1166,12 +1166,13 @@ async fn test_openapi_from_url() {
 		stateful_mode: McpStatefulMode::Stateful,
 		prefix_mode: None,
 		failure_mode: None,
-		session_idle_ttl: None,
 	});
 
 	// Convert to runtime backends
 	let backend_name = ResourceName::new("test-users".into(), "".into());
-	let result = local_backend.as_backends(backend_name, client).await;
+	let result = local_backend
+		.as_backends(backend_name, client, crate::mcp::DEFAULT_SESSION_IDLE_TTL)
+		.await;
 
 	// Verify the conversion succeeded
 	assert!(

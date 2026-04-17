@@ -169,6 +169,9 @@ pub struct RawConfig {
 	/// Configuration for stateful session management
 	session: Option<RawSession>,
 
+	/// MCP gateway settings.
+	mcp: Option<RawMcpConfig>,
+
 	#[serde(default, with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	connection_termination_deadline: Option<Duration>,
@@ -283,6 +286,13 @@ pub struct RawSession {
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(serialize_with = "ser_redact", deserialize_with = "deser_key")]
 	key: secrecy::SecretString,
+}
+
+#[apply(schema_de!)]
+pub struct RawMcpConfig {
+	#[serde(default, with = "serde_dur_option")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	session_ttl: Option<Duration>,
 }
 
 #[apply(schema_de!)]
@@ -483,6 +493,14 @@ pub struct Config {
 	pub admin_runtime_handle: Option<tokio::runtime::Handle>,
 
 	pub backend: BackendConfig,
+	pub mcp: McpConfig,
+}
+
+#[apply(schema!)]
+pub struct McpConfig {
+	#[serde(with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub session_ttl: Duration,
 }
 
 impl Config {
