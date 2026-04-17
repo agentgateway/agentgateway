@@ -2851,7 +2851,9 @@ jwtValidationOptions:
 	fn test_simple_backend_aws_to_backend_conversion() {
 		let sb = make_aws_simple_backend();
 		let backend: Backend = sb.into();
-		assert!(matches!(backend, Backend::Aws(ref name, ref config) if name.name.as_str() == "test-aws" && config == &make_aws_config()));
+		assert!(
+			matches!(backend, Backend::Aws(ref name, ref config) if name.name.as_str() == "test-aws" && config == &make_aws_config())
+		);
 	}
 
 	#[test]
@@ -2861,7 +2863,9 @@ jwtValidationOptions:
 			make_aws_config(),
 		);
 		let sb: SimpleBackend = backend.try_into().unwrap();
-		assert!(matches!(sb, SimpleBackend::Aws(ref name, ref config) if name.name.as_str() == "test-aws" && config == &make_aws_config()));
+		assert!(
+			matches!(sb, SimpleBackend::Aws(ref name, ref config) if name.name.as_str() == "test-aws" && config == &make_aws_config())
+		);
 	}
 
 	#[test]

@@ -831,15 +831,11 @@ mod tests {
 	fn make_aws_simple_backend() -> super::SimpleBackend {
 		use crate::aws::{AwsBackendConfig, AwsService};
 		super::SimpleBackend::Aws(
-			crate::types::agent::ResourceName::new(
-				strng::new("test-aws"),
-				strng::new("ns"),
-			),
+			crate::types::agent::ResourceName::new(strng::new("test-aws"), strng::new("ns")),
 			AwsBackendConfig {
 				service: AwsService::AgentCore(
 					crate::agentcore::AgentCoreConfig::new(
-						"arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123"
-							.to_string(),
+						"arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123".to_string(),
 						None,
 					)
 					.unwrap(),
@@ -886,7 +882,7 @@ mod tests {
 
 	#[test]
 	fn test_build_backend_call_aws_user_policies_override() {
-		use crate::http::auth::{BackendAuth, AwsAuth};
+		use crate::http::auth::{AwsAuth, BackendAuth};
 		use secrecy::SecretString;
 
 		let inputs = make_proxy_inputs();
@@ -902,14 +898,9 @@ mod tests {
 			..Default::default()
 		};
 
-		let result = super::TCPProxy::build_backend_call(
-			&mut None,
-			None,
-			&inputs,
-			&backend,
-			user_policies,
-		)
-		.unwrap();
+		let result =
+			super::TCPProxy::build_backend_call(&mut None, None, &inputs, &backend, user_policies)
+				.unwrap();
 
 		assert!(
 			matches!(

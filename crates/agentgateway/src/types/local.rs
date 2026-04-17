@@ -737,7 +737,7 @@ impl LocalBackend {
 				let mut targets = vec![];
 				let mut backends = vec![];
 				for (idx, t) in tgt.targets.iter().enumerate() {
-						let name = strng::format!("mcp/{}/{}", name.clone(), idx);
+					let name = strng::format!("mcp/{}/{}", name.clone(), idx);
 					let spec = match t.spec.clone() {
 						LocalMcpTargetSpec::Sse { backend } => {
 							let (bref, path) = match backend.process()? {
@@ -901,7 +901,6 @@ pub struct LocalMcpTarget {
 	pub policies: Option<MCPLocalBackendPolicies>,
 }
 
-
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(feature = "schema", schemars(with = "McpBackendHostSerde"))]
@@ -980,22 +979,22 @@ impl McpBackendHost {
 					}
 				},
 				(host, None, None) => {
-				let uri = Uri::try_from(host.as_str())?;
-				let Some(host) = uri.host() else {
-					anyhow::bail!("no host")
-				};
-				let scheme = uri.scheme().unwrap_or(&http::Scheme::HTTP);
-				let port = uri.port_u16();
-				let path = uri.path();
-				let port = match (scheme, port) {
-					(s, p) if s == &http::Scheme::HTTP => p.unwrap_or(80),
-					(s, p) if s == &http::Scheme::HTTPS => p.unwrap_or(443),
-					(_, _) => {
-						anyhow::bail!("invalid scheme: {:?}", scheme);
-					},
-				};
+					let uri = Uri::try_from(host.as_str())?;
+					let Some(host) = uri.host() else {
+						anyhow::bail!("no host")
+					};
+					let scheme = uri.scheme().unwrap_or(&http::Scheme::HTTP);
+					let port = uri.port_u16();
+					let path = uri.path();
+					let port = match (scheme, port) {
+						(s, p) if s == &http::Scheme::HTTP => p.unwrap_or(80),
+						(s, p) if s == &http::Scheme::HTTPS => p.unwrap_or(443),
+						(_, _) => {
+							anyhow::bail!("invalid scheme: {:?}", scheme);
+						},
+					};
 
-				let b = Target::from((host, port));
+					let b = Target::from((host, port));
 					ProcessedMcpBackendHost::Inline {
 						backend: b,
 						path: path.to_string(),
