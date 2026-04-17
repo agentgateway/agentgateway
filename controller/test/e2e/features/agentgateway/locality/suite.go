@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -264,7 +265,7 @@ func curlBody(opts ...curl.Option) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return string(b), fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
 	return string(b), nil
