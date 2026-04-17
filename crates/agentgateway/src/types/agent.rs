@@ -2827,4 +2827,76 @@ jwtValidationOptions:
 			_ => panic!("Expected LocalJwtConfig::Single"),
 		}
 	}
+
+	fn make_aws_config() -> crate::aws::AwsBackendConfig {
+		crate::aws::AwsBackendConfig {
+			service: crate::aws::AwsService::AgentCore(
+				crate::agentcore::AgentCoreConfig::new(
+					"arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123".to_string(),
+					None,
+				)
+				.unwrap(),
+			),
+		}
+	}
+
+	fn make_aws_simple_backend() -> SimpleBackend {
+		SimpleBackend::Aws(
+			ResourceName::new(strng::new("test-aws"), strng::new("ns")),
+			make_aws_config(),
+		)
+	}
+
+	#[test]
+	fn test_simple_backend_aws_to_backend_conversion() {
+		let sb = make_aws_simple_backend();
+		let backend: Backend = sb.into();
+		assert!(matches!(backend, Backend::Aws(ref name, ref config) if name.name.as_str() == "test-aws" && config == &make_aws_config()));
+	}
+
+	#[test]
+	fn test_backend_aws_to_simple_backend_roundtrip() {
+		let backend = Backend::Aws(
+			ResourceName::new(strng::new("test-aws"), strng::new("ns")),
+			make_aws_config(),
+		);
+		let sb: SimpleBackend = backend.try_into().unwrap();
+		assert!(matches!(sb, SimpleBackend::Aws(ref name, ref config) if name.name.as_str() == "test-aws" && config == &make_aws_config()));
+	}
+
+	#[test]
+	fn test_simple_backend_aws_display() {
+		let sb = make_aws_simple_backend();
+		assert_eq!(sb.to_string(), "ns/test-aws");
+	}
+
+	#[test]
+	fn test_simple_backend_aws_hostport() {
+		let sb = make_aws_simple_backend();
+		assert_eq!(
+			sb.hostport(),
+			"bedrock-agentcore.us-east-1.amazonaws.com:443"
+		);
+	}
+
+	#[test]
+	fn test_simple_backend_aws_target_ref() {
+		let sb = make_aws_simple_backend();
+		assert_eq!(
+			sb.target(),
+			BackendTargetRef::Backend {
+				name: "test-aws",
+				namespace: "ns",
+				section: None,
+			}
+		);
+	}
+
+	#[test]
+	fn test_simple_backend_aws_backend_type() {
+		let sb = make_aws_simple_backend();
+		assert_eq!(sb.backend_type(), cel::BackendType::Dynamic);
+		assert_eq!(sb.backend_info().backend_type, cel::BackendType::Dynamic);
+		assert_eq!(sb.backend_info().backend_name, strng::new("ns/test-aws"));
+	}
 }

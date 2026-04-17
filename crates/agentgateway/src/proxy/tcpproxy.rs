@@ -428,7 +428,7 @@ mod tests {
 
 	use agent_core::strng;
 
-	use crate::store::Stores;
+	use crate::store::{BackendPolicies, Stores};
 	use crate::types::agent::{ListenerProtocol, SimpleBackendReference};
 	use crate::types::discovery::{
 		GatewayAddress, NamespacedHostname, NetworkAddress, Service, WaypointIdentity,
@@ -794,5 +794,133 @@ mod tests {
 		);
 		assert!(route.is_some(), "should fall through to default");
 		assert_eq!(route.unwrap().key.as_str(), "_waypoint-default-tcp");
+	}
+
+	fn make_proxy_inputs() -> Arc<crate::ProxyInputs> {
+		use crate::client::Client;
+		use crate::{BackendConfig, client};
+		use agent_core::metrics;
+		use hickory_resolver::config::{ResolverConfig, ResolverOpts};
+		use prometheus_client::registry::Registry;
+
+		let config = crate::config::parse_config("{}".to_string(), None).unwrap();
+		let encoder = config.session_encoder.clone();
+		let stores = Stores::with_ipv6_enabled(config.ipv6_enabled);
+		let client = Client::new(
+			&client::Config {
+				resolver_cfg: ResolverConfig::default(),
+				resolver_opts: ResolverOpts::default(),
+			},
+			None,
+			BackendConfig::default(),
+			None,
+		);
+		Arc::new(crate::ProxyInputs {
+			cfg: Arc::new(config),
+			stores: stores.clone(),
+			metrics: Arc::new(crate::metrics::Metrics::new(
+				metrics::sub_registry(&mut Registry::default()),
+				Default::default(),
+			)),
+			upstream: client,
+			ca: None,
+			mcp_state: crate::mcp::App::new(stores, encoder),
+		})
+	}
+
+	fn make_aws_simple_backend() -> super::SimpleBackend {
+		use crate::aws::{AwsBackendConfig, AwsService};
+		super::SimpleBackend::Aws(
+			crate::types::agent::ResourceName::new(
+				strng::new("test-aws"),
+				strng::new("ns"),
+			),
+			AwsBackendConfig {
+				service: AwsService::AgentCore(
+					crate::agentcore::AgentCoreConfig::new(
+						"arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123"
+							.to_string(),
+						None,
+					)
+					.unwrap(),
+				),
+			},
+		)
+	}
+
+	#[test]
+	fn test_build_backend_call_aws_defaults() {
+		let inputs = make_proxy_inputs();
+		let backend = make_aws_simple_backend();
+		let result = super::TCPProxy::build_backend_call(
+			&mut None,
+			None,
+			&inputs,
+			&backend,
+			BackendPolicies::default(),
+		)
+		.unwrap();
+
+		assert!(
+			matches!(
+				&result.target,
+				super::Target::Hostname(h, 443)
+					if h.as_str() == "bedrock-agentcore.us-east-1.amazonaws.com"
+			),
+			"target should be Hostname with port 443"
+		);
+		assert!(result.backend_policies.backend_tls.is_some());
+		assert!(
+			matches!(
+				&result.backend_policies.backend_auth,
+				Some(crate::http::auth::BackendAuth::Aws(
+					crate::http::auth::AwsAuth::Implicit {}
+				))
+			),
+			"should default to AWS implicit auth"
+		);
+		assert!(result.http_version_override.is_none());
+		assert!(result.transport_override.is_none());
+		assert!(result.network_gateway.is_none());
+	}
+
+	#[test]
+	fn test_build_backend_call_aws_user_policies_override() {
+		use crate::http::auth::{BackendAuth, AwsAuth};
+		use secrecy::SecretString;
+
+		let inputs = make_proxy_inputs();
+		let backend = make_aws_simple_backend();
+
+		let user_policies = BackendPolicies {
+			backend_auth: Some(BackendAuth::Aws(AwsAuth::ExplicitConfig {
+				access_key_id: SecretString::from("AKID"),
+				secret_access_key: SecretString::from("SECRET"),
+				region: Some("us-west-2".to_string()),
+				session_token: None,
+			})),
+			..Default::default()
+		};
+
+		let result = super::TCPProxy::build_backend_call(
+			&mut None,
+			None,
+			&inputs,
+			&backend,
+			user_policies,
+		)
+		.unwrap();
+
+		assert!(
+			matches!(
+				&result.backend_policies.backend_auth,
+				Some(BackendAuth::Aws(AwsAuth::ExplicitConfig { .. }))
+			),
+			"user-provided auth should override default implicit auth"
+		);
+		assert!(
+			result.backend_policies.backend_tls.is_some(),
+			"TLS should still be present from defaults"
+		);
 	}
 }
