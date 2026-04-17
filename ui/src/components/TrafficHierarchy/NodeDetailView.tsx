@@ -1800,7 +1800,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       .trim();
 
     const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
-    console.log("selected.node.policyType", selected.node.policyType);
     const formConfig = getFormForPolicy(selected.node.policyType);
 
     return (

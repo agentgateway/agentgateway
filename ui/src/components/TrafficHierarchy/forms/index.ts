@@ -9,6 +9,7 @@
 import * as apiKeyPolicyForm from "./apiKeyPolicyForm";
 import * as authorizationPolicyForm from "./authorizationPolicyForm";
 import * as backendForm from "./backendForm";
+import * as backendTLSPolicyForm from "./backendTLSPolicyForm";
 import * as basicAuthPolicyForm from "./basicAuthPolicyForm";
 import * as bindForm from "./bindForm";
 import * as corsPolicyForm from "./corsPolicyForm";
@@ -36,6 +37,7 @@ import * as routePolicyForm from "./routePolicyForm";
 import * as topLevelBackendForm from "./topLevelBackendForm";
 import * as transformationsPolicyForm from "./transformationsPolicyForm";
 import * as urlRewritePolicyForm from "./urlRewritePolicyForm";
+import * as backendTunnelPolicyForm from "./backendTunnelPolicyForm";
 
 export const forms = {
   bind: bindForm,
@@ -69,6 +71,8 @@ export const forms = {
   directResponsePolicy: directResponsePolicyForm,
   localRateLimitPolicy: localRateLimitPolicyForm,
   remoteRateLimitPolicy: remoteRateLimitPolicyForm,
+  backendTLSPolicy: backendTLSPolicyForm,
+  backendTunnelPolicy: backendTunnelPolicyForm,
 };
 
 const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = { 
@@ -90,6 +94,8 @@ const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = {
   directResponse: "directResponsePolicy",
   localRateLimit: "localRateLimitPolicy",
   remoteRateLimit: "remoteRateLimitPolicy",
+  backendTLS: "backendTLSPolicy",
+  backendTunnel: "backendTunnelPolicy",
 }
 
 export function getFormForPolicy(policyType: string, fallback: keyof typeof forms = "routePolicy") { 
@@ -155,4 +161,6 @@ export const resourceLabels: Record<
   directResponsePolicy: { singular: "Direct Response Policy", plural: "Direct Response Policies" },
   localRateLimitPolicy: { singular: "Local Rate Limit Policy", plural: "Local Rate Limit Policies" },
   remoteRateLimitPolicy: { singular: "Remote Rate Limit Policy", plural: "Remote Rate Limit Policies" },
+  backendTLSPolicy: { singular: "Backend TLS Policy", plural: "Backend TLS Policies" },
+  backendTunnelPolicy: { singular: "Backend Tunnel Policy", plural: "Backend Tunnel Policies" },
 };

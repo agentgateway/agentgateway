@@ -136,15 +136,13 @@ export function getDefaultPolicyValue(policyType: string): Record<string, unknow
 
     // Backend TLS
     case "backendTLS":
-      return {
-        hostname: "",
-      };
+      return {};
 
     // Backend tunnel
     case "backendTunnel":
       return {
         proxy: {
-          host: "",
+          host: "localhost:9001",
         },
       };
 
