@@ -276,7 +276,7 @@ async fn missing_self_identity_keeps_all_endpoints_reachable() {
 				Step::Sync {
 					services: vec![Svc {
 						name: "app",
-						mode: mode,
+						mode,
 						scopes: vec![Zone],
 					}],
 					endpoints: vec![

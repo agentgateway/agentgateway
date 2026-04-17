@@ -72,7 +72,7 @@ impl Store {
 
 				svc.endpoints.rebucket(|ep: &Endpoint| {
 					let wl = &self.workloads.find_uid(&ep.workload_uid)?;
-					ranker.bucket_for(&wl)
+					ranker.bucket_for(wl)
 				});
 			}
 		}
@@ -142,10 +142,10 @@ impl Store {
 
 		// inserting endpoints requires grabbing the workload's locality info to bucket them
 		let insert_ep = |ep: Endpoint| {
-			if let Some(wl) = self.workloads.find_uid(&ep.workload_uid) {
-				if service.should_include_endpoint(ep.status) {
-					service.endpoints.insert(ep, &wl, &ranker);
-				}
+			if let Some(wl) = self.workloads.find_uid(&ep.workload_uid)
+				&& service.should_include_endpoint(ep.status)
+			{
+				service.endpoints.insert(ep, &wl, &ranker);
 			}
 		};
 
