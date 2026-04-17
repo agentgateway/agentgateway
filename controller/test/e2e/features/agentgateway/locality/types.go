@@ -40,7 +40,7 @@ var (
 	}
 
 	testCases = map[string]*base.TestCase{
-		"TestFailoverWorkloadRemoval": {},
-		"TestFailoverHealthiness":     {},
+		"TestPreferSameZone":             {},
+		"TestInternalTrafficPolicyLocal": {},
 	}
 )

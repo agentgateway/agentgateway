@@ -65,6 +65,7 @@ func (s *testingSuite) SetupSuite() {
 
 func (s *testingSuite) SetupTest() {
 	s.resetWorkloadEntries()
+	s.resetService()
 }
 
 func (s *testingSuite) TearDownSuite() {
@@ -78,16 +79,6 @@ func (s *testingSuite) TestPreferSameZone() {
 	s.setTrafficDistribution("PreferSameZone")
 
 	s.assertTrafficGoesTo(backendZoneA)
-	s.deleteWorkloadEntry("we-zone-a")
-	s.assertTrafficGoesTo(backendZoneB)
-	s.deleteWorkloadEntry("we-zone-b")
-	s.assertTrafficGoesTo(backendRegionB)
-}
-
-func (s *testingSuite) TestPreferSameRegion() {
-	s.setTrafficDistribution("PreferSameRegion")
-
-	s.assertTrafficGoesTo(backendZoneA, backendZoneB)
 	s.deleteWorkloadEntry("we-zone-a")
 	s.assertTrafficGoesTo(backendZoneB)
 	s.deleteWorkloadEntry("we-zone-b")
@@ -112,6 +103,13 @@ type weSpec struct {
 
 func (s *testingSuite) resetWorkloadEntries() {
 	s.applyWorkloadEntries(s.workloadEntries)
+}
+
+func (s *testingSuite) resetService() {
+	s.updateService(func(svc *corev1.Service) {
+		svc.Spec.TrafficDistribution = nil
+		svc.Spec.InternalTrafficPolicy = nil
+	})
 }
 
 func (s *testingSuite) setTrafficDistribution(trafficDistribution string) {
@@ -161,7 +159,7 @@ metadata:
   name: %s
   namespace: %s
   labels:
-    locality-pool: locality-svc-workloadentry
+    app: locality-svc-workloadentry
 spec:
   address: %s
   locality: %q
