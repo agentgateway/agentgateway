@@ -683,12 +683,12 @@ type JWTAuthentication struct {
 
 type JWTProvider struct {
 	// `issuer` identifies the IdP that issued the JWT. This corresponds to the
-	// `iss` claim (https://tools.ietf.org/html/rfc7519#section-4.1.1).
+	// `iss` claim ([RFC 7519 §4.1.1](https://tools.ietf.org/html/rfc7519#section-4.1.1)).
 	// +required
 	Issuer ShortString `json:"issuer"`
 	// `audiences` specifies the list of allowed audiences that are allowed
 	// access. This corresponds to the `aud` claim
-	// (https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3).
+	// ([RFC 7519 §4.1.3](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3)).
 	// If unset, any audience is allowed.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
@@ -1125,13 +1125,13 @@ type MCPAuthentication struct {
 	McpIDP *McpIDP `json:"provider,omitempty"`
 
 	// `issuer` identifies the IdP that issued the JWT. This corresponds to the
-	// `iss` claim (https://tools.ietf.org/html/rfc7519#section-4.1.1).
+	// `iss` claim ([RFC 7519 §4.1.1](https://tools.ietf.org/html/rfc7519#section-4.1.1)).
 	// +optional
 	Issuer ShortString `json:"issuer,omitempty"`
 
 	// `audiences` specifies the list of allowed audiences that are allowed
 	// access. This corresponds to the `aud` claim
-	// (https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3).
+	// ([RFC 7519 §4.1.3](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3)).
 	// If unset, any audience is allowed.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64

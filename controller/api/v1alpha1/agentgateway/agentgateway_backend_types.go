@@ -261,7 +261,7 @@ type OpenAIConfig struct {
 	Model *ShortString `json:"model,omitempty"`
 }
 
-// AzureOpenAIConfig settings for the [Azure OpenAI](https://learn.microsoft.com/en-us/azure/ai-foundry/?view=foundry-classic) LLM provider.
+// AzureOpenAIConfig settings for the [Azure OpenAI](https://learn.microsoft.com/en-us/azure/foundry/?view=foundry-classic) LLM provider.
 // +kubebuilder:validation:XValidation:message="deploymentName is required for this apiVersion",rule="!has(self.apiVersion) || self.apiVersion == 'v1' ? true : has(self.deploymentName)"
 type AzureOpenAIConfig struct {
 	// The endpoint for the Azure OpenAI API to use, such as `my-endpoint.openai.azure.com`.
@@ -270,14 +270,14 @@ type AzureOpenAIConfig struct {
 	Endpoint ShortString `json:"endpoint"`
 
 	// The name of the Azure OpenAI model deployment to use.
-	// For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
+	// For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
 	// This is required if `apiVersion` is not `v1`. For `v1`, the model can be
 	// set in the request.
 	// +optional
 	DeploymentName *ShortString `json:"deploymentName,omitempty"`
 
 	// The version of the Azure OpenAI API to use.
-	// For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/ai-foundry/?view=foundry-classicreference#api-specs).
+	// For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/foundry/openai/reference).
 	// If unset, defaults to `v1`.
 	// +optional
 	ApiVersion *TinyString `json:"apiVersion,omitempty"`
