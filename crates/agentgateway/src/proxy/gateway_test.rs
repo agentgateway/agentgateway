@@ -255,12 +255,9 @@ async fn multiple_requests() {
 #[tokio::test]
 async fn basic_http2() {
 	let mock = simple_mock().await;
-	let t = setup_proxy_test("{}")
-		.unwrap()
-		.with_backend(*mock.address())
-		.with_bind(simple_bind())
-		.with_route(basic_route(*mock.address()));
+	let t = base_gateway(&mock);
 	let io = t.serve_http2(strng::new("bind"));
+
 	let res = RequestBuilder::new(Method::GET, "http://lo")
 		.version(Version::HTTP_2)
 		.send(io)
@@ -272,13 +269,7 @@ async fn basic_http2() {
 
 #[tokio::test]
 async fn reserved_oidc_cookies_are_stripped_before_proxying() {
-	let mock = simple_mock().await;
-	let t = setup_proxy_test("{}")
-		.unwrap()
-		.with_backend(*mock.address())
-		.with_bind(simple_bind())
-		.with_route(basic_route(*mock.address()));
-	let io = t.serve_http(BIND_KEY);
+	let (_mock, _bind, io) = basic_setup().await;
 
 	let res = send_request_headers(
 		io,
@@ -666,7 +657,7 @@ async fn mcp_authentication_runs_in_route_policy_path() {
 			"mcpAuthentication": {
 				"issuer": "https://example.com",
 				"audiences": ["test-aud"],
-				"jwks": "{\"keys\":[{\"use\":\"sig\",\"kty\":\"EC\",\"kid\":\"XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI\",\"crv\":\"P-256\",\"alg\":\"ES256\",\"x\":\"XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo\",\"y\":\"g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE\"}]}",
+				"jwks": r#"{"keys":[{"use":"sig","kty":"EC","kid":"XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI","crv":"P-256","alg":"ES256","x":"XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo","y":"g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"}]}"#,
 				"resourceMetadata": {
 					"mcpResourceUri": "mcp://test"
 				}
