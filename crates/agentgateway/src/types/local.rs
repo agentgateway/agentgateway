@@ -918,6 +918,7 @@ pub enum McpBackendHost {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 struct McpBackendHostSerde {
 	host: Option<String>,
 	port: Option<u16>,

@@ -4255,7 +4255,10 @@
               "type": "object",
               "properties": {
                 "host": {
-                  "type": "string"
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "port": {
                   "type": [
@@ -4271,12 +4274,15 @@
                     "string",
                     "null"
                   ]
+                },
+                "backend": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
-              "additionalProperties": false,
-              "required": [
-                "host"
-              ]
+              "additionalProperties": false
             }
           },
           "required": [
@@ -4290,7 +4296,10 @@
               "type": "object",
               "properties": {
                 "host": {
-                  "type": "string"
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "port": {
                   "type": [
@@ -4306,12 +4315,15 @@
                     "string",
                     "null"
                   ]
+                },
+                "backend": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
-              "additionalProperties": false,
-              "required": [
-                "host"
-              ]
+              "additionalProperties": false
             }
           },
           "required": [
@@ -4357,7 +4369,10 @@
               "type": "object",
               "properties": {
                 "host": {
-                  "type": "string"
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "port": {
                   "type": [
@@ -4374,13 +4389,18 @@
                     "null"
                   ]
                 },
+                "backend": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "schema": {
                   "$ref": "#/$defs/FileInlineOrRemote"
                 }
               },
               "additionalProperties": false,
               "required": [
-                "host",
                 "schema"
               ]
             }
