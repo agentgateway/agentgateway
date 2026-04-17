@@ -1496,8 +1496,8 @@ async fn convert(
 			Backend::Service(_, _) | Backend::Invalid => false,
 		}) {
 			primary_bw.inline_policies.extend_from_slice(&policies);
-		} else if cfg!(debug_assertions) {
-			panic!("as_backends did not return a backend with the expected name: {name}");
+		} else {
+			anyhow::bail!("as_backends did not return a backend with the expected name: {name}");
 		}
 
 		all_backends.extend(bws);
