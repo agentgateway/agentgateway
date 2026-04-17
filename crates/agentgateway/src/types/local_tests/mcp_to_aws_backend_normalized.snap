@@ -1,6 +1,6 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
-assertion_line: 136
+assertion_line: 137
 description: "Config normalization test for mcp_to_aws_backend: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
@@ -57,5 +57,6 @@ backends:
     inlinePolicies:
       - backendAuth:
           aws: {}
+route_groups: []
 workloads: []
 services: []
