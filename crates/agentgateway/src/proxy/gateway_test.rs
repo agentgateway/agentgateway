@@ -2,13 +2,14 @@ use std::sync::{Arc, Mutex as StdMutex};
 
 use crate::http::tests_common::*;
 use crate::http::{Body, Response};
-use crate::llm::{AIProvider, openai};
+use crate::llm::{AIProvider, anthropic, openai};
 use crate::proxy::request_builder::RequestBuilder;
 use crate::read_body;
 use crate::test_helpers::proxymock::*;
 use crate::types::agent::{
-	Backend, BackendPolicy, BackendWithPolicies, Bind, BindProtocol, Listener, ListenerProtocol,
-	ListenerSet, PathMatch, ResourceName, Route, RouteMatch, RouteSet, Target,
+	Backend, BackendPolicy, BackendReference, BackendWithPolicies, Bind, BindProtocol, Listener,
+	ListenerProtocol, ListenerSet, PathMatch, ResourceName, Route, RouteBackendReference, RouteMatch,
+	RouteName, RouteSet, Target,
 };
 use crate::types::backend;
 use crate::*;
@@ -2511,6 +2512,109 @@ async fn llm_models_backend_aliases_replace_route_aliases() {
 	// `backend-only` replaces `route-only`; explicit provider model still present.
 	assert_eq!(ids, vec!["backend-only", "gpt-4o"]);
 	assert!(mock.received_requests().await.unwrap().is_empty());
+}
+
+/// Wire two AI backends (OpenAI + Anthropic) on the same route and assert
+/// `/v1/models` aggregates per-backend explicit models plus shared route-level
+/// aliases, dedups by id (first seen wins), attributes `owned_by` correctly,
+/// and never contacts the upstreams.
+#[tokio::test]
+async fn llm_models_multi_backend_aggregation() {
+	let mock_oai = simple_mock().await;
+	let mock_anthro = simple_mock().await;
+
+	let t = setup_proxy_test("{}").unwrap();
+	for (mock, provider) in [
+		(
+			&mock_oai,
+			AIProvider::OpenAI(openai::Provider {
+				model: Some(strng::new("gpt-4o")),
+			}),
+		),
+		(
+			&mock_anthro,
+			AIProvider::Anthropic(anthropic::Provider {
+				model: Some(strng::new("claude-3-opus")),
+			}),
+		),
+	] {
+		let be =
+			crate::types::local::LocalAIBackend::Provider(llm_named_provider(mock, provider, false))
+				.translate()
+				.unwrap();
+		let b = Backend::AI(
+			ResourceName::new(strng::format!("{}", mock.address()), "".into()),
+			be,
+		);
+		t.pi.stores.binds.write().insert_backend(b.name(), b.into());
+	}
+
+	let route = Route {
+		key: "route".into(),
+		service_key: None,
+		name: RouteName {
+			name: "route".into(),
+			namespace: Default::default(),
+			rule_name: None,
+			kind: None,
+		},
+		hostnames: Default::default(),
+		matches: vec![RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix("/".into()),
+			method: None,
+			query: vec![],
+		}],
+		inline_policies: Default::default(),
+		backends: vec![
+			RouteBackendReference {
+				weight: 1,
+				backend: BackendReference::Backend(strng::format!("/{}", mock_oai.address())),
+				inline_policies: Default::default(),
+			},
+			RouteBackendReference {
+				weight: 1,
+				backend: BackendReference::Backend(strng::format!("/{}", mock_anthro.address())),
+				inline_policies: Default::default(),
+			},
+		],
+	};
+	let mut t = t.with_bind(simple_bind(route));
+	t.attach_route_policy(json!({
+		"ai": {
+			"routes": { "/v1/models": "models" },
+			"modelAliases": { "smart": "gpt-4o" },
+		}
+	}))
+	.await;
+	let io = t.serve_http(BIND_KEY);
+
+	let res = send_request(io, Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body_raw(res.into_body()).await;
+	let body: Value = serde_json::from_slice(&body).unwrap();
+
+	let entries: Vec<(&str, &str)> = body["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|m| (m["id"].as_str().unwrap(), m["owned_by"].as_str().unwrap()))
+		.collect();
+
+	// BTreeMap yields ids in sorted order. Explicit provider models keep their
+	// own owner; the shared alias `smart` is inserted once and attributed to
+	// the first backend that saw it (OpenAI — listed first on the route).
+	assert_eq!(
+		entries,
+		vec![
+			("claude-3-opus", "anthropic"),
+			("gpt-4o", "openai"),
+			("smart", "openai"),
+		]
+	);
+
+	assert!(mock_oai.received_requests().await.unwrap().is_empty());
+	assert!(mock_anthro.received_requests().await.unwrap().is_empty());
 }
 
 /// `/v1/models` with no explicit provider model and no aliases falls through

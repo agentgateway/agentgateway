@@ -668,8 +668,21 @@ impl HTTPProxy {
 		// decide whether that backend would resolve the path to `RouteType::Models`
 		// and which aliases would actually be accepted. This ensures we never
 		// advertise an id that no backend-merged policy would honor.
-		{
-			let path = req.uri().path();
+		//
+		// Pre-filter to keep this off hot paths:
+		//   * Non-GET methods (completions/embeddings/messages are all POST).
+		//   * GETs whose route-level LLM policy already classifies the path as
+		//     something other than Models. When there's no route-level LLM policy
+		//     we can't decide without inspecting each backend, so we enter the
+		//     per-backend loop — this preserves backend-only `ai.routes` configs.
+		let path = req.uri().path();
+		let maybe_models_route = req.method() == ::http::Method::GET
+			&& route_policies
+				.llm
+				.as_ref()
+				.is_none_or(|p| p.resolve_route(path) == RouteType::Models);
+
+		if maybe_models_route {
 			let base: Arc<LLMRequestPolicies> = Arc::new(LLMRequestPolicies {
 				llm: route_policies.llm.clone(),
 				..Default::default()
@@ -699,7 +712,9 @@ impl HTTPProxy {
 				is_models_route = true;
 
 				// Explicit provider model(s) for this backend, and the owner used
-				// both for that id and for any aliases merged onto this backend.
+				// for any aliases merged onto this backend. Stays `None` when the
+				// backend has no concrete AI provider so we don't advertise
+				// aliases with a misleading `owned_by`.
 				let mut alias_owner: Option<Strng> = None;
 				if let Backend::AI(_, ai_backend) = &resolved.backend.backend {
 					for (provider, _info) in ai_backend.providers.iter().iter() {
@@ -710,15 +725,17 @@ impl HTTPProxy {
 						}
 					}
 				}
-				let alias_owner = alias_owner.unwrap_or_else(|| strng::literal!("openai"));
 
 				// Aliases come from the effective (merged) policy so backend-defined
-				// aliases correctly replace route-level aliases when present.
-				for alias in policy.model_aliases.keys() {
-					if !alias.contains('*') {
-						models
-							.entry(alias.clone())
-							.or_insert_with(|| alias_owner.clone());
+				// aliases correctly replace route-level aliases when present. Skipped
+				// when no owner could be derived for this backend.
+				if let Some(alias_owner) = alias_owner {
+					for alias in policy.model_aliases.keys() {
+						if !alias.contains('*') {
+							models
+								.entry(alias.clone())
+								.or_insert_with(|| alias_owner.clone());
+						}
 					}
 				}
 			}
