@@ -723,6 +723,8 @@ fn access_log_payload_policy() -> crate::types::frontend::LoggingPolicy {
 				"mcp_session_cel": "mcp.sessionId",
 				"mcp_tool_name_cel": "mcp.tool.name",
 				"mcp_tool_target_cel": "mcp.tool.target",
+				"mcp_prompt_name_cel": "mcp.prompt.name",
+				"mcp_prompt_target_cel": "mcp.prompt.target",
 				"mcp_args_cel": "mcp.tool.arguments",
 				"mcp_result_cel": "mcp.tool.result",
 				"mcp_error_cel": "mcp.tool.error"
@@ -943,6 +945,43 @@ async fn legacy_sse_tool_call_exposes_arguments_without_terminal_payloads() {
 	);
 	assert!(log.get("gen_ai.tool.call.arguments").is_none());
 	assert!(log.get("gen_ai.tool.call.result").is_none());
+}
+
+#[tokio::test]
+async fn prompt_request_emits_gen_ai_prompt_name() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_t, io) = setup_access_log_mcp_proxy(&mock).await;
+	let client = mcp_streamable_client(io).await;
+
+	let _result = client
+		.get_prompt(
+			rmcp::model::GetPromptRequestParams::new("example_prompt").with_arguments(
+				serde_json::json!({ "message": "hello" })
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("mcp_prompt_name_cel", "example_prompt"),
+	])
+	.await
+	.unwrap();
+
+	assert_eq!(
+		log.get("mcp_method_cel"),
+		Some(&serde_json::json!("prompts/get"))
+	);
+	assert_eq!(
+		log.get("gen_ai.prompt.name"),
+		Some(&serde_json::json!("example_prompt"))
+	);
+	assert!(log.get("gen_ai.tool.name").is_none());
+	assert!(log.get("mcp_tool_name_cel").is_none());
 }
 
 async fn setup_proxy(
