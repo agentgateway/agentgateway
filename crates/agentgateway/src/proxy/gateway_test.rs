@@ -2,13 +2,14 @@ use std::sync::{Arc, Mutex as StdMutex};
 
 use crate::http::tests_common::*;
 use crate::http::{Body, Response};
-use crate::llm::{AIProvider, openai};
+use crate::llm::{AIProvider, anthropic, openai};
 use crate::proxy::request_builder::RequestBuilder;
 use crate::read_body;
 use crate::test_helpers::proxymock::*;
 use crate::types::agent::{
-	Backend, BackendPolicy, BackendWithPolicies, Bind, BindProtocol, Listener, ListenerProtocol,
-	ListenerSet, PathMatch, ResourceName, Route, RouteMatch, RouteSet, Target,
+	Backend, BackendPolicy, BackendReference, BackendWithPolicies, Bind, BindProtocol, Listener,
+	ListenerProtocol, ListenerSet, PathMatch, ResourceName, Route, RouteBackendReference, RouteMatch,
+	RouteName, RouteSet, Target,
 };
 use crate::types::backend;
 use crate::*;
@@ -2347,4 +2348,306 @@ async fn waypoint_tcp_gateway_policy_authz_deny() {
 		.send(io)
 		.await
 		.expect_err("should be denied by network authorization");
+}
+
+/// `/v1/models` with an explicit provider `model` plus non-wildcard modelAliases
+/// returns a synthetic OpenAI-compatible catalog without contacting upstream.
+#[tokio::test]
+async fn llm_models_synthetic_response() {
+	let mock = simple_mock().await;
+	let (mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider {
+			model: Some(strng::new("gpt-4o")),
+		}),
+		false,
+		"{}",
+	);
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"/v1/models": "models",
+				},
+				"modelAliases": {
+					"smart": "gpt-4o",
+					"gpt-*": "gpt-4o",
+				},
+			}
+		}))
+		.await;
+
+	let res = send_request(io, Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(
+		res
+			.headers()
+			.get(header::CONTENT_TYPE)
+			.map(|v| v.to_str().unwrap()),
+		Some("application/json")
+	);
+	let body = read_body_raw(res.into_body()).await;
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(body["object"], "list");
+	let ids: Vec<&str> = body["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|m| m["id"].as_str().unwrap())
+		.collect();
+	// Explicit model + non-wildcard alias, wildcard alias excluded.
+	assert_eq!(ids, vec!["gpt-4o", "smart"]);
+	let owners: Vec<&str> = body["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|m| m["owned_by"].as_str().unwrap())
+		.collect();
+	assert!(owners.iter().all(|o| *o == "openai"));
+	// Upstream must not have been contacted.
+	assert!(mock.received_requests().await.unwrap().is_empty());
+}
+
+/// Attach a backend-level `ai` policy at `addr` (mirrors
+/// `AgentgatewayBackend.spec.policies.ai` in K8s mode).
+fn attach_backend_ai(bind: &mut TestBind, addr: &std::net::SocketAddr, p: serde_json::Value) {
+	let mut policy: crate::llm::Policy = serde_json::from_value(p).unwrap();
+	policy.compile_model_alias_patterns();
+	let key = strng::format!("backend-ai/{}", addr);
+	bind.with_policy(crate::types::agent::TargetedPolicy {
+		key,
+		name: None,
+		target: crate::types::agent::PolicyTarget::Backend(
+			crate::types::agent::BackendTarget::Backend {
+				name: addr.to_string().into(),
+				namespace: Default::default(),
+				section: None,
+			},
+		),
+		policy: BackendPolicy::AI(Arc::new(policy)).into(),
+	});
+}
+
+/// `/v1/models` triggers synthesis from a backend-level `ai` policy with
+/// no route-level `ai` policy — exercises `AgentgatewayBackend.spec.policies.ai`.
+#[tokio::test]
+async fn llm_models_backend_level_policy() {
+	let mock = simple_mock().await;
+	let (mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider {
+			model: Some(strng::new("gpt-4o")),
+		}),
+		false,
+		"{}",
+	);
+	let addr = *mock.address();
+	attach_backend_ai(
+		&mut bind,
+		&addr,
+		json!({
+			"routes": { "/v1/models": "models" },
+			"modelAliases": {
+				"smart": "gpt-4o",
+				"gpt-*": "gpt-4o",
+			},
+		}),
+	);
+
+	let res = send_request(io, Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body_raw(res.into_body()).await;
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	let ids: Vec<&str> = body["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|m| m["id"].as_str().unwrap())
+		.collect();
+	assert_eq!(ids, vec!["gpt-4o", "smart"]);
+	assert!(mock.received_requests().await.unwrap().is_empty());
+}
+
+/// When a backend defines `modelAliases`, the runtime merge replaces the
+/// route-level aliases entirely. The synthetic response must mirror this
+/// so we don't advertise aliases the merged policy would not accept.
+#[tokio::test]
+async fn llm_models_backend_aliases_replace_route_aliases() {
+	let mock = simple_mock().await;
+	let (mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider {
+			model: Some(strng::new("gpt-4o")),
+		}),
+		false,
+		"{}",
+	);
+	let addr = *mock.address();
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": { "/v1/models": "models" },
+				"modelAliases": { "route-only": "gpt-4o" },
+			}
+		}))
+		.await;
+	attach_backend_ai(
+		&mut bind,
+		&addr,
+		json!({
+			"modelAliases": { "backend-only": "gpt-4o" },
+		}),
+	);
+
+	let res = send_request(io, Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body_raw(res.into_body()).await;
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	let ids: Vec<&str> = body["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|m| m["id"].as_str().unwrap())
+		.collect();
+	// `backend-only` replaces `route-only`; explicit provider model still present.
+	assert_eq!(ids, vec!["backend-only", "gpt-4o"]);
+	assert!(mock.received_requests().await.unwrap().is_empty());
+}
+
+/// Wire two AI backends (OpenAI + Anthropic) on the same route and assert
+/// `/v1/models` aggregates per-backend explicit models plus shared route-level
+/// aliases, dedups by id (first seen wins), attributes `owned_by` correctly,
+/// and never contacts the upstreams.
+#[tokio::test]
+async fn llm_models_multi_backend_aggregation() {
+	let mock_oai = simple_mock().await;
+	let mock_anthro = simple_mock().await;
+
+	let t = setup_proxy_test("{}").unwrap();
+	for (mock, provider) in [
+		(
+			&mock_oai,
+			AIProvider::OpenAI(openai::Provider {
+				model: Some(strng::new("gpt-4o")),
+			}),
+		),
+		(
+			&mock_anthro,
+			AIProvider::Anthropic(anthropic::Provider {
+				model: Some(strng::new("claude-3-opus")),
+			}),
+		),
+	] {
+		let be =
+			crate::types::local::LocalAIBackend::Provider(llm_named_provider(mock, provider, false))
+				.translate()
+				.unwrap();
+		let b = Backend::AI(
+			ResourceName::new(strng::format!("{}", mock.address()), "".into()),
+			be,
+		);
+		t.pi.stores.binds.write().insert_backend(b.name(), b.into());
+	}
+
+	let route = Route {
+		key: "route".into(),
+		service_key: None,
+		name: RouteName {
+			name: "route".into(),
+			namespace: Default::default(),
+			rule_name: None,
+			kind: None,
+		},
+		hostnames: Default::default(),
+		matches: vec![RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix("/".into()),
+			method: None,
+			query: vec![],
+		}],
+		inline_policies: Default::default(),
+		backends: vec![
+			RouteBackendReference {
+				weight: 1,
+				backend: BackendReference::Backend(strng::format!("/{}", mock_oai.address())),
+				inline_policies: Default::default(),
+			},
+			RouteBackendReference {
+				weight: 1,
+				backend: BackendReference::Backend(strng::format!("/{}", mock_anthro.address())),
+				inline_policies: Default::default(),
+			},
+		],
+	};
+	let mut t = t.with_bind(simple_bind(route));
+	t.attach_route_policy(json!({
+		"ai": {
+			"routes": { "/v1/models": "models" },
+			"modelAliases": { "smart": "gpt-4o" },
+		}
+	}))
+	.await;
+	let io = t.serve_http(BIND_KEY);
+
+	let res = send_request(io, Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body_raw(res.into_body()).await;
+	let body: Value = serde_json::from_slice(&body).unwrap();
+
+	let entries: Vec<(&str, &str)> = body["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|m| (m["id"].as_str().unwrap(), m["owned_by"].as_str().unwrap()))
+		.collect();
+
+	// BTreeMap yields ids in sorted order. Explicit provider models keep their
+	// own owner; the shared alias `smart` is inserted once and attributed to
+	// the first backend that saw it (OpenAI — listed first on the route).
+	assert_eq!(
+		entries,
+		vec![
+			("claude-3-opus", "anthropic"),
+			("gpt-4o", "openai"),
+			("smart", "openai"),
+		]
+	);
+
+	assert!(mock_oai.received_requests().await.unwrap().is_empty());
+	assert!(mock_anthro.received_requests().await.unwrap().is_empty());
+}
+
+/// `/v1/models` with no explicit provider model and no aliases falls through
+/// to the upstream's real catalog (path-translating passthrough).
+#[tokio::test]
+async fn llm_models_fallthrough_to_upstream() {
+	let upstream_body =
+		br#"{"object":"list","data":[{"id":"from-upstream","object":"model","owned_by":"openai"}]}"#;
+	let mock = body_mock(upstream_body).await;
+	let (mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider { model: None }),
+		false,
+		"{}",
+	);
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"/v1/models": "models",
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request(io, Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body_raw(res.into_body()).await;
+	assert_eq!(body.as_ref(), upstream_body);
+	// Exactly one upstream hit, and the path must be preserved — a regression
+	// that rewrites to `/v1/chat/completions` would otherwise pass since the
+	// mock matches any path.
+	let requests = mock.received_requests().await.unwrap();
+	assert_eq!(requests.len(), 1);
+	assert_eq!(requests[0].url.path(), "/v1/models");
 }

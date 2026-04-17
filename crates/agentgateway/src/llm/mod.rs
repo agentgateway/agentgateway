@@ -385,7 +385,14 @@ impl AIProvider {
 		path_prefix: Option<&str>,
 		has_host_override: bool,
 	) -> anyhow::Result<()> {
-		if matches!(route_type, RouteType::Passthrough | RouteType::Detect) {
+		// `Models` joins `Passthrough`/`Detect` here: providers have no universal
+		// models-endpoint mapping, and the typical client path (`/v1/models`) is
+		// already the upstream's models catalog. Rewriting it via `path_suffix`
+		// would send the client to completions/messages instead.
+		if matches!(
+			route_type,
+			RouteType::Passthrough | RouteType::Detect | RouteType::Models
+		) {
 			return Ok(());
 		}
 
