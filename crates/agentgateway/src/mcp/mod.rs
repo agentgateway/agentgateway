@@ -48,6 +48,8 @@ pub enum Error {
 	MethodNotAllowed,
 	#[error("client must accept both application/json and text/event-stream")]
 	InvalidAccept,
+	#[error("client must accept text/event-stream")]
+	InvalidAcceptGet,
 	#[error("client must send application/json")]
 	InvalidContentType,
 	#[error("fail to deserialize request body: {0}")]

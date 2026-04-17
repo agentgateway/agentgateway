@@ -171,7 +171,7 @@ impl StreamableHttpService {
 			.and_then(|header| header.to_str().ok())
 			.is_some_and(|header| header.contains(EVENT_STREAM_MIME_TYPE))
 		{
-			return mcp::Error::InvalidAccept.into();
+			return mcp::Error::InvalidAcceptGet.into();
 		}
 
 		let Some(session_id) = request

@@ -279,6 +279,7 @@ impl ProxyError {
 			ProxyError::UpstreamTCPProxy(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::MethodNotAllowed) => StatusCode::METHOD_NOT_ALLOWED,
 			ProxyError::MCP(mcp::Error::InvalidAccept) => StatusCode::NOT_ACCEPTABLE,
+			ProxyError::MCP(mcp::Error::InvalidAcceptGet) => StatusCode::NOT_ACCEPTABLE,
 			ProxyError::MCP(mcp::Error::InvalidContentType) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
 			ProxyError::MCP(mcp::Error::Deserialize(_)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::StartSession(_)) => StatusCode::INTERNAL_SERVER_ERROR,
