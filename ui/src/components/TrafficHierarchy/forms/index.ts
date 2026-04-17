@@ -20,11 +20,13 @@ import * as genericPolicyForm from "./genericPolicyForm";
 import * as jwtAuthPolicyForm from "./jwtAuthPolicyForm";
 import * as listenerForm from "./listenerForm";
 import * as llmForm from "./llmForm";
+import * as localRateLimitPolicyForm from "./localRateLimitPolicyForm";
 import * as mcpAuthenticationPolicyForm from "./mcpAuthenticationPolicyForm";
 import * as mcpForm from "./mcpForm";
 import * as mcpTargetForm from "./mcpTargetForm";
 import * as modelForm from "./modelForm";
 import * as policyForm from "./policyForm";
+import * as remoteRateLimitPolicyForm from "./remoteRateLimitPolicyForm";
 import * as requestHeaderModifierPolicyForm from "./requestHeaderModifierPolicyForm";
 import * as requestMirrorPolicyForm from "./requestMirrorPolicyForm";
 import * as requestRedirectPolicyForm from "./requestRedirectPolicyForm";
@@ -65,6 +67,8 @@ export const forms = {
   requestRedirectPolicy: requestRedirectPolicyForm,
   requestMirrorPolicy: requestMirrorPolicyForm,
   directResponsePolicy: directResponsePolicyForm,
+  localRateLimitPolicy: localRateLimitPolicyForm,
+  remoteRateLimitPolicy: remoteRateLimitPolicyForm,
 };
 
 const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = { 
@@ -84,6 +88,8 @@ const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = {
   requestRedirect: "requestRedirectPolicy",
   requestMirror: "requestMirrorPolicy",
   directResponse: "directResponsePolicy",
+  localRateLimit: "localRateLimitPolicy",
+  remoteRateLimit: "remoteRateLimitPolicy",
 }
 
 export function getFormForPolicy(policyType: string, fallback: keyof typeof forms = "routePolicy") { 
@@ -147,4 +153,6 @@ export const resourceLabels: Record<
   requestRedirectPolicy: { singular: "Request Redirect Policy", plural: "Request Redirect Policies" },
   requestMirrorPolicy: { singular: "Request Mirror Policy", plural: "Request Mirror Policies" },
   directResponsePolicy: { singular: "Direct Response Policy", plural: "Direct Response Policies" },
+  localRateLimitPolicy: { singular: "Local Rate Limit Policy", plural: "Local Rate Limit Policies" },
+  remoteRateLimitPolicy: { singular: "Remote Rate Limit Policy", plural: "Remote Rate Limit Policies" },
 };

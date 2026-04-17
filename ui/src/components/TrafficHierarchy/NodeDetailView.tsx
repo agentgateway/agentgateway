@@ -35,7 +35,7 @@ import type {
   RouteNode,
   useTrafficHierarchy,
 } from "./hooks/useTrafficHierarchy";
-import { getPolicyLabel } from "./policyTypes";
+import { getDefaultPolicyValue, getPolicyLabel } from "./policyTypes";
 import type { UrlParams } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -801,7 +801,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           route.policies && typeof route.policies === "object"
             ? route.policies
             : {};
-        const newPolicyConfig = {};
+        const newPolicyConfig = getDefaultPolicyValue(policyType);
 
         const updatedRoute = {
           ...route,
@@ -1800,6 +1800,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       .trim();
 
     const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
+    console.log("selected.node.policyType", selected.node.policyType);
     const formConfig = getFormForPolicy(selected.node.policyType);
 
     return (
