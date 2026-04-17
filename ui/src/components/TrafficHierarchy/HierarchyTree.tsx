@@ -2564,7 +2564,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
   const handleAddListenerPolicy = useCallback(
     async (port: number, listenerIndex: number, policyType: string) => {
       try { 
-        await api.updateListenerPolicy(port, listenerIndex, policyType, getDefaultPolicyValue(policyType));
+        await api.updateListenerPolicy(port, listenerIndex, policyType, getDefaultPolicyValue(policyType) as Record<string, unknown>);
         await mutate();
         ensureExpanded(`bind-${port}`, `listener-${port}-${listenerIndex}`);
         navigate(`${basePath}/bind/${port}/listener/${listenerIndex}/policy/${policyType}?edit=true&creating=true`);
@@ -2586,7 +2586,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       policyType: string,
     ) => {
       try { 
-        await api.updateBackendPolicy(port, listenerIndex, routeIndex, backendIndex, isTcp, policyType, getDefaultPolicyValue(policyType));
+        await api.updateBackendPolicy(port, listenerIndex, routeIndex, backendIndex, isTcp, policyType, getDefaultPolicyValue(policyType) as Record<string, unknown>);
         await mutate();
         ensureExpanded(`bind-${port}`, `listener-${port}-${listenerIndex}`);
         navigate(`${basePath}/bind/${port}/listener/${listenerIndex}/${isTcp ? "tcproute" : "route"}/${routeIndex}/backend/${backendIndex}/policy/${policyType}?edit=true&creating=true`);
@@ -2718,7 +2718,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
   const handleAddMCPTargetPolicy = useCallback(
     async (targetIndex: number, policyType: string) => {
       try {
-        await api.updateMCPTargetPolicy(targetIndex, policyType, getDefaultPolicyValue(policyType));
+        await api.updateMCPTargetPolicy(targetIndex, policyType, getDefaultPolicyValue(policyType) as Record<string, unknown>);
         toast.success(`${getPolicyLabel(policyType)} policy added`);
         ensureExpanded("mcp", `mcp-target-${targetIndex}`);
         await mutate();
