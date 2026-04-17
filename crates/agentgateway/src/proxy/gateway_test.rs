@@ -2407,6 +2407,112 @@ async fn llm_models_synthetic_response() {
 	assert!(mock.received_requests().await.unwrap().is_empty());
 }
 
+/// Attach a backend-level `ai` policy at `addr` (mirrors
+/// `AgentgatewayBackend.spec.policies.ai` in K8s mode).
+fn attach_backend_ai(bind: &mut TestBind, addr: &std::net::SocketAddr, p: serde_json::Value) {
+	let mut policy: crate::llm::Policy = serde_json::from_value(p).unwrap();
+	policy.compile_model_alias_patterns();
+	let key = strng::format!("backend-ai/{}", addr);
+	bind.with_policy(crate::types::agent::TargetedPolicy {
+		key,
+		name: None,
+		target: crate::types::agent::PolicyTarget::Backend(
+			crate::types::agent::BackendTarget::Backend {
+				name: addr.to_string().into(),
+				namespace: Default::default(),
+				section: None,
+			},
+		),
+		policy: BackendPolicy::AI(Arc::new(policy)).into(),
+	});
+}
+
+/// `/v1/models` triggers synthesis from a backend-level `ai` policy with
+/// no route-level `ai` policy — exercises `AgentgatewayBackend.spec.policies.ai`.
+#[tokio::test]
+async fn llm_models_backend_level_policy() {
+	let mock = simple_mock().await;
+	let (mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider {
+			model: Some(strng::new("gpt-4o")),
+		}),
+		false,
+		"{}",
+	);
+	let addr = *mock.address();
+	attach_backend_ai(
+		&mut bind,
+		&addr,
+		json!({
+			"routes": { "/v1/models": "models" },
+			"modelAliases": {
+				"smart": "gpt-4o",
+				"gpt-*": "gpt-4o",
+			},
+		}),
+	);
+
+	let res = send_request(io, Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body_raw(res.into_body()).await;
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	let ids: Vec<&str> = body["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|m| m["id"].as_str().unwrap())
+		.collect();
+	assert_eq!(ids, vec!["gpt-4o", "smart"]);
+	assert!(mock.received_requests().await.unwrap().is_empty());
+}
+
+/// When a backend defines `modelAliases`, the runtime merge replaces the
+/// route-level aliases entirely. The synthetic response must mirror this
+/// so we don't advertise aliases the merged policy would not accept.
+#[tokio::test]
+async fn llm_models_backend_aliases_replace_route_aliases() {
+	let mock = simple_mock().await;
+	let (mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider {
+			model: Some(strng::new("gpt-4o")),
+		}),
+		false,
+		"{}",
+	);
+	let addr = *mock.address();
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": { "/v1/models": "models" },
+				"modelAliases": { "route-only": "gpt-4o" },
+			}
+		}))
+		.await;
+	attach_backend_ai(
+		&mut bind,
+		&addr,
+		json!({
+			"modelAliases": { "backend-only": "gpt-4o" },
+		}),
+	);
+
+	let res = send_request(io, Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body_raw(res.into_body()).await;
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	let ids: Vec<&str> = body["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|m| m["id"].as_str().unwrap())
+		.collect();
+	// `backend-only` replaces `route-only`; explicit provider model still present.
+	assert_eq!(ids, vec!["backend-only", "gpt-4o"]);
+	assert!(mock.received_requests().await.unwrap().is_empty());
+}
+
 /// `/v1/models` with no explicit provider model and no aliases falls through
 /// to the upstream's real catalog (path-translating passthrough).
 #[tokio::test]
