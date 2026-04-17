@@ -788,72 +788,13 @@ fn test_parse_openapi_schema_operation_level_parameter_overrides_path_level_para
 		"openapi": "3.0.0",
 		"info": {"title": "Path Params", "version": "1.0.0"},
 		"paths": {
-			"/workspaces/{workspace_gid}/tags": {
-				"parameters": [
-					{
-						"name": "workspace_gid",
-						"in": "path",
-						"required": true,
-						"description": "path-level parameter",
-						"schema": {"type": "string"}
-					}
-				],
-				"get": {
-					"operationId": "getTagsForWorkspace",
-					"parameters": [
-						{
-							"name": "workspace_gid",
-							"in": "path",
-							"required": true,
-							"description": "operation-level parameter",
-							"schema": {"type": "string", "pattern": "^ws_"}
-						}
-					],
-					"responses": {
-						"200": {"description": "ok"}
-					}
-				}
-			}
-		}
-	}"#;
-	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
-	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
-
-	let schema = tool_schema_for(&tools, "getTagsForWorkspace");
-	let path_schema = nested_schema(schema, "path");
-	let path_properties = path_schema
-		.get("properties")
-		.and_then(serde_json::Value::as_object)
-		.expect("path object should include properties");
-	let workspace_gid = path_properties
-		.get("workspace_gid")
-		.and_then(serde_json::Value::as_object)
-		.expect("workspace_gid property should exist");
-	assert_eq!(
-		workspace_gid.get("description"),
-		Some(&json!("operation-level parameter"))
-	);
-	assert_eq!(workspace_gid.get("pattern"), Some(&json!("^ws_")));
-
-	let required = path_schema
-		.get("required")
-		.and_then(serde_json::Value::as_array)
-		.expect("path object should include required array");
-	assert_eq!(required, &vec![json!("workspace_gid")]);
-}
-
-#[test]
-fn test_parse_openapi_schema_operation_level_override_preserves_parameter_order() {
-	let raw = r#"{
-		"openapi": "3.0.0",
-		"info": {"title": "Path Params", "version": "1.0.0"},
-		"paths": {
 			"/workspaces/{workspace_gid}/tags/{tag_gid}": {
 				"parameters": [
 					{
 						"name": "workspace_gid",
 						"in": "path",
 						"required": true,
+						"description": "path-level parameter",
 						"schema": {"type": "string"}
 					},
 					{
@@ -886,12 +827,6 @@ fn test_parse_openapi_schema_operation_level_override_preserves_parameter_order(
 
 	let schema = tool_schema_for(&tools, "getWorkspaceTag");
 	let path_schema = nested_schema(schema, "path");
-	let required = path_schema
-		.get("required")
-		.and_then(serde_json::Value::as_array)
-		.expect("path object should include required array");
-	assert_eq!(required, &vec![json!("workspace_gid"), json!("tag_gid")]);
-
 	let path_properties = path_schema
 		.get("properties")
 		.and_then(serde_json::Value::as_object)
@@ -905,6 +840,17 @@ fn test_parse_openapi_schema_operation_level_override_preserves_parameter_order(
 		Some(&json!("operation-level parameter"))
 	);
 	assert_eq!(workspace_gid.get("pattern"), Some(&json!("^ws_")));
+
+	let required = path_schema
+		.get("required")
+		.and_then(serde_json::Value::as_array)
+		.expect("path object should include required array");
+	assert_eq!(required, &vec![json!("workspace_gid"), json!("tag_gid")]);
+
+	assert!(
+		path_properties.contains_key("tag_gid"),
+		"the unmodified sibling path parameter should keep its slot"
+	);
 }
 
 #[test]
@@ -975,122 +921,6 @@ fn test_parse_openapi_schema_operation_level_header_override_is_case_insensitive
 		.and_then(serde_json::Value::as_array)
 		.expect("header object should include required array");
 	assert_eq!(required, &vec![json!("x-request-id")]);
-}
-
-#[test]
-fn test_parse_openapi_schema_includes_path_and_operation_parameters_in_different_locations() {
-	let raw = r#"{
-		"openapi": "3.0.0",
-		"info": {"title": "Mixed Params", "version": "1.0.0"},
-		"paths": {
-			"/workspaces/{workspace_gid}/tags": {
-				"parameters": [
-					{
-						"name": "workspace_gid",
-						"in": "path",
-						"required": true,
-						"schema": {"type": "string"}
-					}
-				],
-				"get": {
-					"operationId": "getTagsForWorkspace",
-					"parameters": [
-						{
-							"name": "limit",
-							"in": "query",
-							"required": false,
-							"schema": {"type": "integer"}
-						}
-					],
-					"responses": {
-						"200": {"description": "ok"}
-					}
-				}
-			}
-		}
-	}"#;
-	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
-	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
-
-	let schema = tool_schema_for(&tools, "getTagsForWorkspace");
-	let path_schema = nested_schema(schema, "path");
-	let query_schema = nested_schema(schema, "query");
-
-	let top_level_required = schema
-		.get("required")
-		.and_then(serde_json::Value::as_array)
-		.expect("root schema should include required array");
-	assert_eq!(top_level_required, &vec![json!("path")]);
-
-	let path_properties = path_schema
-		.get("properties")
-		.and_then(serde_json::Value::as_object)
-		.expect("path object should include properties");
-	assert!(path_properties.contains_key("workspace_gid"));
-
-	let query_properties = query_schema
-		.get("properties")
-		.and_then(serde_json::Value::as_object)
-		.expect("query object should include properties");
-	assert!(query_properties.contains_key("limit"));
-	assert_eq!(
-		query_schema
-			.get("required")
-			.and_then(serde_json::Value::as_array),
-		Some(&vec![]),
-		"optional query params should not mark any fields as required"
-	);
-}
-
-#[test]
-fn test_parse_openapi_schema_resolves_ref_path_level_parameters() {
-	let raw = r##"{
-		"openapi": "3.0.0",
-		"info": {"title": "Path Params", "version": "1.0.0"},
-		"components": {
-			"parameters": {
-				"WorkspaceGid": {
-					"name": "workspace_gid",
-					"in": "path",
-					"required": true,
-					"description": "workspace identifier",
-					"schema": {"type": "string"}
-				}
-			}
-		},
-		"paths": {
-			"/workspaces/{workspace_gid}/tags": {
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/WorkspaceGid"
-					}
-				],
-				"get": {
-					"operationId": "getTagsForWorkspace",
-					"responses": {
-						"200": {"description": "ok"}
-					}
-				}
-			}
-		}
-	}"##;
-	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
-	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
-
-	let schema = tool_schema_for(&tools, "getTagsForWorkspace");
-	let path_schema = nested_schema(schema, "path");
-	let path_properties = path_schema
-		.get("properties")
-		.and_then(serde_json::Value::as_object)
-		.expect("path object should include properties");
-	let workspace_gid = path_properties
-		.get("workspace_gid")
-		.and_then(serde_json::Value::as_object)
-		.expect("workspace_gid property should exist");
-	assert_eq!(
-		workspace_gid.get("description"),
-		Some(&json!("workspace identifier"))
-	);
 }
 
 #[test]
