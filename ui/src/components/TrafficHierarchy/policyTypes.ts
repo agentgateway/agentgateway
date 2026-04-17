@@ -164,6 +164,22 @@ export function getDefaultPolicyValue(policyType: string): Record<string, unknow
       return {
         passthrough: {},
       };
+
+    // Request mirror
+    case "requestMirror": 
+      return { 
+        backend: { 
+          host: "localhost:8080",
+        },
+        percentage: 100,
+      };
+
+    // Direct response
+    case "directResponse":
+      return { 
+        status: 200,
+        body: "",
+      };
     
     // Most other policies can start empty or with minimal structure
     default:

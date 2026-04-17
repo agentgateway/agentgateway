@@ -9,23 +9,45 @@ import type { RJSFSchema, UiSchema } from "@rjsf/utils";
         enum: ["none", "auto", "full", "host", "port"],
         default: "none",
       },
-      authorityValue: {
-        type: "string",
-        title: "Authority Value",
-        description: "Used when type is Full hostname, Host only, or Port only",
-      },
       pathType: {
         type: "string",
         title: "Path Rewrite",
         enum: ["none", "full", "prefix"],
         default: "none",
       },
-      pathValue: {
-        type: "string",
-        title: "Path Value",
-        description: "The replacement path or prefix",
-      },
     },
+    allOf: [
+        {
+            if: {
+            properties: { authorityType: { enum: ["full", "host", "port"] } },
+            required: ["authorityType"],
+            },
+            then: {
+            properties: {
+                authorityValue: {
+                type: "string",
+                title: "Authority Value",
+                description: "Used when type is Full hostname, Host only, or Port only",
+                },
+            },
+            },
+        },
+        {
+            if: {
+            properties: { pathType: { enum: ["full", "prefix"] } },
+            required: ["pathType"],
+            },
+            then: {
+            properties: {
+                pathValue: {
+                type: "string",
+                title: "Path Value",
+                description: "The replacement path or prefix",
+                },
+            },
+            },
+        },
+    ],
   };
 
   export const uiSchema: UiSchema = {

@@ -20,21 +20,43 @@ export const schema: RJSFSchema = {
       enum: ["none", "auto", "full", "host", "port"],
       default: "none",
     },
-    authorityValue: {
-      type: "string",
-      title: "Authority Value",
-    },
     pathType: {
       type: "string",
       title: "Path Rewrite",
       enum: ["none", "full", "prefix"],
       default: "none",
     },
-    pathValue: {
-      type: "string",
-      title: "Path Value",
-    },
   },
+  allOf: [
+    {
+      if: {
+        properties: { authorityType: { enum: ["full", "host", "port"] } },
+        required: ["authorityType"],
+      },
+      then: {
+        properties: {
+          authorityValue: {
+            type: "string",
+            title: "Authority Value",
+          },
+        },
+      },
+    },
+    {
+      if: {
+        properties: { pathType: { enum: ["full", "prefix"] } },
+        required: ["pathType"],
+      },
+      then: {
+        properties: {
+          pathValue: {
+            type: "string",
+            title: "Path Value",
+          },
+        },
+      },
+    },
+  ],
 };
 
 export const uiSchema: UiSchema = {

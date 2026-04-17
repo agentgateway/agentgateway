@@ -12,6 +12,7 @@ import * as backendForm from "./backendForm";
 import * as basicAuthPolicyForm from "./basicAuthPolicyForm";
 import * as bindForm from "./bindForm";
 import * as corsPolicyForm from "./corsPolicyForm";
+import * as directResponsePolicyForm from "./directResponsePolicyForm";
 import * as extAuthzPolicyForm from "./extAuthzPolicyForm";
 import * as extProcPolicyForm from "./extProcPolicyForm";
 import * as frontendPoliciesForm from "./frontendPoliciesForm";
@@ -25,13 +26,14 @@ import * as mcpTargetForm from "./mcpTargetForm";
 import * as modelForm from "./modelForm";
 import * as policyForm from "./policyForm";
 import * as requestHeaderModifierPolicyForm from "./requestHeaderModifierPolicyForm";
+import * as requestMirrorPolicyForm from "./requestMirrorPolicyForm";
+import * as requestRedirectPolicyForm from "./requestRedirectPolicyForm";
 import * as responseHeaderModifierPolicyForm from "./responseHeaderModifierPolicyForm";
 import * as routeForm from "./routeForm";
 import * as routePolicyForm from "./routePolicyForm";
 import * as topLevelBackendForm from "./topLevelBackendForm";
 import * as transformationsPolicyForm from "./transformationsPolicyForm";
 import * as urlRewritePolicyForm from "./urlRewritePolicyForm";
-import * as requestRedirectPolicyForm from "./requestRedirectPolicyForm";
 
 export const forms = {
   bind: bindForm,
@@ -61,6 +63,8 @@ export const forms = {
   extProcPolicy: extProcPolicyForm,
   urlRewritePolicy: urlRewritePolicyForm,
   requestRedirectPolicy: requestRedirectPolicyForm,
+  requestMirrorPolicy: requestMirrorPolicyForm,
+  directResponsePolicy: directResponsePolicyForm,
 };
 
 const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = { 
@@ -78,6 +82,8 @@ const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = {
   extProc: "extProcPolicy",
   urlRewrite: "urlRewritePolicy",
   requestRedirect: "requestRedirectPolicy",
+  requestMirror: "requestMirrorPolicy",
+  directResponse: "directResponsePolicy",
 }
 
 export function getFormForPolicy(policyType: string, fallback: keyof typeof forms = "routePolicy") { 
@@ -139,4 +145,6 @@ export const resourceLabels: Record<
   extProcPolicy: { singular: "External Processor Policy", plural: "External Processor Policies" },
   urlRewritePolicy: { singular: "URL Rewrite Policy", plural: "URL Rewrite Policies" },
   requestRedirectPolicy: { singular: "Request Redirect Policy", plural: "Request Redirect Policies" },
+  requestMirrorPolicy: { singular: "Request Mirror Policy", plural: "Request Mirror Policies" },
+  directResponsePolicy: { singular: "Direct Response Policy", plural: "Direct Response Policies" },
 };
