@@ -144,7 +144,7 @@ spec:
                                   apiVersion:
                                     description: |-
                                       The version of the Azure OpenAI API to use.
-                                      For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/ai-foundry/?view=foundry-classicreference#api-specs).
+                                      For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/foundry/openai/reference).
                                       If unset, defaults to `v1`.
                                     maxLength: 64
                                     minLength: 1
@@ -152,7 +152,7 @@ spec:
                                   deploymentName:
                                     description: |-
                                       The name of the Azure OpenAI model deployment to use.
-                                      For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
+                                      For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
                                       This is required if `apiVersion` is not `v1`. For `v1`, the model can be
                                       set in the request.
                                     maxLength: 256
@@ -6530,7 +6530,7 @@ spec:
                           apiVersion:
                             description: |-
                               The version of the Azure OpenAI API to use.
-                              For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/ai-foundry/?view=foundry-classicreference#api-specs).
+                              For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/foundry/openai/reference).
                               If unset, defaults to `v1`.
                             maxLength: 64
                             minLength: 1
@@ -6538,7 +6538,7 @@ spec:
                           deploymentName:
                             description: |-
                               The name of the Azure OpenAI model deployment to use.
-                              For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
+                              For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
                               This is required if `apiVersion` is not `v1`. For `v1`, the model can be
                               set in the request.
                             maxLength: 256
@@ -12685,7 +12685,7 @@ spec:
                             description: |-
                               `audiences` specifies the list of allowed audiences that are allowed
                               access. This corresponds to the `aud` claim
-                              (https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3).
+                              ([RFC 7519 §4.1.3](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3)).
                               If unset, any audience is allowed.
                             items:
                               type: string
@@ -12695,7 +12695,7 @@ spec:
                           issuer:
                             description: |-
                               `issuer` identifies the IdP that issued the JWT. This corresponds to the
-                              `iss` claim (https://tools.ietf.org/html/rfc7519#section-4.1.1).
+                              `iss` claim ([RFC 7519 §4.1.1](https://tools.ietf.org/html/rfc7519#section-4.1.1)).
                             maxLength: 256
                             minLength: 1
                             type: string
