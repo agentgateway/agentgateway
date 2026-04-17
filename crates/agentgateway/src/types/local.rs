@@ -738,62 +738,43 @@ impl LocalBackend {
 				let mut backends = vec![];
 				for (idx, t) in tgt.targets.iter().enumerate() {
 					let name = strng::format!("mcp/{}/{}", name.clone(), idx);
+					let mut process_backend = |backend: McpBackendHost| {
+						Ok(match backend.process()? {
+							ProcessedMcpBackendHost::Inline { backend, path, tls } => {
+								let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
+								if let Some(b) = be {
+									backends.push(Self::make_mcp_backend(b, t.policies.clone(), tls)?);
+								}
+								(bref, Some(path))
+							},
+							ProcessedMcpBackendHost::Reference { .. } if t.policies.is_some() => {
+								anyhow::bail!(
+									"cannot use backend reference when policies are defined for an MCP target"
+								);
+							},
+							ProcessedMcpBackendHost::Reference { backend, path } => (backend, path),
+						})
+					};
+
 					let spec = match t.spec.clone() {
 						LocalMcpTargetSpec::Sse { backend } => {
-							let (bref, path) = match backend.process()? {
-								ProcessedMcpBackendHost::Inline { backend, path, tls } => {
-									let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
-									if let Some(b) = be {
-										backends.push(Self::make_mcp_backend(b, t.policies.clone(), tls)?);
-									}
-									(bref, path)
-								},
-								ProcessedMcpBackendHost::Reference { backend, path } => (
-									backend,
-									path.ok_or_else(|| anyhow!("path is required when backend is set"))?,
-								),
-							};
+							let (bref, path) = process_backend(backend)?;
 							McpTargetSpec::Sse(SseTargetSpec {
 								backend: bref,
-								path,
+								path: path.ok_or_else(|| anyhow!("path is required when backend is set"))?,
 							})
 						},
 						LocalMcpTargetSpec::Mcp { backend } => {
-							let (bref, path) = match backend.process()? {
-								ProcessedMcpBackendHost::Inline { backend, path, tls } => {
-									let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
-									if let Some(b) = be {
-										backends.push(Self::make_mcp_backend(b, t.policies.clone(), tls)?);
-									}
-									(bref, path)
-								},
-								ProcessedMcpBackendHost::Reference { backend, path } => (
-									backend,
-									path.ok_or_else(|| anyhow!("path is required when backend is set"))?,
-								),
-							};
+							let (bref, path) = process_backend(backend)?;
 							McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
 								backend: bref,
-								path,
+								path: path.ok_or_else(|| anyhow!("path is required when backend is set"))?,
 							})
 						},
 						LocalMcpTargetSpec::Stdio { cmd, args, env } => McpTargetSpec::Stdio { cmd, args, env },
 						LocalMcpTargetSpec::OpenAPI { backend, schema } => {
-							let bref = match backend.process()? {
-								ProcessedMcpBackendHost::Inline { backend, tls, .. } => {
-									let (bref, be) = mcp_to_simple_backend_and_ref(local_name(name.clone()), backend);
-									if let Some(b) = be {
-										backends.push(Self::make_mcp_backend(b, t.policies.clone(), tls)?);
-									}
-									bref
-								},
-								ProcessedMcpBackendHost::Reference { backend, path } => {
-									if path.is_some() {
-										anyhow::bail!("path is not supported when backend is set for openapi");
-									}
-									backend
-								},
-							};
+							let (bref, _) = process_backend(backend)?;
+
 							let openapi_schema = schema.load_openapi_schema(client.clone()).await?;
 							McpTargetSpec::OpenAPI(OpenAPITarget {
 								backend: bref,
