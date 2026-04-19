@@ -2,6 +2,7 @@ package agentgateway
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -427,7 +428,8 @@ const (
 type FailureMode string
 
 // McpTargetSelector defines the MCPBackend target to use for this backend.
-// +kubebuilder:validation:ExactlyOneOf=selector;static
+// +kubebuilder:validation:ExactlyOneOf=selector;static;tools
+// +kubebuilder:validation:XValidation:rule="!has(self.tools) || self.tools.all(t1, self.tools.exists_one(t2, t1.name == t2.name))",message="tool names must be unique"
 type McpTargetSelector struct {
 	// Name of the MCP target.
 	// +required
@@ -444,6 +446,37 @@ type McpTargetSelector struct {
 	// instead.
 	// +optional
 	Static *McpTarget `json:"static,omitempty"`
+
+	// `tools` configures a list of HTTP-native MCP tools. Each tool is backed
+	// by a Kubernetes Service; tool arguments are POSTed as JSON to the service.
+	// This is an alternative to running a full MCP server: each service only
+	// needs to handle a plain HTTP POST with the tool's JSON arguments.
+	// +optional
+	// +kubebuilder:validation:MaxItems=64
+	Tools []McpTool `json:"tools,omitempty"`
+}
+
+// McpTool defines a single HTTP-native MCP tool backed by a Kubernetes Service.
+type McpTool struct {
+	// `name` is the MCP tool name exposed to LLM clients.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=64
+	Name string `json:"name"`
+
+	// `backendRef` references the Service backing this tool. `port` must be set.
+	// +required
+	// +kubebuilder:validation:XValidation:rule="has(self.port)",message="port must be set for McpTool backendRef"
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// `description` of the tool, presented to the LLM.
+	// +optional
+	Description string `json:"description,omitempty"`
+
+	// `inputSchema` is the MCP-compatible JSON Schema (2020-12) describing the
+	// tool's arguments. Passed through to MCP clients as-is.
+	// +required
+	InputSchema *apiextv1.JSON `json:"inputSchema"`
 }
 
 const (

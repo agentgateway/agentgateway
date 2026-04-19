@@ -1002,6 +1002,24 @@ impl TryFrom<&proto::agent::McpTarget> for McpTarget {
 						},
 					})
 				},
+				Protocol::HttpTool => {
+					let tools = s
+						.http_tools
+						.iter()
+						.map(|t| HttpToolEntry {
+							name: t.name.clone(),
+							description: if t.description.is_empty() {
+								None
+							} else {
+								Some(t.description.clone())
+							},
+							schema: serde_json::from_str(&t.schema_json)
+								.unwrap_or_else(|_| serde_json::json!({})),
+							backend: resolve_simple_reference(t.backend.as_ref()),
+						})
+						.collect();
+					McpTargetSpec::HttpTool(tools)
+				},
 			},
 		})
 	}

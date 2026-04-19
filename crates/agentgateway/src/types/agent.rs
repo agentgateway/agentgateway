@@ -1289,6 +1289,8 @@ pub enum McpTargetSpec {
 	},
 	#[serde(rename = "openapi")]
 	OpenAPI(OpenAPITarget),
+	#[serde(rename = "httpTool")]
+	HttpTool(Vec<HttpToolEntry>),
 }
 
 impl McpTargetSpec {
@@ -1298,6 +1300,8 @@ impl McpTargetSpec {
 			McpTargetSpec::Mcp(s) => Some(&s.backend),
 			McpTargetSpec::OpenAPI(s) => Some(&s.backend),
 			McpTargetSpec::Stdio { .. } => None,
+			// Each HttpToolEntry has its own backend; no single representative backend.
+			McpTargetSpec::HttpTool(_) => None,
 		}
 	}
 }
@@ -1326,6 +1330,18 @@ pub struct OpenAPITarget {
 	#[serde(skip_serializing)]
 	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
 	pub schema: Arc<OpenAPI>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct HttpToolEntry {
+	pub name: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub description: Option<String>,
+	#[serde(skip_serializing)]
+	pub schema: serde_json::Value,
+	pub backend: SimpleBackendReference,
 }
 
 #[derive(Debug, Clone, Default)]

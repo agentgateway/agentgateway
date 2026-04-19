@@ -1,4 +1,5 @@
 mod client;
+mod httptool;
 mod openapi;
 mod sse;
 mod stdio;
@@ -95,6 +96,7 @@ pub(crate) enum Upstream {
 	McpSSE(sse::Client),
 	McpStdio(stdio::Process),
 	OpenAPI(Box<openapi::Handler>),
+	HttpTool(Box<httptool::Handler>),
 }
 
 impl Upstream {
@@ -103,6 +105,9 @@ impl Upstream {
 			Upstream::McpStreamable(c) => Some(c.get_session_state()),
 			Upstream::McpSSE(c) => Some(c.get_session_state()),
 			Upstream::OpenAPI(c) => Some(c.get_session_state()),
+			// HttpTool participates in session tracking (target_name only; no backend affinity
+			// since each tool routes to its own service).
+			Upstream::HttpTool(c) => Some(c.get_session_state()),
 			_ => None,
 		}
 	}
@@ -113,6 +118,7 @@ impl Upstream {
 			Upstream::McpSSE(c) => c.set_session_id(id, pinned),
 			Upstream::McpStdio(_) => {},
 			Upstream::OpenAPI(c) => c.set_session_id(id, pinned),
+			Upstream::HttpTool(c) => c.set_session_id(id, pinned),
 		}
 	}
 
@@ -129,8 +135,8 @@ impl Upstream {
 			Upstream::McpSSE(c) => {
 				c.stop().await?;
 			},
-			Upstream::OpenAPI(_) => {
-				// No need to do anything here
+			Upstream::OpenAPI(_) | Upstream::HttpTool(_) => {
+				// No session to tear down.
 			},
 		}
 		Ok(())
@@ -147,7 +153,7 @@ impl Upstream {
 				.await?
 				.try_into()
 				.map_err(Into::into),
-			Upstream::OpenAPI(_m) => Ok(Messages::pending()),
+			Upstream::OpenAPI(_) | Upstream::HttpTool(_) => Ok(Messages::pending()),
 		}
 	}
 	pub(crate) async fn generic_stream(
@@ -176,6 +182,7 @@ impl Upstream {
 				res.try_into().map_err(Into::into)
 			},
 			Upstream::OpenAPI(c) => Ok(c.send_message(request, ctx).await?),
+			Upstream::HttpTool(c) => Ok(c.send_message(request, ctx).await?),
 		}
 	}
 
@@ -194,7 +201,7 @@ impl Upstream {
 			Upstream::McpStreamable(c) => {
 				c.send_notification(request, ctx).await?;
 			},
-			Upstream::OpenAPI(_) => {},
+			Upstream::OpenAPI(_) | Upstream::HttpTool(_) => {},
 		}
 		Ok(())
 	}
@@ -371,6 +378,36 @@ impl UpstreamGroup {
 					http_client,
 					tools,  // From parse_openapi_schema
 					prefix, // From get_server_prefix
+				)))
+			},
+			McpTargetSpec::HttpTool(entries) => {
+				debug!("starting httptool transport for target: {}", target.name);
+				let tools = entries
+					.iter()
+					.map(|entry| {
+						// Resolve the per-tool backend reference. Each tool may route to
+						// a different service, so per-tool pod affinity is tracked
+						// independently in memory but cannot be persisted across reconnects.
+						let resolved =
+							crate::proxy::resolve_simple_backend_with_policies(
+								&entry.backend,
+								&self.client.inputs,
+							)
+							.map_err(|_| mcp::Error::NoBackends)?;
+						let http_client = McpHttpClient::new(
+							self.client.clone(),
+							resolved.backend,
+							target.backend_policies.clone(),
+							self.backend.stateful,
+							target.name.to_string(),
+						);
+						let tool = httptool::entry_to_tool(entry);
+						Ok::<_, mcp::Error>((tool, http_client))
+					})
+					.collect::<Result<Vec<_>, _>>()?;
+				upstream::Upstream::HttpTool(Box::new(httptool::Handler::new(
+					target.name.to_string(),
+					tools,
 				)))
 			},
 		};

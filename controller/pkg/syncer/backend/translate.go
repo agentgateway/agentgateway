@@ -302,6 +302,17 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 				return nil, err
 			}
 			mcpTargets = append(mcpTargets, targets...)
+		} else if len(target.Tools) > 0 {
+			httpTools, err := TranslateMCPTools(ctx, be.Namespace, target.Tools)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			mcpTargets = append(mcpTargets, &api.MCPTarget{
+				Name:      string(target.Name),
+				Protocol:  api.MCPTarget_HTTP_TOOL,
+				HttpTools: httpTools,
+			})
 		}
 	}
 	// defaults to stateful session routing
