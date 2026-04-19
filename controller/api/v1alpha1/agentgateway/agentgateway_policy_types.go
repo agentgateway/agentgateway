@@ -420,6 +420,13 @@ type FrontendHTTP struct {
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http2KeepaliveTimeout must be at least 1 second"
 	// +optional
 	HTTP2KeepaliveTimeout *metav1.Duration `json:"http2KeepaliveTimeout,omitempty"`
+	// `maxConnectionDuration` specifies the maximum time a connection is allowed to remain open.
+	// After this duration, the connection is gracefully closed after the current in-flight request completes.
+	// Useful for ensuring even traffic distribution behind load balancers during scaling events.
+	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="maxConnectionDuration must be at least 1 second"
+	// +optional
+	MaxConnectionDuration *metav1.Duration `json:"maxConnectionDuration,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet

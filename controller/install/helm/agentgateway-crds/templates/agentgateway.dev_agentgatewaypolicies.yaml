@@ -6361,13 +6361,24 @@ spec:
                         format: int32
                         minimum: 1
                         type: integer
+                      maxConnectionDuration:
+                        description: |-
+                          `maxConnectionDuration` specifies the maximum time a connection is allowed to remain open.
+                          After this duration, the connection is gracefully closed after the current in-flight request completes.
+                          Useful for ensuring even traffic distribution behind load balancers during scaling events.
+                        type: string
+                        x-kubernetes-validations:
+                        - message: invalid duration value
+                          rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                        - message: maxConnectionDuration must be at least 1 second
+                          rule: duration(self) >= duration('1s')
                     type: object
                     x-kubernetes-validations:
                     - message: at least one of the fields in [http1IdleTimeout http1MaxHeaders
                         http2ConnectionWindowSize http2FrameSize http2KeepaliveInterval
-                        http2KeepaliveTimeout http2WindowSize maxBufferSize] must
-                        be set
-                      rule: '[has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2WindowSize),has(self.maxBufferSize)].filter(x,x==true).size()
+                        http2KeepaliveTimeout http2WindowSize maxBufferSize maxConnectionDuration]
+                        must be set
+                      rule: '[has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
                         >= 1'
                   networkAuthorization:
                     description: |-

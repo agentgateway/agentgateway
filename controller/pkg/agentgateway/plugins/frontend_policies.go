@@ -425,6 +425,9 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	if v := http.HTTP2KeepaliveTimeout; v != nil {
 		spec.Http2KeepaliveTimeout = durationpb.New(v.Duration)
 	}
+	if v := http.MaxConnectionDuration; v != nil {
+		spec.MaxConnectionDuration = durationpb.New(v.Duration)
+	}
 
 	httpPolicy := &api.Policy{
 		Key:  name + frontendHttpPolicySuffix,

@@ -1911,6 +1911,7 @@ impl TryFrom<&proto::agent::FrontendPolicySpec> for FrontendPolicy {
 				http2_frame_size: h.http2_frame_size,
 				http2_keepalive_interval: h.http2_keepalive_interval.map(convert_duration),
 				http2_keepalive_timeout: h.http2_keepalive_timeout.map(convert_duration),
+				max_connection_duration: h.max_connection_duration.map(convert_duration),
 			}),
 			Some(fps::Kind::Tls(t)) => FrontendPolicy::TLS(frontend::TLS {
 				handshake_timeout: t
