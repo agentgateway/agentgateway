@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js";
-import { SSEClientTransport as McpSseTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import {
   ClientRequest as McpClientRequest,
   Result as McpResult,
@@ -127,6 +127,34 @@ interface UiState {
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
 
+const appendPathSegment = (base: string, segment: string) =>
+  base.endsWith("/") ? `${base}${segment}` : `${base}/${segment}`;
+
+const getMcpConnectionEndpoint = (routeInfo: RouteInfo): string => {
+  const exactPath = routeInfo.route.matches?.[0]?.path?.exact;
+  const normalizedEndpoint = routeInfo.endpoint.endsWith("/sse")
+    ? `${routeInfo.endpoint.slice(0, -4)}/mcp`
+    : routeInfo.endpoint;
+
+  if (normalizedEndpoint.endsWith("/mcp")) {
+    return normalizedEndpoint;
+  }
+
+  if (exactPath && exactPath !== "/") {
+    return normalizedEndpoint;
+  }
+
+  return appendPathSegment(normalizedEndpoint, "mcp");
+};
+
+const getConnectionEndpoint = (routeInfo: RouteInfo, backendType: "mcp" | "a2a" | "http") => {
+  if (backendType === "mcp") {
+    return getMcpConnectionEndpoint(routeInfo);
+  }
+
+  return routeInfo.endpoint;
+};
+
 export default function PlaygroundPage() {
   const { binds } = useServer();
   const [routes, setRoutes] = useState<RouteInfo[]>([]);
@@ -229,7 +257,7 @@ export default function PlaygroundPage() {
     setConnectionState((prev) => ({
       ...prev,
       connectionType: backendType,
-      selectedEndpoint: routeInfo.endpoint,
+      selectedEndpoint: getConnectionEndpoint(routeInfo, backendType),
       selectedListenerName: routeInfo.listener.name || null,
       selectedListenerProtocol: routeInfo.listener.protocol,
     }));
@@ -441,21 +469,23 @@ export default function PlaygroundPage() {
     resetClientState();
 
     const backendType = getRouteBackendType(selectedRoute);
+    const connectionEndpoint = getConnectionEndpoint(selectedRoute, backendType);
 
     try {
       if (backendType === "mcp") {
-        setConnectionState((prev) => ({ ...prev, connectionType: "mcp" }));
+        setConnectionState((prev) => ({
+          ...prev,
+          connectionType: "mcp",
+          selectedEndpoint: connectionEndpoint,
+        }));
 
-        // TODO: Support acting as a stateless client
         const client = new McpClient(
           { name: "agentgateway-dashboard", version: "0.1.0" },
           { capabilities: {} }
         );
 
         const headers: Record<string, string> = {
-          Accept: "text/event-stream",
           "Cache-Control": "no-cache",
-          "mcp-protocol-version": "2024-11-05",
         };
 
         // Only add auth header if token is provided and not empty
@@ -463,18 +493,7 @@ export default function PlaygroundPage() {
           headers["Authorization"] = `Bearer ${connectionState.authToken}`;
         }
 
-        const sseUrl = selectedRoute.endpoint.endsWith("/")
-          ? `${selectedRoute.endpoint}sse`
-          : `${selectedRoute.endpoint}/sse`;
-        const transport = new McpSseTransport(new URL(sseUrl), {
-          eventSourceInit: {
-            fetch: (url, init) => {
-              return fetch(url, {
-                ...init,
-                headers: headers as HeadersInit,
-              });
-            },
-          },
+        const transport = new StreamableHTTPClientTransport(new URL(connectionEndpoint), {
           requestInit: {
             headers: headers as HeadersInit,
             credentials: "omit",
@@ -595,7 +614,7 @@ export default function PlaygroundPage() {
         error?.code === 404
       ) {
         toast.error(
-          `❌ Not Found (404): Endpoint '${selectedRoute?.endpoint || "unknown"}' not found`
+          `❌ Not Found (404): Endpoint '${connectionEndpoint || "unknown"}' not found`
         );
       } else if (
         errorMessage.includes("Failed to fetch") ||
@@ -607,12 +626,12 @@ export default function PlaygroundPage() {
         let detailedMessage = "❌ Connection Failed - Possible causes:\n";
         detailedMessage += "• CORS: Server needs 'Access-Control-Allow-Origin' header\n";
         detailedMessage += "• Network: Server may be down or unreachable\n";
-        detailedMessage += "• Headers: Missing required headers (Accept, mcp-protocol-version)\n";
-        detailedMessage += `• URL: Check if '${selectedRoute?.endpoint || "unknown"}/sse' is correct\n`;
+        detailedMessage += "• Headers: Missing required headers (content-type, mcp-protocol-version)\n";
+        detailedMessage += `• URL: Check if '${connectionEndpoint}' is correct\n`;
         detailedMessage += "• Config: Verify agentgateway is running with correct config";
 
         console.error("CORS/Network error details:", {
-          url: `${selectedRoute?.endpoint || "unknown"}/sse`,
+          url: connectionEndpoint,
           headers: error?.headers,
           mode: "cors",
           credentials: "omit",
