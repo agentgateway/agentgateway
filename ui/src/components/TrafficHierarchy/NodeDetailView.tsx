@@ -2174,7 +2174,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     const { node } = selected;
     const modelName = node.model.name || `Model ${node.modelIndex + 1}`;
     const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
-    const formConfig = getFormForPolicy("model");
+    const formConfig = forms.model;
 
     return (
       <Container>
