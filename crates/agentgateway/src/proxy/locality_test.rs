@@ -343,6 +343,93 @@ async fn unhealthy_local_zone_falls_back_to_next_tier() {
 	.await;
 }
 
+// split between higher bucket
+#[tokio::test]
+async fn shared_bucket_splits_within_and_skips_lower_tier() {
+	run(Case {
+		self_loc: Some(("r1", "z1", "node-a")),
+		steps: vec![
+			Step::Sync {
+				services: vec![Svc {
+					name: "app",
+					mode: Failover,
+					scopes: vec![Zone],
+				}],
+				endpoints: vec![
+					Ep {
+						label: "a",
+						svc: "app",
+						loc: ("r1", "z1", "node-a"),
+						healthy: true,
+					},
+					Ep {
+						label: "b",
+						svc: "app",
+						loc: ("r1", "z1", "node-b"),
+						healthy: true,
+					},
+					Ep {
+						label: "c",
+						svc: "app",
+						loc: ("r1", "z2", "node-c"),
+						healthy: true,
+					},
+				],
+			},
+			// Spread over {a,b} sums to `hits`, which implicitly rules out c receiving traffic.
+			Step::Hit {
+				hits: 20,
+				want_status: StatusCode::OK,
+				want: Expect::Spread(vec!["a", "b"]),
+			},
+		],
+	})
+	.await;
+}
+
+// use the only healthy endpoint in the higher bucket
+#[tokio::test]
+async fn shared_bucket_with_one_unhealthy_stays_in_bucket() {
+	run(Case {
+		self_loc: Some(("r1", "z1", "node-a")),
+		steps: vec![
+			Step::Sync {
+				services: vec![Svc {
+					name: "app",
+					mode: Failover,
+					scopes: vec![Zone],
+				}],
+				endpoints: vec![
+					Ep {
+						label: "a",
+						svc: "app",
+						loc: ("r1", "z1", "node-a"),
+						healthy: false,
+					},
+					Ep {
+						label: "b",
+						svc: "app",
+						loc: ("r1", "z1", "node-b"),
+						healthy: true,
+					},
+					Ep {
+						label: "c",
+						svc: "app",
+						loc: ("r1", "z2", "node-c"),
+						healthy: true,
+					},
+				],
+			},
+			Step::Hit {
+				hits: 10,
+				want_status: StatusCode::OK,
+				want: Expect::Exact(vec![("a", 0), ("b", 10), ("c", 0)]),
+			},
+		],
+	})
+	.await;
+}
+
 // ---------- lifecycle ----------
 
 /// Workloads arrive before their service. Before the service exists, requests 503 and endpoints
