@@ -40,11 +40,11 @@ pub const DEFAULT_BUFFERED_LINES_LIMIT: usize = 128_000;
 ///
 /// # Examples
 ///
-/// ``` rust
-/// # #[clippy::allow(needless_doctest_main)]
+/// ``` rust,no_run
 /// fn main () {
 /// # fn doc() {
-///     let (non_blocking, _guard) = tracing_appender::non_blocking(std::io::stdout());
+///     use agent_core::telemetry::nonblocking::NonBlockingBuilder;
+///     let (non_blocking, _guard) = NonBlockingBuilder::default().finish(std::io::stdout());
 ///     let subscriber = tracing_subscriber::fmt().with_writer(non_blocking);
 ///     tracing::subscriber::with_default(subscriber.finish(), || {
 ///         // Emit some tracing events within context of the non_blocking `_guard` and tracing subscriber
