@@ -5039,13 +5039,13 @@ spec:
                     description: |-
                       `mcp` specifies settings for MCP workloads. This is only applicable when
                       connecting to a `Backend` of type `mcp`.
-
-                      This field is deprecated; prefer to use traffic policy `jwtAuthentication.mcp`, which ensures authentication runs before
-                      other policies such as transformation and rate limiting.
                     properties:
                       authentication:
-                        description: '`authentication` defines `MCPBackend`-specific
-                          authentication rules.'
+                        description: |-
+                          `authentication` defines `MCPBackend`-specific authentication rules.
+
+                          This field is deprecated; prefer to use traffic policy `jwtAuthentication.mcp`, which ensures authentication runs before
+                          other policies such as transformation and rate limiting.
                         properties:
                           audiences:
                             description: |-

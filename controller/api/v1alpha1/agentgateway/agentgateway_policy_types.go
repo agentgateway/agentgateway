@@ -243,9 +243,6 @@ type BackendFull struct {
 	// `mcp` specifies settings for MCP workloads. This is only applicable when
 	// connecting to a `Backend` of type `mcp`.
 	//
-	// This field is deprecated; prefer to use traffic policy `jwtAuthentication.mcp`, which ensures authentication runs before
-	// other policies such as transformation and rate limiting.
-	//
 	// +optional
 	MCP *BackendMCP `json:"mcp,omitempty"`
 }
@@ -1111,6 +1108,10 @@ type BackendMCP struct {
 	// +optional
 	Authorization *shared.Authorization `json:"authorization,omitempty"`
 	// `authentication` defines `MCPBackend`-specific authentication rules.
+	//
+	// This field is deprecated; prefer to use traffic policy `jwtAuthentication.mcp`, which ensures authentication runs before
+	// other policies such as transformation and rate limiting.
+	//
 	// +optional
 	Authentication *MCPAuthentication `json:"authentication,omitempty"`
 }
