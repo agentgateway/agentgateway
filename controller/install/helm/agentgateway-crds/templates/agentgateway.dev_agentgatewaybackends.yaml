@@ -7688,13 +7688,121 @@ spec:
                               must be set
                             rule: '[has(self.host),has(self.backendRef)].filter(x,x==true).size()
                               == 1'
+                        tools:
+                          description: |-
+                            `tools` configures a list of HTTP-native MCP tools. Each tool is backed
+                            by a Kubernetes Service; tool arguments are POSTed as JSON to the service.
+                            This is an alternative to running a full MCP server: each service only
+                            needs to handle a plain HTTP POST with the tool's JSON arguments.
+                          items:
+                            description: McpTool defines a single HTTP-native MCP
+                              tool backed by a Kubernetes Service.
+                            properties:
+                              backendRef:
+                                description: '`backendRef` references the Service
+                                  backing this tool. `port` must be set.'
+                                properties:
+                                  group:
+                                    default: ""
+                                    description: |-
+                                      Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                      When unspecified or empty string, core API group is inferred.
+                                    maxLength: 253
+                                    pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                    type: string
+                                  kind:
+                                    default: Service
+                                    description: |-
+                                      Kind is the Kubernetes resource kind of the referent. For example
+                                      "Service".
+
+                                      Defaults to "Service" when not specified.
+
+                                      ExternalName services can refer to CNAME DNS records that may live
+                                      outside of the cluster and as such are difficult to reason about in
+                                      terms of conformance. They also may not be safe to forward to (see
+                                      CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                      support ExternalName Services.
+
+                                      Support: Core (Services with a type other than ExternalName)
+
+                                      Support: Implementation-specific (Services with type ExternalName)
+                                    maxLength: 63
+                                    minLength: 1
+                                    pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                    type: string
+                                  name:
+                                    description: Name is the name of the referent.
+                                    maxLength: 253
+                                    minLength: 1
+                                    type: string
+                                  namespace:
+                                    description: |-
+                                      Namespace is the namespace of the backend. When unspecified, the local
+                                      namespace is inferred.
+
+                                      Note that when a namespace different than the local namespace is specified,
+                                      a ReferenceGrant object is required in the referent namespace to allow that
+                                      namespace's owner to accept the reference. See the ReferenceGrant
+                                      documentation for details.
+
+                                      Support: Core
+                                    maxLength: 63
+                                    minLength: 1
+                                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                    type: string
+                                  port:
+                                    description: |-
+                                      Port specifies the destination port number to use for this resource.
+                                      Port is required when the referent is a Kubernetes Service. In this
+                                      case, the port number is the service port number, not the target port.
+                                      For other resources, destination port might be derived from the referent
+                                      resource or this field.
+                                    format: int32
+                                    maximum: 65535
+                                    minimum: 1
+                                    type: integer
+                                required:
+                                - name
+                                type: object
+                                x-kubernetes-validations:
+                                - message: port must be set for McpTool backendRef
+                                  rule: has(self.port)
+                                - message: Must have port for Service reference
+                                  rule: '(size(self.group) == 0 && self.kind == ''Service'')
+                                    ? has(self.port) : true'
+                              description:
+                                description: '`description` of the tool, presented
+                                  to the LLM.'
+                                type: string
+                              inputSchema:
+                                description: |-
+                                  `inputSchema` is the MCP-compatible JSON Schema (2020-12) describing the
+                                  tool's arguments. Passed through to MCP clients as-is.
+                                x-kubernetes-preserve-unknown-fields: true
+                              name:
+                                description: '`name` is the MCP tool name exposed
+                                  to LLM clients.'
+                                maxLength: 64
+                                minLength: 1
+                                type: string
+                            required:
+                            - backendRef
+                            - inputSchema
+                            - name
+                            type: object
+                          maxItems: 64
+                          type: array
                       required:
                       - name
                       type: object
                       x-kubernetes-validations:
-                      - message: exactly one of the fields in [selector static] must
-                          be set
-                        rule: '[has(self.selector),has(self.static)].filter(x,x==true).size()
+                      - message: tool names must be unique
+                        rule: '!has(self.tools) || self.tools.all(t1, self.tools.exists_one(t2,
+                          t1.name == t2.name))'
+                      - message: exactly one of the fields in [selector static tools]
+                          must be set
+                        rule: '[has(self.selector),has(self.static),has(self.tools)].filter(x,x==true).size()
                           == 1'
                     maxItems: 32
                     minItems: 1

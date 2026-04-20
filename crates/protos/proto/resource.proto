@@ -1307,11 +1307,23 @@ message MCPTarget {
     UNDEFINED = 0;
     SSE = 1;
     STREAMABLE_HTTP = 2;
+    HTTP_TOOL = 3;
   }
   string name = 1;
   BackendReference backend = 2;
   string path = 3;
   Protocol protocol = 4;
+  repeated HttpTool http_tools = 5;
+}
+
+// HttpTool defines a single HTTP-native MCP tool backed by a Kubernetes Service.
+// The tool args are POSTed as JSON to the referenced service.
+message HttpTool {
+  string name = 1;
+  string description = 2;
+  // JSON-serialized MCP inputSchema (JSON Schema 2020-12).
+  string schema_json = 3;
+  BackendReference backend = 4;
 }
 
 message BackendReference {

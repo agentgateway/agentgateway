@@ -129,6 +129,53 @@ func TranslateMCPSelectorTargets(
 	return mcpTargets, nil
 }
 
+func TranslateMCPTools(
+	ctx plugins.PolicyCtx,
+	namespace string,
+	tools []agentgateway.McpTool,
+) ([]*api.HttpTool, error) {
+	httpTools := make([]*api.HttpTool, 0, len(tools))
+	for _, tool := range tools {
+		ref := tool.BackendRef
+		svcNamespace := namespace
+		if ref.Namespace != nil && *ref.Namespace != "" {
+			svcNamespace = string(*ref.Namespace)
+		}
+
+		key := svcNamespace + "/" + string(ref.Name)
+		service := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Services, krt.FilterKey(key)))
+		if service == nil {
+			return nil, fmt.Errorf("McpTool %q: service %s not found", tool.Name, key)
+		}
+
+		port := uint32(0)
+		if ref.Port != nil {
+			port = uint32(*ref.Port) //nolint:gosec // G115: validated by the CRD schema
+		}
+
+		schemaJSON := "{}"
+		if tool.InputSchema != nil && len(tool.InputSchema.Raw) > 0 {
+			schemaJSON = string(tool.InputSchema.Raw)
+		}
+
+		httpTools = append(httpTools, &api.HttpTool{
+			Name:        tool.Name,
+			Description: tool.Description,
+			SchemaJson:  schemaJSON,
+			Backend: &api.BackendReference{
+				Kind: &api.BackendReference_Service_{
+					Service: &api.BackendReference_Service{
+						Hostname:  kubeutils.ServiceFQDN(service.ObjectMeta),
+						Namespace: svcNamespace,
+					},
+				},
+				Port: port,
+			},
+		})
+	}
+	return httpTools, nil
+}
+
 func ResolveMCPBackendRefHost(
 	ctx plugins.PolicyCtx,
 	namespace string,
