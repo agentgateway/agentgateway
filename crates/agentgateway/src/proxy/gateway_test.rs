@@ -1,3 +1,4 @@
+use std::convert::Infallible;
 use std::sync::{Arc, Mutex as StdMutex};
 
 use crate::http::tests_common::*;
@@ -26,7 +27,6 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 use url::{Position, Url};
-use wiremock::{Mock, MockServer, ResponseTemplate};
 use x509_parser::nom::AsBytes;
 
 const TEST_PRIVATE_KEY_PEM: &str = "-----BEGIN PRIVATE KEY-----
@@ -143,34 +143,48 @@ fn query_param(uri: &str, name: &str) -> String {
 		.unwrap_or_else(|| panic!("missing query param {name}"))
 }
 
-async fn oidc_backend_mock() -> (MockServer, Arc<StdMutex<Option<String>>>) {
-	let token_response = Arc::new(StdMutex::new(None));
-	let mock = MockServer::start().await;
-	let token_response_clone = Arc::clone(&token_response);
-	Mock::given(wiremock::matchers::path_regex("/.*"))
-		.respond_with(move |req: &wiremock::Request| {
-			if req.method == Method::POST && req.url.path() == "/token" {
-				let id_token = token_response_clone
-					.lock()
-					.expect("token mutex")
-					.clone()
-					.expect("token response configured");
-				return ResponseTemplate::new(200).set_body_json(json!({
-					"id_token": id_token,
-				}));
-			}
+async fn handle_oidc_backend_request(
+	req: hyper::Request<hyper::body::Incoming>,
+	token_response: Arc<StdMutex<Option<String>>>,
+) -> Result<Response, Infallible> {
+	if req.method() == Method::POST && req.uri().path() == "/token" {
+		let id_token = token_response
+			.lock()
+			.expect("token mutex")
+			.clone()
+			.expect("token response configured");
+		return Ok(
+			::http::Response::builder()
+				.status(200)
+				.header(::http::header::CONTENT_TYPE, "application/json")
+				.body(Body::from(
+					serde_json::to_vec(&json!({
+						"id_token": id_token,
+					}))
+					.unwrap(),
+				))
+				.unwrap(),
+		);
+	}
 
-			let request = RequestDump {
-				method: req.method.clone(),
-				uri: req.url.to_string().parse().expect("request uri"),
-				headers: req.headers.clone(),
-				body: bytes::Bytes::copy_from_slice(&req.body),
-				version: req.version,
-			};
-			ResponseTemplate::new(200).set_body_json(request)
-		})
-		.mount(&mock)
-		.await;
+	echo_request(req).await
+}
+
+async fn oidc_backend_mock() -> (LocalMockServer, Arc<StdMutex<Option<String>>>) {
+	let token_response = Arc::new(StdMutex::new(None));
+
+	// Keep this local instead of relying on wiremock so the OIDC proxy tests keep
+	// asserting the actual backend HTTP version while avoiding extra test-only TLS
+	// and crypto dependencies.
+	let mock = spawn_http_mock({
+		let token_response = Arc::clone(&token_response);
+		move |req| {
+			let token_response = Arc::clone(&token_response);
+			async move { handle_oidc_backend_request(req, token_response).await }
+		}
+	})
+	.await;
+
 	(mock, token_response)
 }
 
@@ -993,6 +1007,7 @@ async fn tls_termination() {
 #[tokio::test]
 async fn tls_backend_connection() {
 	let (mock, certs) = tls_mock().await;
+	assert!(mock.uri().starts_with("https://"));
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
 		root: Some(certs.root_cert.pem().into_bytes()),
 		hostname: Some("localhost".to_string()),
@@ -1367,9 +1382,10 @@ async fn tunnel_absolute_form() {
 	let res = send_request(io.clone(), Method::GET, "http://lo/foo").await;
 	assert_eq!(res.status(), 200);
 	let body = read_body(res.into_body()).await;
-	// Unfortunately, wiremock obscures whether it is an absolute form or not and makes the typical case hardcoded
-	// to "http://localhost". But our assertion here is good enough.
-	assert_eq!(&body.uri.to_string(), "http://lo/foo");
+	assert_eq!(body.uri.scheme_str(), Some("http"));
+	assert_eq!(body.uri.authority().map(|a| a.as_str()), Some("lo"));
+	assert_eq!(body.uri.path(), "/foo");
+	assert_eq!(body.headers.get(header::HOST).unwrap().as_bytes(), b"lo");
 	assert_eq!(
 		body.headers.get("proxy-authorization").unwrap().as_bytes(),
 		b"Basic my-key"

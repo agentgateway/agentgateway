@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use agent_core::strng;
+use futures::StreamExt;
 use itertools::Itertools;
 use openapiv3::OpenAPI;
 use rmcp::RoleClient;
@@ -1033,13 +1034,105 @@ type LegacyService = legacy_rmcp::service::RunningService<
 	legacy_rmcp::model::InitializeRequestParam,
 >;
 
+#[derive(Clone, Debug, Default)]
+struct LegacySseClient {
+	inner: reqwest::Client,
+}
+
+impl legacy_rmcp::transport::sse_client::SseClient for LegacySseClient {
+	type Error = reqwest::Error;
+
+	async fn post_message(
+		&self,
+		uri: http::Uri,
+		message: legacy_rmcp::model::ClientJsonRpcMessage,
+		auth_token: Option<String>,
+	) -> Result<(), legacy_rmcp::transport::sse_client::SseTransportError<Self::Error>> {
+		use legacy_rmcp::transport::sse_client::SseTransportError;
+
+		let mut request_builder = self.inner.post(uri.to_string()).json(&message);
+		if let Some(auth_header) = auth_token {
+			request_builder = request_builder.bearer_auth(auth_header);
+		}
+
+		let response = request_builder
+			.send()
+			.await
+			.map_err(SseTransportError::Client)?;
+		response
+			.error_for_status()
+			.map_err(SseTransportError::Client)?;
+		Ok(())
+	}
+
+	async fn get_stream(
+		&self,
+		uri: http::Uri,
+		last_event_id: Option<String>,
+		auth_token: Option<String>,
+	) -> Result<
+		legacy_rmcp::transport::common::client_side_sse::BoxedSseResponse,
+		legacy_rmcp::transport::sse_client::SseTransportError<Self::Error>,
+	> {
+		use legacy_rmcp::transport::common::http_header::{
+			EVENT_STREAM_MIME_TYPE, HEADER_LAST_EVENT_ID,
+		};
+		use legacy_rmcp::transport::sse_client::SseTransportError;
+		use reqwest::header::{ACCEPT, CONTENT_TYPE};
+
+		let mut request_builder = self
+			.inner
+			.get(uri.to_string())
+			.header(ACCEPT, EVENT_STREAM_MIME_TYPE);
+		if let Some(auth_header) = auth_token {
+			request_builder = request_builder.bearer_auth(auth_header);
+		}
+		if let Some(last_event_id) = last_event_id {
+			request_builder = request_builder.header(HEADER_LAST_EVENT_ID, last_event_id);
+		}
+
+		let response = request_builder
+			.send()
+			.await
+			.map_err(SseTransportError::Client)?
+			.error_for_status()
+			.map_err(SseTransportError::Client)?;
+
+		match response.headers().get(CONTENT_TYPE) {
+			Some(content_type) => {
+				if !content_type
+					.as_bytes()
+					.starts_with(EVENT_STREAM_MIME_TYPE.as_bytes())
+				{
+					return Err(SseTransportError::UnexpectedContentType(Some(
+						String::from_utf8_lossy(content_type.as_bytes()).to_string(),
+					)));
+				}
+			},
+			None => {
+				return Err(SseTransportError::UnexpectedContentType(None));
+			},
+		}
+
+		Ok(sse_stream::SseStream::from_byte_stream(response.bytes_stream()).boxed())
+	}
+}
+
 pub async fn mcp_sse_client(s: SocketAddr) -> LegacyService {
 	use legacy_rmcp::ServiceExt;
 	use legacy_rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
 	use legacy_rmcp::transport::SseClientTransport;
-	let transport = SseClientTransport::<legacyreqwest::Client>::start(format!("http://{s}/sse"))
-		.await
-		.unwrap();
+	use legacy_rmcp::transport::sse_client::SseClientConfig;
+
+	let transport = SseClientTransport::start_with_client(
+		LegacySseClient::default(),
+		SseClientConfig {
+			sse_endpoint: format!("http://{s}/sse").into(),
+			..Default::default()
+		},
+	)
+	.await
+	.unwrap();
 	let client_info = ClientInfo {
 		protocol_version: Default::default(),
 		capabilities: ClientCapabilities::default(),

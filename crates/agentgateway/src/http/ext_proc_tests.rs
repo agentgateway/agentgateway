@@ -238,34 +238,24 @@ async fn dynamic_metadata() {
 	assert_eq!(body.as_ref(), b"");
 }
 
-pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
-	mock: MockServer,
+pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static, M: HasAddress>(
+	mock: M,
 	failure_mode: ext_proc::FailureMode,
 	mock_ext_proc: ExtProcMock<T>,
 	config: &str,
-) -> (
-	MockServer,
-	MockInstance,
-	TestBind,
-	Client<MemoryConnector, Body>,
-) {
+) -> (M, MockInstance, TestBind, Client<MemoryConnector, Body>) {
 	setup_ext_proc_mock_with_meta(mock, failure_mode, mock_ext_proc, config, None, None, None).await
 }
 
-pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
-	mock: MockServer,
+pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static, M: HasAddress>(
+	mock: M,
 	failure_mode: ext_proc::FailureMode,
 	mock_ext_proc: ExtProcMock<T>,
 	config: &str,
 	metadata_context: Option<HashMap<String, HashMap<String, Arc<Expression>>>>,
 	request_attributes: Option<HashMap<String, Arc<Expression>>>,
 	response_attributes: Option<HashMap<String, Arc<Expression>>>,
-) -> (
-	MockServer,
-	MockInstance,
-	TestBind,
-	Client<MemoryConnector, Body>,
-) {
+) -> (M, MockInstance, TestBind, Client<MemoryConnector, Body>) {
 	let ext_proc = mock_ext_proc.spawn().await;
 
 	let t = setup_proxy_test(config)

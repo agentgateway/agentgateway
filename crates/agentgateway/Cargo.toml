@@ -181,20 +181,12 @@ rmcp = { version = "1.5", features = [
 ] }
 # We need SSE client for testing but they removed it for some reason :-(
 # https://github.com/modelcontextprotocol/rust-sdk/pull/562
-legacy-rmcp = { package = "rmcp", version = "0.10.0", features = ["transport-sse-server",
+legacy-rmcp = { package = "rmcp", version = "0.10.0", features = [
+    "transport-sse-server",
     "transport-sse-client",
-    "transport-sse-client-reqwest",
     "client",
-    "reqwest"
 ] }
 reqwest.workspace = true
-# TODO(https://github.com/modelcontextprotocol/rust-sdk/pull/667)
-legacyreqwest = { package = "reqwest", version = "0.12", default-features = false, features = [
-    "http2",
-    "charset",
-    "macos-system-configuration",
-    "rustls-tls",
-] }
 
 [lints.clippy]
 # This rule makes code more confusing
