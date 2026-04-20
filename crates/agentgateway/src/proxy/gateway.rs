@@ -695,10 +695,19 @@ impl Gateway {
 				async move { proxy.proxy(connection, req).map(Ok::<_, Infallible>).await }
 			}),
 		);
-		// Wrap it in the graceful watcher, will ensure GOAWAY/Connection:close when we shutdown
-		let serve = drain.wrap_connection(serve);
+		// Pin the connection so we can call graceful_shutdown() on it
+		tokio::pin!(serve);
+		let drain_signal = drain.wait_for_drain();
+		tokio::pin!(drain_signal);
+
 		let res = tokio::select! {
-			res = serve => res,
+			res = serve.as_mut() => res,
+			_guard = &mut drain_signal => {
+				// Drain signaled, initiate graceful shutdown (GOAWAY/Connection:close)
+				// then wait for in-flight requests to complete
+				serve.as_mut().graceful_shutdown();
+				serve.await
+			},
 			_ = async {
 				match max_connection_duration {
 					Some(d) => tokio::time::sleep(d).await,
@@ -710,7 +719,9 @@ impl Gateway {
 					.downstream_connection_max_duration
 					.get_or_create(&max_dur_labels)
 					.inc();
-				Ok(())
+				// Initiate graceful shutdown then wait for in-flight requests to complete
+				serve.as_mut().graceful_shutdown();
+				serve.await
 			},
 		};
 		match res {
