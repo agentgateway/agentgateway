@@ -650,13 +650,14 @@ fn service_route() -> Route {
 		inline_policies: Default::default(),
 		backends: vec![RouteBackendReference {
 			weight: 1,
-			backend: BackendReference::Service {
+			target: BackendReference::Service {
 				name: NamespacedHostname {
 					namespace: SVC_NAMESPACE.into(),
 					hostname: svc_hostname(ROUTE_TARGET).into(),
 				},
 				port: SVC_PORT,
-			},
+			}
+			.into(),
 			inline_policies: Default::default(),
 		}],
 	}
@@ -780,7 +781,7 @@ async fn run(c: Case) {
 			.self_workload
 			.set(self_workload(locality(r, z), n));
 	}
-	let t = t.with_bind(simple_bind(service_route()));
+	let t = t.with_bind(simple_bind()).with_route(service_route());
 	let client = t.serve_http(BIND_KEY);
 	let mut h = Harness {
 		_bind: t,
