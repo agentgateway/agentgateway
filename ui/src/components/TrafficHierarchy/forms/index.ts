@@ -8,8 +8,10 @@
 
 import * as apiKeyPolicyForm from "./apiKeyPolicyForm";
 import * as authorizationPolicyForm from "./authorizationPolicyForm";
+import * as backendAuthForm from "./backendAuthPolicyForm";
 import * as backendForm from "./backendForm";
 import * as backendTLSPolicyForm from "./backendTLSPolicyForm";
+import * as backendTunnelPolicyForm from "./backendTunnelPolicyForm";
 import * as basicAuthPolicyForm from "./basicAuthPolicyForm";
 import * as bindForm from "./bindForm";
 import * as corsPolicyForm from "./corsPolicyForm";
@@ -18,6 +20,7 @@ import * as extAuthzPolicyForm from "./extAuthzPolicyForm";
 import * as extProcPolicyForm from "./extProcPolicyForm";
 import * as frontendPoliciesForm from "./frontendPoliciesForm";
 import * as genericPolicyForm from "./genericPolicyForm";
+import * as healthPolicyForm from "./healthPolicyForm";
 import * as jwtAuthPolicyForm from "./jwtAuthPolicyForm";
 import * as listenerForm from "./listenerForm";
 import * as llmForm from "./llmForm";
@@ -37,7 +40,6 @@ import * as routePolicyForm from "./routePolicyForm";
 import * as topLevelBackendForm from "./topLevelBackendForm";
 import * as transformationsPolicyForm from "./transformationsPolicyForm";
 import * as urlRewritePolicyForm from "./urlRewritePolicyForm";
-import * as backendTunnelPolicyForm from "./backendTunnelPolicyForm";
 
 export const forms = {
   bind: bindForm,
@@ -73,6 +75,8 @@ export const forms = {
   remoteRateLimitPolicy: remoteRateLimitPolicyForm,
   backendTLSPolicy: backendTLSPolicyForm,
   backendTunnelPolicy: backendTunnelPolicyForm,
+  backendAuthPolicy: backendAuthForm,
+  healthPolicy: healthPolicyForm,
 };
 
 const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = { 
@@ -96,6 +100,8 @@ const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = {
   remoteRateLimit: "remoteRateLimitPolicy",
   backendTLS: "backendTLSPolicy",
   backendTunnel: "backendTunnelPolicy",
+  backendAuth: "backendAuthPolicy",
+  health: "healthPolicy",
 }
 
 export function getFormForPolicy(policyType: string, fallback: keyof typeof forms = "routePolicy") { 
@@ -163,4 +169,6 @@ export const resourceLabels: Record<
   remoteRateLimitPolicy: { singular: "Remote Rate Limit Policy", plural: "Remote Rate Limit Policies" },
   backendTLSPolicy: { singular: "Backend TLS Policy", plural: "Backend TLS Policies" },
   backendTunnelPolicy: { singular: "Backend Tunnel Policy", plural: "Backend Tunnel Policies" },
+  backendAuthPolicy: { singular: "Backend Auth Policy", plural: "Backend Auth Policies" },
+  healthPolicy: { singular: "Health Policy", plural: "Health Policies" },
 };
