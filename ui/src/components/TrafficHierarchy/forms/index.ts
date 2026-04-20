@@ -6,6 +6,7 @@
  * but are handcrafted TypeScript schemas that use the types from config.d.ts.
  */
 
+import * as aiPolicyForm from "./aiPolicyForm";
 import * as apiKeyPolicyForm from "./apiKeyPolicyForm";
 import * as authorizationPolicyForm from "./authorizationPolicyForm";
 import * as backendAuthForm from "./backendAuthPolicyForm";
@@ -15,6 +16,7 @@ import * as backendTunnelPolicyForm from "./backendTunnelPolicyForm";
 import * as basicAuthPolicyForm from "./basicAuthPolicyForm";
 import * as bindForm from "./bindForm";
 import * as corsPolicyForm from "./corsPolicyForm";
+import * as csrfPolicyForm from "./csrfPolicyForm";
 import * as directResponsePolicyForm from "./directResponsePolicyForm";
 import * as extAuthzPolicyForm from "./extAuthzPolicyForm";
 import * as extProcPolicyForm from "./extProcPolicyForm";
@@ -35,8 +37,10 @@ import * as requestHeaderModifierPolicyForm from "./requestHeaderModifierPolicyF
 import * as requestMirrorPolicyForm from "./requestMirrorPolicyForm";
 import * as requestRedirectPolicyForm from "./requestRedirectPolicyForm";
 import * as responseHeaderModifierPolicyForm from "./responseHeaderModifierPolicyForm";
+import * as retryPolicyForm from "./retryPolicyForm";
 import * as routeForm from "./routeForm";
 import * as routePolicyForm from "./routePolicyForm";
+import * as timeoutPolicyForm from "./timeoutPolicyForm";
 import * as topLevelBackendForm from "./topLevelBackendForm";
 import * as transformationsPolicyForm from "./transformationsPolicyForm";
 import * as urlRewritePolicyForm from "./urlRewritePolicyForm";
@@ -77,6 +81,10 @@ export const forms = {
   backendTunnelPolicy: backendTunnelPolicyForm,
   backendAuthPolicy: backendAuthForm,
   healthPolicy: healthPolicyForm,
+  aiPolicy: aiPolicyForm,
+  csrfPolicy: csrfPolicyForm,
+  timeoutPolicy: timeoutPolicyForm,
+  retryPolicy: retryPolicyForm,
 };
 
 const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = { 
@@ -102,6 +110,10 @@ const POLICY_FORM_MAP: Partial<Record<string, keyof typeof forms>> = {
   backendTunnel: "backendTunnelPolicy",
   backendAuth: "backendAuthPolicy",
   health: "healthPolicy",
+  ai: "aiPolicy",
+  csrf: "csrfPolicy",
+  timeout: "timeoutPolicy",
+  retry: "retryPolicy",
 }
 
 export function getFormForPolicy(policyType: string, fallback: keyof typeof forms = "routePolicy") { 
@@ -171,4 +183,8 @@ export const resourceLabels: Record<
   backendTunnelPolicy: { singular: "Backend Tunnel Policy", plural: "Backend Tunnel Policies" },
   backendAuthPolicy: { singular: "Backend Auth Policy", plural: "Backend Auth Policies" },
   healthPolicy: { singular: "Health Policy", plural: "Health Policies" },
+  aiPolicy: { singular: "AI Policy", plural: "AI Policies" },
+  csrfPolicy: { singular: "CSRF Policy", plural: "CSRF Policies" },
+  timeoutPolicy: { singular: "Timeout Policy", plural: "Timeout Policies" },
+  retryPolicy: { singular: "Retry Policy", plural: "Retry Policies" },
 };

@@ -167,6 +167,12 @@ export function getDefaultPolicyValue(policyType: string): Record<string, unknow
         status: 200,
         body: "",
       };
+
+    // Retry
+    case "retry": 
+      return { 
+        codes: [503],
+      }
     
     // Most other policies can start empty or with minimal structure
     default:
