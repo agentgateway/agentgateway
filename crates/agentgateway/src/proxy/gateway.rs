@@ -34,7 +34,7 @@ use crate::types::agent::{
 use crate::types::discovery::Service;
 use crate::types::discovery::gatewayaddress::Destination;
 use crate::types::frontend;
-use crate::{ProxyInputs, client};
+use crate::{ProxyInputs, Stores, client};
 use agent_core::strng;
 use agent_hbone::server::H2Request;
 
@@ -421,6 +421,7 @@ impl Gateway {
 					bind_name,
 					inputs,
 					None,
+					None,
 					raw_stream,
 					Arc::new(policies),
 					drain,
@@ -441,12 +442,14 @@ impl Gateway {
 				)
 				.await
 				{
-					Ok((selected_listener, stream)) => match selected_listener.protocol {
+					Ok((selected_listener, stream)) => match &selected_listener.protocol {
 						ListenerProtocol::HTTPS(_) => {
+							let rx = inputs.stores.read_binds().subscribe_listener_changes();
 							let _ = Self::proxy(
 								bind_name,
 								inputs,
 								Some(selected_listener),
+								Some(rx),
 								stream,
 								Arc::new(policies),
 								drain,
@@ -502,10 +505,12 @@ impl Gateway {
 							{
 								Ok((selected_listener, tls_stream)) => match selected_listener.protocol {
 									ListenerProtocol::HTTPS(_) => {
+										let rx = inputs.stores.read_binds().subscribe_listener_changes();
 										let _ = Self::proxy(
 											bind_name,
 											inputs,
 											Some(selected_listener),
+											Some(rx),
 											tls_stream,
 											Arc::new(policies),
 											drain,
@@ -543,8 +548,16 @@ impl Gateway {
 							}
 						} else {
 							// Plaintext HTTP
-							let err =
-								Self::proxy(bind_name, inputs, None, stream, Arc::new(policies), drain).await;
+							let err = Self::proxy(
+								bind_name,
+								inputs,
+								None,
+								None,
+								stream,
+								Arc::new(policies),
+								drain,
+							)
+							.await;
 							if let Err(e) = err {
 								warn!(src.addr = %peer_addr, "proxy error: {e}");
 							}
@@ -610,6 +623,7 @@ impl Gateway {
 		bind_name: BindKey,
 		inputs: Arc<ProxyInputs>,
 		selected_listener: Option<Arc<Listener>>,
+		listener_change: Option<watch::Receiver<u64>>,
 		mut stream: Socket,
 		policies: Arc<FrontendPolices>,
 		drain: DrainWatcher,
@@ -670,7 +684,7 @@ impl Gateway {
 		let proxy = super::httpproxy::HTTPProxy {
 			bind_name,
 			inputs,
-			selected_listener,
+			selected_listener: selected_listener.clone(),
 			target_address,
 		};
 		let connection = Arc::new(stream.get_ext());
@@ -689,6 +703,7 @@ impl Gateway {
 			.http
 			.as_ref()
 			.and_then(|h| h.max_connection_duration);
+		let drain_proxy = proxy.clone();
 
 		let serve = server.serve_connection_with_upgrades(
 			TokioIo::new(stream),
@@ -699,32 +714,50 @@ impl Gateway {
 				async move { proxy.proxy(connection, req).map(Ok::<_, Infallible>).await }
 			}),
 		);
-		// Pin the connection so we can call graceful_shutdown() on it
-		tokio::pin!(serve);
-		let drain_signal = drain.wait_for_drain();
-		tokio::pin!(drain_signal);
-
-		let max_connection_duration = async {
-			match max_connection_duration {
-				Some(d) => tokio::time::sleep(d).await,
-				None => std::future::pending().await,
-			}
-		};
-		let res = tokio::select! {
-			res = serve.as_mut() => res,
-			_guard = &mut drain_signal => {
-				// Drain signaled, initiate graceful shutdown (GOAWAY/Connection:close)
-				// then wait for in-flight requests to complete
-				serve.as_mut().graceful_shutdown();
-				serve.await
-			},
-			_ = max_connection_duration => {
-				debug!("connection closed: max connection duration reached");
-				// Initiate graceful shutdown then wait for in-flight requests to complete
-				serve.as_mut().graceful_shutdown();
-				serve.await
-			},
-		};
+		let (connection_drain_tx, connection_drain_rx) = drain::new();
+		let parent_drain = drain.clone();
+		let listener_drain = selected_listener.clone().zip(listener_change);
+		let watch_task = tokio::spawn(async move {
+			let max_connection_duration = async {
+				match max_connection_duration {
+					Some(d) => tokio::time::sleep(d).await,
+					None => std::future::pending::<()>().await,
+				}
+			};
+			tokio::pin!(max_connection_duration);
+			let mode = if let Some((serving_listener, listener_change)) = listener_drain {
+				let stores = drain_proxy.inputs.stores.clone();
+				let bind_name = drain_proxy.bind_name.clone();
+				let listener_key = serving_listener.key.clone();
+				tokio::select! {
+					drain = parent_drain.wait_for_drain() => drain.mode(),
+					_ = Self::wait_for_listener_change(
+						stores,
+						bind_name.clone(),
+						serving_listener.clone(),
+						listener_change,
+					) => {
+						info!(bind=%bind_name, listener=%listener_key, "listener changed, draining downstream TLS connection");
+						drain::DrainMode::Graceful
+					},
+					_ = &mut max_connection_duration => {
+						debug!("connection closed: max connection duration reached");
+						drain::DrainMode::Graceful
+					},
+				}
+			} else {
+				tokio::select! {
+					drain = parent_drain.wait_for_drain() => drain.mode(),
+					_ = &mut max_connection_duration => {
+						debug!("connection closed: max connection duration reached");
+						drain::DrainMode::Graceful
+					},
+				}
+			};
+			connection_drain_tx.start_drain_and_wait(mode).await;
+		});
+		let res = connection_drain_rx.wrap_connection(serve).await;
+		watch_task.abort();
 		match res {
 			Ok(_) => Ok(()),
 			Err(e) => {
@@ -766,6 +799,39 @@ impl Gateway {
 			target_address,
 		};
 		proxy.proxy(stream).await
+	}
+
+	async fn wait_for_listener_change(
+		stores: Stores,
+		bind_name: BindKey,
+		listener_snapshot: Arc<Listener>,
+		mut listener_change_rx: watch::Receiver<u64>,
+	) {
+		if Self::listener_snapshot_changed(&stores, &bind_name, &listener_snapshot) {
+			return;
+		}
+		loop {
+			if listener_change_rx.changed().await.is_err() {
+				return;
+			}
+			if Self::listener_snapshot_changed(&stores, &bind_name, &listener_snapshot) {
+				return;
+			}
+		}
+	}
+
+	fn listener_snapshot_changed(
+		stores: &Stores,
+		bind_name: &BindKey,
+		serving_listener: &Listener,
+	) -> bool {
+		match stores
+			.read_binds()
+			.get_bind_listener(bind_name, &serving_listener.key)
+		{
+			Some(current) => current.as_ref() != serving_listener,
+			None => true,
+		}
 	}
 
 	// maybe_terminate_tls will observe the TLS handshake, and once the client hello has been received, select
@@ -1093,6 +1159,7 @@ impl Gateway {
 				bind_name,
 				pi,
 				Some(listener),
+				None,
 				socket,
 				Arc::new(policies),
 				drain,

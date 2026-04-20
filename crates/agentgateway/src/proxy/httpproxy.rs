@@ -642,7 +642,8 @@ impl HTTPProxy {
 		.await
 		.snapshot_on_err(log, &mut req)?;
 
-		Self::detect_misdirected(log, bind, &req, &selected_listener).snapshot_on_err(log, &mut req)?;
+		Self::detect_misdirected(log, &bind, &req, &selected_listener)
+			.snapshot_on_err(log, &mut req)?;
 
 		let selected_route_chain =
 			select_route_chain(&inputs, self.target_address, &selected_listener, &req)
@@ -957,9 +958,9 @@ impl HTTPProxy {
 
 	fn detect_misdirected(
 		log: &RequestLog,
-		bind: Arc<Bind>,
+		bind: &Bind,
 		req: &Request,
-		selected_listener: &Arc<Listener>,
+		selected_listener: &Listener,
 	) -> Result<(), ProxyError> {
 		if log.tls_info.is_none() {
 			// Only applicable for HTTPS

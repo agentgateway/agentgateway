@@ -31,6 +31,7 @@ use anyhow::Context;
 use futures_core::Stream;
 use hashbrown::{Equivalent, HashMap as HbHashMap};
 use itertools::Itertools;
+use tokio::sync::watch;
 use tracing::{Level, instrument, warn};
 
 #[derive(Debug)]
@@ -95,6 +96,8 @@ pub struct Store {
 	pending_listeners: HashMap<BindKey, HashMap<ListenerKey, Listener>>,
 	http_routes: HbHashMap<RouteTarget, Arc<RouteSet>>,
 	tcp_routes: HbHashMap<RouteTarget, Arc<TCPRouteSet>>,
+	listener_change_tx: watch::Sender<u64>,
+	listener_change_rx: watch::Receiver<u64>,
 
 	tx: tokio::sync::mpsc::UnboundedSender<BindEvent>,
 	rx: Option<tokio::sync::mpsc::UnboundedReceiver<BindEvent>>,
@@ -494,6 +497,7 @@ impl Store {
 
 	pub fn new(ipv6_enabled: bool, threading_mode: crate::ThreadingMode) -> Self {
 		let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+		let (listener_change_tx, listener_change_rx) = watch::channel(0);
 		Self {
 			ipv6_enabled,
 			core_ids: match threading_mode {
@@ -510,6 +514,8 @@ impl Store {
 			pending_listeners: Default::default(),
 			http_routes: Default::default(),
 			tcp_routes: Default::default(),
+			listener_change_tx,
+			listener_change_rx,
 			tx,
 			rx: Some(rx),
 		}
@@ -544,6 +550,45 @@ impl Store {
 			.cloned()
 	}
 
+	pub fn subscribe_listener_changes(&self) -> watch::Receiver<u64> {
+		self.listener_change_rx.clone()
+	}
+
+	pub fn get_bind_listener(&self, bind: &BindKey, listener: &ListenerKey) -> Option<Arc<Listener>> {
+		self
+			.binds
+			.get(bind)
+			.and_then(|bind| bind.listeners.inner.get(listener).cloned())
+	}
+
+	fn notify_listener_changed(&self) {
+		self
+			.listener_change_tx
+			.send_modify(|epoch| *epoch = epoch.saturating_add(1));
+	}
+
+	fn bind_listener_changed(old: &Bind, new: &Bind) -> bool {
+		for new_listener in new.listeners.iter() {
+			let Some(old_listener) = old.listeners.get(&new_listener.key) else {
+				// If a new listener is added, no need to notify
+				continue;
+			};
+			if old_listener != new_listener {
+				return true;
+			}
+		}
+		for old_listener in old.listeners.iter() {
+			let Some(new_listener) = new.listeners.get(&old_listener.key) else {
+				// If an old listener is removed, we do need to notify!
+				return true;
+			};
+			if old_listener != new_listener {
+				return true;
+			}
+		}
+		false
+	}
+
 	fn insert_http_route_target(&mut self, target: RouteTarget, route: Route) {
 		let routes = self
 			.http_routes
@@ -562,6 +607,7 @@ impl Store {
 
 	fn upsert_bind(&mut self, key: BindKey, mut bind: Bind) {
 		debug!(bind=%bind.key, "insert bind");
+		let old_bind = self.binds.get(&key).cloned();
 
 		for (_, listener) in self
 			.pending_listeners
@@ -584,6 +630,11 @@ impl Store {
 				},
 			}
 		};
+		if let Some(old_bind) = old_bind.as_deref()
+			&& Self::bind_listener_changed(old_bind, &bind)
+		{
+			self.notify_listener_changed();
+		}
 		self.binds.insert(key.clone(), Arc::new(bind.clone()));
 		if let Some(listeners) = listeners {
 			let _ = self.tx.send(BindEvent::Add(bind, listeners));

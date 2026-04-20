@@ -48,7 +48,7 @@ pub struct Bind {
 
 pub type BindKey = Strng;
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Listener {
 	pub key: ListenerKey,
@@ -71,7 +71,7 @@ impl Listener {
 
 type Alpns = Vec<Vec<u8>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct ServerTlsInputs {
 	cert_pem: Vec<u8>,
 	key_pem: Vec<u8>,
@@ -131,6 +131,12 @@ pub struct ServerTLSConfig {
 	/// Original strict verifier used when ALLOW_INSECURE_FALLBACK is enabled.
 	insecure_fallback_verifier: Option<Arc<dyn ClientCertVerifier>>,
 	per_profile_config: Arc<RwLock<HashMap<ServerTlsProfileKey, Arc<ServerConfig>>>>,
+}
+impl Eq for ServerTLSConfig {}
+impl PartialEq for ServerTLSConfig {
+	fn eq(&self, other: &Self) -> bool {
+		self.inputs == other.inputs
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EncodeLabelValue)]
@@ -426,7 +432,7 @@ pub fn parse_key(key: &[u8]) -> Result<PrivateKeyDer<'static>, anyhow::Error> {
 		_ => Err(anyhow!("unsupported key")),
 	}
 }
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 pub enum ListenerProtocol {
 	/// HTTP
 	HTTP,

@@ -4,6 +4,8 @@ pub mod proxy_protocol;
 pub mod request_builder;
 pub mod tcpproxy;
 
+use std::sync::Arc;
+
 use agent_pool::Error as HyperError;
 pub use gateway::Gateway;
 use rmcp::ErrorData;

@@ -1151,6 +1151,65 @@ async fn tls_connection_reuses_listener_after_route_insert() {
 }
 
 #[tokio::test]
+async fn tls_connection_drains_when_listener_changes() {
+	let existing = body_mock(b"existing-route").await;
+	let bind = https_bind();
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*existing.address())
+		.with_bind(bind)
+		.with_route(route_with_prefix(*existing.address(), "/existing"));
+
+	let (mut sender, conn) = serve_https_http1_connection(&t, "a.example.com").await;
+
+	let res = sender
+		.send_request(
+			::http::Request::builder()
+				.method(Method::GET)
+				.uri("/existing")
+				.version(Version::HTTP_11)
+				.header(header::HOST, "a.example.com")
+				.body(Body::empty())
+				.unwrap(),
+		)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), 200);
+
+	t.pi.stores.binds.write().insert_listener(
+		Listener {
+			key: LISTENER_KEY,
+			name: Default::default(),
+			hostname: strng::new("*.example.com"),
+			protocol: ListenerProtocol::HTTPS(crate::types::agent::ServerTLSConfig::new_invalid()),
+		},
+		BIND_KEY,
+	);
+
+	tokio::time::timeout(std::time::Duration::from_secs(1), async {
+		while !conn.is_finished() {
+			tokio::task::yield_now().await;
+		}
+	})
+	.await
+	.expect("connection should drain after listener change");
+
+	let res = sender
+		.send_request(
+			::http::Request::builder()
+				.method(Method::GET)
+				.uri("/existing")
+				.version(Version::HTTP_11)
+				.header(header::HOST, "a.example.com")
+				.body(Body::empty())
+				.unwrap(),
+		)
+		.await;
+	assert_matches!(res, Err(_));
+	let _ = conn.await;
+}
+
+#[tokio::test]
 async fn tls_backend_connection() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
