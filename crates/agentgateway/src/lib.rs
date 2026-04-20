@@ -396,6 +396,10 @@ impl<'de> Deserialize<'de> for StringOrInt {
 			fn visit_i64<E>(self, value: i64) -> Result<StringOrInt, E> {
 				Ok(StringOrInt(value.to_string()))
 			}
+
+			fn visit_u64<E>(self, value: u64) -> Result<StringOrInt, E> {
+				Ok(StringOrInt(value.to_string()))
+			}
 		}
 
 		deserializer.deserialize_any(StringOrIntVisitor())
@@ -432,6 +436,10 @@ impl<'de> Deserialize<'de> for StringBoolFloat {
 			}
 
 			fn visit_i64<E>(self, value: i64) -> Result<StringBoolFloat, E> {
+				Ok(StringBoolFloat(value.to_string()))
+			}
+
+			fn visit_u64<E>(self, value: u64) -> Result<StringBoolFloat, E> {
 				Ok(StringBoolFloat(value.to_string()))
 			}
 		}
