@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::Instant;
 
 use agent_core::drain::{DrainTrigger, DrainWatcher};
 use agent_core::strng::Strng;
@@ -1010,34 +1010,5 @@ pub fn is_json_subset(subset: &Value, superset: &Value) -> bool {
 
 		// For primitive values, they must be exactly equal
 		_ => subset == superset,
-	}
-}
-
-/// check_eventually runs a function many times until it reaches the expected result.
-/// If it doesn't the last result is returned
-pub async fn check_eventually<F, CF, T, Fut>(dur: Duration, f: F, expected: CF) -> Result<T, T>
-where
-	F: Fn() -> Fut,
-	Fut: Future<Output = T>,
-	T: Eq + Debug,
-	CF: Fn(&T) -> bool,
-{
-	use std::ops::Add;
-	let mut delay = Duration::from_millis(10);
-	let end = SystemTime::now().add(dur);
-	let mut last: T;
-	let mut attempts = 0;
-	loop {
-		attempts += 1;
-		last = f().await;
-		if expected(&last) {
-			return Ok(last);
-		}
-		trace!("attempt {attempts} with delay {delay:?}");
-		if SystemTime::now().add(delay) > end {
-			return Err(last);
-		}
-		tokio::time::sleep(delay).await;
-		delay *= 2;
 	}
 }

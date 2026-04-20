@@ -993,15 +993,14 @@ mod tests {
 			Some(1.0),
 		);
 
-		// Give the eviction event time to be processed
-		tokio::time::sleep(Duration::from_millis(50)).await;
-
-		// Endpoint should now be rejected
-		let group = eps.best_bucket();
-		assert!(
-			group.rejected.contains_key(&key),
-			"endpoint should be evicted"
-		);
+		// Poll until the eviction event is processed
+		agent_core::test_helpers::check_eventually(
+			Duration::from_millis(500),
+			|| async { eps.best_bucket().rejected.contains_key(&key) },
+			|rejected| *rejected,
+		)
+		.await
+		.expect("endpoint should be evicted");
 
 		// Wait for uneviction (100ms eviction duration + buffer)
 		tokio::time::sleep(Duration::from_millis(150)).await;
