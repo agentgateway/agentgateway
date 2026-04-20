@@ -141,7 +141,6 @@ pub struct Metrics {
 	pub tls_handshake_duration: Histogram<TCPLabels>,
 
 	pub downstream_connection: TCPCounter,
-	pub downstream_connection_max_duration: TCPCounter,
 	pub tcp_downstream_rx_bytes: Family<TCPLabels, counter::Counter>,
 	pub tcp_downstream_tx_bytes: Family<TCPLabels, counter::Counter>,
 
@@ -288,11 +287,6 @@ impl Metrics {
 				&mut registry,
 				"downstream_connections",
 				"The total number of downstream connections established",
-			),
-			downstream_connection_max_duration: build(
-				&mut registry,
-				"downstream_connections_max_duration",
-				"The total number of downstream connections closed due to max connection duration",
 			),
 
 			mcp_requests: build(

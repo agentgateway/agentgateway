@@ -661,8 +661,8 @@ impl Gateway {
 		stream.ext_mut().insert(src);
 
 		let transport_metrics = inputs.metrics.clone();
-		let max_dur_metrics = transport_metrics.clone();
-		let max_dur_labels = transport_labels.clone();
+		let _max_dur_metrics = transport_metrics.clone();
+		let _max_dur_labels = transport_labels.clone();
 		let proxy = super::httpproxy::HTTPProxy {
 			bind_name,
 			inputs,
@@ -700,6 +700,12 @@ impl Gateway {
 		let drain_signal = drain.wait_for_drain();
 		tokio::pin!(drain_signal);
 
+		let max_connection_duration = async {
+			match max_connection_duration {
+				Some(d) => tokio::time::sleep(d).await,
+				None => std::future::pending().await,
+			}
+		};
 		let res = tokio::select! {
 			res = serve.as_mut() => res,
 			_guard = &mut drain_signal => {
@@ -708,17 +714,8 @@ impl Gateway {
 				serve.as_mut().graceful_shutdown();
 				serve.await
 			},
-			_ = async {
-				match max_connection_duration {
-					Some(d) => tokio::time::sleep(d).await,
-					None => std::future::pending().await,
-				}
-			} => {
+			_ = max_connection_duration => {
 				debug!("connection closed: max connection duration reached");
-				max_dur_metrics
-					.downstream_connection_max_duration
-					.get_or_create(&max_dur_labels)
-					.inc();
 				// Initiate graceful shutdown then wait for in-flight requests to complete
 				serve.as_mut().graceful_shutdown();
 				serve.await
