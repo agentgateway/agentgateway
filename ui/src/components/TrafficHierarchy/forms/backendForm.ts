@@ -7,7 +7,7 @@ import type { LocalRouteBackend } from "../../../config";
  */
 export const schema: RJSFSchema = {
   type: "object",
-  additionalProperties: true,
+  additionalProperties: false,
   required: ["backendType"],
   properties: {
     backendType: {
@@ -23,11 +23,6 @@ export const schema: RJSFSchema = {
       minimum: 0,
       default: 1,
       description: "Load balancing weight (default: 1)",
-    },
-    policies: {
-      type: "object",
-      description: "Optional backend-level policies",
-      additionalProperties: true,
     },
   },
   dependencies: {
@@ -251,10 +246,6 @@ export const uiSchema: UiSchema = {
   weight: {
     "ui:widget": "updown",
     "ui:help": "Higher weights receive more traffic. Default is 1.",
-  },
-  policies: {
-    "ui:title": "",
-    "ui:help": "Optional: Backend-level policies for this destination",
   },
   service: {
     name: {

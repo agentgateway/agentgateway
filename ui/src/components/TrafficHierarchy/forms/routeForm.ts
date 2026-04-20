@@ -8,7 +8,7 @@ import type { LocalRoute } from "../../../config";
 export const schema: RJSFSchema = {
   type: "object",
   required: [],
-  additionalProperties: true,
+  additionalProperties: false,
   properties: {
     name: {
       type: "string",

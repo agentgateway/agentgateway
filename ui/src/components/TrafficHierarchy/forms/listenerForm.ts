@@ -9,7 +9,7 @@ import type { LocalListener } from "../../../config";
 export const schema: RJSFSchema = {
   type: "object",
   required: [],
-  additionalProperties: true,
+  additionalProperties: false,
   properties: {
     name: {
       type: "string",
@@ -35,11 +35,6 @@ export const schema: RJSFSchema = {
       description: "Protocol for this listener",
     },
     // routes and tcpRoutes removed - managed via hierarchy tree
-    policies: {
-      type: "object",
-      description: "Policies applied at the gateway level for this listener",
-      additionalProperties: true,
-    },
   },
   dependencies: {
     protocol: {
@@ -215,10 +210,6 @@ export const uiSchema: UiSchema = {
     maxTLSVersion: {
       "ui:widget": "select",
     },
-  },
-  policies: {
-    "ui:title": "",
-    "ui:help": "Advanced: Gateway-level policies (CORS, headers, etc.). See documentation for details.",
   },
 };
 
