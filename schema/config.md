@@ -4590,6 +4590,7 @@
 |`frontendPolicies.http.http2FrameSize`|integer||
 |`frontendPolicies.http.http2KeepaliveInterval`|string||
 |`frontendPolicies.http.http2KeepaliveTimeout`|string||
+|`frontendPolicies.http.maxConnectionDuration`|string|Maximum duration a connection is allowed to remain open. After this duration,<br>the connection is gracefully closed after the current in-flight request completes.<br>Useful for ensuring even traffic distribution behind load balancers during scaling events.|
 |`frontendPolicies.tls`|object|Settings for handling incoming TLS connections.|
 |`frontendPolicies.tls.handshakeTimeout`|string||
 |`frontendPolicies.tls.alpn`|array||

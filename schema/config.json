@@ -5685,6 +5685,14 @@
             "null"
           ],
           "default": null
+        },
+        "maxConnectionDuration": {
+          "description": "Maximum duration a connection is allowed to remain open. After this duration,\nthe connection is gracefully closed after the current in-flight request completes.\nUseful for ensuring even traffic distribution behind load balancers during scaling events.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
