@@ -60,6 +60,7 @@ export function KeyValueMapField(props: FieldProps) {
   const { formData, onChange, disabled, readonly, uiSchema, schema } = props;
 
   const isDisabled = disabled || readonly;
+  const shouldHideLabel = uiSchema?.["ui:label"] === false;
   const keyPlaceholder =
     (uiSchema?.["ui:keyPlaceholder"] as string) ?? "key";
   const valuePlaceholder =
@@ -161,7 +162,7 @@ export function KeyValueMapField(props: FieldProps) {
 
   return (
     <Container>
-      {schema.title && (
+      {schema.title && !shouldHideLabel && (
         <Text strong style={{ display: "block", marginBottom: 8 }}>
           {schema.title}
         </Text>

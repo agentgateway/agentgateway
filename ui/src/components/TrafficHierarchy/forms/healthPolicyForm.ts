@@ -45,6 +45,7 @@ export const uiSchema: UiSchema = {
       "ui:placeholder": "response.code >= 500",
     },
     eviction: { 
+        "ui:label": false,
         duration: { "ui:placeholder": "30s" },
     }
 }

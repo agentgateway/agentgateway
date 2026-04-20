@@ -29,16 +29,19 @@ export const schema: RJSFSchema = {
 export const uiSchema: UiSchema = { 
     "ui:title": "",
     defaults: { 
+        "ui:label": false,
         "ui:field": "keyValueMap",
         "ui:keyPlaceholder": "parameter-name",
         "ui:valuePlaceholder": "parameter-value",
     },
     overrides: { 
+        "ui:label": false,
         "ui:field": "keyValueMap",
         "ui:keyPlaceholder": "parameter-name",
         "ui:valuePlaceholder": "parameter-value",
     },
     modelAliases: { 
+        "ui:label": false,
         "ui:field": "keyValueMap",
         "ui:keyPlaceholder": "incoming-model-name",
         "ui:valuePlaceholder": "provider-model-name",

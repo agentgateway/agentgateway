@@ -42,6 +42,7 @@ export function FieldTemplate(props: FieldTemplateProps) {
     children,
     schema,
     hidden,
+    uiSchema,
   } = props;
 
   if (hidden) {
@@ -52,7 +53,7 @@ export function FieldTemplate(props: FieldTemplateProps) {
   // whose labels duplicate the section title so we skip rendering the label.
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const hideLabelIds = useContext(HideLabelContext);
-  const shouldHideLabel = hideLabelIds.has(id);
+  const shouldHideLabel = hideLabelIds.has(id) || uiSchema?.["ui:label"] === false;
 
   // Build help text from description - handle string, ReactElement, or object
   let helpText = "";
@@ -71,10 +72,12 @@ export function FieldTemplate(props: FieldTemplateProps) {
   const hasErrors = rawErrors && rawErrors.length > 0;
 
   // Check if this field represents an object (nested form section)
-  const isObjectField = schema.type === "object" || schema.properties !== undefined;
+  const isArrayItem = /_(0|[1-9]\d*)$/.test(id);
+  console.log("Field template: ", { id, isArrayItem, schemaType: schema.type });
+  const isObjectField = schema.type === "object" || schema.properties !== undefined && !isArrayItem;
 
   // For object fields, render as a section header without Form.Item
-  if (isObjectField && !shouldHideLabel) {
+  if (isObjectField) {
     // Calculate nesting level from the ID path (count underscore separators)
     const nestingLevel = (id.match(/_/g) || []).length;
 

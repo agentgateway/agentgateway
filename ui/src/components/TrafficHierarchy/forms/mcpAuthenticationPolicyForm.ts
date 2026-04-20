@@ -60,6 +60,7 @@ export const uiSchema: UiSchema = {
       "ui:help": "Optional identity provider integration",
     },
     resourceMetadata: {
+      "ui:label": false,
       "ui:field": "keyValueMap",
       "ui:keyPlaceholder": "key",
       "ui:valuePlaceholder": "value",

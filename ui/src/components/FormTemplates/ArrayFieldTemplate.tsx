@@ -20,12 +20,6 @@ export function ArrayFieldTemplate(props: ArrayFieldTemplateProps) {
 
   return (
     <div className="array-field-template" style={{ marginBottom: 16 }}>
-      {title && (
-        <Text strong style={{ display: 'block', marginBottom: 12 }}>
-          {title}
-        </Text>
-      )}
-      
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
         {items.map((element) => (
           <Card
