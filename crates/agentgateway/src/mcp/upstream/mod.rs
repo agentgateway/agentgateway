@@ -331,7 +331,12 @@ impl UpstreamGroup {
 
 				upstream::Upstream::McpStreamable(client)
 			},
-			McpTargetSpec::Stdio { cmd, args, env } => {
+			McpTargetSpec::Stdio {
+				cmd,
+				args,
+				env,
+				clear_env,
+			} => {
 				debug!("starting stdio transport for target: {}", target.name);
 				#[cfg(target_os = "windows")]
 				// Command has some weird behavior on Windows where it expects the executable extension to be
@@ -344,6 +349,9 @@ impl UpstreamGroup {
 				#[cfg(target_os = "windows")]
 				let mut c = Command::new(&cmd);
 				c.args(args);
+				if *clear_env {
+					c.env_clear();
+				}
 				for (k, v) in env {
 					c.env(k, v);
 				}

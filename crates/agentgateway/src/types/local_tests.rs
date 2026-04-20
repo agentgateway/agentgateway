@@ -174,6 +174,11 @@ async fn test_mcp_simple_config() {
 }
 
 #[tokio::test]
+async fn test_mcp_stdio_clear_env_config() {
+	test_config_parsing("mcp_stdio_clear_env").await;
+}
+
+#[tokio::test]
 async fn test_aws_config() {
 	test_config_parsing("aws").await;
 }

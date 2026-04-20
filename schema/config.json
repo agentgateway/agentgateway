@@ -4350,6 +4350,9 @@
                   "additionalProperties": {
                     "type": "string"
                   }
+                },
+                "clear_env": {
+                  "type": "boolean"
                 }
               },
               "additionalProperties": false,

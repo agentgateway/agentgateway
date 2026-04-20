@@ -1286,6 +1286,8 @@ pub enum McpTargetSpec {
 		args: Vec<String>,
 		#[serde(default, skip_serializing_if = "HashMap::is_empty")]
 		env: HashMap<String, String>,
+		#[serde(default, skip_serializing_if = "std::ops::Not::not")]
+		clear_env: bool,
 	},
 	#[serde(rename = "openapi")]
 	OpenAPI(OpenAPITarget),

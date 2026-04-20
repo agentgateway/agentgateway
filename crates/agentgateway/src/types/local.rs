@@ -771,7 +771,17 @@ impl LocalBackend {
 								path: path.ok_or_else(|| anyhow!("path is required when backend is set"))?,
 							})
 						},
-						LocalMcpTargetSpec::Stdio { cmd, args, env } => McpTargetSpec::Stdio { cmd, args, env },
+						LocalMcpTargetSpec::Stdio {
+							cmd,
+							args,
+							env,
+							clear_env,
+						} => McpTargetSpec::Stdio {
+							cmd,
+							args,
+							env,
+							clear_env,
+						},
 						LocalMcpTargetSpec::OpenAPI { backend, schema } => {
 							let (bref, _) = process_backend(backend)?;
 
@@ -1010,6 +1020,8 @@ pub enum LocalMcpTargetSpec {
 		args: Vec<String>,
 		#[serde(default, skip_serializing_if = "HashMap::is_empty")]
 		env: HashMap<String, String>,
+		#[serde(default, skip_serializing_if = "std::ops::Not::not")]
+		clear_env: bool,
 	},
 	#[serde(rename = "openapi")]
 	OpenAPI {

@@ -1,0 +1,15 @@
+mcp:
+  targets:
+  - name: isolated
+    stdio:
+      cmd: uvx
+      args: ["mcp-server-time"]
+      clearEnv: true
+      env:
+        PATH: "/usr/bin:/bin"
+        CREDENTIAL: "target-scoped"
+  - name: inherited
+    stdio:
+      cmd: uvx
+      args: ["mcp-server-time"]
+        EXTRA: "added-but-parent-still-inherited"
