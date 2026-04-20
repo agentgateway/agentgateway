@@ -73,7 +73,6 @@ export function FieldTemplate(props: FieldTemplateProps) {
 
   // Check if this field represents an object (nested form section)
   const isArrayItem = /_(0|[1-9]\d*)$/.test(id);
-  console.log("Field template: ", { id, isArrayItem, schemaType: schema.type });
   const isObjectField = schema.type === "object" || schema.properties !== undefined && !isArrayItem;
 
   // For object fields, render as a section header without Form.Item
