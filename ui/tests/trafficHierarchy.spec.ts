@@ -1,6 +1,7 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
+import { getPolicyTypesForScope, type PolicyScope } from '../src/components/TrafficHierarchy/policyTypes';
 
 const TRAFFIC_HIERARCHY_RESOURCE_PATH = '/ui#/traffic-configuration';
 const TRAFFIC_CONFIGURATION = 'Traffic Configuration';
@@ -86,4 +87,108 @@ test('should edit and save bind configuration', async ({ page }) => {
     const e2eConfig = fs.readFileSync(E2E_CONFIG_PATH, 'utf8');
     const e2eConfigYaml = yaml.load(e2eConfig) as any;
     expect(e2eConfigYaml.binds[0].listeners[0].name).toBe(LISTENER_NEW_NAME);
+});
+
+test('should traverse Traffic Hierarchy tree and verify all nodes', async ({ page }) => { 
+    // Start from a completely blank config so every node is added fresh
+    fs.writeFileSync(E2E_CONFIG_PATH, yaml.dump({}));
+    await page.reload();
+
+    // ── Helper functions ─────────────────────────────────────────────────────
+    function getTreeNode(nodeText: string): Locator {
+        return page.getByRole('tree')
+            .locator('.ant-tree-treenode')
+            .filter({ hasText: nodeText })
+            .first();
+    }
+    async function verifyAddPolicyMenu(nodeText: string, scope: PolicyScope) {
+        // 'listener', 'route', 'backend' use a different key convention than
+        // 'mcp', 'llm', 'mcpTarget' — see HierarchyTree.tsx for the asymmetry
+        const isScopedKey = ['listener', 'route', 'backend'].includes(scope);
+        const addPolicyMenuIdSuffix = isScopedKey ? '-addPolicy' : '-add-policy';
+        const policyItemSuffix = (key: string) =>
+            isScopedKey ? `-add-policy-${key}` : `-${key}`;
+        await getTreeNode(nodeText).locator('button').click();
+        // Scope the hover to the currently open dropdown overlay to avoid matching
+        // stale dropdown DOM nodes that Ant Design leaves in the document
+        const openDropdown = page.locator('.ant-dropdown:not(.ant-dropdown-hidden)');
+        await openDropdown.locator(`[data-menu-id$="${addPolicyMenuIdSuffix}"]`).hover();
+        // Policy items are rendered in a separate submenu popup portal appended to
+        // <body> — they are NOT inside .ant-dropdown, so scope to the popup instead.
+        // Filter to visible only so stale hidden popups from prior interactions are excluded.
+        const submenuPopup = page.locator('.ant-dropdown-menu-submenu-popup').filter({ visible: true });
+        // CLI mode runs faster than UI mode — explicitly wait for the submenu popup
+        // to animate in before asserting items, otherwise the loop starts too early.
+        await submenuPopup.waitFor({ state: 'visible' });
+        for (const pt of getPolicyTypesForScope(scope)) {
+            await expect(
+                submenuPopup.locator(`[data-menu-id$="${policyItemSuffix(pt.key)}"]`)
+            ).toBeVisible();
+        }
+        // Press Escape twice: first closes the submenu, second closes the parent dropdown.
+        // Then wait for the overlay to fully disappear before the next tree interaction —
+        // avoids triggering re-renders via a stray mouse click that destabilises the tree.
+        await page.keyboard.press('Escape');
+        await page.keyboard.press('Escape');
+        await page.waitForSelector('.ant-dropdown:not(.ant-dropdown-hidden)', { state: 'hidden' });
+    }
+
+    // In the empty state the "Add" button is inside the ant-empty component;
+    // once content exists it moves to the card header. Both are inside .ant-card.
+    const addButton = page.locator('.ant-card').getByRole('button', { name: 'Add' }).first();
+    const tree = page.getByRole('tree');
+    
+    // ── MCP Configuration ─────────────────────────────────────────────────────
+    // Add MCP Config via top-level Add menu (key: "mcp")
+    await addButton.click();
+    await page.locator('[data-menu-id$="-mcp"]').click();
+    await expect(tree.getByText('MCP Configuration')).toBeVisible();
+    // Verify all mcp-scope policies are in the Add Policy submenu
+    await verifyAddPolicyMenu('MCP Configuration', 'mcp');
+    // Add MCP Target (handler names it "target-1", so tree shows "target-1")
+    await getTreeNode('MCP Configuration').locator('button').click();
+    await page.locator('[data-menu-id$="-add-target"]').click();
+    await expect(tree.getByText('target-1')).toBeVisible();
+    // Verify all mcpTarget-scope policies are in the Add Policy submenu
+    await verifyAddPolicyMenu('target-1', 'mcpTarget');
+    
+    // ── LLM Configuration ─────────────────────────────────────────────────────
+    // Add LLM Config via top-level Add menu (key: "llm")
+    await addButton.click();
+    await page.locator('[data-menu-id$="-llm"]').click();
+    await expect(tree.getByText('LLM Configuration')).toBeVisible();
+    // Verify all llm-scope policies are in the Add Policy submenu
+    await verifyAddPolicyMenu('LLM Configuration', 'llm');
+    // Add LLM Model (handler names it "model-1", so tree shows "model-1")
+    // Note: model nodes have no "Add Policy" — llm policies live on the
+    // LLM Configuration node itself (already verified above)
+    await getTreeNode('LLM Configuration').locator('button').click();
+    await page.locator('[data-menu-id$="-add-model"]').click();
+    await expect(tree.getByText('model-1')).toBeVisible();
+    // ── Port Bind ─────────────────────────────────────────────────────────────
+    // Add Bind via top-level Add menu (key: "bind"); defaults to port 8080
+    await addButton.click();
+    await page.locator('[data-menu-id$="-bind"]').click();
+    await expect(tree.getByText('Port 8080')).toBeVisible();
+    // Bind nodes have no "Add Policy" in their context menu
+    // Add Listener (handler sets name: "listener", so tree shows "listener")
+    await getTreeNode('Port 8080').locator('button').click();
+    await page.locator('[data-menu-id$="-addListener"]').click();
+    await expect(tree.getByText('listener')).toBeVisible();
+    // Verify all listener-scope policies are in the Add Policy submenu
+    await verifyAddPolicyMenu('listener', 'listener');
+    // Add Route (handler sets name: "route", so tree shows "route")
+    await getTreeNode('listener').locator('button').click();
+    await page.locator('[data-menu-id$="-addRoute"]').click();
+    await expect(tree.getByText('route')).toBeVisible();
+    // Verify all route-scope policies are in the Add Policy submenu
+    await verifyAddPolicyMenu('route', 'route');
+    // Add Backend — hover "Add Backend" submenu, then pick "Host"
+    // describeBackend() returns label "Host" for a host-type backend
+    await getTreeNode('route').locator('button').click();
+    await page.locator('[data-menu-id$="-addBackend"]').hover();
+    await page.locator('[data-menu-id$="-host"]').click();
+    await expect(tree.getByText('Host')).toBeVisible();
+    // Verify all backend-scope policies are in the Add Policy submenu
+    await verifyAddPolicyMenu('Host', 'backend');
 });
