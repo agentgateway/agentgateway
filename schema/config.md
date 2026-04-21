@@ -4633,8 +4633,8 @@
 |`frontendPolicies.networkAuthorization`|object|CEL authorization for downstream network connections.|
 |`frontendPolicies.networkAuthorization.rules`|[]string||
 |`frontendPolicies.proxyProtocol`|object|Enable downstream PROXY protocol handling on this gateway or port, including<br>version matching and whether PROXY headers are required or optional.|
-|`frontendPolicies.proxyProtocol.version`|string||
-|`frontendPolicies.proxyProtocol.mode`|string||
+|`frontendPolicies.proxyProtocol.version`|enum|Possible values: `v1`, `v2`, `all`.|
+|`frontendPolicies.proxyProtocol.mode`|enum|Possible values: `strict`, `optional`.|
 |`frontendPolicies.accessLog`|object|Settings for request access logs.|
 |`frontendPolicies.accessLog.filter`|string||
 |`frontendPolicies.accessLog.add`|object||

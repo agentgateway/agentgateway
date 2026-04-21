@@ -90,6 +90,15 @@ fn parse_v1_header(header: v1::Header<'_>) -> anyhow::Result<ProxyProtocolInfo> 
 }
 
 fn parse_v2_header(header: v2::Header<'_>) -> anyhow::Result<ProxyProtocolInfo> {
+	if header.command == v2::Command::Local {
+		trace!("parsed PROXY protocol v2 LOCAL header");
+		return Ok(ProxyProtocolInfo {
+			src_addr: None,
+			dst_addr: None,
+			peer_identity: None,
+		});
+	}
+
 	let (src_addr, dst_addr) = match header.addresses {
 		v2::Addresses::IPv4(ref a) => (
 			Some(SocketAddr::new(a.source_address.into(), a.source_port)),
@@ -342,6 +351,25 @@ mod tests {
 		.unwrap()
 	}
 
+	fn build_v2_local_header(src: &str, dst: &str) -> Vec<u8> {
+		let src: SocketAddrV4 = src.parse().unwrap();
+		let dst: SocketAddrV4 = dst.parse().unwrap();
+		let addresses = ppp::v2::Addresses::IPv4(ppp::v2::IPv4 {
+			source_address: *src.ip(),
+			destination_address: *dst.ip(),
+			source_port: src.port(),
+			destination_port: dst.port(),
+		});
+		Builder::with_addresses(Version::Two | Command::Local, Protocol::Stream, addresses)
+			.write_tlv(
+				PROXY_PROTOCOL_AUTHORITY_TLV,
+				b"spiffe://cluster.local/ns/default/sa/ignored",
+			)
+			.unwrap()
+			.build()
+			.unwrap()
+	}
+
 	#[test]
 	fn test_parse_spiffe_identity() {
 		let cases = [
@@ -433,6 +461,20 @@ mod tests {
 	#[tokio::test]
 	async fn test_parse_proxy_protocol_v2_unspecified_preserves_socket_addresses() {
 		let header = build_v2_unspecified_header();
+		let mut cursor = std::io::Cursor::new(header.clone());
+		let info = parse_proxy_protocol(&mut cursor, frontend::ProxyVersion::V2)
+			.await
+			.unwrap();
+
+		assert!(info.info.src_addr.is_none());
+		assert!(info.info.dst_addr.is_none());
+		assert!(info.info.peer_identity.is_none());
+		assert_eq!(info.consumed_len, header.len());
+	}
+
+	#[tokio::test]
+	async fn test_parse_proxy_protocol_v2_local_preserves_socket_addresses() {
+		let header = build_v2_local_header("192.168.1.1:12345", "10.0.0.1:8080");
 		let mut cursor = std::io::Cursor::new(header.clone());
 		let info = parse_proxy_protocol(&mut cursor, frontend::ProxyVersion::V2)
 			.await
