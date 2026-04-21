@@ -90,10 +90,6 @@ test('should edit and save bind configuration', async ({ page }) => {
 });
 
 test('should traverse Traffic Hierarchy tree and verify all nodes', async ({ page }) => { 
-    // Start from a completely blank config so every node is added fresh
-    fs.writeFileSync(E2E_CONFIG_PATH, yaml.dump({}));
-    await page.reload();
-
     // ── Helper functions ─────────────────────────────────────────────────────
     function getTreeNode(nodeText: string): Locator {
         return page.getByRole('tree')
@@ -101,6 +97,7 @@ test('should traverse Traffic Hierarchy tree and verify all nodes', async ({ pag
             .filter({ hasText: nodeText })
             .first();
     }
+
     async function verifyAddPolicyMenu(nodeText: string, scope: PolicyScope) {
         // 'listener', 'route', 'backend' use a different key convention than
         // 'mcp', 'llm', 'mcpTarget' — see HierarchyTree.tsx for the asymmetry
@@ -132,6 +129,7 @@ test('should traverse Traffic Hierarchy tree and verify all nodes', async ({ pag
                 submenuPopup.locator(`[data-menu-id$="${policyItemSuffix(pt.key)}"]`)
             ).toBeVisible();
         }
+
         // Press Escape twice: first closes the submenu, second closes the parent dropdown.
         // Then wait for the overlay to fully disappear before the next tree interaction —
         // avoids triggering re-renders via a stray mouse click that destabilises the tree.
@@ -139,6 +137,7 @@ test('should traverse Traffic Hierarchy tree and verify all nodes', async ({ pag
         await page.keyboard.press('Escape');
         await page.waitForSelector('.ant-dropdown:not(.ant-dropdown-hidden)', { state: 'hidden' });
     }
+
     async function clickMenuItemAndExpect(
         triggerNode: string,
         menuItemSuffix: string,
@@ -156,6 +155,10 @@ test('should traverse Traffic Hierarchy tree and verify all nodes', async ({ pag
             await expect(tree.getByText(expectedText)).toBeVisible({ timeout: 2000 });
         }).toPass({ timeout: 15_000, intervals: [500, 1000, 2000, 3000] });
     }
+
+    // Start from a completely blank config so every node is added fresh
+    fs.writeFileSync(E2E_CONFIG_PATH, yaml.dump({}));
+    await page.reload();
 
     // In the empty state the "Add" button is inside the ant-empty component;
     // once content exists it moves to the card header. Both are inside .ant-card.
@@ -185,6 +188,7 @@ test('should traverse Traffic Hierarchy tree and verify all nodes', async ({ pag
     // Note: model nodes have no "Add Policy" — llm policies live on the
     // LLM Configuration node itself (already verified above)
     await clickMenuItemAndExpect('LLM Configuration', '-add-model', 'model-1');
+
     // ── Port Bind ─────────────────────────────────────────────────────────────
     // Add Bind via top-level Add menu (key: "bind"); defaults to port 8080
     await addButton.click();
