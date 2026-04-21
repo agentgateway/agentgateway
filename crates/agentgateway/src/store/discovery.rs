@@ -44,6 +44,7 @@ impl Store {
 				insert_notifier: Sender::new(()),
 				by_addr: Default::default(),
 				by_uid: Default::default(),
+				by_service: Default::default(),
 			},
 			services: Default::default(),
 			self_workload: SelfWorkload::new(),
@@ -127,40 +128,43 @@ impl Store {
 		Ok(())
 	}
 	pub fn insert_service_internal(&mut self, mut service: Service) {
-		let ranker = LocalityRanker::new(service.load_balancer.as_ref(), self.self_workload.get());
-		let prev = self
-			.services
-			.get_by_namespaced_host(&service.namespaced_hostname());
-
-		// build a fresh EndpointSet every time the Service changes so we can handle changes to
-		// locality settings, and health requirements.
-		// TODO there may be some optimizations here when we know the lb setting didn't change
-		// and our self_workload info was the same, but we'd need mut access to the old service to
-		// take its endpointset
-		service.endpoints = EndpointSet::new_empty(ranker.priority_levels());
 		let key = service.namespaced_hostname();
+		let prev = self.services.get_by_namespaced_host(&key);
 
-		// inserting endpoints requires grabbing the workload's locality info to bucket them
-		let insert_ep = |ep: Endpoint| {
-			if let Some(wl) = self.workloads.find_uid(&ep.workload_uid)
-				&& service.should_include_endpoint(ep.status)
-			{
-				service.endpoints.insert(ep, &wl, &ranker);
-			}
-		};
+		// endpoints that came in before the service
+		let had_staged = self.services.staged_services.remove(&key).is_some();
 
-		// old endpoints get re-inserted to update locality bucketing
-		if let Some(prev) = prev {
-			for (ep, _) in prev.endpoints.all_endpoints() {
-				insert_ep((*ep).clone());
-			}
+		// we don't need to rebuild endpoints when LB strategy hasn't changed
+		// but if it did, we need to rebuild from WorkloadStore because the Service's
+		// own list of endpoints may exclude things due to STRICT or health policy
+		//
+		// just to be safe, check staged endpoints before using the fastpath,
+		// but we shouldn't have an existing service and staged at the same time
+		if let Some(prev) = &prev
+			&& prev.load_balancer == service.load_balancer
+			&& !had_staged
+		{
+			service.endpoints = prev.endpoints.clone();
+			self.services.insert(service);
+			return;
 		}
 
-		// add endpoints that arrived after before the service
-		if let Some(staged) = self.services.staged_services.remove(&key) {
-			for (_, ep) in staged {
-				insert_ep(ep.clone());
+		let ranker = LocalityRanker::new(service.load_balancer.as_ref(), self.self_workload.get());
+		service.endpoints = EndpointSet::new_empty(ranker.priority_levels());
+
+		for wl in self.workloads.iter_by_service(&key) {
+			let Some(ports) = wl.services.get(&key) else {
+				continue;
+			};
+			if !service.should_include_endpoint(wl.status) {
+				continue;
 			}
+			let ep = Endpoint {
+				workload_uid: wl.uid.clone(),
+				port: ports.clone(),
+				status: wl.status,
+			};
+			service.endpoints.insert(ep, wl, &ranker);
 		}
 
 		self.services.insert(service);
@@ -222,6 +226,8 @@ pub struct WorkloadStore {
 	// is simpler (and only requires a channelsize of 1)
 	insert_notifier: Sender<()>,
 
+	/// by_service maps a service key to the workload UIDs that are a part of it
+	by_service: HashMap<NamespacedHostname, HashSet<Strng>>,
 	/// by_addr maps workload network addresses to workloads
 	by_addr: HashMap<NetworkAddress, WorkloadByAddr>,
 	/// by_uid maps workload UIDs to workloads
@@ -242,6 +248,13 @@ impl WorkloadStore {
 					.and_modify(|ws| ws.insert(w.clone()))
 					.or_insert_with(|| WorkloadByAddr::Single(w.clone()));
 			}
+		}
+		for svc in w.services.keys() {
+			self
+				.by_service
+				.entry(svc.clone())
+				.or_default()
+				.insert(w.uid.clone());
 		}
 		self.by_uid.insert(w.uid.clone(), w.clone());
 
@@ -267,6 +280,14 @@ impl WorkloadStore {
 						}
 					}
 				}
+				for svc in prev.services.keys() {
+					if let Some(set) = self.by_service.get_mut(svc) {
+						set.remove(&prev.uid);
+						if set.is_empty() {
+							self.by_service.remove(svc);
+						}
+					}
+				}
 
 				Some(prev.deref().clone())
 			},
@@ -282,6 +303,17 @@ impl WorkloadStore {
 	/// Finds the workload by address, as an arc.
 	pub fn find_address(&self, addr: &NetworkAddress) -> Option<Arc<Workload>> {
 		self.by_addr.get(addr).map(WorkloadByAddr::get)
+	}
+
+	pub fn iter_by_service<'a>(
+		&'a self,
+		svc: &NamespacedHostname,
+	) -> impl Iterator<Item = &'a Arc<Workload>> + 'a {
+		self
+			.by_service
+			.get(svc)
+			.into_iter()
+			.flat_map(|uids| uids.iter().filter_map(|uid| self.by_uid.get(uid)))
 	}
 
 	/// Finds a workload by name and namespace.
@@ -381,7 +413,7 @@ impl ServiceStore {
 	fn remove_endpoint(&mut self, prev_workload: &Workload) {
 		let mut services_to_update = HashSet::new();
 		let workload_uid = &prev_workload.uid;
-		for svc in prev_workload.services.iter() {
+		for svc in prev_workload.services.keys() {
 			// Remove the endpoint from the staged services.
 			self
 				.staged_services
@@ -636,7 +668,23 @@ impl StoreUpdater {
 		let source = s.self_workload.get().cloned();
 		for wl in workloads {
 			trace!("inserting local workload {}", &wl.workload.uid);
-			let w = Arc::new(wl.workload);
+			let mut workload = wl.workload;
+			// Merge the LocalWorkload's per-service port maps into Workload.services so the
+			// workload carries the full membership info. `insert_service_internal` relies on
+			// this to rebuild the EndpointSet when a Service's LB config changes.
+			for (host, ports) in &wl.services {
+				let Some((namespace, hostname)) = host.split_once('/') else {
+					continue;
+				};
+				workload.services.insert(
+					NamespacedHostname {
+						namespace: namespace.into(),
+						hostname: hostname.into(),
+					},
+					ports.clone(),
+				);
+			}
+			let w = Arc::new(workload);
 			// First, remove the entry entirely to make sure things are cleaned up properly.
 			s.remove_workload_for_insert(&w.uid);
 

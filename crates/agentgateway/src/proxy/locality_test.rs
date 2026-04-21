@@ -177,7 +177,7 @@ async fn strict_mode_drops_non_matching_endpoints() {
 			Step::Hit {
 				hits: 3,
 				want_status: StatusCode::SERVICE_UNAVAILABLE,
-				want: Expect::Exact(vec![("other-zone", 0), ("other-region", 0)]),
+				want: Expect::Exact(vec![("other-zone", 0), ("other-zone-2", 0)]),
 			},
 		],
 	})
@@ -542,6 +542,75 @@ async fn service_lb_preference_change_rebuckets() {
 					("same-zone", 0),
 					("same-region", 0),
 				]),
+			},
+		],
+	})
+	.await;
+}
+
+// some properties of the service cause us to fully exclude and endpoint from all buckets
+// and we must recover them when we change those properties to something more permissive
+#[tokio::test]
+async fn strict_then_failover_recovers_dropped_endpoints() {
+	let endpoints = vec![
+		Ep {
+			label: "other-zone",
+			svc: "app",
+			loc: ("r1", "z2", "node-b"),
+			healthy: true,
+		},
+		Ep {
+			label: "other-zone-2",
+			svc: "app",
+			loc: ("r1", "z3", "node-c"),
+			healthy: true,
+		},
+	];
+	run(Case {
+		self_loc: Some(("r1", "z1", "node-a")),
+		steps: vec![
+			// Failover + [Zone]: both endpoints share the fallback bucket (zone mismatch),
+			// so traffic spreads across them.
+			Step::Sync {
+				services: vec![Svc {
+					name: "app",
+					mode: Failover,
+					scopes: vec![Zone],
+				}],
+				endpoints: endpoints.clone(),
+			},
+			Step::Hit {
+				hits: 10,
+				want_status: StatusCode::OK,
+				want: Expect::Spread(vec!["other-zone", "other-zone-2"]),
+			},
+			// Strict + [Node]: nothing matches, every endpoint is dropped.
+			Step::Sync {
+				services: vec![Svc {
+					name: "app",
+					mode: Strict,
+					scopes: vec![Node],
+				}],
+				endpoints: endpoints.clone(),
+			},
+			Step::Hit {
+				hits: 3,
+				want_status: StatusCode::SERVICE_UNAVAILABLE,
+				want: Expect::Exact(vec![("other-zone", 0), ("other-zone-2", 0)]),
+			},
+			// Back to Failover + [Zone]: the same workloads should be reachable again.
+			Step::Sync {
+				services: vec![Svc {
+					name: "app",
+					mode: Failover,
+					scopes: vec![Zone],
+				}],
+				endpoints,
+			},
+			Step::Hit {
+				hits: 10,
+				want_status: StatusCode::OK,
+				want: Expect::Spread(vec!["other-zone", "other-zone-2"]),
 			},
 		],
 	})

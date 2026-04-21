@@ -215,7 +215,7 @@ pub enum SelfIdentitySource {
 	},
 }
 
-#[derive(Debug, Default, Hash, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Default, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Workload {
 	pub workload_ips: Vec<IpAddr>,
@@ -270,7 +270,7 @@ pub struct Workload {
 	pub locality: Locality,
 
 	#[serde(default, skip_serializing_if = "is_default")]
-	pub services: Vec<NamespacedHostname>,
+	pub services: HashMap<NamespacedHostname, HashMap<u16, u16>>,
 
 	#[serde(default = "default_capacity")]
 	pub capacity: u32,
@@ -744,17 +744,23 @@ impl Workload {
 			.collect::<Result<Vec<_>, _>>()?;
 
 		let workload_type = resource.workload_type().as_str_name().to_lowercase();
-		let services: Vec<NamespacedHostname> = resource
+		let services: HashMap<NamespacedHostname, HashMap<u16, u16>> = resource
 			.services
-			.keys()
-			.map(|namespaced_host| match namespaced_host.split_once('/') {
-				Some((namespace, hostname)) => Ok(NamespacedHostname {
-					namespace: namespace.into(),
-					hostname: hostname.into(),
-				}),
-				None => Err(ProtoError::NamespacedHostnameParse(namespaced_host.clone())),
+			.iter()
+			.map(|(namespaced_host, ports)| {
+				let (namespace, hostname) = namespaced_host
+					.split_once('/')
+					.ok_or_else(|| ProtoError::NamespacedHostnameParse(namespaced_host.clone()))?;
+
+				Ok((
+					NamespacedHostname {
+						namespace: namespace.into(),
+						hostname: hostname.into(),
+					},
+					ports_from_xds(ports),
+				))
 			})
-			.collect::<Result<_, _>>()?;
+			.collect::<Result<_, ProtoError>>()?;
 		let wl = Workload {
 			workload_ips: addresses,
 			waypoint: wp,
