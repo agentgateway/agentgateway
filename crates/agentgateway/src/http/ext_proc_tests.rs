@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::cel::Expression;
 use crate::http::ext_proc::proto::header_value_option::HeaderAppendAction;
@@ -23,7 +24,7 @@ use serde_json::json;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tonic::Status;
-use wiremock::MockServer;
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[tokio::test]
 async fn nop_ext_proc() {
@@ -286,6 +287,201 @@ pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
 		.await;
 	let io = t.serve_http(strng::new("bind"));
 	(mock, ext_proc, t, io)
+}
+
+const STANDALONE_SERVICE_NAME: &str = "model-service.default.svc.cluster.local";
+const STANDALONE_SERVICE_REF: &str = "default/model-service.default.svc.cluster.local";
+const STANDALONE_SERVICE_PORT: u16 = 8000;
+
+#[derive(Clone)]
+struct StandaloneInferenceRouter {
+	target: SocketAddr,
+	request_headers_seen: Arc<AtomicUsize>,
+}
+
+#[async_trait::async_trait]
+impl Handler for StandaloneInferenceRouter {
+	async fn handle_request_headers(
+		&mut self,
+		_headers: &HttpHeaders,
+		sender: &Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		self.request_headers_seen.fetch_add(1, Ordering::SeqCst);
+		let _ = sender
+			.send(request_header_response(Some(CommonResponse {
+				header_mutation: Some(HeaderMutation {
+					set_headers: vec![HeaderValueOption {
+						header: Some(HeaderValue {
+							key: "x-gateway-destination-endpoint".to_string(),
+							value: self.target.to_string(),
+							raw_value: Vec::new(),
+						}),
+						append: Some(false),
+						..Default::default()
+					}],
+					remove_headers: vec![],
+				}),
+				..Default::default()
+			})))
+			.await;
+		Ok(())
+	}
+}
+
+async fn named_backend(body: &'static str) -> MockServer {
+	let mock = MockServer::start().await;
+	Mock::given(wiremock::matchers::path_regex("/.*"))
+		.respond_with(ResponseTemplate::new(200).set_body_string(body))
+		.mount(&mock)
+		.await;
+	mock
+}
+
+fn configure_standalone_service_endpoints(t: &TestBind, endpoint_ports: &[u16]) {
+	use crate::store::LocalWorkload;
+	use crate::types::discovery::{NetworkAddress, Service, Workload};
+
+	let service = Service {
+		name: "model-service".into(),
+		namespace: "default".into(),
+		hostname: STANDALONE_SERVICE_NAME.into(),
+		vips: vec![NetworkAddress {
+			network: strng::EMPTY,
+			address: "127.0.0.1".parse().unwrap(),
+		}],
+		ports: HashMap::from([(STANDALONE_SERVICE_PORT, 0)]),
+		..Default::default()
+	};
+	let workloads = endpoint_ports
+		.iter()
+		.enumerate()
+		.map(|(idx, port)| LocalWorkload {
+			workload: Workload {
+				uid: strng::format!("standalone-backend-{idx}"),
+				name: strng::format!("standalone-backend-{idx}"),
+				namespace: "default".into(),
+				workload_ips: vec!["127.0.0.1".parse().unwrap()],
+				..Default::default()
+			},
+			services: HashMap::from([(
+				STANDALONE_SERVICE_REF.to_string(),
+				HashMap::from([(STANDALONE_SERVICE_PORT, *port)]),
+			)]),
+		})
+		.collect();
+
+	t.pi
+		.stores
+		.discovery
+		.sync_local(vec![service], workloads, Default::default())
+		.unwrap();
+}
+
+async fn setup_inference_routing_mock(
+	endpoint_ports: &[u16],
+	target: SocketAddr,
+	request_headers_seen: Arc<AtomicUsize>,
+) -> (MockInstance, TestBind, Client<MemoryConnector, Body>) {
+	let ext_proc = ExtProcMock::new(move || StandaloneInferenceRouter {
+		target,
+		request_headers_seen: request_headers_seen.clone(),
+	})
+	.spawn()
+	.await;
+
+	let mut t = setup_proxy_test("{}").unwrap().with_bind(simple_bind());
+	configure_standalone_service_endpoints(&t, endpoint_ports);
+	t.attach_route(json!({
+		"name": "standalone-epp",
+		"backends": [
+			{
+				"service": {
+					"name": STANDALONE_SERVICE_REF,
+					"port": STANDALONE_SERVICE_PORT,
+				},
+				"policies": {
+					"inferenceRouting": {
+						"endpointPicker": {
+							"host": ext_proc.address.to_string(),
+						},
+					},
+				},
+			}
+		],
+	}))
+	.await;
+	let io = t.serve_http(BIND_KEY);
+	(ext_proc, t, io)
+}
+
+#[tokio::test]
+async fn standalone_inference_routing_uses_epp_selected_service_endpoint() {
+	let backend_a = named_backend("backend-a").await;
+	let backend_b = named_backend("backend-b").await;
+	let request_headers_seen = Arc::new(AtomicUsize::new(0));
+	let (_ext_proc, _bind, io) = setup_inference_routing_mock(
+		&[backend_a.address().port(), backend_b.address().port()],
+		*backend_b.address(),
+		request_headers_seen.clone(),
+	)
+	.await;
+
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body_raw(res.into_body()).await;
+	assert_eq!(body.as_ref(), b"backend-b");
+	assert_eq!(
+		request_headers_seen.load(Ordering::SeqCst),
+		1,
+		"request should consult the local EPP",
+	);
+	assert_eq!(
+		backend_a
+			.received_requests()
+			.await
+			.expect("backend-a recording should be enabled")
+			.len(),
+		0,
+		"non-selected service endpoints should not receive traffic",
+	);
+	assert_eq!(
+		backend_b
+			.received_requests()
+			.await
+			.expect("backend-b recording should be enabled")
+			.len(),
+		1,
+		"EPP-selected endpoint should receive traffic",
+	);
+}
+
+#[tokio::test]
+async fn standalone_inference_routing_rejects_endpoint_outside_service() {
+	let backend = named_backend("backend-a").await;
+	let request_headers_seen = Arc::new(AtomicUsize::new(0));
+	let (_ext_proc, _bind, io) = setup_inference_routing_mock(
+		&[backend.address().port()],
+		"127.0.0.1:65535".parse().unwrap(),
+		request_headers_seen.clone(),
+	)
+	.await;
+
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 503);
+	assert_eq!(
+		request_headers_seen.load(Ordering::SeqCst),
+		1,
+		"gateway should consult EPP before rejecting the request",
+	);
+	assert_eq!(
+		backend
+			.received_requests()
+			.await
+			.expect("backend recording should be enabled")
+			.len(),
+		0,
+		"gateway should not forward traffic to a non-selected endpoint",
+	);
 }
 
 #[derive(Debug, Default)]
