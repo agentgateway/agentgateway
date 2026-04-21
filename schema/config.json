@@ -4774,7 +4774,7 @@
         "policies": {
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalAIProviderPolicies"
+              "$ref": "#/$defs/LocalBackendPolicies"
             },
             {
               "type": "null"
@@ -5002,157 +5002,6 @@
           "type": "string",
           "const": "foundry"
         }
-      ]
-    },
-    "LocalAIProviderPolicies": {
-      "type": "object",
-      "properties": {
-        "requestHeaderModifier": {
-          "description": "Headers to be modified in the request.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "transformations": {
-          "description": "Modify requests and responses sent to and from the backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalTransformationConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "backendTLS": {
-          "description": "Send TLS to the backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalBackendTLS"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "backendAuth": {
-          "description": "Authenticate to the backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/BackendAuth"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "http": {
-          "description": "Specify HTTP settings for the backend",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HTTP"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "tcp": {
-          "description": "Specify TCP settings for the backend",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TCP"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "backendTunnel": {
-          "description": "Specify a tunnel to use when connecting to the backend",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Tunnel"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "ai": {
-          "description": "Mark this as LLM traffic to enable LLM processing.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Policy"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        }
-      },
-      "additionalProperties": false
-    },
-    "LocalAIProviders": {
-      "type": "object",
-      "properties": {
-        "providers": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/LocalNamedAIProvider"
-          }
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "providers"
-      ]
-    },
-    "LocalAwsBackend": {
-      "type": "object",
-      "unevaluatedProperties": false,
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "agentCore": {
-              "$ref": "#/$defs/LocalAgentCoreBackend"
-            }
-          },
-          "required": [
-            "agentCore"
-          ]
-        }
-      ]
-    },
-    "LocalAgentCoreBackend": {
-      "type": "object",
-      "properties": {
-        "agentRuntimeArn": {
-          "type": "string"
-        },
-        "qualifier": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "agentRuntimeArn"
       ]
     },
     "LocalBackendPolicies": {
@@ -5395,6 +5244,56 @@
       "additionalProperties": false,
       "required": [
         "endpointPicker"
+      ]
+    },
+    "LocalAIProviders": {
+      "type": "object",
+      "properties": {
+        "providers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalNamedAIProvider"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "providers"
+      ]
+    },
+    "LocalAwsBackend": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "agentCore": {
+              "$ref": "#/$defs/LocalAgentCoreBackend"
+            }
+          },
+          "required": [
+            "agentCore"
+          ]
+        }
+      ]
+    },
+    "LocalAgentCoreBackend": {
+      "type": "object",
+      "properties": {
+        "agentRuntimeArn": {
+          "type": "string"
+        },
+        "qualifier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "agentRuntimeArn"
       ]
     },
     "LocalTCPRoute": {
@@ -6379,7 +6278,7 @@
         "policies": {
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalNamedBackendPolicies"
+              "$ref": "#/$defs/LocalBackendPolicies"
             },
             {
               "type": "null"
@@ -6437,166 +6336,6 @@
           ]
         }
       ]
-    },
-    "LocalNamedBackendPolicies": {
-      "type": "object",
-      "properties": {
-        "requestHeaderModifier": {
-          "description": "Headers to be modified in the request.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "transformations": {
-          "description": "Modify requests and responses sent to and from the backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalTransformationConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "backendTLS": {
-          "description": "Send TLS to the backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalBackendTLS"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "backendAuth": {
-          "description": "Authenticate to the backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/BackendAuth"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "http": {
-          "description": "Specify HTTP settings for the backend",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HTTP"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "tcp": {
-          "description": "Specify TCP settings for the backend",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TCP"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "backendTunnel": {
-          "description": "Specify a tunnel to use when connecting to the backend",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Tunnel"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "responseHeaderModifier": {
-          "description": "Headers to be modified in the response.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "requestRedirect": {
-          "description": "Directly respond to the request with a redirect.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestRedirect"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "health": {
-          "description": "Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalHealthPolicy"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "mcpAuthorization": {
-          "description": "Authorization policies for MCP access.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/McpAuthorization"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "a2a": {
-          "description": "Mark this traffic as A2A to enable A2A processing and telemetry.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/A2aPolicy"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "ai": {
-          "description": "Mark this as LLM traffic to enable LLM processing.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Policy"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        }
-      },
-      "additionalProperties": false
     },
     "LocalRouteGroup": {
       "type": "object",

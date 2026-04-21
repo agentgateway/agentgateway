@@ -269,6 +269,60 @@ binds:
 	);
 }
 
+#[tokio::test]
+async fn test_inference_routing_rejects_named_backend_policies() {
+	let input = r#"
+backends:
+- name: model
+  host: 127.0.0.1:8000
+  policies:
+    inferenceRouting:
+      endpointPicker:
+        host: 127.0.0.1:9002
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - backend: model
+"#;
+
+	let err = normalize_test_config(input).await.unwrap_err();
+	assert!(
+		err
+			.to_string()
+			.contains("inferenceRouting is only supported on service route backends, not named backends"),
+		"unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
+async fn test_inference_routing_rejects_ai_provider_policies() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI: {}
+          policies:
+            inferenceRouting:
+              endpointPicker:
+                host: 127.0.0.1:9002
+"#;
+
+	let err = normalize_test_config(input).await.unwrap_err();
+	assert!(
+		err.to_string().contains(
+			"inferenceRouting is only supported on service route backends, not AI provider policies"
+		),
+		"unexpected error: {err}"
+	);
+}
+
 #[test]
 fn test_llm_model_name_header_match_valid_patterns() {
 	match super::llm_model_name_header_match("*").unwrap() {
