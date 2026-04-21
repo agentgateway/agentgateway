@@ -72,8 +72,10 @@ func CreateAgwPathMatch(match gwv1.HTTPRouteMatch) (*api.PathMatch, *reporter.Ro
 	if match.Path.Value != nil && *match.Path.Value != "" {
 		dest = *match.Path.Value
 	}
-	if !strings.HasPrefix(dest, "/") {
-		dest = "/" + dest
+	if tp != gwv1.PathMatchRegularExpression {
+		if !strings.HasPrefix(dest, "/") {
+			dest = "/" + dest
+		}
 	}
 	switch tp {
 	case gwv1.PathMatchPathPrefix:
