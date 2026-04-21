@@ -1698,7 +1698,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
-|`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker`|object|Reference to the endpoint picker.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker.service`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker.service.name`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker.service.name.namespace`|string||
@@ -2606,7 +2606,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker`|object|Reference to the endpoint picker.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service.name`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service.name.namespace`|string||
@@ -3491,7 +3491,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
-|`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker`|object|Reference to the endpoint picker.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker.service`|object||
 |`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker.service.name`|object||
 |`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker.service.name.namespace`|string||
@@ -6461,7 +6461,7 @@
 |`backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
-|`backends[].ai.policies.inferenceRouting.endpointPicker`|object|Reference to the endpoint picker.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
 |`backends[].ai.policies.inferenceRouting.endpointPicker.service`|object||
 |`backends[].ai.policies.inferenceRouting.endpointPicker.service.name`|object||
 |`backends[].ai.policies.inferenceRouting.endpointPicker.service.name.namespace`|string||
@@ -7369,7 +7369,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
-|`backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker`|object|Reference to the endpoint picker.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
 |`backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service`|object||
 |`backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service.name`|object||
 |`backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service.name.namespace`|string||
@@ -8253,7 +8253,7 @@
 |`backends[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
-|`backends[].policies.inferenceRouting.endpointPicker`|object|Reference to the endpoint picker.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
 |`backends[].policies.inferenceRouting.endpointPicker.service`|object||
 |`backends[].policies.inferenceRouting.endpointPicker.service.name`|object||
 |`backends[].policies.inferenceRouting.endpointPicker.service.name.namespace`|string||
@@ -10635,7 +10635,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
-|`routeGroups[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker`|object|Reference to the endpoint picker.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker.service`|object||
 |`routeGroups[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker.service.name`|object||
 |`routeGroups[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker.service.name.namespace`|string||
@@ -11543,7 +11543,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker`|object|Reference to the endpoint picker.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service.name`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service.name.namespace`|string||
@@ -12428,7 +12428,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
-|`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker`|object|Reference to the endpoint picker.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
 |`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker.service`|object||
 |`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker.service.name`|object||
 |`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker.service.name.namespace`|string||

@@ -1221,24 +1221,6 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 }
 
 #[apply(schema_de!)]
-pub struct LocalInferenceRouting {
-	/// Reference to the endpoint picker.
-	pub endpoint_picker: Arc<SimpleBackendReference>,
-}
-
-impl From<LocalInferenceRouting> for crate::http::ext_proc::InferenceRouting {
-	fn from(val: LocalInferenceRouting) -> Self {
-		let LocalInferenceRouting { endpoint_picker } = val;
-		Self {
-			target: endpoint_picker,
-			// TODO: expose fail-open configuration for standalone EPP once the fallback behavior is
-			// explicitly supported and documented end-to-end.
-			failure_mode: crate::http::ext_proc::FailureMode::FailClosed,
-		}
-	}
-}
-
-#[apply(schema_de!)]
 #[derive(Default)]
 pub struct SimpleLocalBackendPolicies {
 	// Filters. Keep in sync with RouteFilter
@@ -1310,7 +1292,7 @@ pub struct LocalBackendPolicies {
 	pub a2a: Option<A2aPolicy>,
 	/// Route requests through an endpoint picker before forwarding to the selected backend.
 	#[serde(default)]
-	pub inference_routing: Option<LocalInferenceRouting>,
+	pub inference_routing: Option<crate::http::ext_proc::InferenceRouting>,
 	/// Mark this as LLM traffic to enable LLM processing.
 	#[serde(default)]
 	pub ai: Option<llm::Policy>,
@@ -1396,7 +1378,7 @@ impl LocalBackendPolicies {
 			pols.push(BackendPolicy::A2a(p))
 		}
 		if let Some(p) = inference_routing {
-			pols.push(BackendPolicy::InferenceRouting(p.into()))
+			pols.push(BackendPolicy::InferenceRouting(p))
 		}
 		if let Some(p) = backend_tls {
 			pols.push(BackendPolicy::BackendTLS(p.try_into()?))

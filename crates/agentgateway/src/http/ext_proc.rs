@@ -76,10 +76,35 @@ pub enum FailureMode {
 	FailOpen,
 }
 
-#[apply(schema_ser!)]
+#[apply(schema_ser_schema!)]
 pub struct InferenceRouting {
+	#[serde(rename = "endpointPicker")]
 	pub target: Arc<SimpleBackendReference>,
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	#[cfg_attr(feature = "schema", schemars(skip))]
 	pub failure_mode: FailureMode,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InferenceRoutingConfig {
+	endpoint_picker: Arc<SimpleBackendReference>,
+}
+
+impl<'de> serde::Deserialize<'de> for InferenceRouting {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let InferenceRoutingConfig { endpoint_picker } =
+			InferenceRoutingConfig::deserialize(deserializer)?;
+		Ok(Self {
+			target: endpoint_picker,
+			// TODO: expose fail-open configuration for standalone EPP once the fallback behavior is
+			// explicitly supported and documented end-to-end.
+			failure_mode: FailureMode::FailClosed,
+		})
+	}
 }
 
 #[derive(Debug, Default)]

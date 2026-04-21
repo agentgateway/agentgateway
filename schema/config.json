@@ -5153,12 +5153,13 @@
           "description": "Route requests through an endpoint picker before forwarding to the selected backend.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalInferenceRouting"
+              "$ref": "#/$defs/InferenceRouting"
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "ai": {
           "description": "Mark this as LLM traffic to enable LLM processing.",
@@ -5233,11 +5234,10 @@
       },
       "additionalProperties": false
     },
-    "LocalInferenceRouting": {
+    "InferenceRouting": {
       "type": "object",
       "properties": {
         "endpointPicker": {
-          "description": "Reference to the endpoint picker.",
           "$ref": "#/$defs/SimpleLocalBackend"
         }
       },
