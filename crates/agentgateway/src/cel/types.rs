@@ -207,11 +207,11 @@ pub struct BackendContext {
 	/// The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.
 	#[serde(default)]
 	pub name: Strng,
-	/// The type of backend. For example, `ai`, `mcp`, `static`, `dynamic`, or `service`.
+	/// The type of backend.
 	#[serde(rename = "type")]
 	#[serde(default)]
 	pub backend_type: BackendType,
-	/// The protocol of backend. For example, `http`, `tcp`, `a2a`, `mcp`, or `llm`.
+	/// The protocol of backend.
 	#[serde(default)]
 	pub protocol: BackendProtocol,
 }

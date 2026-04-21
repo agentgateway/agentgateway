@@ -94,8 +94,8 @@
 |`mcp.resource.name`|string|The name of the resource|
 |`backend`|object|`backend` contains information about the backend being used.|
 |`backend.name`|string|The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.|
-|`backend.type`|string|The type of backend. For example, `ai`, `mcp`, `static`, `dynamic`, or `service`.|
-|`backend.protocol`|string|The protocol of backend. For example, `http`, `tcp`, `a2a`, `mcp`, or `llm`.|
+|`backend.type`|enum|The type of backend.<br>Possible values: `ai`, `mcp`, `static`, `dynamic`, `service`, `unknown`.|
+|`backend.protocol`|enum|The protocol of backend.<br>Possible values: `http`, `tcp`, `a2a`, `mcp`, `llm`.|
 |`extauthz`|object|`extauthz` contains dynamic metadata from ext_authz filters|
 |`extproc`|object|`extproc` contains dynamic metadata from ext_proc filters|
 |`metadata`|object|`metadata` contains values set by transformation metadata expressions.|

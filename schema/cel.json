@@ -668,7 +668,7 @@
           "default": ""
         },
         "type": {
-          "description": "The type of backend. For example, `ai`, `mcp`, `static`, `dynamic`, or `service`.",
+          "description": "The type of backend.",
           "type": "string",
           "enum": [
             "ai",
@@ -681,7 +681,7 @@
           "default": "unknown"
         },
         "protocol": {
-          "description": "The protocol of backend. For example, `http`, `tcp`, `a2a`, `mcp`, or `llm`.",
+          "description": "The protocol of backend.",
           "type": "string",
           "enum": [
             "http",
