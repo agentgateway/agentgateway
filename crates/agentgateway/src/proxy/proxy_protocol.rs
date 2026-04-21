@@ -47,10 +47,10 @@ const READ_CHUNK_LEN: usize = 64;
 /// Information extracted from a PROXY protocol header.
 #[derive(Debug)]
 pub struct ProxyProtocolInfo {
-	/// Original source address of the client (before ztunnel)
-	pub src_addr: SocketAddr,
-	/// Original destination address (the service VIP)
-	pub dst_addr: SocketAddr,
+	/// Original source address of the client (before the forwarding proxy), when provided.
+	pub src_addr: Option<SocketAddr>,
+	/// Original destination address (the service VIP), when provided.
+	pub dst_addr: Option<SocketAddr>,
 	/// Peer identity extracted from TLV 0xD0, if present
 	pub peer_identity: Option<IstioIdentity>,
 }
@@ -64,17 +64,23 @@ pub struct ParsedProxyProtocol {
 fn parse_v1_header(header: v1::Header<'_>) -> anyhow::Result<ProxyProtocolInfo> {
 	let (src_addr, dst_addr) = match header.addresses {
 		v1::Addresses::Tcp4(a) => (
-			SocketAddr::new(a.source_address.into(), a.source_port),
-			SocketAddr::new(a.destination_address.into(), a.destination_port),
+			Some(SocketAddr::new(a.source_address.into(), a.source_port)),
+			Some(SocketAddr::new(
+				a.destination_address.into(),
+				a.destination_port,
+			)),
 		),
 		v1::Addresses::Tcp6(a) => (
-			SocketAddr::new(a.source_address.into(), a.source_port),
-			SocketAddr::new(a.destination_address.into(), a.destination_port),
+			Some(SocketAddr::new(a.source_address.into(), a.source_port)),
+			Some(SocketAddr::new(
+				a.destination_address.into(),
+				a.destination_port,
+			)),
 		),
-		v1::Addresses::Unknown => bail!("unsupported PROXY protocol v1 address family"),
+		v1::Addresses::Unknown => (None, None),
 	};
 
-	trace!(src = %src_addr, dst = %dst_addr, "parsed PROXY protocol v1 header");
+	trace!(src = ?src_addr, dst = ?dst_addr, "parsed PROXY protocol v1 header");
 
 	Ok(ProxyProtocolInfo {
 		src_addr,
@@ -86,14 +92,21 @@ fn parse_v1_header(header: v1::Header<'_>) -> anyhow::Result<ProxyProtocolInfo> 
 fn parse_v2_header(header: v2::Header<'_>) -> anyhow::Result<ProxyProtocolInfo> {
 	let (src_addr, dst_addr) = match header.addresses {
 		v2::Addresses::IPv4(ref a) => (
-			SocketAddr::new(a.source_address.into(), a.source_port),
-			SocketAddr::new(a.destination_address.into(), a.destination_port),
+			Some(SocketAddr::new(a.source_address.into(), a.source_port)),
+			Some(SocketAddr::new(
+				a.destination_address.into(),
+				a.destination_port,
+			)),
 		),
 		v2::Addresses::IPv6(ref a) => (
-			SocketAddr::new(a.source_address.into(), a.source_port),
-			SocketAddr::new(a.destination_address.into(), a.destination_port),
+			Some(SocketAddr::new(a.source_address.into(), a.source_port)),
+			Some(SocketAddr::new(
+				a.destination_address.into(),
+				a.destination_port,
+			)),
 		),
-		_ => bail!("unsupported PROXY protocol address family"),
+		v2::Addresses::Unspecified => (None, None),
+		v2::Addresses::Unix(_) => bail!("unsupported PROXY protocol address family"),
 	};
 
 	let peer_identity = header
@@ -103,8 +116,8 @@ fn parse_v2_header(header: v2::Header<'_>) -> anyhow::Result<ProxyProtocolInfo> 
 		.and_then(|t| parse_spiffe_identity(&t.value));
 
 	trace!(
-		src = %src_addr,
-		dst = %dst_addr,
+		src = ?src_addr,
+		dst = ?dst_addr,
 		identity = ?peer_identity,
 		"parsed PROXY protocol v2 header"
 	);
@@ -281,6 +294,10 @@ mod tests {
 		.into_bytes()
 	}
 
+	fn build_v1_unknown_header() -> Vec<u8> {
+		b"PROXY UNKNOWN\r\n".to_vec()
+	}
+
 	fn build_v2_proxy_header(src: &str, dst: &str, identity: Option<&[u8]>) -> Vec<u8> {
 		let src: SocketAddrV4 = src.parse().unwrap();
 		let dst: SocketAddrV4 = dst.parse().unwrap();
@@ -316,6 +333,15 @@ mod tests {
 			.unwrap()
 	}
 
+	fn build_v2_unspecified_header() -> Vec<u8> {
+		Builder::new(
+			Version::Two | Command::Proxy,
+			ppp::v2::AddressFamily::Unspecified | Protocol::Stream,
+		)
+		.build()
+		.unwrap()
+	}
+
 	#[test]
 	fn test_parse_spiffe_identity() {
 		let cases = [
@@ -346,8 +372,8 @@ mod tests {
 			.await
 			.unwrap();
 
-		assert_eq!(info.info.src_addr.to_string(), "192.168.1.1:12345");
-		assert_eq!(info.info.dst_addr.to_string(), "10.0.0.1:8080");
+		assert_eq!(info.info.src_addr.unwrap().to_string(), "192.168.1.1:12345");
+		assert_eq!(info.info.dst_addr.unwrap().to_string(), "10.0.0.1:8080");
 		assert!(info.info.peer_identity.is_none());
 		assert_eq!(info.consumed_len, header.len());
 	}
@@ -363,8 +389,22 @@ mod tests {
 			.await
 			.unwrap();
 
-		assert_eq!(info.info.src_addr.to_string(), "192.168.1.1:12345");
-		assert_eq!(info.info.dst_addr.to_string(), "10.0.0.1:8080");
+		assert_eq!(info.info.src_addr.unwrap().to_string(), "192.168.1.1:12345");
+		assert_eq!(info.info.dst_addr.unwrap().to_string(), "10.0.0.1:8080");
+		assert!(info.info.peer_identity.is_none());
+		assert_eq!(info.consumed_len, header.len());
+	}
+
+	#[tokio::test]
+	async fn test_parse_proxy_protocol_v1_unknown_preserves_socket_addresses() {
+		let header = build_v1_unknown_header();
+		let mut cursor = std::io::Cursor::new(header.clone());
+		let info = parse_proxy_protocol(&mut cursor, frontend::ProxyVersion::V1)
+			.await
+			.unwrap();
+
+		assert!(info.info.src_addr.is_none());
+		assert!(info.info.dst_addr.is_none());
 		assert!(info.info.peer_identity.is_none());
 		assert_eq!(info.consumed_len, header.len());
 	}
@@ -382,12 +422,26 @@ mod tests {
 			.await
 			.unwrap();
 
-		assert_eq!(info.info.src_addr.to_string(), "192.168.1.1:12345");
-		assert_eq!(info.info.dst_addr.to_string(), "10.0.0.1:8080");
+		assert_eq!(info.info.src_addr.unwrap().to_string(), "192.168.1.1:12345");
+		assert_eq!(info.info.dst_addr.unwrap().to_string(), "10.0.0.1:8080");
 		assert_eq!(
 			info.info.peer_identity.unwrap().to_string(),
 			"spiffe://cluster.local/ns/default/sa/my-service"
 		);
+	}
+
+	#[tokio::test]
+	async fn test_parse_proxy_protocol_v2_unspecified_preserves_socket_addresses() {
+		let header = build_v2_unspecified_header();
+		let mut cursor = std::io::Cursor::new(header.clone());
+		let info = parse_proxy_protocol(&mut cursor, frontend::ProxyVersion::V2)
+			.await
+			.unwrap();
+
+		assert!(info.info.src_addr.is_none());
+		assert!(info.info.dst_addr.is_none());
+		assert!(info.info.peer_identity.is_none());
+		assert_eq!(info.consumed_len, header.len());
 	}
 
 	#[tokio::test]
@@ -423,8 +477,8 @@ mod tests {
 			.await
 			.unwrap();
 
-		assert_eq!(info.info.src_addr.to_string(), "192.168.1.1:12345");
-		assert_eq!(info.info.dst_addr.to_string(), "10.0.0.1:8080");
+		assert_eq!(info.info.src_addr.unwrap().to_string(), "192.168.1.1:12345");
+		assert_eq!(info.info.dst_addr.unwrap().to_string(), "10.0.0.1:8080");
 		assert_eq!(info.consumed_len, header.len());
 	}
 }

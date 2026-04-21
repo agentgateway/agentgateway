@@ -28,6 +28,7 @@ use crate::transport::BufferLimit;
 use crate::transport::stream::{
 	Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
 };
+use crate::transport::tls::TlsInfo;
 use crate::types::agent::{
 	BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
 };
@@ -889,22 +890,19 @@ impl Gateway {
 		raw_stream: &mut Socket,
 		pp_info: super::proxy_protocol::ProxyProtocolInfo,
 	) {
-		use std::time::Instant;
+		if let (Some(src_addr), Some(dst_addr)) = (pp_info.src_addr, pp_info.dst_addr) {
+			// Capture the original TCP peer before we overwrite it with the client address
+			// from the PROXY header.
+			let raw_peer_addr = raw_stream.tcp().peer_addr;
 
-		use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
-		use crate::transport::tls::TlsInfo;
-
-		// Capture the original TCP peer before we overwrite it with the client address
-		// from the PROXY header.
-		let raw_peer_addr = raw_stream.tcp().peer_addr;
-
-		// Update TCPConnectionInfo with real source/dest from PROXY header
-		raw_stream.ext_mut().insert(TCPConnectionInfo {
-			peer_addr: pp_info.src_addr,
-			local_addr: pp_info.dst_addr,
-			start: Instant::now(),
-			raw_peer_addr: Some(raw_peer_addr),
-		});
+			// Update TCPConnectionInfo with real source/dest from PROXY header
+			raw_stream.ext_mut().insert(TCPConnectionInfo {
+				peer_addr: src_addr,
+				local_addr: dst_addr,
+				start: Instant::now(),
+				raw_peer_addr: Some(raw_peer_addr),
+			});
+		}
 
 		// Insert TLSConnectionInfo with identity from TLV 0xD0
 		// Even though there's no TLS on this connection, we use this struct
