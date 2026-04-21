@@ -37,7 +37,7 @@ output:
       listenerKey: default/test-gateway.http
       matches:
       - path:
-          pathPrefix: /
+          regex: ^/.*$
       name:
         kind: HTTPRoute
         name: regex-route
@@ -46,7 +46,7 @@ status:
 - apiVersion: gateway.networking.k8s.io/v1
   kind: HTTPRoute
   metadata:
-    name: test-route
+    name: regex-route
     namespace: default
   spec: null
   status:
@@ -62,11 +62,6 @@ status:
         reason: ResolvedRefs
         status: "True"
         type: ResolvedRefs
-      - lastTransitionTime: fake
-        message: ""
-        reason: Programmed
-        status: "True"
-        type: Programmed
       controllerName: agentgateway.dev/agentgateway
       parentRef:
         group: gateway.networking.k8s.io
