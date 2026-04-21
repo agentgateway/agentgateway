@@ -595,6 +595,7 @@ impl ListenerName {
 			gateway_name: self.gateway_name.as_ref(),
 			gateway_namespace: self.gateway_namespace.as_ref(),
 			listener_name: None,
+			port: None,
 		}
 	}
 	pub fn as_listener_target_ref(&self) -> PolicyTargetRef {
@@ -602,6 +603,7 @@ impl ListenerName {
 			gateway_name: self.gateway_name.as_ref(),
 			gateway_namespace: self.gateway_namespace.as_ref(),
 			listener_name: Some(self.listener_name.as_ref()),
+			port: None,
 		}
 	}
 }
@@ -612,6 +614,7 @@ impl From<ListenerName> for ListenerTarget {
 			gateway_name: l.gateway_name.clone(),
 			gateway_namespace: l.gateway_namespace.clone(),
 			listener_name: Some(l.listener_name.clone()),
+			port: None,
 		}
 	}
 }
@@ -622,14 +625,25 @@ pub struct ListenerTarget {
 	pub gateway_name: Strng,
 	pub gateway_namespace: Strng,
 	pub listener_name: Option<Strng>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub port: Option<u16>,
 }
 
 impl ListenerTarget {
+	pub fn validate(&self) -> anyhow::Result<()> {
+		anyhow::ensure!(
+			!(self.listener_name.is_some() && self.port.is_some()),
+			"gateway policy target cannot set both listener_name and port"
+		);
+		Ok(())
+	}
+
 	pub fn strip_listener_fields(&self) -> ListenerTarget {
 		Self {
 			gateway_name: self.gateway_name.clone(),
 			gateway_namespace: self.gateway_namespace.clone(),
 			listener_name: None,
+			port: None,
 		}
 	}
 }
@@ -2047,6 +2061,15 @@ pub enum PolicyTarget {
 	Backend(BackendTarget),
 }
 
+impl PolicyTarget {
+	pub fn validate(&self) -> anyhow::Result<()> {
+		if let PolicyTarget::Gateway(target) = self {
+			target.validate()?;
+		}
+		Ok(())
+	}
+}
+
 impl Equivalent<PolicyTarget> for PolicyTargetRef<'_> {
 	fn equivalent(&self, key: &PolicyTarget) -> bool {
 		self == &PolicyTargetRef::from(key)
@@ -2059,6 +2082,7 @@ pub enum PolicyTargetRef<'a> {
 		gateway_name: &'a str,
 		gateway_namespace: &'a str,
 		listener_name: Option<&'a str>,
+		port: Option<u16>,
 	},
 	Route {
 		name: &'a str,
@@ -2076,6 +2100,7 @@ impl<'a> From<&'a PolicyTarget> for PolicyTargetRef<'a> {
 				gateway_name: &v.gateway_name,
 				gateway_namespace: v.gateway_namespace.as_ref(),
 				listener_name: v.listener_name.as_deref(),
+				port: v.port,
 			},
 			PolicyTarget::Route(v) => PolicyTargetRef::Route {
 				name: &v.name,
@@ -2095,6 +2120,7 @@ pub enum FrontendPolicy {
 	TLS(frontend::TLS),
 	TCP(frontend::TCP),
 	NetworkAuthorization(frontend::NetworkAuthorization),
+	Proxy(frontend::Proxy),
 	AccessLog(frontend::LoggingPolicy),
 	Tracing(Arc<TracingPolicy>),
 }

@@ -763,7 +763,7 @@ async fn setup_access_log_mcp_proxy(mock: &MockServer) -> (TestBind, SocketAddr)
 		t.pi
 			.stores
 			.read_binds()
-			.listener_frontend_policies(&listener_name, None)
+			.listener_frontend_policies(&listener_name, None, None)
 			.access_log
 			.is_some()
 	);

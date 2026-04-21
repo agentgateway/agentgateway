@@ -4632,6 +4632,9 @@
 |`frontendPolicies.tcp.keepalives.retries`|integer||
 |`frontendPolicies.networkAuthorization`|object|CEL authorization for downstream network connections.|
 |`frontendPolicies.networkAuthorization.rules`|[]string||
+|`frontendPolicies.proxyProtocol`|object|Enable downstream PROXY protocol handling on this gateway or port, including<br>version matching and whether PROXY headers are required or optional.|
+|`frontendPolicies.proxyProtocol.version`|string||
+|`frontendPolicies.proxyProtocol.mode`|string||
 |`frontendPolicies.accessLog`|object|Settings for request access logs.|
 |`frontendPolicies.accessLog.filter`|string||
 |`frontendPolicies.accessLog.add`|object||
@@ -4854,6 +4857,7 @@
 |`policies[].target.gateway.gatewayName`|string||
 |`policies[].target.gateway.gatewayNamespace`|string||
 |`policies[].target.gateway.listenerName`|string||
+|`policies[].target.gateway.port`|integer||
 |`policies[].target.route`|object||
 |`policies[].target.route.name`|string||
 |`policies[].target.route.namespace`|string||

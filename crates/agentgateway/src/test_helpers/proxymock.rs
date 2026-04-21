@@ -720,6 +720,7 @@ impl TestBind {
 					gateway_name: "default".into(),
 					gateway_namespace: "default".into(),
 					listener_name: None,
+					port: None,
 				}),
 				policy: (v, PolicyPhase::Gateway).into(),
 			});
@@ -905,6 +906,31 @@ impl TestBind {
 		});
 		client
 	}
+
+	pub fn serve_tunnel(&self, bind_name: BindKey) -> DuplexStream {
+		let (client, server) = tokio::io::duplex(8192);
+		let server = Socket::from_memory(
+			server,
+			TCPConnectionInfo {
+				peer_addr: "127.0.0.1:12345".parse().unwrap(),
+				local_addr: "127.0.0.1:80".parse().unwrap(),
+				start: Instant::now(),
+				raw_peer_addr: None,
+			},
+		);
+		let bind = self.pi.stores.read_binds().bind(&bind_name).unwrap();
+		let bind_protocol = bind.protocol;
+		let tunnel_protocol = bind.tunnel_protocol;
+		let pi = self.pi.clone();
+		let drain = self.drain_rx.clone();
+		tokio::spawn(async move {
+			info!("starting tunnel bind...");
+			Gateway::handle_tunnel(bind_name, bind_protocol, tunnel_protocol, server, pi, drain).await;
+			info!("finished tunnel bind...");
+		});
+		client
+	}
+
 	pub async fn serve_real_listener(&self, bind_name: BindKey) -> SocketAddr {
 		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 		let addr = listener.local_addr().unwrap();

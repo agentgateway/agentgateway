@@ -1,26 +1,33 @@
-//! PROXY protocol v2 parser for Istio sandwich waypoint mode.
+//! PROXY protocol parser for downstream connections.
 //!
 //! When agentgateway operates as an Istio ambient mesh waypoint in "sandwich" mode,
 //! ztunnel handles mTLS termination and forwards traffic to the waypoint using
-//! PROXY protocol v2. This module parses the PROXY header to extract:
+//! PROXY protocol. This module parses the PROXY header to extract:
 //!
 //! - Original source/destination addresses (standard PROXY protocol)
-//! - Peer identity from TLV 0xD0 (SPIFFE URI of the source workload)
+//! - Peer identity from TLV 0xD0 (SPIFFE URI of the source workload, v2 only)
 //!
 //! The extracted identity flows through to CEL authorization via TLSConnectionInfo.
 
 use std::net::SocketAddr;
 
-use anyhow::bail;
-use ppp::{HeaderResult, v2};
+use anyhow::{anyhow, bail};
+use ppp::{HeaderResult, PartialResult, v1, v2};
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tracing::trace;
 
 use crate::transport::tls::IstioIdentity;
 use crate::types::discovery::Identity;
+use crate::types::frontend;
 
 /// TLV type for peer identity (SPIFFE URI) - matches ztunnel's PROXY_PROTOCOL_AUTHORITY_TLV
 const PROXY_PROTOCOL_AUTHORITY_TLV: u8 = 0xD0;
+
+/// PROXY protocol v1 prefix
+const PROXY_V1_PREFIX: &[u8] = b"PROXY";
+
+/// Maximum allowed PROXY v1 header length.
+const PROXY_V1_MAX_HEADER_LEN: usize = 107;
 
 /// PROXY protocol v2 signature (12 bytes)
 const PROXY_V2_SIGNATURE: [u8; 12] = [
@@ -34,8 +41,10 @@ const PROXY_V2_MIN_HEADER: usize = 16;
 /// IPv6 addresses need 36 bytes, plus TLVs. 512 bytes is plenty for typical use
 /// (ztunnel only sends identity TLV) while preventing allocation attacks.
 const PROXY_V2_MAX_ADDR_LEN: usize = 512;
+const PROXY_V2_MAX_HEADER_LEN: usize = PROXY_V2_MIN_HEADER + PROXY_V2_MAX_ADDR_LEN;
+const READ_CHUNK_LEN: usize = 64;
 
-/// Information extracted from PROXY protocol v2 header.
+/// Information extracted from a PROXY protocol header.
 #[derive(Debug)]
 pub struct ProxyProtocolInfo {
 	/// Original source address of the client (before ztunnel)
@@ -46,62 +55,35 @@ pub struct ProxyProtocolInfo {
 	pub peer_identity: Option<IstioIdentity>,
 }
 
-/// Parse PROXY protocol v2 header from stream.
-///
-/// Reads exactly the header bytes (no more) so subsequent reads get the HTTP request.
-/// Uses the length field in the PROXY header to determine exact read size.
-pub async fn parse_proxy_protocol<S: AsyncRead + Unpin>(
-	stream: &mut S,
-) -> anyhow::Result<ProxyProtocolInfo> {
-	// Read the fixed 16-byte header prefix
-	let mut header_prefix = [0u8; PROXY_V2_MIN_HEADER];
-	stream.read_exact(&mut header_prefix).await?;
+#[derive(Debug)]
+pub struct ParsedProxyProtocol {
+	pub info: ProxyProtocolInfo,
+	pub consumed_len: usize,
+}
 
-	// Verify signature
-	if header_prefix[..12] != PROXY_V2_SIGNATURE {
-		bail!("invalid PROXY v2 signature");
-	}
-
-	// Extract version/command (byte 12) and address length (bytes 14-15, big-endian)
-	let version_cmd = header_prefix[12];
-	if version_cmd >> 4 != 2 {
-		bail!(
-			"expected PROXY protocol v2, got version {}",
-			version_cmd >> 4
-		);
-	}
-
-	let addr_len = u16::from_be_bytes([header_prefix[14], header_prefix[15]]) as usize;
-	if addr_len > PROXY_V2_MAX_ADDR_LEN {
-		bail!(
-			"PROXY v2 address/TLV length {} exceeds maximum {}",
-			addr_len,
-			PROXY_V2_MAX_ADDR_LEN
-		);
-	}
-	trace!(
-		addr_len,
-		"PROXY v2 header indicates {} bytes of addresses/TLVs", addr_len
-	);
-
-	// Read the remaining address/TLV data
-	let mut full_header = vec![0u8; PROXY_V2_MIN_HEADER + addr_len];
-	full_header[..PROXY_V2_MIN_HEADER].copy_from_slice(&header_prefix);
-
-	if addr_len > 0 {
-		stream
-			.read_exact(&mut full_header[PROXY_V2_MIN_HEADER..])
-			.await?;
-	}
-
-	// Now parse the complete header
-	let header = match HeaderResult::parse(&full_header) {
-		HeaderResult::V2(Ok(h)) => h,
-		HeaderResult::V2(Err(e)) => bail!("invalid PROXY v2 header: {e:?}"),
-		HeaderResult::V1(_) => bail!("PROXY v1 not supported, expected v2"),
+fn parse_v1_header(header: v1::Header<'_>) -> anyhow::Result<ProxyProtocolInfo> {
+	let (src_addr, dst_addr) = match header.addresses {
+		v1::Addresses::Tcp4(a) => (
+			SocketAddr::new(a.source_address.into(), a.source_port),
+			SocketAddr::new(a.destination_address.into(), a.destination_port),
+		),
+		v1::Addresses::Tcp6(a) => (
+			SocketAddr::new(a.source_address.into(), a.source_port),
+			SocketAddr::new(a.destination_address.into(), a.destination_port),
+		),
+		v1::Addresses::Unknown => bail!("unsupported PROXY protocol v1 address family"),
 	};
 
-	// Extract addresses
+	trace!(src = %src_addr, dst = %dst_addr, "parsed PROXY protocol v1 header");
+
+	Ok(ProxyProtocolInfo {
+		src_addr,
+		dst_addr,
+		peer_identity: None,
+	})
+}
+
+fn parse_v2_header(header: v2::Header<'_>) -> anyhow::Result<ProxyProtocolInfo> {
 	let (src_addr, dst_addr) = match header.addresses {
 		v2::Addresses::IPv4(ref a) => (
 			SocketAddr::new(a.source_address.into(), a.source_port),
@@ -114,7 +96,6 @@ pub async fn parse_proxy_protocol<S: AsyncRead + Unpin>(
 		_ => bail!("unsupported PROXY protocol address family"),
 	};
 
-	// Extract peer identity from TLV 0xD0
 	let peer_identity = header
 		.tlvs()
 		.filter_map(|t| t.ok())
@@ -133,6 +114,131 @@ pub async fn parse_proxy_protocol<S: AsyncRead + Unpin>(
 		dst_addr,
 		peer_identity,
 	})
+}
+
+fn could_be_v1_prefix(buffer: &[u8]) -> bool {
+	if buffer.len() <= PROXY_V1_PREFIX.len() {
+		PROXY_V1_PREFIX.starts_with(buffer)
+	} else {
+		buffer.starts_with(PROXY_V1_PREFIX)
+	}
+}
+
+fn could_be_v2_prefix(buffer: &[u8]) -> bool {
+	if buffer.len() <= PROXY_V2_SIGNATURE.len() {
+		PROXY_V2_SIGNATURE.starts_with(buffer)
+	} else {
+		buffer.starts_with(&PROXY_V2_SIGNATURE)
+	}
+}
+
+fn v1_header_complete(buffer: &[u8]) -> bool {
+	buffer.windows(2).any(|w| w == b"\r\n")
+}
+
+/// Detect and parse a PROXY protocol header from stream.
+///
+/// Returns `Ok(None)` when the stream clearly does not start with a PROXY header.
+/// The caller is responsible for rewinding any consumed bytes if passthrough is allowed.
+pub async fn detect_proxy_protocol<S: AsyncRead + Unpin>(
+	stream: &mut S,
+	allowed_version: frontend::ProxyVersion,
+) -> anyhow::Result<Option<ParsedProxyProtocol>> {
+	let mut buffer = Vec::with_capacity(PROXY_V2_MIN_HEADER);
+	let mut chunk = [0; READ_CHUNK_LEN];
+
+	loop {
+		let could_be_proxy = could_be_v1_prefix(&buffer) || could_be_v2_prefix(&buffer);
+		match HeaderResult::parse(&buffer) {
+			HeaderResult::V1(Ok(header)) => {
+				if !allowed_version.allows_v1() {
+					bail!(
+						"received PROXY protocol v1 header but policy only allows {}",
+						allowed_version
+					);
+				}
+				let consumed_len = header.header.len();
+				return Ok(Some(ParsedProxyProtocol {
+					info: parse_v1_header(header)?,
+					consumed_len,
+				}));
+			},
+			HeaderResult::V2(Ok(header)) => {
+				if !allowed_version.allows_v2() {
+					bail!(
+						"received PROXY protocol v2 header but policy only allows {}",
+						allowed_version
+					);
+				}
+				let consumed_len = header.len();
+				return Ok(Some(ParsedProxyProtocol {
+					info: parse_v2_header(header)?,
+					consumed_len,
+				}));
+			},
+			result if result.is_incomplete() => {
+				if !could_be_proxy {
+					return Ok(None);
+				}
+				if buffer.starts_with(PROXY_V1_PREFIX) && buffer.len() > PROXY_V1_MAX_HEADER_LEN {
+					bail!(
+						"PROXY protocol v1 header exceeded maximum {} bytes",
+						PROXY_V1_MAX_HEADER_LEN
+					);
+				}
+				if could_be_v2_prefix(&buffer) && buffer.len() > PROXY_V2_MAX_HEADER_LEN {
+					bail!(
+						"PROXY protocol header exceeded maximum {} bytes",
+						PROXY_V2_MAX_HEADER_LEN
+					);
+				}
+			},
+			HeaderResult::V1(Err(err)) => {
+				if could_be_v1_prefix(&buffer)
+					&& !v1_header_complete(&buffer)
+					&& buffer.len() < PROXY_V1_MAX_HEADER_LEN
+				{
+					// Keep reading until the line terminator or the maximum header length.
+				} else if could_be_proxy {
+					bail!("invalid PROXY protocol v1 header: {err:?}");
+				} else {
+					return Ok(None);
+				}
+			},
+			HeaderResult::V2(Err(err)) => {
+				if could_be_proxy {
+					bail!("invalid PROXY protocol v2 header: {err:?}");
+				}
+				return Ok(None);
+			},
+		}
+
+		match stream.read(&mut chunk).await {
+			Ok(0) => {
+				if buffer.is_empty() {
+					return Ok(None);
+				}
+				if could_be_v1_prefix(&buffer) || could_be_v2_prefix(&buffer) {
+					return Err(anyhow!(
+						"unexpected EOF while reading PROXY protocol header"
+					));
+				}
+				return Ok(None);
+			},
+			Ok(n) => buffer.extend_from_slice(&chunk[..n]),
+			Err(err) => return Err(err.into()),
+		}
+	}
+}
+
+/// Parse a required PROXY protocol header from stream.
+pub async fn parse_proxy_protocol<S: AsyncRead + Unpin>(
+	stream: &mut S,
+	allowed_version: frontend::ProxyVersion,
+) -> anyhow::Result<ParsedProxyProtocol> {
+	detect_proxy_protocol(stream, allowed_version)
+		.await?
+		.ok_or_else(|| anyhow!("expected PROXY protocol {} header", allowed_version))
 }
 
 /// Parse a SPIFFE URI into IstioIdentity components.
@@ -158,11 +264,24 @@ fn parse_spiffe_identity(data: &[u8]) -> Option<IstioIdentity> {
 mod tests {
 	use std::net::SocketAddrV4;
 
-	use ppp::v2::{Builder, Command, Protocol, Version};
+	use ppp::v2::{Builder, Command, Protocol, Type, Version};
 
 	use super::*;
 
-	fn build_proxy_header(src: &str, dst: &str, identity: Option<&[u8]>) -> Vec<u8> {
+	fn build_v1_proxy_header(src: &str, dst: &str) -> Vec<u8> {
+		let src: SocketAddrV4 = src.parse().unwrap();
+		let dst: SocketAddrV4 = dst.parse().unwrap();
+		format!(
+			"PROXY TCP4 {} {} {} {}\r\n",
+			src.ip(),
+			dst.ip(),
+			src.port(),
+			dst.port()
+		)
+		.into_bytes()
+	}
+
+	fn build_v2_proxy_header(src: &str, dst: &str, identity: Option<&[u8]>) -> Vec<u8> {
 		let src: SocketAddrV4 = src.parse().unwrap();
 		let dst: SocketAddrV4 = dst.parse().unwrap();
 		let addresses = ppp::v2::Addresses::IPv4(ppp::v2::IPv4 {
@@ -177,6 +296,24 @@ mod tests {
 			builder = builder.write_tlv(PROXY_PROTOCOL_AUTHORITY_TLV, id).unwrap();
 		}
 		builder.build().unwrap()
+	}
+
+	fn build_max_len_v2_proxy_header(src: &str, dst: &str) -> Vec<u8> {
+		let src: SocketAddrV4 = src.parse().unwrap();
+		let dst: SocketAddrV4 = dst.parse().unwrap();
+		let addresses = ppp::v2::Addresses::IPv4(ppp::v2::IPv4 {
+			source_address: *src.ip(),
+			destination_address: *dst.ip(),
+			source_port: src.port(),
+			destination_port: dst.port(),
+		});
+		let padding_len = PROXY_V2_MAX_ADDR_LEN - 12 - 3;
+		let padding = vec![0u8; padding_len];
+		Builder::with_addresses(Version::Two | Command::Proxy, Protocol::Stream, addresses)
+			.write_tlv(Type::NoOp, &padding)
+			.unwrap()
+			.build()
+			.unwrap()
 	}
 
 	#[test]
@@ -199,36 +336,95 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_parse_proxy_protocol() {
-		let header = build_proxy_header("192.168.1.1:12345", "10.0.0.1:8080", None);
+	async fn test_parse_proxy_protocol_v2() {
+		let header = build_v2_proxy_header("192.168.1.1:12345", "10.0.0.1:8080", None);
 		let mut data = header.clone();
 		data.extend_from_slice(b"GET / HTTP/1.1\r\n"); // trailing HTTP
 
 		let mut cursor = std::io::Cursor::new(data);
-		let info = parse_proxy_protocol(&mut cursor).await.unwrap();
+		let info = parse_proxy_protocol(&mut cursor, frontend::ProxyVersion::V2)
+			.await
+			.unwrap();
 
-		assert_eq!(info.src_addr.to_string(), "192.168.1.1:12345");
-		assert_eq!(info.dst_addr.to_string(), "10.0.0.1:8080");
-		assert!(info.peer_identity.is_none());
-		assert_eq!(cursor.position() as usize, header.len()); // didn't consume HTTP
+		assert_eq!(info.info.src_addr.to_string(), "192.168.1.1:12345");
+		assert_eq!(info.info.dst_addr.to_string(), "10.0.0.1:8080");
+		assert!(info.info.peer_identity.is_none());
+		assert_eq!(info.consumed_len, header.len());
+	}
+
+	#[tokio::test]
+	async fn test_parse_proxy_protocol_v1() {
+		let header = build_v1_proxy_header("192.168.1.1:12345", "10.0.0.1:8080");
+		let mut data = header.clone();
+		data.extend_from_slice(b"GET / HTTP/1.1\r\n");
+
+		let mut cursor = std::io::Cursor::new(data);
+		let info = parse_proxy_protocol(&mut cursor, frontend::ProxyVersion::V1)
+			.await
+			.unwrap();
+
+		assert_eq!(info.info.src_addr.to_string(), "192.168.1.1:12345");
+		assert_eq!(info.info.dst_addr.to_string(), "10.0.0.1:8080");
+		assert!(info.info.peer_identity.is_none());
+		assert_eq!(info.consumed_len, header.len());
 	}
 
 	#[tokio::test]
 	async fn test_parse_proxy_protocol_with_identity() {
-		let header = build_proxy_header(
+		let header = build_v2_proxy_header(
 			"192.168.1.1:12345",
 			"10.0.0.1:8080",
 			Some(b"spiffe://cluster.local/ns/default/sa/my-service"),
 		);
 
 		let mut cursor = std::io::Cursor::new(header);
-		let info = parse_proxy_protocol(&mut cursor).await.unwrap();
+		let info = parse_proxy_protocol(&mut cursor, frontend::ProxyVersion::V2)
+			.await
+			.unwrap();
 
-		assert_eq!(info.src_addr.to_string(), "192.168.1.1:12345");
-		assert_eq!(info.dst_addr.to_string(), "10.0.0.1:8080");
+		assert_eq!(info.info.src_addr.to_string(), "192.168.1.1:12345");
+		assert_eq!(info.info.dst_addr.to_string(), "10.0.0.1:8080");
 		assert_eq!(
-			info.peer_identity.unwrap().to_string(),
+			info.info.peer_identity.unwrap().to_string(),
 			"spiffe://cluster.local/ns/default/sa/my-service"
 		);
+	}
+
+	#[tokio::test]
+	async fn test_detect_proxy_protocol_none() {
+		let mut cursor = std::io::Cursor::new(b"GET / HTTP/1.1\r\n".to_vec());
+		let info = detect_proxy_protocol(&mut cursor, frontend::ProxyVersion::All)
+			.await
+			.unwrap();
+		assert!(info.is_none());
+		assert!(cursor.position() > 0);
+	}
+
+	#[tokio::test]
+	async fn test_parse_proxy_protocol_rejects_disallowed_version() {
+		let header = build_v2_proxy_header("192.168.1.1:12345", "10.0.0.1:8080", None);
+		let mut cursor = std::io::Cursor::new(header);
+		let err = parse_proxy_protocol(&mut cursor, frontend::ProxyVersion::V1)
+			.await
+			.unwrap_err();
+		assert!(err.to_string().contains("only allows v1"));
+	}
+
+	#[tokio::test]
+	async fn test_parse_proxy_protocol_accepts_exact_max_len_v2_header_with_overread() {
+		// Regression test for an unshipped issue in the original parser
+		let header = build_max_len_v2_proxy_header("192.168.1.1:12345", "10.0.0.1:8080");
+		assert_eq!(header.len(), PROXY_V2_MAX_HEADER_LEN);
+
+		let mut data = header.clone();
+		data.extend_from_slice(b"GET / HTTP/1.1\r\n");
+		let mut cursor = std::io::Cursor::new(data);
+		let info = parse_proxy_protocol(&mut cursor, frontend::ProxyVersion::V2)
+			.await
+			.unwrap();
+
+		assert_eq!(info.info.src_addr.to_string(), "192.168.1.1:12345");
+		assert_eq!(info.info.dst_addr.to_string(), "10.0.0.1:8080");
+		assert_eq!(info.consumed_len, header.len());
 	}
 }

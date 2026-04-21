@@ -70,12 +70,17 @@ impl TCPProxy {
 		connection: Socket,
 		log: &mut RequestLog,
 	) -> Result<(), ProxyError> {
-		let frontend_policies = self.inputs.stores.read_binds().listener_frontend_policies(
-			&self.selected_listener.name,
-			connection
-				.ext::<WaypointService>()
-				.map(WaypointService::as_policy_ref),
-		);
+		let frontend_policies = {
+			let binds = self.inputs.stores.read_binds();
+			let bind_port = binds.bind(&self.bind_name).map(|bind| bind.address.port());
+			binds.listener_frontend_policies(
+				&self.selected_listener.name,
+				bind_port,
+				connection
+					.ext::<WaypointService>()
+					.map(WaypointService::as_policy_ref),
+			)
+		};
 
 		// Apply frontend policies for access logging (skip tracing for TCP)
 		frontend_policies.register_cel_expressions(log.cel.ctx());

@@ -520,6 +520,7 @@ impl Config {
 			gateway_name: self.xds.gateway.clone(),
 			gateway_namespace: self.xds.namespace.clone(),
 			listener_name: None,
+			port: None,
 		}
 	}
 	pub fn gateway_ref(&self) -> PolicyTargetRef {
@@ -527,6 +528,15 @@ impl Config {
 			gateway_name: self.xds.gateway.as_ref(),
 			gateway_namespace: self.xds.namespace.as_ref(),
 			listener_name: None,
+			port: None,
+		}
+	}
+	pub fn gateway_port_ref(&self, port: u16) -> PolicyTargetRef {
+		PolicyTargetRef::Gateway {
+			gateway_name: self.xds.gateway.as_ref(),
+			gateway_namespace: self.xds.namespace.as_ref(),
+			listener_name: None,
+			port: Some(port),
 		}
 	}
 	pub fn as_policy_context(

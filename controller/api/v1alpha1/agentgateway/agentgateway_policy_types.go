@@ -367,6 +367,14 @@ type Frontend struct {
 	// +optional
 	HTTP *FrontendHTTP `json:"http,omitempty"`
 
+	// proxyProtocol defines settings for downstream PROXY protocol handling.
+	//
+	// If configured, incoming connections may require a PROXY header before
+	// normal protocol handling. This can also be configured to allow both
+	// PROXY and non-PROXY traffic on the same listener.
+	// +optional
+	ProxyProtocol *FrontendProxyProtocol `json:"proxyProtocol,omitempty"`
+
 	// `accessLog` contains access logging configuration.
 	// +optional
 	AccessLog *AccessLog `json:"accessLog,omitempty"`
@@ -374,6 +382,41 @@ type Frontend struct {
 	// `tracing` contains various settings for the OpenTelemetry tracer.
 	// +optional
 	Tracing *Tracing `json:"tracing,omitempty"`
+}
+
+// +kubebuilder:validation:Enum=V1;V2;All
+type ProxyProtocolVersion string
+
+const (
+	ProxyProtocolVersionV1  ProxyProtocolVersion = "V1"
+	ProxyProtocolVersionV2  ProxyProtocolVersion = "V2"
+	ProxyProtocolVersionAll ProxyProtocolVersion = "All"
+)
+
+// +kubebuilder:validation:Enum=Strict;Optional
+type ProxyProtocolMode string
+
+const (
+	// A valid PROXY header must be present. This is the default option.
+	ProxyProtocolModeStrict ProxyProtocolMode = "Strict"
+	// Accept either a PROXY header or plain downstream traffic.
+	ProxyProtocolModeOptional ProxyProtocolMode = "Optional"
+)
+
+type FrontendProxyProtocol struct {
+	// version controls which PROXY protocol version is accepted.
+	//
+	// If unset, this defaults to `V2`.
+	// +kubebuilder:default=V2
+	// +optional
+	Version ProxyProtocolVersion `json:"version,omitempty"`
+
+	// mode controls whether PROXY headers are required or optional.
+	//
+	// If unset, this defaults to `Strict`.
+	// +kubebuilder:default=Strict
+	// +optional
+	Mode ProxyProtocolMode `json:"mode,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet

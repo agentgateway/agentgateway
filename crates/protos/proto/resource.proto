@@ -469,6 +469,7 @@ message PolicyTarget {
     string name = 1;
     string namespace = 2;
     optional string listener = 3;
+    optional uint32 port = 4;
   }
   message RouteTarget {
     string name = 1;
@@ -620,6 +621,22 @@ message FrontendPolicySpec {
     string value = 2; // CEL expression
   }
 
+  message ProxyProtocol {
+    enum Version {
+      V2 = 0;
+      V1 = 1;
+      ALL = 2;
+    }
+
+    enum Mode {
+      STRICT = 0;
+      OPTIONAL = 1;
+    }
+
+    Version version = 1;
+    Mode mode = 2;
+  }
+
   oneof kind {
     TCP tcp = 1;
     TLS tls = 2;
@@ -627,6 +644,7 @@ message FrontendPolicySpec {
     Logging logging = 4;
     Tracing tracing = 5;
     NetworkAuthorization network_authorization = 6;
+    ProxyProtocol proxy_protocol = 7;
   }
 }
 

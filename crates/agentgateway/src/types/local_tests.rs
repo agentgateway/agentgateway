@@ -70,6 +70,7 @@ async fn normalize_test_policies(
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),
 			listener_name: None,
+			port: None,
 		},
 		&test_config(),
 		super::LocalConfig {
@@ -96,6 +97,7 @@ async fn normalize_test_yaml(yaml: &str) -> anyhow::Result<NormalizedLocalConfig
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),
 			listener_name: None,
+			port: None,
 		},
 		yaml,
 	)
@@ -113,6 +115,7 @@ async fn normalize_test_config(yaml_str: &str) -> anyhow::Result<NormalizedLocal
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),
 			listener_name: None,
+			port: None,
 		},
 		yaml_str,
 	)
@@ -407,11 +410,13 @@ async fn test_targeted_gateway_phase_oidc_accepts_gateway_and_listener_targets()
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),
 			listener_name: None,
+			port: None,
 		}),
 		PolicyTarget::Gateway(ListenerTarget {
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),
 			listener_name: Some("listener".into()),
+			port: None,
 		}),
 	] {
 		let normalized = normalize_test_policies(vec![super::LocalPolicy {

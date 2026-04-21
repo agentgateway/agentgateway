@@ -18,6 +18,7 @@ const (
 	frontendNetworkAuthzSuffix  = ":frontend-network-authz"
 	frontendTlsPolicySuffix     = ":frontend-tls"
 	frontendHttpPolicySuffix    = ":frontend-http"
+	frontendProxyPolicySuffix   = ":frontend-proxy"
 	frontendLoggingPolicySuffix = ":frontend-logging"
 	frontendTracingPolicySuffix = ":frontend-tracing"
 )
@@ -49,6 +50,10 @@ func translateFrontendPolicyToAgw(
 
 	if s := frontend.HTTP; s != nil {
 		appendPolicy("http")(translateFrontendHTTP(policy, policyName), nil)
+	}
+
+	if s := frontend.ProxyProtocol; s != nil {
+		appendPolicy("proxyProtocol")(translateFrontendProxyProtocol(policy, policyName), nil)
 	}
 
 	if s := frontend.TLS; s != nil {
@@ -274,6 +279,52 @@ func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string) 
 		"agentgateway_policy", tcpPolicy.Name)
 
 	return tcpPolicy
+}
+
+func translateFrontendProxyProtocol(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
+	proxy := policy.Spec.Frontend.ProxyProtocol
+	version := api.FrontendPolicySpec_ProxyProtocol_V2
+	switch proxy.Version {
+	case agentgateway.ProxyProtocolVersionV1:
+		version = api.FrontendPolicySpec_ProxyProtocol_V1
+	case agentgateway.ProxyProtocolVersionAll:
+		version = api.FrontendPolicySpec_ProxyProtocol_ALL
+	case agentgateway.ProxyProtocolVersionV2, "":
+		version = api.FrontendPolicySpec_ProxyProtocol_V2
+	default:
+		logger.Warn("unknown proxy protocol version", "version", proxy.Version)
+	}
+
+	mode := api.FrontendPolicySpec_ProxyProtocol_STRICT
+	switch proxy.Mode {
+	case agentgateway.ProxyProtocolModeOptional:
+		mode = api.FrontendPolicySpec_ProxyProtocol_OPTIONAL
+	case agentgateway.ProxyProtocolModeStrict, "":
+		mode = api.FrontendPolicySpec_ProxyProtocol_STRICT
+	default:
+		logger.Warn("unknown proxy protocol mode", "mode", proxy.Mode)
+	}
+
+	proxyPolicy := &api.Policy{
+		Key:  name + frontendProxyPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Frontend{
+			Frontend: &api.FrontendPolicySpec{
+				Kind: &api.FrontendPolicySpec_ProxyProtocol_{
+					ProxyProtocol: &api.FrontendPolicySpec_ProxyProtocol{
+						Version: version,
+						Mode:    mode,
+					},
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated proxy policy",
+		"policy", policy.Name,
+		"agentgateway_policy", proxyPolicy.Name)
+
+	return proxyPolicy
 }
 
 func translateFrontendNetworkAuthorization(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {

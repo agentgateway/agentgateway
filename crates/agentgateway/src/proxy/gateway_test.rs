@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
+use std::time::Duration;
 
 use crate::http::tests_common::*;
 use crate::http::{Body, Response};
@@ -23,6 +24,10 @@ use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioIo;
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
+use ppp::v2::{
+	Builder as ProxyV2Builder, Command as ProxyV2Command, Protocol as ProxyV2Protocol,
+	Version as ProxyV2Version,
+};
 use rand::RngExt;
 use rustls_pki_types::ServerName;
 use serde::Serialize;
@@ -204,6 +209,37 @@ fn query_param(uri: &str, name: &str) -> String {
 		.unwrap_or_else(|| panic!("missing query param {name}"))
 }
 
+fn build_proxy_v1_header(src: &str, dst: &str) -> Vec<u8> {
+	let src: std::net::SocketAddrV4 = src.parse().unwrap();
+	let dst: std::net::SocketAddrV4 = dst.parse().unwrap();
+	format!(
+		"PROXY TCP4 {} {} {} {}\r\n",
+		src.ip(),
+		dst.ip(),
+		src.port(),
+		dst.port()
+	)
+	.into_bytes()
+}
+
+fn build_proxy_v2_header(src: &str, dst: &str) -> Vec<u8> {
+	let src: std::net::SocketAddrV4 = src.parse().unwrap();
+	let dst: std::net::SocketAddrV4 = dst.parse().unwrap();
+	let addresses = ppp::v2::Addresses::IPv4(ppp::v2::IPv4 {
+		source_address: *src.ip(),
+		destination_address: *dst.ip(),
+		source_port: src.port(),
+		destination_port: dst.port(),
+	});
+	ProxyV2Builder::with_addresses(
+		ProxyV2Version::Two | ProxyV2Command::Proxy,
+		ProxyV2Protocol::Stream,
+		addresses,
+	)
+	.build()
+	.unwrap()
+}
+
 async fn oidc_backend_mock() -> (MockServer, Arc<StdMutex<Option<String>>>) {
 	let token_response = Arc::new(StdMutex::new(None));
 	let mock = MockServer::start().await;
@@ -243,6 +279,96 @@ async fn basic_handling() {
 	let body = read_body(res.into_body()).await;
 	assert_eq!(body.version, Version::HTTP_11);
 	assert_eq!(body.method, Method::POST);
+}
+
+#[tokio::test]
+async fn proxy_policy_optional_mode_allows_plain_http() {
+	let mock = simple_mock().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
+	t.attach_frontend_policy(json!({
+		"proxyProtocol": {
+			"version": "all",
+			"mode": "optional",
+		},
+	}))
+	.await;
+
+	let io = t.serve_http(BIND_KEY);
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+}
+
+#[tokio::test]
+async fn proxy_policy_v1_accepts_v1_header() {
+	let mock = simple_mock().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
+	t.attach_frontend_policy(json!({
+		"proxyProtocol": {
+			"version": "v1",
+		},
+	}))
+	.await;
+
+	let mut io = t.serve_tunnel(BIND_KEY);
+	io.write_all(&build_proxy_v1_header("192.168.1.10:40000", "127.0.0.1:80"))
+		.await
+		.unwrap();
+	let (mut sender, conn) = http1::handshake(TokioIo::new(io)).await.unwrap();
+	let conn = tokio::spawn(conn);
+	let res = sender
+		.send_request(
+			::http::Request::builder()
+				.method(Method::GET)
+				.uri("/")
+				.header(header::HOST, "lo")
+				.header(header::CONNECTION, "close")
+				.body(Body::empty())
+				.unwrap(),
+		)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), 200);
+	conn.abort();
+}
+
+#[tokio::test]
+async fn proxy_policy_v1_rejects_v2_header() {
+	let mock = simple_mock().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
+	t.attach_frontend_policy(json!({
+		"proxyProtocol": {
+			"version": "v1",
+		},
+	}))
+	.await;
+
+	let mut io = t.serve_tunnel(BIND_KEY);
+	io.write_all(&build_proxy_v2_header("192.168.1.10:40000", "127.0.0.1:80"))
+		.await
+		.unwrap();
+	io.write_all(b"GET / HTTP/1.1\r\nHost: lo\r\n\r\n")
+		.await
+		.unwrap();
+	io.shutdown().await.unwrap();
+
+	let mut response = [0u8; 1];
+	let read = tokio::time::timeout(Duration::from_secs(2), io.read(&mut response))
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(read, 0);
 }
 
 #[tokio::test]

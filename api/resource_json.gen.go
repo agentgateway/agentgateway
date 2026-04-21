@@ -743,6 +743,17 @@ func (this *FrontendPolicySpec_TracingAttribute) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for FrontendPolicySpec_ProxyProtocol
+func (this *FrontendPolicySpec_ProxyProtocol) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for FrontendPolicySpec_ProxyProtocol
+func (this *FrontendPolicySpec_ProxyProtocol) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for JWTValidationOptions
 func (this *JWTValidationOptions) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)

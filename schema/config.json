@@ -5620,6 +5620,18 @@
           ],
           "default": null
         },
+        "proxyProtocol": {
+          "description": "Enable downstream PROXY protocol handling on this gateway or port, including\nversion matching and whether PROXY headers are required or optional.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Proxy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "accessLog": {
           "description": "Settings for request access logs.",
           "anyOf": [
@@ -5790,6 +5802,35 @@
     },
     "NetworkAuthorization": {
       "$ref": "#/$defs/RuleSet"
+    },
+    "Proxy": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/ProxyVersion",
+          "default": "v2"
+        },
+        "mode": {
+          "$ref": "#/$defs/ProxyMode",
+          "default": "strict"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProxyVersion": {
+      "type": "string",
+      "enum": [
+        "v1",
+        "v2",
+        "all"
+      ]
+    },
+    "ProxyMode": {
+      "type": "string",
+      "enum": [
+        "strict",
+        "optional"
+      ]
     },
     "LoggingPolicy": {
       "type": "object",
@@ -6151,6 +6192,15 @@
             "string",
             "null"
           ]
+        },
+        "port": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
         }
       },
       "additionalProperties": false,

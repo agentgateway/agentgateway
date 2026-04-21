@@ -1975,6 +1975,30 @@ fn frontend_policy_from_proto(
 				authorization::RuleSet::new(policy_set),
 			))
 		},
+		Some(fps::Kind::ProxyProtocol(p)) => {
+			let version =
+				match crate::types::proto::agent::frontend_policy_spec::proxy_protocol::Version::try_from(
+					p.version,
+				) {
+					Ok(crate::types::proto::agent::frontend_policy_spec::proxy_protocol::Version::V1) => {
+						frontend::ProxyVersion::V1
+					},
+					Ok(crate::types::proto::agent::frontend_policy_spec::proxy_protocol::Version::All) => {
+						frontend::ProxyVersion::All
+					},
+					_ => frontend::ProxyVersion::V2,
+				};
+			let mode =
+				match crate::types::proto::agent::frontend_policy_spec::proxy_protocol::Mode::try_from(
+					p.mode,
+				) {
+					Ok(crate::types::proto::agent::frontend_policy_spec::proxy_protocol::Mode::Optional) => {
+						frontend::ProxyMode::Optional
+					},
+					_ => frontend::ProxyMode::Strict,
+				};
+			FrontendPolicy::Proxy(frontend::Proxy { version, mode })
+		},
 		Some(fps::Kind::Logging(p)) => {
 			let (add, rm) = p
 				.fields
@@ -2137,6 +2161,13 @@ fn policy_target_from_proto(t: &proto::agent::PolicyTarget) -> Result<PolicyTarg
 			gateway_name: strng::new(&g.name),
 			gateway_namespace: strng::new(&g.namespace),
 			listener_name: g.listener.as_ref().map(Into::into),
+			port: g
+				.port
+				.map(|p| {
+					u16::try_from(p)
+						.map_err(|_| ProtoError::Generic(format!("gateway target port out of range: {p}")))
+				})
+				.transpose()?,
 		})),
 		Some(tgt::Kind::Route(r)) => Ok(PolicyTarget::Route(RouteTarget {
 			name: strng::new(&r.name),

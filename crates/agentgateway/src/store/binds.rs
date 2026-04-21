@@ -119,6 +119,7 @@ pub struct FrontendPolices {
 	pub tls: Option<frontend::TLS>,
 	pub tcp: Option<frontend::TCP>,
 	pub network_authorization: Option<NetworkAuthorizationSet>,
+	pub proxy: Option<frontend::Proxy>,
 	pub access_log: Option<frontend::LoggingPolicy>,
 	pub tracing: Option<Arc<crate::types::agent::TracingPolicy>>,
 	pub access_log_otlp: Option<Arc<crate::types::agent::AccessLogPolicy>>,
@@ -142,6 +143,9 @@ impl FrontendPolices {
 				} else {
 					self.network_authorization = Some(NetworkAuthorizationSet::new(vec![p.0.clone()].into()));
 				}
+			},
+			FrontendPolicy::Proxy(p) => {
+				self.proxy.get_or_insert_with(|| p.clone());
 			},
 			FrontendPolicy::AccessLog(p) => {
 				self.access_log.get_or_insert_with(|| p.clone());
@@ -971,12 +975,41 @@ impl Store {
 			.collect_vec()
 	}
 
+	pub fn all_access_log_policies(&self) -> Vec<Arc<crate::types::agent::AccessLogPolicy>> {
+		self
+			.binds
+			.values()
+			.flat_map(|bind| {
+				bind.listeners.iter().map(|listener| {
+					self.listener_frontend_policies(&listener.name, Some(bind.address.port()), None)
+				})
+			})
+			.filter_map(|fp| fp.access_log_otlp)
+			.unique_by(|p| Arc::as_ptr(p) as usize)
+			.collect_vec()
+	}
+
 	pub fn frontend_policies(&self, gateway: PolicyTargetRef) -> FrontendPolices {
 		let gw_rules = self.policies_by_target.get(&gateway);
+		let parent_gateway = match gateway {
+			PolicyTargetRef::Gateway {
+				gateway_name,
+				gateway_namespace,
+				listener_name: None,
+				port: Some(_),
+			} => self.policies_by_target.get(&PolicyTargetRef::Gateway {
+				gateway_name,
+				gateway_namespace,
+				listener_name: None,
+				port: None,
+			}),
+			_ => None,
+		};
 		let rules = gw_rules
 			.iter()
 			.copied()
 			.flatten()
+			.chain(parent_gateway.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
 			.filter_map(|p| p.policy.as_frontend());
 
@@ -984,19 +1017,30 @@ impl Store {
 		rules.for_each(|r| pol.set_if_empty(r));
 		pol
 	}
+
 	pub fn listener_frontend_policies(
 		&self,
 		name: &ListenerName,
+		port: Option<u16>,
 		service: Option<PolicyTargetRef>,
 	) -> FrontendPolices {
 		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
 		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
 		let svc = service.and_then(|s| self.policies_by_target.get(&s));
+		let gateway_port = port.and_then(|port| {
+			self.policies_by_target.get(&PolicyTargetRef::Gateway {
+				gateway_name: name.gateway_name.as_ref(),
+				gateway_namespace: name.gateway_namespace.as_ref(),
+				listener_name: None,
+				port: Some(port),
+			})
+		});
 		let rules = svc
 			.iter()
 			.copied()
 			.flatten()
 			.chain(listener.iter().copied().flatten())
+			.chain(gateway_port.iter().copied().flatten())
 			.chain(gateway.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
 			.filter_map(|p| p.policy.as_frontend());
@@ -1767,6 +1811,7 @@ mod tests {
 		policy_name: &str,
 		for_listener: bool,
 		policy: FrontendPolicy,
+		port: Option<u16>,
 	) {
 		let policy_key = strng::new(policy_name);
 		let listener_name = if for_listener {
@@ -1778,6 +1823,7 @@ mod tests {
 			gateway_name: listener.gateway_name.clone(),
 			gateway_namespace: listener.gateway_namespace.clone(),
 			listener_name,
+			port,
 		});
 		let policy = TargetedPolicy {
 			key: policy_key.clone(),
@@ -1807,6 +1853,7 @@ mod tests {
 			"gw_frontend_policy",
 			false,
 			create_access_log_policy(remove_item),
+			None,
 		);
 	}
 
@@ -1821,6 +1868,7 @@ mod tests {
 			"listener_frontend_policy",
 			true,
 			create_access_log_policy(remove_item),
+			None,
 		);
 	}
 
@@ -1836,6 +1884,23 @@ mod tests {
 			policy_name,
 			false,
 			create_network_authorization_policy(cidr),
+			None,
+		);
+	}
+
+	fn insert_port_level_frontend_policy(
+		store: &mut Store,
+		listener: &ListenerName,
+		port: u16,
+		remove_item: &str,
+	) {
+		insert_policy_at_level(
+			store,
+			listener,
+			"port_frontend_policy",
+			false,
+			create_access_log_policy(remove_item),
+			Some(port),
 		);
 	}
 
@@ -1905,7 +1970,7 @@ mod tests {
 		insert_gateway_level_frontend_policy(&mut store, &listener, "gw_remove");
 		insert_listener_level_frontend_policy(&mut store, &listener, "listener_remove");
 
-		let merged_pols = store.listener_frontend_policies(&listener, None);
+		let merged_pols = store.listener_frontend_policies(&listener, None, None);
 		// Verify that listener policy takes precedence over gateway policy
 		assert!(
 			merged_pols.access_log.is_some(),
@@ -1921,6 +1986,26 @@ mod tests {
 			!access_log.remove.contains("gw_remove"),
 			"Gateway policy should not override listener policy"
 		);
+	}
+
+	#[test]
+	fn frontend_policy_gateway_port_inherits_gateway_level() {
+		let mut store = Store::default();
+		let listener = listener();
+
+		insert_gateway_level_frontend_policy(&mut store, &listener, "gw_remove");
+
+		let access_log = store
+			.frontend_policies(PolicyTargetRef::Gateway {
+				gateway_name: listener.gateway_name.as_ref(),
+				gateway_namespace: listener.gateway_namespace.as_ref(),
+				listener_name: None,
+				port: Some(15008),
+			})
+			.access_log
+			.expect("expected gateway policy to apply");
+
+		assert!(access_log.remove.contains("gw_remove"));
 	}
 
 	#[test]
@@ -1982,6 +2067,50 @@ mod tests {
 				})
 				.is_err()
 		);
+	}
+
+	#[test]
+	fn frontend_policy_port_precedence() {
+		let mut store = Store::default();
+		let listener = listener();
+
+		insert_gateway_level_frontend_policy(&mut store, &listener, "gw_remove");
+		insert_port_level_frontend_policy(&mut store, &listener, 15008, "port_remove");
+		insert_listener_level_frontend_policy(&mut store, &listener, "listener_remove");
+
+		let merged_pols = store.listener_frontend_policies(&listener, Some(15008), None);
+		let access_log = merged_pols.access_log.as_ref().unwrap();
+		assert!(access_log.remove.contains("listener_remove"));
+		assert!(!access_log.remove.contains("port_remove"));
+		assert!(!access_log.remove.contains("gw_remove"));
+
+		let merged_pols = store.listener_frontend_policies(&listener, Some(15009), None);
+		let access_log = merged_pols.access_log.as_ref().unwrap();
+		assert!(access_log.remove.contains("listener_remove"));
+
+		let listener_without_listener_policy = ListenerName {
+			gateway_name: listener.gateway_name.clone(),
+			gateway_namespace: listener.gateway_namespace.clone(),
+			listener_name: strng::literal!("other"),
+			listener_set: None,
+		};
+		let merged_pols =
+			store.listener_frontend_policies(&listener_without_listener_policy, Some(15008), None);
+		let access_log = merged_pols.access_log.as_ref().unwrap();
+		assert!(access_log.remove.contains("port_remove"));
+		assert!(!access_log.remove.contains("gw_remove"));
+	}
+
+	#[test]
+	fn gateway_target_cannot_mix_listener_and_port() {
+		let target = ListenerTarget {
+			gateway_name: strng::literal!("gw"),
+			gateway_namespace: strng::literal!("ns"),
+			listener_name: Some(strng::literal!("listener")),
+			port: Some(15008),
+		};
+
+		assert!(target.validate().is_err());
 	}
 
 	#[test]

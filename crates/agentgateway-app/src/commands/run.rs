@@ -81,6 +81,7 @@ async fn validate(contents: String, filename: Option<PathBuf>) -> anyhow::Result
 				gateway_name: strng::literal!("default"),
 				gateway_namespace: strng::literal!("default"),
 				listener_name: None,
+				port: None,
 			},
 			cs.as_str(),
 		)

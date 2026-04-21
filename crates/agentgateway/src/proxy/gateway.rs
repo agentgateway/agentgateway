@@ -393,17 +393,12 @@ impl Gateway {
 	pub async fn proxy_bind(
 		bind_name: BindKey,
 		bind_protocol: BindProtocol,
-		mut raw_stream: Socket,
+		raw_stream: Socket,
 		inputs: Arc<ProxyInputs>,
 		drain: DrainWatcher,
 	) {
-		let policies = inputs
-			.stores
-			.read_binds()
-			.frontend_policies(inputs.cfg.gateway_ref());
-		if let Some(tcp) = policies.tcp.as_ref() {
-			raw_stream.apply_tcp_settings(tcp)
-		}
+		let policies = Self::frontend_policies_for_bind(&bind_name, &inputs);
+
 		let peer_addr = raw_stream.tcp().peer_addr;
 		event!(
 			target: "downstream connection",
@@ -558,6 +553,17 @@ impl Gateway {
 		}
 	}
 
+	fn frontend_policies_for_bind(bind_name: &BindKey, inputs: &Arc<ProxyInputs>) -> FrontendPolices {
+		{
+			let binds = inputs.stores.read_binds();
+			let gateway = binds
+				.bind(bind_name)
+				.map(|bind| inputs.cfg.gateway_port_ref(bind.address.port()))
+				.unwrap_or_else(|| inputs.cfg.gateway_ref());
+			binds.frontend_policies(gateway)
+		}
+	}
+
 	pub async fn handle_tunnel(
 		bind_name: BindKey,
 		bind_protocol: BindProtocol,
@@ -566,13 +572,16 @@ impl Gateway {
 		inputs: Arc<ProxyInputs>,
 		drain: DrainWatcher,
 	) {
-		let policies = inputs
-			.stores
-			.read_binds()
-			.frontend_policies(inputs.cfg.gateway_ref());
+		let policies = Self::frontend_policies_for_bind(&bind_name, &inputs);
 		if let Some(tcp) = policies.tcp.as_ref() {
 			raw_stream.apply_tcp_settings(tcp)
 		}
+		// Tunnel protocol can come from the bind or policies; policies override.
+		let tunnel_protocol = if policies.proxy.is_some() {
+			TunnelProtocol::Proxy
+		} else {
+			tunnel_protocol
+		};
 		let peer_addr = raw_stream.tcp().peer_addr;
 		event!(
 			target: "downstream connection",
@@ -600,8 +609,19 @@ impl Gateway {
 				let _ = Self::terminate_gateway_hbone(inputs, raw_stream, policies, drain).await;
 			},
 			TunnelProtocol::Proxy => {
-				let _ =
-					Self::terminate_proxy_protocol(bind_name, bind_protocol, inputs, raw_stream, drain).await;
+				let proxy_policy = policies.proxy.clone().unwrap_or_default();
+				let err = Self::terminate_proxy_protocol(
+					bind_name,
+					bind_protocol,
+					inputs,
+					raw_stream,
+					proxy_policy,
+					drain,
+				)
+				.await;
+				if let Err(e) = err {
+					warn!(src.addr = %peer_addr, "proxy protocol error: {e}");
+				}
 			},
 		}
 	}
@@ -865,40 +885,20 @@ impl Gateway {
 		tokio::time::timeout(to, handshake).await?
 	}
 
-	/// Handle incoming connection with PROXY protocol v2 header.
-	///
-	/// Used for Istio sandwich waypoint mode where ztunnel handles mTLS termination
-	/// and forwards traffic to agentgateway using PROXY protocol. The PROXY header
-	/// contains the original client addresses and peer identity (TLV 0xD0).
-	async fn terminate_proxy_protocol(
-		bind_name: BindKey,
-		bind_protocol: BindProtocol,
-		inp: Arc<ProxyInputs>,
-		mut raw_stream: Socket,
-		drain: DrainWatcher,
-	) -> anyhow::Result<()> {
+	fn apply_proxy_protocol_info(
+		raw_stream: &mut Socket,
+		pp_info: super::proxy_protocol::ProxyProtocolInfo,
+	) {
 		use std::time::Instant;
 
-		use super::proxy_protocol::parse_proxy_protocol;
 		use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 		use crate::transport::tls::TlsInfo;
 
-		// PROXY protocol header is small (~232 bytes max), should arrive quickly.
-		// Use a relatively short timeout to detect misbehaving or slow clients.
-		const PROXY_PROTOCOL_TIMEOUT: Duration = Duration::from_secs(5);
-
-		// Parse PROXY protocol header from the stream with timeout
-		let pp_info = tokio::time::timeout(
-			PROXY_PROTOCOL_TIMEOUT,
-			parse_proxy_protocol(&mut raw_stream),
-		)
-		.await??;
-
-		// Capture ztunnel's address (the original TCP peer) before we overwrite it
+		// Capture the original TCP peer before we overwrite it with the client address
+		// from the PROXY header.
 		let raw_peer_addr = raw_stream.tcp().peer_addr;
 
 		// Update TCPConnectionInfo with real source/dest from PROXY header
-		// This overwrites ztunnel's loopback address with the actual client address
 		raw_stream.ext_mut().insert(TCPConnectionInfo {
 			peer_addr: pp_info.src_addr,
 			local_addr: pp_info.dst_addr,
@@ -922,9 +922,47 @@ impl Gateway {
 				negotiated_alpn: None,
 			});
 		}
+	}
 
-		// Continue with normal protocol handling - the identity is now in the socket
-		// extensions and will flow through to CEL authorization via with_source()
+	/// Handle incoming connection with a PROXY protocol header.
+	async fn terminate_proxy_protocol(
+		bind_name: BindKey,
+		bind_protocol: BindProtocol,
+		inp: Arc<ProxyInputs>,
+		raw_stream: Socket,
+		policy: frontend::Proxy,
+		drain: DrainWatcher,
+	) -> anyhow::Result<()> {
+		// PROXY protocol header is small (~232 bytes max), should arrive quickly.
+		// Use a relatively short timeout to detect misbehaving or slow clients.
+		const PROXY_PROTOCOL_TIMEOUT: Duration = Duration::from_secs(5);
+
+		let (ext, metrics, inner) = raw_stream.into_parts();
+		let mut rewind = Socket::new_rewind(inner);
+		let pp_info = tokio::time::timeout(
+			PROXY_PROTOCOL_TIMEOUT,
+			crate::proxy::proxy_protocol::detect_proxy_protocol(&mut rewind, policy.version),
+		)
+		.await??;
+
+		let raw_stream = match pp_info {
+			Some(pp_info) => {
+				let mut raw_stream =
+					Socket::from_rewind(ext, metrics, rewind.keep_after(pp_info.consumed_len));
+				Self::apply_proxy_protocol_info(&mut raw_stream, pp_info.info);
+				raw_stream
+			},
+			None => {
+				if policy.mode == frontend::ProxyMode::Strict {
+					anyhow::bail!("PROXY protocol header missing");
+				}
+				rewind.rewind();
+				Socket::from_rewind(ext, metrics, rewind)
+			},
+		};
+
+		// Continue with normal protocol handling. Any PROXY-derived identity is now in the socket
+		// extensions and will flow through to CEL authorization via with_source().
 		Self::proxy_bind(bind_name, bind_protocol, raw_stream, inp, drain).await;
 		Ok(())
 	}
@@ -1083,10 +1121,11 @@ impl Gateway {
 		let should_sniff_tls = svc.port_is_tls(socket.target_address().port());
 		let wps = WaypointService(svc);
 		// Ensure we load policies per-stream so we don't cache stale policies on long-lived HBONE connections.
-		let policies = pi
-			.stores
-			.read_binds()
-			.listener_frontend_policies(&listener.name, Some(wps.as_policy_ref()));
+		let policies = pi.stores.read_binds().listener_frontend_policies(
+			&listener.name,
+			None,
+			Some(wps.as_policy_ref()),
+		);
 		socket.ext_mut().insert(wps);
 		if is_http {
 			let _ = Self::proxy(

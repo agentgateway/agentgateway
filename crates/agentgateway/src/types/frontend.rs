@@ -124,6 +124,52 @@ pub struct TCP {
 	pub keepalives: super::agent::KeepaliveConfig,
 }
 
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum ProxyVersion {
+	V1,
+	#[default]
+	V2,
+	All,
+}
+
+impl ProxyVersion {
+	pub fn allows_v1(self) -> bool {
+		matches!(self, Self::V1 | Self::All)
+	}
+
+	pub fn allows_v2(self) -> bool {
+		matches!(self, Self::V2 | Self::All)
+	}
+}
+
+impl std::fmt::Display for ProxyVersion {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::V1 => f.write_str("v1"),
+			Self::V2 => f.write_str("v2"),
+			Self::All => f.write_str("all"),
+		}
+	}
+}
+
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum ProxyMode {
+	#[default]
+	Strict,
+	Optional,
+}
+
+#[apply(schema!)]
+#[derive(Default, PartialEq, Eq)]
+pub struct Proxy {
+	#[serde(default)]
+	pub version: ProxyVersion,
+	#[serde(default)]
+	pub mode: ProxyMode,
+}
+
 #[apply(schema!)]
 pub struct NetworkAuthorization(pub crate::http::authorization::RuleSet);
 

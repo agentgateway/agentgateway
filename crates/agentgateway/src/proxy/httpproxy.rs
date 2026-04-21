@@ -592,6 +592,7 @@ impl HTTPProxy {
 				debug!(bind=%bind_name, listener=%l.key, "selected listener");
 				let frontend_policies = inputs.stores.read_binds().listener_frontend_policies(
 					&l.name,
+					Some(bind.address.port()),
 					req
 						.extensions()
 						.get::<WaypointService>()
@@ -607,7 +608,7 @@ impl HTTPProxy {
 				let frontend_policies = inputs
 					.stores
 					.read_binds()
-					.frontend_policies(self.inputs.cfg.gateway_ref());
+					.frontend_policies(self.inputs.cfg.gateway_port_ref(bind.address.port()));
 				self
 					.handle_frontend_policies(&frontend_policies, log, &mut req)
 					.await;

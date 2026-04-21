@@ -4705,6 +4705,36 @@ spec:
                     required:
                     - policy
                     type: object
+                  proxyProtocol:
+                    description: |-
+                      proxyProtocol defines settings for downstream PROXY protocol handling.
+
+                      If configured, incoming connections may require a PROXY header before
+                      normal protocol handling. This can also be configured to allow both
+                      PROXY and non-PROXY traffic on the same listener.
+                    properties:
+                      mode:
+                        default: Strict
+                        description: |-
+                          mode controls whether PROXY headers are required or optional.
+
+                          If unset, this defaults to `Strict`.
+                        enum:
+                        - Strict
+                        - Optional
+                        type: string
+                      version:
+                        default: V2
+                        description: |-
+                          version controls which PROXY protocol version is accepted.
+
+                          If unset, this defaults to `V2`.
+                        enum:
+                        - V1
+                        - V2
+                        - All
+                        type: string
+                    type: object
                   tcp:
                     description: tcp defines settings on managing incoming TCP connections.
                     properties:
@@ -5000,8 +5030,8 @@ spec:
                 type: object
                 x-kubernetes-validations:
                 - message: at least one of the fields in [accessLog http networkAuthorization
-                    tcp tls tracing] must be set
-                  rule: '[has(self.accessLog),has(self.http),has(self.networkAuthorization),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
+                    proxyProtocol tcp tls tracing] must be set
+                  rule: '[has(self.accessLog),has(self.http),has(self.networkAuthorization),has(self.proxyProtocol),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
                     >= 1'
               targetRefs:
                 description: |-

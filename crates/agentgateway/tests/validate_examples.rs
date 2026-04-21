@@ -76,6 +76,7 @@ async fn validate_example(path: &str) -> Result<(), String> {
 			gateway_name: "default".into(),
 			gateway_namespace: "default".into(),
 			listener_name: None,
+			port: None,
 		},
 		&yaml,
 	)

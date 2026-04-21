@@ -72,6 +72,7 @@ impl StateManager {
 					gateway_name: xds.gateway.clone(),
 					gateway_namespace: xds.namespace.clone(),
 					listener_name: None,
+					port: None,
 				},
 			};
 			Box::pin(local_client.run()).await?;
