@@ -67,7 +67,9 @@ func CreateAgwPathMatch(match gwv1.HTTPRouteMatch) (*api.PathMatch, *reporter.Ro
 	if match.Path.Type != nil {
 		tp = *match.Path.Type
 	}
-	// Path value must start with "/". If empty/nil, coerce to "/".
+	// For non-regex path match types, ensure the path starts with "/".
+	// If the value is empty or nil, default to "/".
+	// RegularExpression paths are not modified to support full regex patterns (e.g. "^/.*$").
 	dest := "/"
 	if match.Path.Value != nil && *match.Path.Value != "" {
 		dest = *match.Path.Value
