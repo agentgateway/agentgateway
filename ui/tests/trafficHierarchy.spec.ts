@@ -91,14 +91,14 @@ test('should edit and save bind configuration', async ({ page }) => {
 
 test('should traverse Traffic Hierarchy tree and verify all nodes', async ({ page }) => { 
     // ── Helper functions ─────────────────────────────────────────────────────
-    function getTreeNode(nodeText: string): Locator {
+    function getTreeNode(nodeText: string, exact = false): Locator {
         return page.getByRole('tree')
             .locator('.ant-tree-treenode')
-            .filter({ hasText: nodeText })
+            .filter(exact ? { has: page.getByText(nodeText, { exact: true }) } : { hasText: nodeText })
             .first();
     }
 
-    async function verifyAddPolicyMenu(nodeText: string, scope: PolicyScope) {
+    async function verifyAddPolicyMenu(nodeText: string, scope: PolicyScope, exact = false) {
         // 'listener', 'route', 'backend' use a different key convention than
         // 'mcp', 'llm', 'mcpTarget' — see HierarchyTree.tsx for the asymmetry
         const isScopedKey = ['listener', 'route', 'backend'].includes(scope);
@@ -117,7 +117,7 @@ test('should traverse Traffic Hierarchy tree and verify all nodes', async ({ pag
                 await page.keyboard.press('Escape');
                 await openDropdown.waitFor({ state: 'hidden', timeout: 2000 });
             }
-            await getTreeNode(nodeText).locator('button').click();
+            await getTreeNode(nodeText, exact).locator('button').click();
             await expect(openDropdown).toBeVisible({ timeout: 2000 });
             await openDropdown.locator(`[data-menu-id$="${addPolicyMenuIdSuffix}"]`).hover();
             await expect(submenuPopup).toBeVisible({ timeout: 2000 });
@@ -153,6 +153,24 @@ test('should traverse Traffic Hierarchy tree and verify all nodes', async ({ pag
             await expect(openDropdown).toBeVisible({ timeout: 2000 });
             await page.locator(`[data-menu-id$="${menuItemSuffix}"]`).click();
             await expect(tree.getByText(expectedText)).toBeVisible({ timeout: 2000 });
+        }).toPass({ timeout: 15_000, intervals: [500, 1000, 2000, 3000] });
+    }
+
+    async function addBackendOfType(backendType: string, expectedTreeLabel: string) {
+        const openDropdown = page.locator('.ant-dropdown:not(.ant-dropdown-hidden)');
+        const backendSubmenu = page.locator('.ant-dropdown-menu-submenu-popup').filter({ visible: true });
+        await expect(async () => {
+            if (await openDropdown.isVisible()) {
+                await page.keyboard.press('Escape');
+                await openDropdown.waitFor({ state: 'hidden', timeout: 2000 });
+            }
+            await getTreeNode('route').locator('button').click();
+            await expect(openDropdown).toBeVisible({ timeout: 2000 });
+            await page.locator('[data-menu-id$="-addBackend"]').hover();
+            await expect(backendSubmenu).toBeVisible({ timeout: 2000 });
+            // Scope the click to the submenu to avoid ambiguous selectors (e.g. -mcp)
+            await backendSubmenu.locator(`[data-menu-id$="-${backendType}"]`).click();
+            await expect(tree.getByText(expectedTreeLabel)).toBeVisible({ timeout: 2000 });
         }).toPass({ timeout: 15_000, intervals: [500, 1000, 2000, 3000] });
     }
 
@@ -203,24 +221,19 @@ test('should traverse Traffic Hierarchy tree and verify all nodes', async ({ pag
     await clickMenuItemAndExpect('listener', '-addRoute', 'route');
     // Verify all route-scope policies are in the Add Policy submenu
     await verifyAddPolicyMenu('route', 'route');
-    // Add Backend — hover "Add Backend" submenu, then pick "Host"
-    // describeBackend() returns label "Host" for a host-type backend
-    {
-        const openDropdown = page.locator('.ant-dropdown:not(.ant-dropdown-hidden)');
-        const backendSubmenu = page.locator('.ant-dropdown-menu-submenu-popup').filter({ visible: true });
-        await expect(async () => {
-            if (await openDropdown.isVisible()) {
-                await page.keyboard.press('Escape');
-                await openDropdown.waitFor({ state: 'hidden', timeout: 2000 });
-            }
-            await getTreeNode('route').locator('button').click();
-            await expect(openDropdown).toBeVisible({ timeout: 2000 });
-            await page.locator('[data-menu-id$="-addBackend"]').hover();
-            await expect(backendSubmenu).toBeVisible({ timeout: 2000 });
-            await page.locator('[data-menu-id$="-host"]').click();
-            await expect(tree.getByText('Host')).toBeVisible({ timeout: 2000 });
-        }).toPass({ timeout: 15_000, intervals: [500, 1000, 2000, 3000] });
-    }
-    // Verify all backend-scope policies are in the Add Policy submenu
+    // Add Backend — Host and verify policies
+    await addBackendOfType('host', 'Host');
     await verifyAddPolicyMenu('Host', 'backend');
+    // Add Backend - Service and verify poliices
+    await addBackendOfType('service', 'Service');
+    await verifyAddPolicyMenu('Service', 'backend');
+    // Add Backend - Dynamic and verify policies
+    await addBackendOfType('dynamic', 'Backend');
+    await verifyAddPolicyMenu('Backend', 'backend');
+    // Add Backend - MCP and verify policies
+    await addBackendOfType('mcp', 'MCP');
+    await verifyAddPolicyMenu('MCP', 'backend', true);
+    // Add Backend - AI and verify policies
+    await addBackendOfType('ai', 'AI');
+    await verifyAddPolicyMenu('AI', 'backend', true);
 });
