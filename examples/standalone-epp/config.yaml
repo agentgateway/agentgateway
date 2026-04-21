@@ -1,8 +1,10 @@
 # yaml-language-server: $schema=../../schema/local.json
 binds:
-- port: 3000
+- port: 8081
   listeners:
-  - routes:
+  - name: default
+    protocol: HTTP
+    routes:
     - name: standalone-epp
       matches:
       - path:

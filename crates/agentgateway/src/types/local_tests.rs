@@ -199,11 +199,6 @@ async fn test_health_config() {
 }
 
 #[tokio::test]
-async fn test_inference_routing_config() {
-	test_config_parsing("inference_routing").await;
-}
-
-#[tokio::test]
 async fn test_inference_routing_requires_service_backend() {
 	let input = r#"
 binds:
@@ -225,6 +220,28 @@ binds:
 			.contains("inferenceRouting is only supported on service route backends"),
 		"unexpected error: {err}"
 	);
+}
+
+#[tokio::test]
+async fn test_inference_routing_service_backend_config() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - service:
+          name: default/my-model
+          port: 8000
+        policies:
+          inferenceRouting:
+            endpointPicker:
+              host: 127.0.0.1:9002
+"#;
+
+	normalize_test_config(input)
+		.await
+		.expect("service backends should allow inference routing");
 }
 
 #[tokio::test]
