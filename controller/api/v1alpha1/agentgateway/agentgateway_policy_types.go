@@ -1050,7 +1050,7 @@ type AwsAuth struct {
 
 type AzureAuth struct {
 	// `secretRef` references a Kubernetes `Secret` containing the Azure
-	// credentials. The `Secret` must have keys `clientId`, `tenantId`, and
+	// credentials. The `Secret` must have keys `clientID`, `tenantID`, and
 	// `clientSecret`.
 	//
 	// +optional
