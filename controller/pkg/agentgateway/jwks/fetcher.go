@@ -335,6 +335,14 @@ func (f *Fetcher) AddOrUpdateKeyset(source JwksSource) error {
 		return fmt.Errorf("error parsing jwks url %w", err)
 	}
 
+	nextFetchAt := time.Now()
+	if cached, ok := f.cache.GetJwks(source.RequestKey); ok && !cached.FetchedAt.IsZero() {
+		expiresAt := cached.FetchedAt.Add(source.TTL)
+		if expiresAt.After(nextFetchAt) {
+			nextFetchAt = expiresAt
+		}
+	}
+
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -342,7 +350,7 @@ func (f *Fetcher) AddOrUpdateKeyset(source JwksSource) error {
 	state.generation++
 	state.source = source
 	f.requests[source.RequestKey] = state
-	f.scheduleAtLocked(source.RequestKey, state.generation, time.Now(), 0)
+	f.scheduleAtLocked(source.RequestKey, state.generation, nextFetchAt, 0)
 
 	return nil
 }

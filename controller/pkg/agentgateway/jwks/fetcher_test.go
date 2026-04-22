@@ -79,6 +79,52 @@ func TestAddOrUpdateKeysetReplacesExistingScheduleEntry(t *testing.T) {
 	assert.Equal(t, uint64(2), fetch.Generation)
 }
 
+func TestAddOrUpdateKeysetUsesFreshCachedFetchedAtToDelayStartupRefresh(t *testing.T) {
+	f := NewFetcher(NewCache())
+	source := testSource()
+	freshFetchedAt := time.Now().Add(-1 * time.Minute).UTC()
+	f.cache.keysets[source.RequestKey] = Keyset{
+		RequestKey: source.RequestKey,
+		URL:        source.Target.URL,
+		FetchedAt:  freshFetchedAt,
+		JwksJSON:   sampleJWKS,
+	}
+
+	assert.NoError(t, f.AddOrUpdateKeyset(source))
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	fetch := f.schedule.Peek()
+	require.NotNil(t, fetch)
+	assert.Equal(t, source.RequestKey, fetch.RequestKey)
+	assert.WithinDuration(t, freshFetchedAt.Add(source.TTL), fetch.At, time.Second)
+}
+
+func TestAddOrUpdateKeysetImmediatelyRefreshesStaleCachedKeyset(t *testing.T) {
+	f := NewFetcher(NewCache())
+	source := testSource()
+	f.cache.keysets[source.RequestKey] = Keyset{
+		RequestKey: source.RequestKey,
+		URL:        source.Target.URL,
+		FetchedAt:  time.Now().Add(-2 * source.TTL).UTC(),
+		JwksJSON:   sampleJWKS,
+	}
+
+	before := time.Now()
+	assert.NoError(t, f.AddOrUpdateKeyset(source))
+	after := time.Now()
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	fetch := f.schedule.Peek()
+	require.NotNil(t, fetch)
+	assert.Equal(t, source.RequestKey, fetch.RequestKey)
+	assert.False(t, fetch.At.Before(before))
+	assert.False(t, fetch.At.After(after))
+}
+
 func TestFetcherWithEmptyJwksFetchSchedule(t *testing.T) {
 	ctx := t.Context()
 
