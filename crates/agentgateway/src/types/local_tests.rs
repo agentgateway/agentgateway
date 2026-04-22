@@ -102,20 +102,8 @@ async fn normalize_test_yaml(yaml: &str) -> anyhow::Result<NormalizedLocalConfig
 	.await
 }
 
-fn make_test_client() -> client::Client {
-	client::Client::new(
-		&client::Config {
-			resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
-			resolver_opts: hickory_resolver::config::ResolverOpts::default(),
-		},
-		None,
-		BackendConfig::default(),
-		None,
-	)
-}
-
 async fn normalize_test_config(yaml_str: &str) -> anyhow::Result<NormalizedLocalConfig> {
-	let client = make_test_client();
+	let client = test_client();
 	let config = crate::config::parse_config(yaml_str.to_string(), None).unwrap();
 
 	NormalizedLocalConfig::from(
