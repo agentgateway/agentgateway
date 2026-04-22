@@ -35,7 +35,7 @@ type AgentgatewayPolicy struct {
 
 	// status defines the current state of AgentgatewayPolicy.
 	// +optional
-	Status gwv1.PolicyStatus `json:"status,omitempty"`
+	Status gwv1.PolicyStatus `json:"status,omitzero"`
 	// TODO: embed this into a typed Status field when
 	// https://github.com/kubernetes/kubernetes/issues/131533 is resolved
 }
@@ -50,6 +50,7 @@ type AgentgatewayPolicyList struct {
 // +kubebuilder:validation:ExactlyOneOf=targetRefs;targetSelectors
 // +kubebuilder:validation:XValidation:rule="has(self.traffic) || has(self.frontend) || has(self.backend)",message="At least one of traffic, frontend, or backend must be provided."
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.mcp) || ((!has(self.targetRefs) || !self.targetRefs.exists(t, t.kind == 'Service')) && (!has(self.targetSelectors) || !self.targetSelectors.exists(t, t.kind == 'Service')))",message="backend.mcp may not be used with a Service target"
+// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.mcp) || ((!has(self.targetRefs) || !self.targetRefs.exists(t, t.kind == 'AgentgatewayBackend' && has(t.sectionName))) && (!has(self.targetSelectors) || !self.targetSelectors.exists(t, t.kind == 'AgentgatewayBackend' && has(t.sectionName))))",message="backend.mcp may not target an AgentgatewayBackend sectionName"
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.ai) || ((!has(self.targetRefs) || !self.targetRefs.exists(t, t.kind == 'Service')) && (!has(self.targetSelectors) || !self.targetSelectors.exists(t, t.kind == 'Service')))",message="backend.ai may not be used with a Service target"
 // +kubebuilder:validation:XValidation:rule="!(has(self.traffic) && has(self.traffic.jwtAuthentication) && has(self.backend) && has(self.backend.mcp) && has(self.backend.mcp.authentication))",message="traffic.jwtAuthentication may not be used with backend.mcp.authentication in the same policy"
 // +kubebuilder:validation:XValidation:rule="has(self.frontend) && has(self.targetRefs) ? self.targetRefs.all(t, t.kind == 'Gateway' && !has(t.sectionName)) : true",message="the 'frontend' field can only target a Gateway"
@@ -145,17 +146,9 @@ type BackendSimple struct {
 	// +optional
 	Tunnel *BackendTunnel `json:"tunnel,omitempty"`
 
-	// transformation is used to mutate and transform requests and responses sent to and from the backend.
-	// +optional
-	Transformation *Transformation `json:"transformation,omitempty"`
-
 	// `auth` defines settings for managing authentication to the backend.
 	// +optional
 	Auth *BackendAuth `json:"auth,omitempty"`
-
-	// health defines settings for passive and active health checking.
-	// +optional
-	Health *Health `json:"health,omitempty"`
 }
 
 type Health struct {
@@ -221,16 +214,6 @@ type BackendEviction struct {
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
-type BackendWithMCP struct {
-	BackendSimple `json:",inline"`
-
-	// `mcp` specifies settings for MCP workloads. This is only applicable when
-	// connecting to a `Backend` of type `mcp`.
-	// +optional
-	MCP *BackendMCP `json:"mcp,omitempty"`
-}
-
-// +kubebuilder:validation:AtLeastOneFieldSet
 type BackendWithAI struct {
 	BackendSimple `json:",inline"`
 
@@ -238,6 +221,14 @@ type BackendWithAI struct {
 	// connecting to a `Backend` of type `ai`.
 	// +optional
 	AI *BackendAI `json:"ai,omitempty"`
+
+	// transformation is used to mutate and transform requests and responses sent to and from the backend.
+	// +optional
+	Transformation *Transformation `json:"transformation,omitempty"`
+
+	// health defines settings for passive and active health checking.
+	// +optional
+	Health *Health `json:"health,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -251,8 +242,17 @@ type BackendFull struct {
 
 	// `mcp` specifies settings for MCP workloads. This is only applicable when
 	// connecting to a `Backend` of type `mcp`.
+	//
 	// +optional
 	MCP *BackendMCP `json:"mcp,omitempty"`
+
+	// transformation is used to mutate and transform requests and responses sent to and from the backend.
+	// +optional
+	Transformation *Transformation `json:"transformation,omitempty"`
+
+	// health defines settings for passive and active health checking.
+	// +optional
+	Health *Health `json:"health,omitempty"`
 }
 
 // +kubebuilder:validation:MinLength=1
@@ -425,6 +425,13 @@ type FrontendHTTP struct {
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http2KeepaliveTimeout must be at least 1 second"
 	// +optional
 	HTTP2KeepaliveTimeout *metav1.Duration `json:"http2KeepaliveTimeout,omitempty"`
+	// `maxConnectionDuration` specifies the maximum time a connection is allowed to remain open.
+	// After this duration, the connection is gracefully closed after the current in-flight request completes.
+	// Useful for ensuring even traffic distribution behind load balancers during scaling events.
+	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="maxConnectionDuration must be at least 1 second"
+	// +optional
+	MaxConnectionDuration *metav1.Duration `json:"maxConnectionDuration,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -667,6 +674,39 @@ const (
 	JWTAuthenticationModePermissive JWTAuthenticationMode = "Permissive"
 )
 
+// +kubebuilder:validation:ExactlyOneOf=header;queryParameter;cookie
+type AuthorizationLocation struct {
+	// +optional
+	Header *AuthorizationHeaderLocation `json:"header,omitempty"`
+	// +optional
+	QueryParameter *AuthorizationQueryParameterLocation `json:"queryParameter,omitempty"`
+	// +optional
+	Cookie *AuthorizationCookieLocation `json:"cookie,omitempty"`
+}
+
+type AuthorizationHeaderLocation struct {
+	// +required
+	Name gwv1.HTTPHeaderName `json:"name"`
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=256
+	// +optional
+	Prefix *string `json:"prefix,omitempty"`
+}
+
+type AuthorizationQueryParameterLocation struct {
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=256
+	// +required
+	Name string `json:"name"`
+}
+
+type AuthorizationCookieLocation struct {
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=256
+	// +required
+	Name string `json:"name"`
+}
+
 // +kubebuilder:validation:XValidation:rule="!has(self.mcp) || size(self.providers) == 1",message="jwtAuthentication.mcp requires exactly one provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.mcp) || !has(self.mode) || self.mode == 'Strict'",message="jwtAuthentication.mcp requires mode Strict"
 type JWTAuthentication struct {
@@ -680,6 +720,11 @@ type JWTAuthentication struct {
 	// +required
 	Providers []JWTProvider `json:"providers"`
 
+	// `location` controls where JWT credentials are read from.
+	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
+
 	// `mcp` optionally enables MCP OAuth metadata endpoint handling
 	// and MCP-specific authentication behavior on top of standard JWT validation.
 	// When set, the gateway will serve the MCP OAuth metadata discovery endpoints.
@@ -689,12 +734,12 @@ type JWTAuthentication struct {
 
 type JWTProvider struct {
 	// `issuer` identifies the IdP that issued the JWT. This corresponds to the
-	// `iss` claim (https://tools.ietf.org/html/rfc7519#section-4.1.1).
+	// `iss` claim ([RFC 7519 §4.1.1](https://tools.ietf.org/html/rfc7519#section-4.1.1)).
 	// +required
 	Issuer ShortString `json:"issuer"`
 	// `audiences` specifies the list of allowed audiences that are allowed
 	// access. This corresponds to the `aud` claim
-	// (https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3).
+	// ([RFC 7519 §4.1.3](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3)).
 	// If unset, any audience is allowed.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
@@ -816,6 +861,11 @@ type BasicAuthentication struct {
 	//	    bob:$apr1$Ukb5LgRD$EPY2lIfY.A54jzLELNIId/
 	// +optional
 	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+
+	// `location` controls where Basic credentials are read from.
+	// If omitted, credentials are read from the `Authorization` header with the `Basic ` prefix.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Strict;Optional
@@ -897,6 +947,11 @@ type APIKeyAuthentication struct {
 	//	  client2: "k-456"
 	// +optional
 	SecretSelector *SecretSelector `json:"secretSelector,omitempty"`
+
+	// `location` controls where API keys are read from.
+	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
 }
 
 type SecretSelector struct {
@@ -913,6 +968,7 @@ const (
 )
 
 // +kubebuilder:validation:ExactlyOneOf=key;secretRef;passthrough;aws;azure;gcp
+// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key or passthrough auth"
 type BackendAuth struct {
 	// `key` provides an inline key to use as the value of the
 	// `Authorization` header. This option is the least secure; usage of a
@@ -933,7 +989,6 @@ type BackendAuth struct {
 	// request, the original token would be unchanged, so this would have no effect.
 	// +optional
 	Passthrough *BackendAuthPassthrough `json:"passthrough,omitempty"`
-	// TODO: azure, gcp
 
 	// Auth specifies an explicit AWS authentication method for the backend.
 	// When omitted, we will try to use the default AWS SDK authentication methods.
@@ -951,6 +1006,12 @@ type BackendAuth struct {
 	//
 	// +optional
 	GCP *GcpAuth `json:"gcp,omitempty"`
+
+	// `location` controls where  backend credentials are inserted.
+	// If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
+	// This applies to `key`, `secretRef`, and `passthrough`.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=AccessToken;IdToken
@@ -989,7 +1050,7 @@ type AwsAuth struct {
 
 type AzureAuth struct {
 	// `secretRef` references a Kubernetes `Secret` containing the Azure
-	// credentials. The `Secret` must have keys `clientId`, `tenantId`, and
+	// credentials. The `Secret` must have keys `clientID`, `tenantID`, and
 	// `clientSecret`.
 	//
 	// +optional
@@ -1116,6 +1177,10 @@ type BackendMCP struct {
 	// +optional
 	Authorization *shared.Authorization `json:"authorization,omitempty"`
 	// `authentication` defines `MCPBackend`-specific authentication rules.
+	//
+	// This field is deprecated; prefer to use traffic policy `jwtAuthentication.mcp`, which ensures authentication runs before
+	// other policies such as transformation and rate limiting.
+	//
 	// +optional
 	Authentication *MCPAuthentication `json:"authentication,omitempty"`
 }
@@ -1131,13 +1196,13 @@ type MCPAuthentication struct {
 	McpIDP *McpIDP `json:"provider,omitempty"`
 
 	// `issuer` identifies the IdP that issued the JWT. This corresponds to the
-	// `iss` claim (https://tools.ietf.org/html/rfc7519#section-4.1.1).
+	// `iss` claim ([RFC 7519 §4.1.1](https://tools.ietf.org/html/rfc7519#section-4.1.1)).
 	// +optional
 	Issuer ShortString `json:"issuer,omitempty"`
 
 	// `audiences` specifies the list of allowed audiences that are allowed
 	// access. This corresponds to the `aud` claim
-	// (https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3).
+	// ([RFC 7519 §4.1.3](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3)).
 	// If unset, any audience is allowed.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64

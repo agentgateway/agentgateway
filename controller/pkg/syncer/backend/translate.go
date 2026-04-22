@@ -3,6 +3,7 @@ package agentgatewaybackend
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"istio.io/istio/pilot/pkg/model/kstatus"
 	"istio.io/istio/pkg/config"
@@ -17,7 +18,9 @@ import (
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	agwir "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
@@ -27,7 +30,7 @@ import (
 var logger = logging.New("agentgateway/backend")
 
 // NewBackendPlugin creates a new plugin for AgentgatewayBackends
-func NewBackendPlugin(agw *plugins.AgwCollections) plugins.AgwPlugin {
+func NewBackendPlugin(agw *plugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup) plugins.AgwPlugin {
 	return plugins.AgwPlugin{
 		ContributesBackends: map[schema.GroupKind]plugins.BackendPlugin{
 			wellknown.AgentgatewayBackendGVK.GroupKind(): {
@@ -45,6 +48,8 @@ func NewBackendPlugin(agw *plugins.AgwCollections) plugins.AgwPlugin {
 							Krt:         ctx,
 							Collections: agw,
 							References:  input.References,
+							Resolver:    resolver,
+							JWKSLookup:  jwksLookup,
 						}
 						return TranslateAgwBackend(pc, backend, input.References)
 					}, agw.KrtOpts.ToOptions("Backends")...)
@@ -81,9 +86,11 @@ func BuildAgwBackendReferences(
 			for _, p := range r.Providers {
 				if p.Policies != nil {
 					plugins.BackendReferencesFromBackendPolicy(&agentgateway.BackendFull{
-						BackendSimple: p.Policies.BackendSimple,
-						AI:            p.Policies.AI,
-						MCP:           nil,
+						BackendSimple:  p.Policies.BackendSimple,
+						AI:             p.Policies.AI,
+						MCP:            nil,
+						Transformation: p.Policies.Transformation,
+						Health:         p.Policies.Health,
 					}, app)
 				}
 			}
@@ -92,11 +99,8 @@ func BuildAgwBackendReferences(
 	if mcp := backend.Spec.MCP; mcp != nil {
 		for _, r := range mcp.Targets {
 			if r.Static != nil && r.Static.Policies != nil {
-				p := r.Static.Policies
 				plugins.BackendReferencesFromBackendPolicy(&agentgateway.BackendFull{
-					BackendSimple: p.BackendSimple,
-					MCP:           p.MCP,
-					AI:            nil,
+					BackendSimple: *r.Static.Policies,
 				}, app)
 			}
 		}
@@ -116,14 +120,19 @@ func BuildAgwBackend(
 	}
 
 	if b := backend.Spec.Static; b != nil {
+		sb := &api.StaticBackend{}
+		switch {
+		case b.UnixPath != nil:
+			sb.UnixPath = *b.UnixPath
+		default:
+			sb.Host = string(b.Host)
+			sb.Port = b.Port
+		}
 		return []*api.Backend{{
 			Key:  backend.Namespace + "/" + backend.Name,
 			Name: plugins.ResourceName(backend),
 			Kind: &api.Backend_Static{
-				Static: &api.StaticBackend{
-					Host: b.Host,
-					Port: b.Port,
-				},
+				Static: sb,
 			},
 			InlinePolicies: pols,
 		}}, errors.Join(errs...)
@@ -247,11 +256,7 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 			}
 
 			staticBackendRef := utils.InternalMCPStaticBackendName(be.Namespace, be.Name, string(target.Name))
-			pol, err := TranslateMCPBackendPolicies(ctx, be.Namespace, s.Policies)
-			if err != nil {
-				logger.Error("failed to translate static MCP backend policies", "err", err)
-				errs = append(errs, err)
-			}
+
 			staticBackend := &api.Backend{
 				Key:  staticBackendRef,
 				Name: plugins.ResourceName(be),
@@ -261,7 +266,17 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 						Port: s.Port,
 					},
 				},
-				InlinePolicies: pol,
+			}
+
+			if s.Policies != nil {
+				polt, err := TranslateBackendPolicies(ctx, be.Namespace, &agentgateway.BackendFull{
+					BackendSimple: *s.Policies,
+				})
+				if err != nil {
+					logger.Error("failed to translate static MCP backend policies", "err", err)
+					errs = append(errs, err)
+				}
+				staticBackend.InlinePolicies = polt
 			}
 			backends = append(backends, staticBackend)
 
@@ -378,19 +393,6 @@ func TranslateBackendPolicies(
 	return plugins.TranslateInlineBackendPolicy(ctx, namespace, policies)
 }
 
-func TranslateMCPBackendPolicies(
-	ctx plugins.PolicyCtx,
-	namespace string, policies *agentgateway.BackendWithMCP,
-) ([]*api.BackendPolicySpec, error) {
-	if policies == nil {
-		return nil, nil
-	}
-	return TranslateBackendPolicies(ctx, namespace, &agentgateway.BackendFull{
-		BackendSimple: policies.BackendSimple,
-		MCP:           policies.MCP,
-	})
-}
-
 func translateAIBackendPolicies(
 	ctx plugins.PolicyCtx,
 	namespace string, policies *agentgateway.BackendWithAI,
@@ -399,8 +401,10 @@ func translateAIBackendPolicies(
 		return nil, nil
 	}
 	return TranslateBackendPolicies(ctx, namespace, &agentgateway.BackendFull{
-		BackendSimple: policies.BackendSimple,
-		AI:            policies.AI,
+		BackendSimple:  policies.BackendSimple,
+		AI:             policies.AI,
+		Transformation: policies.Transformation,
+		Health:         policies.Health,
 	})
 }
 
@@ -432,11 +436,27 @@ func translateLLMProvider(llm *agentgateway.LLMProvider, providerName string) (*
 			},
 		}
 	} else if llm.AzureOpenAI != nil {
-		provider.Provider = &api.AIBackend_Provider_Azureopenai{
-			Azureopenai: &api.AIBackend_AzureOpenAI{
-				Host:       llm.AzureOpenAI.Endpoint,
-				Model:      llm.AzureOpenAI.DeploymentName,
-				ApiVersion: llm.AzureOpenAI.ApiVersion,
+		resourceName, resourceType := parseAzureEndpoint(string(llm.AzureOpenAI.Endpoint))
+		provider.Provider = &api.AIBackend_Provider_Azure{
+			Azure: &api.AIBackend_Azure{
+				ResourceName: resourceName,
+				ResourceType: resourceType,
+				Model:        llm.AzureOpenAI.DeploymentName,
+				ApiVersion:   llm.AzureOpenAI.ApiVersion,
+			},
+		}
+	} else if llm.Azure != nil {
+		resourceType := api.AIBackend_OPEN_AI
+		if llm.Azure.ResourceType == agentgateway.AzureResourceTypeFoundry {
+			resourceType = api.AIBackend_FOUNDRY
+		}
+		provider.Provider = &api.AIBackend_Provider_Azure{
+			Azure: &api.AIBackend_Azure{
+				ResourceName: string(llm.Azure.ResourceName),
+				ResourceType: resourceType,
+				Model:        llm.Azure.Model,
+				ApiVersion:   llm.Azure.ApiVersion,
+				ProjectName:  llm.Azure.ProjectName,
 			},
 		}
 	} else if llm.Anthropic != nil {
@@ -522,4 +542,20 @@ func toMCPProtocol(appProtocol string) api.MCPTarget_Protocol {
 		// should never happen since this function is only invoked for valid MCPBackend protocols
 		return api.MCPTarget_UNDEFINED
 	}
+}
+
+// parseAzureEndpoint extracts the resource name and resource type from a full
+// Azure endpoint host string (e.g. "my-resource.openai.azure.com").
+func parseAzureEndpoint(endpoint string) (string, api.AIBackend_AzureResourceType) {
+	if name, ok := strings.CutSuffix(endpoint, ".openai.azure.com"); ok {
+		return name, api.AIBackend_OPEN_AI
+	}
+	if name, ok := strings.CutSuffix(endpoint, "-resource.services.ai.azure.com"); ok {
+		return name, api.AIBackend_FOUNDRY
+	}
+	if name, ok := strings.CutSuffix(endpoint, ".services.ai.azure.com"); ok {
+		return name, api.AIBackend_FOUNDRY
+	}
+	// Fallback: treat the whole endpoint as the resource name with OpenAI type.
+	return endpoint, api.AIBackend_OPEN_AI
 }

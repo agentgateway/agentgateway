@@ -12,33 +12,30 @@ use crate::http::tests_common::*;
 use crate::store::Stores;
 use crate::types::agent::{
 	HeaderMatch, HeaderValueMatch, Listener, ListenerProtocol, MethodMatch, PathMatch, QueryMatch,
-	QueryValueMatch, Route, RouteMatch, RouteSet,
+	QueryValueMatch, Route, RouteMatch,
 };
 use crate::types::discovery::{
-	GatewayAddress, NamespacedHostname, NetworkAddress, Service, WaypointIdentity,
-	gatewayaddress::Destination,
+	GatewayAddress, NamespacedHostname, NetworkAddress, Service, gatewayaddress::Destination,
 };
 use crate::*;
 
 fn run_test(req: &Request, routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Option<String> {
 	let stores = Stores::with_ipv6_enabled(true);
-	let network = strng::literal!("network");
 	let dummy_dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 1000);
 
-	let listener = setup_listener(routes);
+	let (listener, routes) = setup_listener(routes);
+	for route in routes {
+		stores
+			.binds
+			.write()
+			.insert_route(route, listener.key.clone());
+	}
 
-	let result = super::select_best_route(
-		stores.clone(),
-		network.clone(),
-		None,
-		dummy_dest,
-		&listener,
-		req,
-	);
+	let result = super::select_best_route(stores.clone(), dummy_dest, &listener, req);
 	result.map(|(r, _)| r.key.to_string())
 }
 
-fn setup_listener(routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Arc<Listener> {
+fn setup_listener(routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> (Arc<Listener>, Vec<Route>) {
 	let mk_route = |name: &str, hostnames: Vec<&str>, matches: Vec<RouteMatch>| Route {
 		key: name.into(),
 		service_key: None,
@@ -49,22 +46,30 @@ fn setup_listener(routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Arc<Listener
 		inline_policies: vec![],
 	};
 
-	Arc::new(Listener {
-		key: Default::default(),
-		name: Default::default(),
-		hostname: Default::default(),
-		protocol: ListenerProtocol::HTTP,
-		tcp_routes: Default::default(),
-		routes: RouteSet::from_list(
-			routes
-				.iter()
-				.map(|r| {
-					let r = r.clone();
-					mk_route(r.0, r.1, r.2)
-				})
-				.collect(),
-		),
-	})
+	(
+		Arc::new(Listener {
+			key: Default::default(),
+			name: Default::default(),
+			hostname: Default::default(),
+			protocol: ListenerProtocol::HTTP,
+		}),
+		routes
+			.iter()
+			.map(|r| {
+				let r = r.clone();
+				mk_route(r.0, r.1, r.2)
+			})
+			.collect(),
+	)
+}
+
+fn attach_waypoint_service(req: &mut Request, stores: &Stores, service_key: &NamespacedHostname) {
+	let svc = stores
+		.read_discovery()
+		.services
+		.get_by_namespaced_host(service_key)
+		.expect("test service must exist in discovery store");
+	req.extensions_mut().insert(proxy::WaypointService(svc));
 }
 
 #[test]
@@ -847,8 +852,6 @@ fn hbone_listener() -> Arc<Listener> {
 		name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HBONE,
-		tcp_routes: Default::default(),
-		routes: RouteSet::from_list(vec![]),
 	})
 }
 
@@ -892,26 +895,16 @@ async fn test_waypoint_hostname_match() {
 		}),
 	);
 	let stores = stores_with_services(vec![svc]);
-	let self_id = WaypointIdentity {
-		gateway: strng::new("my-waypoint"),
-		namespace: strng::new("istio-system"),
-	};
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
-	let req = request(
+	let mut req = request(
 		"http://my-app.default.svc.cluster.local/",
 		http::Method::GET,
 		&[],
 	);
 	let listener = hbone_listener();
+	attach_waypoint_service(&mut req, &stores, &svc_nh());
 
-	let result = super::select_best_route(
-		stores,
-		strng::literal!("network"),
-		Some(&self_id),
-		dst,
-		&listener,
-		&req,
-	);
+	let result = super::select_best_route(stores, dst, &listener, &req);
 	assert!(result.is_some(), "should return default waypoint route");
 	let (route, _) = result.unwrap();
 	assert_eq!(route.key.as_str(), "_waypoint-default");
@@ -935,10 +928,6 @@ async fn test_waypoint_hostname_mismatch() {
 		}),
 	);
 	let stores = stores_with_services(vec![svc]);
-	let self_id = WaypointIdentity {
-		gateway: strng::new("my-waypoint"),
-		namespace: strng::new("istio-system"),
-	};
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
 	let req = request(
 		"http://my-app.default.svc.cluster.local/",
@@ -947,14 +936,7 @@ async fn test_waypoint_hostname_mismatch() {
 	);
 	let listener = hbone_listener();
 
-	let result = super::select_best_route(
-		stores,
-		strng::literal!("network"),
-		Some(&self_id),
-		dst,
-		&listener,
-		&req,
-	);
+	let result = super::select_best_route(stores, dst, &listener, &req);
 	assert!(
 		result.is_none(),
 		"should reject service bound to a different waypoint"
@@ -979,26 +961,16 @@ async fn test_waypoint_hostname_fqdn_match() {
 		}),
 	);
 	let stores = stores_with_services(vec![svc]);
-	let self_id = WaypointIdentity {
-		gateway: strng::new("my-waypoint"),
-		namespace: strng::new("istio-system"),
-	};
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
-	let req = request(
+	let mut req = request(
 		"http://my-app.default.svc.cluster.local/",
 		http::Method::GET,
 		&[],
 	);
 	let listener = hbone_listener();
+	attach_waypoint_service(&mut req, &stores, &svc_nh());
 
-	let result = super::select_best_route(
-		stores,
-		strng::literal!("network"),
-		Some(&self_id),
-		dst,
-		&listener,
-		&req,
-	);
+	let result = super::select_best_route(stores, dst, &listener, &req);
 	assert!(result.is_some(), "should match waypoint with FQDN hostname");
 }
 
@@ -1030,26 +1002,16 @@ async fn test_waypoint_address_match() {
 		None,
 	);
 	let stores = stores_with_services(vec![svc, waypoint_svc]);
-	let self_id = WaypointIdentity {
-		gateway: strng::new("my-waypoint"),
-		namespace: strng::new("istio-system"),
-	};
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
-	let req = request(
+	let mut req = request(
 		"http://my-app.default.svc.cluster.local/",
 		http::Method::GET,
 		&[],
 	);
 	let listener = hbone_listener();
+	attach_waypoint_service(&mut req, &stores, &svc_nh());
 
-	let result = super::select_best_route(
-		stores,
-		strng::literal!("network"),
-		Some(&self_id),
-		dst,
-		&listener,
-		&req,
-	);
+	let result = super::select_best_route(stores, dst, &listener, &req);
 	assert!(result.is_some(), "should match waypoint by address VIP");
 	let (route, _) = result.unwrap();
 	assert_eq!(route.key.as_str(), "_waypoint-default");
@@ -1082,10 +1044,6 @@ async fn test_waypoint_address_mismatch() {
 		None,
 	);
 	let stores = stores_with_services(vec![svc, waypoint_svc]);
-	let self_id = WaypointIdentity {
-		gateway: strng::new("my-waypoint"),
-		namespace: strng::new("istio-system"),
-	};
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
 	let req = request(
 		"http://my-app.default.svc.cluster.local/",
@@ -1094,14 +1052,7 @@ async fn test_waypoint_address_mismatch() {
 	);
 	let listener = hbone_listener();
 
-	let result = super::select_best_route(
-		stores,
-		strng::literal!("network"),
-		Some(&self_id),
-		dst,
-		&listener,
-		&req,
-	);
+	let result = super::select_best_route(stores, dst, &listener, &req);
 	assert!(
 		result.is_none(),
 		"should reject service bound to a different waypoint address"
@@ -1120,10 +1071,6 @@ async fn test_waypoint_no_waypoint_on_service() {
 		None, // no waypoint
 	);
 	let stores = stores_with_services(vec![svc]);
-	let self_id = WaypointIdentity {
-		gateway: strng::new("my-waypoint"),
-		namespace: strng::new("istio-system"),
-	};
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
 	let req = request(
 		"http://my-app.default.svc.cluster.local/",
@@ -1132,14 +1079,7 @@ async fn test_waypoint_no_waypoint_on_service() {
 	);
 	let listener = hbone_listener();
 
-	let result = super::select_best_route(
-		stores,
-		strng::literal!("network"),
-		Some(&self_id),
-		dst,
-		&listener,
-		&req,
-	);
+	let result = super::select_best_route(stores, dst, &listener, &req);
 	assert!(
 		result.is_none(),
 		"should return None for service without waypoint"
@@ -1172,14 +1112,7 @@ async fn test_waypoint_no_self_addr() {
 	);
 	let listener = hbone_listener();
 
-	let result = super::select_best_route(
-		stores,
-		strng::literal!("network"),
-		None, // no self_addr
-		dst,
-		&listener,
-		&req,
-	);
+	let result = super::select_best_route(stores, dst, &listener, &req);
 	assert!(
 		result.is_none(),
 		"should return None when self_addr is not configured"
@@ -1190,22 +1123,11 @@ async fn test_waypoint_no_self_addr() {
 async fn test_waypoint_unknown_vip() {
 	// Request to a VIP that doesn't match any known service
 	let stores = stores_with_services(vec![]);
-	let self_id = WaypointIdentity {
-		gateway: strng::new("my-waypoint"),
-		namespace: strng::new("istio-system"),
-	};
 	let dst = SocketAddr::new("10.0.0.200".parse().unwrap(), 80);
 	let req = request("http://unknown.svc.cluster.local/", http::Method::GET, &[]);
 	let listener = hbone_listener();
 
-	let result = super::select_best_route(
-		stores,
-		strng::literal!("network"),
-		Some(&self_id),
-		dst,
-		&listener,
-		&req,
-	);
+	let result = super::select_best_route(stores, dst, &listener, &req);
 	assert!(result.is_none(), "should return None for unknown VIP");
 }
 
@@ -1261,13 +1183,6 @@ fn waypoint_svc() -> Service {
 	)
 }
 
-fn waypoint_self_id() -> WaypointIdentity {
-	WaypointIdentity {
-		gateway: strng::new("my-waypoint"),
-		namespace: strng::new("istio-system"),
-	}
-}
-
 #[tokio::test]
 async fn test_service_route_path_match() {
 	let stores = stores_with_service_routes(
@@ -1295,40 +1210,27 @@ async fn test_service_route_path_match() {
 			),
 		],
 	);
-	let self_id = waypoint_self_id();
 	let listener = hbone_listener();
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
 
 	// /api/v1 matches the prefix route
-	let req = request(
+	let mut req = request(
 		"http://my-app.default.svc.cluster.local/api/v1",
 		http::Method::GET,
 		&[],
 	);
-	let result = super::select_best_route(
-		stores.clone(),
-		strng::literal!("network"),
-		Some(&self_id),
-		dst,
-		&listener,
-		&req,
-	);
+	attach_waypoint_service(&mut req, &stores, &svc_nh());
+	let result = super::select_best_route(stores.clone(), dst, &listener, &req);
 	assert_eq!(result.unwrap().0.key.as_str(), "api-route");
 
 	// /healthz matches the exact route (higher priority than prefix)
-	let req = request(
+	let mut req = request(
 		"http://my-app.default.svc.cluster.local/healthz",
 		http::Method::GET,
 		&[],
 	);
-	let result = super::select_best_route(
-		stores.clone(),
-		strng::literal!("network"),
-		Some(&self_id),
-		dst,
-		&listener,
-		&req,
-	);
+	attach_waypoint_service(&mut req, &stores, &svc_nh());
+	let result = super::select_best_route(stores.clone(), dst, &listener, &req);
 	assert_eq!(result.unwrap().0.key.as_str(), "health-route");
 }
 
@@ -1363,23 +1265,16 @@ async fn test_service_route_method_match() {
 			),
 		],
 	);
-	let self_id = waypoint_self_id();
 	let listener = hbone_listener();
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
 
-	let req = request(
+	let mut req = request(
 		"http://my-app.default.svc.cluster.local/",
 		http::Method::POST,
 		&[],
 	);
-	let result = super::select_best_route(
-		stores.clone(),
-		strng::literal!("network"),
-		Some(&self_id),
-		dst,
-		&listener,
-		&req,
-	);
+	attach_waypoint_service(&mut req, &stores, &svc_nh());
+	let result = super::select_best_route(stores.clone(), dst, &listener, &req);
 	assert_eq!(result.unwrap().0.key.as_str(), "post-route");
 }
 
@@ -1401,40 +1296,27 @@ async fn test_service_route_header_match() {
 			}],
 		)],
 	);
-	let self_id = waypoint_self_id();
 	let listener = hbone_listener();
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
 
 	// With matching header -> matches
-	let req = request(
+	let mut req = request(
 		"http://my-app.default.svc.cluster.local/",
 		http::Method::GET,
 		&[("x-custom", "special")],
 	);
-	let result = super::select_best_route(
-		stores.clone(),
-		strng::literal!("network"),
-		Some(&self_id),
-		dst,
-		&listener,
-		&req,
-	);
+	attach_waypoint_service(&mut req, &stores, &svc_nh());
+	let result = super::select_best_route(stores.clone(), dst, &listener, &req);
 	assert_eq!(result.unwrap().0.key.as_str(), "header-route");
 
 	// Without matching header -> GAMMA reject (service routes exist, none match)
-	let req = request(
+	let mut req = request(
 		"http://my-app.default.svc.cluster.local/",
 		http::Method::GET,
 		&[],
 	);
-	let result = super::select_best_route(
-		stores.clone(),
-		strng::literal!("network"),
-		Some(&self_id),
-		dst,
-		&listener,
-		&req,
-	);
+	attach_waypoint_service(&mut req, &stores, &svc_nh());
+	let result = super::select_best_route(stores.clone(), dst, &listener, &req);
 	assert!(
 		result.is_none(),
 		"should reject when service routes exist but none match"
@@ -1457,23 +1339,16 @@ async fn test_service_route_rejects_unmatched() {
 			}],
 		)],
 	);
-	let self_id = waypoint_self_id();
 	let listener = hbone_listener();
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
 
-	let req = request(
+	let mut req = request(
 		"http://my-app.default.svc.cluster.local/other",
 		http::Method::GET,
 		&[],
 	);
-	let result = super::select_best_route(
-		stores.clone(),
-		strng::literal!("network"),
-		Some(&self_id),
-		dst,
-		&listener,
-		&req,
-	);
+	attach_waypoint_service(&mut req, &stores, &svc_nh());
+	let result = super::select_best_route(stores.clone(), dst, &listener, &req);
 	assert!(
 		result.is_none(),
 		"GAMMA: should reject when service routes exist but none match"
@@ -1484,23 +1359,16 @@ async fn test_service_route_rejects_unmatched() {
 async fn test_no_service_routes_falls_through_to_default() {
 	// No service-keyed routes -> default passthrough route
 	let stores = stores_with_services(vec![waypoint_svc()]);
-	let self_id = waypoint_self_id();
 	let listener = hbone_listener();
 	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 80);
 
-	let req = request(
+	let mut req = request(
 		"http://my-app.default.svc.cluster.local/anything",
 		http::Method::GET,
 		&[],
 	);
-	let result = super::select_best_route(
-		stores,
-		strng::literal!("network"),
-		Some(&self_id),
-		dst,
-		&listener,
-		&req,
-	);
+	attach_waypoint_service(&mut req, &stores, &svc_nh());
+	let result = super::select_best_route(stores, dst, &listener, &req);
 	assert!(
 		result.is_some(),
 		"should fall through to default route when no service routes"
@@ -1532,32 +1400,28 @@ fn bench(b: Bencher, (host, route): (u64, u64)) {
 		name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HTTP,
-		tcp_routes: Default::default(),
-		routes: RouteSet::from_list(
-			routes
-				.into_iter()
-				.map(|(name, host, matches)| Route {
-					key: name.into(),
-					service_key: None,
-					name: Default::default(),
-					hostnames: host.into_iter().map(|s| s.into()).collect(),
-					matches,
-					backends: vec![],
-					inline_policies: vec![],
-				})
-				.collect(),
-		),
 	});
 	let stores = Stores::with_ipv6_enabled(true);
-	let network = strng::literal!("network");
+	for route in routes.into_iter().map(|(name, host, matches)| Route {
+		key: name.into(),
+		service_key: None,
+		name: Default::default(),
+		hostnames: host.into_iter().map(|s| s.into()).collect(),
+		matches,
+		backends: vec![],
+		inline_policies: vec![],
+	}) {
+		stores
+			.binds
+			.write()
+			.insert_route(route, listener.key.clone());
+	}
 	let dummy_dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 1000);
 	let req = request("http://example.com", http::Method::GET, &[]);
 
 	b.bench_local(|| {
 		divan::black_box(super::select_best_route(
 			stores.clone(),
-			network.clone(),
-			None,
 			dummy_dest,
 			&listener,
 			divan::black_box(&req),

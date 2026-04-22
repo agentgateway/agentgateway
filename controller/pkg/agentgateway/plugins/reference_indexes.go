@@ -13,12 +13,13 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 type ReferenceTypes struct {
-	PolicyTargets func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) (*api.PolicyTarget, bool)
+	PolicyTargets func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) ([]*api.PolicyTarget, bool)
 	PolicyBackend func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error)
 	RouteBackend  func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error)
 }
@@ -43,29 +44,29 @@ func (e *BackendReferenceError) Error() string {
 func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 	return ReferenceTypes{
 		// AgentgatewayPolicy targets
-		PolicyTargets: func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) (*api.PolicyTarget, bool) {
+		PolicyTargets: func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) ([]*api.PolicyTarget, bool) {
 			key := namespace + "/" + string(name)
 			switch gk {
 			case wellknown.GatewayGVK.GroupKind():
-				return &api.PolicyTarget{
+				return []*api.PolicyTarget{{
 					Kind: utils.GatewayTarget(namespace, string(name), sectionName),
-				}, ptr.Flatten(krt.FetchOne(krtctx, agw.Gateways, krt.FilterKey(key))) != nil
+				}}, ptr.Flatten(krt.FetchOne(krtctx, agw.Gateways, krt.FilterKey(key))) != nil
 			case wellknown.HTTPRouteGVK.GroupKind():
-				return &api.PolicyTarget{
+				return []*api.PolicyTarget{{
 					Kind: utils.RouteTarget(namespace, string(name), wellknown.HTTPRouteGVK.Kind, sectionName),
-				}, ptr.Flatten(krt.FetchOne(krtctx, agw.HTTPRoutes, krt.FilterKey(key))) != nil
+				}}, ptr.Flatten(krt.FetchOne(krtctx, agw.HTTPRoutes, krt.FilterKey(key))) != nil
 			case wellknown.GRPCRouteGVK.GroupKind():
-				return &api.PolicyTarget{
+				return []*api.PolicyTarget{{
 					Kind: utils.RouteTarget(namespace, string(name), wellknown.GRPCRouteGVK.Kind, sectionName),
-				}, ptr.Flatten(krt.FetchOne(krtctx, agw.GRPCRoutes, krt.FilterKey(key))) != nil
+				}}, ptr.Flatten(krt.FetchOne(krtctx, agw.GRPCRoutes, krt.FilterKey(key))) != nil
 			case wellknown.AgentgatewayBackendGVK.GroupKind():
-				return &api.PolicyTarget{
+				return []*api.PolicyTarget{{
 					Kind: utils.BackendTarget(namespace, string(name), sectionName),
-				}, ptr.Flatten(krt.FetchOne(krtctx, agw.Backends, krt.FilterKey(key))) != nil
+				}}, ptr.Flatten(krt.FetchOne(krtctx, agw.Backends, krt.FilterKey(key))) != nil
 			case wellknown.ServiceGVK.GroupKind():
-				return &api.PolicyTarget{
+				return []*api.PolicyTarget{{
 					Kind: utils.ServiceTarget(namespace, string(name), sectionName),
-				}, ptr.Flatten(krt.FetchOne(krtctx, agw.Services, krt.FilterKey(key))) != nil
+				}}, ptr.Flatten(krt.FetchOne(krtctx, agw.Services, krt.FilterKey(key))) != nil
 			}
 			return nil, false
 		},
@@ -156,7 +157,14 @@ func DefaultRouteBackend(krtctx krt.HandlerContext, agw *AgwCollections, default
 				Namespace: ns,
 			},
 		}
-		ref.Port = uint32(svc.Spec.TargetPorts[0].Number) //nolint:gosec // G115: validated 1-65535
+		backendPort, err := utils.InferencePoolBackendPort(svc)
+		if err != nil {
+			return ref, &BackendReferenceError{
+				Reason:  BackendReferenceErrorReasonUnsupportedValue,
+				Message: err.Error(),
+			}
+		}
+		ref.Port = backendPort
 	case wellknown.ServiceGVK.GroupKind():
 		if strings.Contains(string(name), ".") {
 			return ref, &BackendReferenceError{
@@ -275,13 +283,13 @@ func (p ReferenceIndex) LookupGatewaysForTarget(ctx krt.HandlerContext, object u
 		return sets.New(object.NamespacedName)
 	case wellknown.HTTPRouteGVK.Kind, wellknown.GRPCRouteGVK.Kind, wellknown.TCPRouteGVK.Kind, wellknown.TLSRouteGVK.Kind:
 		gateways := sets.New[types.NamespacedName]()
-		for _, ancestor := range krt.FetchOne(ctx, p.attachments, krt.FilterKey(object.String())).Objects {
+		for _, ancestor := range krtutil.FetchIndexObjects(ctx, p.attachments, object) {
 			gateways.Insert(ancestor.Gateway)
 		}
 		return gateways
 	default:
 		gateways := sets.New[types.NamespacedName]()
-		for _, ancestor := range krt.FetchOne(ctx, p.Ancestors, krt.FilterKey(object.String())).Objects {
+		for _, ancestor := range krtutil.FetchIndexObjects(ctx, p.Ancestors, object) {
 			gateways.Insert(ancestor.Gateway)
 		}
 		return gateways
@@ -289,24 +297,37 @@ func (p ReferenceIndex) LookupGatewaysForTarget(ctx krt.HandlerContext, object u
 }
 
 func (p ReferenceIndex) LookupGatewaysForBackend(ctx krt.HandlerContext, object utils.TypedNamespacedName) sets.Set[types.NamespacedName] {
-	return p.lookupGatewaysForBackend(ctx, object, map[string]struct{}{})
+	return p.lookupGatewaysForBackend(ctx, object, sets.New[utils.TypedNamespacedName]())
 }
 
-func (p ReferenceIndex) lookupGatewaysForBackend(ctx krt.HandlerContext, object utils.TypedNamespacedName, seen map[string]struct{}) sets.Set[types.NamespacedName] {
-	key := object.String()
-	if _, ok := seen[key]; ok {
+func (p ReferenceIndex) lookupGatewaysForBackend(ctx krt.HandlerContext, object utils.TypedNamespacedName, seen sets.Set[utils.TypedNamespacedName]) sets.Set[types.NamespacedName] {
+	if seen.InsertContains(object) {
 		return sets.New[types.NamespacedName]()
 	}
-	seen[key] = struct{}{}
 
 	base := p.LookupGatewaysForTarget(ctx, object)
 	if p.PolicyAttachments == nil {
 		return base
 	}
-	for _, pref := range krt.FetchOne(ctx, p.PolicyAttachments, krt.FilterKey(key)).Objects {
+	for _, pref := range krtutil.FetchIndexObjects(ctx, p.PolicyAttachments, object) {
 		base = base.Union(p.lookupGatewaysForBackend(ctx, pref.Target, seen))
 	}
 	return base
+}
+
+func IsBackendLikeTarget(policyTarget *api.PolicyTarget) bool {
+	return policyTarget.GetBackend() != nil || policyTarget.GetService() != nil
+}
+
+// TODO: PolicyAttachment and AncestorBackend are keyed by root object only (no port/section).
+// This means section-scoped targets (e.g. svc-a:9090 vs svc-a:8080) chain identically in the
+// recursive graph, causing over-attachment. A follow-up should add section-aware indexing to
+// support scoped recursive chaining without over-attachment.
+func (p ReferenceIndex) LookupGatewaysForPolicyTarget(ctx krt.HandlerContext, object utils.TypedNamespacedName, policyTarget *api.PolicyTarget) sets.Set[types.NamespacedName] {
+	if IsBackendLikeTarget(policyTarget) {
+		return p.LookupGatewaysForBackend(ctx, object)
+	}
+	return p.LookupGatewaysForTarget(ctx, object)
 }
 
 func (p ReferenceIndex) WithPolicyAttachments(references krt.IndexCollection[utils.TypedNamespacedName, *PolicyAttachment]) ReferenceIndex {
@@ -314,7 +335,7 @@ func (p ReferenceIndex) WithPolicyAttachments(references krt.IndexCollection[uti
 	return p
 }
 
-func (p ReferenceIndex) PolicyTarget(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) (*api.PolicyTarget, bool) {
+func (p ReferenceIndex) PolicyTarget(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) ([]*api.PolicyTarget, bool) {
 	return p.explicitReferences.PolicyTargets(krtctx, namespace, name, gk, sectionName)
 }
 

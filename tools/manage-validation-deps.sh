@@ -3,8 +3,11 @@
 set -euo pipefail
 
 KEYCLOAK_BASE_URL="http://localhost:7080"
-# Wait for JWKS to ensure realm import completed
-KEYCLOAK_REALM_JWKS_ENDPOINT="$KEYCLOAK_BASE_URL/realms/mcp/protocol/openid-connect/certs"
+# Wait for JWKS endpoints to ensure realm import completed.
+KEYCLOAK_REALM_JWKS_ENDPOINTS=(
+  "$KEYCLOAK_BASE_URL/realms/mcp/protocol/openid-connect/certs"
+  "$KEYCLOAK_BASE_URL/realms/agentgateway/protocol/openid-connect/certs"
+)
 
 wait_for_http_ok() {
   local url="$1"
@@ -42,11 +45,15 @@ case "${1:-}" in
     docker compose up -d
     popd >/dev/null
 
-    # Realm import may complete after container is up; wait for JWKS specifically
-    if ! wait_for_http_ok "$KEYCLOAK_REALM_JWKS_ENDPOINT" 240 3; then
-      echo "Keycloak realm JWKS endpoint did not become available in time" >&2
-      exit 1
-    fi
+    # Realm import may complete after container is up; wait for each imported realm's
+    # JWKS specifically so example validation can rely on discovery-backed providers.
+    for jwks_endpoint in "${KEYCLOAK_REALM_JWKS_ENDPOINTS[@]}"; do
+      if ! wait_for_http_ok "$jwks_endpoint" 240 1; then
+        echo "Keycloak realm JWKS endpoint did not become available in time: $jwks_endpoint" >&2
+        exit 1
+      fi
+    done
+    docker logs keycloak
     ;;
   stop)
     pkill -f "examples/mcp-authentication/auth_server.py" 2>/dev/null || true

@@ -32,6 +32,12 @@ pub struct GuardrailContentBlock {
 	pub text: GuardrailTextBlock,
 }
 
+/// Output content from guardrail with masked/anonymized text
+#[derive(Debug, Clone, Deserialize)]
+pub struct GuardrailOutputContent {
+	pub text: String,
+}
+
 /// Request body for ApplyGuardrail API
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -58,12 +64,64 @@ pub enum GuardrailAction {
 pub struct ApplyGuardrailResponse {
 	/// The action taken by the guardrail
 	pub action: GuardrailAction,
+	/// Outputs with masked text (if configured with mask)
+	#[serde(default)]
+	pub outputs: Vec<GuardrailOutputContent>,
+	/// Assessment details containing action type (BLOCKED, ANONYMIZED, etc.)
+	#[serde(default)]
+	pub assessments: Vec<serde_json::Value>,
 }
 
 impl ApplyGuardrailResponse {
-	/// Returns true if the guardrail intervened
+	/// Returns true if the guardrail blocked content
 	pub fn is_blocked(&self) -> bool {
-		self.action == GuardrailAction::GuardrailIntervened
+		self.action == GuardrailAction::GuardrailIntervened && self.has_blocked_assessment()
+	}
+
+	/// Returns true if the guardrail anonymized/masked content
+	pub fn is_anonymized(&self) -> bool {
+		self.action == GuardrailAction::GuardrailIntervened && !self.has_blocked_assessment()
+	}
+
+	/// Returns the masked output texts
+	pub fn output_texts(&self) -> Vec<String> {
+		self.outputs.iter().map(|o| o.text.clone()).collect()
+	}
+
+	/// Check if any assessment contains a BLOCKED action
+	fn has_blocked_assessment(&self) -> bool {
+		self.assessments.iter().any(Self::value_contains_blocked)
+	}
+
+	/// Search for "action": "BLOCKED" in JSON value
+	fn value_contains_blocked(value: &serde_json::Value) -> bool {
+		match value {
+			serde_json::Value::Object(map) => {
+				if let Some(serde_json::Value::String(action)) = map.get("action")
+					&& action == "BLOCKED"
+				{
+					return true;
+				}
+				map.values().any(Self::value_contains_blocked)
+			},
+			serde_json::Value::Array(arr) => arr.iter().any(Self::value_contains_blocked),
+			_ => false,
+		}
+	}
+}
+
+impl BedrockGuardrails {
+	/// User-provided policies come first so they take precedence during resolution
+	/// then system TLS and implicit AWS auth are appended as fallbacks.
+	pub(crate) fn build_request_policies(&self) -> Vec<BackendPolicy> {
+		let mut pols: Vec<BackendPolicy> = self.policies.to_vec();
+		pols.push(BackendPolicy::BackendTLS(
+			crate::http::backendtls::SYSTEM_TRUST.clone(),
+		));
+		pols.push(BackendPolicy::BackendAuth(BackendAuth::Aws(
+			AwsAuth::Implicit {},
+		)));
+		pols
 	}
 }
 
@@ -139,12 +197,7 @@ async fn send_guardrail_request(
 		"Sending Bedrock guardrail request"
 	);
 
-	let mut pols = vec![
-		BackendPolicy::BackendTLS(crate::http::backendtls::SYSTEM_TRUST.clone()),
-		// Default to implicit AWS auth
-		BackendPolicy::BackendAuth(BackendAuth::Aws(AwsAuth::Implicit {})),
-	];
-	pols.extend(guardrails.policies.iter().cloned());
+	let pols = guardrails.build_request_policies();
 
 	// AWS requires both Content-Type and Accept headers
 	let mut rb = ::http::Request::builder()
@@ -168,7 +221,7 @@ async fn send_guardrail_request(
 	);
 
 	let resp = client
-		.call_with_explicit_policies(req, mock_be, pols)
+		.call_with_explicit_policies_list(req, mock_be, pols)
 		.await?;
 
 	let status = resp.status();
@@ -200,6 +253,13 @@ async fn send_guardrail_request(
 			guardrail_version = %guardrails.guardrail_version,
 			source = ?source,
 			"Bedrock guardrail blocked content"
+		);
+	} else if resp.is_anonymized() {
+		tracing::debug!(
+			guardrail_id = %guardrails.guardrail_identifier,
+			guardrail_version = %guardrails.guardrail_version,
+			source = ?source,
+			"Bedrock guardrail anonymized content"
 		);
 	}
 

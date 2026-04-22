@@ -17,7 +17,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
-	"github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
+	agentgatewaybackend "github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
 
@@ -131,6 +131,56 @@ func TestBuildMCP(t *testing.T) {
 				},
 			},
 			inputs: []any{createMockMCPServiceWithProtocol("test-ns", "mcp-service", "app=mcp-server", "agentgateway.dev/mcp")},
+		},
+		{
+			name: "Service selector MCPBackend backend - legacy annotation path",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "service-mcp-backend-legacy",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Selector: &agentgateway.McpSelector{
+									Service: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"app": "mcp-server-legacy",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			inputs: []any{createMockMCPServiceWithLegacyAnnotation("test-ns", "mcp-service-legacy", "app=mcp-server-legacy", "/legacy/mcp/path")},
+		},
+		{
+			name: "Service selector MCPBackend backend - new annotation takes precedence",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "service-mcp-backend-precedence",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Selector: &agentgateway.McpSelector{
+									Service: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"app": "mcp-server-both",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			inputs: []any{createMockMCPServiceWithBothAnnotations("test-ns", "mcp-service-both", "app=mcp-server-both", "/new/path", "/legacy/path")},
 		},
 		{
 			name: "Service backendRef MCPBackend backend - same namespace",
@@ -251,6 +301,28 @@ func TestBuildAIBackend(t *testing.T) {
 								Endpoint:       "endpoint-123.openai.azure.com",
 								DeploymentName: ptr.Of("my-deployment"),
 								ApiVersion:     ptr.Of("2024-02-15-preview"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Valid Azure Foundry backend",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "azure-foundry-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					AI: &agentgateway.AIBackend{
+						LLM: &agentgateway.LLMProvider{
+							Azure: &agentgateway.AzureConfig{
+								ResourceName: "my-foundry-resource",
+								ResourceType: agentgateway.AzureResourceTypeFoundry,
+								Model:        ptr.Of("gpt-4o-mini"),
+								ApiVersion:   ptr.Of("2024-12-01-preview"),
+								ProjectName:  ptr.Of("my-project"),
 							},
 						},
 					},
@@ -631,6 +703,25 @@ func TestBuildStaticIr(t *testing.T) {
 					backend.GetStatic().Port == 443
 			},
 		},
+		{
+			name: "Valid unix socket backend",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "uds-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					Static: &agentgateway.StaticBackend{
+						UnixPath: ptr.Of("/shared/agent/agent.sock"),
+					},
+				},
+			},
+			validate: func(backend *api.Backend) bool {
+				return backend != nil &&
+					backend.Key == "test-ns/uds-backend" &&
+					backend.GetStatic().UnixPath == "/shared/agent/agent.sock"
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -774,6 +865,81 @@ func createMockMCPServiceWithProtocol(namespace, serviceName, _ /* labels */, ap
 	}
 }
 
+// createMockMCPServiceWithLegacyAnnotation creates a mock service with the legacy kgateway.dev/mcp-path annotation
+func createMockMCPServiceWithLegacyAnnotation(namespace, serviceName, labels, legacyPath string) *corev1.Service {
+	// Parse labels
+	labelsMap := make(map[string]string)
+	if labels != "" {
+		// Simple parsing for "key=value" format
+		for _, label := range []string{labels} {
+			if len(label) > 0 {
+				parts := []string{"app", "mcp-server-legacy"} // hardcoded for test
+				if len(parts) == 2 {
+					labelsMap[parts[0]] = parts[1]
+				}
+			}
+		}
+	}
+
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: namespace,
+			Labels:    labelsMap,
+			Annotations: map[string]string{
+				"kgateway.dev/mcp-path": legacyPath,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name:        "mcp",
+					Port:        8080,
+					AppProtocol: ptr.Of("agentgateway.dev/mcp"),
+				},
+			},
+		},
+	}
+}
+
+// createMockMCPServiceWithBothAnnotations creates a mock service with both new and legacy annotations to test precedence
+func createMockMCPServiceWithBothAnnotations(namespace, serviceName, labels, newPath, legacyPath string) *corev1.Service {
+	// Parse labels
+	labelsMap := make(map[string]string)
+	if labels != "" {
+		// Simple parsing for "key=value" format
+		for _, label := range []string{labels} {
+			if len(label) > 0 {
+				parts := []string{"app", "mcp-server-both"} // hardcoded for test
+				if len(parts) == 2 {
+					labelsMap[parts[0]] = parts[1]
+				}
+			}
+		}
+	}
+
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: namespace,
+			Labels:    labelsMap,
+			Annotations: map[string]string{
+				"agentgateway.dev/mcp-path": newPath,
+				"kgateway.dev/mcp-path":     legacyPath,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name:        "mcp",
+					Port:        8080,
+					AppProtocol: ptr.Of("agentgateway.dev/mcp"),
+				},
+			},
+		},
+	}
+}
+
 // createMockMCPService creates a mock service collection with a specific MCPBackend service
 func createMockMCPService(namespace, serviceName, labels string) *corev1.Service {
 	// Parse labels
@@ -801,7 +967,7 @@ func createMockMCPService(namespace, serviceName, labels string) *corev1.Service
 				{
 					Name:        "mcp",
 					Port:        8080,
-					AppProtocol: ptr.Of("kgateway.dev/mcp"),
+					AppProtocol: ptr.Of("agentgateway.dev/mcp"),
 				},
 			},
 		},
@@ -825,7 +991,7 @@ func createMockMultipleNamespaceServices() []any {
 					{
 						Name:        "mcp",
 						Port:        8080,
-						AppProtocol: ptr.Of("kgateway.dev/mcp"),
+						AppProtocol: ptr.Of("agentgateway.dev/mcp"),
 					},
 				},
 			},
@@ -843,7 +1009,7 @@ func createMockMultipleNamespaceServices() []any {
 					{
 						Name:        "mcp",
 						Port:        8080,
-						AppProtocol: ptr.Of("kgateway.dev/mcp"),
+						AppProtocol: ptr.Of("agentgateway.dev/mcp"),
 					},
 				},
 			},
@@ -861,7 +1027,7 @@ func createMockMultipleNamespaceServices() []any {
 					{
 						Name:        "mcp",
 						Port:        8080,
-						AppProtocol: ptr.Of("kgateway.dev/mcp"),
+						AppProtocol: ptr.Of("agentgateway.dev/mcp"),
 					},
 				},
 			},

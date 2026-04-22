@@ -1,5 +1,4 @@
 use std::convert::Infallible;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use ::http::HeaderMap;
 use anyhow::anyhow;
@@ -18,6 +17,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::cel::{Executor, Expression, RequestSnapshot};
 use crate::client::ResolvedDestination;
+use crate::http;
 use crate::http::envoy_proto_common;
 use crate::http::ext_proc::proto::{
 	BodyMutation, BodyResponse, HeaderMutation, HeaderValueOption, HeadersResponse, HttpBody,
@@ -76,16 +76,47 @@ pub enum FailureMode {
 	FailOpen,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct InferenceRouting {
+	#[serde(rename = "endpointPicker")]
 	pub target: Arc<SimpleBackendReference>,
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	#[cfg_attr(feature = "schema", schemars(skip))]
 	pub failure_mode: FailureMode,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InferenceRoutingConfig {
+	endpoint_picker: Arc<SimpleBackendReference>,
+}
+
+impl<'de> serde::Deserialize<'de> for InferenceRouting {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let InferenceRoutingConfig { endpoint_picker } =
+			InferenceRoutingConfig::deserialize(deserializer)?;
+		Ok(Self {
+			target: endpoint_picker,
+			// TODO: expose fail-open configuration for standalone EPP once the fallback behavior is
+			// explicitly supported and documented end-to-end.
+			failure_mode: FailureMode::FailClosed,
+		})
+	}
 }
 
 #[derive(Debug, Default)]
 pub struct InferencePoolRouter {
 	ext_proc: Option<ExtProcInstance>,
+}
+
+#[derive(Debug, Default)]
+pub struct InferenceRequestResult {
+	pub destination: Option<SocketAddr>,
+	pub policy_response: PolicyResponse,
+	pub failed_open: bool,
 }
 
 impl InferenceRouting {
@@ -108,12 +139,13 @@ impl InferencePoolRouter {
 	pub async fn mutate_request(
 		&mut self,
 		req: &mut http::Request,
-	) -> Result<(Option<SocketAddr>, PolicyResponse), ProxyError> {
+	) -> Result<InferenceRequestResult, ProxyError> {
 		let Some(ext_proc) = &mut self.ext_proc else {
-			return Ok((None, Default::default()));
+			return Ok(Default::default());
 		};
 		let r = std::mem::take(req);
 		let (new_req, pr) = ext_proc.mutate_request(r).await?;
+		let failed_open = ext_proc.did_fail_open();
 		*req = new_req;
 		let dest = req
 			.headers()
@@ -122,7 +154,11 @@ impl InferencePoolRouter {
 			.map(|v| v.parse::<SocketAddr>())
 			.transpose()
 			.map_err(|e| ProxyError::Processing(anyhow!("EPP returned invalid address: {e}")))?;
-		Ok((dest, pr.unwrap_or_default()))
+		Ok(InferenceRequestResult {
+			destination: dest,
+			policy_response: pr.unwrap_or_default(),
+			failed_open,
+		})
 	}
 
 	pub async fn mutate_response(
@@ -243,7 +279,7 @@ impl ExtProcRequest {
 #[derive(Debug)]
 struct ExtProcInstance {
 	failure_mode: FailureMode,
-	skipped: Arc<AtomicBool>,
+	skipped: bool,
 	tx_req: Sender<ProcessingRequest>,
 	rx_resp_for_request: Option<Receiver<ProcessingResponse>>,
 	rx_resp_for_response: Option<Receiver<ProcessingResponse>>,
@@ -253,6 +289,10 @@ struct ExtProcInstance {
 }
 
 impl ExtProcInstance {
+	fn did_fail_open(&self) -> bool {
+		self.skipped
+	}
+
 	fn new(
 		client: PolicyClient,
 		policies: Vec<BackendPolicy>,
@@ -293,7 +333,6 @@ impl ExtProcInstance {
 		let (tx_resp_for_response, rx_resp_for_response) = tokio::sync::mpsc::channel(1);
 		tokio::task::spawn(async move {
 			while let Some(item) = rx_resp.recv().await {
-				trace!("received response item {item:?}");
 				match &item.response {
 					Some(processing_response::Response::ResponseBody(_))
 					| Some(processing_response::Response::ResponseHeaders(_))
@@ -336,7 +375,6 @@ impl ExtProcInstance {
 		req: http::Request,
 	) -> Result<(http::Request, Option<PolicyResponse>), Error> {
 		let headers = req_to_header_map(&req);
-		let buffer = http::buffer_limit(&req);
 
 		let exec = cel::Executor::new_request(&req);
 		// request_attributes should only be sent on first ProcessingRequest
@@ -362,23 +400,11 @@ impl ExtProcInstance {
 			})
 			.unwrap_or_default();
 
-		let (parts, body) = req.into_parts();
-
-		// For fail open we need a copy of the body. There is definitely a better way to do this, but for
-		// now its good enough?
-		let (body_copy, body) = if self.failure_mode == FailureMode::FailOpen {
-			let buffered = http::read_body_with_limit(body, buffer)
-				.await
-				.map_err(|e| Error::BodyBuffer(e.to_string()))?;
-			(Some(buffered.clone()), http::Body::from(buffered))
-		} else {
-			(None, body)
-		};
-		let end_of_stream = body.is_end_stream();
-		let had_body = !end_of_stream;
+		let failure_mode = self.failure_mode;
+		let end_of_stream = req.body().is_end_stream();
 
 		// Send the request headers to ext_proc.
-		self
+		if let Err(e) = self
 			.send_request(ProcessingRequest {
 				request: Some(Request::RequestHeaders(HttpHeaders {
 					headers,
@@ -389,140 +415,140 @@ impl ExtProcInstance {
 				protocol_config: Default::default(),
 				observability_mode: false,
 			})
-			.await?;
-
-		// The EPP will await for our headers and body. The body is going to be streaming in.
-		// We will spin off a task that is going to pipe the body to the ext_proc server as we read it.
-		let tx = self.tx_req.clone();
-
-		if had_body {
-			tokio::task::spawn(async move {
-				let mut stream = BodyStream::new(body);
-				while let Some(Ok(frame)) = stream.next().await {
-					let request = Some(if frame.is_data() {
-						let frame = frame.into_data().expect("already checked");
-						trace!("sending request body chunk...",);
-						Request::RequestBody(HttpBody {
-							body: frame.into(),
-							end_of_stream: false,
-						})
-					} else if frame.is_trailers() {
-						let frame = frame.into_trailers().expect("already checked");
-						Request::RequestTrailers(HttpTrailers {
-							trailers: to_header_map(&frame),
-						})
-					} else {
-						// http_body::Frame only has data and trailers variants
-						unreachable!("Frame is neither data nor trailers")
-					});
-
-					trace!("sending request body chunk...");
-					let Ok(()) = tx
-						.send(ProcessingRequest {
-							request,
-							metadata_context: metadata_context.as_deref().cloned(),
-							attributes: Default::default(),
-							protocol_config: Default::default(),
-							observability_mode: false,
-						})
-						.await
-					else {
-						// TODO: on error here we need a way to signal to the outer task to fail fast
-						return;
-					};
-				}
-
-				// Send end of stream marker - try to unwrap Arc to avoid final clone
-				let final_metadata = metadata_context.and_then(Arc::into_inner);
-				let _ = tx
-					.send(ProcessingRequest {
-						request: Some(Request::RequestBody(HttpBody {
-							body: Default::default(),
-							end_of_stream: true,
-						})),
-						metadata_context: final_metadata,
-						attributes: Default::default(),
-						protocol_config: Default::default(),
-						observability_mode: false,
-					})
-					.await;
-				trace!("body request done");
-			});
+			.await
+		{
+			if failure_mode == FailureMode::FailOpen {
+				trace!("fail open triggered");
+				self.skipped = true;
+				return Ok((req, None));
+			}
+			return Err(e);
 		}
-		// Now we need to build the new body. This is going to be streamed in from the ext_proc server.
-		let (tx_chunk, rx_chunk) = tokio::sync::mpsc::channel(1);
 
-		let body = http_body_util::StreamBody::new(ReceiverStream::new(rx_chunk));
-		let mut req = http::Request::from_parts(parts, http::Body::new(body));
+		// At this point, we start body handling. Fail open + streaming bodies is a disaster,
+		// as we could silently corrupt data.
+		// We behave approximately like Envoy here (https://github.com/envoyproxy/envoy/pull/41276); after
+		// the headers are sent we drop fail_open.
+		// In practice, this means that the server was running fine at the start of the request which covers
+		// all but edge cases around the server dying mid-request.
+		let (parts, body) = req.into_parts();
+		let had_body = !end_of_stream;
+		let tx = self.tx_req.clone();
+		if had_body {
+			tokio::task::spawn(Self::handle_body_stream(
+				metadata_context,
+				body,
+				tx,
+				Request::RequestBody,
+				Request::RequestTrailers,
+			));
+		}
+
+		// Now we need to build the new body. This is going to be streamed in from the ext_proc server.
+		let (mut tx_chunk, rx_chunk) = tokio::sync::mpsc::channel(1);
+
+		let upstream_body = http_body_util::StreamBody::new(ReceiverStream::new(rx_chunk));
+		let mut req = http::Request::from_parts(parts, http::Body::new(upstream_body));
 		req.headers_mut().remove(http::header::CONTENT_LENGTH);
-		let (tx_done, rx_done) = tokio::sync::oneshot::channel();
 		let mut rx = self
 			.rx_resp_for_request
 			.take()
 			.expect("mutate_request called twice");
-		let failure_mode = self.failure_mode;
-		let skipped = self.skipped.clone();
-		tokio::task::spawn(async move {
-			let mut req = Some(req);
-			let mut tx_done = Some(tx_done);
-			let mut tx_chunkh = Some(tx_chunk);
-			loop {
-				// Loop through all the ext_proc responses and process them
-				let Some(presp) = rx.recv().await else {
-					trace!("done receiving request");
-					if failure_mode == FailureMode::FailOpen
-						&& let Some(req) = req.take()
-						&& let Some(tx_done) = tx_done.take()
-					{
-						trace!("fail open triggered");
-						skipped.store(true, Ordering::SeqCst);
-						let (parts, _) = req.into_parts();
-						let new_req = http::Request::from_parts(parts, http::Body::from(body_copy.unwrap()));
-						let _ = tx_done.send(Ok((new_req, None)));
-						tx_chunkh.take();
-					}
-					return;
-				};
-				if let Some(resp) = to_immediate_response(&presp) {
-					trace!("got immediate response in request handler");
-					let _ = tx_done
-						.take()
-						.unwrap()
-						.send(Ok((http::Request::default(), Some(resp))));
-					tx_chunkh.take();
-					return;
+		loop {
+			let Some(presp) = rx.recv().await else {
+				if !had_body && failure_mode == FailureMode::FailOpen {
+					trace!("fail open triggered");
+					self.skipped = true;
+					return Ok((req, None));
 				}
-				if let Some(dm) = &presp.dynamic_metadata
-					&& let Err(e) = Self::extract_dynamic_metadata(req.as_mut(), dm)
-				{
-					warn!("Failed to extract ext_proc dynamic metadata: {}", e);
-				}
-				let Some(tx_chunk) = tx_chunkh.as_mut() else {
-					return;
-				};
-				let r = handle_response_for_request_mutation(had_body, req.as_mut(), tx_chunk, presp).await;
-				match r {
-					Ok((headers_done, eos)) => {
-						if headers_done
-							&& let Some(req) = req.take()
-							&& let Some(tx_done) = tx_done.take()
-						{
-							trace!("request complete!");
-							let _ = tx_done.send(Ok((req, None)));
-						}
-						if eos || !had_body {
-							trace!("request EOS!");
-							tx_chunkh.take();
-						}
-					},
-					Err(e) => {
-						warn!("error {e:?}");
-						return;
-					},
-				}
+				trace!("done receiving request");
+				return Err(Error::NoMoreResponses);
+			};
+			if let Some(resp) = to_immediate_response(&presp) {
+				trace!("got immediate response in request handler");
+				return Ok((req, Some(resp)));
 			}
-		});
-		rx_done.await.map_err(|_| Error::ResponseDropped)?
+			let (headers_done, eos) =
+				handle_response_for_request_mutation(had_body, Some(&mut req), &mut tx_chunk, presp).await;
+			if headers_done {
+				if !eos {
+					trace!("spawn body!");
+					// Moving rest of body handling to async
+					tokio::task::spawn(async move {
+						loop {
+							let Some(presp) = rx.recv().await else {
+								trace!("done receiving request");
+								return;
+							};
+							let (_, eos) =
+								handle_response_for_request_mutation(had_body, None, &mut tx_chunk, presp).await;
+							if eos || !had_body {
+								trace!("request EOS!");
+								drop(tx_chunk);
+								return;
+							}
+						}
+					});
+				}
+				return Ok((req, None));
+			}
+		}
+	}
+
+	async fn handle_body_stream(
+		metadata_context: Option<Arc<Metadata>>,
+		body: http::Body,
+		tx: Sender<ProcessingRequest>,
+		body_fn: fn(HttpBody) -> Request,
+		trail_fn: fn(HttpTrailers) -> Request,
+	) {
+		let mut stream = BodyStream::new(body);
+		while let Some(Ok(frame)) = stream.next().await {
+			let request = Some(if frame.is_data() {
+				let frame = frame.into_data().expect("already checked");
+				trace!("sending body chunk...",);
+				body_fn(HttpBody {
+					body: frame.into(),
+					end_of_stream: false,
+				})
+			} else if frame.is_trailers() {
+				let frame = frame.into_trailers().expect("already checked");
+				trail_fn(HttpTrailers {
+					trailers: to_header_map(&frame),
+				})
+			} else {
+				// http_body::Frame only has data and trailers variants
+				unreachable!("Frame is neither data nor trailers")
+			});
+			let Ok(()) = tx
+				.send(ProcessingRequest {
+					request,
+					metadata_context: metadata_context.as_deref().cloned(),
+					attributes: Default::default(),
+					protocol_config: Default::default(),
+					observability_mode: false,
+				})
+				.await
+			else {
+				return;
+			};
+		}
+
+		// Send end of stream marker - try to unwrap Arc to avoid final clone
+		let final_metadata = metadata_context.and_then(Arc::into_inner);
+		let _ = tx
+			.send(ProcessingRequest {
+				request: Some(body_fn(HttpBody {
+					body: Default::default(),
+					end_of_stream: true,
+				})),
+				metadata_context: final_metadata,
+				attributes: Default::default(),
+				protocol_config: Default::default(),
+				observability_mode: false,
+			})
+			.await;
+		trace!("body request done");
 	}
 
 	pub async fn mutate_response(
@@ -531,7 +557,7 @@ impl ExtProcInstance {
 		request: Option<&RequestSnapshot>,
 		resolved_destination_metadata: Option<SocketAddr>,
 	) -> Result<(http::Response, Option<PolicyResponse>), Error> {
-		if self.skipped.load(Ordering::SeqCst) {
+		if self.skipped {
 			return Ok((req, None));
 		}
 		let headers = resp_to_header_map(&req);
@@ -575,6 +601,7 @@ impl ExtProcInstance {
 		let had_body = !end_of_stream;
 
 		// Send the response headers to ext_proc.
+		// No response side fail_open handling.
 		self
 			.send_request(ProcessingRequest {
 				request: Some(Request::ResponseHeaders(HttpHeaders {
@@ -591,156 +618,61 @@ impl ExtProcInstance {
 		// The EPP will await for our headers and body. The body is going to be streaming in.
 		// We will spin off a task that is going to pipe the body to the ext_proc server as we read it.
 		let tx = self.tx_req.clone();
-
 		if had_body {
-			tokio::task::spawn(async move {
-				let mut stream = BodyStream::new(body);
-				while let Some(Ok(frame)) = stream.next().await {
-					let request = Some(if frame.is_data() {
-						let frame = frame.into_data().expect("already checked");
-						Request::ResponseBody(HttpBody {
-							body: frame.into(),
-							end_of_stream: false,
-						})
-					} else if frame.is_trailers() {
-						let frame = frame.into_trailers().expect("already checked");
-						Request::ResponseTrailers(HttpTrailers {
-							trailers: to_header_map(&frame),
-						})
-					} else {
-						// http_body::Frame only has data and trailers variants
-						unreachable!("Frame is neither data nor trailers")
-					});
-
-					trace!("sending response body chunk...");
-					let Ok(()) = tx
-						.send(ProcessingRequest {
-							request,
-							metadata_context: metadata_context.as_deref().cloned(),
-							attributes: HashMap::new(),
-							protocol_config: Default::default(),
-							observability_mode: false,
-						})
-						.await
-					else {
-						// TODO: on error here we need a way to signal to the outer task to fail fast
-						return;
-					};
-				}
-
-				// Send end of stream marker - try to unwrap Arc to avoid final clone
-				let final_metadata = metadata_context.and_then(Arc::into_inner);
-				let _ = tx
-					.send(ProcessingRequest {
-						request: Some(Request::ResponseBody(HttpBody {
-							body: Default::default(),
-							end_of_stream: true,
-						})),
-						metadata_context: final_metadata,
-						attributes: HashMap::new(),
-						protocol_config: Default::default(),
-						observability_mode: false,
-					})
-					.await;
-				trace!("body response done");
-			});
+			tokio::task::spawn(Self::handle_body_stream(
+				metadata_context,
+				body,
+				tx,
+				Request::ResponseBody,
+				Request::ResponseTrailers,
+			));
 		}
+
 		// Now we need to build the new body. This is going to be streamed in from the ext_proc server.
-		let (tx_chunk, rx_chunk) = tokio::sync::mpsc::channel(1);
+		let (mut tx_chunk, rx_chunk) = tokio::sync::mpsc::channel(1);
+
 		let body = http_body_util::StreamBody::new(ReceiverStream::new(rx_chunk));
 		let mut resp = http::Response::from_parts(parts, http::Body::new(body));
 		resp.headers_mut().remove(http::header::CONTENT_LENGTH);
-		let (tx_done, rx_done) = tokio::sync::oneshot::channel();
 		let mut rx = self
 			.rx_resp_for_response
 			.take()
-			.expect("mutate_request called twice");
-		tokio::task::spawn(async move {
-			let mut resp = Some(resp);
-			let mut tx_done = Some(tx_done);
-			let mut tx_chunkh = Some(tx_chunk);
-			loop {
-				// Loop through all the ext_proc responses and process them
-				let Some(presp) = rx.recv().await else {
-					trace!("done receiving response");
-					return;
-				};
-				if let Some(resp) = to_immediate_response(&presp) {
-					trace!("got immediate response in response handler");
-					let _ = tx_done
-						.take()
-						.unwrap()
-						.send(Ok((http::Response::default(), Some(resp))));
-					tx_chunkh.take();
-					return;
-				}
-				let Some(tx_chunk) = tx_chunkh.as_mut() else {
-					trace!("body done, skipping");
-					return;
-				};
-				let r =
-					handle_response_for_response_mutation(had_body, resp.as_mut(), tx_chunk, presp).await;
-				match r {
-					Ok((headers_done, eos)) => {
-						if headers_done
-							&& let Some(resp) = resp.take()
-							&& let Some(tx_done) = tx_done.take()
-						{
-							trace!("response complete!");
-							let _ = tx_done.send(Ok((resp, None)));
-						}
-						if eos || !had_body {
-							trace!("response EOS!");
-							tx_chunkh.take();
-						}
-					},
-					Err(e) => {
-						warn!("error {e:?}");
-						return;
-						// return tx_done.take().expect("must be called once").send(Err(e));
-					},
-				}
+			.expect("mutate_response called twice");
+		loop {
+			let Some(presp) = rx.recv().await else {
+				trace!("done receiving response");
+				return Err(Error::NoMoreResponses);
+			};
+			if let Some(dr) = to_immediate_response(&presp) {
+				trace!("got immediate response in request handler");
+				return Ok((resp, Some(dr)));
 			}
-		});
-		rx_done.await.map_err(|_| Error::ResponseDropped)?
-	}
-
-	pub(crate) fn extract_dynamic_metadata(
-		req: Option<&mut http::Request>,
-		metadata: &prost_wkt_types::Struct,
-	) -> Result<(), Error> {
-		let Some(req) = req else {
-			// Warn when metadata is sent after headers are processed (body/trailer phase)
-			if !metadata.fields.is_empty() {
-				warn!(
-					"ext_proc server sent dynamic_metadata after headers were processed; \
-					 metadata cannot be attached and will be ignored. Consider sending \
-					 metadata in the RequestHeaders response instead."
-				);
+			let (headers_done, eos) =
+				handle_response_for_response_mutation(had_body, Some(&mut resp), &mut tx_chunk, presp)
+					.await;
+			if headers_done {
+				if !eos {
+					trace!("spawn body!");
+					// Moving rest of body handling to async
+					tokio::task::spawn(async move {
+						loop {
+							let Some(presp) = rx.recv().await else {
+								trace!("done receiving response");
+								return;
+							};
+							let (_, eos) =
+								handle_response_for_response_mutation(had_body, None, &mut tx_chunk, presp).await;
+							if eos || !had_body {
+								trace!("response EOS!");
+								drop(tx_chunk);
+								return;
+							}
+						}
+					});
+				}
+				return Ok((resp, None));
 			}
-			return Ok(());
-		};
-
-		// Get or create metadata container, merging with existing metadata
-		let mut dynamic_metadata = req
-			.extensions_mut()
-			.remove::<Arc<ExtProcDynamicMetadata>>()
-			.map(|arc| (*arc).clone())
-			.unwrap_or_default();
-
-		// Merge new fields into existing metadata
-		for (key, value) in &metadata.fields {
-			let json_val = envoy_proto_common::prost_value_to_json(value).map_err(|e| {
-				Error::MetadataConversion(format!("failed to convert key '{}': {}", key, e))
-			})?;
-			dynamic_metadata.0.insert(key.clone(), json_val);
 		}
-
-		if !dynamic_metadata.0.is_empty() {
-			req.extensions_mut().insert(Arc::new(dynamic_metadata));
-		}
-
-		Ok(())
 	}
 }
 
@@ -758,7 +690,7 @@ fn to_immediate_response(rp: &ProcessingResponse) -> Option<PolicyResponse> {
 				::http::response::Builder::new().status(status.map(|s| s.code).unwrap_or(200) as u16);
 
 			if let Some(hm) = rb.headers_mut() {
-				let _ = apply_header_mutations(hm, headers.as_ref());
+				apply_header_mutations(hm, headers.as_ref());
 			}
 			let resp = rb
 				.body(http::Body::from(body.to_string()))
@@ -776,15 +708,29 @@ fn to_immediate_response(rp: &ProcessingResponse) -> Option<PolicyResponse> {
 // handle_response_for_request_mutation handles a single ext_proc response. If it returns 'true' we are done processing.
 async fn handle_response_for_request_mutation(
 	had_body: bool,
-	req: Option<&mut http::Request>,
+	mut req: Option<&mut http::Request>,
 	body_tx: &mut Sender<Result<Frame<Bytes>, Infallible>>,
 	presp: ProcessingResponse,
-) -> Result<(bool, bool), Error> {
+) -> (bool, bool) {
+	if let Some(dm) = &presp.dynamic_metadata {
+		if let Some(req) = req.as_mut() {
+			if let Err(e) = extract_dynamic_metadata(req, dm) {
+				warn!("Failed to extract ext_proc dynamic metadata: {}", e);
+			}
+		} else if !dm.fields.is_empty() {
+			warn!(
+				"ext_proc server sent dynamic_metadata after headers were processed; \
+					 metadata cannot be attached and will be ignored. Consider sending \
+					 metadata in the RequestHeaders response instead."
+			);
+		}
+	}
+
 	let res = matches!(presp.response, Some(Response::RequestHeaders(_)));
 	let cr = match presp.response {
 		Some(Response::RequestHeaders(HeadersResponse { response: None })) => {
 			trace!("no headers");
-			return Ok((res, false));
+			return (true, !had_body);
 		},
 		Some(Response::RequestHeaders(HeadersResponse { response: Some(cr) })) => {
 			trace!("got request headers back");
@@ -792,20 +738,27 @@ async fn handle_response_for_request_mutation(
 		},
 		Some(Response::RequestBody(BodyResponse { response: None })) => {
 			trace!("got empty request body back");
-			return Ok((res, true));
+			return (false, true);
 		},
 		Some(Response::RequestBody(BodyResponse { response: Some(cr) })) => {
 			trace!("got request body back");
 			cr
 		},
+		Some(Response::ImmediateResponse(_)) => {
+			if req.is_none() {
+				trace!("immediate response received after request sent; will apply only on the response");
+			}
+			// Handled out of this function.
+			return (true, true);
+		},
 		msg => {
 			// In theory, there can trailers too. EPP never sends them
 			warn!("ignoring response during request {msg:?}");
-			return Ok((res, false));
+			return (false, false);
 		},
 	};
 	if let Some(req) = req {
-		apply_header_mutations_request(req, cr.header_mutation.as_ref())?;
+		apply_header_mutations_request(req, cr.header_mutation.as_ref());
 	}
 	if let Some(BodyMutation { mutation: Some(b) }) = cr.body_mutation {
 		match b {
@@ -815,7 +768,7 @@ async fn handle_response_for_request_mutation(
 				let _ = body_tx.send(Ok(Frame::data(by.clone()))).await;
 
 				trace!(eos, "got stream request body");
-				return Ok((res, eos));
+				return (res, eos);
 			},
 			Mutation::Body(_) => {
 				warn!("Body() not valid for streaming mode, skipping...");
@@ -826,53 +779,44 @@ async fn handle_response_for_request_mutation(
 		}
 	} else if !had_body {
 		trace!("got headers back and do not expect body; we are done");
-		return Ok((res, true));
+		return (res, true);
 	}
 	trace!("still waiting for response...");
-	Ok((res, false))
+	(res, false)
 }
 
-fn apply_header_with_action(
-	headers: &mut HeaderMap,
-	hk: &HeaderName,
-	hvo: &HeaderValueOption,
-) -> Result<(), Error> {
+fn apply_header_with_action(headers: &mut HeaderMap, hk: &HeaderName, hvo: &HeaderValueOption) {
 	let Some(_) = hvo.header else {
-		return Ok(());
+		return;
 	};
 
 	// Skip content-length as the EPP sets it to invalid values
 	// https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/943
 	if hk == http::header::CONTENT_LENGTH {
 		debug!("skipping invalid content-length");
-		return Ok(());
+		return;
 	}
 
 	let _ = envoy_proto_common::apply_header_value_option(headers, hk, hvo);
-	Ok(())
 }
 
-fn apply_header_mutations(
-	headers: &mut HeaderMap,
-	h: Option<&HeaderMutation>,
-) -> Result<(), Error> {
+fn apply_header_mutations(headers: &mut HeaderMap, h: Option<&HeaderMutation>) {
 	if let Some(hm) = h {
 		for rm in &hm.remove_headers {
 			headers.remove(rm);
 		}
 		for set in &hm.set_headers {
 			let Some(h) = &set.header else { continue };
-			let hk = HeaderName::try_from(h.key.as_str())?;
-			apply_header_with_action(headers, &hk, set)?;
+			let Ok(hk) = HeaderName::try_from(h.key.as_str()) else {
+				warn!("invalid header key: {}", h.key);
+				continue;
+			};
+			apply_header_with_action(headers, &hk, set);
 		}
 	}
-	Ok(())
 }
 
-fn apply_header_mutations_request(
-	req: &mut http::Request,
-	h: Option<&HeaderMutation>,
-) -> Result<(), Error> {
+fn apply_header_mutations_request(req: &mut http::Request, h: Option<&HeaderMutation>) {
 	if let Some(hm) = h {
 		for rm in &hm.remove_headers {
 			req.headers_mut().remove(rm);
@@ -881,23 +825,21 @@ fn apply_header_mutations_request(
 			let Some(h) = &set.header else { continue };
 			match HeaderOrPseudo::try_from(h.key.as_str()) {
 				Ok(HeaderOrPseudo::Header(hk)) => {
-					apply_header_with_action(req.headers_mut(), &hk, set)?;
+					apply_header_with_action(req.headers_mut(), &hk, set);
 				},
 				Ok(_) => {
 					let mut rr = crate::http::RequestOrResponse::Request(req);
 					let _ = envoy_proto_common::apply_pseudo_header_option(&mut rr, set);
 				},
-				Err(_) => {},
+				Err(e) => {
+					warn!("invalid header key: {} {e}", h.key);
+				},
 			}
 		}
 	}
-	Ok(())
 }
 
-fn apply_header_mutations_response(
-	resp: &mut http::Response,
-	h: Option<&HeaderMutation>,
-) -> Result<(), Error> {
+fn apply_header_mutations_response(resp: &mut http::Response, h: Option<&HeaderMutation>) {
 	if let Some(hm) = h {
 		for rm in &hm.remove_headers {
 			resp.headers_mut().remove(rm);
@@ -906,17 +848,18 @@ fn apply_header_mutations_response(
 			let Some(h) = &set.header else { continue };
 			match crate::http::HeaderOrPseudo::try_from(h.key.as_str()) {
 				Ok(crate::http::HeaderOrPseudo::Header(hk)) => {
-					apply_header_with_action(resp.headers_mut(), &hk, set)?;
+					apply_header_with_action(resp.headers_mut(), &hk, set);
 				},
 				Ok(_) => {
 					let mut rr = crate::http::RequestOrResponse::Response(resp);
 					let _ = envoy_proto_common::apply_pseudo_header_option(&mut rr, set);
 				},
-				Err(_) => {},
+				Err(e) => {
+					warn!("invalid header key: {} {e}", h.key);
+				},
 			}
 		}
 	}
-	Ok(())
 }
 
 // handle_response_for_response_mutation handles a single ext_proc response. If it returns 'true' we are done processing.
@@ -925,27 +868,27 @@ async fn handle_response_for_response_mutation(
 	resp: Option<&mut http::Response>,
 	body_tx: &mut Sender<Result<Frame<Bytes>, Infallible>>,
 	presp: ProcessingResponse,
-) -> Result<(bool, bool), Error> {
+) -> (bool, bool) {
 	let res = matches!(presp.response, Some(Response::ResponseHeaders(_)));
 	let cr = match presp.response {
 		Some(Response::ResponseHeaders(HeadersResponse { response: None })) => {
 			trace!("no headers");
-			return Ok((res, false));
+			return (res, false);
 		},
 		Some(Response::ResponseHeaders(HeadersResponse { response: Some(cr) })) => cr,
 		Some(Response::ResponseBody(BodyResponse { response: Some(cr) })) => cr,
 		Some(Response::ResponseBody(BodyResponse { response: None })) => {
 			trace!("got empty response body back");
-			return Ok((res, true));
+			return (res, true);
 		},
 		msg => {
 			// In theory, there can trailers too. EPP never sends them
 			warn!("ignoring {msg:?}");
-			return Ok((res, false));
+			return (res, false);
 		},
 	};
 	if let Some(resp) = resp {
-		apply_header_mutations_response(resp, cr.header_mutation.as_ref())?;
+		apply_header_mutations_response(resp, cr.header_mutation.as_ref());
 	}
 	if let Some(BodyMutation { mutation: Some(b) }) = cr.body_mutation {
 		match b {
@@ -954,7 +897,7 @@ async fn handle_response_for_response_mutation(
 				let by = bytes::Bytes::from(bb.body);
 				let _ = body_tx.send(Ok(Frame::data(by.clone()))).await;
 				trace!(%eos, "got body chunk");
-				return Ok((res, eos));
+				return (res, eos);
 			},
 			Mutation::Body(_) => {
 				warn!("Body() not valid for streaming mode, skipping...");
@@ -965,10 +908,10 @@ async fn handle_response_for_response_mutation(
 		}
 	} else if !had_body {
 		trace!("got headers back and do not expect body; we are done");
-		return Ok((res, true));
+		return (res, true);
 	}
 	trace!("still waiting for response for response...");
-	Ok((res, false))
+	(res, false)
 }
 
 fn req_to_header_map(req: &http::Request) -> Option<proto::HeaderMap> {
@@ -1045,6 +988,30 @@ fn eval_to_struct(
 			})
 			.collect(),
 	})
+}
+
+pub(crate) fn extract_dynamic_metadata(
+	req: &mut http::Request,
+	metadata: &prost_wkt_types::Struct,
+) -> Result<(), Error> {
+	// Get or create metadata container, merging with existing metadata
+	let mut dynamic_metadata = req
+		.extensions_mut()
+		.remove::<ExtProcDynamicMetadata>()
+		.unwrap_or_default();
+
+	// Merge new fields into existing metadata
+	for (key, value) in &metadata.fields {
+		let json_val = envoy_proto_common::prost_value_to_json(value)
+			.map_err(|e| Error::MetadataConversion(format!("failed to convert key '{}': {}", key, e)))?;
+		dynamic_metadata.0.insert(key.clone(), json_val);
+	}
+
+	if !dynamic_metadata.0.is_empty() {
+		req.extensions_mut().insert(dynamic_metadata);
+	}
+
+	Ok(())
 }
 
 #[derive(Clone, Debug)]

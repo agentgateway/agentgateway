@@ -103,6 +103,12 @@ func TranslateMCPSelectorTargets(
 				targetName = service.Name + "-" + port.Name
 			}
 
+			path := service.Annotations[apiannotations.MCPServiceHTTPPath]
+			// use legacy annotation for backwards compatibility
+			if path == "" && service.Annotations[apiannotations.LegacyMCPServiceHTTPPath] != "" {
+				path = service.Annotations[apiannotations.LegacyMCPServiceHTTPPath]
+			}
+
 			svcHostname := kubeutils.ServiceFQDN(service.ObjectMeta)
 			mcpTargets = append(mcpTargets, &api.MCPTarget{
 				Name: targetName,
@@ -116,7 +122,7 @@ func TranslateMCPSelectorTargets(
 					Port: uint32(port.Port), //nolint:gosec // G115: Kubernetes service ports are always positive
 				},
 				Protocol: toMCPProtocol(appProtocol),
-				Path:     service.Annotations[apiannotations.MCPServiceHTTPPath],
+				Path:     path,
 			})
 		}
 	}

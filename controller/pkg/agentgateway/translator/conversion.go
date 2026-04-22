@@ -576,6 +576,23 @@ func buildAgwHTTPDestination(
 	var invalidBackendErr *reporter.RouteCondition
 	var res []*api.RouteBackend
 	for _, fwd := range forwardTo {
+		// Handle HTTPRoute backend refs as delegation (route group) references
+		ref := NormalizeReference(fwd.Group, fwd.Kind, wellknown.ServiceGVK)
+		if ref == wellknown.HTTPRouteGVK {
+			weight := int32(1)
+			if fwd.Weight != nil {
+				weight = *fwd.Weight
+			}
+			backendNs := ns
+			if fwd.Namespace != nil {
+				backendNs = string(*fwd.Namespace)
+			}
+			res = append(res, &api.RouteBackend{
+				Weight:        weight,
+				RouteGroupKey: ptr.Of(utils.InternalRouteGroupKey(backendNs, string(fwd.Name))),
+			})
+			continue
+		}
 		dst, err := buildAgwDestination(ctx, fwd, ns, wellknown.HTTPRouteGVK)
 		if err != nil {
 			logger.Error("erroring building agent gateway destination", "error", err)
@@ -733,11 +750,12 @@ func ReferenceAllowed(
 	hostnames []gwv1.Hostname,
 	localNamespace string,
 ) *ParentError {
-	if parentRef.Kind == wellknown.ServiceGVK.Kind {
+	if parent.ServiceKey != nil {
+		// Parent resolver already verified this reference exists.
+	} else if parentRef.Kind == wellknown.ServiceGVK.Kind {
+		// check that the referenced svc exists
 		key := parentRef.Namespace + "/" + parentRef.Name
 		svc := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Services, krt.FilterKey(key)))
-
-		// check that the referenced svc exists
 		if svc == nil {
 			return &ParentError{
 				Reason:  ParentErrorNotAccepted,
@@ -914,30 +932,7 @@ func (p ParentReference) String() string {
 	return p.TypedNamespacedName.String() + "/" + string(p.SectionName) + "/" + fmt.Sprint(p.Port)
 }
 
-// ParentInfo holds info about a "Parent" - something that can be referenced as a ParentRef in the API.
-// Today, this is just Gateway
-type ParentInfo struct {
-	ParentGateway          types.NamespacedName
-	ParentGatewayClassName string
-	// ListenerKey is the internal key of the listener resource created for this parent.
-	ListenerKey string
-	// ServiceKey (optionally) links a parent reference to an individual Service.
-	ServiceKey *types.NamespacedName
-	// AllowedKinds indicates which kinds can be admitted by this Parent
-	AllowedKinds []gwv1.RouteGroupKind
-	// Hostnames is the hostnames that must be match to reference to the Parent. For gateway this is listener hostname
-	// Format is ns/hostname
-	Hostnames []string
-	// OriginalHostname is the unprocessed form of Hostnames; how it appeared in users' config
-	OriginalHostname string
-	// Timestamp the parent was created - used in determining listener precedence
-	CreationTimestamp metav1.Time
-
-	SectionName    gwv1.SectionName
-	Port           gwv1.PortNumber
-	Protocol       gwv1.ProtocolType
-	TLSPassthrough bool
-}
+type ParentInfo = plugins.ParentInfo
 
 // RouteParentReference holds information about a route's parent reference
 type RouteParentReference struct {

@@ -52,6 +52,10 @@ impl Client {
 		}
 	}
 
+	pub fn has_session_id(&self) -> bool {
+		self.session_id.load().is_some()
+	}
+
 	pub async fn send_request(
 		&self,
 		req: JsonRpcRequest<ClientRequest>,

@@ -19,6 +19,8 @@ pub mod csrf;
 pub mod envoy_proto_common;
 pub mod ext_authz;
 pub mod ext_proc;
+pub(crate) mod oauth;
+pub mod oidc;
 pub mod outlierdetection;
 mod peekbody;
 pub mod remoteratelimit;
@@ -31,6 +33,42 @@ pub type Error = axum_core::Error;
 pub type Body = axum_core::body::Body;
 pub type Request = ::http::Request<Body>;
 pub type Response = ::http::Response<Body>;
+
+pub(crate) fn iter_request_cookies<'a>(
+	req: &'a Request,
+) -> impl Iterator<Item = cookie::Cookie<'a>> + 'a {
+	req
+		.headers()
+		.get_all(header::COOKIE)
+		.into_iter()
+		.filter_map(|value| value.to_str().ok())
+		.flat_map(move |header_value| {
+			cookie::Cookie::split_parse(Cow::Borrowed(header_value)).filter_map(Result::ok)
+		})
+}
+
+pub(crate) fn read_request_cookie<'a>(req: &'a Request, name: &str) -> Option<Cow<'a, str>> {
+	for cookie in iter_request_cookies(req) {
+		if cookie.name() == name {
+			return Some(Cow::Owned(cookie.value().to_owned()));
+		}
+	}
+	None
+}
+
+pub(crate) fn strip_request_cookies_by_prefix(req: &mut Request, prefix: &str) {
+	let preserved: Vec<String> = iter_request_cookies(req)
+		.filter(|cookie| !cookie.name().starts_with(prefix))
+		.map(|cookie| cookie.to_string())
+		.collect();
+
+	req.headers_mut().remove(header::COOKIE);
+	if !preserved.is_empty() {
+		let hv =
+			HeaderValue::from_str(&preserved.join("; ")).expect("re-joined cookie header is valid");
+		req.headers_mut().insert(header::COOKIE, hv);
+	}
+}
 
 // SendDirectResponse is a Response that has been buffered so that it is Send.
 pub struct SendDirectResponse(pub ::http::Response<Bytes>);
@@ -165,6 +203,7 @@ impl RequestOrResponse<'_> {
 	}
 }
 
+use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use std::pin::Pin;
@@ -175,6 +214,7 @@ pub use ::http::uri::{Authority, Scheme};
 pub use ::http::{
 	HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header, status, uri,
 };
+use axum_core::BoxError;
 use bytes::Bytes;
 use cel::Value;
 use http::uri::PathAndQuery;
@@ -182,6 +222,7 @@ use http_body::{Frame, SizeHint};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tower_serve_static::private::mime;
 use url::Url;
+use url::form_urlencoded;
 
 use crate::cel::{BackendContext, LLMContext, RequestTime, SourceContext};
 use crate::client::PoolKey;
@@ -546,6 +587,87 @@ pub fn modify_url(
 	Ok(())
 }
 
+pub fn modify_query_parameters<S, R, KSet, VSet, KRemove>(
+	uri: &mut Uri,
+	query_parameters_to_set: S,
+	query_parameters_to_remove: R,
+) -> anyhow::Result<()>
+where
+	S: IntoIterator<Item = (KSet, VSet)>,
+	R: IntoIterator<Item = KRemove>,
+	KSet: AsRef<str>,
+	VSet: AsRef<str>,
+	KRemove: AsRef<str>,
+{
+	let query_parameters_to_set = query_parameters_to_set
+		.into_iter()
+		.map(|(key, value)| (key.as_ref().to_owned(), value.as_ref().to_owned()))
+		.collect::<Vec<_>>();
+	let query_parameters_to_remove = query_parameters_to_remove
+		.into_iter()
+		.map(|key| key.as_ref().to_owned())
+		.collect::<Vec<_>>();
+
+	if query_parameters_to_set.is_empty() && query_parameters_to_remove.is_empty() {
+		return Ok(());
+	}
+
+	let mut parts = std::mem::take(uri).into_parts();
+	let path = parts
+		.path_and_query
+		.as_ref()
+		.map(|pq| pq.path())
+		.filter(|path| !path.is_empty())
+		.unwrap_or("/");
+	let query = parts
+		.path_and_query
+		.as_ref()
+		.and_then(|pq| pq.query())
+		.unwrap_or_default();
+	let mut pairs = form_urlencoded::parse(query.as_bytes())
+		.map(|(key, value)| (key.into_owned(), value.into_owned()))
+		.collect::<Vec<_>>();
+
+	for (key, value) in query_parameters_to_set {
+		pairs.retain(|(current_key, _)| current_key != &key);
+		pairs.push((key, value));
+	}
+
+	if !query_parameters_to_remove.is_empty() {
+		pairs.retain(|(key, _)| {
+			!query_parameters_to_remove
+				.iter()
+				.any(|remove| remove == key)
+		});
+	}
+
+	let mut updated = form_urlencoded::Serializer::new(String::new());
+	for (key, value) in pairs {
+		updated.append_pair(&key, &value);
+	}
+
+	let updated = updated.finish();
+	let new_path: Result<PathAndQuery, _> = if updated.is_empty() {
+		path.to_string()
+	} else {
+		format!("{path}?{updated}")
+	}
+	.parse();
+	match new_path {
+		Ok(p) => {
+			parts.path_and_query = Some(p);
+			*uri = Uri::from_parts(parts)?;
+			Ok(())
+		},
+		Err(e) => {
+			// Just a backup, in the event that somehow our new param was invalid we still set the URI
+			// so its not wiped out
+			*uri = Uri::from_parts(parts)?;
+			Err(e.into())
+		},
+	}
+}
+
 #[derive(Debug)]
 pub enum WellKnownContentTypes {
 	Json,
@@ -567,6 +689,13 @@ pub fn classify_content_type(h: &HeaderMap) -> WellKnownContentTypes {
 		}
 	}
 	WellKnownContentTypes::Unknown
+}
+
+pub fn get_path_and_query(req: &Uri) -> &str {
+	req
+		.path_and_query()
+		.map(|pq| pq.as_str())
+		.unwrap_or_else(|| req.path())
 }
 
 pub fn get_host(req: &Request) -> Result<&str, ProxyError> {
@@ -705,16 +834,19 @@ pin_project_lite::pin_project! {
 	}
 }
 
-impl<B, D> DropBody<B, D> {
-	pub fn new(body: B, dropper: D) -> Self {
-		Self { body, dropper }
+impl<B, D> DropBody<B, D>
+where
+	D: Send + 'static,
+	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
+	B::Error: Into<BoxError>,
+{
+	#[allow(clippy::new_ret_no_self)]
+	pub fn new(body: B, dropper: D) -> Body {
+		Body::new(Self { body, dropper })
 	}
 }
 
-impl<B: http_body::Body + Debug + Unpin, D> http_body::Body for DropBody<B, D>
-where
-	B::Data: Debug,
-{
+impl<B: http_body::Body + Unpin, D> http_body::Body for DropBody<B, D> {
 	type Data = B::Data;
 	type Error = B::Error;
 
@@ -806,6 +938,42 @@ impl Debug for DebugExtensions<'_> {
 		if let Some(e) = ext.get::<RequestTime>() {
 			d.field("RequestTime", e);
 		}
+		if let Some(e) = ext.get::<transformation_cel::TransformationMetadata>() {
+			d.field("TransformationMetadata", e);
+		}
 		d.finish()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_modify_query_parameters_for_relative_uri() {
+		let mut uri = "/resource?keep=1&set=old&set=older&remove=gone"
+			.parse()
+			.unwrap();
+
+		modify_query_parameters(
+			&mut uri,
+			[("set", "updated"), ("new", "added value")],
+			["remove"],
+		)
+		.unwrap();
+
+		assert_eq!(
+			uri.to_string(),
+			"/resource?keep=1&set=updated&new=added+value"
+		);
+	}
+
+	#[test]
+	fn test_modify_query_parameters_for_absolute_uri() {
+		let mut uri = "https://example.com/resource?remove=1".parse().unwrap();
+
+		modify_query_parameters(&mut uri, std::iter::empty::<(&str, &str)>(), ["remove"]).unwrap();
+
+		assert_eq!(uri.to_string(), "https://example.com/resource");
 	}
 }

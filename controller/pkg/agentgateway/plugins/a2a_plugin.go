@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	a2aProtocol = "kgateway.dev/a2a"
+	legacyA2aProtocol = "kgateway.dev/a2a"
+	a2aProtocol       = "agentgateway.dev/a2a"
 )
 
 // NewA2APlugin creates a new A2A policy plugin
@@ -39,16 +40,24 @@ func NewA2APlugin(agw *AgwCollections) AgwPlugin {
 // translatePoliciesForService generates A2A policies for a single service
 func translatePoliciesForService(krtctx krt.HandlerContext, svc *corev1.Service, clusterDomain string, references ReferenceIndex) []AgwPolicy {
 	var a2aPolicies []AgwPolicy
-	gatewayTargets := references.LookupGatewaysForBackend(krtctx, utils.TypedNamespacedName{
-		Kind: wellknown.ServiceKind,
-		NamespacedName: types.NamespacedName{
-			Namespace: svc.Namespace,
-			Name:      svc.Name,
-		},
-	}).UnsortedList()
+	// Lazily compute so we don't run it for each Service
+	var computedGatewayTargets *[]types.NamespacedName
+	gatewayTargets := func() []types.NamespacedName {
+		if computedGatewayTargets == nil {
+			computedGatewayTargets = ptr.Of(references.LookupGatewaysForBackend(krtctx, utils.TypedNamespacedName{
+				Kind: wellknown.ServiceKind,
+				NamespacedName: types.NamespacedName{
+					Namespace: svc.Namespace,
+					Name:      svc.Name,
+				},
+			}).UnsortedList())
+		}
+		return *computedGatewayTargets
+	}
 
 	for _, port := range svc.Spec.Ports {
-		if port.AppProtocol != nil && *port.AppProtocol == a2aProtocol {
+		// support legacy kgateway.dev/a2a and agentgateway.dev/a2a
+		if port.AppProtocol != nil && (*port.AppProtocol == a2aProtocol || *port.AppProtocol == legacyA2aProtocol) {
 			logger.Debug("found A2A service", "service", svc.Name, "namespace", svc.Namespace, "port", port.Port)
 			hostname := fmt.Sprintf("%s.%s.svc.%s", svc.Name, svc.Namespace, clusterDomain)
 			policy := &api.Policy{
@@ -69,7 +78,7 @@ func translatePoliciesForService(krtctx krt.HandlerContext, svc *corev1.Service,
 				},
 			}
 
-			a2aPolicies = appendPolicyForGateways(a2aPolicies, gatewayTargets, policy)
+			a2aPolicies = appendPolicyForGateways(a2aPolicies, gatewayTargets(), policy)
 		}
 	}
 

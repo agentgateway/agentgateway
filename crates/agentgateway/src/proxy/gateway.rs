@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::error::Error as StdError;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -20,7 +21,7 @@ use tokio::task::{AbortHandle, JoinSet};
 use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, event, info, info_span, warn};
 
-use crate::proxy::ProxyError;
+use crate::proxy::{ProxyError, WaypointService};
 use crate::store::{BindEvent, BindListeners, FrontendPolices};
 use crate::telemetry::metrics::TCPLabels;
 use crate::transport::BufferLimit;
@@ -30,13 +31,20 @@ use crate::transport::stream::{
 use crate::types::agent::{
 	BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
 };
+use crate::types::discovery::Service;
+use crate::types::discovery::gatewayaddress::Destination;
 use crate::types::frontend;
 use crate::{ProxyInputs, client};
 use agent_core::strng;
+use agent_hbone::server::H2Request;
 
 #[cfg(test)]
 #[path = "gateway_test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "locality_test.rs"]
+mod locality_tests;
 
 #[derive(Debug, Clone, PartialEq)]
 
@@ -422,17 +430,7 @@ impl Gateway {
 					warn!(src.addr = %peer_addr, "proxy error: {e}");
 				}
 			},
-			BindProtocol::tcp => {
-				Self::proxy_tcp(
-					bind_name,
-					inputs,
-					None,
-					raw_stream,
-					Arc::new(policies),
-					drain,
-				)
-				.await
-			},
+			BindProtocol::tcp => Self::proxy_tcp(bind_name, inputs, None, raw_stream, drain).await,
 			BindProtocol::tls => {
 				match Self::maybe_terminate_tls(
 					inputs.clone(),
@@ -456,15 +454,7 @@ impl Gateway {
 							.await;
 						},
 						ListenerProtocol::TLS(_) => {
-							Self::proxy_tcp(
-								bind_name,
-								inputs,
-								Some(selected_listener),
-								stream,
-								Arc::new(policies),
-								drain,
-							)
-							.await
+							Self::proxy_tcp(bind_name, inputs, Some(selected_listener), stream, drain).await
 						},
 						_ => {
 							error!(
@@ -528,7 +518,6 @@ impl Gateway {
 											inputs,
 											Some(selected_listener),
 											tls_stream,
-											Arc::new(policies),
 											drain,
 										)
 										.await
@@ -601,8 +590,11 @@ impl Gateway {
 				Self::proxy_bind(bind_name, bind_protocol, raw_stream, inputs, drain).await
 			},
 			TunnelProtocol::HboneWaypoint => {
-				let _ =
+				let err =
 					Self::terminate_waypoint_hbone(bind_name, inputs, raw_stream, policies, drain).await;
+				if let Err(e) = err {
+					warn!(src.addr = %peer_addr, "hbone error: {e}");
+				}
 			},
 			TunnelProtocol::HboneGateway => {
 				let _ = Self::terminate_gateway_hbone(inputs, raw_stream, policies, drain).await;
@@ -655,11 +647,16 @@ impl Gateway {
 			.get_or_create(&transport_labels)
 			.inc();
 
-		let src = crate::cel::SourceContext {
-			address: tcp.peer_addr.ip(),
-			port: tcp.peer_addr.port(),
-			tls: tls.and_then(|t| t.src_identity.clone()),
-		};
+		let unverified_workload = crate::cel::WorkloadContext::from_stores(
+			&inputs.stores,
+			&inputs.cfg.network,
+			tcp.peer_addr.ip(),
+		);
+		let src = crate::cel::SourceContext::from_tcp_connection(
+			tcp,
+			tls.and_then(|t| t.src_identity.clone()),
+			unverified_workload,
+		);
 		if let Some(network_authorization) = policies.network_authorization.as_ref()
 			&& let Err(e) = network_authorization.apply(&src)
 		{
@@ -668,6 +665,8 @@ impl Gateway {
 		stream.ext_mut().insert(src);
 
 		let transport_metrics = inputs.metrics.clone();
+		let _max_dur_metrics = transport_metrics.clone();
+		let _max_dur_labels = transport_labels.clone();
 		let proxy = super::httpproxy::HTTPProxy {
 			bind_name,
 			inputs,
@@ -686,6 +685,11 @@ impl Gateway {
 			.map(|h| h.max_buffer_size)
 			.unwrap_or(def.max_buffer_size);
 
+		let max_connection_duration = policies
+			.http
+			.as_ref()
+			.and_then(|h| h.max_connection_duration);
+
 		let serve = server.serve_connection_with_upgrades(
 			TokioIo::new(stream),
 			hyper::service::service_fn(move |mut req| {
@@ -695,16 +699,38 @@ impl Gateway {
 				async move { proxy.proxy(connection, req).map(Ok::<_, Infallible>).await }
 			}),
 		);
-		// Wrap it in the graceful watcher, will ensure GOAWAY/Connect:clone when we shutdown
-		let serve = drain.wrap_connection(serve);
-		let res = serve.await;
+		// Pin the connection so we can call graceful_shutdown() on it
+		tokio::pin!(serve);
+		let drain_signal = drain.wait_for_drain();
+		tokio::pin!(drain_signal);
+
+		let max_connection_duration = async {
+			match max_connection_duration {
+				Some(d) => tokio::time::sleep(d).await,
+				None => std::future::pending().await,
+			}
+		};
+		let res = tokio::select! {
+			res = serve.as_mut() => res,
+			_guard = &mut drain_signal => {
+				// Drain signaled, initiate graceful shutdown (GOAWAY/Connection:close)
+				// then wait for in-flight requests to complete
+				serve.as_mut().graceful_shutdown();
+				serve.await
+			},
+			_ = max_connection_duration => {
+				debug!("connection closed: max connection duration reached");
+				// Initiate graceful shutdown then wait for in-flight requests to complete
+				serve.as_mut().graceful_shutdown();
+				serve.await
+			},
+		};
 		match res {
 			Ok(_) => Ok(()),
 			Err(e) => {
-				if let Some(te) = e.downcast_ref::<hyper::Error>()
-					&& te.is_timeout()
-				{
-					// This is just closing an idle connection; no need to log which is misleading
+				if should_ignore_downstream_connection_error(e.as_ref()) {
+					// Expected for idle keepalive expiry and clients tearing down long-lived
+					// streams such as SSE before the server finishes the response.
 					return Ok(());
 				}
 				anyhow::bail!("{e}");
@@ -717,7 +743,6 @@ impl Gateway {
 		inputs: Arc<ProxyInputs>,
 		selected_listener: Option<Arc<Listener>>,
 		stream: Socket,
-		policies: Arc<FrontendPolices>,
 		_drain: DrainWatcher,
 	) {
 		let selected_listener = match selected_listener {
@@ -740,7 +765,7 @@ impl Gateway {
 			selected_listener,
 			target_address,
 		};
-		proxy.proxy(stream, policies).await
+		proxy.proxy(stream).await
 	}
 
 	// maybe_terminate_tls will observe the TLS handshake, and once the client hello has been received, select
@@ -924,17 +949,9 @@ impl Gateway {
 
 		debug!("accepted connection");
 		let cfg = inp.cfg.clone();
-		let pols = Arc::new(policies);
 		let request_handler = move |req, ext, graceful| {
-			Self::serve_waypoint_connect(
-				bind_name.clone(),
-				inp.clone(),
-				pols.clone(),
-				req,
-				ext,
-				graceful,
-			)
-			.instrument(info_span!("inbound"))
+			Self::serve_waypoint_connect(bind_name.clone(), inp.clone(), req, ext, graceful)
+				.instrument(info_span!("inbound"))
 		};
 
 		let (_, force_shutdown) = watch::channel(());
@@ -991,20 +1008,14 @@ impl Gateway {
 	async fn serve_waypoint_connect(
 		bind_name: BindKey,
 		pi: Arc<ProxyInputs>,
-		policies: Arc<FrontendPolices>,
 		req: agent_hbone::server::H2Request,
 		ext: Arc<Extension>,
 		drain: DrainWatcher,
 	) {
-		let uri = req.uri();
-		let parsed_addr = match HboneAddress::try_from(uri) {
-			Ok(addr) => addr,
-			Err(_) => {
-				warn!(
-					bind=?bind_name,
-					uri=%uri,
-					"serve_waypoint_connect: invalid URI format"
-				);
+		let (socket_addr, svc) = match Self::setup_hbone_info(&pi, &req).await {
+			Ok(i) => i,
+			Err(e) => {
+				warn!("hbone failed: {e}");
 				let _ = req
 					.send_response(build_response(StatusCode::BAD_REQUEST))
 					.await;
@@ -1012,62 +1023,10 @@ impl Gateway {
 			},
 		};
 
-		// Resolve the HBONE address to a socket address and detect the service protocol
-		// in a single discovery store lookup to avoid redundant read locks.
-		let (socket_addr, is_http) = {
-			let discovery = pi.stores.read_discovery();
-			let network = &pi.cfg.network;
-
-			let resolved_addr = match parsed_addr {
-				HboneAddress::SocketAddr(addr) => addr,
-				HboneAddress::SvcHostname(hostname, port) => {
-					let hostname_str = hostname.to_string();
-					let svc = find_service_by_hostname(&discovery, &hostname_str);
-
-					let vip = if let Some(svc) = svc {
-						if let Some(vip) = svc
-							.vips
-							.iter()
-							.find(|vip| vip.network == *network)
-							.or_else(|| svc.vips.first())
-						{
-							vip.address
-						} else {
-							warn!(
-								bind=?bind_name,
-								hostname=%hostname_str,
-								"serve_waypoint_connect: no VIP found for service"
-							);
-							return;
-						}
-					} else {
-						warn!(
-							bind=?bind_name,
-							hostname=%hostname_str,
-							"serve_waypoint_connect: no service found for hostname"
-						);
-						return;
-					};
-					SocketAddr::from((vip, port))
-				},
-			};
-
-			// Determine protocol from service discovery. Default to HTTP since the vast
-			// majority of waypoint traffic is HTTP; only use TCP when there is a positive
-			// signal via explicit AppProtocol::Tcp/Tls (from istio/istio#59259).
-			let svc = discovery
-				.services
-				.get_by_vip(&crate::types::discovery::NetworkAddress {
-					network: network.clone(),
-					address: resolved_addr.ip(),
-				});
-			let is_http = match svc {
-				Some(svc) => !svc.port_is_tcp(resolved_addr.port()),
-				None => true,
-			};
-
-			(resolved_addr, is_http)
-		};
+		// Determine protocol from service discovery. Default to HTTP since the vast
+		// majority of waypoint traffic is HTTP; only use TCP when there is a positive
+		// signal via explicit AppProtocol::Tcp/Tls (from istio/istio#59259).
+		let is_http = !svc.port_is_tcp(socket_addr.port());
 
 		let Ok(resp) = req.send_response(build_response(StatusCode::OK)).await else {
 			warn!("failed to send response");
@@ -1079,8 +1038,21 @@ impl Gateway {
 			drain_tx: None,
 		};
 
-		// Look up the real HBONE listener for policy resolution (gateway/listener-targeted
-		// policies require the listener's name to match).
+		let socket = Socket::from_hbone(ext, socket_addr, con);
+		Self::handle_waypoint(bind_name, pi, svc, socket, is_http, drain).await;
+	}
+
+	/// Resolve the HBONE listener and dispatch to the HTTP or TCP proxy.
+	pub(crate) async fn handle_waypoint(
+		bind_name: BindKey,
+		pi: Arc<ProxyInputs>,
+		svc: Arc<crate::types::discovery::Service>,
+		mut socket: Socket,
+		is_http: bool,
+		drain: DrainWatcher,
+	) {
+		// Find HBONE listener, or fall back to a synthetic one using gateway
+		// config names so gateway/listener-targeted policies still match.
 		let listener = pi
 			.stores
 			.read_binds()
@@ -1092,10 +1064,10 @@ impl Gateway {
 					.find(|l| matches!(l.protocol, ListenerProtocol::HBONE))
 					.cloned()
 			})
-			.or_else(|| {
+			.unwrap_or_else(|| {
 				// Synthetic fallback so route selection works via VIP lookup.
 				// We may eventually elide the need to generate an HBONE listener at all.
-				Some(Arc::new(Listener {
+				Arc::new(Listener {
 					key: Default::default(),
 					name: crate::types::agent::ListenerName {
 						gateway_name: pi.cfg.xds.gateway.clone(),
@@ -1105,17 +1077,120 @@ impl Gateway {
 					},
 					hostname: Default::default(),
 					protocol: ListenerProtocol::HBONE,
-					tcp_routes: Default::default(),
-					routes: Default::default(),
-				}))
+				})
 			});
 
-		let socket = Socket::from_hbone(ext, socket_addr, con);
+		let should_sniff_tls = svc.port_is_tls(socket.target_address().port());
+		let wps = WaypointService(svc);
+		// Ensure we load policies per-stream so we don't cache stale policies on long-lived HBONE connections.
+		let policies = pi
+			.stores
+			.read_binds()
+			.listener_frontend_policies(&listener.name, Some(wps.as_policy_ref()));
+		socket.ext_mut().insert(wps);
 		if is_http {
-			let _ = Self::proxy(bind_name, pi, listener, socket, policies.clone(), drain).await;
+			let _ = Self::proxy(
+				bind_name,
+				pi,
+				Some(listener),
+				socket,
+				Arc::new(policies),
+				drain,
+			)
+			.await;
 		} else {
-			Self::proxy_tcp(bind_name, pi, listener, socket, policies.clone(), drain).await;
+			// For waypoint TCP traffic, only sniff TLS if the service port's appProtocol is TLS
+			socket
+				.ext_mut()
+				.insert(crate::transport::stream::WaypointTLSInfo { should_sniff_tls });
+
+			Self::proxy_tcp(bind_name, pi, Some(listener), socket, drain).await;
 		}
+	}
+
+	async fn setup_hbone_info(
+		pi: &Arc<ProxyInputs>,
+		req: &H2Request,
+	) -> anyhow::Result<(SocketAddr, Arc<Service>)> {
+		let uri = req.uri();
+		let parsed_addr = match HboneAddress::try_from(uri) {
+			Ok(addr) => addr,
+			Err(err) => {
+				anyhow::bail!("invalid URI format: {uri} {err}");
+			},
+		};
+
+		// Resolve the HBONE address to a socket address and detect the service protocol
+		// in a single discovery store lookup to avoid redundant read locks.
+		let discovery = pi.stores.read_discovery();
+		let network = &pi.cfg.network;
+
+		let (addr, svc) = match parsed_addr {
+			HboneAddress::SocketAddr(addr) => {
+				let Some(svc) = discovery
+					.services
+					.get_by_vip(&crate::types::discovery::NetworkAddress {
+						network: network.clone(),
+						address: addr.ip(),
+					})
+				else {
+					anyhow::bail!("no service found for address {addr}");
+				};
+				(addr, svc)
+			},
+			HboneAddress::SvcHostname(hostname, port) => {
+				let hostname_str = hostname.to_string();
+				let Some(svc) = find_service_by_hostname(&discovery, &hostname_str) else {
+					anyhow::bail!("no service found for hostname {hostname_str}");
+				};
+
+				let Some(vip) = svc
+					.vips
+					.iter()
+					.find(|vip| vip.network == *network)
+					.or_else(|| svc.vips.first())
+					.map(|v| v.address)
+				else {
+					anyhow::bail!("serve_waypoint_connect: no VIP found for service {hostname_str}");
+				};
+				(SocketAddr::from((vip, port)), svc)
+			},
+		};
+
+		// Make sure the service is actually bound to us
+		let Some(wp) = svc.waypoint.as_ref() else {
+			anyhow::bail!(
+				"service {}.{} is not bound to a waypoint",
+				svc.hostname,
+				svc.namespace
+			);
+		};
+		let Some(self_id) = pi.cfg.self_addr.as_ref() else {
+			anyhow::bail!("self_id required for waypoint");
+		};
+		let is_ours = match &wp.destination {
+			Destination::Address(addr) => self_id.matches_address(addr, |ns, hostname| {
+				let self_svc = discovery.services.get_by_namespaced_host(
+					&crate::types::discovery::NamespacedHostname {
+						namespace: ns.clone(),
+						hostname: hostname.clone(),
+					},
+				)?;
+				Some(self_svc.vips.clone())
+			}),
+			Destination::Hostname(n) => self_id.matches_hostname(n),
+		};
+		if !is_ours {
+			anyhow::bail!(
+				"service {} is meant for waypoint {:?}, but we are {}.{}",
+				svc.hostname,
+				wp.destination,
+				self_id.gateway,
+				self_id.namespace
+			);
+		}
+
+		Ok((addr, svc))
 	}
 
 	/// serve_gateway_connect handles a single connection from a client.
@@ -1197,6 +1272,7 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 		http2_frame_size,
 		http2_keepalive_interval,
 		http2_keepalive_timeout,
+		max_connection_duration: _,
 	} = c.unwrap_or(&def);
 
 	if let Some(m) = http1_max_headers {
@@ -1244,6 +1320,16 @@ fn is_accept_error_per_connection(e: &std::io::Error) -> bool {
 		e.raw_os_error(),
 		Some(libc::ECONNABORTED | libc::ECONNRESET | libc::EPERM)
 	)
+}
+
+fn should_ignore_downstream_connection_error(err: &(dyn StdError + 'static)) -> bool {
+	if let Some(hyper_err) = err.downcast_ref::<hyper::Error>()
+		&& (hyper_err.is_timeout() || hyper_err.is_incomplete_message())
+	{
+		return true;
+	}
+
+	false
 }
 
 fn build_response(status: StatusCode) -> ::http::Response<()> {

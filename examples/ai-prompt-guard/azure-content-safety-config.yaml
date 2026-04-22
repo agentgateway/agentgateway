@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI:
+              model: gpt-4o-mini
+      policies:
+        ai:
+          promptGuard:
+            request:
+            - azureContentSafety:
+                endpoint: your-resource-name.cognitiveservices.azure.com
+                analyzeText:
+                  severityThreshold: 2
+                detectJailbreak: {}
+            response:
+            - azureContentSafety:
+                endpoint: your-resource-name.cognitiveservices.azure.com
+                analyzeText:
+                  severityThreshold: 2

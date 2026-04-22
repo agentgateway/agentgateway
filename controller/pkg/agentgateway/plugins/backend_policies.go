@@ -19,7 +19,7 @@ import (
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
@@ -36,6 +36,41 @@ const (
 	mcpAuthenticationPolicySuffix = ":mcp-authentication"
 	healthPolicySuffix            = ":health"
 )
+
+func translateAuthorizationLocation(loc *agentgateway.AuthorizationLocation) *api.AuthorizationLocation {
+	if loc == nil {
+		return nil
+	}
+	if loc.Header != nil {
+		return &api.AuthorizationLocation{
+			Kind: &api.AuthorizationLocation_Header_{
+				Header: &api.AuthorizationLocation_Header{
+					Name:   string(loc.Header.Name),
+					Prefix: loc.Header.Prefix,
+				},
+			},
+		}
+	}
+	if loc.QueryParameter != nil {
+		return &api.AuthorizationLocation{
+			Kind: &api.AuthorizationLocation_QueryParameter_{
+				QueryParameter: &api.AuthorizationLocation_QueryParameter{
+					Name: loc.QueryParameter.Name,
+				},
+			},
+		}
+	}
+	if loc.Cookie != nil {
+		return &api.AuthorizationLocation{
+			Kind: &api.AuthorizationLocation_Cookie_{
+				Cookie: &api.AuthorizationLocation_Cookie{
+					Name: loc.Cookie.Name,
+				},
+			},
+		}
+	}
+	return nil
+}
 
 func TranslateInlineBackendPolicy(
 	ctx PolicyCtx,
@@ -458,17 +493,12 @@ func translateMCPAuthenticationSpec(
 	}
 
 	var errs []error
-	jwksUrl, _, err := jwks_url.JwksUrlBuilderFactory().BuildJwksUrlAndTlsConfig(ctx.Krt, policy.Name, policy.Namespace, &authnPolicy.JWKS)
+	translatedInlineJwks, err := resolveJWKSInlineForOwner(
+		ctx,
+		jwks.PolicyBackendMCPAuthenticationLookupOwner(policy.Namespace, policy.Name, authnPolicy.JWKS),
+	)
 	if err != nil {
-		logger.Error("failed resolving jwks url", "error", err)
-		errs = append(errs, err)
-	}
-	var translatedInlineJwks string
-	if err == nil {
-		translatedInlineJwks, err = resolveRemoteJWKSInline(ctx, jwksUrl)
-	}
-	if err != nil {
-		logger.Error("failed resolving jwks", "jwks_uri", jwksUrl, "error", err)
+		logger.Error("failed resolving jwks", "error", err)
 		errs = append(errs, err)
 	}
 
@@ -622,6 +652,9 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 			CacheTools:    aiSpec.PromptCaching.CacheTools,
 		}
 		translatedAIPolicy.PromptCaching.MinTokens = ptr.Of(uint32(aiSpec.PromptCaching.MinTokens)) //nolint:gosec // G115: MinTokens is validated by kubebuilder to be >= 0
+		if aiSpec.PromptCaching.CacheMessageOffset > 0 {
+			translatedAIPolicy.PromptCaching.CacheMessageOffset = ptr.Of(uint32(aiSpec.PromptCaching.CacheMessageOffset)) //nolint:gosec // G115: CacheMessageOffset is validated by kubebuilder to be >= 0
+		}
 	}
 
 	if aiSpec.Routes != nil {
@@ -661,7 +694,10 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 	if auth.InlineKey != nil && *auth.InlineKey != "" {
 		translatedAuth = &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Key{
-				Key: &api.Key{Secret: *auth.InlineKey},
+				Key: &api.Key{
+					Secret:                *auth.InlineKey,
+					AuthorizationLocation: translateAuthorizationLocation(auth.Location),
+				},
 			},
 		}
 	} else if auth.SecretRef != nil {
@@ -671,21 +707,28 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 			errs = append(errs, err)
 			translatedAuth = &api.BackendAuthPolicy{
 				Kind: &api.BackendAuthPolicy_Key{
-					Key: &api.Key{},
+					Key: &api.Key{
+						AuthorizationLocation: translateAuthorizationLocation(auth.Location),
+					},
 				},
 			}
 		} else {
 			if authKey, ok := kubeutils.GetSecretAuth(secret); ok {
 				translatedAuth = &api.BackendAuthPolicy{
 					Kind: &api.BackendAuthPolicy_Key{
-						Key: &api.Key{Secret: authKey},
+						Key: &api.Key{
+							Secret:                authKey,
+							AuthorizationLocation: translateAuthorizationLocation(auth.Location),
+						},
 					},
 				}
 			} else {
 				errs = append(errs, fmt.Errorf("secret %s/%s missing Authorization value", policy.Namespace, auth.SecretRef.Name))
 				translatedAuth = &api.BackendAuthPolicy{
 					Kind: &api.BackendAuthPolicy_Key{
-						Key: &api.Key{},
+						Key: &api.Key{
+							AuthorizationLocation: translateAuthorizationLocation(auth.Location),
+						},
 					},
 				}
 			}
@@ -707,7 +750,9 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 	} else if auth.Passthrough != nil {
 		translatedAuth = &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Passthrough{
-				Passthrough: &api.Passthrough{},
+				Passthrough: &api.Passthrough{
+					AuthorizationLocation: translateAuthorizationLocation(auth.Location),
+				},
 			},
 		}
 	}

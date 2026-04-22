@@ -2,11 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use ::http::{HeaderMap, StatusCode, Uri, header};
-use prost_types::Timestamp;
-use serde_json::Value as JsonValue;
-use url::form_urlencoded;
-
 use crate::cel::{BufferedBody, Expression, Value};
 use crate::http::envoy_proto_common;
 use crate::http::ext_authz::proto::attribute_context::HttpRequest;
@@ -24,6 +19,11 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendPolicy, SimpleBackendReference};
 use crate::*;
+use ::http::HeaderValue;
+use ::http::{HeaderMap, StatusCode, Uri, header};
+use prost_types::Timestamp;
+use serde_json::Value as JsonValue;
+
 #[cfg(test)]
 #[path = "ext_authz_tests.rs"]
 mod tests;
@@ -171,6 +171,39 @@ impl ExtAuthz {
 	}
 }
 impl ExtAuthz {
+	async fn buffer_request_body(
+		req: &mut Request,
+		body_opts: &BodyOptions,
+	) -> Result<BufferedRequestBody, BufferRequestBodyError> {
+		let max_size = body_opts.max_request_bytes as usize;
+
+		let peek_limit = max_size.saturating_add(1);
+		let body = crate::http::inspect_body_with_limit(req.body_mut(), peek_limit)
+			.await
+			.map_err(BufferRequestBodyError::Read)?;
+		let is_partial = body.len() > max_size;
+
+		if is_partial && !body_opts.allow_partial_message {
+			return Err(BufferRequestBodyError::TooLarge);
+		}
+
+		let body = if is_partial {
+			body.slice(0..max_size)
+		} else {
+			body
+		};
+		let original_size = match is_partial {
+			false => i64::try_from(body.len()).unwrap_or(i64::MAX),
+			true => -1,
+		};
+
+		Ok(BufferedRequestBody {
+			body,
+			is_partial,
+			original_size,
+		})
+	}
+
 	/// Handle authorization failure with FailureMode configuration
 	fn handle_auth_failure(&self, error_msg: &str) -> Result<PolicyResponse, ProxyError> {
 		match &self.failure_mode {
@@ -274,27 +307,25 @@ impl ExtAuthz {
 		}
 
 		let (body, raw_body, original_body_size) = if let Some(body_opts) = &self.include_request_body {
-			let max_size = body_opts.max_request_bytes as usize;
-
-			let original_size = 0;
-			match crate::http::inspect_body_with_limit(req.body_mut(), max_size).await {
-				Ok(body_bytes) => {
-					let bytes = body_bytes.to_vec();
-
+			match Self::buffer_request_body(req, body_opts).await {
+				Ok(buffered) => {
+					let bytes = buffered.body;
 					if body_opts.pack_as_bytes {
-						(String::new(), bytes, original_size)
+						(String::new(), bytes.to_vec(), buffered.original_size)
 					} else {
 						(
-							String::from_utf8_lossy(&bytes).into_owned(),
+							String::from_utf8_lossy(bytes.as_ref()).into_owned(),
 							Vec::new(),
-							original_size,
+							buffered.original_size,
 						)
 					}
 				},
-				Err(e) => {
-					debug!("Failed to read request body for ext_authz: {:?}", e);
-					(String::new(), Vec::new(), 0)
+				Err(BufferRequestBodyError::TooLarge) => {
+					return Err(ProxyError::ExternalAuthorizationFailed(Some(
+						StatusCode::PAYLOAD_TOO_LARGE,
+					)));
 				},
+				Err(BufferRequestBodyError::Read(e)) => return Err(ProxyError::Processing(e)),
 			}
 		} else {
 			(String::new(), Vec::new(), 0)
@@ -534,17 +565,18 @@ impl ExtAuthz {
 			unreachable!();
 		};
 
-		let body = if let Some(body_opts) = &self.include_request_body {
-			let max_size = body_opts.max_request_bytes as usize;
-			match crate::http::inspect_body_with_limit(req.body_mut(), max_size).await {
-				Ok(body_bytes) => body_bytes,
-				Err(e) => {
-					debug!("Failed to read request body for ext_authz: {:?}", e);
-					Bytes::new()
+		let (body, is_partial_body) = if let Some(body_opts) = &self.include_request_body {
+			match Self::buffer_request_body(req, body_opts).await {
+				Ok(buffered) => (buffered.body, buffered.is_partial),
+				Err(BufferRequestBodyError::TooLarge) => {
+					return Err(ProxyError::ExternalAuthorizationFailed(Some(
+						StatusCode::PAYLOAD_TOO_LARGE,
+					)));
 				},
+				Err(BufferRequestBodyError::Read(e)) => return Err(ProxyError::Processing(e)),
 			}
 		} else {
-			Bytes::new()
+			(Bytes::new(), false)
 		};
 
 		let path: Uri = match path {
@@ -572,7 +604,8 @@ impl ExtAuthz {
 					},
 				}
 			},
-			None => Uri::try_from(req.uri().path()).expect("pre-validated"),
+			None => Uri::try_from(http::get_path_and_query(req.uri()))
+				.map_err(|_| ProxyError::ExternalAuthorizationFailed(None))?,
 		};
 
 		// If the user defined their own path expression, use that.
@@ -596,6 +629,13 @@ impl ExtAuthz {
 					hv.as_bytes(),
 				);
 			}
+		}
+		if self.include_request_body.is_some() {
+			check_req.headers_mut().insert(
+				// Don't love this but its part of the "specification" so we follow it.
+				HeaderName::from_static("x-envoy-auth-partial-body"),
+				HeaderValue::from_static(if is_partial_body { "true" } else { "false" }),
+			);
 		}
 
 		// Insert any headers derived from CEL expressions.
@@ -739,6 +779,18 @@ impl ExtAuthz {
 	}
 }
 
+struct BufferedRequestBody {
+	body: Bytes,
+	is_partial: bool,
+	original_size: i64,
+}
+
+#[derive(Debug)]
+enum BufferRequestBodyError {
+	TooLarge,
+	Read(anyhow::Error),
+}
+
 /// Apply HTTP/2 pseudo-headers returned by the ext_authz server to the inbound request
 fn apply_pseudo_headers_to_request(req: &mut Request, headers: &[HeaderValueOption]) {
 	for header in headers {
@@ -759,38 +811,13 @@ fn apply_query_parameters_to_request(
 	query_parameters_to_set: &[proto::QueryParameter],
 	query_parameters_to_remove: &[String],
 ) -> Result<(), ProxyError> {
-	if query_parameters_to_set.is_empty() && query_parameters_to_remove.is_empty() {
-		return Ok(());
-	}
-
-	crate::http::modify_url(req.uri_mut(), |url| {
-		let mut pairs = url
-			.query()
-			.map(|query| {
-				form_urlencoded::parse(query.as_bytes())
-					.map(|(key, value)| (key.into_owned(), value.into_owned()))
-					.collect::<Vec<_>>()
-			})
-			.unwrap_or_default();
-
-		for param in query_parameters_to_set {
-			pairs.retain(|(key, _)| key != &param.key);
-			pairs.push((param.key.clone(), param.value.clone()));
-		}
-
-		if !query_parameters_to_remove.is_empty() {
-			pairs.retain(|(key, _)| !query_parameters_to_remove.contains(key));
-		}
-
-		let mut serializer = form_urlencoded::Serializer::new(String::new());
-		for (key, value) in pairs {
-			serializer.append_pair(&key, &value);
-		}
-
-		let query = serializer.finish();
-		url.set_query((!query.is_empty()).then_some(query.as_str()));
-		Ok(())
-	})
+	crate::http::modify_query_parameters(
+		req.uri_mut(),
+		query_parameters_to_set
+			.iter()
+			.map(|param| (param.key.as_str(), param.value.as_str())),
+		query_parameters_to_remove.iter().map(String::as_str),
+	)
 	.map_err(ProxyError::Processing)
 }
 

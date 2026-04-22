@@ -3,6 +3,19 @@ kind: Namespace
 metadata:
   name: agentgateway-base
 ---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: base-gateway-params
+  namespace: agentgateway-base
+spec:
+  env:
+    # Drop export time from 5s to 200ms to speed up tests
+    - name: OTEL_BSP_SCHEDULE_DELAY
+      value: "200"
+    - name: OTEL_BLRP_SCHEDULE_DELAY
+      value: "200"
+---
 kind: Gateway
 apiVersion: gateway.networking.k8s.io/v1
 metadata:
@@ -10,6 +23,11 @@ metadata:
   namespace: agentgateway-base
 spec:
   gatewayClassName: agentgateway
+  infrastructure:
+    parametersRef:
+      group: agentgateway.dev
+      kind: AgentgatewayParameters
+      name: base-gateway-params
   listeners:
     - protocol: HTTP
       port: 80
@@ -188,7 +206,7 @@ spec:
     - protocol: TCP
       port: 9999
       targetPort: 9999
-      appProtocol: kgateway.dev/a2a
+      appProtocol: agentgateway.dev/a2a
 ---
 apiVersion: v1
 kind: Service
@@ -231,7 +249,7 @@ spec:
   ports:
     - port: 80
       targetPort: 8000
-      appProtocol: kgateway.dev/mcp
+      appProtocol: agentgateway.dev/mcp
 ---
 apiVersion: v1
 kind: Service
@@ -246,7 +264,7 @@ spec:
     - name: http
       port: 80
       targetPort: 3001
-      appProtocol: kgateway.dev/mcp
+      appProtocol: agentgateway.dev/mcp
   type: ClusterIP
 ---
 apiVersion: v1

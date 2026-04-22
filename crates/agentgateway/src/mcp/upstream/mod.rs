@@ -13,7 +13,6 @@ use rmcp::transport::TokioChildProcess;
 use thiserror::Error;
 use tokio::process::Command;
 
-use crate::http::jwt::Claims;
 use crate::mcp::FailureMode;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
@@ -21,15 +20,13 @@ use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::{mergestream, upstream};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::transport::BufferLimit;
 use crate::types::agent::McpTargetSpec;
 use crate::*;
 
 #[derive(Debug, Clone)]
 pub struct IncomingRequestContext {
 	headers: http::HeaderMap,
-	claims: Option<Claims>,
-	buffer_limit: Option<BufferLimit>,
+	ext: ::http::Extensions,
 }
 
 impl IncomingRequestContext {
@@ -37,17 +34,13 @@ impl IncomingRequestContext {
 	pub fn empty() -> Self {
 		Self {
 			headers: http::HeaderMap::new(),
-			claims: None,
-			buffer_limit: None,
+			ext: ::http::Extensions::new(),
 		}
 	}
 	pub fn new(parts: &::http::request::Parts) -> Self {
-		let claims = parts.extensions.get::<Claims>().cloned();
-		let buffer_limit = parts.extensions.get::<BufferLimit>().cloned();
 		Self {
 			headers: parts.headers.clone(),
-			claims,
-			buffer_limit,
+			ext: parts.extensions.clone(),
 		}
 	}
 	pub fn apply(&self, req: &mut http::Request) {
@@ -60,12 +53,7 @@ impl IncomingRequestContext {
 				req.headers_mut().insert(k.clone(), v.clone());
 			}
 		}
-		if let Some(claims) = self.claims.as_ref() {
-			req.extensions_mut().insert(claims.clone());
-		}
-		if let Some(buffer_limit) = self.buffer_limit.as_ref() {
-			req.extensions_mut().insert(buffer_limit.clone());
-		}
+		req.extensions_mut().extend(self.ext.clone());
 	}
 }
 
@@ -134,7 +122,9 @@ impl Upstream {
 				c.stop().await?;
 			},
 			Upstream::McpStreamable(c) => {
-				c.send_delete(ctx).await?;
+				if c.has_session_id() {
+					c.send_delete(ctx).await?;
+				}
 			},
 			Upstream::McpSSE(c) => {
 				c.stop().await?;
@@ -341,7 +331,12 @@ impl UpstreamGroup {
 
 				upstream::Upstream::McpStreamable(client)
 			},
-			McpTargetSpec::Stdio { cmd, args, env } => {
+			McpTargetSpec::Stdio {
+				cmd,
+				args,
+				env,
+				clear_env,
+			} => {
 				debug!("starting stdio transport for target: {}", target.name);
 				#[cfg(target_os = "windows")]
 				// Command has some weird behavior on Windows where it expects the executable extension to be
@@ -354,6 +349,9 @@ impl UpstreamGroup {
 				#[cfg(target_os = "windows")]
 				let mut c = Command::new(&cmd);
 				c.args(args);
+				if *clear_env {
+					c.env_clear();
+				}
 				for (k, v) in env {
 					c.env(k, v);
 				}

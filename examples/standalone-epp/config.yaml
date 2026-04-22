@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=../../schema/local.json
+binds:
+- port: 8081
+  listeners:
+  - name: default
+    protocol: HTTP
+    routes:
+    - name: standalone-epp
+      matches:
+      - path:
+          pathPrefix: /v1/chat/completions
+      backends:
+      - service:
+          name: default/my-model
+          port: 8000
+        policies:
+          inferenceRouting:
+            endpointPicker:
+              host: 127.0.0.1:9002

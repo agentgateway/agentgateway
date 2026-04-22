@@ -146,6 +146,10 @@ func (refs ReferenceGrants) BackendAllowed(
 	routeNamespace string,
 	refKind schema.GroupVersionKind,
 ) bool {
+	if refKind == wellknown.HTTPRouteGVK {
+		// ReferenceGrant not required for route delegation
+		return true
+	}
 	from := Reference{Kind: k, Namespace: gwv1b1.Namespace(routeNamespace)}
 	to := Reference{Kind: refKind, Namespace: backendNamespace}
 	pair := ReferencePair{From: from, To: to}

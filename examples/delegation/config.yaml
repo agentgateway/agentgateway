@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Route delegation example: a parent route delegates to a route group,
+# which contains child routes that match more specific paths.
+#
+# Test with:
+#   curl 127.0.0.1:3000/anything/team1/foo   -> proxied to localhost:8080
+#   curl 127.0.0.1:3000/anything/team1/bar   -> proxied to localhost:8081
+#   curl 127.0.0.1:3000/anything/team2       -> proxied to localhost:8082
+#   curl 127.0.0.1:3000/other                -> no route match (404)
+binds:
+- port: 3000
+  listeners:
+  - protocol: HTTP
+    routes:
+    # Parent route: matches /anything/team1 and delegates to a route group
+    - name: parent-team1
+      matches:
+      - path:
+          pathPrefix: /anything/team1
+      backends:
+      - routeGroup: team1-routes
+    # A non-delegated route for comparison
+    - name: team2-direct
+      matches:
+      - path:
+          pathPrefix: /anything/team2
+      backends:
+      - host: 127.0.0.1:8082
+
+# Route groups contain child routes that are selected when a parent delegates to them.
+# Child routes must match a subset of the parent route's path to ever be reached.
+routeGroups:
+- name: team1-routes
+  routes:
+  - name: child-foo
+    matches:
+    - path:
+        pathPrefix: /anything/team1/foo
+    backends:
+    - host: 127.0.0.1:8080
+  - name: child-bar
+    matches:
+    - path:
+        pathPrefix: /anything/team1/bar
+    backends:
+    - host: 127.0.0.1:8081

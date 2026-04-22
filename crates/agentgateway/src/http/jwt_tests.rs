@@ -7,6 +7,10 @@ use serde_json::json;
 
 type ProviderInfo = (&'static str, &'static str, &'static str);
 
+fn bearer_location() -> crate::http::auth::AuthorizationLocation {
+	crate::http::auth::AuthorizationLocation::bearer_header()
+}
+
 // Deserialization: missing jwtValidationOptions defaults required_claims to ["exp"]
 #[test]
 fn test_deserialize_missing_jwt_validation_options_defaults_to_exp() {
@@ -232,6 +236,7 @@ fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
 		Jwt {
 			mode: Mode::Strict,
 			providers: vec![provider],
+			location: bearer_location(),
 		},
 		kid,
 		issuer,
@@ -329,6 +334,7 @@ pub async fn test_apply_strict_missing_token() {
 	let jwt = super::Jwt {
 		mode: super::Mode::Strict,
 		providers: vec![],
+		location: bearer_location(),
 	};
 
 	// Minimal Request without Authorization header
@@ -348,6 +354,7 @@ pub async fn test_apply_permissive_no_token_ok() {
 	let jwt = Jwt {
 		mode: Mode::Permissive,
 		providers: base.providers.clone(),
+		location: bearer_location(),
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let mut log = make_min_req_log();
@@ -363,6 +370,7 @@ pub async fn test_apply_permissive_invalid_token_ok_and_keeps_header() {
 	let jwt = Jwt {
 		mode: Mode::Permissive,
 		providers: base.providers.clone(),
+		location: bearer_location(),
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	req.headers_mut().insert(
@@ -391,6 +399,7 @@ pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header
 	let jwt = Jwt {
 		mode: Mode::Permissive,
 		providers: base.providers.clone(),
+		location: bearer_location(),
 	};
 	let now = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
@@ -421,6 +430,7 @@ pub async fn test_apply_optional_no_token_ok() {
 	let jwt = Jwt {
 		mode: Mode::Optional,
 		providers: base.providers.clone(),
+		location: bearer_location(),
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let mut log = make_min_req_log();
@@ -436,6 +446,7 @@ pub async fn test_apply_optional_invalid_token_err() {
 	let jwt = Jwt {
 		mode: Mode::Optional,
 		providers: base.providers.clone(),
+		location: bearer_location(),
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	req.headers_mut().insert(
@@ -455,6 +466,7 @@ pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header()
 	let jwt = Jwt {
 		mode: Mode::Optional,
 		providers: base.providers.clone(),
+		location: bearer_location(),
 	};
 	let now = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
@@ -475,6 +487,34 @@ pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header()
 			.get(crate::http::header::AUTHORIZATION)
 			.is_none()
 	);
+	assert!(req.extensions().get::<super::Claims>().is_some());
+}
+
+#[tokio::test]
+pub async fn test_apply_query_parameter_token_inserts_claims_and_removes_query_param() {
+	use std::time::{SystemTime, UNIX_EPOCH};
+
+	let (base, kid, issuer, allowed_aud) = setup_test_jwt();
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: base.providers.clone(),
+		location: crate::http::auth::AuthorizationLocation::QueryParameter {
+			name: "token".into(),
+		},
+	};
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs();
+	let token = build_unsigned_token(kid, issuer, allowed_aud, now + 600);
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	*req.uri_mut() = format!("http://example.com/?token={token}&keep=yes")
+		.parse()
+		.unwrap();
+	let mut log = make_min_req_log();
+	let res = jwt.apply(Some(&mut log), &mut req).await;
+	assert!(res.is_ok());
+	assert_eq!(req.uri().to_string(), "http://example.com/?keep=yes");
 	assert!(req.extensions().get::<super::Claims>().is_some());
 }
 
@@ -584,6 +624,7 @@ fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 		Jwt {
 			mode: Mode::Strict,
 			providers: vec![provider1, provider2],
+			location: bearer_location(),
 		},
 		(kid1, issuer1, aud1),
 		(kid2, issuer2, aud2),
@@ -678,6 +719,7 @@ pub fn test_empty_required_claims_accepts_token_without_exp() {
 	let jwt = Jwt {
 		mode: Mode::Strict,
 		providers: vec![provider],
+		location: bearer_location(),
 	};
 
 	let token = build_unsigned_token_without_exp(kid, issuer, aud);
@@ -736,6 +778,7 @@ pub fn test_default_required_claims_rejects_token_without_exp() {
 	let jwt = Jwt {
 		mode: Mode::Strict,
 		providers: vec![provider],
+		location: bearer_location(),
 	};
 
 	let token = build_unsigned_token_without_exp(kid, issuer, aud);
@@ -792,6 +835,7 @@ pub fn test_empty_required_claims_still_rejects_expired_tokens() {
 	let jwt = Jwt {
 		mode: Mode::Strict,
 		providers: vec![provider],
+		location: bearer_location(),
 	};
 
 	let token = build_unsigned_token_with_expired_exp(kid, issuer, aud);
@@ -848,6 +892,7 @@ pub fn test_required_claims_with_nbf_rejects_missing_nbf() {
 	let jwt = Jwt {
 		mode: Mode::Strict,
 		providers: vec![provider],
+		location: bearer_location(),
 	};
 
 	// Token with exp but without nbf should be rejected when nbf is required

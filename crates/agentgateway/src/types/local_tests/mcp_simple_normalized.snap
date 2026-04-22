@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
+assertion_line: 137
 description: "Config normalization test for mcp_simple: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
@@ -15,18 +16,20 @@ binds:
         key: mcp
         listenerName: mcp
         protocol: HTTP
-        routes:
-          "mcp:default":
-            backends:
-              - backend: /mcp
-                weight: 1
-            key: "mcp:default"
-            matches:
-              - path:
-                  pathPrefix: /
-            name: default
-            namespace: internal
-        tcpRoutes: {}
+listener_routes:
+  - - mcp
+    - - backends:
+          - backend: /mcp
+            weight: 1
+        key: "mcp:default"
+        matches:
+          - path:
+              pathPrefix: /
+        name: default
+        namespace: internal
+listener_tcp_routes:
+  - - mcp
+    - []
 policies: []
 backends:
   - backend:
@@ -48,5 +51,7 @@ backends:
           stateful: true
           alwaysUsePrefix: false
           failureMode: failClosed
+          sessionIdleTtl: 45m0s
+route_groups: []
 workloads: []
 services: []

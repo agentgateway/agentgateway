@@ -6,9 +6,10 @@ use std::time::{Duration, Instant};
 
 use anyhow::anyhow;
 use arc_swap::ArcSwapOption;
+use hickory_resolver::TokioResolver;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-use hickory_resolver::name_server::TokioConnectionProvider;
-use hickory_resolver::{ResolveError, TokioResolver};
+use hickory_resolver::net::NetError;
+use hickory_resolver::net::runtime::TokioRuntimeProvider;
 
 use crate::*;
 
@@ -131,7 +132,7 @@ enum Resolver {
 }
 
 impl Resolver {
-	async fn resolve(&self, host: &str) -> Result<(Box<[IpAddr]>, Instant), ResolveError> {
+	async fn resolve(&self, host: &str) -> Result<(Box<[IpAddr]>, Instant), NetError> {
 		match self {
 			Resolver::Real(resolver) => resolver.lookup_ip(host).await.map(|lookup| {
 				let expiry = lookup.valid_until();
@@ -149,9 +150,9 @@ impl CachedResolver {
 		// always consult the system's /etc/hosts file when resolving hostnames
 		opts.use_hosts_file = hickory_resolver::config::ResolveHosts::Always;
 		let mut rb =
-			hickory_resolver::Resolver::builder_with_config(config, TokioConnectionProvider::default());
+			hickory_resolver::Resolver::builder_with_config(config, TokioRuntimeProvider::default());
 		*rb.options_mut() = opts;
-		let dns_resolver = rb.build();
+		let dns_resolver = rb.build().expect("dns resolver config should be valid");
 		CachedResolver {
 			entries: Arc::new(Mutex::new(HashMap::new())),
 			dns: Arc::new(Resolver::Real(dns_resolver)),

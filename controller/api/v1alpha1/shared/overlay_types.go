@@ -21,7 +21,7 @@ type ObjectMetadata struct {
 
 // KubernetesResourceOverlay provides a mechanism to customize generated
 // Kubernetes resources using [Strategic Merge
-// Patch](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-api-machinery/strategic-merge-patch.md)
+// Patch](https://github.com/kubernetes/community/blob/main/contributors/devel/sig-api-machinery/strategic-merge-patch.md)
 // semantics.
 //
 // # Overlay Application Order

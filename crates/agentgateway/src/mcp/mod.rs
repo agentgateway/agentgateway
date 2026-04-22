@@ -11,6 +11,7 @@ mod upstream;
 use std::fmt::{Display, Write};
 use std::io;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[cfg(feature = "schema")]
 use crate::JsonSchema;
@@ -38,6 +39,8 @@ pub enum FailureMode {
 	FailOpen,
 }
 
+pub(crate) const DEFAULT_SESSION_IDLE_TTL: Duration = Duration::from_mins(30);
+
 #[cfg(test)]
 #[path = "mcp_tests.rs"]
 mod tests;
@@ -48,6 +51,8 @@ pub enum Error {
 	MethodNotAllowed,
 	#[error("client must accept both application/json and text/event-stream")]
 	InvalidAccept,
+	#[error("client must accept text/event-stream")]
+	InvalidAcceptGet,
 	#[error("client must send application/json")]
 	InvalidContentType,
 	#[error("fail to deserialize request body: {0}")]

@@ -60,6 +60,14 @@ pub struct HTTP {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	#[serde(default)]
 	pub http2_keepalive_timeout: Option<Duration>,
+
+	/// Maximum duration a connection is allowed to remain open. After this duration,
+	/// the connection is gracefully closed after the current in-flight request completes.
+	/// Useful for ensuring even traffic distribution behind load balancers during scaling events.
+	#[serde(with = "serde_dur_option")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	#[serde(default)]
+	pub max_connection_duration: Option<Duration>,
 }
 
 impl Default for HTTP {
@@ -76,6 +84,8 @@ impl Default for HTTP {
 
 			http2_keepalive_interval: None,
 			http2_keepalive_timeout: None,
+
+			max_connection_duration: None,
 		}
 	}
 }

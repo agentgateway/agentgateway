@@ -105,10 +105,85 @@ pub struct SourceContext {
 	#[serde(default)]
 	/// The port of the downstream connection.
 	pub port: u16,
+	#[serde(default = "dummy_address", rename = "rawAddress")]
+	#[dynamic(rename = "rawAddress")]
+	/// The original TCP peer IP address of the downstream connection.
+	/// This can differ from the `address` when using tunneling protocols like PROXY.
+	pub raw_address: IpAddr,
+	#[serde(default, rename = "rawPort")]
+	#[dynamic(rename = "rawPort")]
+	/// The original TCP peer port of the downstream connection.
+	/// This can differ from the `port` when using tunneling protocols like PROXY.
+	pub raw_port: u16,
 	/// The (Istio SPIFFE) identity of the downstream connection, if available.
 	#[serde(flatten, default, deserialize_with = "none_if_empty")]
 	#[dynamic(flatten)]
 	pub tls: Option<crate::transport::tls::TlsInfo>,
+	/// The workload context of the downstream connection, resolved from the
+	/// workload discovery store by source IP. Available when the source pod is
+	/// known to the controller's workload discovery store.
+	///
+	/// Fields are nested under `unverified` to signal that they are derived
+	/// from the source IP (not cryptographically authenticated). Policy
+	/// authors should prefer `source.identity.*` for trust-sensitive checks.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub unverified_workload: Option<WorkloadContext>,
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+/// Workload context wrapper. All fields live under `unverified` to make it
+/// clear that the data is resolved by IP, not cryptographically verified.
+pub struct WorkloadContext {
+	/// The pod name of the source workload.
+	#[serde(default)]
+	pub name: Strng,
+	/// The namespace of the source workload.
+	#[serde(default)]
+	pub namespace: Strng,
+	/// The service account of the source workload.
+	#[serde(default)]
+	pub service_account: Strng,
+}
+
+impl SourceContext {
+	pub fn from_tcp_connection(
+		tcp: &crate::transport::stream::TCPConnectionInfo,
+		tls: Option<crate::transport::tls::TlsInfo>,
+		unverified_workload: Option<WorkloadContext>,
+	) -> Self {
+		let raw_peer_addr = tcp.raw_peer_addr.unwrap_or(tcp.peer_addr);
+		Self {
+			address: tcp.peer_addr.ip(),
+			port: tcp.peer_addr.port(),
+			raw_address: raw_peer_addr.ip(),
+			raw_port: raw_peer_addr.port(),
+			tls,
+			unverified_workload,
+		}
+	}
+}
+
+impl WorkloadContext {
+	/// Resolve the source workload from the discovery store by IP address.
+	pub fn from_stores(
+		stores: &crate::Stores,
+		network: &Strng,
+		addr: IpAddr,
+	) -> Option<WorkloadContext> {
+		let discovery = stores.read_discovery();
+		discovery
+			.workloads
+			.find_address(&crate::types::discovery::NetworkAddress {
+				network: network.clone(),
+				address: addr,
+			})
+			.map(|w| WorkloadContext {
+				name: w.name.clone(),
+				namespace: w.namespace.clone(),
+				service_account: w.service_account.clone(),
+			})
+	}
 }
 fn none_if_empty<'de, D>(deserializer: D) -> Result<Option<TlsInfo>, D::Error>
 where
@@ -132,11 +207,11 @@ pub struct BackendContext {
 	/// The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.
 	#[serde(default)]
 	pub name: Strng,
-	/// The type of backend. For example, `ai`, `mcp`, `static`, `dynamic`, or `service`.
+	/// The type of backend.
 	#[serde(rename = "type")]
 	#[serde(default)]
 	pub backend_type: BackendType,
-	/// The protocol of backend. For example, `http`, `tcp`, `a2a`, `mcp`, or `llm`.
+	/// The protocol of backend.
 	#[serde(default)]
 	pub protocol: BackendProtocol,
 }
@@ -312,13 +387,13 @@ impl<'a> Executor<'a> {
 	}
 	pub fn new_tcp_logger(
 		source_context: Option<&'a SourceContext>,
-		end_time: Option<&'a RequestTime>,
+		end_time: &'a RequestTime,
 	) -> Self {
 		let mut this = Self::new_empty();
 		// For TCP connections, set the source context directly
 		this.source = ExtensionOrDirect::Direct(source_context);
 		if let Some(f) = this.request.as_mut() {
-			f.end_time = end_time;
+			f.end_time = Some(end_time);
 		}
 		this
 	}
@@ -1460,12 +1535,19 @@ pub fn full_example_executor() -> ExecutorSerde {
 		source: Some(SourceContext {
 			address: "127.0.0.1".parse().unwrap(),
 			port: 12345,
+			raw_address: "127.0.0.1".parse().unwrap(),
+			raw_port: 12345,
 			tls: Some(TlsInfo {
 				identity: None,
 				subject_alt_names: vec!["san".into()],
 				issuer: Default::default(),
 				subject: Default::default(),
 				subject_cn: Some("cn".into()),
+			}),
+			unverified_workload: Some(WorkloadContext {
+				name: "pod-1".into(),
+				namespace: "ns-1".into(),
+				service_account: "sa-1".into(),
 			}),
 		}),
 		jwt: Some(jwt::Claims {

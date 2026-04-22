@@ -43,6 +43,8 @@ func ToAgwResource(t any) *api.Resource {
 		return &api.Resource{Kind: &api.Resource_Listener{Listener: tt.Listener}}
 	case AgwRoute:
 		return &api.Resource{Kind: &api.Resource_Route{Route: tt.Route}}
+	case AgwRouteGroup:
+		return &api.Resource{Kind: &api.Resource_RouteGroup{RouteGroup: tt.RouteGroup}}
 	case AgwTCPRoute:
 		return &api.Resource{Kind: &api.Resource_TcpRoute{TcpRoute: tt.TCPRoute}}
 	case AgwPolicy:
@@ -121,6 +123,18 @@ func (g AgwRoute) Equals(other AgwRoute) bool {
 	return protoconv.Equals(g, other)
 }
 
+type AgwRouteGroup struct {
+	*api.RouteGroup
+}
+
+func (g AgwRouteGroup) ResourceName() string {
+	return g.Key
+}
+
+func (g AgwRouteGroup) Equals(other AgwRouteGroup) bool {
+	return protoconv.Equals(g, other)
+}
+
 // AgwTCPRoute is a wrapper type that contains the tcp route on the gateway, as well as the status for the tcp route.
 type AgwTCPRoute struct {
 	*api.TCPRoute
@@ -193,23 +207,6 @@ func (g GatewayListener) Equals(other GatewayListener) bool {
 		g.ParentGateway == other.ParentGateway &&
 		g.ParentObject == other.ParentObject &&
 		g.ParentInfo.Equals(other.ParentInfo)
-}
-
-func (g ParentInfo) Equals(other ParentInfo) bool {
-	return g.ParentGateway == other.ParentGateway &&
-		g.ParentGatewayClassName == other.ParentGatewayClassName &&
-		g.ListenerKey == other.ListenerKey &&
-		ptr.Equal(g.ServiceKey, other.ServiceKey) &&
-		g.OriginalHostname == other.OriginalHostname &&
-		g.SectionName == other.SectionName &&
-		g.Port == other.Port &&
-		g.Protocol == other.Protocol &&
-		g.TLSPassthrough == other.TLSPassthrough &&
-		g.CreationTimestamp == other.CreationTimestamp &&
-		slices.EqualFunc(g.AllowedKinds, other.AllowedKinds, func(a, b gwv1.RouteGroupKind) bool {
-			return a.Kind == b.Kind && ptr.Equal(a.Group, b.Group)
-		}) &&
-		slices.Equal(g.Hostnames, other.Hostnames)
 }
 
 type GatewayCollectionConfig struct {
@@ -550,12 +547,7 @@ func reportNotAllowedListenerSet(status *gwv1.ListenerSetStatus, obj *gwv1.Liste
 	status.Conditions = SetConditions(obj.Generation, status.Conditions, gatewayConditions)
 }
 
-// ParentResolver allows expanding a parent reference into the information needed
-// to link a route to the gateway(s) it applies to.
-type ParentResolver interface {
-	// Fetch returns the parents for a given parent key.
-	ParentsFor(ctx krt.HandlerContext, pk utils.TypedNamespacedName) []*ParentInfo
-}
+type ParentResolver = plugins.ParentResolver
 
 // RouteParents holds information about things Routes can reference as parents.
 type RouteParents struct {
@@ -568,6 +560,21 @@ func (p RouteParents) ParentsFor(ctx krt.HandlerContext, pk utils.TypedNamespace
 	return slices.Map(krt.Fetch(ctx, p.Gateways, krt.FilterIndex(p.GatewayIndex, pk)), func(gw *GatewayListener) *ParentInfo {
 		return &gw.ParentInfo
 	})
+}
+
+// CompositeParentResolver combines multiple ParentResolvers, concatenating
+// results from each. This allows plugins to contribute additional parent
+// resolution logic alongside the default Gateway-based resolution.
+type CompositeParentResolver struct {
+	Resolvers []ParentResolver
+}
+
+func (c *CompositeParentResolver) ParentsFor(ctx krt.HandlerContext, pk utils.TypedNamespacedName) []*ParentInfo {
+	var result []*ParentInfo
+	for _, r := range c.Resolvers {
+		result = append(result, r.ParentsFor(ctx, pk)...)
+	}
+	return result
 }
 
 // BuildRouteParents builds a RouteParents from a collection of gateways.

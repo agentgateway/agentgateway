@@ -52,6 +52,7 @@ use telemetry::{metrics, trc};
 use crate::control::{AuthSource, RootCert};
 use crate::telemetry::trc::Protocol;
 use crate::types::agent::{ListenerTarget, PolicyTargetRef};
+use crate::types::local;
 
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -149,6 +150,11 @@ pub struct RawConfig {
 	namespace: Option<String>,
 	gateway: Option<String>,
 	trust_domain: Option<String>,
+	/// Comma-separated list of additional SPIFFE trust domains accepted on inbound HBONE
+	/// connections. The local trust_domain is always implicitly included.
+	additional_trust_domains: Option<String>,
+	/// When true, skip SPIFFE trust-domain verification on inbound HBONE connections.
+	skip_validate_trust_domain: Option<bool>,
 	service_account: Option<String>,
 	cluster_id: Option<String>,
 	network: Option<String>,
@@ -162,6 +168,9 @@ pub struct RawConfig {
 
 	/// Configuration for stateful session management
 	session: Option<RawSession>,
+
+	/// MCP gateway settings.
+	mcp: Option<RawMcpConfig>,
 
 	#[serde(default, with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
@@ -280,6 +289,13 @@ pub struct RawSession {
 }
 
 #[apply(schema_de!)]
+pub struct RawMcpConfig {
+	#[serde(default, with = "serde_dur_option")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	session_ttl: Option<Duration>,
+}
+
+#[apply(schema_de!)]
 pub struct RawTracing {
 	otlp_endpoint: String,
 	#[serde(default)]
@@ -380,6 +396,10 @@ impl<'de> Deserialize<'de> for StringOrInt {
 			fn visit_i64<E>(self, value: i64) -> Result<StringOrInt, E> {
 				Ok(StringOrInt(value.to_string()))
 			}
+
+			fn visit_u64<E>(self, value: u64) -> Result<StringOrInt, E> {
+				Ok(StringOrInt(value.to_string()))
+			}
 		}
 
 		deserializer.deserialize_any(StringOrIntVisitor())
@@ -418,6 +438,10 @@ impl<'de> Deserialize<'de> for StringBoolFloat {
 			fn visit_i64<E>(self, value: i64) -> Result<StringBoolFloat, E> {
 				Ok(StringBoolFloat(value.to_string()))
 			}
+
+			fn visit_u64<E>(self, value: u64) -> Result<StringBoolFloat, E> {
+				Ok(StringBoolFloat(value.to_string()))
+			}
 		}
 
 		deserializer.deserialize_any(StringBoolFloatVisitor())
@@ -446,6 +470,9 @@ impl schemars::JsonSchema for StringBoolFloat {
 pub struct Config {
 	pub ipv6_enabled: bool,
 	pub network: Strng,
+	/// How the gateway discovers its own workload for locality-aware load balancing.
+	/// `None` disables locality filtering — any LoadBalancer config on services is ignored.
+	pub self_identity: Option<types::discovery::SelfIdentitySource>,
 	#[serde(with = "serde_dur")]
 	pub termination_max_deadline: Duration,
 	#[serde(with = "serde_dur")]
@@ -470,11 +497,21 @@ pub struct Config {
 	pub proxy_metadata: ProxyMetadata,
 	pub threading_mode: ThreadingMode,
 	pub session_encoder: http::sessionpersistence::Encoder,
+	/// Runtime cookie/session crypto for browser OIDC flows.
+	pub oidc_cookie_encoder: Option<http::sessionpersistence::Encoder>,
 	/// Handle for tasks/spans emitted on the admin runtime.
 	#[serde(skip)]
 	pub admin_runtime_handle: Option<tokio::runtime::Handle>,
 
 	pub backend: BackendConfig,
+	pub mcp: McpConfig,
+}
+
+#[apply(schema!)]
+pub struct McpConfig {
+	#[serde(with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub session_ttl: Duration,
 }
 
 impl Config {
@@ -491,6 +528,15 @@ impl Config {
 			gateway_namespace: self.xds.namespace.as_ref(),
 			listener_name: None,
 		}
+	}
+	pub fn as_policy_context(
+		&self,
+		policy_key: impl std::fmt::Display,
+	) -> Option<local::AttachedPolicyContext> {
+		Some(local::AttachedPolicyContext {
+			oidc_policy_id: crate::http::oidc::PolicyId::policy(&policy_key),
+			oidc_cookie_encoder: self.oidc_cookie_encoder.as_ref(),
+		})
 	}
 }
 

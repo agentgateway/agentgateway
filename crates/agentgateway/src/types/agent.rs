@@ -1,11 +1,11 @@
 use std::cmp;
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::{Arc, RwLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::anyhow;
 use hashbrown::Equivalent;
@@ -59,8 +59,6 @@ pub struct Listener {
 	/// Can be a wildcard
 	pub hostname: Strng,
 	pub protocol: ListenerProtocol,
-	pub routes: RouteSet,
-	pub tcp_routes: TCPRouteSet,
 }
 
 impl Listener {
@@ -529,6 +527,7 @@ pub struct Route {
 }
 
 pub type RouteKey = Strng;
+pub type RouteGroupKey = Strng;
 pub type RouteRuleName = Strng;
 
 #[apply(schema!)]
@@ -567,13 +566,24 @@ impl RouteName {
 
 #[apply(schema!)]
 #[derive(Hash, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "internal_benches"), derive(Default))]
 pub struct ListenerName {
 	pub gateway_name: Strng,
 	pub gateway_namespace: Strng,
 	pub listener_name: Strng,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub listener_set: Option<ResourceName>,
+}
+
+#[cfg(any(test, feature = "internal_benches"))]
+impl Default for ListenerName {
+	fn default() -> Self {
+		Self {
+			gateway_name: "default".into(),
+			gateway_namespace: "default".into(),
+			listener_name: "default".into(),
+			listener_set: None,
+		}
+	}
 }
 
 impl ListenerName {
@@ -877,11 +887,44 @@ pub enum PathRedirect {
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+pub enum RouteBackendTarget {
+	Service { name: NamespacedHostname, port: u16 },
+	Backend(BackendKey),
+	RouteGroup(RouteGroupKey),
+	Invalid,
+}
+
+impl From<BackendReference> for RouteBackendTarget {
+	fn from(value: BackendReference) -> Self {
+		match value {
+			BackendReference::Service { name, port } => Self::Service { name, port },
+			BackendReference::Backend(key) => Self::Backend(key),
+			BackendReference::Invalid => Self::Invalid,
+		}
+	}
+}
+
+impl RouteBackendTarget {
+	pub fn as_backend_reference(&self) -> Option<BackendReference> {
+		match self {
+			Self::Service { name, port } => Some(BackendReference::Service {
+				name: name.clone(),
+				port: *port,
+			}),
+			Self::Backend(key) => Some(BackendReference::Backend(key.clone())),
+			Self::Invalid => Some(BackendReference::Invalid),
+			Self::RouteGroup(_) => None,
+		}
+	}
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RouteBackendReference {
 	#[serde(default = "default_weight")]
 	pub weight: usize,
 	#[serde(flatten)]
-	pub backend: BackendReference,
+	pub target: RouteBackendTarget,
 	// Inline policies ("filters") of the route backend
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub inline_policies: Vec<BackendPolicy>,
@@ -975,6 +1018,7 @@ impl From<SimpleBackend> for Backend {
 		match value {
 			SimpleBackend::Service(svc, port) => Backend::Service(svc, port),
 			SimpleBackend::Opaque(name, target) => Backend::Opaque(name, target),
+			SimpleBackend::Aws(name, cfg) => Backend::Aws(name, cfg),
 			SimpleBackend::Invalid => Backend::Invalid,
 		}
 	}
@@ -986,6 +1030,7 @@ pub enum SimpleBackend {
 	Service(Arc<Service>, u16),
 	#[serde(rename = "host")]
 	Opaque(ResourceName, Target), // Hostname or IP
+	Aws(ResourceName, crate::aws::AwsBackendConfig),
 	Invalid,
 }
 
@@ -994,6 +1039,7 @@ impl fmt::Display for SimpleBackend {
 		match self {
 			SimpleBackend::Service(service, port) => write!(f, "{}:{}", service.hostname, port),
 			SimpleBackend::Opaque(name, _) => write!(f, "{}", name),
+			SimpleBackend::Aws(name, _) => write!(f, "{}", name),
 			SimpleBackend::Invalid => write!(f, "invalid"),
 		}
 	}
@@ -1006,6 +1052,7 @@ impl TryFrom<Backend> for SimpleBackend {
 		match value {
 			Backend::Service(svc, port) => Ok(SimpleBackend::Service(svc, port)),
 			Backend::Opaque(name, tgt) => Ok(SimpleBackend::Opaque(name, tgt)),
+			Backend::Aws(rn, cfg) => Ok(SimpleBackend::Aws(rn, cfg)),
 			Backend::Invalid => Ok(SimpleBackend::Invalid),
 			_ => anyhow::bail!("unsupported backend type"),
 		}
@@ -1031,7 +1078,7 @@ impl From<SimpleBackend> for SimpleBackendWithPolicies {
 }
 
 #[derive(Eq, PartialEq)]
-#[apply(schema_ser!)]
+#[apply(schema_ser_schema!)]
 #[cfg_attr(feature = "schema", schemars(with = "SimpleLocalBackend"))]
 pub enum SimpleBackendReference {
 	Service { name: NamespacedHostname, port: u16 },
@@ -1063,6 +1110,7 @@ impl SimpleBackend {
 			SimpleBackend::Service(svc, port) => {
 				format!("{}:{port}", svc.hostname)
 			},
+			SimpleBackend::Aws(_, cfg) => format!("{}:{}", cfg.get_host(), 443),
 			SimpleBackend::Opaque(_, tgt) => tgt.hostport(),
 			SimpleBackend::Invalid => "invalid".to_string(),
 		}
@@ -1080,6 +1128,11 @@ impl SimpleBackend {
 				namespace: name.namespace.as_ref(),
 				section: None,
 			},
+			SimpleBackend::Aws(name, _) => BackendTargetRef::Backend {
+				name: name.name.as_ref(),
+				namespace: name.namespace.as_ref(),
+				section: None,
+			},
 			SimpleBackend::Invalid => BackendTargetRef::Invalid,
 		}
 	}
@@ -1088,6 +1141,7 @@ impl SimpleBackend {
 		match self {
 			SimpleBackend::Service(_, _) => cel::BackendType::Service,
 			SimpleBackend::Opaque(_, _) => cel::BackendType::Static,
+			SimpleBackend::Aws(_, _) => cel::BackendType::Dynamic,
 			SimpleBackend::Invalid => cel::BackendType::Unknown,
 		}
 	}
@@ -1203,6 +1257,9 @@ pub struct McpBackend {
 	/// Behavior when one or more MCP targets fail to initialize or fail during fanout.
 	/// Defaults to `failClosed`.
 	pub failure_mode: FailureMode,
+	#[serde(with = "crate::serdes::serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub session_idle_ttl: Duration,
 }
 
 impl McpBackend {
@@ -1226,6 +1283,17 @@ pub struct McpTarget {
 
 pub type McpTargetName = Strng;
 
+/// Reject MCP target names that collide with the resource-multiplexing
+/// delimiter. `+` is used as the separator in `{target}+{scheme}://...`
+pub fn validate_mcp_target_name(name: &str) -> Result<(), String> {
+	if name.contains('+') {
+		return Err(format!(
+			"invalid MCP target name {name:?}: '+' is reserved for resource multiplexing and cannot appear in a target name"
+		));
+	}
+	Ok(())
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -1241,6 +1309,8 @@ pub enum McpTargetSpec {
 		args: Vec<String>,
 		#[serde(default, skip_serializing_if = "HashMap::is_empty")]
 		env: HashMap<String, String>,
+		#[serde(default, skip_serializing_if = "std::ops::Not::not")]
+		clear_env: bool,
 	},
 	#[serde(rename = "openapi")]
 	OpenAPI(OpenAPITarget),
@@ -1504,6 +1574,10 @@ impl RouteSet {
 				.get(&rl.key)
 				.map(|r| (r.clone(), r.matches.get(rl.index).expect("corrupted state")))
 		})
+	}
+
+	pub fn get_by_name(&self, name: &RouteName) -> Option<Arc<Route>> {
+		self.all.values().find(|route| route.name == *name).cloned()
 	}
 
 	pub fn insert(&mut self, r: Route) {
@@ -2038,6 +2112,7 @@ pub enum TrafficPolicy {
 	ExtAuthz(ext_authz::ExtAuthz),
 	ExtProc(ext_proc::ExtProc),
 	JwtAuth(JwtAuthentication),
+	Oidc(crate::http::oidc::OidcPolicy),
 	BasicAuth(crate::http::basicauth::BasicAuthentication),
 	APIKey(crate::http::apikey::APIKeyAuthentication),
 	Transformation(crate::http::transformation_cel::Transformation),
@@ -2220,6 +2295,8 @@ pub struct LocalMcpAuthentication {
 	#[serde(default)]
 	pub mode: McpAuthenticationMode,
 	#[serde(default)]
+	pub authorization_location: http::auth::AuthorizationLocation,
+	#[serde(default)]
 	pub jwt_validation_options: http::jwt::JWTValidationOptions,
 }
 
@@ -2245,6 +2322,7 @@ impl LocalMcpAuthentication {
 
 		Ok(http::jwt::LocalJwtConfig::Single {
 			mode: self.mode.into(),
+			location: self.authorization_location.clone(),
 			issuer: self.issuer.clone(),
 			audiences: Some(self.audiences.clone()),
 			jwks,
@@ -2304,13 +2382,11 @@ impl serde::Serialize for Target {
 	}
 }
 
-impl TryFrom<(&str, u16)> for Target {
-	type Error = anyhow::Error;
-
-	fn try_from((host, port): (&str, u16)) -> Result<Self, Self::Error> {
+impl From<(&str, u16)> for Target {
+	fn from((host, port): (&str, u16)) -> Self {
 		match host.parse::<IpAddr>() {
-			Ok(target) => Ok(Target::Address(SocketAddr::new(target, port))),
-			Err(_) => Ok(Target::Hostname(host.into(), port)),
+			Ok(target) => Target::Address(SocketAddr::new(target, port)),
+			Err(_) => Target::Hostname(host.into(), port),
 		}
 	}
 }
@@ -2327,7 +2403,7 @@ impl TryFrom<&str> for Target {
 			anyhow::bail!("invalid host:port: {hostport}");
 		};
 		let port: u16 = port.parse()?;
-		(host, port).try_into()
+		Ok((host, port).into())
 	}
 }
 
@@ -2777,6 +2853,108 @@ jwtValidationOptions:
 				);
 			},
 			_ => panic!("Expected LocalJwtConfig::Single"),
+		}
+	}
+
+	fn make_aws_config() -> crate::aws::AwsBackendConfig {
+		crate::aws::AwsBackendConfig {
+			service: crate::aws::AwsService::AgentCore(
+				crate::agentcore::AgentCoreConfig::new(
+					"arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123".to_string(),
+					None,
+				)
+				.unwrap(),
+			),
+		}
+	}
+
+	fn make_aws_simple_backend() -> SimpleBackend {
+		SimpleBackend::Aws(
+			ResourceName::new(strng::new("test-aws"), strng::new("ns")),
+			make_aws_config(),
+		)
+	}
+
+	#[test]
+	fn test_simple_backend_aws_to_backend_conversion() {
+		let sb = make_aws_simple_backend();
+		let backend: Backend = sb.into();
+		assert!(
+			matches!(backend, Backend::Aws(ref name, ref config) if name.name.as_str() == "test-aws" && config == &make_aws_config())
+		);
+	}
+
+	#[test]
+	fn test_backend_aws_to_simple_backend_roundtrip() {
+		let backend = Backend::Aws(
+			ResourceName::new(strng::new("test-aws"), strng::new("ns")),
+			make_aws_config(),
+		);
+		let sb: SimpleBackend = backend.try_into().unwrap();
+		assert!(
+			matches!(sb, SimpleBackend::Aws(ref name, ref config) if name.name.as_str() == "test-aws" && config == &make_aws_config())
+		);
+	}
+
+	#[test]
+	fn test_simple_backend_aws_display() {
+		let sb = make_aws_simple_backend();
+		assert_eq!(sb.to_string(), "ns/test-aws");
+	}
+
+	#[test]
+	fn test_simple_backend_aws_hostport() {
+		let sb = make_aws_simple_backend();
+		assert_eq!(
+			sb.hostport(),
+			"bedrock-agentcore.us-east-1.amazonaws.com:443"
+		);
+	}
+
+	#[test]
+	fn test_simple_backend_aws_target_ref() {
+		let sb = make_aws_simple_backend();
+		assert_eq!(
+			sb.target(),
+			BackendTargetRef::Backend {
+				name: "test-aws",
+				namespace: "ns",
+				section: None,
+			}
+		);
+	}
+
+	#[test]
+	fn test_simple_backend_aws_backend_type() {
+		let sb = make_aws_simple_backend();
+		assert_eq!(sb.backend_type(), cel::BackendType::Dynamic);
+		assert_eq!(sb.backend_info().backend_type, cel::BackendType::Dynamic);
+		assert_eq!(sb.backend_info().backend_name, strng::new("ns/test-aws"));
+	}
+
+	#[test]
+	fn validate_mcp_target_name_accepts_normal_names() {
+		for name in ["time", "everything", "my-target", "svc.ns", ""] {
+			assert!(
+				validate_mcp_target_name(name).is_ok(),
+				"expected {name:?} to be accepted"
+			);
+		}
+	}
+
+	#[test]
+	fn validate_mcp_target_name_rejects_plus() {
+		for name in ["bad+name", "+leading", "trailing+", "a+b+c"] {
+			let err =
+				validate_mcp_target_name(name).expect_err(&format!("expected {name:?} to be rejected"));
+			assert!(
+				err.contains("'+' is reserved"),
+				"unexpected message for {name:?}: {err}"
+			);
+			assert!(
+				err.contains(name),
+				"error should name the offending input {name:?}: {err}"
+			);
 		}
 	}
 }

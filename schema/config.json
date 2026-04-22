@@ -35,6 +35,12 @@
         "$ref": "#/$defs/FullLocalBackend"
       }
     },
+    "routeGroups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/LocalRouteGroup"
+      }
+    },
     "llm": {
       "anyOf": [
         {
@@ -127,6 +133,20 @@
             "null"
           ]
         },
+        "additionalTrustDomains": {
+          "description": "Comma-separated list of additional SPIFFE trust domains accepted on inbound HBONE\nconnections. The local trust_domain is always implicitly included.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "skipValidateTrustDomain": {
+          "description": "When true, skip SPIFFE trust-domain verification on inbound HBONE connections.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "serviceAccount": {
           "type": [
             "string",
@@ -171,6 +191,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/RawSession"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mcp": {
+          "description": "MCP gateway settings.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawMcpConfig"
             },
             {
               "type": "null"
@@ -320,6 +351,19 @@
       "required": [
         "key"
       ]
+    },
+    "RawMcpConfig": {
+      "type": "object",
+      "properties": {
+        "sessionTtl": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
     },
     "RawTracing": {
       "type": "object",
@@ -1215,6 +1259,17 @@
             }
           ]
         },
+        "oidc": {
+          "description": "Authenticate incoming browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "basicAuth": {
           "description": "Authenticate incoming requests using Basic Authentication with htpasswd.",
           "anyOf": [
@@ -1708,13 +1763,17 @@
           "$ref": "#/$defs/McpAuthenticationMode",
           "default": "strict"
         },
-        "jwtValidationOptions": {
-          "$ref": "#/$defs/JWTValidationOptions",
+        "authorizationLocation": {
+          "$ref": "#/$defs/AuthorizationLocation",
           "default": {
-            "requiredClaims": [
-              "exp"
-            ]
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
           }
+        },
+        "jwtValidationOptions": {
+          "$ref": "#/$defs/JWTValidationOptions"
         }
       },
       "additionalProperties": false,
@@ -1804,6 +1863,79 @@
           "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
           "type": "string",
           "const": "permissive"
+        }
+      ]
+    },
+    "AuthorizationLocation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "header": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "prefix": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "header"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "queryParameter": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "queryParameter"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cookie": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "cookie"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -1985,6 +2117,17 @@
           "required": [
             "googleModelArmor"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "azureContentSafety": {
+              "$ref": "#/$defs/AzureContentSafety"
+            }
+          },
+          "required": [
+            "azureContentSafety"
+          ]
         }
       ]
     },
@@ -2136,30 +2279,6 @@
           ],
           "default": null
         },
-        "responseHeaderModifier": {
-          "description": "Headers to be modified in the response.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "requestRedirect": {
-          "description": "Directly respond to the request with a redirect.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestRedirect"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
         "transformations": {
           "description": "Modify requests and responses sent to and from the backend.",
           "anyOf": [
@@ -2212,18 +2331,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/TCP"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "health": {
-          "description": "Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalHealthPolicy"
             },
             {
               "type": "null"
@@ -2378,6 +2485,17 @@
           "properties": {
             "passthrough": {
               "type": "object",
+              "properties": {
+                "location": {
+                  "$ref": "#/$defs/AuthorizationLocation",
+                  "default": {
+                    "header": {
+                      "name": "authorization",
+                      "prefix": "Bearer "
+                    }
+                  }
+                }
+              },
               "additionalProperties": false
             }
           },
@@ -2390,7 +2508,25 @@
           "type": "object",
           "properties": {
             "key": {
-              "$ref": "#/$defs/FileOrInline"
+              "type": "object",
+              "properties": {
+                "value": {
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                "location": {
+                  "$ref": "#/$defs/AuthorizationLocation",
+                  "default": {
+                    "header": {
+                      "name": "authorization",
+                      "prefix": "Bearer "
+                    }
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "value"
+              ]
             }
           },
           "required": [
@@ -2750,64 +2886,6 @@
         "nanos"
       ]
     },
-    "LocalHealthPolicy": {
-      "description": "Local/config health policy with CEL as string; converted to Policy by compiling the expression.\nMirrors the proto `Health` message structure.",
-      "type": "object",
-      "properties": {
-        "unhealthyExpression": {
-          "description": "CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.\nWhen unset, any 5xx or connection failure is treated as unhealthy.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "eviction": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalEviction"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "LocalEviction": {
-      "description": "Local/config eviction sub-policy with duration as string; mirrors `Eviction`.",
-      "type": "object",
-      "properties": {
-        "duration": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "restoreHealth": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        },
-        "consecutiveFailures": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int32"
-        },
-        "healthThreshold": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        }
-      },
-      "additionalProperties": false
-    },
     "Tunnel": {
       "type": "object",
       "properties": {
@@ -2893,6 +2971,106 @@
         "projectId"
       ]
     },
+    "AzureContentSafety": {
+      "description": "Configuration for Azure Content Safety integration.\n\nUses the Azure AI Content Safety APIs to detect harmful content\nand jailbreak attempts. The endpoint and authentication are shared\nacross all enabled features.",
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "description": "The Azure Content Safety endpoint hostname (e.g., \"<resource-name>.cognitiveservices.azure.com\")",
+          "type": "string"
+        },
+        "policies": {
+          "description": "Backend policies for Azure authentication (optional, defaults to implicit Azure auth)",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "analyzeText": {
+          "description": "Analyze Text configuration for detecting harmful content categories\n(Hate, SelfHarm, Sexual, Violence) and blocklist matches.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AnalyzeTextConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detectJailbreak": {
+          "description": "Detect Text Jailbreak configuration for detecting jailbreak attempts.\nOnly applicable to request guards.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DetectJailbreakConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "endpoint"
+      ]
+    },
+    "AnalyzeTextConfig": {
+      "description": "Configuration for the Analyze Text API.",
+      "type": "object",
+      "properties": {
+        "severityThreshold": {
+          "description": "Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "apiVersion": {
+          "description": "API version to use (default: \"2024-09-01\")",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "blocklistNames": {
+          "description": "Blocklist names to check against",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "haltOnBlocklistHit": {
+          "description": "When true, further analysis stops if a blocklist is hit",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DetectJailbreakConfig": {
+      "description": "Configuration for the Detect Jailbreak API.",
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "description": "API version to use (default: \"2024-02-15-preview\")",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "ResponseGuard": {
       "type": "object",
       "properties": {
@@ -2948,6 +3126,17 @@
           },
           "required": [
             "googleModelArmor"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "azureContentSafety": {
+              "$ref": "#/$defs/AzureContentSafety"
+            }
+          },
+          "required": [
+            "azureContentSafety"
           ]
         }
       ]
@@ -3014,6 +3203,12 @@
           "format": "uint",
           "minimum": 0,
           "default": 1024
+        },
+        "cacheMessageOffset": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 0
         }
       },
       "additionalProperties": false
@@ -3213,6 +3408,17 @@
         "type": {
           "$ref": "#/$defs/RateLimitType",
           "default": "requests"
+        },
+        "limitOverride": {
+          "description": "limitOverride determines the optional expression to determine the limit of the request.\nThis tells the remote server what limit to apply to the request.\nThe expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:\n`{\"unit\":\"second\",\"requestsPerUnit\":100}`.\nValid units: second, minute, hour, day, month, year\nIf the expression fails to evaluate, the descriptor is skipped.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -3259,6 +3465,15 @@
               "$ref": "#/$defs/Mode",
               "default": "optional"
             },
+            "location": {
+              "$ref": "#/$defs/AuthorizationLocation",
+              "default": {
+                "header": {
+                  "name": "authorization",
+                  "prefix": "Bearer "
+                }
+              }
+            },
             "providers": {
               "type": "array",
               "items": {
@@ -3278,6 +3493,15 @@
               "$ref": "#/$defs/Mode",
               "default": "optional"
             },
+            "location": {
+              "$ref": "#/$defs/AuthorizationLocation",
+              "default": {
+                "header": {
+                  "name": "authorization",
+                  "prefix": "Bearer "
+                }
+              }
+            },
             "issuer": {
               "type": "string"
             },
@@ -3294,12 +3518,7 @@
               "$ref": "#/$defs/FileInlineOrRemote"
             },
             "jwtValidationOptions": {
-              "$ref": "#/$defs/JWTValidationOptions",
-              "default": {
-                "requiredClaims": [
-                  "exp"
-                ]
-              }
+              "$ref": "#/$defs/JWTValidationOptions"
             }
           },
           "additionalProperties": false,
@@ -3348,18 +3567,107 @@
           "$ref": "#/$defs/FileInlineOrRemote"
         },
         "jwtValidationOptions": {
-          "$ref": "#/$defs/JWTValidationOptions",
-          "default": {
-            "requiredClaims": [
-              "exp"
-            ]
-          }
+          "$ref": "#/$defs/JWTValidationOptions"
         }
       },
       "additionalProperties": false,
       "required": [
         "issuer",
         "jwks"
+      ]
+    },
+    "LocalOidcConfig": {
+      "description": "Browser-based OIDC authentication policy.\n\nExplicit mode is still OIDC: it supplies provider metadata manually instead of using discovery.\nUnauthenticated non-callback requests always redirect to the provider login flow. Routes that\nneed non-redirect authentication behavior should use a different auth policy.",
+      "type": "object",
+      "properties": {
+        "issuer": {
+          "description": "Issuer used for discovery and ID token validation.",
+          "type": "string"
+        },
+        "discovery": {
+          "description": "Optional discovery document override. If omitted, discovery uses\n`${issuer}/.well-known/openid-configuration`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileInlineOrRemote"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorizationEndpoint": {
+          "description": "Authorization endpoint used to start the browser login flow.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "tokenEndpoint": {
+          "description": "Token endpoint used to exchange the authorization code.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "tokenEndpointAuth": {
+          "description": "Token endpoint client authentication method for explicit provider configuration.\n\nDiscovery mode derives this from provider metadata. Explicit mode defaults to\n`clientSecretBasic` when omitted.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenEndpointAuth"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "jwks": {
+          "description": "JWKS source used to validate returned ID tokens.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileInlineOrRemote"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clientId": {
+          "description": "OAuth2 client identifier used for authorization and token exchange.",
+          "type": "string"
+        },
+        "clientSecret": {
+          "description": "OAuth2 client secret used for token exchange.",
+          "type": "string"
+        },
+        "redirectURI": {
+          "description": "Absolute callback URI handled by the gateway.\nThis policy always redirects unauthenticated non-callback requests back through this login\nflow.",
+          "type": "string"
+        },
+        "scopes": {
+          "description": "Additional OAuth2 scopes to request. `openid` is always included.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "issuer",
+        "clientId",
+        "clientSecret",
+        "redirectURI"
+      ]
+    },
+    "TokenEndpointAuth": {
+      "type": "string",
+      "enum": [
+        "clientSecretBasic",
+        "clientSecretPost"
       ]
     },
     "LocalBasicAuth": {
@@ -3381,6 +3689,15 @@
           "description": "Validation mode for basic authentication",
           "$ref": "#/$defs/Mode2",
           "default": "optional"
+        },
+        "authorizationLocation": {
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Basic "
+            }
+          }
         }
       },
       "additionalProperties": false,
@@ -3417,6 +3734,15 @@
           "description": "Validation mode for API keys",
           "$ref": "#/$defs/Mode3",
           "default": "optional"
+        },
+        "location": {
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
         }
       },
       "additionalProperties": false,
@@ -4018,6 +4344,17 @@
           "required": [
             "aws"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "routeGroup": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "routeGroup"
+          ]
         }
       ]
     },
@@ -4089,7 +4426,10 @@
               "type": "object",
               "properties": {
                 "host": {
-                  "type": "string"
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "port": {
                   "type": [
@@ -4105,12 +4445,15 @@
                     "string",
                     "null"
                   ]
+                },
+                "backend": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
-              "additionalProperties": false,
-              "required": [
-                "host"
-              ]
+              "additionalProperties": false
             }
           },
           "required": [
@@ -4124,7 +4467,10 @@
               "type": "object",
               "properties": {
                 "host": {
-                  "type": "string"
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "port": {
                   "type": [
@@ -4140,12 +4486,15 @@
                     "string",
                     "null"
                   ]
+                },
+                "backend": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
-              "additionalProperties": false,
-              "required": [
-                "host"
-              ]
+              "additionalProperties": false
             }
           },
           "required": [
@@ -4172,6 +4521,9 @@
                   "additionalProperties": {
                     "type": "string"
                   }
+                },
+                "clear_env": {
+                  "type": "boolean"
                 }
               },
               "additionalProperties": false,
@@ -4191,7 +4543,10 @@
               "type": "object",
               "properties": {
                 "host": {
-                  "type": "string"
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "port": {
                   "type": [
@@ -4208,13 +4563,18 @@
                     "null"
                   ]
                 },
+                "backend": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "schema": {
                   "$ref": "#/$defs/FileInlineOrRemote"
                 }
               },
               "additionalProperties": false,
               "required": [
-                "host",
                 "schema"
               ]
             }
@@ -4233,30 +4593,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "responseHeaderModifier": {
-          "description": "Headers to be modified in the response.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "requestRedirect": {
-          "description": "Directly respond to the request with a redirect.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestRedirect"
             },
             {
               "type": "null"
@@ -4316,18 +4652,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/TCP"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "health": {
-          "description": "Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalHealthPolicy"
             },
             {
               "type": "null"
@@ -4529,12 +4853,12 @@
         {
           "type": "object",
           "properties": {
-            "azureOpenAI": {
+            "azure": {
               "$ref": "#/$defs/Provider6"
             }
           },
           "required": [
-            "azureOpenAI"
+            "azure"
           ],
           "additionalProperties": false
         }
@@ -4637,10 +4961,22 @@
             "null"
           ]
         },
-        "host": {
+        "resourceName": {
+          "description": "The Azure resource name used to construct the endpoint host.",
           "type": "string"
         },
+        "resourceType": {
+          "description": "The type of Azure endpoint. Determines the host suffix.",
+          "$ref": "#/$defs/AzureResourceType"
+        },
         "apiVersion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "projectName": {
+          "description": "The Foundry project name, required when `resourceType` is `foundry`.\nUsed to construct paths: `/api/projects/{projectName}/openai/v1/...`.\nThis is distinct from `resourceName` which is used for the host.",
           "type": [
             "string",
             "null"
@@ -4649,7 +4985,23 @@
       },
       "additionalProperties": false,
       "required": [
-        "host"
+        "resourceName",
+        "resourceType"
+      ]
+    },
+    "AzureResourceType": {
+      "description": "The type of Azure endpoint to connect to.",
+      "oneOf": [
+        {
+          "description": "Azure OpenAI Service endpoint: `{resourceName}.openai.azure.com`",
+          "type": "string",
+          "const": "openAI"
+        },
+        {
+          "description": "Azure AI Foundry (project) endpoint: `{resourceName}-resource.services.ai.azure.com`\nRequires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`",
+          "type": "string",
+          "const": "foundry"
+        }
       ]
     },
     "LocalBackendPolicies": {
@@ -4660,30 +5012,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "responseHeaderModifier": {
-          "description": "Headers to be modified in the response.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "requestRedirect": {
-          "description": "Directly respond to the request with a redirect.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestRedirect"
             },
             {
               "type": "null"
@@ -4750,18 +5078,6 @@
           ],
           "default": null
         },
-        "health": {
-          "description": "Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalHealthPolicy"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
         "backendTunnel": {
           "description": "Specify a tunnel to use when connecting to the backend",
           "anyOf": [
@@ -4773,6 +5089,41 @@
             }
           ],
           "default": null
+        },
+        "responseHeaderModifier": {
+          "description": "Headers to be modified in the response.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeaderModifier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "requestRedirect": {
+          "description": "Directly respond to the request with a redirect.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequestRedirect"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "health": {
+          "description": "Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalHealthPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "mcpAuthorization": {
           "description": "Authorization policies for MCP access.",
@@ -4798,6 +5149,18 @@
           ],
           "default": null
         },
+        "inferenceRouting": {
+          "description": "Route requests through an endpoint picker before forwarding to the selected backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InferenceRouting"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "ai": {
           "description": "Mark this as LLM traffic to enable LLM processing.",
           "anyOf": [
@@ -4812,6 +5175,76 @@
         }
       },
       "additionalProperties": false
+    },
+    "LocalHealthPolicy": {
+      "description": "Local/config health policy with CEL as string; converted to Policy by compiling the expression.\nMirrors the proto `Health` message structure.",
+      "type": "object",
+      "properties": {
+        "unhealthyExpression": {
+          "description": "CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.\nWhen unset, any 5xx or connection failure is treated as unhealthy.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "eviction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalEviction"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalEviction": {
+      "description": "Local/config eviction sub-policy with duration as string; mirrors `Eviction`.",
+      "type": "object",
+      "properties": {
+        "duration": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "restoreHealth": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "consecutiveFailures": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "healthThreshold": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "additionalProperties": false
+    },
+    "InferenceRouting": {
+      "type": "object",
+      "properties": {
+        "endpointPicker": {
+          "$ref": "#/$defs/SimpleLocalBackend"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "endpointPicker"
+      ]
     },
     "LocalAIProviders": {
       "type": "object",
@@ -5044,6 +5477,17 @@
     "LocalGatewayPolicy": {
       "type": "object",
       "properties": {
+        "oidc": {
+          "description": "Authenticate incoming browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "jwtAuth": {
           "description": "Authenticate incoming JWT requests.",
           "anyOf": [
@@ -5260,6 +5704,14 @@
           "default": null
         },
         "http2KeepaliveTimeout": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "maxConnectionDuration": {
+          "description": "Maximum duration a connection is allowed to remain open. After this duration,\nthe connection is gracefully closed after the current in-flight request completes.\nUseful for ensuring even traffic distribution behind load balancers during scaling events.",
           "type": [
             "string",
             "null"
@@ -5823,9 +6275,6 @@
         "name": {
           "type": "string"
         },
-        "host": {
-          "type": "string"
-        },
         "policies": {
           "anyOf": [
             {
@@ -5837,10 +6286,74 @@
           ]
         }
       },
+      "required": [
+        "name"
+      ],
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "host": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mcp": {
+              "$ref": "#/$defs/LocalMcpBackend"
+            }
+          },
+          "required": [
+            "mcp"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ai": {
+              "$ref": "#/$defs/LocalAIBackend"
+            }
+          },
+          "required": [
+            "ai"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "aws": {
+              "$ref": "#/$defs/LocalAwsBackend"
+            }
+          },
+          "required": [
+            "aws"
+          ]
+        }
+      ]
+    },
+    "LocalRouteGroup": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalRoute"
+          }
+        }
+      },
       "additionalProperties": false,
       "required": [
         "name",
-        "host"
+        "routes"
       ]
     },
     "LocalLLMConfig": {
@@ -5964,8 +6477,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "backendTunnel": {
           "description": "backendTunnel configures tunneling when connecting to the LLM provider.",
@@ -6024,8 +6536,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "awsRegion": {
           "type": [
@@ -6045,15 +6556,33 @@
             "null"
           ]
         },
-        "azureHost": {
-          "description": "For Azure: the host of the deployment",
+        "azureResourceName": {
+          "description": "For Azure: the resource name of the deployment",
           "type": [
             "string",
             "null"
           ]
         },
+        "azureResourceType": {
+          "description": "For Azure: the type of Azure endpoint (openAI or foundry)",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AzureResourceType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "azureApiVersion": {
           "description": "For Azure: the API version to use",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "azureProjectName": {
+          "description": "For Azure: the Foundry project name (required for foundry resource type)",
           "type": [
             "string",
             "null"
@@ -6102,7 +6631,7 @@
         "vertex",
         "anthropic",
         "bedrock",
-        "azureOpenAI"
+        "azure"
       ]
     },
     "LLMRouteMatch": {
@@ -6120,6 +6649,17 @@
     "LocalLLMPolicy": {
       "type": "object",
       "properties": {
+        "oidc": {
+          "description": "Authenticate incoming browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "jwtAuth": {
           "description": "Authenticate incoming JWT requests.",
           "anyOf": [

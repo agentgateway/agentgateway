@@ -4,16 +4,17 @@ pub mod proxy_protocol;
 pub mod request_builder;
 pub mod tcpproxy;
 
+use agent_pool::Error as HyperError;
 pub use gateway::Gateway;
-use hyper_util_fork::client::legacy::Error as HyperError;
 use rmcp::ErrorData;
 use rmcp::model::{ErrorCode, JsonRpcError};
 
 use crate::http::{HeaderValue, Response, StatusCode, ext_proc};
 use crate::types::agent::{
-	Backend, BackendReference, BackendWithPolicies, ResourceName, SimpleBackend,
+	Backend, BackendReference, BackendTargetRef, BackendWithPolicies, ResourceName, SimpleBackend,
 	SimpleBackendReference, SimpleBackendWithPolicies,
 };
+use crate::types::discovery::Service;
 use crate::*;
 
 #[derive(thiserror::Error, Debug)]
@@ -44,11 +45,13 @@ impl ProxyResponse {
 			| ProxyError::InvalidRequest
 			| ProxyError::ProcessingString(_)
 			| ProxyError::Processing(_)
+			| ProxyError::RouteCycleDetected
 			| ProxyError::Body(_)
 			| ProxyError::Http(_)
 			| ProxyError::BackendUnsupportedMirror
 			| ProxyError::FilterError(_) => ProxyResponseReason::Internal,
 			ProxyError::JwtAuthenticationFailure(_) => ProxyResponseReason::JwtAuth,
+			ProxyError::OidcFailure(_) => ProxyResponseReason::Oidc,
 			ProxyError::McpJwtAuthenticationFailure(_, _) => ProxyResponseReason::JwtAuth,
 			ProxyError::BasicAuthenticationFailure(_) => ProxyResponseReason::BasicAuth,
 			ProxyError::APIKeyAuthenticationFailure(_) => ProxyResponseReason::APIKeyAuth,
@@ -92,6 +95,8 @@ pub enum ProxyResponseReason {
 	Internal,
 	/// JWT authentication failed
 	JwtAuth,
+	/// OIDC processing failed
+	Oidc,
 	/// Basic authentication failed
 	BasicAuth,
 	/// API Key authentication failed
@@ -126,6 +131,8 @@ pub enum ProxyError {
 	ListenerNotFound,
 	#[error("route not found")]
 	RouteNotFound,
+	#[error("route delegation cycle detected")]
+	RouteCycleDetected,
 	#[error("misdirected request")]
 	MisdirectedRequest,
 	#[error("no valid backends")]
@@ -140,6 +147,8 @@ pub enum ProxyError {
 	BackendUnsupportedMirror,
 	#[error("authentication failure: {0}")]
 	JwtAuthenticationFailure(http::jwt::TokenError),
+	#[error("oidc failure: {0}")]
+	OidcFailure(http::oidc::Error),
 	#[error("mcp authentication failure: {0}")]
 	McpJwtAuthenticationFailure(Box<ProxyError>, String),
 	#[error("basic authentication failure: {0}")]
@@ -207,10 +216,12 @@ impl ProxyError {
 		}
 	}
 	pub fn into_response(self) -> Response {
+		let msg = self.to_string();
 		let code = match self {
 			ProxyError::BindNotFound => StatusCode::NOT_FOUND,
 			ProxyError::ListenerNotFound => StatusCode::NOT_FOUND,
 			ProxyError::RouteNotFound => StatusCode::NOT_FOUND,
+			ProxyError::RouteCycleDetected => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MisdirectedRequest => StatusCode::MISDIRECTED_REQUEST,
 			ProxyError::NoValidBackends => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::BackendDoesNotExist => StatusCode::INTERNAL_SERVER_ERROR,
@@ -228,6 +239,24 @@ impl ProxyError {
 			ProxyError::InvalidRequest => StatusCode::BAD_REQUEST,
 
 			ProxyError::JwtAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
+			ProxyError::OidcFailure(ref error) => match error {
+				http::oidc::Error::AuthenticationRequired => StatusCode::UNAUTHORIZED,
+				http::oidc::Error::MissingSession
+				| http::oidc::Error::InvalidSession
+				| http::oidc::Error::MissingTransaction
+				| http::oidc::Error::InvalidTransaction
+				| http::oidc::Error::PolicyMismatch
+				| http::oidc::Error::CsrfMismatch
+				| http::oidc::Error::NonceMismatch
+				| http::oidc::Error::InvalidCallback
+				| http::oidc::Error::ProviderCallback(_) => StatusCode::BAD_REQUEST,
+				http::oidc::Error::SessionCookieTooLarge
+				| http::oidc::Error::TokenExchangeFailed(_)
+				| http::oidc::Error::MissingIdToken
+				| http::oidc::Error::InvalidIdToken(_)
+				| http::oidc::Error::Config(_)
+				| http::oidc::Error::Http(_) => StatusCode::INTERNAL_SERVER_ERROR,
+			},
 			ProxyError::BasicAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::APIKeyAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::McpJwtAuthenticationFailure(_, _) => StatusCode::UNAUTHORIZED,
@@ -254,6 +283,7 @@ impl ProxyError {
 			ProxyError::UpstreamTCPProxy(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::MethodNotAllowed) => StatusCode::METHOD_NOT_ALLOWED,
 			ProxyError::MCP(mcp::Error::InvalidAccept) => StatusCode::NOT_ACCEPTABLE,
+			ProxyError::MCP(mcp::Error::InvalidAcceptGet) => StatusCode::NOT_ACCEPTABLE,
 			ProxyError::MCP(mcp::Error::InvalidContentType) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
 			ProxyError::MCP(mcp::Error::Deserialize(_)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::StartSession(_)) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -273,7 +303,6 @@ impl ProxyError {
 			// Note: we do not return a 401/403 here, as the obscure that it was rejected due to auth
 			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::BAD_REQUEST,
 		};
-		let msg = self.to_string();
 		let mut rb = ::http::Response::builder().status(code);
 
 		// Apply per-error headers
@@ -362,6 +391,24 @@ impl ProxyError {
 	}
 }
 
+#[derive(Clone, Debug)]
+pub struct WaypointService(pub Arc<Service>);
+
+impl AsRef<Service> for WaypointService {
+	fn as_ref(&self) -> &Service {
+		self.0.as_ref()
+	}
+}
+
+impl WaypointService {
+	pub fn as_policy_ref(&self) -> PolicyTargetRef {
+		PolicyTargetRef::Backend(BackendTargetRef::Service {
+			hostname: self.0.hostname.as_str(),
+			namespace: self.0.namespace.as_str(),
+			port: None,
+		})
+	}
+}
 pub fn resolve_backend(
 	b: &BackendReference,
 	pi: &ProxyInputs,

@@ -10,11 +10,11 @@ spec:
     test: test
   ports:
     - protocol: TCP
-      appProtocol: kgateway.dev/mcp
+      appProtocol: agentgateway.dev/mcp
       port: 80
       targetPort: test
     - protocol: TCP
-      appProtocol: kgateway.dev/mcp-sse
+      appProtocol: agentgateway.dev/mcp-sse
       port: 90
       targetPort: test-2
 ---

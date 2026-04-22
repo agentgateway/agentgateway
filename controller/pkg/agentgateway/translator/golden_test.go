@@ -46,6 +46,20 @@ func TestRouteCollection(t *testing.T) {
 	})
 }
 
+func TestRouteDelegation(t *testing.T) {
+	testutils.RunForDirectory(t, "testdata/delegation", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
+		sq, ri := testutils.Syncer(t, ctx, "HTTPRoute", "GRPCRoute", "TCPRoute", "TLSRoute", "InferencePool")
+		r := ri.Outputs.Resources.List()
+		r = slices.FilterInPlace(r, func(resource ir.AgwResource) bool {
+			x := ir.GetAgwResourceName(resource.Resource)
+			return strings.HasPrefix(x, "route/") || strings.HasPrefix(x, "policy/") || strings.HasPrefix(x, "backend/")
+		})
+		return sq.Dump(), slices.SortBy(r, func(a ir.AgwResource) string {
+			return a.ResourceName()
+		})
+	})
+}
+
 func TestGatewayCollection(t *testing.T) {
 	testutils.RunForDirectory(t, "testdata/gateways", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
 		sq, ri := testutils.Syncer(t, ctx, "Gateway", "ListenerSet")

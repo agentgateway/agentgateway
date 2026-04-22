@@ -3,8 +3,27 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::Instant;
 
+use crate::http::backendtls::BackendTLS;
+use crate::http::{Body, Response};
+use crate::llm::AIProvider;
+use crate::mcp::FailureMode;
+use crate::proxy::Gateway;
+use crate::proxy::request_builder::RequestBuilder;
+use crate::store::Stores;
+use crate::transport::stream::{Socket, TCPConnectionInfo};
+use crate::transport::tls;
+use crate::types::agent::{
+	Backend, BackendPolicy, BackendReference, BackendTarget, BackendWithPolicies, Bind, BindKey,
+	BindProtocol, Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget, McpTargetSpec,
+	PathMatch, PolicyPhase, PolicyTarget, ResourceName, Route, RouteBackendReference, RouteMatch,
+	RouteName, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	TCPRouteBackendReference, Target, TargetedPolicy,
+};
+use crate::types::local;
+use crate::types::local::LocalNamedAIProvider;
+use crate::{ProxyInputs, client, mcp};
 use agent_core::drain::{DrainTrigger, DrainWatcher};
 use agent_core::strng::Strng;
 use agent_core::{drain, metrics, strng};
@@ -23,26 +42,6 @@ use tokio_rustls::TlsConnector;
 use tracing::{info, trace};
 use wiremock::tls_certs::MockTlsCertificates;
 use wiremock::{Mock, MockServer, ResponseTemplate};
-
-use crate::http::backendtls::BackendTLS;
-use crate::http::{Body, Response};
-use crate::llm::AIProvider;
-use crate::mcp::FailureMode;
-use crate::proxy::Gateway;
-use crate::proxy::request_builder::RequestBuilder;
-use crate::store::Stores;
-use crate::transport::stream::{Socket, TCPConnectionInfo};
-use crate::transport::tls;
-use crate::types::agent::{
-	Backend, BackendPolicy, BackendReference, BackendTarget, BackendWithPolicies, Bind, BindKey,
-	BindProtocol, Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget, McpTargetSpec,
-	PathMatch, PolicyTarget, ResourceName, Route, RouteBackendReference, RouteMatch, RouteName,
-	RouteSet, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, TCPRouteSet, Target, TargetedPolicy,
-};
-use crate::types::local;
-use crate::types::local::LocalNamedAIProvider;
-use crate::{ProxyInputs, client, mcp};
 
 pub async fn send_request(
 	io: Client<MemoryConnector, Body>,
@@ -116,17 +115,16 @@ pub fn base_gateway(mock: &MockServer) -> TestBind {
 	setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(simple_bind(basic_route(*mock.address())))
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()))
 }
 
 pub fn setup_tcp_mock(mock: MockServer) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(simple_tcp_bind(basic_named_tcp_route(strng::format!(
-			"/{}",
-			mock.address()
-		))));
+		.with_bind(simple_tcp_bind())
+		.with_tcp_route(basic_named_tcp_route(strng::format!("/{}", mock.address())));
 	let io = t.serve_http(BIND_KEY);
 	(mock, t, io)
 }
@@ -155,7 +153,9 @@ pub fn setup_llm_named_provider_mock(
 		be,
 	);
 	t.pi.stores.binds.write().insert_backend(b.name(), b.into());
-	let t = t.with_bind(simple_bind(basic_route(*mock.address())));
+	let t = t
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
 	let io = t.serve_http(BIND_KEY);
 	(mock, t, io)
 }
@@ -200,7 +200,7 @@ pub fn basic_named_route(target: Strng) -> Route {
 		inline_policies: Default::default(),
 		backends: vec![RouteBackendReference {
 			weight: 1,
-			backend: BackendReference::Backend(target),
+			target: BackendReference::Backend(target).into(),
 			inline_policies: Default::default(),
 		}],
 	}
@@ -228,7 +228,7 @@ pub fn basic_named_tcp_route(target: Strng) -> TCPRoute {
 pub const BIND_KEY: Strng = strng::literal!("bind");
 pub const LISTENER_KEY: Strng = strng::literal!("listener");
 
-pub fn simple_bind(route: Route) -> Bind {
+pub fn simple_bind() -> Bind {
 	Bind {
 		key: BIND_KEY,
 		// not really used
@@ -238,26 +238,42 @@ pub fn simple_bind(route: Route) -> Bind {
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTP,
-			tcp_routes: Default::default(),
-			routes: RouteSet::from_list(vec![route]),
 		}]),
 		protocol: BindProtocol::http,
 		tunnel_protocol: Default::default(),
 	}
 }
 
-pub fn simple_tcp_bind(route: TCPRoute) -> Bind {
+pub fn waypoint_bind(protocol: ListenerProtocol) -> Bind {
+	Bind {
+		key: BIND_KEY,
+		address: "127.0.0.1:15008".parse().unwrap(),
+		listeners: ListenerSet::from_list([Listener {
+			key: LISTENER_KEY,
+			name: crate::types::agent::ListenerName {
+				gateway_name: strng::literal!("default"),
+				gateway_namespace: strng::literal!("default"),
+				listener_name: strng::EMPTY,
+				listener_set: None,
+			},
+			hostname: Default::default(),
+			protocol,
+		}]),
+		protocol: BindProtocol::http,
+		tunnel_protocol: Default::default(),
+	}
+}
+
+pub fn simple_tcp_bind() -> Bind {
 	Bind {
 		key: BIND_KEY,
 		// not really used
 		address: "127.0.0.1:0".parse().unwrap(),
 		listeners: ListenerSet::from_list([Listener {
-			key: Default::default(),
+			key: LISTENER_KEY,
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::TCP,
-			tcp_routes: TCPRouteSet::from_list(vec![route]),
-			routes: Default::default(),
 		}]),
 		protocol: BindProtocol::tcp,
 		tunnel_protocol: Default::default(),
@@ -379,7 +395,9 @@ impl tower::Service<Uri> for MemoryConnector {
 
 impl TestBind {
 	pub fn with_bind(self, bind: Bind) -> Self {
-		self.pi.stores.binds.write().insert_bind(bind);
+		let mut binds = self.pi.stores.binds.write();
+		binds.insert_bind(bind);
+		drop(binds);
 		self
 	}
 	pub fn inputs(&self) -> Arc<ProxyInputs> {
@@ -387,6 +405,90 @@ impl TestBind {
 	}
 	pub fn with_route(self, r: Route) -> Self {
 		self.pi.stores.binds.write().insert_route(r, LISTENER_KEY);
+		self
+	}
+
+	pub fn with_tcp_route(self, r: TCPRoute) -> Self {
+		self
+			.pi
+			.stores
+			.binds
+			.write()
+			.insert_tcp_route(r, LISTENER_KEY);
+		self
+	}
+
+	pub fn with_route_for_listener(self, listener_key: Strng, r: Route) -> Self {
+		self.pi.stores.binds.write().insert_route(r, listener_key);
+		self
+	}
+
+	pub fn with_tcp_route_for_listener(self, listener_key: Strng, r: TCPRoute) -> Self {
+		self
+			.pi
+			.stores
+			.binds
+			.write()
+			.insert_tcp_route(r, listener_key);
+		self
+	}
+
+	/// Insert a service + workload via sync_local so endpoint linking is exercised.
+	pub fn with_waypoint_service(self, backend_addr: SocketAddr) -> Self {
+		use crate::store::LocalWorkload;
+		use crate::types::discovery::{
+			GatewayAddress, NetworkAddress, Service, Workload, gatewayaddress::Destination,
+		};
+		let svc = Service {
+			name: strng::literal!("my-svc"),
+			namespace: strng::literal!("default"),
+			hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+			vips: vec![NetworkAddress {
+				network: strng::EMPTY,
+				address: "127.0.0.1".parse().unwrap(),
+			}],
+			ports: std::collections::HashMap::from([(80, backend_addr.port())]),
+			waypoint: Some(GatewayAddress {
+				destination: Destination::Hostname(crate::types::discovery::NamespacedHostname {
+					namespace: strng::literal!("default"),
+					hostname: strng::literal!("default.default.svc.cluster.local"),
+				}),
+				hbone_mtls_port: 15008,
+			}),
+			..Default::default()
+		};
+		let wl = LocalWorkload {
+			workload: Workload {
+				uid: strng::literal!("test-wl-uid"),
+				name: strng::literal!("test-wl"),
+				namespace: strng::literal!("default"),
+				workload_ips: vec![backend_addr.ip()],
+				..Default::default()
+			},
+			services: std::collections::HashMap::from([(
+				"default/my-svc.default.svc.cluster.local".to_string(),
+				std::collections::HashMap::from([(80, backend_addr.port())]),
+			)]),
+		};
+		self
+			.pi
+			.stores
+			.discovery
+			.sync_local(vec![svc], vec![wl], Default::default())
+			.unwrap();
+		self
+	}
+
+	pub fn with_route_group(
+		self,
+		key: agent_core::strng::Strng,
+		routes: Vec<crate::types::agent::Route>,
+	) -> Self {
+		let mut binds = self.pi.stores.binds.write();
+		for r in routes {
+			binds.insert_route_into_group(r, key.clone());
+		}
+		drop(binds);
 		self
 	}
 
@@ -450,6 +552,7 @@ impl TestBind {
 				stateful,
 				always_use_prefix: false,
 				failure_mode: FailureMode::FailClosed,
+				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 			},
 		);
 		{
@@ -498,6 +601,7 @@ impl TestBind {
 				stateful,
 				always_use_prefix: false,
 				failure_mode: FailureMode::FailClosed,
+				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 			},
 		);
 		{
@@ -527,8 +631,11 @@ impl TestBind {
 			.transpose()
 			.unwrap()
 			.unwrap_or_default();
+		let local::FullLocalBackendSpec::Opaque(host) = b.spec else {
+			panic!("attach_backend only supports Opaque (host) backends");
+		};
 		let bps = BackendWithPolicies {
-			backend: Backend::Opaque(crate::types::local::local_name(b.name), b.host),
+			backend: Backend::Opaque(crate::types::local::local_name(b.name), host),
 			inline_policies: policies,
 		};
 		self
@@ -541,10 +648,15 @@ impl TestBind {
 	pub async fn attach_route(&mut self, p: serde_json::Value) {
 		let pol: local::LocalRoute = serde_json::from_value(p).unwrap();
 		self.routes += 1;
-		let (route, backends) =
-			local::convert_route(self.pi.upstream.clone(), pol, self.routes, LISTENER_KEY)
-				.await
-				.unwrap();
+		let (route, backends) = local::convert_route(
+			self.pi.upstream.clone(),
+			&self.pi.cfg,
+			pol,
+			self.routes,
+			LISTENER_KEY,
+		)
+		.await
+		.unwrap();
 		for b in backends {
 			self
 				.pi
@@ -561,14 +673,21 @@ impl TestBind {
 			.insert_route(route, LISTENER_KEY);
 	}
 	pub async fn attach_route_policy(&mut self, p: serde_json::Value) {
+		let oidc_key = strng::format!("oidc/{}", self.policies + 1);
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
-		let pols = local::split_policies(self.pi.upstream.clone(), pol)
-			.await
-			.unwrap();
-		for v in pols.route_policies.into_iter() {
+		let pols = local::split_policies(
+			self.pi.upstream.clone(),
+			pol,
+			self.pi.cfg.as_policy_context(oidc_key),
+		)
+		.await
+		.unwrap();
+		assert!(pols.backend_policies.is_empty());
+		for v in pols.route_policies {
 			self.policies += 1;
+			let key = strng::format!("pol/{}", self.policies);
 			self.with_policy(TargetedPolicy {
-				key: strng::format!("pol-{}", self.policies),
+				key,
 				name: None,
 				target: PolicyTarget::Route(RouteName {
 					name: "route".into(),
@@ -576,7 +695,59 @@ impl TestBind {
 					rule_name: None,
 					kind: None,
 				}),
-				policy: v.into(),
+				policy: (v, PolicyPhase::Route).into(),
+			});
+		}
+	}
+	pub async fn attach_gateway_policy(&mut self, p: serde_json::Value) {
+		let oidc_key = strng::format!("pol/{}", self.policies + 1);
+		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
+		let pols = local::split_policies(
+			self.pi.upstream.clone(),
+			pol,
+			self.pi.cfg.as_policy_context(&oidc_key),
+		)
+		.await
+		.unwrap();
+		assert!(pols.backend_policies.is_empty());
+		for v in pols.route_policies {
+			self.policies += 1;
+			let key = strng::format!("pol/{}", self.policies);
+			self.with_policy(TargetedPolicy {
+				key,
+				name: None,
+				target: PolicyTarget::Gateway(crate::types::agent::ListenerTarget {
+					gateway_name: "default".into(),
+					gateway_namespace: "default".into(),
+					listener_name: None,
+				}),
+				policy: (v, PolicyPhase::Gateway).into(),
+			});
+		}
+	}
+	pub async fn attach_service_policy(&mut self, p: serde_json::Value) {
+		let oidc_key = strng::format!("oidc/{}", self.policies + 1);
+		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
+		let pols = local::split_policies(
+			self.pi.upstream.clone(),
+			pol,
+			self.pi.cfg.as_policy_context(oidc_key),
+		)
+		.await
+		.unwrap();
+		assert!(pols.backend_policies.is_empty());
+		for v in pols.route_policies {
+			self.policies += 1;
+			let key = strng::format!("pol/{}", self.policies);
+			self.with_policy(TargetedPolicy {
+				key,
+				name: None,
+				target: PolicyTarget::Backend(BackendTarget::Service {
+					hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+					namespace: strng::literal!("default"),
+					port: None,
+				}),
+				policy: (v, PolicyPhase::Route).into(),
 			});
 		}
 	}
@@ -595,20 +766,20 @@ impl TestBind {
 		for v in normalized.policies.into_iter() {
 			self.policies += 1;
 			self.with_policy(TargetedPolicy {
-				key: strng::format!("pol-{}", self.policies),
+				key: strng::format!("pol/{}", self.policies),
 				..v
 			});
 		}
 	}
 	pub async fn attached_backend_policy(&mut self, addr: &SocketAddr, p: serde_json::Value) {
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
-		let pols = local::split_policies(self.pi.upstream.clone(), pol)
+		let pols = local::split_policies(self.pi.upstream.clone(), pol, None)
 			.await
 			.unwrap();
 		for v in pols.backend_policies.into_iter() {
 			self.policies += 1;
 			self.with_policy(TargetedPolicy {
-				key: strng::format!("pol-{}", self.policies),
+				key: strng::format!("pol/{}", self.policies),
 				name: None,
 				target: PolicyTarget::Backend(BackendTarget::Backend {
 					name: addr.to_string().into(),
@@ -623,14 +794,17 @@ impl TestBind {
 	pub fn with_policy(&mut self, p: TargetedPolicy) {
 		self.pi.stores.binds.write().insert_policy(p);
 	}
-	pub fn serve_http(&self, bind_name: BindKey) -> Client<MemoryConnector, Body> {
-		let io = self.serve(bind_name);
+	fn memory_client(io: DuplexStream) -> Client<MemoryConnector, Body> {
 		::hyper_util::client::legacy::Client::builder(TokioExecutor::new())
 			.timer(TokioTimer::new())
 			.build(MemoryConnector {
 				tls_config: None,
 				io: Arc::new(Mutex::new(Some(io))),
 			})
+	}
+
+	pub fn serve_http(&self, bind_name: BindKey) -> Client<MemoryConnector, Body> {
+		Self::memory_client(self.serve(bind_name))
 	}
 	pub fn serve_https(
 		&self,
@@ -668,6 +842,43 @@ impl TestBind {
 				io: Arc::new(Mutex::new(Some(io))),
 			})
 	}
+	pub fn serve_waypoint_http(&self, bind_name: BindKey) -> Client<MemoryConnector, Body> {
+		Self::memory_client(self.serve_waypoint(bind_name, true))
+	}
+
+	pub fn serve_waypoint_tcp(&self, bind_name: BindKey) -> Client<MemoryConnector, Body> {
+		Self::memory_client(self.serve_waypoint(bind_name, false))
+	}
+
+	fn serve_waypoint(&self, bind_name: BindKey, is_http: bool) -> DuplexStream {
+		let (client, server) = tokio::io::duplex(8192);
+		let server = Socket::from_memory(
+			server,
+			TCPConnectionInfo {
+				peer_addr: "127.0.0.1:12345".parse().unwrap(),
+				local_addr: "127.0.0.1:80".parse().unwrap(),
+				start: Instant::now(),
+				raw_peer_addr: None,
+			},
+		);
+		let svc = self
+			.pi
+			.stores
+			.read_discovery()
+			.services
+			.get_by_vip(&crate::types::discovery::NetworkAddress {
+				network: self.pi.cfg.network.clone(),
+				address: "127.0.0.1".parse().unwrap(),
+			})
+			.unwrap_or_else(|| Arc::new(crate::types::discovery::Service::default()));
+		let pi = self.pi.clone();
+		let drain = self.drain_rx.clone();
+		tokio::spawn(async move {
+			Gateway::handle_waypoint(bind_name, pi, svc, server, is_http, drain).await;
+		});
+		client
+	}
+
 	pub fn serve(&self, bind_name: BindKey) -> DuplexStream {
 		let (client, server) = tokio::io::duplex(8192);
 		let server = Socket::from_memory(
@@ -734,6 +945,10 @@ impl TestBind {
 pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 	agent_core::telemetry::testing::setup_test_logging();
 	let config = crate::config::parse_config(cfg.to_string(), None)?;
+	Ok(setup_proxy_test_with_config(config))
+}
+
+pub fn setup_proxy_test_with_config(config: crate::Config) -> TestBind {
 	let encoder = config.session_encoder.clone();
 	let stores = Stores::new(config.ipv6_enabled, config.threading_mode);
 	let client = client::Client::new(&config.dns, None, Default::default(), None);
@@ -750,14 +965,14 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 
 		mcp_state: mcp::App::new(stores.clone(), encoder),
 	});
-	Ok(TestBind {
+	TestBind {
 		pi,
 		drain_rx,
 		_drain_tx: drain_tx,
 
 		routes: 0,
 		policies: 0,
-	})
+	}
 }
 
 pub async fn read_body_raw(body: axum_core::body::Body) -> Bytes {
@@ -794,34 +1009,5 @@ pub fn is_json_subset(subset: &Value, superset: &Value) -> bool {
 
 		// For primitive values, they must be exactly equal
 		_ => subset == superset,
-	}
-}
-
-/// check_eventually runs a function many times until it reaches the expected result.
-/// If it doesn't the last result is returned
-pub async fn check_eventually<F, CF, T, Fut>(dur: Duration, f: F, expected: CF) -> Result<T, T>
-where
-	F: Fn() -> Fut,
-	Fut: Future<Output = T>,
-	T: Eq + Debug,
-	CF: Fn(&T) -> bool,
-{
-	use std::ops::Add;
-	let mut delay = Duration::from_millis(10);
-	let end = SystemTime::now().add(dur);
-	let mut last: T;
-	let mut attempts = 0;
-	loop {
-		attempts += 1;
-		last = f().await;
-		if expected(&last) {
-			return Ok(last);
-		}
-		trace!("attempt {attempts} with delay {delay:?}");
-		if SystemTime::now().add(delay) > end {
-			return Err(last);
-		}
-		tokio::time::sleep(delay).await;
-		delay *= 2;
 	}
 }

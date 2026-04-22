@@ -142,11 +142,6 @@ func validateInferencePoolEndpointPickerRef(krtctx krt.HandlerContext, pool *inf
 		errs = append(errs, fmt.Sprintf("endpointPickerRef.kind must be %q, got %q", wellknown.ServiceKind, kind))
 	}
 
-	// InferencePool v1 only supports a single target port.
-	if len(pool.Spec.TargetPorts) != 1 {
-		errs = append(errs, "inferencePool.targetPorts must contain exactly one entry")
-	}
-
 	if epr.Port == nil {
 		errs = append(errs, "endpointPickerRef.port must be specified")
 		return inferencePoolValidationError(errs)

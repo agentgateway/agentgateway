@@ -21,7 +21,6 @@ import (
 	"istio.io/istio/pkg/util/protomarshal"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -30,7 +29,8 @@ import (
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks_url"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
@@ -85,10 +85,7 @@ func ConvertStatusCollection[T controllers.Object, S any](col krt.Collection[krt
 }
 
 // NewAgentPlugin creates a new AgentgatewayPolicy plugin
-func NewAgentPlugin(agw *AgwCollections) AgwPlugin {
-	backendReferences := krt.NewManyCollection(agw.AgentgatewayPolicies, func(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy) []*PolicyAttachment {
-		return BackendReferencesFromPolicy(policy)
-	})
+func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup) AgwPlugin {
 	return AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]PolicyPlugin{
 			wellknown.AgentgatewayPolicyGVK.GroupKind(): {
@@ -97,12 +94,14 @@ func NewAgentPlugin(agw *AgwCollections) AgwPlugin {
 						*gwv1.PolicyStatus,
 						[]AgwPolicy,
 					) {
-						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References)
+						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References, resolver, jwksLookup)
 					}, agw.KrtOpts.ToOptions("AgentgatewayPolicy")...)
 					return ConvertStatusCollection(policyStatusCol), policyCol
 				},
 				BuildReferences: func(input PolicyPluginInput) krt.Collection[*PolicyAttachment] {
-					return backendReferences
+					return krt.NewManyCollection(agw.AgentgatewayPolicies, func(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy) []*PolicyAttachment {
+						return BackendReferencesFromPolicy(ctx, policy, input.References)
+					}, agw.KrtOpts.ToOptions("AgentgatewayPolicyAttachments")...)
 				},
 			},
 		},
@@ -113,6 +112,8 @@ type PolicyCtx struct {
 	Krt         krt.HandlerContext
 	Collections *AgwCollections
 	References  ReferenceIndex
+	Resolver    remotehttp.Resolver
+	JWKSLookup  jwks.Lookup
 }
 
 type ResolvedTarget struct {
@@ -123,94 +124,87 @@ type ResolvedTarget struct {
 }
 
 // TranslateAgentgatewayPolicy generates policies for a single traffic policy
-func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy, agw *AgwCollections, references ReferenceIndex) (*gwv1.PolicyStatus, []AgwPolicy) {
+func TranslateAgentgatewayPolicy(
+	ctx krt.HandlerContext,
+	policy *agentgateway.AgentgatewayPolicy,
+	agw *AgwCollections,
+	references ReferenceIndex,
+	resolver remotehttp.Resolver,
+	jwksLookup jwks.Lookup,
+) (*gwv1.PolicyStatus, []AgwPolicy) {
 	var agwPolicies []AgwPolicy
+	existingStatus := policy.Status.DeepCopy()
 
-	pctx := PolicyCtx{Krt: ctx, Collections: agw, References: references}
+	pctx := PolicyCtx{Krt: ctx, Collections: agw, References: references, Resolver: resolver, JWKSLookup: jwksLookup}
 	var ancestors []gwv1.PolicyAncestorStatus
 	var attachmentErrors []string
 	// TODO: add selectors
 	baseTranslatedPolicies, baseErr := translatePolicyToAgw(pctx, policy)
-	baseConds := setPolicyConditions(baseErr, len(baseTranslatedPolicies) > 0)
+	baseConds := policyConditionMap(baseErr, len(baseTranslatedPolicies) > 0)
+	controller := gwv1.GatewayController(agw.ControllerName)
 	for _, target := range policy.Spec.TargetRefs {
 		gk := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
 
-		policyTarget, targetExists := references.PolicyTarget(ctx, policy.Namespace, target.Name, gk, target.SectionName)
-		if policyTarget == nil {
+		policyTargets, targetExists := references.PolicyTarget(ctx, policy.Namespace, target.Name, gk, target.SectionName)
+		if len(policyTargets) == 0 {
 			// This should be impossible, verified by CEL validation
 			logger.Warn("unsupported target kind", "kind", target.Kind, "policy", policy.Name)
 			continue
 		}
 
-		gatewayTargets := references.LookupGatewaysForTarget(ctx, utils.TypedNamespacedName{
+		targetObject := utils.TypedNamespacedName{
 			NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: string(target.Name)},
 			Kind:           gk.Kind,
-		}).UnsortedList()
-
-		translatedPolicies := clonePoliciesForTarget(baseTranslatedPolicies, policyTarget)
-		for _, translatedPolicy := range translatedPolicies {
-			for _, gatewayTarget := range gatewayTargets {
-				agwPolicies = append(agwPolicies, AgwPolicy{
-					Gateway: ptr.Of(gatewayTarget),
-					Policy:  translatedPolicy,
-				})
-			}
 		}
 
-		ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(ctx, policy.Namespace, gk, target.Name, targetExists, references)
-		if attachmentErr != "" {
-			attachmentErrors = append(attachmentErrors, attachmentErr)
-		}
-
-		for _, ar := range ancestorRefs {
-			// A policy should report at most one status per Gateway parent, even if multiple
-			// targetRefs resolve to the same Gateway.
-			if slices.IndexFunc(ancestors, func(existing gwv1.PolicyAncestorStatus) bool {
-				return existing.ControllerName == gwv1.GatewayController(agw.ControllerName) && parentRefEqual(existing.AncestorRef, ar)
-			}) != -1 {
-				continue
+		for _, policyTarget := range policyTargets {
+			// For backend-like targets, skip gateway resolution when the target doesn't exist.
+			// A missing backend could still resolve via PolicyAttachments if another backend
+			// chain happens to reference the same name, which would push config for a phantom target.
+			// Gateway/route targets use direct lookup (no PolicyAttachments), so they're safe.
+			var gatewayTargets []types.NamespacedName
+			if !IsBackendLikeTarget(policyTarget) || targetExists {
+				gatewayTargets = references.LookupGatewaysForPolicyTarget(ctx, targetObject, policyTarget).UnsortedList()
+				translatedPolicies := clonePoliciesForTarget(baseTranslatedPolicies, policyTarget)
+				for _, translatedPolicy := range translatedPolicies {
+					for _, gatewayTarget := range gatewayTargets {
+						agwPolicies = append(agwPolicies, AgwPolicy{
+							Gateway: ptr.Of(gatewayTarget),
+							Policy:  translatedPolicy,
+						})
+					}
+				}
 			}
-			ancestors = append(ancestors, gwv1.PolicyAncestorStatus{
-				AncestorRef:    ar,
-				ControllerName: gwv1.GatewayController(agw.ControllerName),
-				Conditions:     baseConds,
-			})
+
+			ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(policy.Namespace, targetObject, gatewayTargets, targetExists)
+			if attachmentErr != "" {
+				attachmentErrors = append(attachmentErrors, attachmentErr)
+			}
+
+			for _, ar := range ancestorRefs {
+				// A policy should report at most one status per Gateway parent, even if multiple
+				// targetRefs resolve to the same Gateway.
+				if slices.IndexFunc(ancestors, func(existing gwv1.PolicyAncestorStatus) bool {
+					return existing.ControllerName == controller && parentRefEqual(existing.AncestorRef, ar)
+				}) != -1 {
+					continue
+				}
+				ancestors = append(ancestors, setAncestorStatus(ar, existingStatus, policy.Generation, baseConds, controller))
+			}
 		}
 	}
 
 	if len(attachmentErrors) > 0 {
 		logger.Warn("failed to resolve one or more ancestor refs", "errors", attachmentErrors)
-		ancestors = append(ancestors, gwv1.PolicyAncestorStatus{
-			AncestorRef: gwv1.ParentReference{
-				Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayPolicyGVK.Group)),
-				Name:  "StatusSummary",
-			},
-			ControllerName: gwv1.GatewayController(agw.ControllerName),
-			Conditions:     setAttachmentErrorConditions(baseConds, attachmentErrors),
-		})
+		ancestors = append(ancestors, setAncestorStatus(gwv1.ParentReference{
+			Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayPolicyGVK.Group)),
+			Name:  "StatusSummary",
+		}, existingStatus, policy.Generation, attachmentErrorConditionMap(baseConds, attachmentErrors), controller))
 	}
 
 	// Build final status from accumulated ancestors
-	status := gwv1.PolicyStatus{Ancestors: ancestors}
-
-	if len(status.Ancestors) > 15 {
-		ignored := status.Ancestors[15:]
-		status.Ancestors = status.Ancestors[:15]
-		status.Ancestors = append(status.Ancestors, gwv1.PolicyAncestorStatus{
-			AncestorRef: gwv1.ParentReference{
-				Group: ptr.Of(gwv1.Group("gateway.kgateway.dev")),
-				Name:  "StatusSummary",
-			},
-			ControllerName: gwv1.GatewayController(agw.ControllerName),
-			Conditions: []metav1.Condition{
-				{
-					Type:    "StatusSummarized",
-					Status:  metav1.ConditionTrue,
-					Reason:  "StatusSummary",
-					Message: fmt.Sprintf("%d AncestorRefs ignored due to max status size", len(ignored)),
-				},
-			},
-		})
+	status := gwv1.PolicyStatus{
+		Ancestors: mergeAncestors(agw.ControllerName, existingStatus.Ancestors, ancestors),
 	}
 
 	// sort all parents for consistency with Equals and for Update
@@ -223,88 +217,68 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 	return &status, agwPolicies
 }
 
-func setPolicyConditions(err error, hasTranslatedPolicies bool) []metav1.Condition {
-	var conds []metav1.Condition
+func policyConditionMap(err error, hasTranslatedPolicies bool) map[string]*condition {
+	conds := map[string]*condition{}
 	if err != nil {
 		// If we produced some policies alongside errors, treat as partial validity
 		if hasTranslatedPolicies {
-			meta.SetStatusCondition(&conds, metav1.Condition{
-				Type:    string(shared.PolicyConditionAccepted),
-				Status:  metav1.ConditionTrue,
-				Reason:  string(shared.PolicyReasonPartiallyValid),
-				Message: err.Error(),
-			})
+			conds[string(shared.PolicyConditionAccepted)] = &condition{
+				status:  metav1.ConditionTrue,
+				reason:  string(shared.PolicyReasonPartiallyValid),
+				message: err.Error(),
+			}
 		} else {
 			// No policies produced and error present -> invalid
-			meta.SetStatusCondition(&conds, metav1.Condition{
-				Type:    string(shared.PolicyConditionAccepted),
-				Status:  metav1.ConditionTrue,
-				Reason:  string(shared.PolicyReasonInvalid),
-				Message: err.Error(),
-			})
-			meta.SetStatusCondition(&conds, metav1.Condition{
-				Type:    string(shared.PolicyConditionAttached),
-				Status:  metav1.ConditionFalse,
-				Reason:  string(shared.PolicyReasonPending),
-				Message: "Policy is not attached due to invalid status",
-			})
+			conds[string(shared.PolicyConditionAccepted)] = &condition{
+				status:  metav1.ConditionFalse,
+				reason:  string(shared.PolicyReasonInvalid),
+				message: err.Error(),
+			}
+			conds[string(shared.PolicyConditionAttached)] = &condition{
+				status:  metav1.ConditionFalse,
+				reason:  string(shared.PolicyReasonPending),
+				message: "Policy is not attached due to invalid status",
+			}
 		}
 	} else {
 		// Check for partial validity
 		// Build success conditions per ancestor
-		meta.SetStatusCondition(&conds, metav1.Condition{
-			Type:    string(shared.PolicyConditionAccepted),
-			Status:  metav1.ConditionTrue,
-			Reason:  string(shared.PolicyReasonValid),
-			Message: reporter.PolicyAcceptedMsg,
-		})
-		meta.SetStatusCondition(&conds, metav1.Condition{
-			Type:    string(shared.PolicyConditionAttached),
-			Status:  metav1.ConditionTrue,
-			Reason:  string(shared.PolicyReasonAttached),
-			Message: reporter.PolicyAttachedMsg,
-		})
-	}
-	// TODO: validate the target exists with dataplane https://github.com/kgateway-dev/kgateway/issues/12275
-	// Ensure LastTransitionTime is set for all conditions
-	for i := range conds {
-		if conds[i].LastTransitionTime.IsZero() {
-			conds[i].LastTransitionTime = metav1.Now()
+		conds[string(shared.PolicyConditionAccepted)] = &condition{
+			status:  metav1.ConditionTrue,
+			reason:  string(shared.PolicyReasonValid),
+			message: reporter.PolicyAcceptedMsg,
+		}
+		conds[string(shared.PolicyConditionAttached)] = &condition{
+			status:  metav1.ConditionTrue,
+			reason:  string(shared.PolicyReasonAttached),
+			message: reporter.PolicyAttachedMsg,
 		}
 	}
 	return conds
 }
 
-func setAttachmentErrorConditions(baseConds []metav1.Condition, attachmentErrors []string) []metav1.Condition {
-	conds := append([]metav1.Condition(nil), baseConds...)
-	meta.SetStatusCondition(&conds, metav1.Condition{
-		Type:    string(shared.PolicyConditionAttached),
-		Status:  metav1.ConditionFalse,
-		Reason:  string(shared.PolicyReasonPending),
-		Message: strings.Join(attachmentErrors, "\n"),
-	})
+func attachmentErrorConditionMap(baseConds map[string]*condition, attachmentErrors []string) map[string]*condition {
+	conds := maps.Clone(baseConds)
+	conds[string(shared.PolicyConditionAttached)] = &condition{
+		status:  metav1.ConditionFalse,
+		reason:  string(shared.PolicyReasonPending),
+		message: strings.Join(attachmentErrors, "\n"),
+	}
 	return conds
 }
 
 func resolvePolicyAncestorRefs(
-	ctx krt.HandlerContext,
 	policyNamespace string,
-	targetGK schema.GroupKind,
-	targetName gwv1.ObjectName,
+	targetObject utils.TypedNamespacedName,
+	gatewayTargets []types.NamespacedName,
 	targetExists bool,
-	references ReferenceIndex,
 ) ([]gwv1.ParentReference, string) {
 	if !targetExists {
-		return nil, fmt.Sprintf("Policy is not attached: %s %s/%s not found", targetGK.Kind, policyNamespace, targetName)
+		return nil, fmt.Sprintf("Policy is not attached: %s %s/%s not found", targetObject.Kind, policyNamespace, targetObject.Name)
 	}
 
-	object := utils.TypedNamespacedName{
-		NamespacedName: types.NamespacedName{Namespace: policyNamespace, Name: string(targetName)},
-		Kind:           targetGK.Kind,
-	}
-	gatewayTargets := references.LookupGatewaysForTarget(ctx, object).UnsortedList()
 	if len(gatewayTargets) == 0 {
-		return nil, fmt.Sprintf("Policy is not attached: %s %s/%s is not attached to any Gateway", targetGK.Kind, policyNamespace, targetName)
+		return nil, fmt.Sprintf("Policy is not attached: %s %s/%s is not attached to any Gateway", targetObject.Kind, policyNamespace, targetObject.Name)
 	}
 
 	refs := make([]gwv1.ParentReference, 0, len(gatewayTargets))
@@ -551,6 +525,7 @@ func processDirectResponse(directResponse *agentgateway.DirectResponse, basePoli
 
 func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthentication, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
 	p := &api.TrafficPolicySpec_JWT{}
+	p.AuthorizationLocation = translateAuthorizationLocation(jwt.Location)
 
 	switch jwt.Mode {
 	case agentgateway.JWTAuthenticationModeOptional:
@@ -562,7 +537,7 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 	}
 
 	errs := make([]error, 0)
-	for _, pp := range jwt.Providers {
+	for idx, pp := range jwt.Providers {
 		jp := &api.TrafficPolicySpec_JWTProvider{
 			Issuer:    pp.Issuer,
 			Audiences: pp.Audiences,
@@ -573,12 +548,11 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 			continue
 		}
 		if r := pp.JWKS.Remote; r != nil {
-			jwksUrl, _, err := jwks_url.JwksUrlBuilderFactory().BuildJwksUrlAndTlsConfig(ctx.Krt, policy.Name, policy.Namespace, pp.JWKS.Remote)
-			if err != nil {
-				errs = append(errs, err)
+			owner, ok := jwks.PolicyJWTProviderLookupOwner(policy.Namespace, policy.Name, idx, pp)
+			if !ok {
 				continue
 			}
-			inline, err := resolveRemoteJWKSInline(ctx, jwksUrl)
+			inline, err := resolveJWKSInlineForOwner(ctx, owner)
 			if err != nil {
 				errs = append(errs, err)
 				continue
@@ -628,6 +602,7 @@ func processBasicAuthenticationPolicy(
 ) (*api.Policy, error) {
 	p := &api.TrafficPolicySpec_BasicAuthentication{}
 	p.Realm = ba.Realm
+	p.AuthorizationLocation = translateAuthorizationLocation(ba.Location)
 
 	switch ba.Mode {
 	case agentgateway.BasicAuthenticationModeOptional:
@@ -684,6 +659,7 @@ func processAPIKeyAuthenticationPolicy(
 	policy types.NamespacedName,
 ) (*api.Policy, error) {
 	p := &api.TrafficPolicySpec_APIKey{}
+	p.AuthorizationLocation = translateAuthorizationLocation(ak.Location)
 
 	switch ak.Mode {
 	case agentgateway.APIKeyAuthenticationModeOptional:
@@ -1496,28 +1472,60 @@ func DefaultString[T ~string](s *T, def string) string {
 	}
 	return string(*s)
 }
-func BackendReferencesFromPolicy(policy *agentgateway.AgentgatewayPolicy) []*PolicyAttachment {
-	var attachments []*PolicyAttachment
+
+// BackendReferencesFromPolicy only emits attachments for existing, unsectioned targets
+// to prevent phantom chains and section-scoped over-attachment.
+func BackendReferencesFromPolicy(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy, references ReferenceIndex) []*PolicyAttachment {
 	s := policy.Spec
 	self := utils.TypedNamespacedName{
 		NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name},
 		Kind:           wellknown.AgentgatewayPolicyGVK.Kind,
 	}
-	app := func(ref gwv1.BackendObjectReference) {
-		for _, tgt := range s.TargetRefs {
+
+	existingTargets := make([]utils.TypedNamespacedName, 0, len(s.TargetRefs))
+	for _, tgt := range s.TargetRefs {
+		gk := schema.GroupKind{Group: string(tgt.Group), Kind: string(tgt.Kind)}
+		policyTarget, targetExists := references.PolicyTarget(ctx, policy.Namespace, tgt.Name, gk, tgt.SectionName)
+		if policyTarget == nil || !targetExists {
+			continue
+		}
+		existingTargets = append(existingTargets, utils.TypedNamespacedName{
+			NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: string(tgt.Name)},
+			Kind:           string(tgt.Kind),
+		})
+	}
+	if len(existingTargets) == 0 {
+		return nil
+	}
+
+	backends := referencedBackendsFromPolicy(policy)
+	if len(backends) == 0 {
+		return nil
+	}
+
+	attachments := make([]*PolicyAttachment, 0, len(existingTargets)*len(backends))
+	for _, backend := range backends {
+		for _, tgt := range existingTargets {
 			attachments = append(attachments, &PolicyAttachment{
-				Target: utils.TypedNamespacedName{
-					NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: string(tgt.Name)},
-					Kind:           string(tgt.Kind),
-				},
-				Backend: utils.TypedNamespacedName{
-					NamespacedName: types.NamespacedName{Namespace: DefaultString(ref.Namespace, policy.Namespace), Name: string(ref.Name)},
-					Kind:           DefaultString(ref.Kind, wellknown.ServiceKind),
-				},
-				Source: self,
+				Target:  tgt,
+				Backend: backend,
+				Source:  self,
 			})
 		}
 	}
+	return attachments
+}
+
+func referencedBackendsFromPolicy(policy *agentgateway.AgentgatewayPolicy) []utils.TypedNamespacedName {
+	var backends []utils.TypedNamespacedName
+	app := func(ref gwv1.BackendObjectReference) {
+		backends = append(backends, utils.TypedNamespacedName{
+			NamespacedName: types.NamespacedName{Namespace: DefaultString(ref.Namespace, policy.Namespace), Name: string(ref.Name)},
+			Kind:           DefaultString(ref.Kind, wellknown.ServiceKind),
+		})
+	}
+
+	s := policy.Spec
 	if s.Traffic != nil {
 		if s.Traffic.ExtAuth != nil {
 			app(s.Traffic.ExtAuth.BackendRef)
@@ -1547,7 +1555,7 @@ func BackendReferencesFromPolicy(policy *agentgateway.AgentgatewayPolicy) []*Pol
 	if s.Backend != nil {
 		BackendReferencesFromBackendPolicy(s.Backend, app)
 	}
-	return attachments
+	return backends
 }
 
 func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(ref gwv1.BackendObjectReference)) {

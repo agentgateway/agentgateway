@@ -309,6 +309,13 @@ spec:
       serviceAccountName: test-release-agentgateway
       containers:
         - name: controller
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop:
+              - ALL
           image: "cr.agentgateway.dev/controller:v0.0.1"
           imagePullPolicy: IfNotPresent
           ports:

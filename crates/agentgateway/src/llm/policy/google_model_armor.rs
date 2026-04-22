@@ -318,6 +318,21 @@ pub async fn send_response(
 	Ok(response)
 }
 
+impl GoogleModelArmor {
+	/// User-provided policies come first so they take precedence during resolution
+	/// then system TLS and implicit GCP auth are appended as fallbacks.
+	pub(crate) fn build_request_policies(&self) -> Vec<BackendPolicy> {
+		let mut pols: Vec<BackendPolicy> = self.policies.to_vec();
+		pols.push(BackendPolicy::BackendTLS(
+			crate::http::backendtls::SYSTEM_TRUST.clone(),
+		));
+		pols.push(BackendPolicy::BackendAuth(BackendAuth::Gcp(
+			GcpAuth::default(),
+		)));
+		pols
+	}
+}
+
 async fn send_model_armor_request<T: Serialize>(
 	client: &PolicyClient,
 	claims: Option<Claims>,
@@ -340,12 +355,7 @@ async fn send_model_armor_request<T: Serialize>(
 	);
 	let uri = format!("https://{}{}", host, path);
 
-	let mut pols = vec![
-		BackendPolicy::BackendTLS(crate::http::backendtls::SYSTEM_TRUST.clone()),
-		// Default to implicit GCP auth
-		BackendPolicy::BackendAuth(BackendAuth::Gcp(GcpAuth::default())),
-	];
-	pols.extend(model_armor.policies.iter().cloned());
+	let pols = model_armor.build_request_policies();
 
 	let mut rb = ::http::Request::builder()
 		.uri(&uri)
@@ -364,7 +374,7 @@ async fn send_model_armor_request<T: Serialize>(
 	);
 
 	let resp = client
-		.call_with_explicit_policies(req, mock_be, pols)
+		.call_with_explicit_policies_list(req, mock_be, pols)
 		.await?;
 
 	let resp: SanitizeResponse = json::from_response_body(resp).await?;

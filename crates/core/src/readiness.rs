@@ -36,7 +36,7 @@ impl Ready {
 	/// register_task allows a caller to add a dependency to be marked "ready".
 	pub fn register_task(&self, name: &str) -> BlockReady {
 		let mut state = self.0.lock().unwrap();
-		let was_ready = state.pending.is_empty();
+		let was_ready: bool = state.pending.is_empty();
 		state.pending.insert(name.to_string());
 		if was_ready {
 			state.ready_tx.send_replace(false);

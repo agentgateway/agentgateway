@@ -1,4 +1,5 @@
 use rand::RngExt;
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
@@ -12,7 +13,7 @@ use headers::HeaderMapExt;
 use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
-use rand::seq::IndexedRandom;
+use rand::seq::{IndexedRandom, IteratorRandom};
 use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
@@ -29,7 +30,9 @@ use crate::http::{
 };
 use crate::llm::{InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType};
 use crate::proxy::tcpproxy::TCPProxy;
-use crate::proxy::{ProxyError, ProxyResponse, ProxyResponseReason, resolve_simple_backend};
+use crate::proxy::{
+	ProxyError, ProxyResponse, ProxyResponseReason, WaypointService, resolve_simple_backend,
+};
 use crate::store::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
 	RoutePath,
@@ -47,6 +50,56 @@ fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference
 		.choose_weighted(&mut rand::rng(), |b| b.weight)
 		.ok()
 		.cloned()
+}
+
+#[derive(Debug)]
+struct SelectedRouteChain {
+	routes: Vec<Arc<Route>>,
+	path_match: PathMatch,
+	backend: Option<RouteBackendReference>,
+}
+
+fn select_route_chain(
+	inputs: &ProxyInputs,
+	target_address: SocketAddr,
+	listener: &Listener,
+	req: &Request,
+) -> Result<SelectedRouteChain, ProxyError> {
+	let (mut selected_route, mut path_match) =
+		http::route::select_best_route(inputs.stores.clone(), target_address, listener, req)
+			.ok_or(ProxyError::RouteNotFound)?;
+
+	let mut routes = vec![selected_route.clone()];
+	let mut seen = HashSet::from([selected_route.key.clone()]);
+	loop {
+		let Some(selected_backend) = select_backend(selected_route.as_ref(), req) else {
+			return Ok(SelectedRouteChain {
+				routes,
+				path_match,
+				backend: None,
+			});
+		};
+		let RouteBackendTarget::RouteGroup(route_name) = &selected_backend.target else {
+			return Ok(SelectedRouteChain {
+				routes,
+				path_match,
+				backend: Some(selected_backend),
+			});
+		};
+
+		let rg = {
+			let binds = inputs.stores.binds.read();
+			binds
+				.lookup_route_group(route_name)
+				.ok_or(ProxyError::RouteNotFound)?
+		};
+		(selected_route, path_match) =
+			http::route::select_best_route_group(rg.as_ref(), req).ok_or(ProxyError::RouteNotFound)?;
+		if !seen.insert(selected_route.key.clone()) {
+			return Err(ProxyError::RouteCycleDetected);
+		}
+		routes.push(selected_route.clone());
+	}
 }
 
 pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingPolicy) {
@@ -81,6 +134,14 @@ async fn apply_request_policies(
 			.map_err(ProxyError::from)?
 			.apply(response_policies.headers())?;
 	}
+
+	if let Some(o) = &policies.oidc {
+		o.apply(Some(log), req, client.clone())
+			.await
+			.map_err(|e| ProxyResponse::from(ProxyError::OidcFailure(e)))?
+			.apply(response_policies.headers())?;
+	}
+	http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
 
 	if let Some(j) = &policies.jwt {
 		j.apply(&client, Some(log), req).await?;
@@ -255,6 +316,14 @@ async fn apply_gateway_policies(
 	ext_proc: Option<&mut ExtProcRequest>,
 	response_headers: &mut HeaderMap,
 ) -> Result<(), ProxyResponse> {
+	if let Some(o) = &policies.oidc {
+		o.apply(Some(log), req, client.clone())
+			.await
+			.map_err(|e| ProxyResponse::from(ProxyError::OidcFailure(e)))?
+			.apply(response_headers)?;
+		http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
+	}
+
 	if let Some(j) = &policies.jwt {
 		j.apply(&client, Some(log), req).await?;
 	}
@@ -394,6 +463,7 @@ impl HTTPProxy {
 			.clone();
 		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
 		connection.copy::<cel::SourceContext>(req.extensions_mut());
+		connection.copy::<WaypointService>(req.extensions_mut());
 		req
 			.extensions_mut()
 			.insert(RequestTime(start.as_datetime()));
@@ -412,12 +482,7 @@ impl HTTPProxy {
 		// or direct responses
 		let mut response_policies = ResponsePolicies::default();
 		let ret = self
-			.proxy_internal(
-				connection,
-				req,
-				log.as_mut().unwrap(),
-				&mut response_policies,
-			)
+			.proxy_internal(req, log.as_mut().unwrap(), &mut response_policies)
 			.await
 			.map_err(|e| e.0);
 
@@ -481,12 +546,11 @@ impl HTTPProxy {
 
 	async fn proxy_internal(
 		&self,
-		connection: Arc<Extension>,
 		req: ::http::Request<Incoming>,
 		log: &mut RequestLog,
 		response_policies: &mut ResponsePolicies,
 	) -> Result<Response, SnapshottedProxyResponse> {
-		log.tls_info = connection.get::<TLSConnectionInfo>().cloned();
+		log.tls_info = req.extensions().get::<TLSConnectionInfo>().cloned();
 		log.backend_protocol = Some(cel::BackendProtocol::http);
 
 		let selected_listener = self.selected_listener.clone();
@@ -500,7 +564,7 @@ impl HTTPProxy {
 		};
 
 		sensitive_headers(&mut req);
-		normalize_uri(&connection, &mut req)
+		normalize_uri(log.tls_info.as_ref(), &mut req)
 			.map_err(ProxyError::Processing)
 			.snapshot_on_err(log, &mut req)?;
 		let mut req_upgrade = hop_by_hop_headers(&mut req);
@@ -526,10 +590,13 @@ impl HTTPProxy {
 		let selected_listener = match selected_listener {
 			Ok(l) => {
 				debug!(bind=%bind_name, listener=%l.key, "selected listener");
-				let frontend_policies = inputs
-					.stores
-					.read_binds()
-					.listener_frontend_policies(&l.name);
+				let frontend_policies = inputs.stores.read_binds().listener_frontend_policies(
+					&l.name,
+					req
+						.extensions()
+						.get::<WaypointService>()
+						.map(WaypointService::as_policy_ref),
+				);
 
 				self
 					.handle_frontend_policies(&frontend_policies, log, &mut req)
@@ -577,16 +644,15 @@ impl HTTPProxy {
 
 		Self::detect_misdirected(log, bind, &req, &selected_listener).snapshot_on_err(log, &mut req)?;
 
-		let (selected_route, path_match) = http::route::select_best_route(
-			inputs.stores.clone(),
-			inputs.cfg.network.clone(),
-			inputs.cfg.self_addr.as_ref(),
-			self.target_address,
-			&selected_listener,
-			&req,
-		)
-		.ok_or(ProxyError::RouteNotFound)
-		.snapshot_on_err(log, &mut req)?;
+		let selected_route_chain =
+			select_route_chain(&inputs, self.target_address, &selected_listener, &req)
+				.snapshot_on_err(log, &mut req)?;
+		let selected_route = selected_route_chain
+			.routes
+			.last()
+			.expect("route chain always contains the initially selected route")
+			.clone();
+		let path_match = selected_route_chain.path_match.clone();
 		log.route_name = Some(selected_route.name.clone());
 		// Record the matched path for tracing/logging span names
 		log.path_match = Some(match &path_match {
@@ -605,14 +671,27 @@ impl HTTPProxy {
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 
 		let route_path = RoutePath {
-			route: &selected_route.name,
 			listener: &selected_listener.name,
+			service: selected_route_chain
+				.routes
+				.last()
+				.and_then(|r| r.service_key.as_ref()),
+			routes: selected_route_chain
+				.routes
+				.iter()
+				.map(|route| &route.name)
+				.collect(),
 		};
+		let route_inline_policies = selected_route_chain
+			.routes
+			.iter()
+			.map(|route| route.inline_policies.as_slice())
+			.collect::<Vec<_>>();
 
 		let mut route_policies = inputs
 			.stores
 			.read_binds()
-			.route_policies(&route_path, &selected_route.inline_policies);
+			.route_policies(&route_path, &route_inline_policies);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
 		log.retry_backoff = route_policies.retry.as_ref().and_then(|r| r.backoff);
@@ -639,11 +718,12 @@ impl HTTPProxy {
 		)
 		.await
 		.snapshot_on_err(log, &mut req)?;
-		let selected_backend = select_backend(selected_route.as_ref(), &req)
+		let selected_backend_ref = selected_route_chain
+			.backend
 			.ok_or(ProxyError::NoValidBackends)
 			.snapshot_on_err(log, &mut req)?;
 		let selected_backend =
-			resolve_backend(selected_backend, self.inputs.as_ref()).snapshot_on_err(log, &mut req)?;
+			resolve_backend(selected_backend_ref, self.inputs.as_ref()).snapshot_on_err(log, &mut req)?;
 		let backend_policies = get_backend_policies(
 			self.inputs.as_ref(),
 			&selected_backend.backend,
@@ -1004,7 +1084,11 @@ impl HTTPProxy {
 }
 
 fn resolve_backend(b: RouteBackendReference, pi: &ProxyInputs) -> Result<RouteBackend, ProxyError> {
-	let backend = super::resolve_backend(&b.backend, pi)?;
+	let backend_ref = b
+		.target
+		.as_backend_reference()
+		.ok_or(ProxyError::InvalidBackendType)?;
+	let backend = super::resolve_backend(&backend_ref, pi)?;
 	Ok(RouteBackend {
 		weight: b.weight,
 		backend,
@@ -1087,7 +1171,7 @@ pub async fn build_transport(
 	if let Some(tun) = backend_tunnel {
 		let backend = super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?;
 		let pols = crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &[], None);
-		let call = TCPProxy::build_backend_call(&mut None, inputs, &backend.backend, pols)?;
+		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols)?;
 		let tunnel_backend_tls = call.backend_policies.backend_tls.clone();
 		let tunnel_auth = call.backend_policies.backend_auth.clone();
 		// This is a bounded recursion; this code is only called when backend_tunnel is set, and in this call
@@ -1300,13 +1384,18 @@ async fn make_backend_call(
 	});
 
 	let mut maybe_inference = policies.build_inference(policy_client.clone());
-	let (inference_override, ext_proc_resp) = maybe_inference.mutate_request(&mut req).await?;
-	ext_proc_resp.apply(response_policies.headers())?;
-	log.add(|l| l.inference_pool = inference_override);
+	let inference_result = maybe_inference.mutate_request(&mut req).await?;
+	inference_result
+		.policy_response
+		.apply(response_policies.headers())?;
+	log.add(|l| l.inference_pool = inference_result.destination);
 
 	// Use inference override if present, otherwise check for stateful MCP pinning.
 	// In practice, these don't conflict: inference is for AI backends, MCP pinning is for MCP backends.
-	let override_dest = inference_override.or(policies.override_dest);
+	let service_override = ServiceCallOverride {
+		destination: inference_result.destination.or(policies.override_dest),
+		inference_failed_open: inference_result.failed_open,
+	};
 
 	let backend_call = match backend {
 		Backend::AI(n, ai) => {
@@ -1349,9 +1438,15 @@ async fn make_backend_call(
 				network_gateway: None,
 			}
 		},
-		Backend::Service(svc, port) => {
-			build_service_call(&inputs, policies, &mut log, override_dest, svc, port)?
-		},
+		Backend::Service(svc, port) => build_service_call(
+			&inputs,
+			policies,
+			&mut log,
+			service_override,
+			svc,
+			port,
+			req.uri().host(),
+		)?,
 		Backend::Opaque(_, target) => BackendCall {
 			target: target.clone(),
 			http_version_override: None,
@@ -1398,7 +1493,7 @@ async fn make_backend_call(
 					Some(s) if *s == Scheme::HTTPS => 443,
 					_ => 80,
 				});
-			let target = Target::try_from((host, port)).map_err(ProxyError::Processing)?;
+			let target = Target::from((host, port));
 			BackendCall {
 				target,
 				http_version_override: None,
@@ -1698,30 +1793,26 @@ pub fn build_service_call(
 	inputs: &ProxyInputs,
 	backend_policies: BackendPolicies,
 	log: &mut Option<&mut RequestLog>,
-	override_dest: Option<SocketAddr>,
+	service_override: ServiceCallOverride,
 	svc: &Arc<Service>,
 	port: &u16,
+	request_host: Option<&str>,
 ) -> Result<BackendCall, ProxyError> {
 	let port = *port;
 	let workloads = &inputs.stores.read_discovery().workloads;
 	let (ep, handle, wl) = svc
 		.endpoints
-		.select_endpoint(workloads, svc.as_ref(), port, override_dest)
+		.select_endpoint(workloads, svc.as_ref(), port, service_override.destination)
 		.ok_or(ProxyError::NoHealthyEndpoints)?;
 
-	let svc_target_port = svc.ports.get(&port).copied().unwrap_or_default();
-	let target_port = if let Some(ov) = override_dest {
-		// use the explicit override. select_endpoint ensures this is actually in the endpoint
-		ov.port()
-	} else if let Some(&ep_target_port) = ep.port.get(&port) {
-		// prefer endpoint port mapping
-		ep_target_port
-	} else if svc_target_port > 0 {
-		// otherwise, see if the service has this port
-		svc_target_port
-	} else {
-		return Err(ProxyError::NoHealthyEndpoints);
-	};
+	let target_port = select_service_target_port(
+		ep.as_ref(),
+		svc.as_ref(),
+		port,
+		service_override.destination,
+		service_override.inference_failed_open,
+	)
+	.ok_or(ProxyError::NoHealthyEndpoints)?;
 
 	let http_version_override = if svc.port_is_http2(port) {
 		Some(::http::Version::HTTP_2)
@@ -1779,20 +1870,26 @@ pub fn build_service_call(
 	// For double HBONE, use hostname-based target so the gateway can resolve it
 	let target = if network_gateway.is_some() {
 		tracing::debug!(
-			hostname = % svc.hostname,
-			port = % port,
+			hostname=%svc.hostname,
+			port=%port,
 			"using hostname-based target for double hbone"
 		);
+		// Use the original service port, not the target port; the gateway will resolve it
 		Target::Hostname(svc.hostname.clone(), port)
 	} else {
-		// TODO: support a mode like ServiceEntry DYNAMIC_DNS. Need a way to signal this, though; perhaps:
-		// wl.workload_ips.is_empty() && wl.hostname.starts_with("*.")
-		// For direct connections, we need the workload IP
-		let Some(ip) = wl.workload_ips.first() else {
-			return Err(ProxyError::NoHealthyEndpoints);
-		};
-		let dest = SocketAddr::from((*ip, target_port));
-		Target::Address(dest)
+		// TODO: this should only be used with DNS resolution type! maybe?
+		if wl.workload_ips.is_empty()
+			&& let Some(hostname) = resolved_workload_target_hostname(&wl.hostname, request_host)
+		{
+			Target::Hostname(hostname.into(), target_port)
+		} else {
+			// For direct connections, we need the workload IP
+			let Some(ip) = wl.workload_ips.first() else {
+				return Err(ProxyError::NoHealthyEndpoints);
+			};
+			let dest = SocketAddr::from((*ip, target_port));
+			Target::Address(dest)
+		}
 	};
 
 	Ok(BackendCall {
@@ -1802,6 +1899,34 @@ pub fn build_service_call(
 		network_gateway,
 		backend_policies,
 	})
+}
+
+fn select_service_target_port(
+	ep: &Endpoint,
+	svc: &Service,
+	svc_port: u16,
+	override_dest: Option<SocketAddr>,
+	inference_failed_open: bool,
+) -> Option<u16> {
+	let svc_target_port = svc.ports.get(&svc_port).copied().unwrap_or_default();
+	if let Some(ov) = override_dest {
+		// use the explicit override. select_endpoint ensures this is actually in the endpoint
+		return Some(ov.port());
+	}
+	if inference_failed_open
+		&& let Some(target_port) = ep.port.values().choose(&mut rand::rng()).copied()
+	{
+		return Some(target_port);
+	}
+	if let Some(&ep_target_port) = ep.port.get(&svc_port) {
+		// prefer endpoint port mapping
+		return Some(ep_target_port);
+	}
+	if svc_target_port > 0 {
+		// otherwise, see if the service has this port
+		return Some(svc_target_port);
+	}
+	None
 }
 
 /// Combines workload identity with service SANs.
@@ -1817,11 +1942,191 @@ fn workload_and_service_sans(wl: &Workload, svc: &Service) -> Vec<Identity> {
 	ids
 }
 
+fn resolved_workload_target_hostname<'a>(
+	workload_hostname: &'a str,
+	request_host: Option<&'a str>,
+) -> Option<&'a str> {
+	if workload_hostname.is_empty() {
+		return None;
+	}
+
+	if let Some(wildcard_suffix) = workload_hostname.strip_prefix("*.") {
+		let suffix = format!(".{wildcard_suffix}");
+		request_host.filter(|host| host.ends_with(&suffix))
+	} else {
+		Some(workload_hostname)
+	}
+}
+
 fn should_retry(res: &Result<Response, SnapshottedProxyResponse>, pol: &retry::Policy) -> bool {
 	match res {
 		Ok(resp) => pol.codes.contains(&resp.status()),
 		Err(SnapshottedProxyResponse(ProxyResponse::Error(e))) => e.is_retryable(),
 		Err(SnapshottedProxyResponse(ProxyResponse::DirectResponse(_))) => false,
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{hop_by_hop_headers, resolved_workload_target_hostname, select_service_target_port};
+	use crate::http;
+	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
+	use std::collections::{HashMap, HashSet};
+	use std::net::SocketAddr;
+
+	#[test]
+	fn resolved_workload_target_hostname_uses_explicit_workload_hostname() {
+		assert_eq!(
+			resolved_workload_target_hostname("api.example.com", Some("caller.example.com")),
+			Some("api.example.com")
+		);
+		assert_eq!(
+			resolved_workload_target_hostname("api.example.com", None),
+			Some("api.example.com")
+		);
+	}
+
+	#[test]
+	fn resolved_workload_target_hostname_uses_request_host_for_matching_wildcard() {
+		assert_eq!(
+			resolved_workload_target_hostname("*.example.com", Some("api.example.com")),
+			Some("api.example.com")
+		);
+		assert_eq!(
+			resolved_workload_target_hostname("*.example.com", Some("deep.api.example.com")),
+			Some("deep.api.example.com")
+		);
+	}
+
+	#[test]
+	fn resolved_workload_target_hostname_rejects_non_matching_wildcard() {
+		assert_eq!(
+			resolved_workload_target_hostname("*.example.com", Some("example.com")),
+			None
+		);
+		assert_eq!(
+			resolved_workload_target_hostname("*.example.com", Some("api.other.com")),
+			None
+		);
+		assert_eq!(
+			resolved_workload_target_hostname("*.example.com", None),
+			None
+		);
+	}
+
+	fn multi_port_inference_service() -> Service {
+		Service {
+			name: "gateway-pool".into(),
+			namespace: "default".into(),
+			hostname: "gateway-pool.default.inference.cluster.local".into(),
+			vips: Vec::new(),
+			ports: HashMap::from([(8000, 8000), (8001, 8001)]),
+			app_protocols: HashMap::from([(8000, AppProtocol::Http2), (8001, AppProtocol::Http2)]),
+			endpoints: Default::default(),
+			subject_alt_names: Vec::new(),
+			waypoint: None,
+			load_balancer: None,
+			ip_families: None,
+		}
+	}
+
+	#[tokio::test]
+	async fn select_service_target_port_uses_override_destination_when_present() {
+		let endpoint = Endpoint {
+			workload_uid: "wl-1".into(),
+			port: HashMap::from([(8000, 8000), (8001, 8001)]),
+			status: HealthStatus::Healthy,
+		};
+		let service = multi_port_inference_service();
+		let override_dest = SocketAddr::from(([10, 0, 0, 1], 8001));
+
+		assert_eq!(
+			select_service_target_port(&endpoint, &service, 8000, Some(override_dest), true),
+			Some(8001)
+		);
+	}
+
+	#[tokio::test]
+	async fn select_service_target_port_uses_canonical_port_without_inference_fail_open() {
+		let endpoint = Endpoint {
+			workload_uid: "wl-1".into(),
+			port: HashMap::from([(8000, 8000), (8001, 8001)]),
+			status: HealthStatus::Healthy,
+		};
+		let service = multi_port_inference_service();
+
+		assert_eq!(
+			select_service_target_port(&endpoint, &service, 8000, None, false),
+			Some(8000)
+		);
+	}
+
+	#[tokio::test]
+	async fn select_service_target_port_can_reach_all_ports_after_inference_fail_open() {
+		let endpoint = Endpoint {
+			workload_uid: "wl-1".into(),
+			port: HashMap::from([(8000, 8000), (8001, 8001)]),
+			status: HealthStatus::Healthy,
+		};
+		let service = multi_port_inference_service();
+		let mut seen = HashSet::new();
+
+		for _ in 0..64 {
+			let target_port = select_service_target_port(&endpoint, &service, 8000, None, true)
+				.expect("expected a target port");
+			seen.insert(target_port);
+			if seen.len() == 2 {
+				break;
+			}
+		}
+
+		assert_eq!(seen, HashSet::from([8000, 8001]));
+	}
+
+	#[test]
+	fn hop_by_hop_headers_removes_connection_nominated_headers() {
+		let mut req = ::http::Request::builder()
+			.uri("http://app/")
+			.header("connection", "x-internal-auth, x-original-url")
+			.header("x-internal-auth", "1")
+			.header("x-original-url", "/admin")
+			.body(http::Body::empty())
+			.expect("request should build");
+
+		assert!(hop_by_hop_headers(&mut req).is_none());
+		assert!(!req.headers().contains_key("connection"));
+		assert!(!req.headers().contains_key("x-internal-auth"));
+		assert!(!req.headers().contains_key("x-original-url"));
+	}
+
+	#[test]
+	fn hop_by_hop_headers_preserves_upgrade_and_trailers_after_stripping() {
+		let mut req = ::http::Request::builder()
+			.uri("http://app/")
+			.header("connection", "keep-alive, upgrade, x-original-url")
+			.header("upgrade", "websocket")
+			.header("te", "trailers")
+			.header("x-original-url", "/admin")
+			.body(http::Body::empty())
+			.expect("request should build");
+
+		assert!(hop_by_hop_headers(&mut req).is_none());
+		assert_eq!(
+			req
+				.headers()
+				.get("connection")
+				.and_then(|v| v.to_str().ok()),
+			Some("upgrade")
+		);
+		assert_eq!(
+			req.headers().get("upgrade").and_then(|v| v.to_str().ok()),
+			Some("websocket")
+		);
+		assert_eq!(
+			req.headers().get("te").and_then(|v| v.to_str().ok()),
+			Some("trailers")
+		);
+		assert!(!req.headers().contains_key("x-original-url"));
 	}
 }
 
@@ -1864,6 +2169,18 @@ static HOP_HEADERS: [HeaderName; 9] = [
 	header::UPGRADE,
 ];
 
+fn connection_header_tokens(headers: &HeaderMap) -> Vec<HeaderName> {
+	headers
+		.get_all(header::CONNECTION)
+		.into_iter()
+		.filter_map(|value| value.to_str().ok())
+		.flat_map(|value| value.split(','))
+		.map(str::trim)
+		.filter(|token| !token.is_empty())
+		.filter_map(|token| HeaderName::from_bytes(token.as_bytes()).ok())
+		.collect()
+}
+
 #[derive(Clone)]
 struct RequestUpgrade {
 	upgrade_type: HeaderValue,
@@ -1877,7 +2194,11 @@ fn hop_by_hop_headers(req: &mut Request) -> Option<RequestUpgrade> {
 		.and_then(|h| h.to_str().ok())
 		.map(|s| s.contains("trailers"))
 		.unwrap_or(false);
+	let connection_headers = connection_header_tokens(req.headers());
 	let upgrade_type = get_upgrade_type(req.headers());
+	for h in connection_headers {
+		req.headers_mut().remove(h);
+	}
 	for h in HOP_HEADERS.iter() {
 		req.headers_mut().remove(h);
 	}
@@ -1928,7 +2249,7 @@ fn sensitive_headers(req: &mut Request) {
 
 // The http library will not put the authority into req.uri().authority for HTTP/1. Normalize so
 // the rest of the code doesn't need to worry about it
-fn normalize_uri(connection: &Extension, req: &mut Request) -> anyhow::Result<()> {
+fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::Result<()> {
 	debug!("request before normalization: {req:?}");
 	if let ::http::Version::HTTP_10 | ::http::Version::HTTP_11 = req.version()
 		&& req.uri().authority().is_none()
@@ -1945,7 +2266,7 @@ fn normalize_uri(connection: &Extension, req: &mut Request) -> anyhow::Result<()
 		parts.authority = Some(host);
 		if parts.path_and_query.is_some() {
 			// TODO: or always do this?
-			if connection.get::<TLSConnectionInfo>().is_some() {
+			if tls.is_some() {
 				parts.scheme = Some(Scheme::HTTPS);
 			} else {
 				parts.scheme = Some(Scheme::HTTP);
@@ -1963,6 +2284,12 @@ pub struct BackendCall {
 	pub transport_override: Option<(InboundProtocol, Vec<Identity>)>,
 	pub network_gateway: Option<(GatewayAddress, Identity)>, /* For double hbone: (gateway_address, gateway_identity) */
 	pub backend_policies: BackendPolicies,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ServiceCallOverride {
+	pub destination: Option<SocketAddr>,
+	pub inference_failed_open: bool,
 }
 
 #[derive(Debug, Default)]
@@ -2090,20 +2417,19 @@ impl PolicyClient {
 			.await
 	}
 
-	pub async fn call_with_default_policies(
+	pub async fn call_with_explicit_policies(
 		&self,
 		req: Request,
 		backend: &SimpleBackend,
-		defaults: BackendPolicies,
+		policies: BackendPolicies,
 	) -> Result<Response, ProxyError> {
-		let backend = Backend::from(backend.clone()).into();
-		let pols = defaults.merge(get_backend_policies(&self.inputs, &backend, &[], None));
+		let backend = Backend::from(backend.clone());
 		self
-			.internal_call_with_policies(req, backend.backend, pols)
+			.internal_call_with_policies(req, backend, policies)
 			.await
 	}
 
-	pub async fn call_with_explicit_policies(
+	pub async fn call_with_explicit_policies_list(
 		&self,
 		req: Request,
 		backend: SimpleBackend,
@@ -2160,5 +2486,187 @@ impl OptLogger for Option<&mut RequestLog> {
 		if let Some(log) = self.as_mut() {
 			f(log)
 		}
+	}
+}
+
+#[cfg(test)]
+mod route_chain_tests {
+	use super::*;
+	use crate::test_helpers::proxymock;
+	use agent_core::strng;
+
+	fn route(name: &str, path: &str, target: RouteBackendTarget) -> Route {
+		Route {
+			key: strng::new(name),
+			service_key: None,
+			name: RouteName {
+				name: strng::new(name),
+				namespace: strng::EMPTY,
+				rule_name: None,
+				kind: Some(strng::literal!("HTTPRoute")),
+			},
+			hostnames: Vec::new(),
+			matches: vec![RouteMatch {
+				headers: Vec::new(),
+				path: PathMatch::PathPrefix(strng::new(path)),
+				method: None,
+				query: Vec::new(),
+			}],
+			backends: vec![RouteBackendReference {
+				weight: 1,
+				target,
+				inline_policies: Vec::new(),
+			}],
+			inline_policies: Vec::new(),
+		}
+	}
+
+	fn route_without_backends(name: &str, path: &str) -> Route {
+		Route {
+			key: strng::new(name),
+			service_key: None,
+			name: RouteName {
+				name: strng::new(name),
+				namespace: strng::EMPTY,
+				rule_name: None,
+				kind: Some(strng::literal!("HTTPRoute")),
+			},
+			hostnames: Vec::new(),
+			matches: vec![RouteMatch {
+				headers: Vec::new(),
+				path: PathMatch::PathPrefix(strng::new(path)),
+				method: None,
+				query: Vec::new(),
+			}],
+			backends: Vec::new(),
+			inline_policies: Vec::new(),
+		}
+	}
+
+	fn request(path: &str) -> Request {
+		::http::Request::builder()
+			.uri(format!("http://example.com{path}"))
+			.header(header::HOST, "example.com")
+			.body(http::Body::empty())
+			.unwrap()
+	}
+
+	fn bind() -> Bind {
+		Bind {
+			key: proxymock::BIND_KEY,
+			address: "127.0.0.1:0".parse().unwrap(),
+			listeners: ListenerSet::from_list([Listener {
+				key: proxymock::LISTENER_KEY,
+				name: Default::default(),
+				hostname: Default::default(),
+				protocol: ListenerProtocol::HTTP,
+			}]),
+			protocol: BindProtocol::http,
+			tunnel_protocol: Default::default(),
+		}
+	}
+
+	#[test]
+	fn select_route_chain_follows_delegated_routes() {
+		let backend: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+		let child = route(
+			"child",
+			"/",
+			BackendReference::Backend(strng::format!("/{}", backend)).into(),
+		);
+		let parent = route(
+			"parent",
+			"/foo",
+			RouteBackendTarget::RouteGroup(child.key.clone()),
+		);
+		let bind = bind();
+		let listener = bind.listeners.get_exactly_one().unwrap();
+		let proxy = proxymock::setup_proxy_test("{}")
+			.unwrap()
+			.with_backend(backend)
+			.with_bind(bind)
+			.with_route(parent)
+			.with_route_group(child.key.clone(), vec![child.clone()]);
+
+		let selected = select_route_chain(
+			proxy.inputs().as_ref(),
+			listener_address(),
+			&listener,
+			&request("/foo"),
+		)
+		.expect("delegated route should resolve");
+
+		assert_eq!(selected.routes.len(), 2);
+		assert_eq!(selected.routes[0].name.name.as_str(), "parent");
+		assert_eq!(selected.routes[1].name.name.as_str(), "child");
+		match &selected.path_match {
+			PathMatch::PathPrefix(prefix) => assert_eq!(prefix.as_str(), "/"),
+			other => panic!("expected delegated path prefix match, got {other:?}"),
+		}
+		match selected.backend.unwrap().target {
+			RouteBackendTarget::Backend(name) => assert_eq!(name.as_str(), format!("/{}", backend)),
+			other => panic!("expected backend target, got {other:?}"),
+		}
+	}
+
+	#[test]
+	fn select_route_chain_rejects_cycles() {
+		let parent = route(
+			"parent",
+			"/",
+			RouteBackendTarget::RouteGroup(strng::literal!("child")),
+		);
+		let child = route(
+			"child",
+			"/",
+			RouteBackendTarget::RouteGroup(strng::literal!("parent")),
+		);
+		let bind = bind();
+		let listener = bind.listeners.get_exactly_one().unwrap();
+		let proxy = proxymock::setup_proxy_test("{}")
+			.unwrap()
+			.with_bind(bind)
+			.with_route(parent.clone())
+			.with_route(child.clone())
+			.with_route_group(strng::literal!("child"), vec![child])
+			.with_route_group(strng::literal!("parent"), vec![parent]);
+
+		let err = select_route_chain(
+			proxy.inputs().as_ref(),
+			listener_address(),
+			&listener,
+			&request("/"),
+		)
+		.expect_err("cycle should fail");
+		assert!(matches!(err, ProxyError::RouteCycleDetected));
+	}
+
+	#[test]
+	fn select_route_chain_allows_backendless_terminal_route() {
+		let bind = bind();
+		let listener = bind.listeners.get_exactly_one().unwrap();
+		let proxy = proxymock::setup_proxy_test("{}")
+			.unwrap()
+			.with_bind(bind)
+			.with_route(route_without_backends("direct", "/"));
+
+		let selected = select_route_chain(
+			proxy.inputs().as_ref(),
+			listener_address(),
+			&listener,
+			&request("/"),
+		)
+		.expect("backendless route should still resolve");
+
+		assert_eq!(selected.routes.len(), 1);
+		assert!(selected.backend.is_none());
+		match &selected.path_match {
+			PathMatch::PathPrefix(prefix) => assert_eq!(prefix.as_str(), "/"),
+			other => panic!("expected path prefix match, got {other:?}"),
+		}
+	}
+
+	fn listener_address() -> SocketAddr {
+		"127.0.0.1:80".parse().unwrap()
 	}
 }
