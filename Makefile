@@ -62,7 +62,7 @@ test:
 
 .PHONY: test-release
 test-release:
-	cargo test --release --all-targets
+	cargo test --profile quick-release --all-targets
 
 # clean
 .PHONY: clean
