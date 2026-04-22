@@ -230,7 +230,7 @@ func policyConditionMap(err error, hasTranslatedPolicies bool) map[string]*condi
 		} else {
 			// No policies produced and error present -> invalid
 			conds[string(shared.PolicyConditionAccepted)] = &condition{
-				status:  metav1.ConditionTrue,
+				status:  metav1.ConditionFalse,
 				reason:  string(shared.PolicyReasonInvalid),
 				message: err.Error(),
 			}
