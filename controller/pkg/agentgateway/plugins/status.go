@@ -1,6 +1,8 @@
 package plugins
 
 import (
+	"fmt"
+
 	"istio.io/istio/pilot/pkg/model/kstatus"
 	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/ptr"
@@ -55,8 +57,41 @@ func mergeAncestors(controllerName string, existing []gwv1.PolicyAncestorStatus,
 	existing = existing[:n]
 	// Add all remaining ones.
 	existing = append(existing, incoming...)
-	// There is a max of 16
-	return existing[:min(len(existing), 16)]
+	// There is a max of 16. If we exceed this, insert an entry describing the truncation
+	if len(existing) > 16 {
+		lastOwned := -1
+		for i := range min(len(existing), 16) {
+			if string(existing[i].ControllerName) == controllerName {
+				lastOwned = i
+			}
+		}
+		if lastOwned == -1 {
+			// We didn't own any of them... just truncate. :-(
+			return existing[:16]
+		}
+
+		ignored := len(existing) - 15
+		trimmed := make([]gwv1.PolicyAncestorStatus, 0, 16)
+		trimmed = append(trimmed, existing[:lastOwned]...)
+		trimmed = append(trimmed, existing[lastOwned+1:16]...)
+		trimmed = append(trimmed, gwv1.PolicyAncestorStatus{
+			AncestorRef: gwv1.ParentReference{
+				Group: ptr.Of(gwv1.Group("agentgateway.dev")),
+				Name:  "StatusSummary",
+			},
+			ControllerName: gwv1.GatewayController(controllerName),
+			Conditions: []metav1.Condition{
+				{
+					Type:    "StatusSummarized",
+					Status:  metav1.ConditionTrue,
+					Reason:  "StatusSummary",
+					Message: fmt.Sprintf("%d AncestorRefs ignored due to max status size", ignored),
+				},
+			},
+		})
+		return trimmed
+	}
+	return existing
 }
 
 func parentRefEqual(a, b gwv1.ParentReference) bool {
@@ -76,7 +111,7 @@ func setAncestorStatus(
 	controller gwv1.GatewayController,
 ) gwv1.PolicyAncestorStatus {
 	currentAncestor := slices.FindFunc(status.Ancestors, func(ex gwv1.PolicyAncestorStatus) bool {
-		return parentRefEqual(ex.AncestorRef, pr)
+		return ex.ControllerName == controller && parentRefEqual(ex.AncestorRef, pr)
 	})
 	var currentConds []metav1.Condition
 	if currentAncestor != nil {
