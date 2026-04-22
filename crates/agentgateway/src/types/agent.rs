@@ -1272,6 +1272,19 @@ pub struct McpTarget {
 
 pub type McpTargetName = Strng;
 
+/// Reject MCP target names that collide with the resource-multiplexing
+/// delimiter. `+` is used as the separator in `{target}+{scheme}://...`
+/// URIs (see `mcp::handler::resource_uri`), so a name containing `+`
+/// cannot be round-tripped through the multiplexer.
+pub fn validate_mcp_target_name(name: &str) -> Result<(), String> {
+	if name.contains('+') {
+		return Err(format!(
+			"invalid MCP target name {name:?}: '+' is reserved for resource multiplexing and cannot appear in a target name"
+		));
+	}
+	Ok(())
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -2908,5 +2921,31 @@ jwtValidationOptions:
 		assert_eq!(sb.backend_type(), cel::BackendType::Dynamic);
 		assert_eq!(sb.backend_info().backend_type, cel::BackendType::Dynamic);
 		assert_eq!(sb.backend_info().backend_name, strng::new("ns/test-aws"));
+	}
+
+	#[test]
+	fn validate_mcp_target_name_accepts_normal_names() {
+		for name in ["time", "everything", "my-target", "svc.ns", ""] {
+			assert!(
+				validate_mcp_target_name(name).is_ok(),
+				"expected {name:?} to be accepted"
+			);
+		}
+	}
+
+	#[test]
+	fn validate_mcp_target_name_rejects_plus() {
+		for name in ["bad+name", "+leading", "trailing+", "a+b+c"] {
+			let err =
+				validate_mcp_target_name(name).expect_err(&format!("expected {name:?} to be rejected"));
+			assert!(
+				err.contains("'+' is reserved"),
+				"unexpected message for {name:?}: {err}"
+			);
+			assert!(
+				err.contains(name),
+				"error should name the offending input {name:?}: {err}"
+			);
+		}
 	}
 }

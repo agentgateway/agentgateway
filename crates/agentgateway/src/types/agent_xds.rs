@@ -994,6 +994,7 @@ impl TryFrom<&proto::agent::McpTarget> for McpTarget {
 	fn try_from(s: &proto::agent::McpTarget) -> Result<Self, Self::Error> {
 		let proto = proto::agent::mcp_target::Protocol::try_from(s.protocol)?;
 		let backend = resolve_simple_reference(s.backend.as_ref());
+		validate_mcp_target_name(&s.name).map_err(ProtoError::Generic)?;
 
 		Ok(Self {
 			name: strng::new(&s.name),
@@ -2708,5 +2709,17 @@ mod tests {
 		};
 		assert_eq!(vertex.region.as_deref(), Some("us-central1"));
 		Ok(())
+	}
+
+	#[test]
+	fn test_xds_mcp_target_name_wiring_rejects_plus() {
+		let proto_target = proto::agent::McpTarget {
+			name: "bad+name".to_string(),
+			backend: None,
+			path: String::new(),
+			protocol: proto::agent::mcp_target::Protocol::StreamableHttp as i32,
+		};
+		McpTarget::try_from(&proto_target)
+			.expect_err("MCP target name containing '+' should be rejected");
 	}
 }

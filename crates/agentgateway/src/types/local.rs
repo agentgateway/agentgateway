@@ -28,7 +28,7 @@ use crate::types::agent::{
 	Route, RouteBackendReference, RouteBackendTarget, RouteGroupKey, RouteMatch, RouteName,
 	ServerTLSConfig, SimpleBackend, SimpleBackendReference, SimpleBackendWithPolicies, SseTargetSpec,
 	StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, Target, TargetedPolicy,
-	TracingConfig, TrafficPolicy, TunnelProtocol, TypedResourceName,
+	TracingConfig, TrafficPolicy, TunnelProtocol, TypedResourceName, validate_mcp_target_name,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
@@ -740,6 +740,7 @@ impl LocalBackend {
 				let mut targets = vec![];
 				let mut backends = vec![];
 				for (idx, t) in tgt.targets.iter().enumerate() {
+					validate_mcp_target_name(t.name.as_str()).map_err(Error::msg)?;
 					let name = strng::format!("mcp/{}/{}", name.clone(), idx);
 					let mut process_backend = |backend: McpBackendHost| {
 						Ok(match backend.process()? {
