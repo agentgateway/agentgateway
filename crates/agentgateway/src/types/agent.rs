@@ -1274,8 +1274,6 @@ pub type McpTargetName = Strng;
 
 /// Reject MCP target names that collide with the resource-multiplexing
 /// delimiter. `+` is used as the separator in `{target}+{scheme}://...`
-/// URIs (see `mcp::handler::resource_uri`), so a name containing `+`
-/// cannot be round-tripped through the multiplexer.
 pub fn validate_mcp_target_name(name: &str) -> Result<(), String> {
 	if name.contains('+') {
 		return Err(format!(
