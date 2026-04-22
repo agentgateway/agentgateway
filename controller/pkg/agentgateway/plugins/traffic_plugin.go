@@ -133,6 +133,7 @@ func TranslateAgentgatewayPolicy(
 	jwksLookup jwks.Lookup,
 ) (*gwv1.PolicyStatus, []AgwPolicy) {
 	var agwPolicies []AgwPolicy
+	existingStatus := policy.Status.DeepCopy()
 
 	pctx := PolicyCtx{Krt: ctx, Collections: agw, References: references, Resolver: resolver, JWKSLookup: jwksLookup}
 	var ancestors []gwv1.PolicyAncestorStatus
@@ -188,7 +189,7 @@ func TranslateAgentgatewayPolicy(
 				}) != -1 {
 					continue
 				}
-				ancestors = append(ancestors, setAncestorStatus(ar, &policy.Status, policy.Generation, baseConds, controller))
+				ancestors = append(ancestors, setAncestorStatus(ar, existingStatus, policy.Generation, baseConds, controller))
 			}
 		}
 	}
@@ -198,12 +199,12 @@ func TranslateAgentgatewayPolicy(
 		ancestors = append(ancestors, setAncestorStatus(gwv1.ParentReference{
 			Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayPolicyGVK.Group)),
 			Name:  "StatusSummary",
-		}, &policy.Status, policy.Generation, attachmentErrorConditionMap(baseConds, attachmentErrors), controller))
+		}, existingStatus, policy.Generation, attachmentErrorConditionMap(baseConds, attachmentErrors), controller))
 	}
 
 	// Build final status from accumulated ancestors
 	status := gwv1.PolicyStatus{
-		Ancestors: mergeAncestors(agw.ControllerName, policy.Status.Ancestors, ancestors),
+		Ancestors: mergeAncestors(agw.ControllerName, existingStatus.Ancestors, ancestors),
 	}
 
 	// sort all parents for consistency with Equals and for Update
@@ -257,11 +258,7 @@ func policyConditionMap(err error, hasTranslatedPolicies bool) map[string]*condi
 }
 
 func attachmentErrorConditionMap(baseConds map[string]*condition, attachmentErrors []string) map[string]*condition {
-	conds := make(map[string]*condition, len(baseConds)+1)
-	for k, v := range baseConds {
-		copy := *v
-		conds[k] = &copy
-	}
+	conds := maps.Clone(baseConds)
 	conds[string(shared.PolicyConditionAttached)] = &condition{
 		status:  metav1.ConditionFalse,
 		reason:  string(shared.PolicyReasonPending),
