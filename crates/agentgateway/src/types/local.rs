@@ -1309,7 +1309,7 @@ fn validate_inference_routing_scope(
 	policies: Option<&LocalBackendPolicies>,
 	scope: InferenceRoutingScope,
 ) -> anyhow::Result<()> {
-	if !policies.is_some_and(|p| p.inference_routing.is_some()) {
+	if policies.is_none_or(|p| p.inference_routing.is_none()) {
 		return Ok(());
 	}
 	match scope {
