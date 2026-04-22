@@ -298,12 +298,15 @@ export const uiSchema: UiSchema = {
   },
   requestHeaders: {
     "ui:help": "Modify headers sent to the LLM provider",
+    "ui:title": "",
     add: {
+      "ui:title": "",
       "ui:field": "keyValueMap",
       "ui:keyPlaceholder": "header-name",
       "ui:valuePlaceholder": "header-value",
     },
     set: {
+      "ui:title": "",
       "ui:field": "keyValueMap",
       "ui:keyPlaceholder": "header-name",
       "ui:valuePlaceholder": "header-value",
@@ -311,13 +314,16 @@ export const uiSchema: UiSchema = {
     remove: { "ui:help": "Header names to remove from requests" },
   },
   responseHeaders: {
+    "ui:title": "",
     "ui:help": "Modify headers in responses from the LLM provider",
     add: {
+      "ui:title": "",
       "ui:field": "keyValueMap",
       "ui:keyPlaceholder": "header-name",
       "ui:valuePlaceholder": "header-value",
     },
     set: {
+      "ui:title": "",
       "ui:field": "keyValueMap",
       "ui:keyPlaceholder": "header-name",
       "ui:valuePlaceholder": "header-value",
@@ -325,11 +331,13 @@ export const uiSchema: UiSchema = {
     remove: { "ui:help": "Header names to remove from responses" },
   },
   backendTLS: {
+    "ui:title": "",
     cert: { "ui:widget": "textarea", "ui:options": { rows: 3 } },
     key: { "ui:widget": "textarea", "ui:options": { rows: 3 } },
     root: { "ui:widget": "textarea", "ui:options": { rows: 3 } },
   },
   health: {
+    "ui:title": "",
     unhealthyExpression: {
       "ui:placeholder": "response.code >= 500",
     },
@@ -338,7 +346,9 @@ export const uiSchema: UiSchema = {
     },
   },
   backendTunnel: {
+    "ui:title": "",
     proxy: {
+      "ui:title": "",
       host: { "ui:placeholder": "proxy.example.com" },
     },
   },
