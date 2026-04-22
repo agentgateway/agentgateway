@@ -1,6 +1,7 @@
 pub mod extauthmock;
 pub mod extprocmock;
 mod hyper_tower;
+pub mod oteltracemock;
 #[cfg(any(test, feature = "internal_benches"))]
 pub mod proxymock;
 pub mod ratelimitmock;
@@ -96,7 +97,7 @@ mod common {
 
 #[cfg(test)]
 mod tests {
-	use super::{extauthmock, extprocmock, ratelimitmock};
+	use super::{extauthmock, extprocmock, oteltracemock, ratelimitmock};
 
 	struct DevExtProcHandler;
 
@@ -112,6 +113,11 @@ mod tests {
 
 	#[async_trait::async_trait]
 	impl extauthmock::Handler for DevExtAuthHandler {}
+
+	struct DevOtelTraceHandler;
+
+	#[async_trait::async_trait]
+	impl oteltracemock::Handler for DevOtelTraceHandler {}
 
 	// Run with: cargo test --lib -p agentgateway -- --ignored start_dev_mocks_on_fixed_ports --nocapture
 	#[tokio::test]
@@ -132,7 +138,12 @@ mod tests {
 			.await;
 		println!("ext_auth mock started on {}", ext_auth.address);
 
-		let _instances = (ext_proc, rate_limit, ext_auth);
+		let otel_trace = oteltracemock::OtelTraceMock::new(|| DevOtelTraceHandler)
+			.spawn_on(([127, 0, 0, 1], 9998).into())
+			.await;
+		println!("otel trace mock started on {}", otel_trace.address);
+
+		let _instances = (ext_proc, rate_limit, ext_auth, otel_trace);
 		std::future::pending::<()>().await;
 	}
 }

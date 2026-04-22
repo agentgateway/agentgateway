@@ -5,25 +5,6 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant, SystemTime};
 
-use agent_core::drain::{DrainTrigger, DrainWatcher};
-use agent_core::strng::Strng;
-use agent_core::{drain, metrics, strng};
-use axum::body::to_bytes;
-use bytes::Bytes;
-use http::{HeaderMap, HeaderName, HeaderValue, Method, Uri};
-use hyper_util::client::legacy::Client;
-use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
-use itertools::Itertools;
-use prometheus_client::registry::Registry;
-use rustls_pki_types::ServerName;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use tokio::io::DuplexStream;
-use tokio_rustls::TlsConnector;
-use tracing::{info, trace};
-use wiremock::tls_certs::MockTlsCertificates;
-use wiremock::{Mock, MockServer, ResponseTemplate};
-
 use crate::http::backendtls::BackendTLS;
 use crate::http::{Body, Response};
 use crate::llm::AIProvider;
@@ -43,6 +24,24 @@ use crate::types::agent::{
 use crate::types::local;
 use crate::types::local::LocalNamedAIProvider;
 use crate::{ProxyInputs, client, mcp};
+use agent_core::drain::{DrainTrigger, DrainWatcher};
+use agent_core::strng::Strng;
+use agent_core::{drain, metrics, strng};
+use axum::body::to_bytes;
+use bytes::Bytes;
+use http::{HeaderMap, HeaderName, HeaderValue, Method, Uri};
+use hyper_util::client::legacy::Client;
+use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
+use itertools::Itertools;
+use prometheus_client::registry::Registry;
+use rustls_pki_types::ServerName;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use tokio::io::DuplexStream;
+use tokio_rustls::TlsConnector;
+use tracing::{info, trace};
+use wiremock::tls_certs::MockTlsCertificates;
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 pub async fn send_request(
 	io: Client<MemoryConnector, Body>,
@@ -718,8 +717,8 @@ impl TestBind {
 				key,
 				name: None,
 				target: PolicyTarget::Gateway(crate::types::agent::ListenerTarget {
-					gateway_name: Default::default(),
-					gateway_namespace: Default::default(),
+					gateway_name: "default".into(),
+					gateway_namespace: "default".into(),
 					listener_name: None,
 				}),
 				policy: (v, PolicyPhase::Gateway).into(),

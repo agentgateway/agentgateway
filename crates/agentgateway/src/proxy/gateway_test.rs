@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 
 use crate::http::tests_common::*;
@@ -5,6 +6,7 @@ use crate::http::{Body, Response};
 use crate::llm::{AIProvider, openai};
 use crate::proxy::request_builder::RequestBuilder;
 use crate::read_body;
+use crate::test_helpers::oteltracemock;
 use crate::test_helpers::proxymock::*;
 use crate::types::agent::{
 	Backend, BackendPolicy, BackendWithPolicies, Bind, BindProtocol, Listener, ListenerProtocol,
@@ -241,6 +243,65 @@ async fn basic_handling() {
 	let body = read_body(res.into_body()).await;
 	assert_eq!(body.version, Version::HTTP_11);
 	assert_eq!(body.method, Method::POST);
+}
+
+#[tokio::test]
+async fn tracing_exports_to_otel_trace_mock() {
+	unsafe {
+		// Drop export time to make tests fast
+		std::env::set_var("OTEL_BLRP_SCHEDULE_DELAY", "20");
+		std::env::set_var("OTEL_BSP_SCHEDULE_DELAY", "20");
+	}
+	struct CountingTraceHandler {
+		exports: Arc<AtomicUsize>,
+	}
+
+	#[async_trait::async_trait]
+	impl oteltracemock::Handler for CountingTraceHandler {
+		async fn export(
+			&mut self,
+			_request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
+		) -> Result<
+			opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceResponse,
+			tonic::Status,
+		> {
+			self.exports.fetch_add(1, Ordering::SeqCst);
+			oteltracemock::ok_response()
+		}
+	}
+
+	let exports = Arc::new(AtomicUsize::new(0));
+	let otel = oteltracemock::OtelTraceMock::new({
+		let exports = Arc::clone(&exports);
+		move || CountingTraceHandler {
+			exports: Arc::clone(&exports),
+		}
+	})
+	.spawn()
+	.await;
+
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_frontend_policy(json!({
+			"tracing": {
+				"host": otel.address.to_string(),
+				"randomSampling": true
+			}
+		}))
+		.await;
+
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+
+	tokio::time::timeout(Duration::from_secs(2), async {
+		while exports.load(Ordering::SeqCst) == 0 {
+			tokio::task::yield_now().await;
+		}
+	})
+	.await
+	.unwrap();
+
+	assert_eq!(exports.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

@@ -566,13 +566,24 @@ impl RouteName {
 
 #[apply(schema!)]
 #[derive(Hash, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "internal_benches"), derive(Default))]
 pub struct ListenerName {
 	pub gateway_name: Strng,
 	pub gateway_namespace: Strng,
 	pub listener_name: Strng,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub listener_set: Option<ResourceName>,
+}
+
+#[cfg(any(test, feature = "internal_benches"))]
+impl Default for ListenerName {
+	fn default() -> Self {
+		Self {
+			gateway_name: "default".into(),
+			gateway_namespace: "default".into(),
+			listener_name: "default".into(),
+			listener_set: None,
+		}
+	}
 }
 
 impl ListenerName {
