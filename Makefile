@@ -60,6 +60,10 @@ format:
 test:
 	cargo test --all-targets
 
+.PHONY: test-release
+test-release:
+	cargo test --release --all-targets
+
 # clean
 .PHONY: clean
 clean:

@@ -63,6 +63,40 @@ jobs:
       if: ${{ always() && startsWith(matrix.os, 'blacksmith-') }}
       run: tools/manage-validation-deps.sh stop
 
+  # Release-mode test pass to catch bugs the compiler hides in debug. The
+  # primary example is side-effecting expressions wrapped in `debug_assert!`
+  # — the macro (and its argument) is stripped in release, so a reserve
+  # call inside one compiles out and leaks. proxy-test above runs in debug
+  # only; this job is the guard for release-only stripping regressions.
+  # Linux only — the bug class is compiler-behavior dependent, not OS
+  # dependent.
+  proxy-test-release:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    name: "Proxy Test (Release)"
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+      with:
+        toolchain: "${{ env.RUST_VERSION }}"
+    - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      with:
+        # Distinct cache prefix so release artifacts don't collide with the
+        # debug cache used by proxy-test.
+        prefix-key: "release"
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+    - name: Start validation dependencies
+      run: tools/manage-validation-deps.sh start
+    - name: Test
+      run: make test-release
+      env:
+        KEYCLOAK_AVAILABLE: "1"
+    - name: Stop validation dependencies
+      if: ${{ always() }}
+      run: tools/manage-validation-deps.sh stop
+
   proxy-lint:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:

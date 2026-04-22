@@ -254,8 +254,18 @@ impl H2Pool {
 		if let HttpConnection::Http2(h) = conn {
 			self.0.push_front(h.clone_without_load_incremented());
 			if reserve {
+				// IMPORTANT: must not wrap this `try_reserve_stream_slot` call in a
+				// `debug_assert!` — `debug_assert!` is stripped entirely in release
+				// builds, which also strips the side-effecting reserve. Callers pass
+				// `reserve=true` to get a `ReservedHttp2Connection` whose slot is
+				// accounted; without the increment the corresponding Drop releases
+				// an unreserved slot, wrapping `active_streams` to `usize::MAX` and
+				// permanently blocking the connection from further reservations
+				// (and preventing it from ever returning to `idle`, which leaks the
+				// underlying TCP connection).
+				let result = h.load.try_reserve_stream_slot();
 				debug_assert!(
-					h.load.try_reserve_stream_slot() != CapacityReservationResult::NoCapacity,
+					result != CapacityReservationResult::NoCapacity,
 					"a new stream should always be able to be reserved"
 				);
 			}
@@ -2152,6 +2162,72 @@ mod tests {
 		drop(pooled1);
 
 		let _ = must_checkout(&pool, key.clone());
+	}
+
+	/// Regression test: idle-pool re-checkout must reserve a stream slot in
+	/// release builds as well as debug. A prior implementation wrapped the
+	/// `try_reserve_stream_slot()` side effect inside `debug_assert!` which
+	/// strips the call in release. The guard's Drop then decremented an
+	/// unreserved counter, wrapping `active_streams` from 0 to `usize::MAX`
+	/// and leaving the connection unusable + unreapable forever.
+	///
+	/// This test asserts the active_streams counter stays within the valid
+	/// range (0..=max) across an idle-pull-drop cycle. Without the fix,
+	/// `active_streams` wraps to `usize::MAX` in release builds.
+	#[tokio::test]
+	async fn test_h2_idle_checkout_reserve_survives_release_build() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+		pool.insert_new_connection(sc1, mock_http2_connection(2).await);
+		let pooled1 = w1.await.expect("get h2");
+
+		// Drop the Pooled to return its slot and let the connection migrate to
+		// the idle list.
+		drop(pooled1);
+
+		// Pull from idle. Under the bug this goes through maybe_insert_new
+		// with reserve=true which, in release, silently skips the reserve.
+		let pooled2 = must_checkout(&pool, key.clone());
+
+		// Before dropping the second Pooled, `active_streams` must be > 0
+		// (we just reserved a slot for it) and must be <= max.
+		let host = pool.host(&key);
+		let active_mid = host.active_h2.0[0]
+			.load
+			.active_streams
+			.load(Ordering::Acquire);
+		let max = host.active_h2.0[0].load.max_streams.load(Ordering::Acquire);
+		drop(host);
+		assert!(
+			active_mid > 0 && active_mid <= max,
+			"active_streams after idle-pull must be in (0, max]; got {active_mid}, max={max}. \
+             A value of usize::MAX here indicates the reserve was stripped by debug_assert in release."
+		);
+
+		// Drop the second Pooled. This releases the slot. active_streams
+		// should return to 0, NOT wrap.
+		drop(pooled2);
+		let host = pool.host(&key);
+		let load_after = if host.active_h2.0.is_empty() {
+			// Connection correctly migrated to idle — its load isn't in active_h2
+			// but we can still inspect it via idle.
+			assert_eq!(host.idle.len(), 1, "conn must be in idle after drop");
+			match &host.idle[0].value {
+				HttpConnection::Http2(h2) => h2.load.active_streams.load(Ordering::Acquire),
+				_ => unreachable!(),
+			}
+		} else {
+			host.active_h2.0[0]
+				.load
+				.active_streams
+				.load(Ordering::Acquire)
+		};
+		assert_eq!(
+			load_after, 0,
+			"active_streams after guard drop must be 0, got {load_after}. \
+             A huge value here indicates the counter wrapped."
+		);
 	}
 
 	#[tokio::test]
