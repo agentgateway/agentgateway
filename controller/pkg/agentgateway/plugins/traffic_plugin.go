@@ -21,7 +21,6 @@ import (
 	"istio.io/istio/pkg/util/protomarshal"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -125,15 +124,24 @@ type ResolvedTarget struct {
 }
 
 // TranslateAgentgatewayPolicy generates policies for a single traffic policy
-func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy, agw *AgwCollections, references ReferenceIndex, resolver remotehttp.Resolver, jwksLookup jwks.Lookup) (*gwv1.PolicyStatus, []AgwPolicy) {
+func TranslateAgentgatewayPolicy(
+	ctx krt.HandlerContext,
+	policy *agentgateway.AgentgatewayPolicy,
+	agw *AgwCollections,
+	references ReferenceIndex,
+	resolver remotehttp.Resolver,
+	jwksLookup jwks.Lookup,
+) (*gwv1.PolicyStatus, []AgwPolicy) {
 	var agwPolicies []AgwPolicy
+	existingStatus := policy.Status.DeepCopy()
 
 	pctx := PolicyCtx{Krt: ctx, Collections: agw, References: references, Resolver: resolver, JWKSLookup: jwksLookup}
 	var ancestors []gwv1.PolicyAncestorStatus
 	var attachmentErrors []string
 	// TODO: add selectors
 	baseTranslatedPolicies, baseErr := translatePolicyToAgw(pctx, policy)
-	baseConds := setPolicyConditions(baseErr, len(baseTranslatedPolicies) > 0)
+	baseConds := policyConditionMap(baseErr, len(baseTranslatedPolicies) > 0)
+	controller := gwv1.GatewayController(agw.ControllerName)
 	for _, target := range policy.Spec.TargetRefs {
 		gk := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
 
@@ -177,52 +185,26 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 				// A policy should report at most one status per Gateway parent, even if multiple
 				// targetRefs resolve to the same Gateway.
 				if slices.IndexFunc(ancestors, func(existing gwv1.PolicyAncestorStatus) bool {
-					return existing.ControllerName == gwv1.GatewayController(agw.ControllerName) && parentRefEqual(existing.AncestorRef, ar)
+					return existing.ControllerName == controller && parentRefEqual(existing.AncestorRef, ar)
 				}) != -1 {
 					continue
 				}
-				ancestors = append(ancestors, gwv1.PolicyAncestorStatus{
-					AncestorRef:    ar,
-					ControllerName: gwv1.GatewayController(agw.ControllerName),
-					Conditions:     baseConds,
-				})
+				ancestors = append(ancestors, setAncestorStatus(ar, existingStatus, policy.Generation, baseConds, controller))
 			}
 		}
 	}
 
 	if len(attachmentErrors) > 0 {
 		logger.Warn("failed to resolve one or more ancestor refs", "errors", attachmentErrors)
-		ancestors = append(ancestors, gwv1.PolicyAncestorStatus{
-			AncestorRef: gwv1.ParentReference{
-				Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayPolicyGVK.Group)),
-				Name:  "StatusSummary",
-			},
-			ControllerName: gwv1.GatewayController(agw.ControllerName),
-			Conditions:     setAttachmentErrorConditions(baseConds, attachmentErrors),
-		})
+		ancestors = append(ancestors, setAncestorStatus(gwv1.ParentReference{
+			Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayPolicyGVK.Group)),
+			Name:  "StatusSummary",
+		}, existingStatus, policy.Generation, attachmentErrorConditionMap(baseConds, attachmentErrors), controller))
 	}
 
 	// Build final status from accumulated ancestors
-	status := gwv1.PolicyStatus{Ancestors: ancestors}
-
-	if len(status.Ancestors) > 15 {
-		ignored := status.Ancestors[15:]
-		status.Ancestors = status.Ancestors[:15]
-		status.Ancestors = append(status.Ancestors, gwv1.PolicyAncestorStatus{
-			AncestorRef: gwv1.ParentReference{
-				Group: ptr.Of(gwv1.Group("gateway.kgateway.dev")),
-				Name:  "StatusSummary",
-			},
-			ControllerName: gwv1.GatewayController(agw.ControllerName),
-			Conditions: []metav1.Condition{
-				{
-					Type:    "StatusSummarized",
-					Status:  metav1.ConditionTrue,
-					Reason:  "StatusSummary",
-					Message: fmt.Sprintf("%d AncestorRefs ignored due to max status size", len(ignored)),
-				},
-			},
-		})
+	status := gwv1.PolicyStatus{
+		Ancestors: mergeAncestors(agw.ControllerName, existingStatus.Ancestors, ancestors),
 	}
 
 	// sort all parents for consistency with Equals and for Update
@@ -235,66 +217,53 @@ func TranslateAgentgatewayPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 	return &status, agwPolicies
 }
 
-func setPolicyConditions(err error, hasTranslatedPolicies bool) []metav1.Condition {
-	var conds []metav1.Condition
+func policyConditionMap(err error, hasTranslatedPolicies bool) map[string]*condition {
+	conds := map[string]*condition{}
 	if err != nil {
 		// If we produced some policies alongside errors, treat as partial validity
 		if hasTranslatedPolicies {
-			meta.SetStatusCondition(&conds, metav1.Condition{
-				Type:    string(shared.PolicyConditionAccepted),
-				Status:  metav1.ConditionTrue,
-				Reason:  string(shared.PolicyReasonPartiallyValid),
-				Message: err.Error(),
-			})
+			conds[string(shared.PolicyConditionAccepted)] = &condition{
+				status:  metav1.ConditionTrue,
+				reason:  string(shared.PolicyReasonPartiallyValid),
+				message: err.Error(),
+			}
 		} else {
 			// No policies produced and error present -> invalid
-			meta.SetStatusCondition(&conds, metav1.Condition{
-				Type:    string(shared.PolicyConditionAccepted),
-				Status:  metav1.ConditionTrue,
-				Reason:  string(shared.PolicyReasonInvalid),
-				Message: err.Error(),
-			})
-			meta.SetStatusCondition(&conds, metav1.Condition{
-				Type:    string(shared.PolicyConditionAttached),
-				Status:  metav1.ConditionFalse,
-				Reason:  string(shared.PolicyReasonPending),
-				Message: "Policy is not attached due to invalid status",
-			})
+			conds[string(shared.PolicyConditionAccepted)] = &condition{
+				status:  metav1.ConditionFalse,
+				reason:  string(shared.PolicyReasonInvalid),
+				message: err.Error(),
+			}
+			conds[string(shared.PolicyConditionAttached)] = &condition{
+				status:  metav1.ConditionFalse,
+				reason:  string(shared.PolicyReasonPending),
+				message: "Policy is not attached due to invalid status",
+			}
 		}
 	} else {
 		// Check for partial validity
 		// Build success conditions per ancestor
-		meta.SetStatusCondition(&conds, metav1.Condition{
-			Type:    string(shared.PolicyConditionAccepted),
-			Status:  metav1.ConditionTrue,
-			Reason:  string(shared.PolicyReasonValid),
-			Message: reporter.PolicyAcceptedMsg,
-		})
-		meta.SetStatusCondition(&conds, metav1.Condition{
-			Type:    string(shared.PolicyConditionAttached),
-			Status:  metav1.ConditionTrue,
-			Reason:  string(shared.PolicyReasonAttached),
-			Message: reporter.PolicyAttachedMsg,
-		})
-	}
-	// TODO: validate the target exists with dataplane https://github.com/kgateway-dev/kgateway/issues/12275
-	// Ensure LastTransitionTime is set for all conditions
-	for i := range conds {
-		if conds[i].LastTransitionTime.IsZero() {
-			conds[i].LastTransitionTime = metav1.Now()
+		conds[string(shared.PolicyConditionAccepted)] = &condition{
+			status:  metav1.ConditionTrue,
+			reason:  string(shared.PolicyReasonValid),
+			message: reporter.PolicyAcceptedMsg,
+		}
+		conds[string(shared.PolicyConditionAttached)] = &condition{
+			status:  metav1.ConditionTrue,
+			reason:  string(shared.PolicyReasonAttached),
+			message: reporter.PolicyAttachedMsg,
 		}
 	}
 	return conds
 }
 
-func setAttachmentErrorConditions(baseConds []metav1.Condition, attachmentErrors []string) []metav1.Condition {
-	conds := append([]metav1.Condition(nil), baseConds...)
-	meta.SetStatusCondition(&conds, metav1.Condition{
-		Type:    string(shared.PolicyConditionAttached),
-		Status:  metav1.ConditionFalse,
-		Reason:  string(shared.PolicyReasonPending),
-		Message: strings.Join(attachmentErrors, "\n"),
-	})
+func attachmentErrorConditionMap(baseConds map[string]*condition, attachmentErrors []string) map[string]*condition {
+	conds := maps.Clone(baseConds)
+	conds[string(shared.PolicyConditionAttached)] = &condition{
+		status:  metav1.ConditionFalse,
+		reason:  string(shared.PolicyReasonPending),
+		message: strings.Join(attachmentErrors, "\n"),
+	}
 	return conds
 }
 
