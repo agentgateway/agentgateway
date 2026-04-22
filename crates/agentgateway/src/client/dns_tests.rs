@@ -25,12 +25,12 @@ impl Mock {
 		responses.insert(host.to_string(), (ips.into_boxed_slice(), expiry));
 	}
 
-	pub async fn resolve(&self, host: &str) -> Result<(Box<[IpAddr]>, Instant), ResolveError> {
+	pub async fn resolve(&self, host: &str) -> Result<(Box<[IpAddr]>, Instant), NetError> {
 		let responses = self.responses.lock().unwrap();
 		responses
 			.get(host)
 			.cloned()
-			.ok_or_else(|| ResolveError::from("host not found"))
+			.ok_or_else(|| NetError::from("host not found"))
 	}
 }
 

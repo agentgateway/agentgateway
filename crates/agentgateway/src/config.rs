@@ -602,16 +602,16 @@ fn resolve_dns_config(
 ) {
 	let resolved_cfg = if cfg.name_servers().is_empty() {
 		warn!(
-			"no DNS nameservers found in system config, using defaults. /etc/hosts entries will still be resolved"
+			"no DNS nameservers found in system config, using Google Public DNS defaults. /etc/hosts entries will still be resolved"
 		);
-		hickory_resolver::config::ResolverConfig::default()
+		hickory_resolver::config::ResolverConfig::udp_and_tcp(&hickory_resolver::config::GOOGLE)
 	} else {
 		cfg
 	};
 	let nameservers: Vec<_> = resolved_cfg
 		.name_servers()
 		.iter()
-		.map(|ns| ns.to_string())
+		.map(|ns| format!("{:?}", ns))
 		.collect();
 
 	let ip_strategy = dns_lookup_family.to_lookup_strategy(ipv6_enabled);
@@ -855,11 +855,7 @@ config:
 
 	#[test]
 	fn resolve_dns_config_uses_defaults_when_nameservers_empty() {
-		let empty_cfg = hickory_resolver::config::ResolverConfig::from_parts(
-			None,
-			vec![],
-			hickory_resolver::config::NameServerConfigGroup::new(),
-		);
+		let empty_cfg = hickory_resolver::config::ResolverConfig::from_parts(None, vec![], vec![]);
 		let mut custom_opts = hickory_resolver::config::ResolverOpts::default();
 		custom_opts.ndots = 42;
 
@@ -880,7 +876,8 @@ config:
 
 	#[test]
 	fn resolve_dns_config_keeps_valid_config() {
-		let valid_cfg = hickory_resolver::config::ResolverConfig::default();
+		let valid_cfg =
+			hickory_resolver::config::ResolverConfig::udp_and_tcp(&hickory_resolver::config::GOOGLE);
 		let mut custom_opts = hickory_resolver::config::ResolverOpts::default();
 		custom_opts.ndots = 7;
 
