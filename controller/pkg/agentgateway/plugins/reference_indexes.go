@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/util/sets"
@@ -37,6 +38,16 @@ type BackendReferenceError struct {
 	Message string
 }
 
+func ExtractName[T controllers.ComparableObject](t T) types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: t.GetNamespace(),
+		Name:      t.GetName(),
+	}
+}
+func ResourceExists[T controllers.ComparableObject](krtctx krt.HandlerContext, col krt.Collection[T], key string) bool {
+	return len(krt.PartialFetchComparable(krtctx, col, ExtractName, krt.FilterKey(key))) > 0
+}
+
 func (e *BackendReferenceError) Error() string {
 	return e.Message
 }
@@ -50,23 +61,23 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 			case wellknown.GatewayGVK.GroupKind():
 				return []*api.PolicyTarget{{
 					Kind: utils.GatewayTarget(namespace, string(name), sectionName),
-				}}, ptr.Flatten(krt.FetchOne(krtctx, agw.Gateways, krt.FilterKey(key))) != nil
+				}}, ResourceExists(krtctx, agw.Gateways, key)
 			case wellknown.HTTPRouteGVK.GroupKind():
 				return []*api.PolicyTarget{{
 					Kind: utils.RouteTarget(namespace, string(name), wellknown.HTTPRouteGVK.Kind, sectionName),
-				}}, ptr.Flatten(krt.FetchOne(krtctx, agw.HTTPRoutes, krt.FilterKey(key))) != nil
+				}}, ResourceExists(krtctx, agw.HTTPRoutes, key)
 			case wellknown.GRPCRouteGVK.GroupKind():
 				return []*api.PolicyTarget{{
 					Kind: utils.RouteTarget(namespace, string(name), wellknown.GRPCRouteGVK.Kind, sectionName),
-				}}, ptr.Flatten(krt.FetchOne(krtctx, agw.GRPCRoutes, krt.FilterKey(key))) != nil
+				}}, ResourceExists(krtctx, agw.GRPCRoutes, key)
 			case wellknown.AgentgatewayBackendGVK.GroupKind():
 				return []*api.PolicyTarget{{
 					Kind: utils.BackendTarget(namespace, string(name), sectionName),
-				}}, ptr.Flatten(krt.FetchOne(krtctx, agw.Backends, krt.FilterKey(key))) != nil
+				}}, ResourceExists(krtctx, agw.Backends, key)
 			case wellknown.ServiceGVK.GroupKind():
 				return []*api.PolicyTarget{{
 					Kind: utils.ServiceTarget(namespace, string(name), sectionName),
-				}}, ptr.Flatten(krt.FetchOne(krtctx, agw.Services, krt.FilterKey(key))) != nil
+				}}, ResourceExists(krtctx, agw.Services, key)
 			}
 			return nil, false
 		},
