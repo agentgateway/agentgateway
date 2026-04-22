@@ -299,19 +299,17 @@ func (f *Fetcher) maybeFetchJwks(ctx context.Context) {
 			continue
 		}
 
-		state, ok = f.lookup(fetch.RequestKey)
-		if !ok || state.generation != fetch.Generation {
-			continue
-		}
-
-		if err := f.cache.addJwks(fetch.RequestKey, requestURL, jwks); err != nil {
+		keyset, err := buildKeyset(fetch.RequestKey, requestURL, jwks)
+		if err != nil {
 			logger.Error("error adding jwks", "request_key", fetch.RequestKey, "jwks_uri", requestURL, "error", err)
 			next := nextRetryDelay(fetch.RetryAttempt)
 			f.scheduleAt(fetch.RequestKey, state.generation, now.Add(next), fetch.RetryAttempt+1)
 			continue
 		}
 
-		f.scheduleAt(fetch.RequestKey, state.generation, now.Add(state.source.TTL), 0)
+		if !f.commitFetchResult(fetch.RequestKey, fetch.Generation, keyset, now.Add(state.source.TTL)) {
+			continue
+		}
 		updates.Insert(fetch.RequestKey)
 	}
 
@@ -347,22 +345,66 @@ func (f *Fetcher) AddOrUpdateKeyset(source JwksSource) error {
 	return nil
 }
 
-func (f *Fetcher) RemoveKeyset(requestKey remotehttp.FetchKey) {
+// commitFetchResult publishes a freshly fetched keyset to the cache and
+// re-schedules the next fetch, atomically under f.mu so that a concurrent
+// RemoveKeyset cannot interleave between the liveness check and the cache
+// write and leave a stale keyset behind. Returns false if the request has
+// been removed or superseded by a newer generation since the fetch was
+// dispatched; in that case the result is discarded.
+func (f *Fetcher) commitFetchResult(requestKey remotehttp.FetchKey, generation uint64, keyset Keyset, nextFetchAt time.Time) bool {
 	f.mu.Lock()
-	_, ok := f.requests[requestKey]
-	if ok {
-		delete(f.requests, requestKey)
-		f.schedule.Remove(requestKey)
+	defer f.mu.Unlock()
+
+	state, ok := f.requests[requestKey]
+	if !ok || state.generation != generation {
+		return false
+	}
+
+	f.cache.putKeyset(keyset)
+	f.scheduleAtLocked(requestKey, generation, nextFetchAt, 0)
+	return true
+}
+
+// SweepOrphans drops any cache entries that do not correspond to a live
+// request. Intended to be called once at startup after the request collection
+// has synced, to reconcile persisted keysets whose owning policies were
+// deleted while the controller was down.
+func (f *Fetcher) SweepOrphans() {
+	f.mu.Lock()
+	orphans := sets.New[remotehttp.FetchKey]()
+	for _, key := range f.cache.Keys() {
+		if _, ok := f.requests[key]; !ok {
+			orphans.Insert(key)
+			f.cache.deleteJwks(key)
+		}
 	}
 	f.mu.Unlock()
 
-	if !ok {
+	if orphans.IsEmpty() {
 		return
 	}
 
-	f.cache.deleteJwks(requestKey)
+	f.notifySubscribers(orphans)
+}
+
+func (f *Fetcher) RemoveKeyset(requestKey remotehttp.FetchKey) {
+	f.mu.Lock()
+	_, hadRequest := f.requests[requestKey]
+	if hadRequest {
+		delete(f.requests, requestKey)
+		f.schedule.Remove(requestKey)
+	}
+	hadCache := f.cache.deleteJwks(requestKey)
+	f.mu.Unlock()
+
+	if !hadRequest && !hadCache {
+		return
+	}
+
 	f.notifySubscribers(sets.New(requestKey))
-	signalWake(f.wake)
+	if hadRequest {
+		signalWake(f.wake)
+	}
 }
 
 func (f *Fetcher) fetchJwks(ctx context.Context, source JwksSource) (string, jose.JSONWebKeySet, error) {

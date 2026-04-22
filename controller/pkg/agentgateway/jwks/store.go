@@ -89,6 +89,9 @@ func (s *Store) Start(ctx context.Context) error {
 	if !registration.WaitUntilSynced(ctx.Done()) {
 		return nil
 	}
+
+	s.jwksFetcher.SweepOrphans()
+
 	close(s.ready)
 
 	<-ctx.Done()

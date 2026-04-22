@@ -49,7 +49,7 @@ func TestRemoveKeysetFromFetcher(t *testing.T) {
 	f := NewFetcher(NewCache())
 
 	assert.NoError(t, f.AddOrUpdateKeyset(source))
-	f.cache.keysets[source.RequestKey] = Keyset{RequestKey: source.RequestKey, URL: source.Target.URL, JwksJSON: "jwks"}
+	seedJwksCacheForTest(f.cache, source.RequestKey, source.Target.URL)
 
 	f.RemoveKeyset(source.RequestKey)
 
@@ -60,6 +60,23 @@ func TestRemoveKeysetFromFetcher(t *testing.T) {
 	assert.False(t, ok)
 	_, ok = f.cache.GetJwks(source.RequestKey)
 	assert.False(t, ok)
+}
+
+// RemoveKeyset must clear the cache even when f.requests didn't own the key.
+// The cache can be seeded by LoadPersistedKeysets at startup without a
+// corresponding Fetcher request; if a later event (e.g. manual CM deletion)
+// drives RemoveKeyset, the early-return path leaves the cache stale.
+func TestRemoveKeysetClearsCacheEvenWithoutRequest(t *testing.T) {
+	source := testSource()
+	f := NewFetcher(NewCache())
+	// Simulate LoadPersistedKeysets populating the cache without the fetcher
+	// ever seeing an AddOrUpdateKeyset.
+	seedJwksCacheForTest(f.cache, source.RequestKey, source.Target.URL)
+
+	f.RemoveKeyset(source.RequestKey)
+
+	_, ok := f.cache.GetJwks(source.RequestKey)
+	assert.False(t, ok, "cache should be cleared even when request was not tracked")
 }
 
 func TestAddOrUpdateKeysetReplacesExistingScheduleEntry(t *testing.T) {
@@ -369,6 +386,17 @@ func testSourceWithURL(requestURL string) JwksSource {
 		Target:     target,
 		TTL:        5 * time.Minute,
 	}
+}
+
+// seedJwksCacheForTest writes a synthetic keyset into the cache through
+// putKeyset so the cache lock is respected, rather than reaching into the
+// unexported map directly.
+func seedJwksCacheForTest(cache *JwksCache, requestKey remotehttp.FetchKey, url string) {
+	cache.putKeyset(Keyset{
+		RequestKey: requestKey,
+		URL:        url,
+		JwksJSON:   `{"keys":[]}`,
+	})
 }
 
 type stubJwksClient struct {

@@ -51,27 +51,39 @@ func (c *JwksCache) GetJwks(requestKey remotehttp.FetchKey) (Keyset, bool) {
 	return keyset, ok
 }
 
-func (c *JwksCache) addJwks(requestKey remotehttp.FetchKey, requestURL string, jwks jose.JSONWebKeySet) error {
+func buildKeyset(requestKey remotehttp.FetchKey, requestURL string, jwks jose.JSONWebKeySet) (Keyset, error) {
 	serializedJwks, err := json.Marshal(jwks)
 	if err != nil {
-		return err
+		return Keyset{}, err
 	}
-
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	keyset := Keyset{
+	return Keyset{
 		RequestKey: requestKey,
 		URL:        requestURL,
 		FetchedAt:  time.Now(),
 		JwksJSON:   string(serializedJwks),
-	}
-	c.keysets[requestKey] = keyset
-	return nil
+	}, nil
 }
 
-func (c *JwksCache) deleteJwks(requestKey remotehttp.FetchKey) {
+func (c *JwksCache) putKeyset(keyset Keyset) {
 	c.l.Lock()
+	defer c.l.Unlock()
+	c.keysets[keyset.RequestKey] = keyset
+}
+
+func (c *JwksCache) deleteJwks(requestKey remotehttp.FetchKey) bool {
+	c.l.Lock()
+	defer c.l.Unlock()
+	_, existed := c.keysets[requestKey]
 	delete(c.keysets, requestKey)
-	c.l.Unlock()
+	return existed
+}
+
+func (c *JwksCache) Keys() []remotehttp.FetchKey {
+	c.l.Lock()
+	defer c.l.Unlock()
+	keys := make([]remotehttp.FetchKey, 0, len(c.keysets))
+	for k := range c.keysets {
+		keys = append(keys, k)
+	}
+	return keys
 }
