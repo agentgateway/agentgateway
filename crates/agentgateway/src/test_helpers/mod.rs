@@ -103,9 +103,7 @@ mod tests {
 	use opentelemetry_proto::tonic::collector::trace::v1::{
 		ExportTraceServiceRequest, ExportTraceServiceResponse,
 	};
-	use protos::envoy::service::auth::v3::check_response::HttpResponse;
-	use protos::envoy::service::auth::v3::{CheckRequest, CheckResponse, OkHttpResponse};
-	use protos::envoy::service::common::v3::{HeaderValue, HeaderValueOption};
+	use protos::envoy::service::auth::v3::{CheckRequest, CheckResponse};
 	use tonic::Status;
 
 	struct DevExtProcHandler;
@@ -124,33 +122,7 @@ mod tests {
 	impl extauthmock::Handler for DevExtAuthHandler {
 		async fn check(&mut self, request: &CheckRequest) -> Result<CheckResponse, Status> {
 			tracing::info!("got extauth request {:#?}", request);
-			allow_response(Some(HttpResponse::OkResponse(OkHttpResponse {
-				headers: vec![
-					HeaderValueOption {
-						header: Some(HeaderValue {
-							key: ":authority".to_string(),
-							value: "authority".to_string(),
-							raw_value: vec![],
-						}),
-						append: None,
-						append_action: 0,
-					},
-					HeaderValueOption {
-						header: Some(HeaderValue {
-							key: "Host".to_string(),
-							value: "host".to_string(),
-							raw_value: vec![],
-						}),
-						append: None,
-						append_action: 0,
-					},
-				],
-				headers_to_remove: vec![],
-				dynamic_metadata: None,
-				response_headers_to_add: vec![],
-				query_parameters_to_set: vec![],
-				query_parameters_to_remove: vec![],
-			})))
+			allow_response(None)
 		}
 	}
 

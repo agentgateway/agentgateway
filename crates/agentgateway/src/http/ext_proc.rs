@@ -490,7 +490,7 @@ impl ExtProcInstance {
 				}
 				// Skip content-length as the EPP sets it to invalid values
 				// https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/943
-				resp.headers_mut().remove(http::header::CONTENT_LENGTH);
+				req.headers_mut().remove(http::header::CONTENT_LENGTH);
 				return Ok((req, None));
 			}
 		}
