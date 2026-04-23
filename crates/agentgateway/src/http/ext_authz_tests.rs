@@ -28,7 +28,10 @@ impl Default for ExtAuthz {
 
 #[test]
 fn test_process_headers_with_allowlist() {
-	let mut headers = HeaderMap::new();
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com")
+		.body(http::Body::empty())
+		.unwrap();
 
 	let header_options = vec![
 		HeaderValueOption {
@@ -53,10 +56,10 @@ fn test_process_headers_with_allowlist() {
 
 	// Test with allowlist
 	let allowlist = vec!["x-allowed".to_string()];
-	super::process_headers(&mut headers, header_options, Some(&allowlist));
+	super::process_headers((&mut req).into(), header_options, Some(&allowlist));
 
-	assert_eq!(headers.get("x-allowed").unwrap(), "allowed-value");
-	assert!(headers.get("x-not-allowed").is_none());
+	assert_eq!(req.headers().get("x-allowed").unwrap(), "allowed-value");
+	assert!(req.headers().get("x-not-allowed").is_none());
 }
 
 #[test]
@@ -102,12 +105,69 @@ fn test_process_headers() {
 		},
 	];
 
-	super::process_headers(&mut headers, header_options, None);
+	super::process_raw_headers(&mut headers, header_options);
 
 	assert_eq!(headers.get("x-custom-header").unwrap(), "test-value");
 	assert_eq!(headers.get("x-raw-header").unwrap(), "raw-value");
 
 	let append_values: Vec<_> = headers.get_all("x-append-header").iter().collect();
+	assert_eq!(append_values.len(), 2);
+	assert_eq!(append_values[0], "value1");
+	assert_eq!(append_values[1], "value2");
+}
+
+#[test]
+fn test_process_headers_request_append_action() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com")
+		.body(http::Body::empty())
+		.unwrap();
+
+	let header_options = vec![
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-custom-header".to_string(),
+				value: "test-value".to_string(),
+				raw_value: vec![],
+			}),
+			append: Some(false),
+			append_action: 0,
+		},
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-append-header".to_string(),
+				value: "value1".to_string(),
+				raw_value: vec![],
+			}),
+			append: Some(false),
+			append_action: 0,
+		},
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-append-header".to_string(),
+				value: "value2".to_string(),
+				raw_value: vec![],
+			}),
+			append: Some(true),
+			append_action: 0,
+		},
+		HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-raw-header".to_string(),
+				value: "ignored".to_string(),
+				raw_value: b"raw-value".to_vec(),
+			}),
+			append: Some(false),
+			append_action: 0,
+		},
+	];
+
+	super::process_headers((&mut req).into(), header_options, None);
+
+	assert_eq!(req.headers().get("x-custom-header").unwrap(), "test-value");
+	assert_eq!(req.headers().get("x-raw-header").unwrap(), "raw-value");
+
+	let append_values: Vec<_> = req.headers().get_all("x-append-header").iter().collect();
 	assert_eq!(append_values.len(), 2);
 	assert_eq!(append_values[0], "value1");
 	assert_eq!(append_values[1], "value2");
@@ -467,8 +527,6 @@ fn test_append_action_append_if_exists_or_add() {
 	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
 
 	let mut headers = HeaderMap::new();
-
-	// Pre-existing header
 	headers.insert("x-test", "existing".parse().unwrap());
 
 	let header_options = vec![
@@ -492,7 +550,7 @@ fn test_append_action_append_if_exists_or_add() {
 		},
 	];
 
-	super::process_headers(&mut headers, header_options, None);
+	super::process_raw_headers(&mut headers, header_options);
 
 	// Should append to existing header
 	let values: Vec<_> = headers.get_all("x-test").iter().collect();
@@ -507,8 +565,6 @@ fn test_append_action_append_if_exists_or_add() {
 #[test]
 fn test_default_append_action_overwrite() {
 	let mut headers = HeaderMap::new();
-
-	// Pre-existing header with multiple values
 	headers.append("x-test", "value1".parse().unwrap());
 	headers.append("x-test", "value2".parse().unwrap());
 
@@ -533,7 +589,7 @@ fn test_default_append_action_overwrite() {
 		},
 	];
 
-	super::process_headers(&mut headers, header_options, None);
+	super::process_raw_headers(&mut headers, header_options);
 
 	// Should replace all existing values with single new value
 	let values: Vec<_> = headers.get_all("x-test").iter().collect();
@@ -549,8 +605,6 @@ fn test_append_action_add_if_absent() {
 	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
 
 	let mut headers = HeaderMap::new();
-
-	// Pre-existing header
 	headers.insert("x-existing", "value1".parse().unwrap());
 
 	let header_options = vec![
@@ -574,7 +628,7 @@ fn test_append_action_add_if_absent() {
 		},
 	];
 
-	super::process_headers(&mut headers, header_options, None);
+	super::process_raw_headers(&mut headers, header_options);
 
 	// Should not modify existing header (no-op)
 	let values: Vec<_> = headers.get_all("x-existing").iter().collect();
@@ -590,8 +644,6 @@ fn test_append_action_overwrite_if_exists_or_add() {
 	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
 
 	let mut headers = HeaderMap::new();
-
-	// Pre-existing header with multiple values
 	headers.append("x-existing", "value1".parse().unwrap());
 	headers.append("x-existing", "value2".parse().unwrap());
 
@@ -616,7 +668,7 @@ fn test_append_action_overwrite_if_exists_or_add() {
 		},
 	];
 
-	super::process_headers(&mut headers, header_options, None);
+	super::process_raw_headers(&mut headers, header_options);
 
 	// Should replace all existing values with single new value
 	let values: Vec<_> = headers.get_all("x-existing").iter().collect();
@@ -632,8 +684,6 @@ fn test_append_action_overwrite_if_exists() {
 	use crate::http::ext_authz::proto::header_value_option::HeaderAppendAction;
 
 	let mut headers = HeaderMap::new();
-
-	// Pre-existing header
 	headers.insert("x-existing", "old-value".parse().unwrap());
 
 	let header_options = vec![
@@ -657,7 +707,7 @@ fn test_append_action_overwrite_if_exists() {
 		},
 	];
 
-	super::process_headers(&mut headers, header_options, None);
+	super::process_raw_headers(&mut headers, header_options);
 
 	// Should overwrite existing header
 	assert_eq!(headers.get("x-existing").unwrap(), "new-value");
@@ -682,7 +732,7 @@ fn test_append_action_backward_compatibility_with_deprecated_append() {
 		append_action: 0, // Default value
 	}];
 
-	super::process_headers(&mut headers, header_options_append_true, None);
+	super::process_raw_headers(&mut headers, header_options_append_true);
 
 	let values: Vec<_> = headers.get_all("x-test").iter().collect();
 	assert_eq!(values.len(), 2);
@@ -703,7 +753,7 @@ fn test_append_action_backward_compatibility_with_deprecated_append() {
 		append_action: 0, // Default value
 	}];
 
-	super::process_headers(&mut headers2, header_options_append_false, None);
+	super::process_raw_headers(&mut headers2, header_options_append_false);
 
 	let values2: Vec<_> = headers2.get_all("x-test2").iter().collect();
 	assert_eq!(values2.len(), 1);
@@ -747,7 +797,7 @@ fn test_append_action_multiple_set_cookie_headers() {
 		},
 	];
 
-	super::process_headers(&mut headers, header_options, None);
+	super::process_raw_headers(&mut headers, header_options);
 
 	// Should have all three set-cookie headers
 	let values: Vec<_> = headers.get_all("set-cookie").iter().collect();

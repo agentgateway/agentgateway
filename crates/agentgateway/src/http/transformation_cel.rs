@@ -265,11 +265,11 @@ impl Transformation {
 		}
 		for (k, v) in &cfg.add {
 			let val = Self::exec_header(&r, v, k, request);
-			r.apply_header(k, val, true);
+			r.apply_header(k, val, http::HeaderMutationAction::AppendIfExistsOrAdd);
 		}
 		for (k, v) in &cfg.set {
 			let val = Self::exec_header(&r, v, k, request);
-			r.apply_header(k, val, false);
+			r.apply_header(k, val, http::HeaderMutationAction::OverwriteIfExistsOrAdd);
 		}
 		for k in &cfg.remove {
 			r.headers().remove(k);

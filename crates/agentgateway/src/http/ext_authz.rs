@@ -1,9 +1,9 @@
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use crate::cel::{BufferedBody, Expression, Value};
-use crate::http::envoy_proto_common;
 use crate::http::ext_authz::proto::attribute_context::HttpRequest;
 use crate::http::ext_authz::proto::authorization_client::AuthorizationClient;
 use crate::http::ext_authz::proto::check_response::HttpResponse;
@@ -14,6 +14,7 @@ use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::filters::BackendRequestTimeout;
 use crate::http::transformation_cel::SerAsStr;
 use crate::http::{HeaderName, HeaderOrPseudo, PolicyResponse, Request, Response, jwt};
+use crate::http::{RequestOrResponse, envoy_proto_common};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
@@ -284,14 +285,18 @@ impl ExtAuthz {
 		// Handle multi-value headers: comma-separated except cookies use "; " separator
 		// https://github.com/envoyproxy/envoy/blob/d9e0412bd471a80e0938102c0c8cbff1caedd4cf/source/common/http/header_map_impl.cc#L28-L33
 		let mut headers = std::collections::HashMap::new();
+		let pseudo_headers = crate::http::get_request_pseudo_headers(req);
 
 		if self.include_request_headers.is_empty() {
+			// Envoy includes pseudo-headers, so we do too.
+			for (pseudo, value) in &pseudo_headers {
+				headers.insert(pseudo.to_string(), value.clone());
+			}
 			for name in req.headers().keys() {
 				self.get_header_values(req, name, &mut headers);
 			}
 		} else {
 			// Only include requested headers (both regular and pseudo headers)
-			let pseudo_headers = crate::http::get_request_pseudo_headers(req);
 			for header_spec in &self.include_request_headers {
 				match header_spec {
 					HeaderOrPseudo::Header(header_name) => {
@@ -479,13 +484,11 @@ impl ExtAuthz {
 				let status = http_status
 					.and_then(|s| StatusCode::from_u16(s.code as u16).ok())
 					.unwrap_or(StatusCode::FORBIDDEN);
-				let mut rb = ::http::response::Builder::new().status(status);
-				if let Some(hm) = rb.headers_mut() {
-					process_headers(hm, headers, None);
-				}
-				let resp = rb
+				let rb = ::http::response::Builder::new().status(status);
+				let mut resp = rb
 					.body(http::Body::from(body))
 					.map_err(|e| ProxyError::Processing(e.into()))?;
+				process_headers(RequestOrResponse::Response(&mut resp), headers, None);
 				return Ok(PolicyResponse {
 					direct_response: Some(resp),
 					response_headers: None,
@@ -517,24 +520,7 @@ impl ExtAuthz {
 					}
 				}
 
-				// Apply pseudo-header mutations first
-				apply_pseudo_headers_to_request(req, &headers);
-
-				// Then process regular headers, excluding host and any pseudo-headers
-				let filtered_headers: Vec<_> = headers
-					.into_iter()
-					.filter(|h| {
-						h.header
-							.as_ref()
-							.map(|hdr| {
-								let k = hdr.key.as_str();
-								k.to_lowercase() != "host" && !k.starts_with(':')
-							})
-							.unwrap_or(true)
-					})
-					.collect();
-
-				process_headers(req.headers_mut(), filtered_headers, None);
+				process_headers(req.into(), headers, None);
 
 				apply_query_parameters_to_request(
 					req,
@@ -544,7 +530,7 @@ impl ExtAuthz {
 
 				if !response_headers_to_add.is_empty() {
 					let mut hm = HeaderMap::new();
-					process_headers(&mut hm, response_headers_to_add, None);
+					process_raw_headers(&mut hm, response_headers_to_add);
 					if !hm.is_empty() {
 						res.response_headers = Some(hm);
 					}
@@ -628,10 +614,11 @@ impl ExtAuthz {
 		};
 		for h in include {
 			if let Some(hv) = http::get_pseudo_or_header_value(h, req) {
-				let _ = http::apply_header_or_pseudo(
-					&mut http::RequestOrResponse::Request(&mut check_req),
+				let value = http::HeaderOrPseudoValue::from_raw(h, hv.as_bytes());
+				http::RequestOrResponse::Request(&mut check_req).apply_header(
 					h,
-					hv.as_bytes(),
+					value,
+					http::HeaderMutationAction::OverwriteIfExistsOrAdd,
 				);
 			}
 		}
@@ -648,7 +635,11 @@ impl ExtAuthz {
 			let exec = cel::Executor::new_request(req);
 			let res = exec.eval(hv).ok();
 			let resv = http::HeaderOrPseudoValue::from_cel_result(hn, res);
-			http::RequestOrResponse::Request(&mut check_req).apply_header(hn, resv, false);
+			http::RequestOrResponse::Request(&mut check_req).apply_header(
+				hn,
+				resv,
+				http::HeaderMutationAction::OverwriteIfExistsOrAdd,
+			);
 		}
 		// Set the default request timeout. This can be overridden by a timeout on the Backend object itself.
 		check_req
@@ -758,7 +749,10 @@ impl ExtAuthz {
 						)]),
 					})
 				} else {
-					None
+					// Envoy always set this, even if there is no metadata, so do the same for compatibility.
+					Some(Metadata {
+						filter_metadata: HashMap::new(),
+					})
 				}
 			},
 		})
@@ -796,21 +790,6 @@ enum BufferRequestBodyError {
 	Read(anyhow::Error),
 }
 
-/// Apply HTTP/2 pseudo-headers returned by the ext_authz server to the inbound request
-fn apply_pseudo_headers_to_request(req: &mut Request, headers: &[HeaderValueOption]) {
-	for header in headers {
-		let Some(h) = header.header.as_ref() else {
-			continue;
-		};
-		// Only consider pseudo-headers (start with ':') and ignore others
-		if !h.key.starts_with(':') {
-			continue;
-		}
-		let mut rr = crate::http::RequestOrResponse::Request(req);
-		let _ = envoy_proto_common::apply_pseudo_header_option(&mut rr, header);
-	}
-}
-
 fn apply_query_parameters_to_request(
 	req: &mut Request,
 	query_parameters_to_set: &[proto::QueryParameter],
@@ -827,23 +806,31 @@ fn apply_query_parameters_to_request(
 }
 
 fn process_headers(
-	hm: &mut HeaderMap,
+	mut rr: http::RequestOrResponse,
 	headers: Vec<HeaderValueOption>,
 	allowlist: Option<&[String]>,
 ) {
 	for header in headers {
+		let header = header.borrow();
 		let Some(ref h) = header.header else { continue };
 
 		// If allowlist is provided, only process headers in the allowlist
-		if let Some(allowed) = allowlist {
-			let header_name_lower = h.key.to_lowercase();
-			if !allowed
+		let header_name_lower = h.key.to_lowercase();
+		if let Some(allowed) = allowlist
+			&& !allowed
 				.iter()
 				.any(|name| name.to_lowercase() == header_name_lower)
-			{
-				continue;
-			}
+		{
+			continue;
 		}
+
+		envoy_proto_common::apply_header_option(&mut rr, header)
+	}
+}
+
+fn process_raw_headers(hm: &mut HeaderMap, headers: Vec<HeaderValueOption>) {
+	for header in headers {
+		let Some(ref h) = header.header else { continue };
 
 		let Ok(hn) = HeaderName::from_bytes(h.key.as_bytes()) else {
 			warn!("Invalid header name: {}", h.key);

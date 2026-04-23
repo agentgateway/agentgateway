@@ -193,7 +193,7 @@ async fn apply_request_policies(
 			.apply(response_policies.headers())?;
 	}
 	if let Some(rhm) = &policies.request_header_modifier {
-		rhm.apply(req.headers_mut()).map_err(ProxyError::from)?;
+		rhm.apply_request(req).map_err(ProxyError::from)?;
 	}
 
 	// Enable Auto Hostname rewrite by default. This may be disabled by a URL Rewrite, or explicitly
@@ -279,7 +279,7 @@ async fn apply_backend_policies(
 		j.apply_request(req);
 	}
 	if let Some(rhm) = request_header_modifier {
-		rhm.apply(req.headers_mut()).map_err(ProxyError::from)?;
+		rhm.apply_request(req).map_err(ProxyError::from)?;
 	}
 	if let Some(rr) = request_redirect {
 		rr.apply(req)

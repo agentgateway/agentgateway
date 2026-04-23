@@ -38,6 +38,33 @@ impl HeaderModifier {
 		}
 		Ok(())
 	}
+
+	pub fn apply_request(&self, req: &mut Request) -> Result<(), Error> {
+		for (k, v) in &self.add {
+			let name = HeaderName::from_bytes(k.as_bytes())?;
+			let value = HeaderValue::from_str(v)?;
+			let mut rr = crate::http::RequestOrResponse::Request(req);
+			rr.apply_header(
+				&crate::http::HeaderOrPseudo::Header(name),
+				Some(crate::http::HeaderOrPseudoValue::Header(value)),
+				crate::http::HeaderMutationAction::AppendIfExistsOrAdd,
+			);
+		}
+		for (k, v) in &self.set {
+			let name = HeaderName::from_bytes(k.as_bytes())?;
+			let value = HeaderValue::from_str(v)?;
+			let mut rr = crate::http::RequestOrResponse::Request(req);
+			rr.apply_header(
+				&crate::http::HeaderOrPseudo::Header(name),
+				Some(crate::http::HeaderOrPseudoValue::Header(value)),
+				crate::http::HeaderMutationAction::OverwriteIfExistsOrAdd,
+			);
+		}
+		for k in &self.remove {
+			req.headers_mut().remove(HeaderName::from_bytes(k.as_bytes())?);
+		}
+		Ok(())
+	}
 }
 
 #[apply(schema!)]

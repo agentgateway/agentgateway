@@ -141,10 +141,30 @@ impl RequestOrResponse<'_> {
 			RequestOrResponse::Response(r) => r.body_mut(),
 		}
 	}
-	pub fn apply_header(&mut self, k: &HeaderOrPseudo, v: Option<HeaderOrPseudoValue>, append: bool) {
+	pub fn apply_header(
+		&mut self,
+		k: &HeaderOrPseudo,
+		v: Option<HeaderOrPseudoValue>,
+		action: HeaderMutationAction,
+	) {
 		match (k, v) {
 			(HeaderOrPseudo::Header(k), Some(HeaderOrPseudoValue::Header(v))) => {
-				if append {
+				// Normalize modification of host header to authority header.
+				if k == &header::HOST && matches!(self, RequestOrResponse::Request(_)) {
+					let Some(value) = HeaderOrPseudoValue::from_raw(&HeaderOrPseudo::Authority, v.as_bytes())
+					else {
+						return;
+					};
+					self.headers().remove(header::HOST);
+					self.apply_header(&HeaderOrPseudo::Authority, Some(value), action);
+					return;
+				}
+
+				let exists = self.headers().contains_key(k);
+				if !action.should_apply(exists) {
+					return;
+				}
+				if action.should_append() {
 					self.headers().append(k.clone(), v);
 				} else {
 					self.headers().insert(k.clone(), v);
@@ -253,7 +273,56 @@ pub enum HeaderOrPseudoValue {
 	Status(StatusCode),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HeaderMutationAction {
+	AppendIfExistsOrAdd,
+	AddIfAbsent,
+	OverwriteIfExistsOrAdd,
+	OverwriteIfExists,
+}
+
+impl HeaderMutationAction {
+	pub fn should_apply(self, exists: bool) -> bool {
+		match self {
+			HeaderMutationAction::AppendIfExistsOrAdd | HeaderMutationAction::OverwriteIfExistsOrAdd => {
+				true
+			},
+			HeaderMutationAction::AddIfAbsent => !exists,
+			HeaderMutationAction::OverwriteIfExists => exists,
+		}
+	}
+
+	pub fn should_append(self) -> bool {
+		matches!(self, HeaderMutationAction::AppendIfExistsOrAdd)
+	}
+}
+
 impl HeaderOrPseudoValue {
+	pub fn from_raw(k: &HeaderOrPseudo, raw: &[u8]) -> Option<HeaderOrPseudoValue> {
+		match k {
+			HeaderOrPseudo::Header(_) => HeaderValue::from_bytes(raw)
+				.ok()
+				.map(HeaderOrPseudoValue::Header),
+			HeaderOrPseudo::Status => std::str::from_utf8(raw)
+				.ok()
+				.and_then(|s| s.parse::<u16>().ok())
+				.and_then(|s| StatusCode::from_u16(s).ok())
+				.map(HeaderOrPseudoValue::Status),
+			HeaderOrPseudo::Method => ::http::Method::from_bytes(raw)
+				.ok()
+				.map(HeaderOrPseudoValue::Method),
+			HeaderOrPseudo::Scheme => ::http::uri::Scheme::try_from(raw)
+				.ok()
+				.map(HeaderOrPseudoValue::Scheme),
+			HeaderOrPseudo::Authority => ::http::uri::Authority::try_from(raw)
+				.ok()
+				.map(HeaderOrPseudoValue::Authority),
+			HeaderOrPseudo::Path => ::http::uri::PathAndQuery::try_from(raw)
+				.ok()
+				.map(HeaderOrPseudoValue::Path),
+		}
+	}
+
 	pub fn from_cel_result(k: &HeaderOrPseudo, res: Option<Value>) -> Option<HeaderOrPseudoValue> {
 		match (res?.always_materialize_owned(), k) {
 			(v, HeaderOrPseudo::Header(_)) => v
@@ -415,81 +484,6 @@ pub fn get_request_pseudo_headers(req: &Request) -> Vec<(HeaderOrPseudo, String)
 		out.push((HeaderOrPseudo::Path, v));
 	}
 	out
-}
-
-/// Apply a pseudo header mutation to either a request or a response. Returns true if applied.
-pub fn apply_header_or_pseudo(
-	rr: &mut RequestOrResponse,
-	pseudo: &HeaderOrPseudo,
-	raw: &[u8],
-) -> bool {
-	match (rr, pseudo) {
-		(RequestOrResponse::Request(req), HeaderOrPseudo::Method) => {
-			if let Ok(m) = ::http::Method::from_bytes(raw) {
-				*req.method_mut() = m;
-				return true;
-			}
-		},
-		(RequestOrResponse::Request(req), HeaderOrPseudo::Scheme) => {
-			if let Ok(s) = ::http::uri::Scheme::try_from(raw) {
-				let _ = modify_req_uri(req, |uri| {
-					uri.scheme = Some(s);
-					Ok(())
-				});
-				return true;
-			}
-		},
-		(RequestOrResponse::Request(req), HeaderOrPseudo::Authority) => {
-			if let Ok(a) = ::http::uri::Authority::try_from(raw) {
-				let _ = modify_req_uri(req, |uri| {
-					uri.authority = Some(a);
-					if uri.scheme.is_none() {
-						// When authority is set, scheme must also be set
-						// TODO: do the same for HeaderOrPseudo::Scheme
-						uri.scheme = Some(Scheme::HTTP);
-					}
-					Ok(())
-				});
-				return true;
-			}
-		},
-		(RequestOrResponse::Request(req), HeaderOrPseudo::Path) => {
-			if let Ok(pq) = ::http::uri::PathAndQuery::try_from(raw) {
-				let _ = modify_req_uri(req, |uri| {
-					uri.path_and_query = Some(pq);
-					Ok(())
-				});
-				return true;
-			}
-		},
-		(RequestOrResponse::Response(resp), HeaderOrPseudo::Status) => {
-			if let Some(code) = std::str::from_utf8(raw)
-				.ok()
-				.and_then(|s| s.parse::<u16>().ok())
-				.and_then(|c| ::http::StatusCode::from_u16(c).ok())
-			{
-				*resp.status_mut() = code;
-				return true;
-			}
-		},
-		(RequestOrResponse::Response(resp), HeaderOrPseudo::Header(hn)) => {
-			let Ok(hv) = HeaderValue::try_from(raw) else {
-				return false;
-			};
-			resp.headers_mut().insert(hn, hv);
-			return true;
-		},
-		(RequestOrResponse::Request(req), HeaderOrPseudo::Header(hn)) => {
-			let Ok(hv) = HeaderValue::try_from(raw) else {
-				return false;
-			};
-			req.headers_mut().insert(hn, hv);
-			return true;
-		},
-		// Not applicable combination
-		_ => {},
-	}
-	false
 }
 
 pub mod x_headers {
