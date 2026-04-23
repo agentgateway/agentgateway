@@ -493,12 +493,13 @@ pub fn apply_header_or_pseudo(
 }
 
 pub mod x_headers {
-	use http::HeaderName;
+	use http::{HeaderMap, HeaderName, HeaderValue};
 
 	pub const X_RATELIMIT_LIMIT: HeaderName = HeaderName::from_static("x-ratelimit-limit");
 	pub const X_RATELIMIT_REMAINING: HeaderName = HeaderName::from_static("x-ratelimit-remaining");
 	pub const X_RATELIMIT_RESET: HeaderName = HeaderName::from_static("x-ratelimit-reset");
 	pub const X_AMZN_REQUESTID: HeaderName = HeaderName::from_static("x-amzn-requestid");
+	pub const X_FORWARDED_PROTO: HeaderName = HeaderName::from_static("x-forwarded-proto");
 
 	pub const RETRY_AFTER_MS: HeaderName = HeaderName::from_static("retry-after-ms");
 
@@ -510,6 +511,17 @@ pub mod x_headers {
 		HeaderName::from_static("x-ratelimit-reset-requests-day");
 	pub const X_RATELIMIT_RESET_TOKENS_MINUTE: HeaderName =
 		HeaderName::from_static("x-ratelimit-reset-tokens-minute");
+
+	pub fn forwarded_proto(headers: &HeaderMap<HeaderValue>) -> Option<String> {
+		headers
+			.get_all(&X_FORWARDED_PROTO)
+			.iter()
+			.filter_map(|value| value.to_str().ok())
+			.flat_map(|value| value.split(','))
+			.map(str::trim)
+			.find(|value| !value.is_empty())
+			.map(|value| value.to_ascii_lowercase())
+	}
 }
 
 pub fn modify_req(
