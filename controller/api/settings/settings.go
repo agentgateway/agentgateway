@@ -11,6 +11,7 @@ import (
 
 // DnsLookupFamily controls the DNS lookup family for all static clusters created via Backend resources.
 type DnsLookupFamily string
+type XdsMode string
 
 const (
 	// DnsLookupFamilyV4Preferred is the default value for DnsLookupFamily.
@@ -33,6 +34,10 @@ const (
 	// non-existent V6_PREFERRED option and is a legacy name that will be
 	// deprecated in favor of V6_PREFERRED in a future major version.
 	DnsLookupFamilyAuto DnsLookupFamily = "AUTO"
+
+	XdsModePlaintext XdsMode = "plaintext"
+	XdsModeTLS       XdsMode = "tls"
+	XdsModeEither    XdsMode = "either"
 )
 
 // Decode implements envconfig.Decoder.
@@ -44,6 +49,24 @@ func (m *DnsLookupFamily) Decode(value string) error {
 		return nil
 	default:
 		return fmt.Errorf("invalid DNS lookup family: %q", value)
+	}
+}
+
+// Decode implements envconfig.Decoder.
+func (m *XdsMode) Decode(value string) error {
+	mode := XdsMode(strings.ToLower(value))
+	switch mode {
+	case XdsModePlaintext, XdsModeTLS, XdsModeEither:
+		*m = mode
+		return nil
+	case "true":
+		*m = XdsModeTLS
+		return nil
+	case "false":
+		*m = XdsModePlaintext
+		return nil
+	default:
+		return fmt.Errorf("invalid xDS mode: %q (supported: plaintext, tls, either)", value)
 	}
 }
 
@@ -100,15 +123,6 @@ const (
 	// private key, and CA certificate for xDS communication. This secret must exist in the
 	// agentgateway installation namespace when TLS is enabled.
 	TLSSecretName = "kgateway-xds-cert" //nolint:gosec // G101: This is a well-known xDS TLS secret name, not a credential
-
-	// TLSCertPath is the path to the TLS certificate
-	TLSCertPath = "/etc/xds-tls/tls.crt"
-
-	// TLSKeyPath is the path to the TLS key
-	TLSKeyPath = "/etc/xds-tls/tls.key"
-
-	// TLSRootCAPath is the path to the TLS root CA
-	TLSRootCAPath = "/etc/xds-tls/ca.crt"
 )
 
 type Settings struct {
@@ -144,14 +158,15 @@ type Settings struct {
 	// By default, this is enabled.
 	XdsAuth bool `split_words:"true" default:"true"`
 
-	// XdsTLS enables or disables TLS encryption for xDS communication between the data-plane and control-plane.
-	// By default, this is disabled.
-	XdsTLS bool `split_words:"true" default:"false"`
+	// XdsMode configures how xDS is served by the control-plane:
+	// - plaintext: serve only plaintext xDS
+	// - tls: serve only TLS xDS
+	// - either: serve both TLS and plaintext xDS
+	XdsMode XdsMode `split_words:"true" default:"plaintext"`
 
 	// AgentgatewayXdsServicePort is the port of the Kubernetes Service that serves xDS config for agentgateway.
-	// This corresponds to the value of the `grpc-xds-agw` port in the service.
+	// This is the primary xDS port and is used for TLS mode and for plaintext when mode=plaintext.
 	AgentgatewayXdsServicePort uint32 `split_words:"true" default:"9978"`
-
 	// NoListenersDummyPort is the port exposed on the generated Service when a Gateway has no listeners.
 	// This keeps the LoadBalancer provisioned and address stable across transitions to zero listeners.
 	NoListenersDummyPort uint16 `split_words:"true" default:"443"`
@@ -205,4 +220,12 @@ func BuildSettings() (*Settings, error) {
 		return settings, err
 	}
 	return settings, nil
+}
+
+func (s *Settings) IsXdsTLSEnabled() bool {
+	return s.XdsMode == XdsModeTLS || s.XdsMode == XdsModeEither
+}
+
+func (s *Settings) IsXdsPlaintextEnabled() bool {
+	return s.XdsMode == XdsModePlaintext || s.XdsMode == XdsModeEither
 }

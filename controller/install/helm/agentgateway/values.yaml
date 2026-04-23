@@ -127,11 +127,10 @@ controller:
   extraVolumeMounts: []
   # -- Add extra volumes to the controller pod.
   extraVolumes: []
-  # -- Configure TLS settings for the xDS gRPC servers.
+  # -- Configure xDS transport mode for the gRPC servers.
   xds:
-    tls:
-      # -- Enable TLS encryption for xDS communication. When enabled, the agent gateway xDS server (port 9978) will use TLS. When TLS is enabled, you must create a Secret named 'kgateway-xds-cert' in the agentgateway installation namespace. The Secret must be of type 'kubernetes.io/tls' with 'tls.crt', 'tls.key', and 'ca.crt' data fields present.
-      enabled: false
+    # -- One of: plaintext, tls, either.
+    mode: tls
   # -- Change the rollout strategy from the Kubernetes default of a RollingUpdate with 25% maxUnavailable, 25% maxSurge.
   # E.g., to recreate pods, minimizing resources for the rollout but causing downtime:
   # strategy:

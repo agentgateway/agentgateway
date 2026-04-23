@@ -10,9 +10,11 @@ import (
 	"github.com/go-logr/logr"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/kclient"
+	"github.com/soheilhy/cmux"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/security"
 	"istio.io/istio/pkg/util/sets"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -20,7 +22,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
@@ -41,6 +42,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/namespaces"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
@@ -186,19 +188,13 @@ func (s *setup) Start(ctx context.Context) error {
 
 	// Create shared certificate watcher if TLS is enabled. This watcher is used by both the xDS server
 	// and the Gateway controller to kick reconciliation on cert changes.
-	var certWatcher *certwatcher.CertWatcher
-	if s.GlobalSettings.XdsTLS {
+	var certWatcher *xdsTLSMaterial
+	if s.GlobalSettings.IsXdsTLSEnabled() {
 		var err error
-		certWatcher, err = certwatcher.New(apisettings.TLSCertPath, apisettings.TLSKeyPath)
+		certWatcher, err = setupXdsTLSMaterial(ctx, s.APIClient, namespaces.GetPodNamespace(), apisettings.TLSSecretName, s.xdsTLSHosts())
 		if err != nil {
 			return err
 		}
-		go func() {
-			if err := certWatcher.Start(ctx); err != nil {
-				slog.Error("failed to start TLS certificate watcher", "error", err)
-			}
-			slog.Info("started TLS certificate watcher")
-		}()
 	}
 
 	setupOpts := &controller.SetupOpts{
@@ -275,7 +271,23 @@ func (s *setup) Start(ctx context.Context) error {
 	}
 
 	if s.XDSListener != nil && agw != nil {
-		runXDSServer(ctx, s.XDSListener, authenticators, s.GlobalSettings.XdsAuth, certWatcher, agw.NackPublisher, agw.Registrations...)
+		if s.GlobalSettings.XdsMode == apisettings.XdsModeEither {
+			xdsMux := cmux.New(s.XDSListener)
+			tlsListener := xdsMux.Match(cmux.TLS())
+			plaintextListener := xdsMux.Match(cmux.Any())
+			runXDSServer(ctx, tlsListener, authenticators, s.GlobalSettings.XdsAuth, certWatcher, agw.NackPublisher, agw.Registrations...)
+			runXDSServer(ctx, plaintextListener, authenticators, s.GlobalSettings.XdsAuth, nil, agw.NackPublisher, agw.Registrations...)
+			context.AfterFunc(ctx, xdsMux.Close)
+			go func() {
+				if err := xdsMux.Serve(); err != nil && err != cmux.ErrListenerClosed && err != cmux.ErrServerClosed {
+					slog.Error("xDS listener mux stopped", "error", err)
+				}
+			}()
+		} else if s.GlobalSettings.IsXdsTLSEnabled() {
+			runXDSServer(ctx, s.XDSListener, authenticators, s.GlobalSettings.XdsAuth, certWatcher, agw.NackPublisher, agw.Registrations...)
+		} else if s.GlobalSettings.IsXdsPlaintextEnabled() {
+			runXDSServer(ctx, s.XDSListener, authenticators, s.GlobalSettings.XdsAuth, nil, agw.NackPublisher, agw.Registrations...)
+		}
 	}
 
 	slog.Info("starting admin server")
@@ -283,6 +295,19 @@ func (s *setup) Start(ctx context.Context) error {
 
 	slog.Info("starting manager")
 	return mgr.Start(ctx)
+}
+
+func (s *setup) xdsTLSHosts() []string {
+	if s.GlobalSettings.XdsServiceHost != "" {
+		return []string{s.GlobalSettings.XdsServiceHost}
+	}
+	namespace := namespaces.GetPodNamespace()
+	serviceName := s.GlobalSettings.XdsServiceName
+	return []string{
+		serviceName + "." + namespace,
+		serviceName + "." + namespace + ".svc",
+		kubeutils.ServiceFQDN(metav1.ObjectMeta{Name: serviceName, Namespace: namespace}),
+	}
 }
 
 func newXDSListener(ip string, port uint32) (net.Listener, error) {

@@ -151,8 +151,7 @@ func TestHelmChartTemplate(t *testing.T) {
 			name: "xds-tls-enabled",
 			valuesYAML: `controller:
   xds:
-    tls:
-      enabled: true
+    mode: tls
 `,
 		},
 		{

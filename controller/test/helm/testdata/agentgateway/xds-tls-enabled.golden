@@ -345,8 +345,8 @@ spec:
               value: "9978"
             - name: AGW_DISCOVERY_NAMESPACE_SELECTORS
               value: "[]"
-            - name: AGW_XDS_TLS_ENABLED
-              value: "true"
+            - name: AGW_XDS_MODE
+              value: "tls"
             - name: AGW_GATEWAY_CLASS_PARAMETERS_REFS
               value: "{}"
             - name: POD_NAMESPACE
@@ -355,11 +355,3 @@ spec:
                   fieldPath: metadata.namespace
           resources:
             {}
-          volumeMounts:
-            - name: xds-tls
-              mountPath: /etc/xds-tls
-              readOnly: true
-      volumes:
-        - name: xds-tls
-          secret:
-            secretName: kgateway-xds-cert
