@@ -873,6 +873,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       } else if (sel.type === "backendPolicy") {
         const raw = (sel.backend.backend as any)?.policies ?? {};
         setFormData((raw[sel.policyType] ?? {}) as Record<string, unknown>);
+      } else if (sel.type === "llmPolicy" || sel.type === "mcpPolicy") {
+        setFormData(sel.node.policy as Record<string, unknown>);
       } else if (sel.type === "model") {
         setFormData(sel.node.model as unknown as Record<string, unknown>);
       } else if (
@@ -1050,6 +1052,29 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         return;
       }
 
+      if (selected.type === "llmPolicy") {
+        const form = getFormForPolicy(selected.node.policyType, "llmPolicy") as any;
+        const dataToSave = form?.transformBeforeSubmit ? form.transformBeforeSubmit(fd) : fd;
+
+        // Update the specific policy in the LLM config
+        if (!hierarchy.llm) throw new Error("LLM config not found");
+        const currentConfig = { ...hierarchy.llm.config, models: hierarchy.llm.models.map((m) => m.model) };
+        const currentPolicies = hierarchy.llm.policies.reduce((acc, p) => {
+          acc[p.policyType] = p.policy;
+          return acc;
+        }, {} as Record<string, unknown>);
+        console.log(`fd`, fd);
+        console.log(`dataToSave`, dataToSave);
+        await api.createOrUpdateLLM({
+          ...currentConfig,
+          policies: { ...currentPolicies, [selected.node.policyType]: dataToSave },
+        } as any);
+        toast.success(`${getPolicyLabel(selected.node.policyType)} policy updated`);
+        await mutate();
+        navigate(`${basePath}/llm/policy/${selected.node.policyType}`);
+        return;
+      }
+
       const { port, li, ri, bi, isTcpRoute } = urlParams;
 
       // Guard: these types require a port
@@ -1147,18 +1172,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         await api.updateListenerPolicy(port, li!, selected.policyType, dataToSave);
       } else if (selected.type === "backendPolicy") {
         await api.updateBackendPolicy(port, li!, ri!, bi!, isTcpRoute ?? false, selected.policyType, dataToSave);
-       } else if (selected.type === "llmPolicy") {
-        // Update the specific policy in the LLM config
-        if (!hierarchy.llm) throw new Error("LLM config not found");
-        const currentConfig = { ...hierarchy.llm.config, models: hierarchy.llm.models.map((m) => m.model) };
-        const currentPolicies = hierarchy.llm.policies.reduce((acc, p) => {
-          acc[p.policyType] = p.policy;
-          return acc;
-        }, {} as Record<string, unknown>);
-        await api.createOrUpdateLLM({
-          ...currentConfig,
-          policies: { ...currentPolicies, [selected.node.policyType]: dataToSave },
-        } as any);
       }
 
       toast.success(

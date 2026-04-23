@@ -60,5 +60,11 @@ export const schema: RJSFSchema = {
  }
 
  export function transformBeforeSubmit(data: unknown): unknown { 
-    return data;
+    const d = data as Record<string, unknown>;
+    const providers = d.providers as unknown[] | undefined;
+    if (!providers || providers.length === 0) { 
+      const { providers: _drop, ...rest } = d;
+      return rest;
+    }
+    return d;
  }
