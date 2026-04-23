@@ -1,8 +1,7 @@
 import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import styled from "@emotion/styled";
 import Form from "@rjsf/antd";
-import type { MenuProps } from "antd";
-import { Breadcrumb, Button, Dropdown, Popconfirm, Space, Spin } from "antd";
+import { Breadcrumb, Button, Popconfirm, Space, Spin } from "antd";
 import { Edit2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
@@ -841,7 +840,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     // Initialize formData when selection changes
     if (sel) {
       if (sel.type === "bind") {
-        setFormData(sel.node.bind as unknown as Record<string, unknown>);
+        const { listeners: _listeners, ...bindData } = sel.node.bind as unknown as Record<string, unknown>;
+        setFormData(bindData);
       } else if (sel.type === "listener") {
         // Filter out routes and tcpRoutes - they're managed separately via the tree
         const { routes: _routes, tcpRoutes: _tcpRoutes, ...listenerData } = sel.node
@@ -1560,48 +1560,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       return null;
     }
 
-    // Check which policy types already exist
-    const existingPolicyTypes = new Set(node.policies.map((p) => p.policyType));
-    const hasCors = existingPolicyTypes.has("cors");
-    const hasRequestHeaderModifier = existingPolicyTypes.has(
-      "requestHeaderModifier",
-    );
-    const hasResponseHeaderModifier = existingPolicyTypes.has(
-      "responseHeaderModifier",
-    );
-
-    const policyMenuItems: MenuProps["items"] = [
-      {
-        key: "addCors",
-        label: hasCors ? "CORS policy already exists" : "Add CORS Policy",
-        icon: <PlusOutlined />,
-        disabled: hasCors,
-        onClick: () => !hasCors && handleAddPolicy(port, li, ri, isTcp, "cors"),
-      },
-      {
-        key: "addRequestHeaderModifier",
-        label: hasRequestHeaderModifier
-          ? "Request Header Modifier already exists"
-          : "Add Request Header Modifier",
-        icon: <PlusOutlined />,
-        disabled: hasRequestHeaderModifier,
-        onClick: () =>
-          !hasRequestHeaderModifier &&
-          handleAddPolicy(port, li, ri, isTcp, "requestHeaderModifier"),
-      },
-      {
-        key: "addResponseHeaderModifier",
-        label: hasResponseHeaderModifier
-          ? "Response Header Modifier already exists"
-          : "Add Response Header Modifier",
-        icon: <PlusOutlined />,
-        disabled: hasResponseHeaderModifier,
-        onClick: () =>
-          !hasResponseHeaderModifier &&
-          handleAddPolicy(port, li, ri, isTcp, "responseHeaderModifier"),
-      },
-    ];
-
     const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
     return (
       <Container>
@@ -1625,13 +1583,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
                 >
                   Add Backend
                 </Button>
-                <Dropdown
-                  menu={{ items: policyMenuItems }}
-                  trigger={["click"]}
-                  overlayStyle={{ maxHeight: "50vh", overflow: "auto" }}
-                >
-                  <Button icon={<PlusOutlined />}>Add Policy</Button>
-                </Dropdown>
                 <Button
                   type="primary"
                   icon={<Edit2 size={14} />}
