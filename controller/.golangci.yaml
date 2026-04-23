@@ -12,6 +12,7 @@ linters:
   default: none
   enable:
     - bodyclose
+    - revive
     - copyloopvar
     - forbidigo
     - ginkgolinter
@@ -61,6 +62,16 @@ linters:
               isFirstField: Ignore
               useProtobuf: Forbid
               usePatchStrategy: Ignore
+    revive:
+      rules:
+        - name: var-naming
+          disabled: false
+        - name: unused-parameter
+          disabled: true
+        - name: dot-imports
+          disabled: true
+        - name: package-comments
+          disabled: true
     forbidigo:
       forbid:
         - pattern: anypb.New
@@ -181,7 +192,67 @@ linters:
       - path-except: "^api/v1alpha1"
         linters:
           - kubeapilinter
-issues:
+
+      # Revive catches legacy exported names with issues
+      - path: "agentgateway_parameters_types.go"
+        linters:
+          - revive
+        text: 'LoggingJson'
+      - path: "agentgateway_policy_types.go"
+        linters:
+          - revive
+        text: 'GcpAuthTypeIdToken|OTLPProtocolHttp'
+      - path: "settings.go"
+        linters:
+          - revive
+        text: 'DnsLookupFamily'
+      - path: "pkg/utils/kubeutils/rest_config.go"
+        linters:
+          - revive
+        text: 'Qps'
+      
+      # Exclude var-naming for TLS cipher suite constants - these must match IANA/standard names
+      - path: "agentgateway_policy_types.go"
+        linters:
+          - revive
+        text: 'CipherSuite'
+      - path: "ai_policy.go"
+        linters:
+          - revive
+        text: 'ALL_CAPS'
+      - linters:
+          - revive
+        text: 'avoid meaningless package names' # shared, common etc
+      - path: "agentgateway_backend_types.go"
+        linters:
+          - revive
+        text: 'ApiVersion|ProjectId'
+
+      - path: "test/"
+        linters:
+          - revive
+      - path: "pkg/admin"
+        linters:
+          - revive
+        text: 'Json'
+      - path: "pkg/agentgateway/jwks/fetcher.go"
+        linters:
+          - revive
+        text: 'HttpClient'
+      - path: "pkg/deployer/values.go"
+        linters:
+          - revive
+        text: 'Tls'
+      - path: "pkg/deployer/deployer.go"
+        linters:
+          - revive
+        text: 'XdsTls'
+      - path: "pkg/syncer/"
+        linters:
+          - revive
+        text: 'TypeUrl|TargetType.*Url'
+
+  issues:
   max-same-issues: 0
   uniq-by-line: true
 formatters:

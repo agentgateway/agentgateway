@@ -88,12 +88,12 @@ func (c *Client) Delete(ctx context.Context, extraArgs ...string) error {
 	return c.RunCommand(ctx, args...)
 }
 
-func (c *Client) AddRepository(ctx context.Context, chartName string, chartUrl string, extraArgs ...string) error {
+func (c *Client) AddRepository(ctx context.Context, chartName string, chartURL string, extraArgs ...string) error {
 	args := append([]string{
 		"repo",
 		"add",
 		chartName,
-		chartUrl,
+		chartURL,
 	}, extraArgs...)
 	return c.RunCommand(ctx, args...)
 }

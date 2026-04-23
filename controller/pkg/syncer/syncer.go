@@ -618,14 +618,14 @@ func (s *Syncer) getBindProtocol(obj *translator.GatewayListener) api.Bind_Proto
 // using the istio ambient builder. It can be passed via WithBuildAddressCollections to the syncer.
 func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtutil.KrtOptions) (krt.Collection[Address], func() bool) {
 	opts := krtopts.ToIstio()
-	clusterId := cluster.ID(cols.ClusterID)
+	clusterID := cluster.ID(cols.ClusterID)
 	Networks := ambient.BuildNetworkCollections(cols.Namespaces, cols.Gateways, ambient.Options{
 		SystemNamespace: cols.IstioNamespace,
-		ClusterID:       clusterId,
+		ClusterID:       clusterID,
 	}, opts)
 	builder := ambient.Builder{
 		DomainSuffix: kubeutils.GetClusterDomainName(),
-		ClusterID:    clusterId,
+		ClusterID:    clusterID,
 		Networks:     Networks,
 		Flags: ambient.FeatureFlags{
 			EnableK8SServiceSelectWorkloadEntries: true,
@@ -644,9 +644,9 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 		return &ambient.MeshConfig{MeshConfig: mesh.DefaultMeshConfig()}
 	}, krtopts.ToOptions("IstioMeshConfig")...)
 
-	waypoints := builder.WaypointsCollection(clusterId, cols.Gateways, cols.GatewayClasses, cols.Pods, opts)
+	waypoints := builder.WaypointsCollection(clusterID, cols.Gateways, cols.GatewayClasses, cols.Pods, opts)
 	services := builder.ServicesCollection(
-		clusterId,
+		clusterID,
 		cols.Services,
 		cols.ServiceEntries,
 		waypoints,

@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	ErrInvalidTlsSecret = errors.New("invalid TLS secret")
+	ErrInvalidTlsSecret = errors.New("invalid TLS secret") //revive:disable-line
 
-	InvalidTlsSecretError = func(n, ns string, err error) error {
+	InvalidTlsSecretError = func(n, ns string, err error) error { //revive:disable-line
 		return fmt.Errorf("%w %s/%s: %v", ErrInvalidTlsSecret, ns, n, err)
 	}
 
@@ -23,7 +23,7 @@ var (
 	}
 )
 
-func ValidateTlsSecretData(n, ns string, sslSecretData map[string][]byte) (cleanedCertChain string, err error) {
+func ValidateTlsSecretData(n, ns string, sslSecretData map[string][]byte) (cleanedCertChain string, err error) { //revive:disable-line
 	certChain := string(sslSecretData[corev1.TLSCertKey])
 	privateKey := string(sslSecretData[corev1.TLSPrivateKeyKey])
 	rootCa := string(sslSecretData[corev1.ServiceAccountRootCAKey])

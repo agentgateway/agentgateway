@@ -25,7 +25,7 @@ func GetRestConfigWithKubeContext(kubeContext string) (*rest.Config, error) {
 		return nil, err
 	}
 
-	if err = setClientQpsOrError(restConfig); err != nil {
+	if err = setClientQPSOrError(restConfig); err != nil {
 		return nil, err
 	}
 	if err = setClientBurstOrError(restConfig); err != nil {
@@ -35,14 +35,14 @@ func GetRestConfigWithKubeContext(kubeContext string) (*rest.Config, error) {
 	return restConfig, nil
 }
 
-func setClientQpsOrError(restConfig *rest.Config) error {
+func setClientQPSOrError(restConfig *rest.Config) error {
 	restConfig.QPS = K8sClientQpsDefault
-	clientQpsOverride := os.Getenv(K8sClientQpsEnv)
-	if clientQpsOverride == "" {
+	clientQPSOverride := os.Getenv(K8sClientQpsEnv)
+	if clientQPSOverride == "" {
 		return nil
 	}
 
-	qps, err := strconv.ParseFloat(clientQpsOverride, 32)
+	qps, err := strconv.ParseFloat(clientQPSOverride, 32)
 	if err != nil {
 		return err
 	}

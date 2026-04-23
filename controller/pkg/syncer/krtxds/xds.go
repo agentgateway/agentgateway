@@ -873,9 +873,9 @@ func (s *DiscoveryServer) initConnection(node *envoycorev3.Node, con *Connection
 
 	// Authorize xds clients
 	if id != nil {
-		reqId := AgentgatewayID(con.node)
-		if reqId != *id {
-			return fmt.Errorf("requested gateway %v but authenticated as %v", reqId, *id)
+		reqID := AgentgatewayID(con.node)
+		if reqID != *id {
+			return fmt.Errorf("requested gateway %v but authenticated as %v", reqID, *id)
 		}
 	}
 
