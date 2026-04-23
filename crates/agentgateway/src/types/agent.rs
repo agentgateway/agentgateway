@@ -2133,6 +2133,7 @@ pub enum FrontendPolicy {
 	Proxy(frontend::Proxy),
 	AccessLog(frontend::LoggingPolicy),
 	Tracing(Arc<TracingPolicy>),
+	Metrics(frontend::MetricsFieldsPolicy),
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

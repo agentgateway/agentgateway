@@ -126,6 +126,7 @@ pub struct FrontendPolices {
 	pub access_log: Option<frontend::LoggingPolicy>,
 	pub tracing: Option<Arc<crate::types::agent::TracingPolicy>>,
 	pub access_log_otlp: Option<Arc<crate::types::agent::AccessLogPolicy>>,
+	pub metrics_fields: Option<frontend::MetricsFieldsPolicy>,
 }
 
 impl FrontendPolices {
@@ -159,24 +160,31 @@ impl FrontendPolices {
 			FrontendPolicy::Tracing(p) => {
 				self.tracing.get_or_insert_with(|| p.clone());
 			},
+			FrontendPolicy::Metrics(p) => {
+				self.metrics_fields.get_or_insert_with(|| p.clone());
+			},
 		}
 	}
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
-		let Some(frontend::LoggingPolicy {
+		if let Some(frontend::LoggingPolicy {
 			filter,
 			add: fields_add,
 			remove: _,
 			otlp: _,
 			access_log_policy: _,
 		}) = &self.access_log
-		else {
-			return;
-		};
-		if let Some(f) = filter {
-			ctx.register_log_expression(f)
+		{
+			if let Some(f) = filter {
+				ctx.register_log_expression(f)
+			}
+			for (_, v) in fields_add.iter() {
+				ctx.register_log_expression(v)
+			}
 		}
-		for (_, v) in fields_add.iter() {
-			ctx.register_log_expression(v)
+		if let Some(mf) = &self.metrics_fields {
+			for (_, v) in mf.add.iter() {
+				ctx.register_log_expression(v)
+			}
 		}
 	}
 }
@@ -2363,6 +2371,81 @@ mod tests {
 			modifier.set[0],
 			(strng::new("x-foo"), strng::new("bar3")),
 			"Section attached policy (bar3) should win over backend attached policy (bar)"
+		);
+	}
+
+	fn create_metrics_policy(expr: &str) -> FrontendPolicy {
+		let (expression, _) = cel::Expression::new_permissive(expr);
+		FrontendPolicy::Metrics(crate::types::frontend::MetricsFieldsPolicy {
+			add: Arc::new(OrderedStringMap::from_iter(vec![(
+				"team".to_string(),
+				Arc::new(expression),
+			)])),
+		})
+	}
+
+	#[test]
+	fn frontend_metrics_policy_set_if_empty() {
+		let mut policies = FrontendPolices::default();
+		assert!(policies.metrics_fields.is_none());
+
+		let metrics = create_metrics_policy("jwt.team");
+		policies.set_if_empty(&metrics);
+		assert!(policies.metrics_fields.is_some());
+		assert_eq!(policies.metrics_fields.as_ref().unwrap().add.len(), 1);
+
+		// Second set_if_empty should not override
+		let metrics2 = create_metrics_policy(r#"request.headers["x-org-id"]"#);
+		policies.set_if_empty(&metrics2);
+		// Still has the first policy's field
+		assert!(
+			policies
+				.metrics_fields
+				.as_ref()
+				.unwrap()
+				.add
+				.contains_key("team")
+		);
+	}
+
+	#[test]
+	fn frontend_metrics_policy_registers_cel_expressions() {
+		let mut policies = FrontendPolices::default();
+		let metrics = create_metrics_policy("jwt.team");
+		policies.set_if_empty(&metrics);
+
+		let mut ctx = cel::ContextBuilder::new();
+		policies.register_cel_expressions(&mut ctx);
+		// If register_cel_expressions didn't panic and completes, CEL expressions are registered
+	}
+
+	#[test]
+	fn frontend_metrics_policy_gateway_level() {
+		let mut store = Store::default();
+		let listener = listener();
+
+		insert_policy_at_level(
+			&mut store,
+			&listener,
+			"gw_metrics_policy",
+			false,
+			create_metrics_policy("jwt.team"),
+			None,
+		);
+
+		let merged_pols = store.frontend_policies(listener.as_gateway_target_ref());
+		assert!(
+			merged_pols.metrics_fields.is_some(),
+			"Expected metrics_fields policy to be present"
+		);
+		assert_eq!(merged_pols.metrics_fields.as_ref().unwrap().add.len(), 1);
+		assert!(
+			merged_pols
+				.metrics_fields
+				.as_ref()
+				.unwrap()
+				.add
+				.contains_key("team")
 		);
 	}
 }

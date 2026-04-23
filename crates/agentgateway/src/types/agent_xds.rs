@@ -2202,6 +2202,28 @@ fn frontend_policy_from_proto(
 				tracer: once_cell::sync::OnceCell::new(),
 			}))
 		},
+		Some(fps::Kind::Metrics(m)) => {
+			let add = m
+				.fields
+				.as_ref()
+				.map(|f| {
+					f.add
+						.iter()
+						.map(|field| {
+							let expr = permissive_cel_expression_arc(
+								diagnostics,
+								format!("frontend.metrics.fields.add.{}", field.name),
+								&field.expression,
+							);
+							Ok::<_, ProtoError>((field.name.clone(), expr))
+						})
+						.collect::<Result<Vec<_>, _>>()
+						.map(OrderedStringMap::from_iter)
+				})
+				.transpose()?
+				.unwrap_or_default();
+			FrontendPolicy::Metrics(frontend::MetricsFieldsPolicy { add: Arc::new(add) })
+		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})
 }
@@ -2890,6 +2912,57 @@ mod tests {
 			panic!("Expected AIProvider::Vertex");
 		};
 		assert_eq!(vertex.region.as_deref(), Some("us-central1"));
+		Ok(())
+	}
+
+	#[test]
+	fn test_frontend_policy_spec_metrics() -> Result<(), ProtoError> {
+		use crate::types::proto::agent::frontend_policy_spec as fps;
+
+		let spec = proto::agent::FrontendPolicySpec {
+			kind: Some(fps::Kind::Metrics(fps::Metrics {
+				fields: Some(fps::metrics::Fields {
+					add: vec![
+						fps::metrics::Field {
+							name: "team".to_string(),
+							expression: "jwt.team".to_string(),
+						},
+						fps::metrics::Field {
+							name: "org".to_string(),
+							expression: r#"request.headers["x-org-id"]"#.to_string(),
+						},
+					],
+				}),
+			})),
+		};
+
+		let mut diag = Diagnostics::default();
+		let policy = frontend_policy_from_proto(&spec, &mut diag)?;
+		let FrontendPolicy::Metrics(metrics) = policy else {
+			panic!("Expected Metrics policy variant, got: {policy:?}");
+		};
+
+		assert_eq!(metrics.add.len(), 2);
+		assert!(metrics.add.contains_key("team"), "expected team field");
+		assert!(metrics.add.contains_key("org"), "expected org field");
+		Ok(())
+	}
+
+	#[test]
+	fn test_frontend_policy_spec_metrics_empty_fields() -> Result<(), ProtoError> {
+		use crate::types::proto::agent::frontend_policy_spec as fps;
+
+		let spec = proto::agent::FrontendPolicySpec {
+			kind: Some(fps::Kind::Metrics(fps::Metrics { fields: None })),
+		};
+
+		let mut diag = Diagnostics::default();
+		let policy = frontend_policy_from_proto(&spec, &mut diag)?;
+		let FrontendPolicy::Metrics(metrics) = policy else {
+			panic!("Expected Metrics policy variant, got: {policy:?}");
+		};
+
+		assert_eq!(metrics.add.len(), 0);
 		Ok(())
 	}
 }

@@ -4655,6 +4655,54 @@ spec:
                         must be set
                       rule: '[has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
                         >= 1'
+                  metrics:
+                    description: |-
+                      `metrics` contains custom Prometheus metric label configuration.
+                      CEL expressions are evaluated per-request and added as labels to all
+                      Prometheus metrics exposed by agentgateway.
+                    properties:
+                      attributes:
+                        description: |-
+                          `attributes` specifies customizations to the labels that are
+                          added to Prometheus metrics.
+                        properties:
+                          add:
+                            description: |-
+                              `add` specifies additional key-value pairs to be added as custom labels
+                              to all Prometheus metrics. The value is a CEL expression evaluated
+                              per-request. If the CEL expression fails to evaluate, the label value
+                              is set to "unknown".
+
+                              WARNING: High-cardinality labels (e.g., per-user IDs) can significantly
+                              increase Prometheus storage and memory usage. Prefer low-cardinality
+                              dimensions like team or environment.
+                            items:
+                              properties:
+                                expression:
+                                  description: CELExpression represents a Common Expression
+                                    Language (CEL) expression.
+                                  maxLength: 16384
+                                  minLength: 1
+                                  type: string
+                                name:
+                                  maxLength: 256
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - expression
+                              - name
+                              type: object
+                            maxItems: 16
+                            minItems: 1
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - name
+                            x-kubernetes-list-type: map
+                        type: object
+                        x-kubernetes-validations:
+                        - message: at least one of the fields in [add] must be set
+                          rule: '[has(self.add)].filter(x,x==true).size() >= 1'
+                    type: object
                   networkAuthorization:
                     description: |-
                       networkAuthorization defines CEL authorization on downstream network connections.
@@ -5029,9 +5077,9 @@ spec:
                       rule: '!has(self.path) || self.path.startsWith(''/'')'
                 type: object
                 x-kubernetes-validations:
-                - message: at least one of the fields in [accessLog http networkAuthorization
+                - message: at least one of the fields in [accessLog http metrics networkAuthorization
                     proxyProtocol tcp tls tracing] must be set
-                  rule: '[has(self.accessLog),has(self.http),has(self.networkAuthorization),has(self.proxyProtocol),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
+                  rule: '[has(self.accessLog),has(self.http),has(self.metrics),has(self.networkAuthorization),has(self.proxyProtocol),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
                     >= 1'
               targetRefs:
                 description: |-

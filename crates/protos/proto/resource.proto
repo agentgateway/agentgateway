@@ -637,6 +637,19 @@ message FrontendPolicySpec {
     Mode mode = 2;
   }
 
+  // Custom Prometheus metric label configuration policy.
+  // CEL expressions are evaluated per-request and added as labels to all metrics.
+  message Metrics {
+    message Field {
+      string name = 1;
+      string expression = 2; // CEL expression
+    }
+    message Fields {
+      repeated Field add = 1;
+    }
+    Fields fields = 1;
+  }
+
   oneof kind {
     TCP tcp = 1;
     TLS tls = 2;
@@ -645,6 +658,7 @@ message FrontendPolicySpec {
     Tracing tracing = 5;
     NetworkAuthorization network_authorization = 6;
     ProxyProtocol proxy_protocol = 7;
+    Metrics metrics = 8;
   }
 }
 

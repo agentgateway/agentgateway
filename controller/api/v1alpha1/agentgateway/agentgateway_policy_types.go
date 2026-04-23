@@ -382,6 +382,12 @@ type Frontend struct {
 	// `tracing` contains various settings for the OpenTelemetry tracer.
 	// +optional
 	Tracing *Tracing `json:"tracing,omitempty"`
+
+	// `metrics` contains custom Prometheus metric label configuration.
+	// CEL expressions are evaluated per-request and added as labels to all
+	// Prometheus metrics exposed by agentgateway.
+	// +optional
+	Metrics *MetricLabels `json:"metrics,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=V1;V2;All
@@ -1740,6 +1746,33 @@ type AttributeAdd struct {
 	Name ShortString `json:"name"`
 	// +required
 	Expression shared.CELExpression `json:"expression"`
+}
+
+// MetricLabels specifies custom labels to add to Prometheus metrics.
+type MetricLabels struct {
+	// `attributes` specifies customizations to the labels that are
+	// added to Prometheus metrics.
+	// +optional
+	Attributes *MetricAttributes `json:"attributes,omitempty"`
+}
+
+// +kubebuilder:validation:AtLeastOneFieldSet
+type MetricAttributes struct {
+	// `add` specifies additional key-value pairs to be added as custom labels
+	// to all Prometheus metrics. The value is a CEL expression evaluated
+	// per-request. If the CEL expression fails to evaluate, the label value
+	// is set to "unknown".
+	//
+	// WARNING: High-cardinality labels (e.g., per-user IDs) can significantly
+	// increase Prometheus storage and memory usage. Prefer low-cardinality
+	// dimensions like team or environment.
+	//
+	// +listType=map
+	// +listMapKey=name
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	Add []AttributeAdd `json:"add,omitempty"`
 }
 
 type OTLPProtocol string

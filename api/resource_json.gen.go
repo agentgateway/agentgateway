@@ -754,6 +754,39 @@ func (this *FrontendPolicySpec_ProxyProtocol) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for FrontendPolicySpec_Metrics
+func (this *FrontendPolicySpec_Metrics) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for FrontendPolicySpec_Metrics
+func (this *FrontendPolicySpec_Metrics) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for FrontendPolicySpec_Metrics_Field
+func (this *FrontendPolicySpec_Metrics_Field) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for FrontendPolicySpec_Metrics_Field
+func (this *FrontendPolicySpec_Metrics_Field) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for FrontendPolicySpec_Metrics_Fields
+func (this *FrontendPolicySpec_Metrics_Fields) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for FrontendPolicySpec_Metrics_Fields
+func (this *FrontendPolicySpec_Metrics_Fields) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for JWTValidationOptions
 func (this *JWTValidationOptions) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
