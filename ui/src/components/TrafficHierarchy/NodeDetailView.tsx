@@ -853,7 +853,26 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           string,
           unknown
         >;
-        setFormData(routeData);
+        
+        const normalizedMatches = Array.isArray(routeData.matches) ? routeData.matches.map((match) => {
+          if (!match || typeof match !== "object") return match;
+          const m = match as Record<string, unknown>;
+          const p = m.path;
+          if (!p || typeof p !== "object") return match;
+          const pathObj = p as Record<string, unknown>;
+          if ("exact" in pathObj) {
+            return { ...m, path: { pathType: "exact", ...pathObj } };
+          }
+          if ("pathPrefix" in pathObj) {
+            return { ...m, path: { pathType: "pathPrefix", ...pathObj } };
+          }
+          if ("regex" in pathObj) {
+            return { ...m, path: { pathType: "regex", ...pathObj } };
+          }
+          return match;
+        })
+        : routeData.matches;
+  setFormData({ ...routeData, matches: normalizedMatches });
       } else if (sel.type === "backend") {
         // Transform backend data from API format to form format
         const form = forms.backend as any;
@@ -914,7 +933,27 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           string,
           unknown
         >;
-        setFormData(routeData);
+        
+        const normalizedMatches = Array.isArray(routeData.matches)
+          ? routeData.matches.map((match) => {
+              if (!match || typeof match !== "object") return match;
+              const m = match as Record<string, unknown>;
+              const p = m.path;
+              if (!p || typeof p !== "object") return match;
+              const pathObj = p as Record<string, unknown>;
+              if ("exact" in pathObj) {
+                return { ...m, path: { pathType: "exact", ...pathObj } };
+              }
+              if ("pathPrefix" in pathObj) {
+                return { ...m, path: { pathType: "pathPrefix", ...pathObj } };
+              }
+              if ("regex" in pathObj) {
+                return { ...m, path: { pathType: "regex", ...pathObj } };
+              }
+              return match;
+            })
+          : routeData.matches;
+  setFormData({ ...routeData, matches: normalizedMatches });
       } else if (selected.type === "backend") {
         // Transform backend data from API format to form format
         const form = forms.backend as any;
@@ -1634,7 +1673,26 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             formData={formData}
             validator={validator}
             disabled={!isEditing || saving}
-            onChange={({ formData: fd }) => setFormData(fd)}
+            onChange={({ formData: fd }) => {
+              const routeData = (fd ?? {}) as Record<string, unknown>;
+              if (!Array.isArray(routeData.matches)) {
+                setFormData(routeData);
+                return;
+              }
+              const matches = routeData.matches.map((match) => {
+                if (!match || typeof match !== "object") return match;
+                const m = match as Record<string, unknown>;
+                if (!m.path || typeof m.path !== "object") return match;
+                const p = m.path as Record<string, unknown>;
+                const pathType = p.pathType;
+                let nextPath: Record<string, unknown> = { pathType };
+                if (pathType === "exact") nextPath.exact = p.exact;
+                else if (pathType === "regex") nextPath.regex = p.regex;
+                else nextPath.pathPrefix = p.pathPrefix;
+                return { ...m, path: nextPath };
+              });
+              setFormData({ ...routeData, matches });
+            }}            
             onSubmit={handleSubmit}
             onError={handleError}
             templates={formTemplates}

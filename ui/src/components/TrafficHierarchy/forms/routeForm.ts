@@ -44,35 +44,53 @@ export const schema: RJSFSchema = {
           path: {
             type: "object",
             title: "Path Match",
-            default: {
-              pathPrefix: "/",
+            additionalProperties: true,
+            required: ["pathType"],
+            properties: {
+              pathType: {
+                type: "string",
+                title: "Match Type",
+                enum: ["pathPrefix", "exact", "regex"],
+                default: "pathPrefix",
+              },
             },
-            oneOf: [
-              {
-                title: "Exact Path",
-                type: "object",
-                properties: {
-                  exact: {
-                    type: "string",
-                    title: "Exact Path",
+            dependencies: {
+              pathType: {
+                oneOf: [
+                  {
+                    properties: {
+                      pathType: { const: "pathPrefix" },
+                      pathPrefix: {
+                        type: "string",
+                        title: "Path Prefix",
+                        default: "/",
+                      },
+                    },
+                    required: ["pathPrefix"],
                   },
-                },
-                required: ["exact"],
-                additionalProperties: false,
-              },
-              {
-                title: "Path Prefix",
-                type: "object",
-                properties: {
-                  pathPrefix: {
-                    type: "string",
-                    title: "Path Prefix",
+                  {
+                    properties: {
+                      pathType: { const: "exact" },
+                      exact: {
+                        type: "string",
+                        title: "Exact Path",
+                      },
+                    },
+                    required: ["exact"],
                   },
-                },
-                required: ["pathPrefix"],
-                additionalProperties: false,
+                  {
+                    properties: {
+                      pathType: { const: "regex" },
+                      regex: {
+                        type: "string",
+                        title: "Regex",
+                      },
+                    },
+                    required: ["regex"],
+                  },
+                ],
               },
-            ],
+            },
           },
           method: {
             type: "string",
@@ -118,7 +136,20 @@ export const uiSchema: UiSchema = {
     },
     items: {
       path: {
+        "ui:label": false,
         "ui:help": "Select how to match the request path",
+        pathType: {
+          "ui:widget": "select",
+        },
+        pathPrefix: {
+          "ui:placeholder": "/",
+        },
+        exact: {
+          "ui:placeholder": "/exact/path",
+        },  
+        regex: { 
+          "ui:placeholder": "^/api/.*$",
+        }
       },
       method: {
         "ui:widget": "select",
@@ -157,12 +188,33 @@ export function transformBeforeSubmit(data: unknown): unknown {
   if (typeof data !== "object" || data === null) {
     return data;
   }
-
-  const { backends: _backends, policies: _policies, ...rest } = data as Record<string, unknown> & {
+  const { backends: _backends, policies: _policies, ...rest } = data as Record<
+    string,
+    unknown
+  > & {
     backends?: unknown;
     policies?: unknown;
   };
-
-  // Don't include backends or policies - they are managed separately
-  return rest;
+  const routeData: Record<string, unknown> = { ...rest };
+  if (Array.isArray(routeData.matches)) {
+    routeData.matches = routeData.matches.map((match) => {
+      if (!match || typeof match !== "object") return match;
+      const m = match as Record<string, unknown>;
+      if (!m.path || typeof m.path !== "object") return match;
+      const p = m.path as Record<string, unknown>;
+      const pathType = p.pathType;
+      const { pathType: _pathType, ...pathWithoutType } = p;
+      // Convert UI discriminator shape back to API shape.
+      let nextPath: Record<string, unknown> = pathWithoutType;
+      if (pathType === "exact") {
+        nextPath = { exact: p.exact };
+      } else if (pathType === "pathPrefix") {
+        nextPath = { pathPrefix: p.pathPrefix };
+      } else if (pathType === "regex") {
+        nextPath = { regex: p.regex };
+      }
+      return { ...m, path: nextPath };
+    });
+  }
+  return routeData;
 }
