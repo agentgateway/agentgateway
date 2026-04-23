@@ -1578,12 +1578,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             {!isEditing && (
               <Space>
                 <Button
-                  icon={<PlusOutlined />}
-                  onClick={() => handleAddBackend(port, li, ri, isTcp)}
-                >
-                  Add Backend
-                </Button>
-                <Button
                   type="primary"
                   icon={<Edit2 size={14} />}
                   onClick={() => navigate(location.pathname + "?edit=true")}
