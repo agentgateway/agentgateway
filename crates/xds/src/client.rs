@@ -52,18 +52,81 @@ impl Display for ResourceKey {
 #[derive(Debug)]
 pub struct RejectedConfig {
 	name: Strng,
-	reason: anyhow::Error,
+	severity: RejectedConfigSeverity,
+	reason: String,
 }
 
 impl RejectedConfig {
-	pub fn new(name: Strng, reason: anyhow::Error) -> Self {
-		Self { name, reason }
+	pub fn error(name: Strng, reason: anyhow::Error) -> Self {
+		Self {
+			name,
+			severity: RejectedConfigSeverity::Error,
+			reason: reason.to_string(),
+		}
+	}
+
+	pub fn warning(name: Strng, reason: impl Into<String>) -> Self {
+		Self {
+			name,
+			severity: RejectedConfigSeverity::Warning,
+			reason: reason.into(),
+		}
+	}
+
+	pub fn format_json(rejects: &[RejectedConfig]) -> String {
+		let payload = rejects
+			.iter()
+			.map(RejectedConfigMessage::from)
+			.collect::<Vec<_>>();
+		serde_json::to_string(&payload)
+			.unwrap_or_else(|err| format!("failed to serialize rejects: {}", err))
 	}
 }
 
 impl Display for RejectedConfig {
 	fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-		write!(f, "{}: {}", self.name, self.reason)
+		write!(f, "{} [{}]: {}", self.name, self.severity, self.reason)
+	}
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum RejectedConfigSeverity {
+	Warning,
+	Error,
+}
+
+impl Display for RejectedConfigSeverity {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		match self {
+			RejectedConfigSeverity::Warning => f.write_str("warning"),
+			RejectedConfigSeverity::Error => f.write_str("error"),
+		}
+	}
+}
+
+#[derive(serde::Serialize)]
+struct RejectedConfigMessage {
+	key: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	warn: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	error: Option<String>,
+}
+
+impl From<&RejectedConfig> for RejectedConfigMessage {
+	fn from(value: &RejectedConfig) -> Self {
+		match value.severity {
+			RejectedConfigSeverity::Warning => Self {
+				key: value.name.to_string(),
+				warn: Some(value.reason.clone()),
+				error: None,
+			},
+			RejectedConfigSeverity::Error => Self {
+				key: value.name.to_string(),
+				warn: None,
+				error: Some(value.reason.clone()),
+			},
+		}
 	}
 }
 
@@ -77,7 +140,7 @@ pub fn handle_single_resource<T: prost::Message, F: FnMut(XdsUpdate<T>) -> anyho
 		.filter_map(|res| {
 			let name = res.name();
 			if let Err(e) = handle_one(res) {
-				Some(RejectedConfig::new(name, e))
+				Some(RejectedConfig::error(name, e))
 			} else {
 				None
 			}
@@ -129,10 +192,8 @@ impl<T: 'static + prost::Message + Default + Debug> RawHandler for HandlerWrappe
 			.resources
 			.iter()
 			.map(|raw| {
-				decode_proto::<T>(raw).map_err(|err| RejectedConfig {
-					name: raw.name.as_str().into(),
-					reason: err.into(),
-				})
+				decode_proto::<T>(raw)
+					.map_err(|err| RejectedConfig::error(raw.name.as_str().into(), err.into()))
 			})
 			.split(|i| i.is_ok());
 
@@ -575,8 +636,8 @@ impl AdsClient {
 						received_type = Some(msg.type_url.clone())
 					}
 
-					let (signal, req) = self.handle_stream_event(msg)?;
-					if let XdsSignal::Ack = signal {
+					let (req, has_errors) = self.handle_stream_event(msg)?;
+					if !has_errors {
 						if let Some(received_type) = received_type {
 							self.types_to_expect.remove(&received_type);
 							if self.types_to_expect.is_empty() {
@@ -598,7 +659,7 @@ impl AdsClient {
 	fn handle_stream_event(
 		&mut self,
 		response: DeltaDiscoveryResponse,
-	) -> Result<(XdsSignal, DeltaDiscoveryRequest), Error> {
+	) -> Result<(DeltaDiscoveryRequest, bool), Error> {
 		let type_url = response.type_url.clone();
 		let nonce = response.nonce.clone();
 		self.metrics.record(&response, ());
@@ -619,16 +680,15 @@ impl AdsClient {
 				},
 			};
 
-		let (response_type, error) = match handler_response {
+		let (response_type, error, has_errors) = match handler_response {
 			Err(rejects) => {
-				let error = rejects
-					.into_iter()
-					.map(|reject| reject.to_string())
-					.collect::<Vec<String>>()
-					.join("; ");
-				(XdsSignal::Nack, Some(error))
+				let has_errors = rejects
+					.iter()
+					.any(|reject| matches!(reject.severity, RejectedConfigSeverity::Error));
+				let error = RejectedConfig::format_json(&rejects);
+				(XdsSignal::Nack, Some(error), has_errors)
 			},
-			_ => (XdsSignal::Ack, None),
+			_ => (XdsSignal::Ack, None, false),
 		};
 
 		match response_type {
@@ -656,7 +716,7 @@ impl AdsClient {
 			}),
 			..Default::default()
 		};
-		Ok((response_type, req))
+		Ok((req, has_errors))
 	}
 }
 

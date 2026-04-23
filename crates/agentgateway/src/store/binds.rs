@@ -18,6 +18,7 @@ use crate::types::agent::{
 	McpAuthentication, PolicyKey, PolicyTarget, Route, RouteGroupKey, RouteKey, RouteName, RouteSet,
 	TCPRoute, TCPRouteSet, TargetedPolicy, TrafficPolicy,
 };
+use crate::types::agent_xds::Diagnostics;
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
@@ -1230,11 +1231,11 @@ impl Store {
 		self.tcp_routes.get(&Self::service_target_ref(key)).cloned()
 	}
 
-	fn remove_resource(&mut self, res: &Strng) -> anyhow::Result<()> {
+	fn remove_resource(&mut self, res: &Strng) {
 		trace!("removing res {res}...");
 		let Some(old) = self.resources.remove(res) else {
 			debug!("unknown resource name {res}");
-			return Ok(());
+			return;
 		};
 		match old {
 			ResourceKind::Policy(n) => self.remove_policy(n),
@@ -1244,54 +1245,58 @@ impl Store {
 			ResourceKind::Listener(n) => self.remove_listener(n),
 			ResourceKind::Backend(n) => self.remove_backend(n),
 		}
-		Ok(())
 	}
 
-	fn insert_xds(&mut self, name: Strng, res: ADPResource) -> anyhow::Result<()> {
+	fn insert_xds(
+		&mut self,
+		name: Strng,
+		res: ADPResource,
+		diagnostics: &mut Diagnostics,
+	) -> anyhow::Result<()> {
 		trace!(%name, "insert resource {res:?}");
 		match res.kind {
 			Some(XdsKind::Bind(w)) => {
 				self
 					.resources
 					.insert(name, ResourceKind::Bind(strng::new(&w.key)));
-				self.insert_xds_bind(w)
+				self.insert_xds_bind(w, diagnostics)
 			},
 			Some(XdsKind::Listener(w)) => {
 				self
 					.resources
 					.insert(name, ResourceKind::Listener(strng::new(&w.key)));
-				self.insert_xds_listener(w)
+				self.insert_xds_listener(w, diagnostics)
 			},
 			Some(XdsKind::Route(w)) => {
 				self
 					.resources
 					.insert(name, ResourceKind::Route(strng::new(&w.key)));
-				self.insert_xds_route(w)
+				self.insert_xds_route(w, diagnostics)
 			},
 			Some(XdsKind::TcpRoute(w)) => {
 				self
 					.resources
 					.insert(name, ResourceKind::TcpRoute(strng::new(&w.key)));
-				self.insert_xds_tcp_route(w)
+				self.insert_xds_tcp_route(w, diagnostics)
 			},
 			Some(XdsKind::Backend(w)) => {
 				self
 					.resources
 					.insert(name, ResourceKind::Backend(strng::new(&w.key)));
-				self.insert_xds_backend(w)
+				self.insert_xds_backend(w, diagnostics)
 			},
 			Some(XdsKind::Policy(w)) => {
 				self
 					.resources
 					.insert(name, ResourceKind::Policy(strng::new(&w.key)));
-				self.insert_xds_policy(w)
+				self.insert_xds_policy(w, diagnostics)
 			},
 			_ => Err(anyhow::anyhow!("unknown resource type")),
 		}
 	}
 
-	fn insert_xds_bind(&mut self, raw: XdsBind) -> anyhow::Result<()> {
-		let mut bind = Bind::try_from_xds(&raw, self.ipv6_enabled)?;
+	fn insert_xds_bind(&mut self, raw: XdsBind, diagnostics: &mut Diagnostics) -> anyhow::Result<()> {
+		let mut bind = Bind::from_xds(&raw, self.ipv6_enabled, diagnostics)?;
 		// If XDS server pushes the same bind twice (which it shouldn't really do, but oh well),
 		// we need to copy the listeners over.
 		if let Some(old) = self.binds.get(&bind.key) {
@@ -1301,13 +1306,21 @@ impl Store {
 		self.insert_bind(bind);
 		Ok(())
 	}
-	fn insert_xds_listener(&mut self, raw: XdsListener) -> anyhow::Result<()> {
-		let (lis, bind_name) = Listener::try_from_xds(&raw)?;
+	fn insert_xds_listener(
+		&mut self,
+		raw: XdsListener,
+		diagnostics: &mut Diagnostics,
+	) -> anyhow::Result<()> {
+		let (lis, bind_name) = Listener::from_xds(&raw, diagnostics)?;
 		self.insert_listener(lis, bind_name);
 		Ok(())
 	}
-	fn insert_xds_route(&mut self, raw: XdsRoute) -> anyhow::Result<()> {
-		let (route, listener_name, rgk) = Route::try_from_xds(&raw)?;
+	fn insert_xds_route(
+		&mut self,
+		raw: XdsRoute,
+		diagnostics: &mut Diagnostics,
+	) -> anyhow::Result<()> {
+		let (route, listener_name, rgk) = Route::from_xds(&raw, diagnostics)?;
 		if let Some(sk) = route.service_key.clone() {
 			self.insert_service_route(route, sk);
 		} else if let Some(rgk) = rgk {
@@ -1317,8 +1330,12 @@ impl Store {
 		}
 		Ok(())
 	}
-	fn insert_xds_tcp_route(&mut self, raw: XdsTcpRoute) -> anyhow::Result<()> {
-		let (route, listener_name) = TCPRoute::try_from_xds(&raw)?;
+	fn insert_xds_tcp_route(
+		&mut self,
+		raw: XdsTcpRoute,
+		diagnostics: &mut Diagnostics,
+	) -> anyhow::Result<()> {
+		let (route, listener_name) = TCPRoute::from_xds(&raw, diagnostics)?;
 		if let Some(sk) = route.service_key.clone() {
 			self.insert_service_tcp_route(route, sk);
 			Ok(())
@@ -1327,14 +1344,22 @@ impl Store {
 			Ok(())
 		}
 	}
-	fn insert_xds_backend(&mut self, raw: XdsBackend) -> anyhow::Result<()> {
+	fn insert_xds_backend(
+		&mut self,
+		raw: XdsBackend,
+		diagnostics: &mut Diagnostics,
+	) -> anyhow::Result<()> {
 		let key = strng::new(&raw.key);
-		let backend: BackendWithPolicies = (&raw).try_into()?;
+		let backend = crate::types::agent_xds::backend_with_policies_from_proto(&raw, diagnostics)?;
 		self.insert_backend(key, backend);
 		Ok(())
 	}
-	fn insert_xds_policy(&mut self, raw: XdsPolicy) -> anyhow::Result<()> {
-		let policy: TargetedPolicy = (&raw).try_into()?;
+	fn insert_xds_policy(
+		&mut self,
+		raw: XdsPolicy,
+		diagnostics: &mut Diagnostics,
+	) -> anyhow::Result<()> {
+		let policy = crate::types::agent_xds::targeted_policy_from_proto(&raw, diagnostics)?;
 		self.insert_policy(policy);
 		Ok(())
 	}
@@ -1548,20 +1573,40 @@ pub struct PreviousState {
 impl agent_xds::Handler<ADPResource> for StoreUpdater {
 	fn handle(
 		&self,
-		updates: Box<&mut dyn Iterator<Item = XdsUpdate<ADPResource>>>,
+		mut updates: Box<&mut dyn Iterator<Item = XdsUpdate<ADPResource>>>,
 	) -> Result<(), Vec<RejectedConfig>> {
 		let mut state = self.state.write().unwrap();
-		let handle = |res: XdsUpdate<ADPResource>| {
+		let mut rejects = Vec::new();
+
+		for res in updates.as_mut() {
+			let name = res.name();
 			match res {
-				XdsUpdate::Update(w) => state.insert_xds(w.name, w.resource)?,
+				XdsUpdate::Update(w) => {
+					let mut diagnostics = Diagnostics::default();
+					match state.insert_xds(w.name, w.resource, &mut diagnostics) {
+						Ok(()) => {
+							rejects.extend(
+								diagnostics
+									.into_warnings()
+									.into_iter()
+									.map(|warning| RejectedConfig::warning(name.clone(), warning)),
+							);
+						},
+						Err(err) => rejects.push(RejectedConfig::error(name, err)),
+					}
+				},
 				XdsUpdate::Remove(name) => {
 					debug!("handling delete {}", name);
-					state.remove_resource(&strng::new(name))?
+					state.remove_resource(&name);
 				},
 			}
+		}
+
+		if rejects.is_empty() {
 			Ok(())
-		};
-		agent_xds::handle_single_resource(updates, handle)
+		} else {
+			Err(rejects)
+		}
 	}
 }
 
@@ -1950,7 +1995,7 @@ mod tests {
 			tunnel_protocol: 0, // Direct
 		};
 
-		let bind = Bind::try_from_xds(&xds_bind, false).unwrap();
+		let bind = Bind::from_xds(&xds_bind, false, &mut Diagnostics::default()).unwrap();
 		assert_eq!(bind.address.port(), 8080);
 		assert_eq!(bind.address.ip(), IpAddr::V4(Ipv4Addr::UNSPECIFIED));
 	}
@@ -1967,7 +2012,7 @@ mod tests {
 			tunnel_protocol: 0, // Direct
 		};
 
-		let bind = Bind::try_from_xds(&xds_bind, true).unwrap();
+		let bind = Bind::from_xds(&xds_bind, true, &mut Diagnostics::default()).unwrap();
 		assert_eq!(bind.address.port(), 9090);
 		assert_eq!(bind.address.ip(), IpAddr::V6(Ipv6Addr::UNSPECIFIED));
 	}

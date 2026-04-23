@@ -132,6 +132,8 @@ dependencies = [
  "prost",
  "prost-wkt-types",
  "protos",
+ "serde",
+ "serde_json",
  "split-iter",
  "thiserror 2.0.18",
  "tokio",

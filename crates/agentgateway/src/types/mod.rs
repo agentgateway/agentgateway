@@ -1,5 +1,5 @@
 pub mod agent;
-mod agent_xds;
+pub(crate) mod agent_xds;
 pub mod backend;
 pub mod discovery;
 pub mod frontend;
