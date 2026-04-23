@@ -57,9 +57,7 @@ pub fn resolve_header_mutation_action(header: &ProtoHeaderValueOption) -> Header
 	match resolve_append_action(header) {
 		HeaderAppendAction::AppendIfExistsOrAdd => HeaderMutationAction::AppendIfExistsOrAdd,
 		HeaderAppendAction::AddIfAbsent => HeaderMutationAction::AddIfAbsent,
-		HeaderAppendAction::OverwriteIfExistsOrAdd => {
-			HeaderMutationAction::OverwriteIfExistsOrAdd
-		},
+		HeaderAppendAction::OverwriteIfExistsOrAdd => HeaderMutationAction::OverwriteIfExistsOrAdd,
 		HeaderAppendAction::OverwriteIfExists => HeaderMutationAction::OverwriteIfExists,
 	}
 }
@@ -100,10 +98,7 @@ pub fn apply_header_value_option(
 	true
 }
 
-pub fn apply_header_option(
-	rr: &mut RequestOrResponse<'_>,
-	header: &ProtoHeaderValueOption,
-)  {
+pub fn apply_header_option(rr: &mut RequestOrResponse<'_>, header: &ProtoHeaderValueOption) {
 	let Some(ref h) = header.header else {
 		warn!("Invalid header mutation: no header provided");
 		return;
@@ -181,20 +176,14 @@ mod tests {
 		}
 	}
 
-	fn apply_request_options(
-		req: &mut ::http::Request<Body>,
-		options: &[ProtoHeaderValueOption],
-	) {
+	fn apply_request_options(req: &mut ::http::Request<Body>, options: &[ProtoHeaderValueOption]) {
 		let mut rr = RequestOrResponse::Request(req);
 		for option in options {
 			apply_header_option(&mut rr, option);
 		}
 	}
 
-	fn apply_response_options(
-		resp: &mut ::http::Response<Body>,
-		options: &[ProtoHeaderValueOption],
-	) {
+	fn apply_response_options(resp: &mut ::http::Response<Body>, options: &[ProtoHeaderValueOption]) {
 		let mut rr = RequestOrResponse::Response(resp);
 		for option in options {
 			apply_header_option(&mut rr, option);
@@ -459,10 +448,7 @@ mod tests {
 			.body(Body::empty())
 			.unwrap();
 
-		apply_response_options(
-			&mut resp,
-			&[header_option(":status", "", b"404", None, 0)],
-		);
+		apply_response_options(&mut resp, &[header_option(":status", "", b"404", None, 0)]);
 
 		assert_eq!(resp.status(), 404);
 		assert_eq!(resp.headers().get("x-test").unwrap(), "value");
@@ -475,10 +461,7 @@ mod tests {
 			.body(Body::empty())
 			.unwrap();
 
-		apply_response_options(
-			&mut resp,
-			&[header_option(":status", "201", b"", None, 0)],
-		);
+		apply_response_options(&mut resp, &[header_option(":status", "201", b"", None, 0)]);
 
 		assert_eq!(resp.status(), 201);
 	}
@@ -579,7 +562,10 @@ mod tests {
 			)],
 		);
 
-		assert_eq!(req.uri().authority().unwrap().as_str(), "ignored.example.com");
+		assert_eq!(
+			req.uri().authority().unwrap().as_str(),
+			"ignored.example.com"
+		);
 		assert!(req.headers().get("host").is_none());
 	}
 
@@ -664,7 +650,13 @@ mod tests {
 
 		apply_header_map_options(
 			&mut headers,
-			&[header_option("existing", "", b"overwritten", Some(false), 0)],
+			&[header_option(
+				"existing",
+				"",
+				b"overwritten",
+				Some(false),
+				0,
+			)],
 		);
 
 		let values: Vec<_> = headers.get_all("existing").iter().collect();

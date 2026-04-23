@@ -61,7 +61,9 @@ impl HeaderModifier {
 			);
 		}
 		for k in &self.remove {
-			req.headers_mut().remove(HeaderName::from_bytes(k.as_bytes())?);
+			req
+				.headers_mut()
+				.remove(HeaderName::from_bytes(k.as_bytes())?);
 		}
 		Ok(())
 	}

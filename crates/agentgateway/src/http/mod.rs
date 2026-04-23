@@ -150,7 +150,7 @@ impl RequestOrResponse<'_> {
 		match (k, v) {
 			(HeaderOrPseudo::Header(k), Some(HeaderOrPseudoValue::Header(v))) => {
 				// Normalize modification of host header to authority header.
-				if k == &header::HOST && matches!(self, RequestOrResponse::Request(_)) {
+				if k == header::HOST && matches!(self, RequestOrResponse::Request(_)) {
 					let Some(value) = HeaderOrPseudoValue::from_raw(&HeaderOrPseudo::Authority, v.as_bytes())
 					else {
 						return;

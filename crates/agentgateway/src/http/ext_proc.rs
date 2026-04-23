@@ -19,9 +19,8 @@ use crate::client::ResolvedDestination;
 use crate::http;
 use crate::http::envoy_proto_common;
 use crate::http::ext_proc::proto::{
-	BodyMutation, BodyResponse, HeaderMutation, HeadersResponse, HttpBody,
-	HttpHeaders, HttpTrailers, ImmediateResponse, Metadata, ProcessingRequest, ProcessingResponse,
-	processing_response,
+	BodyMutation, BodyResponse, HeaderMutation, HeadersResponse, HttpBody, HttpHeaders, HttpTrailers,
+	ImmediateResponse, Metadata, ProcessingRequest, ProcessingResponse, processing_response,
 };
 use crate::http::{HeaderName, PolicyResponse};
 use crate::proxy::ProxyError;
@@ -489,6 +488,9 @@ impl ExtProcInstance {
 						}
 					});
 				}
+				// Skip content-length as the EPP sets it to invalid values
+				// https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/943
+				resp.headers_mut().remove(http::header::CONTENT_LENGTH);
 				return Ok((req, None));
 			}
 		}
@@ -669,6 +671,9 @@ impl ExtProcInstance {
 						}
 					});
 				}
+				// Skip content-length as the EPP sets it to invalid values
+				// https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/943
+				resp.headers_mut().remove(http::header::CONTENT_LENGTH);
 				return Ok((resp, None));
 			}
 		}
