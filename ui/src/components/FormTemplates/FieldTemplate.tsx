@@ -119,10 +119,12 @@ export function FieldTemplate(props: FieldTemplateProps) {
     return (
       <ObjectFieldWrapper className={classNames}>
         <ObjectFieldHeader>
-          <Title level={level} style={{ margin: 0, ...titleStyle }}>
-            {label}
-            {required && <span style={{ color: "red", marginLeft: 4 }}>*</span>}
-          </Title>
+          {label && (
+            <Title level={level} style={{ margin: 0, ...titleStyle }}>
+              {label}
+              {required && <span style={{ color: "red", marginLeft: 4 }}>*</span>}
+            </Title>
+          )}
           {helpText && (
             <Tooltip title={helpText + defaultValueHint}>
               <InfoCircleOutlined
