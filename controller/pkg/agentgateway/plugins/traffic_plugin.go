@@ -139,8 +139,8 @@ func TranslateAgentgatewayPolicy(
 	var ancestors []gwv1.PolicyAncestorStatus
 	var attachmentErrors []string
 	// TODO: add selectors
-	baseTranslatedPolicies, baseErr := translatePolicyToAgw(pctx, policy)
-	baseConds := policyConditionMap(baseErr, len(baseTranslatedPolicies) > 0)
+	baseTranslatedPolicies, baseErr := TranslatePolicyToAgw(pctx, policy)
+	baseConds := PolicyConditionMap(baseErr, len(baseTranslatedPolicies) > 0)
 	controller := gwv1.GatewayController(agw.ControllerName)
 	for _, target := range policy.Spec.TargetRefs {
 		gk := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
@@ -165,7 +165,7 @@ func TranslateAgentgatewayPolicy(
 			var gatewayTargets []types.NamespacedName
 			if !IsBackendLikeTarget(policyTarget) || targetExists {
 				gatewayTargets = references.LookupGatewaysForPolicyTarget(ctx, targetObject, policyTarget).UnsortedList()
-				translatedPolicies := clonePoliciesForTarget(baseTranslatedPolicies, policyTarget)
+				translatedPolicies := ClonePoliciesForTarget(baseTranslatedPolicies, policyTarget)
 				for _, translatedPolicy := range translatedPolicies {
 					for _, gatewayTarget := range gatewayTargets {
 						agwPolicies = append(agwPolicies, AgwPolicy{
@@ -185,18 +185,18 @@ func TranslateAgentgatewayPolicy(
 				// A policy should report at most one status per Gateway parent, even if multiple
 				// targetRefs resolve to the same Gateway.
 				if slices.IndexFunc(ancestors, func(existing gwv1.PolicyAncestorStatus) bool {
-					return existing.ControllerName == controller && parentRefEqual(existing.AncestorRef, ar)
+					return existing.ControllerName == controller && ParentRefEquals(existing.AncestorRef, ar)
 				}) != -1 {
 					continue
 				}
-				ancestors = append(ancestors, setAncestorStatus(ar, existingStatus, policy.Generation, baseConds, controller))
+				ancestors = append(ancestors, SetAncestorStatus(ar, existingStatus, policy.Generation, baseConds, controller))
 			}
 		}
 	}
 
 	if len(attachmentErrors) > 0 {
 		logger.Warn("failed to resolve one or more ancestor refs", "errors", attachmentErrors)
-		ancestors = append(ancestors, setAncestorStatus(gwv1.ParentReference{
+		ancestors = append(ancestors, SetAncestorStatus(gwv1.ParentReference{
 			Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayPolicyGVK.Group)),
 			Name:  "StatusSummary",
 		}, existingStatus, policy.Generation, attachmentErrorConditionMap(baseConds, attachmentErrors), controller))
@@ -204,7 +204,7 @@ func TranslateAgentgatewayPolicy(
 
 	// Build final status from accumulated ancestors
 	status := gwv1.PolicyStatus{
-		Ancestors: mergeAncestors(agw.ControllerName, existingStatus.Ancestors, ancestors),
+		Ancestors: MergeAncestors(agw.ControllerName, existingStatus.Ancestors, ancestors),
 	}
 
 	// sort all parents for consistency with Equals and for Update
@@ -217,52 +217,52 @@ func TranslateAgentgatewayPolicy(
 	return &status, agwPolicies
 }
 
-func policyConditionMap(err error, hasTranslatedPolicies bool) map[string]*condition {
-	conds := map[string]*condition{}
+func PolicyConditionMap(err error, hasTranslatedPolicies bool) map[string]*Condition {
+	conds := map[string]*Condition{}
 	if err != nil {
 		// If we produced some policies alongside errors, treat as partial validity
 		if hasTranslatedPolicies {
-			conds[string(shared.PolicyConditionAccepted)] = &condition{
-				status:  metav1.ConditionTrue,
-				reason:  string(shared.PolicyReasonPartiallyValid),
-				message: err.Error(),
+			conds[string(shared.PolicyConditionAccepted)] = &Condition{
+				Status:  metav1.ConditionTrue,
+				Reason:  string(shared.PolicyReasonPartiallyValid),
+				Message: err.Error(),
 			}
 		} else {
 			// No policies produced and error present -> invalid
-			conds[string(shared.PolicyConditionAccepted)] = &condition{
-				status:  metav1.ConditionFalse,
-				reason:  string(shared.PolicyReasonInvalid),
-				message: err.Error(),
+			conds[string(shared.PolicyConditionAccepted)] = &Condition{
+				Status:  metav1.ConditionFalse,
+				Reason:  string(shared.PolicyReasonInvalid),
+				Message: err.Error(),
 			}
-			conds[string(shared.PolicyConditionAttached)] = &condition{
-				status:  metav1.ConditionFalse,
-				reason:  string(shared.PolicyReasonPending),
-				message: "Policy is not attached due to invalid status",
+			conds[string(shared.PolicyConditionAttached)] = &Condition{
+				Status:  metav1.ConditionFalse,
+				Reason:  string(shared.PolicyReasonPending),
+				Message: "Policy is not attached due to invalid status",
 			}
 		}
 	} else {
 		// Check for partial validity
 		// Build success conditions per ancestor
-		conds[string(shared.PolicyConditionAccepted)] = &condition{
-			status:  metav1.ConditionTrue,
-			reason:  string(shared.PolicyReasonValid),
-			message: reporter.PolicyAcceptedMsg,
+		conds[string(shared.PolicyConditionAccepted)] = &Condition{
+			Status:  metav1.ConditionTrue,
+			Reason:  string(shared.PolicyReasonValid),
+			Message: reporter.PolicyAcceptedMsg,
 		}
-		conds[string(shared.PolicyConditionAttached)] = &condition{
-			status:  metav1.ConditionTrue,
-			reason:  string(shared.PolicyReasonAttached),
-			message: reporter.PolicyAttachedMsg,
+		conds[string(shared.PolicyConditionAttached)] = &Condition{
+			Status:  metav1.ConditionTrue,
+			Reason:  string(shared.PolicyReasonAttached),
+			Message: reporter.PolicyAttachedMsg,
 		}
 	}
 	return conds
 }
 
-func attachmentErrorConditionMap(baseConds map[string]*condition, attachmentErrors []string) map[string]*condition {
+func attachmentErrorConditionMap(baseConds map[string]*Condition, attachmentErrors []string) map[string]*Condition {
 	conds := maps.Clone(baseConds)
-	conds[string(shared.PolicyConditionAttached)] = &condition{
-		status:  metav1.ConditionFalse,
-		reason:  string(shared.PolicyReasonPending),
-		message: strings.Join(attachmentErrors, "\n"),
+	conds[string(shared.PolicyConditionAttached)] = &Condition{
+		Status:  metav1.ConditionFalse,
+		Reason:  string(shared.PolicyReasonPending),
+		Message: strings.Join(attachmentErrors, "\n"),
 	}
 	return conds
 }
@@ -296,8 +296,8 @@ func resolvePolicyAncestorRefs(
 	return refs, ""
 }
 
-// translateTrafficPolicyToAgw converts a TrafficPolicy to agentgateway Policy resources
-func translatePolicyToAgw(
+// TranslatePolicyToAgw converts a TrafficPolicy to agentgateway Policy resources
+func TranslatePolicyToAgw(
 	ctx PolicyCtx,
 	policy *agentgateway.AgentgatewayPolicy,
 ) ([]*api.Policy, error) {
@@ -325,7 +325,7 @@ func translatePolicyToAgw(
 	return agwPolicies, errors.Join(errs...)
 }
 
-func clonePoliciesForTarget(base []*api.Policy, policyTarget *api.PolicyTarget) []*api.Policy {
+func ClonePoliciesForTarget(base []*api.Policy, policyTarget *api.PolicyTarget) []*api.Policy {
 	if len(base) == 0 {
 		return nil
 	}

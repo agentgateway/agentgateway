@@ -70,20 +70,20 @@ func translatePoliciesForBackendTLS(
 	// Condition reporting for BackendTLSPolicy is tricky. The references are to Service (or other backends), but we report
 	// per-gateway.
 	// This means most of the results are aggregated.
-	conds := map[string]*condition{
+	conds := map[string]*Condition{
 		string(gwv1.PolicyConditionAccepted): {
-			reason:  string(gwv1.PolicyReasonAccepted),
-			message: "Configuration is valid",
+			Reason:  string(gwv1.PolicyReasonAccepted),
+			Message: "Configuration is valid",
 		},
 		string(gwv1.BackendTLSPolicyConditionResolvedRefs): {
-			reason:  string(gwv1.BackendTLSPolicyReasonResolvedRefs),
-			message: "Configuration is valid",
+			Reason:  string(gwv1.BackendTLSPolicyReasonResolvedRefs),
+			Message: "Configuration is valid",
 		},
 	}
 
 	caCert, err := getBackendTLSCACert(krtctx, cfgmaps, btls, conds)
 	if err != nil {
-		conds[string(gwv1.PolicyConditionAccepted)].error = &ConfigError{
+		conds[string(gwv1.PolicyConditionAccepted)].Error = &ConfigError{
 			Reason:  string(gwv1.BackendTLSPolicyReasonNoValidCACertificate),
 			Message: err.Error(),
 		}
@@ -131,7 +131,7 @@ func translatePoliciesForBackendTLS(
 
 		backendTLSPoliciesForThisTarget := krtutil.FetchIndexObjects(krtctx, targetIndex, tgtRef)
 		if err := checkConflicted(btls, target, backendTLSPoliciesForThisTarget); err != nil {
-			conds[string(gwv1.PolicyConditionAccepted)].error = &ConfigError{
+			conds[string(gwv1.PolicyConditionAccepted)].Error = &ConfigError{
 				Reason:  string(gwv1.PolicyReasonConflicted),
 				Message: err.Error(),
 			}
@@ -239,9 +239,9 @@ func translatePoliciesForBackendTLS(
 			Kind:  ptr.Of(gwv1.Kind(gvk.KubernetesGateway.Kind)),
 			Name:  gwv1.ObjectName(g.Name),
 		}
-		ancestorStatus = append(ancestorStatus, setAncestorStatus(pr, status, btls.Generation, conds, gwv1.GatewayController(controllerName)))
+		ancestorStatus = append(ancestorStatus, SetAncestorStatus(pr, status, btls.Generation, conds, gwv1.GatewayController(controllerName)))
 	}
-	status.Ancestors = mergeAncestors(controllerName, status.Ancestors, ancestorStatus)
+	status.Ancestors = MergeAncestors(controllerName, status.Ancestors, ancestorStatus)
 	return status, policies
 }
 
@@ -286,7 +286,7 @@ func getBackendTLSCACert(
 	krtctx krt.HandlerContext,
 	cfgmaps krt.Collection[*corev1.ConfigMap],
 	btls *gwv1.BackendTLSPolicy,
-	conds map[string]*condition,
+	conds map[string]*Condition,
 ) ([]byte, error) {
 	validation := btls.Spec.Validation
 	if wk := validation.WellKnownCACertificates; wk != nil {
@@ -295,7 +295,7 @@ func getBackendTLSCACert(
 			return nil, nil
 
 		default:
-			conds[string(gwv1.PolicyConditionAccepted)].error = &ConfigError{
+			conds[string(gwv1.PolicyConditionAccepted)].Error = &ConfigError{
 				Reason:  string(gwv1.PolicyReasonInvalid),
 				Message: fmt.Sprintf("Unknown wellKnownCACertificates: %v", *wk),
 			}
@@ -312,7 +312,7 @@ func getBackendTLSCACert(
 	var sb strings.Builder
 	for _, ref := range validation.CACertificateRefs {
 		if ref.Group != gwv1.Group(wellknown.ConfigMapGVK.Group) || ref.Kind != gwv1.Kind(wellknown.ConfigMapGVK.Kind) {
-			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].error = &ConfigError{
+			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].Error = &ConfigError{
 				Reason:  string(gwv1.BackendTLSPolicyReasonInvalidKind),
 				Message: "Certificate reference invalid: " + string(ref.Kind),
 			}
@@ -324,7 +324,7 @@ func getBackendTLSCACert(
 		}
 		cfgmap := krt.FetchOne(krtctx, cfgmaps, krt.FilterObjectName(nn))
 		if cfgmap == nil {
-			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].error = &ConfigError{
+			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].Error = &ConfigError{
 				Reason:  string(gwv1.BackendTLSPolicyReasonInvalidCACertificateRef),
 				Message: "Certificate reference not found",
 			}
@@ -332,7 +332,7 @@ func getBackendTLSCACert(
 		}
 		caCert, err := GetCACertFromConfigMap(ptr.Flatten(cfgmap))
 		if err != nil {
-			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].error = &ConfigError{
+			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].Error = &ConfigError{
 				Reason:  string(gwv1.BackendTLSPolicyReasonInvalidCACertificateRef),
 				Message: "Certificate invalid: " + err.Error(),
 			}

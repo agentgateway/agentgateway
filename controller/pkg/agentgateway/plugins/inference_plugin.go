@@ -277,24 +277,24 @@ func desiredInferencePoolParentRefs(attachedGateways map[types.NamespacedName]st
 	return refs
 }
 
-func inferencePoolConditionMap(controllerName string, validationErr error) map[string]*condition {
+func inferencePoolConditionMap(controllerName string, validationErr error) map[string]*Condition {
 	msg := "InferencePool has been accepted"
 	if controllerName != "" {
 		msg = fmt.Sprintf("InferencePool has been accepted by controller %s", controllerName)
 	}
 
-	conds := map[string]*condition{
+	conds := map[string]*Condition{
 		string(inf.InferencePoolConditionAccepted): {
-			reason:  string(inf.InferencePoolReasonAccepted),
-			message: msg,
+			Reason:  string(inf.InferencePoolReasonAccepted),
+			Message: msg,
 		},
 		string(inf.InferencePoolConditionResolvedRefs): {
-			reason:  string(inf.InferencePoolReasonResolvedRefs),
-			message: "All InferencePool references have been resolved",
+			Reason:  string(inf.InferencePoolReasonResolvedRefs),
+			Message: "All InferencePool references have been resolved",
 		},
 	}
 	if validationErr != nil {
-		conds[string(inf.InferencePoolConditionResolvedRefs)].error = &ConfigError{
+		conds[string(inf.InferencePoolConditionResolvedRefs)].Error = &ConfigError{
 			Reason:  string(inf.InferencePoolReasonInvalidExtensionRef),
 			Message: "error: " + validationErr.Error(),
 		}
