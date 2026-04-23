@@ -875,6 +875,13 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         setFormData((raw[sel.policyType] ?? {}) as Record<string, unknown>);
       } else if (sel.type === "llmPolicy" || sel.type === "mcpPolicy") {
         setFormData(sel.node.policy as Record<string, unknown>);
+      } else if (sel.type === "mcpTarget") {
+        const form = forms.mcpTarget as any;
+        const targetData = sel.node.target as Record<string, unknown>;
+        const transformedData = form?.transformForForm ? form.transformForForm(targetData) : targetData;
+        setFormData(transformedData as Record<string, unknown>);
+      } else if (sel.type === "mcpTargetPolicy") {
+        setFormData(sel.node.policy as Record<string, unknown>)
       } else if (sel.type === "model") {
         setFormData(sel.node.model as unknown as Record<string, unknown>);
       } else if (
