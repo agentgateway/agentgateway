@@ -280,10 +280,16 @@ export const uiSchema: UiSchema = {
   defaults: {
     "ui:title": "",
     "ui:help": "Example: {\"temperature\": 0.7, \"max_tokens\": 1000}",
+    "ui:field": "keyValueMap",
+    "ui:keyPlaceholder": "field",
+    "ui:valuePlaceholder": "value",
   },
   overrides: {
     "ui:title": "",
     "ui:help": "Example: {\"top_p\": 1.0} - forces this value even if user provides different",
+    "ui:field": "keyValueMap",
+    "ui:keyPlaceholder": "field",
+    "ui:valuePlaceholder": "value", 
   },
   transformation: {
     "ui:field": "keyValueMap",
