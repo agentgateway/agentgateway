@@ -350,7 +350,12 @@ impl ExtAuthz {
 					.path_and_query()
 					.map(|pq| pq.to_string())
 					.unwrap_or_else(|| req.uri().path().to_string()),
-				host: req.uri().host().unwrap_or("").to_string(),
+				host: req
+					.uri()
+					.authority()
+					.map(|s| s.as_str())
+					.unwrap_or("")
+					.to_string(),
 				scheme: req
 					.uri()
 					.scheme()
