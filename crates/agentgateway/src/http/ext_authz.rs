@@ -327,7 +327,17 @@ impl ExtAuthz {
 			}
 		}
 
-		Self::insert_synthetic_host_header_if_absent(req, &mut headers);
+		let should_include_synthetic_host = self.include_request_headers.is_empty()
+			|| self.include_request_headers.iter().any(|header_spec| {
+				matches!(
+					header_spec,
+					HeaderOrPseudo::Header(header_name)
+						if header_name.as_str().eq_ignore_ascii_case("host")
+				)
+			});
+		if should_include_synthetic_host {
+			Self::insert_synthetic_host_header_if_absent(req, &mut headers);
+		}
 
 		let (body, raw_body, original_body_size) = if let Some(body_opts) = &self.include_request_body {
 			match Self::buffer_request_body(req, body_opts).await {
