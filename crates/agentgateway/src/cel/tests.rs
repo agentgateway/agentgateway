@@ -323,9 +323,11 @@ fn test_properties() {
 	test(r#"!a.b"#, &["a.b"]);
 	test(r#"a.b < c"#, &["a.b", "c"]);
 	test(r#"a.b + c + 2"#, &["a.b", "c"]);
-	// This is not right! Should just be 'a' probably
-	test(r#"a["b"].c"#, &["a.c"]);
+	test(r#"a["b"].c"#, &["a"]);
+	test(r#"a["b"]["c"]"#, &["a"]);
 	test(r#"a.b[0]"#, &["a.b"]);
+	test(r#"a.b[0].c"#, &["a.b"]);
+	test(r#"a[b.c]"#, &["a", "b.c"]);
 	test(r#"{"a":"b"}.a"#, &[]);
 	// Test extauthz namespace recognition
 	test(r#"extauthz.user_id"#, &["extauthz.user_id"]);
