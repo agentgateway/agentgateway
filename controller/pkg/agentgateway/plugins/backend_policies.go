@@ -26,12 +26,12 @@ import (
 
 const (
 	aiPolicySuffix                = ":ai"
-	backendTlsPolicySuffix        = ":backend-tls"
+	backendTLSPolicySuffix        = ":backend-tls"
 	backendTunnelPolicySuffix     = ":backend-tunnel"
 	backendauthPolicySuffix       = ":backend-auth"
 	backendTransformationSuffix   = ":backend-transformation"
 	tlsPolicySuffix               = ":tls"
-	backendHttpPolicySuffix       = ":backend-http"
+	backendHTTPPolicySuffix       = ":backend-http"
 	mcpAuthorizationPolicySuffix  = ":mcp-authorization"
 	mcpAuthenticationPolicySuffix = ":mcp-authentication"
 	healthPolicySuffix            = ":health"
@@ -364,7 +364,7 @@ func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy) *api.Policy {
 		p.RequestTimeout = durationpb.New(rt.Duration)
 	}
 	tp := &api.Policy{
-		Key:  policy.Namespace + "/" + policy.Name + backendHttpPolicySuffix,
+		Key:  policy.Namespace + "/" + policy.Name + backendHTTPPolicySuffix,
 		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
@@ -809,7 +809,7 @@ func buildAwsAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.AwsAuth, s
 		return nil, nil
 	}
 
-	var accessKeyId, secretAccessKey string
+	var accessKeyID, secretAccessKey string
 	var sessionToken *string
 
 	// Get secret using the SecretIndex
@@ -821,7 +821,7 @@ func buildAwsAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.AwsAuth, s
 		if value, exists := kubeutils.GetSecretValue(secret, wellknown.AccessKey); !exists {
 			errs = append(errs, errors.New("accessKey is missing or not a valid string"))
 		} else {
-			accessKeyId = value
+			accessKeyID = value
 		}
 
 		// Extract secret key
@@ -844,7 +844,7 @@ func buildAwsAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.AwsAuth, s
 			Aws: &api.Aws{
 				Kind: &api.Aws_ExplicitConfig{
 					ExplicitConfig: &api.AwsExplicitConfig{
-						AccessKeyId:     accessKeyId,
+						AccessKeyId:     accessKeyID,
 						SecretAccessKey: secretAccessKey,
 						SessionToken:    sessionToken,
 						Region:          "",

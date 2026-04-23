@@ -113,7 +113,7 @@ func applyPatch(client apiclient.Client, fieldManager string, gvr schema.GroupVe
 	return err
 }
 
-func JsonConvert(in *HelmConfig, out any) error {
+func JsonConvert(in *HelmConfig, out any) error { //revive:disable-line
 	b, err := json.Marshal(in)
 	if err != nil {
 		return err

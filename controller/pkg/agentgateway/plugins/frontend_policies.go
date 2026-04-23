@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	frontendTcpPolicySuffix     = ":frontend-tcp"
+	frontendTCPPolicySuffix     = ":frontend-tcp"
 	frontendNetworkAuthzSuffix  = ":frontend-network-authz"
-	frontendTlsPolicySuffix     = ":frontend-tls"
-	frontendHttpPolicySuffix    = ":frontend-http"
+	frontendTLSPolicySuffix     = ":frontend-tls"
+	frontendHTTPPolicySuffix    = ":frontend-http"
 	frontendLoggingPolicySuffix = ":frontend-logging"
 	frontendTracingPolicySuffix = ":frontend-tracing"
 )
@@ -258,7 +258,7 @@ func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string) 
 	}
 
 	tcpPolicy := &api.Policy{
-		Key:  name + frontendTcpPolicySuffix,
+		Key:  name + frontendTCPPolicySuffix,
 		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Frontend{
 			Frontend: &api.FrontendPolicySpec{
@@ -380,7 +380,7 @@ func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) 
 	}
 
 	tlsPolicy := &api.Policy{
-		Key:  name + frontendTlsPolicySuffix,
+		Key:  name + frontendTLSPolicySuffix,
 		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Frontend{
 			Frontend: &api.FrontendPolicySpec{
@@ -430,7 +430,7 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	}
 
 	httpPolicy := &api.Policy{
-		Key:  name + frontendHttpPolicySuffix,
+		Key:  name + frontendHTTPPolicySuffix,
 		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Frontend{
 			Frontend: &api.FrontendPolicySpec{

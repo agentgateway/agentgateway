@@ -219,7 +219,7 @@ func translatePoliciesForBackendTLS(
 		}
 
 		policy := &api.Policy{
-			Key:    btls.Namespace + "/" + btls.Name + backendTlsPolicySuffix + attachmentName(policyTarget),
+			Key:    btls.Namespace + "/" + btls.Name + backendTLSPolicySuffix + attachmentName(policyTarget),
 			Name:   TypedResourceName(wellknown.BackendTLSPolicyKind, btls),
 			Target: policyTarget,
 			Kind: &api.Policy_Backend{

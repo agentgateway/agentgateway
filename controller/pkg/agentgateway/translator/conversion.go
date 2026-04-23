@@ -1200,8 +1200,8 @@ func listenerProtocolToAgw(p gwv1.ProtocolType) (string, error) {
 	return "", fmt.Errorf("protocol %q is unsupported", p)
 }
 
-// dummyTls is a sentinel value to send to agentgateway to signal that it should reject TLS connects due to invalid config
-var dummyTls = &TLSInfo{
+// dummyTLS is a sentinel value to send to agentgateway to signal that it should reject TLS connects due to invalid config
+var dummyTLS = &TLSInfo{
 	Cert: []byte("invalid"),
 	Key:  []byte("invalid"),
 }
@@ -1246,17 +1246,17 @@ func buildTLS(
 		// Important: all failures MUST include dummyTls, as this is the signal to the dataplane to actually do TLS (but fail)
 		if len(tls.CertificateRefs) != 1 {
 			// This is required in the API, should be rejected in validation
-			return dummyTls, &ConfigError{Reason: InvalidTLS, Message: "exactly 1 certificateRefs should be present for TLS termination"}
+			return dummyTLS, &ConfigError{Reason: InvalidTLS, Message: "exactly 1 certificateRefs should be present for TLS termination"}
 		}
 		tlsRes, err := buildSecretReference(ctx, tls.CertificateRefs[0], gw, secrets)
 		if err != nil {
-			return dummyTls, err
+			return dummyTLS, err
 		}
 		// If we are going to send a cert, validate we can access it
 		sameNamespace := tlsRes.Source.Namespace == namespace
 		objectKind := GvkFromObject(gw)
 		if !sameNamespace && !grants.SecretAllowed(ctx, objectKind, tlsRes.Source, namespace) {
-			return dummyTls, &ConfigError{
+			return dummyTLS, &ConfigError{
 				Reason: InvalidListenerRefNotPermitted,
 				Message: fmt.Sprintf(
 					"certificateRef %v/%v not accessible to a Gateway in namespace %q (missing a ReferenceGrant?)",
@@ -1268,7 +1268,7 @@ func buildTLS(
 		if gatewayTLS != nil && gatewayTLS.Validation != nil && len(gatewayTLS.Validation.CACertificateRefs) > 0 {
 			// TODO: add 'Mode'
 			if len(gatewayTLS.Validation.CACertificateRefs) > 1 {
-				return dummyTls, &ConfigError{
+				return dummyTLS, &ConfigError{
 					Reason:  InvalidTLS,
 					Message: "only one caCertificateRef is supported",
 				}
@@ -1276,11 +1276,11 @@ func buildTLS(
 			caCertRef := gatewayTLS.Validation.CACertificateRefs[0]
 			cred, err := buildCaCertificateReference(ctx, caCertRef, gw, configMaps, secrets)
 			if err != nil {
-				return dummyTls, err
+				return dummyTLS, err
 			}
 			sameNamespace := cred.Source.Namespace == namespace
 			if !sameNamespace && !grants.SecretAllowed(ctx, GvkFromObject(gw), cred.Source, namespace) {
-				return dummyTls, &ConfigError{
+				return dummyTLS, &ConfigError{
 					Reason: InvalidListenerRefNotPermitted,
 					Message: fmt.Sprintf(
 						"caCertificateRef %v/%v not accessible to a Gateway in namespace %q (missing a ReferenceGrant?)",
