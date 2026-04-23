@@ -19,7 +19,7 @@ export function ArrayFieldTemplate(props: ArrayFieldTemplateProps) {
   } = props;
 
   return (
-    <div className="array-field-template" style={{ marginBottom: 16 }}>
+    <div className="array-field-template" style={{ marginBottom: 16 }}>      
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
         {items.map((element) => (
           <Card

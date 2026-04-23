@@ -88,19 +88,16 @@ export const schema: RJSFSchema = {
       properties: {
         add: {
           type: "object",
-          title: "Add Headers",
           description: "Headers to add to requests",
           additionalProperties: { type: "string" },
         },
         set: {
           type: "object",
-          title: "Set Headers",
           description: "Headers to set/override in requests",
           additionalProperties: { type: "string" },
         },
         remove: {
           type: "array",
-          title: "Remove Headers",
           description: "Header names to remove from requests",
           items: { type: "string" },
         },
@@ -113,19 +110,16 @@ export const schema: RJSFSchema = {
       properties: {
         add: {
           type: "object",
-          title: "Add Headers",
           description: "Headers to add to responses",
           additionalProperties: { type: "string" },
         },
         set: {
           type: "object",
-          title: "Set Headers",
           description: "Headers to set/override in responses",
           additionalProperties: { type: "string" },
         },
         remove: {
           type: "array",
-          title: "Remove Headers",
           description: "Header names to remove from responses",
           items: { type: "string" },
         },
@@ -298,47 +292,64 @@ export const uiSchema: UiSchema = {
   },
   requestHeaders: {
     "ui:help": "Modify headers sent to the LLM provider",
+    "ui:title": "",
     add: {
+      "ui:title": "Add Headers",
       "ui:field": "keyValueMap",
       "ui:keyPlaceholder": "header-name",
       "ui:valuePlaceholder": "header-value",
     },
     set: {
+      "ui:title": "Set Headers",
       "ui:field": "keyValueMap",
       "ui:keyPlaceholder": "header-name",
       "ui:valuePlaceholder": "header-value",
     },
-    remove: { "ui:help": "Header names to remove from requests" },
+    remove: { 
+      "ui:title": "Remove Headers",
+      "ui:help": "Header names to remove from requests" 
+    },
   },
   responseHeaders: {
+    "ui:title": "",
     "ui:help": "Modify headers in responses from the LLM provider",
     add: {
+      "ui:title": "Add Headers",
       "ui:field": "keyValueMap",
       "ui:keyPlaceholder": "header-name",
       "ui:valuePlaceholder": "header-value",
     },
     set: {
+      "ui:title": "Set Headers",
       "ui:field": "keyValueMap",
       "ui:keyPlaceholder": "header-name",
       "ui:valuePlaceholder": "header-value",
     },
-    remove: { "ui:help": "Header names to remove from responses" },
+    remove: { 
+      "ui:title": "Remove Headers",
+      "ui:help": "Header names to remove from responses" 
+    },
   },
   backendTLS: {
+    "ui:title": "",
     cert: { "ui:widget": "textarea", "ui:options": { rows: 3 } },
     key: { "ui:widget": "textarea", "ui:options": { rows: 3 } },
     root: { "ui:widget": "textarea", "ui:options": { rows: 3 } },
   },
   health: {
+    "ui:title": "",
     unhealthyExpression: {
       "ui:placeholder": "response.code >= 500",
     },
     eviction: {
+      "ui:title": "",
       duration: { "ui:placeholder": "30s" },
     },
   },
   backendTunnel: {
+    "ui:title": "",
     proxy: {
+      "ui:title": "",
       host: { "ui:placeholder": "proxy.example.com" },
     },
   },

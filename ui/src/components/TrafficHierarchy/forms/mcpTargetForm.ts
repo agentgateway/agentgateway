@@ -166,6 +166,7 @@ export const uiSchema: UiSchema = {
     "ui:help": "SSE and MCP are network-based, STDIO runs a local process",
   },
   sse: {
+    "ui:title": "",
     host: { "ui:placeholder": "localhost" },
     port: { "ui:placeholder": "8080" },
     path: { "ui:placeholder": "/sse" },
