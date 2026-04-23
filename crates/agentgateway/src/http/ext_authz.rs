@@ -226,6 +226,27 @@ impl ExtAuthz {
 		}
 	}
 
+	/// `HttpRequest.host` in ext_authz should match the effective Host / `:authority` (including any
+	/// non-default port). Use `req.uri().authority` rather than `host()` (which omits the port).
+	fn http_request_host_for_ext_authz(req: &Request) -> String {
+		req
+			.uri()
+			.authority()
+			.map(|a| a.as_str().to_string())
+			.unwrap_or_default()
+	}
+
+	/// After HTTP/1 normalization, `Host` is removed from the header map. Re-insert it for ext_authz
+	/// so downstream auth services (e.g. HTTP Message Signatures on `@authority`) see the same value.
+	fn insert_synthetic_host_header_if_absent(req: &Request, headers: &mut HashMap<String, String>) {
+		let host_key = header::HOST.as_str();
+		if !headers.contains_key(host_key)
+			&& let Some(authority) = req.uri().authority()
+		{
+			headers.insert(host_key.to_string(), authority.as_str().to_string());
+		}
+	}
+
 	fn get_header_values(
 		&self,
 		req: &Request,
@@ -306,6 +327,8 @@ impl ExtAuthz {
 			}
 		}
 
+		Self::insert_synthetic_host_header_if_absent(req, &mut headers);
+
 		let (body, raw_body, original_body_size) = if let Some(body_opts) = &self.include_request_body {
 			match Self::buffer_request_body(req, body_opts).await {
 				Ok(buffered) => {
@@ -350,7 +373,7 @@ impl ExtAuthz {
 					.path_and_query()
 					.map(|pq| pq.to_string())
 					.unwrap_or_else(|| req.uri().path().to_string()),
-				host: req.uri().host().unwrap_or("").to_string(),
+				host: Self::http_request_host_for_ext_authz(req),
 				scheme: req
 					.uri()
 					.scheme()

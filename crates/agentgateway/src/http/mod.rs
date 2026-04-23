@@ -372,7 +372,21 @@ pub fn get_pseudo_or_header_value<'a>(
 	req: &'a Request,
 ) -> Option<std::borrow::Cow<'a, HeaderValue>> {
 	match pseudo {
-		HeaderOrPseudo::Header(v) => req.headers().get(v).map(std::borrow::Cow::Borrowed),
+		HeaderOrPseudo::Header(v) => {
+			if let Some(h) = req.headers().get(v) {
+				return Some(std::borrow::Cow::Borrowed(h));
+			}
+			// After `normalize_uri`, `Host` may be promoted to `req.uri().authority` only; mirror
+			// `:authority` so HTTP ext_authz can still forward an explicit `host` include.
+			if *v == ::http::header::HOST {
+				return req.uri().authority().and_then(|a| {
+					HeaderValue::try_from(a.as_str())
+						.ok()
+						.map(std::borrow::Cow::Owned)
+				});
+			}
+			None
+		},
 		_ => get_pseudo_header_value(pseudo, req)
 			.and_then(|v| HeaderValue::try_from(&v).ok().map(std::borrow::Cow::Owned)),
 	}

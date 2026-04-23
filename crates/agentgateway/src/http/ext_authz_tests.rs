@@ -289,6 +289,110 @@ fn test_pseudo_header_value_extraction() {
 }
 
 #[test]
+fn test_ext_authz_http_request_host_includes_non_default_port() {
+	use ::http::{Method, Request};
+
+	// As after `normalize_uri`: Host header consumed, full authority in the URI
+	let req = Request::builder()
+		.method(Method::POST)
+		.version(::http::Version::HTTP_11)
+		.uri("http://supply-chain-agent.localhost:3000/")
+		.body(http::Body::empty())
+		.unwrap();
+
+	assert_eq!(
+		super::ExtAuthz::http_request_host_for_ext_authz(&req),
+		"supply-chain-agent.localhost:3000"
+	);
+}
+
+#[test]
+fn test_ext_authz_http_request_host_omits_port_when_not_in_uri() {
+	use ::http::{Method, Request};
+
+	let req = Request::builder()
+		.method(Method::GET)
+		.version(::http::Version::HTTP_11)
+		.uri("https://api.example.com/v1")
+		.body(http::Body::empty())
+		.unwrap();
+
+	assert_eq!(
+		super::ExtAuthz::http_request_host_for_ext_authz(&req),
+		"api.example.com"
+	);
+}
+
+#[test]
+fn test_ext_authz_insert_synthetic_host_header_from_authority() {
+	use ::http::{Method, Request};
+
+	// No Host in header map; authority carries host:port
+	let req = Request::builder()
+		.method(Method::POST)
+		.version(::http::Version::HTTP_11)
+		.uri("http://example.com:3000/path")
+		.body(http::Body::empty())
+		.unwrap();
+
+	let mut headers = std::collections::HashMap::new();
+	headers.insert("user-agent".to_string(), "test".to_string());
+	super::ExtAuthz::insert_synthetic_host_header_if_absent(&req, &mut headers);
+
+	assert_eq!(
+		headers.get("host").map(String::as_str),
+		Some("example.com:3000")
+	);
+	assert_eq!(headers.get("user-agent").map(String::as_str), Some("test"));
+}
+
+#[test]
+fn test_ext_authz_does_not_overwrite_present_host_header() {
+	use ::http::{Method, Request};
+
+	let req = Request::builder()
+		.method(Method::GET)
+		.version(::http::Version::HTTP_11)
+		.uri("http://other.example.com:4000/")
+		.header("host", "original.example:9000")
+		.body(http::Body::empty())
+		.unwrap();
+
+	let mut headers = std::collections::HashMap::new();
+	super::ExtAuthz::get_header_values(
+		&super::ExtAuthz {
+			..Default::default()
+		},
+		&req,
+		&::http::header::HOST,
+		&mut headers,
+	);
+	super::ExtAuthz::insert_synthetic_host_header_if_absent(&req, &mut headers);
+
+	assert_eq!(
+		headers.get("host").map(String::as_str),
+		Some("original.example:9000")
+	);
+}
+
+#[test]
+fn test_get_pseudo_or_header_value_host_falls_back_to_uri_authority() {
+	use ::http::{Method, Request};
+
+	// No Host header (as after HTTP/1 normalize_uri), authority in URI
+	let req = Request::builder()
+		.method(Method::POST)
+		.version(::http::Version::HTTP_11)
+		.uri("http://supply-chain-agent.localhost:3000/agent")
+		.body(http::Body::empty())
+		.unwrap();
+
+	let spec = crate::http::HeaderOrPseudo::Header(::http::header::HOST);
+	let cow = crate::http::get_pseudo_or_header_value(&spec, &req).expect("host via authority");
+	assert_eq!(cow.to_str().unwrap(), "supply-chain-agent.localhost:3000");
+}
+
+#[test]
 fn test_pseudo_header_authority_fallback() {
 	use ::http::{Method, Request};
 
