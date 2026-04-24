@@ -1360,7 +1360,6 @@ impl Store {
 		diagnostics: &mut Diagnostics,
 	) -> anyhow::Result<()> {
 		let policy = crate::types::agent_xds::targeted_policy_from_proto(&raw, diagnostics)?;
-		tracing::error!("howardjohn: policy {:?}", diagnostics);
 		self.insert_policy(policy);
 		Ok(())
 	}

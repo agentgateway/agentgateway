@@ -65,7 +65,6 @@ fn permissive_cel_expression(
 ) -> cel::Expression {
 	let original_expression = original_expression.into();
 	let (expression, err) = cel::Expression::new_permissive(original_expression.clone());
-	tracing::error!("howardjohn: build permissive {:?} {:?}", expression, err);
 	if let Some(err) = err {
 		diagnostics.add_warning(format!(
 			"invalid CEL expression for {}: {err}; replacing {original_expression:?} with an expression that always fails",

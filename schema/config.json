@@ -938,6 +938,12 @@
     "HeaderValueMatch": {
       "oneOf": [
         {
+          "type": "string",
+          "enum": [
+            "invalid"
+          ]
+        },
+        {
           "type": "object",
           "properties": {
             "exact": {
@@ -965,6 +971,12 @@
     },
     "PathMatch": {
       "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "invalid"
+          ]
+        },
         {
           "type": "object",
           "properties": {
@@ -1021,6 +1033,12 @@
     },
     "QueryValueMatch": {
       "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "invalid"
+          ]
+        },
         {
           "type": "object",
           "properties": {
