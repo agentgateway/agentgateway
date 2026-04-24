@@ -80,6 +80,71 @@ Agentgateway has a built-in UI for you to explore agentgateway connecting agent-
   <img alt="agentgateway UI" src="img/UI-homepage.png">
 </div>
 
+## FAQ & Troubleshooting
+
+### Getting Started
+
+**Q: What is agentgateway and why do I need it?**
+
+Agentgateway is a unified proxy for Agentic AI that sits between your AI agents, LLMs, and tools. It provides:
+- **Security**: Auth, rate limiting, guardrails, and content filtering
+- **Observability**: OpenTelemetry metrics, logs, and tracing out of the box
+- **Governance**: RBAC policies, budget controls, and audit trails
+- **Connectivity**: MCP, A2A, and OpenAI-compatible APIs in one place
+
+Instead of implementing these concerns in each agent, agentgateway centralizes them.
+
+**Q: How do I choose between standalone and Kubernetes deployment?**
+
+- **Standalone**: Best for local development, testing, or small-scale deployments. See the [Standalone Quickstart](https://agentgateway.dev/docs/quickstart).
+- **Kubernetes**: Best for production environments requiring scalability, high availability, and integration with Gateway API. See the [Kubernetes Quickstart](https://agentgateway.dev/docs/kubernetes/latest).
+
+**Q: Which LLM providers are supported?**
+
+Agentgateway routes to any LLM provider through a unified OpenAI-compatible API, including OpenAI, Anthropic, Gemini, Bedrock, and self-hosted models. Configure providers in your gateway configuration YAML.
+
+### Common Issues
+
+**Q: My MCP tool connections are failing. What should I check?**
+
+1. Verify the MCP server is running and accessible at the configured endpoint
+2. Check transport type compatibility — agentgateway supports stdio, HTTP, SSE, and Streamable HTTP
+3. Ensure OAuth credentials are correctly configured if the tool requires authentication
+4. Review agentgateway logs for specific error messages
+
+**Q: How do I configure guardrails?**
+
+Guardrails are configured in the gateway YAML configuration. Supported options include:
+- Regex-based content filtering
+- OpenAI moderation API
+- AWS Bedrock Guardrails
+- Google Model Armor
+- Custom webhook endpoints
+
+See the [Guardrails documentation](https://agentgateway.dev/docs) for configuration examples.
+
+**Q: Can I use agentgateway with existing AI frameworks?**
+
+Yes. Agentgateway exposes an OpenAI-compatible API, so it works with any framework that supports OpenAI's API format, including LangChain, LlamaIndex, CrewAI, and custom agents.
+
+**Q: How do I enable observability?**
+
+Agentgateway exports OpenTelemetry metrics, logs, and traces by default. Configure your OTLP endpoint in the gateway configuration to send telemetry to your preferred backend (Prometheus, Jaeger, Datadog, etc.).
+
+### Advanced Usage
+
+**Q: How does inference routing work?**
+
+Inference routing uses Kubernetes Inference Gateway extensions to route requests based on real-time signals: GPU utilization, KV cache pressure, LoRA adapter availability, and queue depth. This is particularly useful for self-hosted model deployments.
+
+**Q: Can I implement custom RBAC policies?**
+
+Yes. Agentgateway uses a CEL (Common Expression Language) policy engine for fine-grained access control. Write CEL expressions to define who can access which tools, models, or agent capabilities.
+
+**Q: How do I set up A2A agent-to-agent communication?**
+
+Configure A2A endpoints in your gateway YAML. Agentgateway handles capability discovery, modality negotiation, and task collaboration between agents following the A2A protocol.
+
 ## Sponsors
 
 <table>
