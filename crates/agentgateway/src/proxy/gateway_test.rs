@@ -1186,11 +1186,11 @@ async fn tls_connection_drains_when_listener_changes() {
 		BIND_KEY,
 	);
 
-	tokio::time::timeout(std::time::Duration::from_secs(1), async {
-		while !conn.is_finished() {
-			tokio::task::yield_now().await;
-		}
-	})
+	agent_core::test_helpers::check_eventually(
+		Duration::from_secs(1),
+		|| async { conn.is_finished() },
+		|b| *b,
+	)
 	.await
 	.expect("connection should drain after listener change");
 
