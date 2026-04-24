@@ -190,6 +190,9 @@ const TreeCard = styled(Card)`
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 24px;
+    height: 24px;
+    align-self: center;
     color: var(--color-text-tertiary);
     transition: all 0.2s ease;
 
@@ -570,6 +573,10 @@ function buildListenerTitle(
       label: "Add Policy",
       icon: <PlusOutlined />,
       children: listenerPolicyMenuItems as MenuProps["items"],
+      onTitleClick: ({ domEvent }) => {
+        domEvent.preventDefault();
+        domEvent.stopPropagation();
+      },
     },
     { type: "divider" },
     {
@@ -862,6 +869,10 @@ function buildBackendTitle(
       label: "Add Policy",
       icon: <PlusOutlined />,
       children: backendPolicyMenuItems as MenuProps["items"],
+      onTitleClick: ({ domEvent }) => {
+        domEvent.preventDefault();
+        domEvent.stopPropagation();
+      },
     },
     { type: "divider" },
     {
@@ -1069,6 +1080,10 @@ function buildRouteTitle(
       label: "Add Policy",
       icon: <PlusOutlined />,
       children: routePolicyMenuItems,
+      onTitleClick: ({ domEvent }) => {
+        domEvent.preventDefault();
+        domEvent.stopPropagation();
+      },
     },
     { type: "divider" },
     {
@@ -1311,6 +1326,10 @@ function buildLLMItemTitle(
       label: "Add Policy",
       icon: <PlusOutlined />,
       children: policyMenuItems,
+      onTitleClick: ({ domEvent }) => {
+        domEvent.preventDefault();
+        domEvent.stopPropagation();
+      },
     },
     { type: "divider" },
     {
@@ -1403,6 +1422,10 @@ function buildMCPTargetTitle(
       icon: <PlusOutlined />,
       disabled: policySubmenu.length === 0,
       children: policySubmenu.length > 0 ? policySubmenu : undefined,
+      onTitleClick: ({ domEvent }) => {
+        domEvent.preventDefault();
+        domEvent.stopPropagation();
+      },
     },
     { type: "divider" },
     {
@@ -1491,6 +1514,10 @@ function buildMCPItemTitle(
       label: "Add Policy",
       icon: <PlusOutlined />,
       children: policyMenuItems,
+      onTitleClick: ({ domEvent }) => {
+        domEvent.preventDefault();
+        domEvent.stopPropagation();
+      },
     },
     { type: "divider" },
     {

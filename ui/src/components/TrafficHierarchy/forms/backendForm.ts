@@ -361,8 +361,7 @@ export const schema: RJSFSchema = {
 export const uiSchema: UiSchema = {
   "ui:title": "",
   backendType: {
-    "ui:widget": "select",
-    "ui:help": "Service: Kubernetes service | Host: Direct hostname/IP | Dynamic: Runtime-determined | MCP: Model Context Protocol | AI: LLM provider",
+    "ui:widget": "hidden",
   },
   weight: {
     "ui:widget": "updown",
@@ -548,6 +547,17 @@ export function transformForForm(data: unknown): unknown {
     }
   } else if ("ai" in backendData) {
     result.backendType = "ai";
+
+    // transform provider object to string value for form
+    const aiObj = backendData.ai as Record<string, unknown> | undefined;
+    if (aiObj?.provider && typeof aiObj.provider === "object") {
+      const providerObj = aiObj.provider as Record<string, unknown>;
+      const providerKey = Object.keys(providerObj)[0];
+      result.ai = {
+        ...aiObj,
+        provider: providerKey || "openAI",
+      };
+    }
   }
 
   const backendTls = (backendData as any)?.policies?.backendTLS;
@@ -629,7 +639,15 @@ export function transformBeforeSubmit(data: unknown): unknown {
       }),
     };
   } else if (backendType === "ai" && ai !== undefined && ai !== null) {
-    result.ai = ai;
+    console.log(`ai`, ai);
+    const aiObj = ai as Record<string, unknown>;
+    console.log(`aiObj`, aiObj);
+    result.ai = { 
+      ...aiObj,
+      provider: aiObj.provider ? { [aiObj.provider as string]: {}} 
+        : undefined,
+    }
+    console.log(`result`, result);
   }
 
   // Add optional common fields
