@@ -14,6 +14,7 @@ use cel::types::dynamic::{DynamicType, DynamicValue};
 use cel::{ExecutionError, FunctionContext, Value};
 use chrono::{DateTime, FixedOffset};
 use http::{Extensions, HeaderMap, Method, Uri, Version};
+use once_cell::sync::Lazy;
 use prometheus_client::encoding::EncodeLabelValue;
 #[cfg(feature = "schema")]
 pub use schemars::JsonSchema;
@@ -29,6 +30,7 @@ use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{RecordedBodyHandle, apikey, basicauth, jwt};
 use crate::llm::{LLMInfo, LLMRequest};
 use crate::mcp::{MCPInfo, MCPTool};
+use crate::proxy::dtrace;
 use crate::serdes::schema;
 use crate::transport::tls::TlsInfo;
 use crate::{apply, llm};
@@ -269,6 +271,24 @@ pub enum BackendProtocol {
 struct ExecutorResolver<'a> {
 	executor: &'a Executor<'a>,
 }
+
+static DUMP: Lazy<Expression> =
+	Lazy::new(|| Expression::new_strict("variables()").expect("failed to compile"));
+
+impl ExecutorResolver<'_> {
+	pub fn slow_debug(&self) -> serde_json::Value {
+		let expr = &DUMP;
+		let cel_value = Value::resolve(expr.expression.expression(), ROOT_CONTEXT.as_ref(), self)
+			.unwrap_or(Value::Null);
+		let mut v = cel_value.json().unwrap_or(serde_json::Value::Null);
+		// Filter nulls which are just noisy
+		if let serde_json::Value::Object(obj) = &mut v {
+			obj.retain(|_k, v| v != &serde_json::Value::Null)
+		}
+		v
+	}
+}
+
 impl<'a> VariableResolver<'a> for ExecutorResolver<'a> {
 	fn resolve(&self, variable: &str) -> Option<Value<'a>> {
 		self.executor.field(variable)
@@ -431,14 +451,33 @@ impl<'a> Executor<'a> {
 		this.set_response(response);
 		this
 	}
+	pub fn debug_snapshot(&'a self) -> serde_json::Value {
+		let resolver = ExecutorResolver { executor: self };
+		resolver.slow_debug()
+	}
 
 	pub fn eval(&'a self, expr: &'a Expression) -> Result<Value<'a>, Error> {
 		let resolver = ExecutorResolver { executor: self };
-		match Value::resolve(
+		let start = dtrace::timed_start();
+		let res = Value::resolve(
 			expr.expression.expression(),
 			ROOT_CONTEXT.as_ref(),
 			&resolver,
-		) {
+		);
+		dtrace::trace(|t| {
+			t.cel_eval(
+				start,
+				Instant::now(),
+				// TODO: include the source policy of the expression
+				&expr.original_expression,
+				resolver.slow_debug(),
+				res
+					.clone()
+					.map(|v| v.json().unwrap_or_else(|e| json!({"error": e.to_string()})))
+					.unwrap_or_else(|e| json!({"error": e.to_string()})),
+			)
+		});
+		match res {
 			Ok(v) => Ok(v),
 			Err(e) => {
 				event!(

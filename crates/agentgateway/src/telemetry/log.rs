@@ -34,7 +34,7 @@ use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::{Request, health};
 use crate::llm::InputFormat;
 use crate::mcp::{MCPInfo, MCPOperation};
-use crate::proxy::ProxyResponseReason;
+use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
 	GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics, RouteIdentifier,
 };
@@ -719,6 +719,7 @@ pub struct RequestLog {
 
 impl Drop for DropOnLog {
 	fn drop(&mut self) {
+		dtrace::trace(|t| t.request_completed());
 		let Some(mut log) = self.log.take() else {
 			return;
 		};

@@ -1,12 +1,14 @@
 use std::borrow::Cow;
 use std::cmp;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use agent_core::strng;
+use itertools::Itertools;
 
 use crate::http::Request;
+use crate::proxy::dtrace;
 use crate::types::agent;
 use crate::types::agent::{
 	BackendReference, HeaderMatch, HeaderValueMatch, Listener, PathMatch, QueryValueMatch, Route,
@@ -196,14 +198,31 @@ pub fn select_best_route(
 		let binds = stores.read_binds();
 		binds.get_listener_routes(&listener.key)
 	};
+
 	if let Some(routes) = listener_routes {
+		let get_all = || {
+			let mut all_routes = HashSet::new();
+			for hnm in agent::HostnameMatch::all_matches(&host) {
+				routes.get_hostname(&hnm).for_each(|i| {
+					all_routes.insert(i.0.key.clone());
+				});
+			}
+			all_routes.into_iter().sorted().collect_vec()
+		};
 		for hnm in agent::HostnameMatch::all_matches(&host) {
 			let mut candidates = routes.get_hostname(&hnm);
 			let best_match = candidates.find(|(_, m)| matches_request(m, request));
 			if let Some((route, matcher)) = best_match {
+				dtrace::trace(|d| {
+					let selected = route.key.clone();
+					d.route_selection(Some(selected), get_all());
+				});
 				return Some((route, matcher.path.clone()));
 			}
 		}
+		dtrace::trace(|d| {
+			d.route_selection(None, get_all());
+		});
 	}
 	default_response
 }

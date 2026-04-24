@@ -7,6 +7,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/config"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/flag"
+	"github.com/agentgateway/agentgateway/controller/pkg/cli/trace"
 )
 
 func NewRootCmd() *cobra.Command {
@@ -17,6 +18,7 @@ func NewRootCmd() *cobra.Command {
 
 	flag.AttachGlobalFlags(rootCmd)
 	rootCmd.AddCommand(flag.BuildCobra(config.Command))
+	rootCmd.AddCommand(flag.BuildCobra(trace.Command))
 
 	return rootCmd
 }

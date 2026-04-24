@@ -7,11 +7,14 @@ use secrecy::{ExposeSecret, SecretString};
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
 use crate::proxy::ProxyError;
+use crate::proxy::dtrace::{self, pol_result};
 use crate::*;
 
 #[cfg(test)]
 #[path = "apikey_tests.rs"]
 mod tests;
+
+const TRACE_POLICY_KIND: &str = "api_key";
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -104,25 +107,45 @@ impl APIKeyAuthentication {
 			location,
 		}
 	}
-
 	async fn verify(&self, req: &mut Request) -> Result<Option<Claims>, ProxyError> {
 		let Some(key) = self.location.extract(req) else {
 			// In strict mode, we require credentials
 			if self.mode == Mode::Strict {
+				pol_result!(
+					dtrace::Error,
+					Apply,
+					"rejected request because API key is required but missing"
+				);
 				return Err(ProxyError::APIKeyAuthenticationFailure(Error::Missing));
 			}
 			// Otherwise without credentials, don't attempt to authenticate
+			pol_result!(
+				dtrace::Info,
+				Skip,
+				"request has no API key and auth mode is optional"
+			);
 			return Ok(None);
 		};
 
 		let key = APIKey::new(key);
 		if let Some(meta) = self.users.get(&key) {
+			pol_result!(
+				dtrace::Info,
+				Apply,
+				"authenticated request with API key with metadata {}",
+				serde_json::to_string(meta).unwrap_or_default()
+			);
 			let claims = Claims {
 				key,
 				metadata: meta.clone(),
 			};
 			Ok(Some(claims))
 		} else {
+			pol_result!(
+				dtrace::Error,
+				Apply,
+				"rejected request because API key credentials are invalid"
+			);
 			Err(ProxyError::APIKeyAuthenticationFailure(
 				Error::InvalidCredentials,
 			))

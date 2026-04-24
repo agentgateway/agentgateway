@@ -6,12 +6,17 @@ use crate::http::uri::Scheme;
 use crate::http::{
 	HeaderMap, HeaderName, HeaderValue, PolicyResponse, Request, Response, StatusCode, Uri,
 };
+use crate::proxy::dtrace::{Severity, pol_result};
 use crate::types::agent::{HostRedirect, PathMatch, PathRedirect, SimpleBackendReference};
 use crate::*;
 
 #[cfg(test)]
 #[path = "filters_test.rs"]
 mod tests;
+
+const REQUEST_REDIRECT_TRACE_KIND: &str = "request_redirect";
+const URL_REWRITE_TRACE_KIND: &str = "url_rewrite";
+const DIRECT_RESPONSE_TRACE_KIND: &str = "direct_response";
 
 #[apply(schema!)]
 pub struct HeaderModifier {
@@ -114,6 +119,12 @@ impl RequestRedirect {
 			.authority(authority)
 			.path_and_query(path_and_query)
 			.build()?;
+		pol_result!(
+			REQUEST_REDIRECT_TRACE_KIND,
+			Severity::Info,
+			Apply,
+			"applied request redirect to {new}",
+		);
 		let dr = ::http::Response::builder()
 			.status(status.unwrap_or(StatusCode::FOUND))
 			.header(http::header::LOCATION, new.to_string())
@@ -169,6 +180,12 @@ impl UrlRewrite {
 			.build()
 			.map_err(|e| Error::InvalidFilterConfiguration(e.to_string()))?;
 		*req.uri_mut() = new;
+		pol_result!(
+			URL_REWRITE_TRACE_KIND,
+			Severity::Info,
+			Apply,
+			"rewrote request URL"
+		);
 		Ok(())
 	}
 }
@@ -184,6 +201,7 @@ pub struct DirectResponse {
 
 impl DirectResponse {
 	pub fn apply(&self) -> Result<Response, Error> {
+		pol_result!(DIRECT_RESPONSE_TRACE_KIND, Severity::Info, Apply, "applied direct response");
 		response::Builder::new()
 			.status(self.status)
 			.body(http::Body::from(self.body.clone()))

@@ -1,3 +1,4 @@
+pub(crate) mod dtrace;
 mod gateway;
 pub mod httpproxy;
 pub mod proxy_protocol;

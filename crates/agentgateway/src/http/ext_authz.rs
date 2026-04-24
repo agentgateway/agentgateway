@@ -21,11 +21,14 @@ use crate::http::{
 	HeaderName, HeaderOrPseudo, PolicyResponse, Request, RequestOrResponse, Response,
 	envoy_proto_common, jwt,
 };
-use crate::proxy::ProxyError;
+use crate::proxy::dtrace::{Severity, pol_event, pol_result_timed};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::proxy::{ProxyError, dtrace};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendPolicy, SimpleBackendReference};
 use crate::*;
+
+const TRACE_POLICY_KIND: &str = "ext_auth";
 
 #[cfg(test)]
 #[path = "ext_authz_tests.rs"]
@@ -146,7 +149,6 @@ pub struct ExtAuthz {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub include_request_body: Option<BodyOptions>,
 }
-
 impl ExtAuthz {
 	pub fn expressions(&self) -> Box<dyn Iterator<Item = &Expression> + '_> {
 		match &self.protocol {
@@ -173,6 +175,7 @@ impl ExtAuthz {
 		}
 	}
 }
+
 impl ExtAuthz {
 	async fn buffer_request_body(
 		req: &mut Request,
@@ -211,7 +214,10 @@ impl ExtAuthz {
 	fn handle_auth_failure(&self, error_msg: &str) -> Result<PolicyResponse, ProxyError> {
 		match &self.failure_mode {
 			FailureMode::Allow => {
-				debug!("Allowing request due to FailureMode::Allow configuration");
+				dtrace::pol_event!(
+					Severity::Info,
+					"Allowing request due to FailureMode::Allow configuration"
+				);
 				Ok(PolicyResponse::default())
 			},
 			FailureMode::Deny => Err(ProxyError::ExternalAuthorizationFailed(None)),
@@ -262,6 +268,7 @@ impl ExtAuthz {
 			trace!(protocol = "http", "connecting to {:?}", self.target);
 			return self.check_http(client, req).await;
 		}
+		let start = dtrace::timed_start();
 		trace!(protocol = "grpc", "connecting to {:?}", self.target);
 
 		let Protocol::Grpc { context, metadata } = &self.protocol else {
@@ -447,7 +454,9 @@ impl ExtAuthz {
 			}),
 		};
 
+		let scope = dtrace::start_scope("ext_authz");
 		let resp = grpc_client.check(authz_req).await;
+		drop(scope);
 
 		trace!("check response: {:?}", resp);
 		let cr = match resp {
@@ -476,7 +485,7 @@ impl ExtAuthz {
 		}
 
 		if status != 0 {
-			debug!("status denied: {status}");
+			pol_result_timed!(start, Severity::Error, Apply, "denied: {status}");
 			if let Some(HttpResponse::DeniedResponse(denied)) = cr.http_response {
 				let DeniedHttpResponse {
 					status: http_status,
@@ -500,13 +509,14 @@ impl ExtAuthz {
 		}
 
 		let mut res = PolicyResponse::default();
+		pol_result_timed!(start, Severity::Info, Apply, "allowed");
 		let Some(resp) = cr.http_response else {
 			return Ok(res);
 		};
 
 		match resp {
 			HttpResponse::DeniedResponse(_) => {
-				warn!("Received DeniedResponse with OK status");
+				pol_event!("Received DeniedResponse with OK status");
 			},
 			HttpResponse::OkResponse(OkHttpResponse {
 				headers,
@@ -647,6 +657,7 @@ impl ExtAuthz {
 		check_req
 			.extensions_mut()
 			.insert(BackendRequestTimeout(Duration::from_millis(200)));
+		let scope = dtrace::start_scope("ext_authz");
 		let resp = client.call_reference(check_req, &self.target).await;
 		let mut resp = match resp {
 			Ok(r) => r,
@@ -655,6 +666,7 @@ impl ExtAuthz {
 				return self.handle_auth_failure(&e.to_string());
 			},
 		};
+		drop(scope);
 		if resp.status().is_success() {
 			for k in include_response_headers {
 				if let Some(h) = resp.headers().get(k) {

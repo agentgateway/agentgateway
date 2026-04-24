@@ -31,7 +31,7 @@ use crate::http::{
 use crate::llm::{InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType};
 use crate::proxy::tcpproxy::TCPProxy;
 use crate::proxy::{
-	ProxyError, ProxyResponse, ProxyResponseReason, WaypointService, resolve_simple_backend,
+	ProxyError, ProxyResponse, ProxyResponseReason, WaypointService, dtrace, resolve_simple_backend,
 };
 use crate::store::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
@@ -154,11 +154,11 @@ async fn apply_request_policies(
 	}
 
 	if let Some(x) = &policies.ext_authz {
-		x.check(client.clone(), req).await?
-	} else {
-		http::PolicyResponse::default()
+		x.check(client.clone(), req)
+			.await?
+			.apply(response_policies.headers())?;
+		dtrace::snapshot!(Request, "ext authz", &req);
 	}
-	.apply(response_policies.headers())?;
 	if let Some(j) = &policies.authorization {
 		j.apply(req)
 			.map_err(|_| ProxyResponse::from(ProxyError::AuthorizationFailed))?;
@@ -166,24 +166,27 @@ async fn apply_request_policies(
 
 	for lrl in &policies.local_rate_limit {
 		lrl.check_request()?;
+		dtrace::snapshot!(Request, "local rate limit", &req);
 	}
 
 	if let Some(rrl) = &policies.remote_rate_limit {
-		rrl.check(client, req).await?
-	} else {
-		http::PolicyResponse::default()
+		rrl
+			.check(client, req)
+			.await?
+			.apply(response_policies.headers())?;
+		dtrace::snapshot!(Request, "remote rate limit", &req);
 	}
-	.apply(response_policies.headers())?;
 
 	if let Some(x) = response_policies.ext_proc.as_mut() {
-		x.mutate_request(req).await?
-	} else {
-		http::PolicyResponse::default()
+		x.mutate_request(req)
+			.await?
+			.apply(response_policies.headers())?;
+		dtrace::snapshot!(Request, "ext proc", &req);
 	}
-	.apply(response_policies.headers())?;
 
 	if let Some(j) = &policies.transformation {
 		j.apply_request(req);
+		dtrace::snapshot!(Request, "transformation", &req);
 	}
 
 	if let Some(csrf) = &policies.csrf {
@@ -191,9 +194,11 @@ async fn apply_request_policies(
 			.apply(req)
 			.map_err(|_| ProxyError::CsrfValidationFailed)?
 			.apply(response_policies.headers())?;
+		dtrace::snapshot!(Request, "csrf", &req);
 	}
 	if let Some(rhm) = &policies.request_header_modifier {
 		rhm.apply_request(req).map_err(ProxyError::from)?;
+		dtrace::snapshot!(Request, "request header modifier", &req);
 	}
 
 	// Enable Auto Hostname rewrite by default. This may be disabled by a URL Rewrite, or explicitly
@@ -209,9 +214,9 @@ async fn apply_request_policies(
 		r.apply(req).map_err(ProxyError::from)?;
 	}
 	if let Some(rr) = &policies.request_redirect {
-		rr.apply(req)
-			.map_err(ProxyError::from)?
-			.apply(response_policies.headers())?;
+		let pr = rr.apply(req).map_err(ProxyError::from)?;
+		pr.apply(response_policies.headers())?;
+		dtrace::snapshot!(Request, "request redirect", &req);
 	}
 	if let Some(dr) = &policies.direct_response {
 		PolicyResponse::default()
@@ -274,17 +279,19 @@ async fn apply_backend_policies(
 
 	if let Some(auth) = backend_auth {
 		auth::apply_backend_auth(&backend_info, auth, req).await?;
+		dtrace::snapshot!(Request, "backend auth", &req);
 	}
 	if let Some(j) = transformation {
 		j.apply_request(req);
+		dtrace::snapshot!(Request, "backend transformation", &req);
 	}
 	if let Some(rhm) = request_header_modifier {
 		rhm.apply_request(req).map_err(ProxyError::from)?;
+		dtrace::snapshot!(Request, "backend request header modifier", &req);
 	}
 	if let Some(rr) = request_redirect {
-		rr.apply(req)
-			.map_err(ProxyError::from)?
-			.apply(response_policies.headers())?;
+		let pr = rr.apply(req).map_err(ProxyError::from)?;
+		pr.apply(response_policies.headers())?;
 	}
 
 	if let Some(a2a) = a2a {
@@ -326,30 +333,32 @@ async fn apply_gateway_policies(
 
 	if let Some(j) = &policies.jwt {
 		j.apply(&client, Some(log), req).await?;
+		dtrace::snapshot!(Request, "gateway jwt", &req);
 	}
 	if let Some(b) = &policies.basic_auth {
 		b.apply(req).await?;
+		dtrace::snapshot!(Request, "gateway basic auth", &req);
 	}
 	if let Some(b) = &policies.api_key {
 		b.apply(req).await?;
+		dtrace::snapshot!(Request, "gateway api key", &req);
 	}
 
 	if let Some(x) = &policies.ext_authz {
-		x.check(client.clone(), req).await?
-	} else {
-		http::PolicyResponse::default()
+		x.check(client.clone(), req)
+			.await?
+			.apply(response_headers)?;
+		dtrace::snapshot!(Request, "gateway ext authz", &req);
 	}
-	.apply(response_headers)?;
 
 	if let Some(x) = ext_proc {
-		x.mutate_request(req).await?
-	} else {
-		http::PolicyResponse::default()
+		x.mutate_request(req).await?.apply(response_headers)?;
+		dtrace::snapshot!(Request, "gateway ext proc", &req);
 	}
-	.apply(response_headers)?;
 
 	if let Some(j) = &policies.transformation {
 		j.apply_request(req);
+		dtrace::snapshot!(Request, "gateway transformation", &req);
 	}
 
 	Ok(())
@@ -456,6 +465,7 @@ impl HTTPProxy {
 	) -> Response {
 		let start = agent_core::Timestamp::now();
 
+		dtrace::trace(|f| f.request_started());
 		// Copy connection level attributes into request level attributes
 		let tcp = connection
 			.copy::<TCPConnectionInfo>(req.extensions_mut())
@@ -522,6 +532,9 @@ impl HTTPProxy {
 				ProxyResponse::DirectResponse(dr) => *dr,
 			},
 		};
+		if let Some(log) = log.as_mut() {
+			dtrace::snapshot!(Response, "final response", log, &resp);
+		}
 
 		// Pass the log into the body so it finishes once the stream is entirely complete.
 		// We will also record trailer info there.
@@ -582,6 +595,7 @@ impl HTTPProxy {
 				.unwrap_or_else(|| req.uri().path().to_string()),
 		);
 		log.version = Some(req.version());
+		dtrace::snapshot!(Request, "initial request", &req);
 
 		// Now check if we actually have a listener - fail after tracing is set up
 		let selected_listener = selected_listener
@@ -642,6 +656,7 @@ impl HTTPProxy {
 		)
 		.await
 		.snapshot_on_err(log, &mut req)?;
+		dtrace::snapshot!(Request, "gateway policies", &req);
 
 		Self::detect_misdirected(log, &bind, &req, &selected_listener)
 			.snapshot_on_err(log, &mut req)?;
@@ -721,6 +736,8 @@ impl HTTPProxy {
 		)
 		.await
 		.snapshot_on_err(log, &mut req)?;
+		dtrace::snapshot!(Request, "route policies", &req);
+
 		let selected_backend_ref = selected_route_chain
 			.backend
 			.ok_or(ProxyError::NoValidBackends)
@@ -1735,11 +1752,14 @@ async fn make_backend_call(
 			.or(backend_call.http_version_override),
 	)
 	.await?;
+	dtrace::snapshot!(Request, "final request", &req);
 	let call = client::Call {
 		req,
 		target: backend_call.target,
 		transport,
 	};
+	let backend_call_start = dtrace::timed_start();
+	dtrace::trace(|trace| trace.backend_call_started(&call.target));
 	let upstream = inputs.upstream.clone();
 	let llm_response_log = log.as_ref().map(|l| l.llm_response.clone());
 	let include_completion_in_log = log
@@ -1748,7 +1768,22 @@ async fn make_backend_call(
 		.unwrap_or_default();
 	let a2a_type = response_policies.a2a_type.clone();
 
-	let mut resp = upstream.call(call).await?;
+	let resp = upstream.call(call).await;
+	dtrace::trace(|trace| match &resp {
+		Ok(resp) => trace.backend_call_completed(
+			backend_call_start,
+			Instant::now(),
+			Some(resp.status().as_u16()),
+			None,
+		),
+		Err(err) => trace.backend_call_completed(
+			backend_call_start,
+			Instant::now(),
+			None,
+			Some(err.to_string()),
+		),
+	});
+	let mut resp = resp?;
 	a2a::apply_to_response(
 		backend_call.backend_policies.a2a.as_ref(),
 		a2a_type,
@@ -1776,6 +1811,9 @@ async fn make_backend_call(
 	};
 	// TODO: we currently do not support ImmediateResponse from inference router
 	let _ = maybe_inference.mutate_response(&mut resp).await?;
+	if let Some(log) = log.as_ref() {
+		dtrace::snapshot!(Response, "backend response ready", log, &resp);
+	}
 	Ok(resp)
 }
 
@@ -2321,20 +2359,27 @@ impl ResponsePolicies {
 		log: &mut RequestLog,
 		is_upstream_response: bool,
 	) -> Result<(), ProxyResponse> {
+		dtrace::snapshot!(Response, "response policies", log, &resp);
+
 		if let Some(rhm) = &self.route_response_header {
 			rhm.apply(resp.headers_mut()).map_err(ProxyError::from)?;
+			dtrace::snapshot!(Response, "response header modifier", log, &resp);
 		}
 		if let Some(rhm) = &self.backend_response_header {
 			rhm.apply(resp.headers_mut()).map_err(ProxyError::from)?;
+			dtrace::snapshot!(Response, "backend response header modifier", log, &resp);
 		}
 		if let Some(j) = &self.transformation {
 			j.apply_response(resp, log.request_snapshot.as_ref());
+			dtrace::snapshot!(Response, "transformation", log, &resp);
 		}
 		if let Some(j) = &self.backend_transformation {
 			j.apply_response(resp, log.request_snapshot.as_ref());
+			dtrace::snapshot!(Response, "backend transformation", log, &resp);
 		}
 		if let Some(j) = &self.gateway_transformation {
 			j.apply_response(resp, log.request_snapshot.as_ref());
+			dtrace::snapshot!(Response, "gateway transformation", log, &resp);
 		}
 
 		// ext_proc is only intended to run on responses from upstream
@@ -2342,20 +2387,22 @@ impl ResponsePolicies {
 			if let Some(x) = self.ext_proc.as_mut() {
 				x.mutate_response(resp, log.request_snapshot.as_ref())
 					.await?
-			} else {
-				PolicyResponse::default()
-			}
-			.apply(&mut self.response_headers)?;
+					.apply(&mut self.response_headers)?;
+				dtrace::snapshot!(Response, "ext proc", log, &resp);
+			};
 			if let Some(x) = self.gateway_ext_proc.as_mut() {
 				x.mutate_response(resp, log.request_snapshot.as_ref())
 					.await?
-			} else {
-				PolicyResponse::default()
+					.apply(&mut self.response_headers)?;
+				dtrace::snapshot!(Response, "gateway ext proc", log, &resp);
 			}
-			.apply(&mut self.response_headers)?;
 		}
 
-		merge_in_headers(Some(self.response_headers.clone()), resp.headers_mut());
+		if !self.response_headers.is_empty() {
+			merge_in_headers(Some(self.response_headers.clone()), resp.headers_mut());
+			dtrace::snapshot!(Response, "response headers", log, &resp);
+		}
+
 		Ok(())
 	}
 }

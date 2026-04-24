@@ -40,7 +40,7 @@ impl From<Box<dyn std::error::Error>> for Error {
 pub struct Expression {
 	attributes: FlagSet<Attributes>,
 	expression: Program,
-	original_expression: String,
+	pub original_expression: String,
 }
 
 impl Serialize for Expression {
