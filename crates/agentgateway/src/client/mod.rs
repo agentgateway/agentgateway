@@ -81,7 +81,7 @@ pub struct TunnelConfig {
 pub enum Transport {
 	Plain(ApplicationTransport),
 	Tunnel(ApplicationTransport, TunnelConfig),
-	Hbone(ApplicationTransport, Vec<Identity>),
+	Hbone(ApplicationTransport, Vec<Identity>, Option<SocketAddr>),
 	DoubleHbone {
 		gateway_address: SocketAddr, // Address of network gateway to connect to
 		gateway_identity: Identity,  // Identity of network gateway
@@ -107,7 +107,7 @@ impl Transport {
 		match self {
 			Transport::Plain(inner) => inner,
 			Transport::Tunnel(inner, _) => inner,
-			Transport::Hbone(inner, _) => inner,
+			Transport::Hbone(inner, _, _) => inner,
 			Transport::DoubleHbone { inner, .. } => inner,
 		}
 	}
@@ -124,8 +124,8 @@ impl Transport {
 
 	pub fn name(&self) -> &'static str {
 		match self {
-			Transport::Hbone(ApplicationTransport::Plaintext, _) => "hbone",
-			Transport::Hbone(ApplicationTransport::Tls(_), _) => "hbone-tls",
+			Transport::Hbone(ApplicationTransport::Plaintext, _, _) => "hbone",
+			Transport::Hbone(ApplicationTransport::Tls(_), _, _) => "hbone-tls",
 			Transport::Plain(ApplicationTransport::Plaintext) => "plaintext",
 			Transport::Plain(ApplicationTransport::Tls(_)) => "tls",
 			Transport::Tunnel(ApplicationTransport::Plaintext, _) => "tunnel",
@@ -280,12 +280,12 @@ impl Connector {
 				socket.ext_mut().insert(stream::HttpProxy);
 				socket
 			},
-			Transport::Hbone(_, identities) => {
+			Transport::Hbone(_, identities, waypoint_dst) => {
 				let pool = self
 					.hbone_pool
 					.clone()
 					.ok_or_else(|| crate::http::Error::new(anyhow::anyhow!("hbone pool disabled")))?;
-				hbone_tunnel::handshake(pool, ep, identities).await?
+				hbone_tunnel::handshake(pool, ep, identities, waypoint_dst).await?
 			},
 
 			Transport::DoubleHbone {

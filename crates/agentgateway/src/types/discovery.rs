@@ -514,6 +514,10 @@ pub struct Service {
 	#[serde(default, skip_serializing_if = "is_default")]
 	pub waypoint: Option<GatewayAddress>,
 
+	/// When true, an ingress gateway should route traffic to this service through its waypoint.
+	#[serde(default, skip_serializing_if = "is_default")]
+	pub ingress_use_waypoint: bool,
+
 	#[serde(default, skip_serializing_if = "is_default")]
 	pub load_balancer: Option<LoadBalancer>,
 
@@ -862,6 +866,7 @@ impl TryFrom<&XdsService> for Service {
 			Some(w) => Some(GatewayAddress::try_from(w)?),
 			None => None,
 		};
+		let ingress_use_waypoint = s.ingress_use_waypoint;
 		let lb = if let Some(lb) = &s.load_balancing {
 			Some(LoadBalancer {
 				routing_preferences: lb
@@ -919,6 +924,7 @@ impl TryFrom<&XdsService> for Service {
 				})
 				.collect(),
 			waypoint,
+			ingress_use_waypoint,
 			load_balancer: lb,
 			ip_families,
 		};
