@@ -30,6 +30,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
+	oidcpkg "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/oidc"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
@@ -85,7 +86,7 @@ func ConvertStatusCollection[T controllers.Object, S any](col krt.Collection[krt
 }
 
 // NewAgentPlugin creates a new AgentgatewayPolicy plugin
-func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup) AgwPlugin {
+func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, oidcLookup oidcpkg.Lookup) AgwPlugin {
 	return AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]PolicyPlugin{
 			wellknown.AgentgatewayPolicyGVK.GroupKind(): {
@@ -94,7 +95,7 @@ func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLooku
 						*gwv1.PolicyStatus,
 						[]AgwPolicy,
 					) {
-						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References, resolver, jwksLookup)
+						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References, resolver, jwksLookup, oidcLookup)
 					}, agw.KrtOpts.ToOptions("AgentgatewayPolicy")...)
 					return ConvertStatusCollection(policyStatusCol), policyCol
 				},
@@ -114,6 +115,7 @@ type PolicyCtx struct {
 	References  ReferenceIndex
 	Resolver    remotehttp.Resolver
 	JWKSLookup  jwks.Lookup
+	OidcLookup  oidcpkg.Lookup
 }
 
 type ResolvedTarget struct {
@@ -131,11 +133,12 @@ func TranslateAgentgatewayPolicy(
 	references ReferenceIndex,
 	resolver remotehttp.Resolver,
 	jwksLookup jwks.Lookup,
+	oidcLookup oidcpkg.Lookup,
 ) (*gwv1.PolicyStatus, []AgwPolicy) {
 	var agwPolicies []AgwPolicy
 	existingStatus := policy.Status.DeepCopy()
 
-	pctx := PolicyCtx{Krt: ctx, Collections: agw, References: references, Resolver: resolver, JWKSLookup: jwksLookup}
+	pctx := PolicyCtx{Krt: ctx, Collections: agw, References: references, Resolver: resolver, JWKSLookup: jwksLookup, OidcLookup: oidcLookup}
 	var ancestors []gwv1.PolicyAncestorStatus
 	var attachmentErrors []string
 	// TODO: add selectors
@@ -435,6 +438,10 @@ func translateTrafficPolicyToAgw(
 
 	if traffic.JWTAuthentication != nil {
 		appendPolicy("jwtAuthentication")(processJWTAuthenticationPolicy(ctx, traffic.JWTAuthentication, traffic.Phase, basePolicyName, policyName))
+	}
+
+	if traffic.OIDC != nil {
+		appendPolicy("oidc")(processOIDCPolicy(ctx, traffic.OIDC, traffic.Phase, basePolicyName, policyName, ctx.OidcLookup))
 	}
 
 	if traffic.APIKeyAuthentication != nil {

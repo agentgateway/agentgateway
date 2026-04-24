@@ -129,6 +129,13 @@ spec:
                   name: {{ required "agentgateway.sessionKeySecretName is required" $gateway.sessionKeySecretName }}
                   key: key
             {{- end }}
+            {{- if $gateway.oidcCookieSecretName }}
+            - name: OIDC_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "agentgateway.oidcCookieSecretName is required" $gateway.oidcCookieSecretName }}
+                  key: key
+            {{- end }}
             - name: XDS_ADDRESS
               {{- if and $gateway.xds.tls $gateway.xds.tls.enabled }}
               value: "https://{{ $gateway.xds.host }}:{{ $gateway.xds.port }}"

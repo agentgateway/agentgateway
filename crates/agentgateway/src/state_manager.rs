@@ -38,6 +38,9 @@ impl StateManager {
 	) -> anyhow::Result<Self> {
 		let xds = &config.xds;
 		let stores = Stores::new(config.ipv6_enabled, config.threading_mode);
+		if let Some(encoder) = config.oidc_cookie_encoder.clone() {
+			stores.binds.write().set_oidc_cookie_encoder(encoder);
+		}
 		let xds_client = if let Some(addr) = &xds.address {
 			let connector = control::grpc_connector(
 				client.clone(),

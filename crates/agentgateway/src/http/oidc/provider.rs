@@ -5,7 +5,7 @@ use anyhow::Context;
 use base64::Engine;
 use secrecy::{ExposeSecret, SecretString};
 
-use super::{Error, Provider, TokenEndpointAuth};
+use super::{ClientCredentials, Error, Provider};
 use crate::http::Body;
 use crate::http::filters::BackendRequestTimeout;
 use crate::proxy::httpproxy::PolicyClient;
@@ -59,11 +59,14 @@ pub(crate) async fn exchange_code_with_timeout(
 		.uri(provider.token_endpoint.as_str())
 		.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
 		.header(header::ACCEPT, "application/json");
-	match client_config.token_endpoint_auth {
-		TokenEndpointAuth::ClientSecretBasic => {
+	// The token endpoint always needs to know which client is exchanging the
+	// code; confidential clients additionally prove their identity with a
+	// secret. Public clients (`None`) send only the client_id and rely on
+	// PKCE to bind the request to the authorization.
+	match &client_config.credentials {
+		ClientCredentials::ClientSecretBasic { client_secret } => {
 			let encoded_client_id = form_urlencode_component(&client_config.client_id);
-			let encoded_client_secret =
-				form_urlencode_component(client_config.client_secret.expose_secret());
+			let encoded_client_secret = form_urlencode_component(client_secret.expose_secret());
 			let auth = format!(
 				"Basic {}",
 				base64::engine::general_purpose::STANDARD
@@ -71,12 +74,12 @@ pub(crate) async fn exchange_code_with_timeout(
 			);
 			req = req.header(header::AUTHORIZATION, auth);
 		},
-		TokenEndpointAuth::ClientSecretPost => {
+		ClientCredentials::ClientSecretPost { client_secret } => {
 			form.push(("client_id", client_config.client_id.clone()));
-			form.push((
-				"client_secret",
-				client_config.client_secret.expose_secret().to_string(),
-			));
+			form.push(("client_secret", client_secret.expose_secret().to_string()));
+		},
+		ClientCredentials::None => {
+			form.push(("client_id", client_config.client_id.clone()));
 		},
 	}
 	let body = serde_urlencoded::to_string(form).map_err(anyhow::Error::from)?;
