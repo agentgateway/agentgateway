@@ -27,6 +27,7 @@ import (
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/pkg/admin"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
+	oidcpkg "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/oidc"
 	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/policyselection"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
@@ -74,6 +75,10 @@ type Options struct {
 	// PersistedJWKS overrides the default JWKS persistence layer.
 	// When set, setup uses this instance instead of creating one with DefaultJwksStorePrefix.
 	PersistedJWKS *jwks.PersistedEntries
+
+	// PersistedOIDC overrides the default OIDC persistence layer.
+	// When set, setup uses this instance instead of creating one with DefaultStorePrefix.
+	PersistedOIDC *oidcpkg.PersistedEntries
 }
 
 type setup struct {
@@ -241,6 +246,12 @@ func (s *setup) Start(ctx context.Context) error {
 	}
 	jwksLookup := jwks.NewLookup(persistedJWKS, jwks.NewResolver(resolver))
 
+	persistedOIDC := s.PersistedOIDC
+	if persistedOIDC == nil {
+		persistedOIDC = oidcpkg.NewPersistedEntries(s.APIClient, krtOpts, oidcpkg.DefaultStorePrefix, namespaces.GetPodNamespace())
+	}
+	oidcLookup := oidcpkg.NewLookup(persistedOIDC, oidcpkg.NewResolver(resolver))
+
 	for _, mgrCfgFunc := range s.ExtraManagerConfig {
 		err := mgrCfgFunc(mgr)
 		if err != nil {
@@ -269,7 +280,14 @@ func (s *setup) Start(ctx context.Context) error {
 		}
 	}
 
-	agw, err := s.buildSyncer(ctx, mgr, setupOpts, agwCollections, resolver, jwksLookup)
+	// build oidc store if it doesn't exist
+	if !runnablesRegistry.Contains(oidcpkg.RunnableName) {
+		if err := buildOIDCStore(ctx, mgr, s.APIClient, agwCollections, persistedOIDC, resolver); err != nil {
+			return fmt.Errorf("error creating oidc store %w", err)
+		}
+	}
+
+	agw, err := s.buildSyncer(ctx, mgr, setupOpts, agwCollections, resolver, jwksLookup, oidcLookup)
 	if err != nil {
 		return err
 	}
@@ -297,6 +315,7 @@ func (s *setup) buildSyncer(
 	agwCollections *agwplugins.AgwCollections,
 	resolver remotehttp.Resolver,
 	jwksLookup jwks.Lookup,
+	oidcLookup oidcpkg.Lookup,
 ) (*syncer.Syncer, error) {
 	slog.Info("creating krt collections")
 	krtOpts := krtutil.NewKrtOptions(ctx.Done(), setupOpts.KrtDebugger)
@@ -325,6 +344,7 @@ func (s *setup) buildSyncer(
 		AgwCollections:                 agwCollections,
 		Resolver:                       resolver,
 		JWKSLookup:                     jwksLookup,
+		OidcLookup:                     oidcLookup,
 		ExtraAgwResourceStatusHandlers: s.ExtraStatusHandlers,
 		GatewayControllerExtension:     s.GatewayControllerExtension,
 		AgentgatewaySyncerOptions:      s.AgentGatewaySyncerOptions,
@@ -382,6 +402,35 @@ func initDiscoveryNSFilter(
 		return fmt.Errorf("error creating discovery namespace filter: %w", err)
 	}
 	kube.SetObjectFilter(cli.Core(), discoveryNamespacesFilter)
+	return nil
+}
+
+func buildOIDCStore(
+	ctx context.Context,
+	mgr manager.Manager,
+	apiClient apiclient.Client,
+	agwCollections *agwplugins.AgwCollections,
+	persistedOIDC *oidcpkg.PersistedEntries,
+	resolver remotehttp.Resolver,
+) error {
+	oidcCollections := oidcpkg.NewCollections(oidcpkg.CollectionInputs{
+		AgentgatewayPolicies: agwCollections.AgentgatewayPolicies,
+		Backends:             agwCollections.Backends,
+		Resolver:             oidcpkg.NewResolver(resolver),
+		KrtOpts:              agwCollections.KrtOpts,
+	})
+
+	oidcStore := oidcpkg.NewStore(oidcCollections.SharedRequests, persistedOIDC, oidcpkg.DefaultStorePrefix)
+	if err := mgr.Add(oidcStore); err != nil {
+		return err
+	}
+
+	oidcStoreCMCtrl := oidcpkg.NewConfigMapController(apiClient, oidcpkg.DefaultStorePrefix, namespaces.GetPodNamespace(), oidcStore, persistedOIDC)
+	oidcStoreCMCtrl.Init(ctx)
+	if err := mgr.Add(oidcStoreCMCtrl); err != nil {
+		return err
+	}
+
 	return nil
 }
 

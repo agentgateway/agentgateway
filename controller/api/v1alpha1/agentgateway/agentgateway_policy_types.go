@@ -61,6 +61,9 @@ type AgentgatewayPolicyList struct {
 // +kubebuilder:validation:XValidation:rule="has(self.traffic) && has(self.targetSelectors) ? self.targetSelectors.all(t, t.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute', 'ListenerSet']) : true",message="the 'traffic' field can only target a Gateway, ListenerSet, GRPCRoute, or HTTPRoute"
 // +kubebuilder:validation:XValidation:rule="has(self.targetRefs) && has(self.traffic) && has(self.traffic.phase) && self.traffic.phase == 'PreRouting' ? self.targetRefs.all(t, t.kind in ['Gateway', 'ListenerSet']) : true",message="the 'traffic.phase=PreRouting' field can only target a Gateway or ListenerSet"
 // +kubebuilder:validation:XValidation:rule="has(self.targetSelectors) && has(self.traffic) && has(self.traffic.phase) && self.traffic.phase == 'PreRouting' ? self.targetSelectors.all(t, t.kind in ['Gateway', 'ListenerSet']) : true",message="the 'traffic.phase=PreRouting' field can only target a Gateway or ListenerSet"
+// +kubebuilder:validation:XValidation:rule="has(self.traffic) && has(self.traffic.oidc) ? !has(self.traffic.jwtAuthentication) : true",message="traffic.oidc and traffic.jwtAuthentication are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="has(self.traffic) && has(self.traffic.oidc) && has(self.targetRefs) ? self.targetRefs.all(t, t.kind in ['Gateway', 'ListenerSet', 'HTTPRoute', 'GRPCRoute']) : true",message="traffic.oidc may only target a Gateway, ListenerSet, or Route"
+// +kubebuilder:validation:XValidation:rule="has(self.traffic) && has(self.traffic.oidc) && has(self.targetSelectors) ? self.targetSelectors.all(t, t.kind in ['Gateway', 'ListenerSet', 'HTTPRoute', 'GRPCRoute']) : true",message="traffic.oidc may only target a Gateway, ListenerSet, or Route"
 type AgentgatewayPolicySpec struct {
 	// `targetRefs` specifies the target resources by reference to attach the
 	// policy to.
@@ -609,7 +612,7 @@ const (
 	PolicyPhasePostRouting PolicyPhase = "PostRouting"
 )
 
-// +kubebuilder:validation:IfThenOnlyFields:if="has(self.phase) && self.phase == 'PreRouting'",fields=phase;transformation;extProc;extAuth;jwtAuthentication;basicAuthentication;apiKeyAuthentication,message="phase PreRouting only supports extAuth, transformation, extProc, jwtAuthentication, basicAuthentication, and apiKeyAuthentication"
+// +kubebuilder:validation:IfThenOnlyFields:if="has(self.phase) && self.phase == 'PreRouting'",fields=phase;transformation;extProc;extAuth;jwtAuthentication;basicAuthentication;apiKeyAuthentication;oidc,message="phase PreRouting only supports extAuth, transformation, extProc, jwtAuthentication, basicAuthentication, apiKeyAuthentication, and oidc"
 type Traffic struct {
 	// The phase to apply the traffic policy to. If the phase is `PreRouting`,
 	// the `targetRef` must be a `Gateway` or a `Listener`. `PreRouting` is
@@ -708,6 +711,13 @@ type Traffic struct {
 	// +optional
 	APIKeyAuthentication *APIKeyAuthentication `json:"apiKeyAuthentication,omitempty"`
 
+	// `oidc` performs OpenID Connect authentication for inbound requests.
+	// When set, the gateway acts as an OIDC Relying Party: it fetches the
+	// discovery document from `<issuerURL>/.well-known/openid-configuration`,
+	// validates identity tokens, and manages the redirect flow.
+	// +optional
+	OIDC *OIDC `json:"oidc,omitempty"`
+
 	// `directResponse` configures the policy to send a direct response to the
 	// client.
 	// +optional
@@ -730,6 +740,56 @@ type DirectResponse struct {
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=4096
 	Body *string `json:"body,omitempty"`
+}
+
+// OIDC configures the gateway as an OpenID Connect Relying Party.
+// The gateway fetches the IdP discovery document, validates identity tokens,
+// and manages the OIDC redirect flow on behalf of upstream services.
+// +kubebuilder:validation:XValidation:rule="has(self.tokenEndpointAuthMethod) && self.tokenEndpointAuthMethod == 'None' ? !has(self.clientSecret) : true",message="tokenEndpointAuthMethod None must not be paired with a clientSecret"
+type OIDC struct {
+	// IssuerURL is the OIDC issuer URL; the controller fetches <IssuerURL>/.well-known/openid-configuration.
+	// +kubebuilder:validation:Pattern=`^https?://.+`
+	// +required
+	IssuerURL string `json:"issuerURL"`
+
+	// ClientID is the OIDC client identifier.
+	// +required
+	ClientID string `json:"clientID"`
+
+	// ClientSecret references a Secret containing the OIDC client secret under
+	// the `clientSecret` data key. Omit for a public client; in that case PKCE
+	// alone protects the authorization code exchange and the IdP must accept
+	// the `none` token-endpoint auth method (see TokenEndpointAuthMethod).
+	// +optional
+	ClientSecret *corev1.LocalObjectReference `json:"clientSecret,omitempty"`
+
+	// RedirectURI is the callback URL registered with the IdP.
+	// +kubebuilder:validation:Pattern=`^https?://.+`
+	// +required
+	RedirectURI string `json:"redirectURI"`
+
+	// Scopes to request from the IdP. Defaults to ["openid"].
+	// +optional
+	// +kubebuilder:default={"openid"}
+	Scopes []string `json:"scopes,omitempty"`
+
+	// Backend optionally identifies the backend used to reach the IdP. When unset, direct egress is used.
+	// +optional
+	Backend *gwv1.BackendObjectReference `json:"backend,omitempty"`
+
+	// RefreshInterval controls how often the controller re-fetches the discovery document and JWKS.
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('5m')",message="refreshInterval must be at least 5m."
+	// +kubebuilder:default="1h"
+	RefreshInterval *metav1.Duration `json:"refreshInterval,omitempty"`
+
+	// TokenEndpointAuthMethod overrides the auth method the IdP advertises
+	// in its discovery document. `None` selects public-client mode (no client
+	// authentication at the token endpoint; PKCE still protects the code
+	// exchange) and must not be paired with a `clientSecret`.
+	// +optional
+	// +kubebuilder:validation:Enum=ClientSecretBasic;ClientSecretPost;None
+	TokenEndpointAuthMethod *string `json:"tokenEndpointAuthMethod,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Strict;Optional;Permissive

@@ -32,6 +32,10 @@ type AgwCollections struct {
 	Settings  apisettings.Settings
 
 	GatewaysForDeployer krt.Collection[collections.GatewayForDeployer]
+	// GatewaysRequiringOIDC enumerates Gateways whose Pods need the managed
+	// OIDC cookie Secret because at least one OIDC-bearing AgentgatewayPolicy
+	// is attached, directly or via a child ListenerSet/HTTPRoute/GRPCRoute.
+	GatewaysRequiringOIDC krt.Collection[OIDCRequiredGateway]
 
 	// Core Kubernetes resources
 	Namespaces          krt.Collection[*corev1.Namespace]
@@ -115,16 +119,32 @@ func NewAgwCollections(
 		}}
 	})
 
+	httpRoutes := krt.WrapClient(kclient.NewFilteredDelayed[*gwv1.HTTPRoute](client, wellknown.HTTPRouteGVR, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/HTTPRoutes")...)
+	grpcRoutes := krt.WrapClient(kclient.NewFilteredDelayed[*gwv1.GRPCRoute](client, wellknown.GRPCRouteGVR, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/GRPCRoutes")...)
+	agentgatewayPolicies := krt.NewInformer[*agentgateway.AgentgatewayPolicy](client)
+
 	agwCollections := &AgwCollections{
-		Client:              client,
-		KrtOpts:             krtOptions,
-		Settings:            settings,
-		GatewaysForDeployer: krt.NewCollection(gateways, collections.GatewaysForDeployerTransformationFunc(gatewayClasses, listenerSets, byParentRefIndex, agwControllerName)),
-		ControllerName:      agwControllerName,
-		SystemNamespace:     systemNamespace,
-		IstioNamespace:      settings.IstioNamespace,
-		IstioRevision:       settings.IstioRevision,
-		ClusterID:           clusterID,
+		Client:   client,
+		KrtOpts:  krtOptions,
+		Settings: settings,
+		GatewaysForDeployer: krt.NewCollection(
+			gateways,
+			collections.GatewaysForDeployerTransformationFunc(gatewayClasses, listenerSets, byParentRefIndex, agwControllerName),
+		),
+		GatewaysRequiringOIDC: buildGatewaysRequiringOIDC(
+			krtOptions,
+			gateways,
+			listenerSets,
+			httpRoutes,
+			grpcRoutes,
+			agentgatewayPolicies,
+			byParentRefIndex,
+		),
+		ControllerName:  agwControllerName,
+		SystemNamespace: systemNamespace,
+		IstioNamespace:  settings.IstioNamespace,
+		IstioRevision:   settings.IstioRevision,
+		ClusterID:       clusterID,
 
 		// Core Kubernetes resources
 		Namespaces: krt.NewInformer[*corev1.Namespace](client, krtOptions.ToOptions("informer/Namespaces")...),
@@ -166,8 +186,8 @@ func NewAgwCollections(
 		// Gateway API resources
 		GatewayClasses:     gatewayClasses,
 		Gateways:           gateways,
-		HTTPRoutes:         krt.WrapClient(kclient.NewFilteredDelayed[*gwv1.HTTPRoute](client, wellknown.HTTPRouteGVR, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/HTTPRoutes")...),
-		GRPCRoutes:         krt.WrapClient(kclient.NewFilteredDelayed[*gwv1.GRPCRoute](client, wellknown.GRPCRouteGVR, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/GRPCRoutes")...),
+		HTTPRoutes:         httpRoutes,
+		GRPCRoutes:         grpcRoutes,
 		TLSRoutes:          krt.WrapClient(kclient.NewDelayedInformer[*gwv1.TLSRoute](client, gvr.TLSRoute, kubetypes.StandardInformer, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/TLSRoutes")...),
 		BackendTLSPolicies: krt.WrapClient(kclient.NewDelayedInformer[*gwv1.BackendTLSPolicy](client, gvr.BackendTLSPolicy, kubetypes.StandardInformer, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/BackendTLSPolicies")...),
 		ListenerSets:       listenerSets,
@@ -181,7 +201,7 @@ func NewAgwCollections(
 		InferencePools: krt.NewStaticCollection[*inf.InferencePool](nil, nil, krtOptions.ToOptions("disable/inferencepools")...),
 
 		// agentgateway-specific CRDs
-		AgentgatewayPolicies: krt.NewInformer[*agentgateway.AgentgatewayPolicy](client),
+		AgentgatewayPolicies: agentgatewayPolicies,
 		Backends:             krt.NewInformer[*agentgateway.AgentgatewayBackend](client),
 	}
 
@@ -206,5 +226,6 @@ func (c *AgwCollections) SetupIndexes() {
 }
 
 func (c *AgwCollections) HasSynced() bool {
-	return c.GatewaysForDeployer.HasSynced()
+	return c.GatewaysForDeployer.HasSynced() &&
+		c.GatewaysRequiringOIDC.HasSynced()
 }

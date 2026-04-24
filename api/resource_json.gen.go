@@ -1007,6 +1007,17 @@ func (this *TrafficPolicySpec_APIKey_User) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for TrafficPolicySpec_OIDC
+func (this *TrafficPolicySpec_OIDC) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_OIDC
+func (this *TrafficPolicySpec_OIDC) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for TrafficPolicySpec_TransformationPolicy
 func (this *TrafficPolicySpec_TransformationPolicy) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)

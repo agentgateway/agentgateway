@@ -195,7 +195,7 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 // agwPluginFactory is a factory function that returns the agent gateway plugins
 // It is based on agwPluginFactory(cfg)(ctx, cfg.AgwCollections) in start.go
 func agwPluginFactory(agwCollections *plugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup) plugins.AgwPlugin {
-	agwPlugins := controller.Plugins(agwCollections, resolver, jwksLookup)
+	agwPlugins := controller.Plugins(agwCollections, resolver, jwksLookup, nil)
 	mergedPlugins := plugins.MergePlugins(agwPlugins...)
 	return mergedPlugins
 }

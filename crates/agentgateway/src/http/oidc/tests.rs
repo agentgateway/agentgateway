@@ -128,8 +128,9 @@ fn test_policy() -> OidcPolicy {
 		}),
 		client: ClientConfig {
 			client_id: TEST_CLIENT_ID.into(),
-			client_secret: SecretString::new("client-secret".into()),
-			token_endpoint_auth: TokenEndpointAuth::ClientSecretBasic,
+			credentials: ClientCredentials::ClientSecretBasic {
+				client_secret: SecretString::new("client-secret".into()),
+			},
 		},
 		redirect_uri: test_redirect_uri(),
 		session,
@@ -242,7 +243,7 @@ fn explicit_local_oidc_config() -> LocalOidcConfig {
 		token_endpoint_auth: None,
 		jwks: Some(test_jwks_inline()),
 		client_id: TEST_CLIENT_ID.into(),
-		client_secret: SecretString::new("client-secret".into()),
+		client_secret: Some(SecretString::new("client-secret".into())),
 		redirect_uri: test_redirect_uri().redirect_uri,
 		scopes: vec!["profile".into(), "email".into()],
 	}
@@ -487,8 +488,11 @@ async fn token_endpoint_auth_modes_shape_exchange_requests() {
 		};
 		let client_config = ClientConfig {
 			client_id: client_id.into(),
-			client_secret: SecretString::new(client_secret.into()),
-			token_endpoint_auth,
+			credentials: ClientCredentials::from_parts(
+				token_endpoint_auth,
+				Some(SecretString::new(client_secret.into())),
+			)
+			.expect("confidential credentials"),
 		};
 
 		let response = provider::exchange_code(
@@ -544,6 +548,61 @@ async fn token_endpoint_auth_modes_shape_exchange_requests() {
 }
 
 #[tokio::test]
+async fn public_client_token_exchange_sends_no_client_secret() {
+	let mock = MockServer::start().await;
+	Mock::given(method("POST"))
+		.and(path("/token"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
+			"id_token": signed_id_token(TEST_NONCE)
+		})))
+		.mount(&mock)
+		.await;
+
+	let provider = Provider {
+		issuer: TEST_ISSUER.into(),
+		authorization_endpoint: provider_endpoint("https://issuer.example.com/authorize"),
+		token_endpoint: provider_endpoint(format!("{}/token", mock.uri())),
+		id_token_validator: test_id_token_validator(),
+	};
+	let client_config = ClientConfig {
+		client_id: TEST_CLIENT_ID.into(),
+		credentials: ClientCredentials::None,
+	};
+
+	let response = provider::exchange_code(
+		policy_client(),
+		&provider,
+		&client_config,
+		"https://app.example.com/oauth/callback",
+		"code",
+		&SecretString::new("verifier".into()),
+	)
+	.await
+	.expect("public-client token exchange");
+	assert!(response.id_token.is_some());
+
+	let request = &mock.received_requests().await.expect("requests")[0];
+	let body = String::from_utf8(request.body.clone()).expect("utf8 body");
+
+	// Public clients authenticate themselves only by presenting client_id and
+	// a valid PKCE verifier; no Authorization header and no client_secret
+	// parameter should ever leave the gateway.
+	assert!(!request.headers.contains_key("authorization"));
+	assert!(
+		body.contains(&format!("client_id={TEST_CLIENT_ID}")),
+		"token request must still identify the client: {body}"
+	);
+	assert!(
+		!body.contains("client_secret"),
+		"public-client request leaked a client_secret: {body}"
+	);
+	assert!(
+		body.contains("code_verifier=verifier"),
+		"PKCE verifier must still be present: {body}"
+	);
+}
+
+#[tokio::test]
 async fn token_exchange_bounds_transport_failures() {
 	#[derive(Copy, Clone)]
 	enum FailureMode {
@@ -578,8 +637,9 @@ async fn token_exchange_bounds_transport_failures() {
 		};
 		let client_config = ClientConfig {
 			client_id: TEST_CLIENT_ID.into(),
-			client_secret: SecretString::new("client-secret".into()),
-			token_endpoint_auth: TokenEndpointAuth::ClientSecretBasic,
+			credentials: ClientCredentials::ClientSecretBasic {
+				client_secret: SecretString::new("client-secret".into()),
+			},
 		};
 
 		let err = match failure_mode {
@@ -921,7 +981,7 @@ async fn local_oidc_config_compiles_supported_provider_sources() {
 				token_endpoint_auth: None,
 				jwks: None,
 				client_id: TEST_CLIENT_ID.into(),
-				client_secret: SecretString::new("client-secret".into()),
+				client_secret: Some(SecretString::new("client-secret".into())),
 				redirect_uri: "http://localhost:3000/oauth/callback".into(),
 				scopes: vec![],
 			},
@@ -969,7 +1029,8 @@ async fn local_oidc_config_compiles_supported_provider_sources() {
 			"{name}"
 		);
 		assert_eq!(
-			policy.client.token_endpoint_auth, expected_token_endpoint_auth,
+			policy.client.credentials.method(),
+			expected_token_endpoint_auth,
 			"{name}"
 		);
 	}
@@ -998,7 +1059,7 @@ async fn discovery_rejects_relative_provider_endpoints() {
 		token_endpoint_auth: None,
 		jwks: None,
 		client_id: TEST_CLIENT_ID.into(),
-		client_secret: SecretString::new("client-secret".into()),
+		client_secret: Some(SecretString::new("client-secret".into())),
 		redirect_uri: "http://localhost:3000/oauth/callback".into(),
 		scopes: vec![],
 	};
@@ -1022,7 +1083,7 @@ async fn local_oidc_config_rejects_ambiguous_provider_source_configuration() {
 				token_endpoint_auth: None,
 				jwks: Some(test_jwks_inline()),
 				client_id: TEST_CLIENT_ID.into(),
-				client_secret: SecretString::new("client-secret".into()),
+				client_secret: Some(SecretString::new("client-secret".into())),
 				redirect_uri: "http://localhost:3000/oauth/callback".into(),
 				scopes: vec![],
 			},
@@ -1050,7 +1111,7 @@ async fn local_oidc_config_rejects_ambiguous_provider_source_configuration() {
 				token_endpoint_auth: Some(TokenEndpointAuth::ClientSecretPost),
 				jwks: None,
 				client_id: TEST_CLIENT_ID.into(),
-				client_secret: SecretString::new("client-secret".into()),
+				client_secret: Some(SecretString::new("client-secret".into())),
 				redirect_uri: "http://localhost:3000/oauth/callback".into(),
 				scopes: vec![],
 			},
@@ -1064,4 +1125,125 @@ async fn local_oidc_config_rejects_ambiguous_provider_source_configuration() {
 			.expect_err(name);
 		assert!(err.to_string().contains(expected_error_fragment), "{name}");
 	}
+}
+
+#[test]
+fn policy_id_from_str_round_trips_canonical_forms() {
+	use std::str::FromStr;
+
+	for input in [
+		"route/default/my-route/rule-0",
+		"policy/default/my-policy",
+		"route/ns/r",
+		"policy/ns/p",
+	] {
+		let parsed = PolicyId::from_str(input).expect(input);
+		assert_eq!(parsed.as_str(), input);
+	}
+}
+
+#[test]
+fn policy_id_from_str_rejects_malformed_input() {
+	use std::str::FromStr;
+
+	for bad in [
+		"",              // missing prefix
+		"nope",          // missing '/'
+		"route/",        // empty identifier
+		"policy/",       // empty identifier
+		"gateway/ns/g",  // unsupported prefix
+		"/default/name", // empty prefix
+	] {
+		assert!(
+			PolicyId::from_str(bad).is_err(),
+			"expected PolicyId::from_str({bad:?}) to fail",
+		);
+	}
+}
+
+#[test]
+fn policy_id_constructors_match_from_str() {
+	use std::str::FromStr;
+
+	let route = PolicyId::route("default/my-route/rule-0");
+	assert_eq!(
+		PolicyId::from_str(route.as_str()).unwrap(),
+		route,
+		"route constructor output must round-trip",
+	);
+
+	let policy = PolicyId::policy("default/my-policy");
+	assert_eq!(
+		PolicyId::from_str(policy.as_str()).unwrap(),
+		policy,
+		"policy constructor output must round-trip",
+	);
+}
+
+fn compile_test_oidc_from_xds(
+	policy_id: PolicyId,
+	jwks_inline: &str,
+	encoder: &crate::http::sessionpersistence::Encoder,
+) -> Result<OidcPolicy, super::Error> {
+	super::compile_oidc_policy_from_xds(
+		policy_id,
+		TEST_ISSUER.into(),
+		provider_endpoint("https://issuer.example.com/authorize"),
+		provider_endpoint("https://issuer.example.com/token"),
+		TokenEndpointAuth::ClientSecretBasic,
+		jwks_inline,
+		TEST_CLIENT_ID.into(),
+		Some(SecretString::new("client-secret".into())),
+		test_redirect_uri(),
+		vec!["profile".into()],
+		encoder,
+	)
+}
+
+#[test]
+fn xds_oidc_compiles_to_policy() {
+	let policy_id = PolicyId::policy("default/my-policy");
+	let encoder = test_oidc_cookie_encoder();
+	let jwks = serde_json::to_string(&test_jwks()).expect("jwks json");
+
+	let policy =
+		compile_test_oidc_from_xds(policy_id.clone(), &jwks, &encoder).expect("compile xds oidc");
+
+	assert_eq!(policy.policy_id, policy_id);
+	assert_eq!(policy.provider.issuer, TEST_ISSUER);
+	assert_eq!(policy.client.client_id, TEST_CLIENT_ID);
+	match &policy.client.credentials {
+		ClientCredentials::ClientSecretBasic { client_secret } => {
+			assert_eq!(client_secret.expose_secret(), "client-secret");
+		},
+		other => panic!("expected ClientSecretBasic credentials, got {other:?}"),
+	}
+
+	// Scopes always include "openid", even when not explicitly requested.
+	assert_eq!(policy.scopes, vec!["openid".to_string(), "profile".into()]);
+
+	// Cookie names are deterministic from the policy id; the xDS path must
+	// derive the same cookie as the file-backed path.
+	let (expected_cookie, expected_transaction_prefix) =
+		super::session::derive_cookie_names(&policy_id);
+	assert_eq!(policy.session.cookie_name, expected_cookie);
+	assert_eq!(
+		policy.session.transaction_cookie_prefix,
+		expected_transaction_prefix
+	);
+}
+
+#[test]
+fn xds_oidc_rejects_invalid_jwks_inline() {
+	let err = compile_test_oidc_from_xds(
+		PolicyId::policy("default/p"),
+		"not valid json",
+		&test_oidc_cookie_encoder(),
+	)
+	.expect_err("bad jwks must be rejected");
+	let msg = err.to_string();
+	assert!(
+		msg.contains("failed to parse inline oidc jwks"),
+		"expected jwks parse error, got: {msg}",
+	);
 }

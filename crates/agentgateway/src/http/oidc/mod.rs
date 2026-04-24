@@ -23,6 +23,7 @@ mod session;
 mod tests;
 
 pub use local::LocalOidcConfig;
+pub(crate) use local::compile_oidc_policy_from_xds;
 pub use redirect::RedirectUri;
 pub use session::{
 	BrowserSession, CookieSecureMode, RESERVED_COOKIE_PREFIX, SameSiteMode, SessionConfig,
@@ -31,6 +32,11 @@ pub use session::{
 
 pub use crate::http::oauth::TokenEndpointAuth;
 
+/// Stable identity used to prefix session cookies and to correlate an OIDC
+/// policy between the controller, xDS, and the dataplane runtime. The
+/// canonical wire form is `policy/<key>` or `route/<key>`; see
+/// [`PolicyId::policy`] / [`PolicyId::route`] for the constructors and
+/// [`<PolicyId as std::str::FromStr>::from_str`] for the parser.
 #[derive(
 	Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -48,6 +54,29 @@ impl PolicyId {
 
 	pub fn policy(policy_key: impl std::fmt::Display) -> Self {
 		Self(format!("policy/{policy_key}"))
+	}
+}
+
+impl std::str::FromStr for PolicyId {
+	type Err = String;
+
+	/// Parse a PolicyId from its canonical string form, used to transport the
+	/// identity through xDS. The encoding is produced by [`PolicyId::route`]
+	/// and [`PolicyId::policy`]; any other shape is rejected so a malformed
+	/// identity never becomes a stable cookie prefix.
+	fn from_str(value: &str) -> Result<Self, Self::Err> {
+		let (prefix, rest) = value
+			.split_once('/')
+			.ok_or_else(|| format!("policy id '{value}' is missing a '<prefix>/' segment"))?;
+		if rest.is_empty() {
+			return Err(format!("policy id '{value}' has an empty identifier"));
+		}
+		match prefix {
+			"route" | "policy" => Ok(Self(value.to_string())),
+			other => Err(format!(
+				"policy id prefix '{other}' is not supported (expected 'route' or 'policy')"
+			)),
+		}
 	}
 }
 
@@ -146,9 +175,68 @@ pub struct Provider {
 #[serde(rename_all = "camelCase")]
 pub struct ClientConfig {
 	pub client_id: String,
-	#[serde(serialize_with = "crate::serdes::ser_redact")]
-	pub client_secret: SecretString,
-	pub token_endpoint_auth: TokenEndpointAuth,
+	pub credentials: ClientCredentials,
+}
+
+/// Runtime-strict pairing of a token-endpoint auth method with the secret it
+/// requires. Confidential variants carry the `client_secret`; `None` is the
+/// public-client mode where PKCE alone protects the authorization code
+/// exchange. By tying the method to the secret at the type level, public and
+/// confidential configurations cannot be mixed by accident at a call site.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase", tag = "method")]
+pub enum ClientCredentials {
+	ClientSecretBasic {
+		#[serde(serialize_with = "crate::serdes::ser_redact")]
+		client_secret: SecretString,
+	},
+	ClientSecretPost {
+		#[serde(serialize_with = "crate::serdes::ser_redact")]
+		client_secret: SecretString,
+	},
+	None,
+}
+
+impl ClientCredentials {
+	#[cfg(test)]
+	pub(super) fn method(&self) -> TokenEndpointAuth {
+		match self {
+			Self::ClientSecretBasic { .. } => TokenEndpointAuth::ClientSecretBasic,
+			Self::ClientSecretPost { .. } => TokenEndpointAuth::ClientSecretPost,
+			Self::None => TokenEndpointAuth::None,
+		}
+	}
+
+	/// Pair a method with its (optional) secret, rejecting mismatches. Returns
+	/// an [`Error::Config`] with a user-comprehensible message that names both
+	/// the method and whether a secret was expected.
+	pub fn from_parts(
+		method: TokenEndpointAuth,
+		client_secret: Option<SecretString>,
+	) -> Result<Self, Error> {
+		match (method, client_secret) {
+			(TokenEndpointAuth::ClientSecretBasic, Some(client_secret)) => {
+				Ok(Self::ClientSecretBasic { client_secret })
+			},
+			(TokenEndpointAuth::ClientSecretPost, Some(client_secret)) => {
+				Ok(Self::ClientSecretPost { client_secret })
+			},
+			(TokenEndpointAuth::None, None) => Ok(Self::None),
+			(method, None) if method.requires_client_secret() => Err(Error::Config(format!(
+				"tokenEndpointAuthMethod {} requires a clientSecret",
+				method.as_str()
+			))),
+			(TokenEndpointAuth::None, Some(_)) => Err(Error::Config(
+				"tokenEndpointAuthMethod None must not be paired with a clientSecret".into(),
+			)),
+			// Unreachable today (requires_client_secret covers the confidential methods)
+			// but kept exhaustive so a future method addition is a compile error.
+			(method, _) => Err(Error::Config(format!(
+				"tokenEndpointAuthMethod {} is not supported in this build",
+				method.as_str()
+			))),
+		}
+	}
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -354,11 +442,18 @@ pub(crate) fn now_unix() -> u64 {
 		.as_secs()
 }
 
-pub(crate) fn dedupe_scopes(mut scopes: Vec<String>) -> Vec<String> {
-	scopes.insert(0, "openid".into());
+pub(crate) fn dedupe_scopes(scopes: Vec<String>) -> Vec<String> {
 	let mut seen = HashSet::new();
-	scopes.retain(|scope| seen.insert(scope.clone()));
-	scopes
+	seen.insert("openid".to_string());
+
+	let mut deduped = Vec::with_capacity(scopes.len() + 1);
+	deduped.push("openid".to_string());
+	for scope in scopes {
+		if seen.insert(scope.clone()) {
+			deduped.push(scope);
+		}
+	}
+	deduped
 }
 
 pub(crate) fn cap_session_expiry(now: u64, ttl: Duration, claims: &Map<String, Value>) -> u64 {
