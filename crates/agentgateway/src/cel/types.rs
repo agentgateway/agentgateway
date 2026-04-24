@@ -4,6 +4,24 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 use std::time::Instant;
 
+use agent_core::env::ENV;
+use agent_core::strng::Strng;
+use bytes::Bytes;
+use cel::common::ast::OptimizedExpr;
+use cel::context::VariableResolver;
+use cel::objects::{BytesValue, ListValue, StringValue};
+use cel::types::dynamic::{DynamicType, DynamicValue};
+use cel::{ExecutionError, FunctionContext, Value};
+use chrono::{DateTime, FixedOffset};
+use http::{Extensions, HeaderMap, Method, Uri, Version};
+use prometheus_client::encoding::EncodeLabelValue;
+#[cfg(feature = "schema")]
+pub use schemars::JsonSchema;
+use secrecy::{ExposeSecret, SecretString};
+use serde::{Deserialize, Serialize, Serializer};
+use serde_json::json;
+use tracing::event;
+
 use crate::cel::{Error, Expression, ROOT_CONTEXT, query};
 use crate::http::ext_authz::ExtAuthzDynamicMetadata;
 use crate::http::ext_proc::ExtProcDynamicMetadata;
@@ -14,24 +32,6 @@ use crate::mcp::{MCPInfo, MCPTool};
 use crate::serdes::schema;
 use crate::transport::tls::TlsInfo;
 use crate::{apply, llm};
-use agent_core::env::ENV;
-use agent_core::strng::Strng;
-use bytes::Bytes;
-use cel::Value;
-use cel::common::ast::OptimizedExpr;
-use cel::context::VariableResolver;
-use cel::objects::{BytesValue, ListValue, StringValue};
-use cel::types::dynamic::{DynamicType, DynamicValue};
-use cel::{ExecutionError, FunctionContext};
-use chrono::{DateTime, FixedOffset};
-use http::{Extensions, HeaderMap, Method, Uri, Version};
-use prometheus_client::encoding::EncodeLabelValue;
-#[cfg(feature = "schema")]
-pub use schemars::JsonSchema;
-use secrecy::{ExposeSecret, SecretString};
-use serde::{Deserialize, Serialize, Serializer};
-use serde_json::json;
-use tracing::event;
 
 #[derive(Debug, Default, cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]

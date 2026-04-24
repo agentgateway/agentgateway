@@ -4,6 +4,7 @@ use std::io;
 use std::path::PathBuf;
 
 use anyhow::Context;
+use openapiv3::OpenAPI;
 #[cfg(feature = "schema")]
 pub use schemars::JsonSchema;
 use secrecy::SecretString;
@@ -14,7 +15,6 @@ pub use serde_with;
 
 use crate::client::Client;
 use crate::http::Body;
-use openapiv3::OpenAPI;
 
 /// Serde yaml represents things different than just as "JSON in YAML format".
 /// We don't want this. Instead, we transcode YAML via the JSON module.

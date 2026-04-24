@@ -1,11 +1,12 @@
+use std::cmp::Ordering;
+use std::collections::BinaryHeap;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+
 use arc_swap::ArcSwap;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rand::RngExt;
 use serde::ser::SerializeSeq;
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
-use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use tokio::sync::mpsc;
 use tokio::time::sleep_until;
 

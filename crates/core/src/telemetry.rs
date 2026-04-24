@@ -580,14 +580,15 @@ impl<'a> FormatFields<'a> for IstioJsonFormat {
 /// Mod testing gives access to a test logger, which stores logs in memory for querying.
 /// Inspired by https://github.com/dbrgn/tracing-test
 pub mod testing {
-	use once_cell::sync::Lazy;
-	use serde_json::Value;
 	use std::collections::HashMap;
 	use std::fmt::{Debug, Display, Formatter};
 	use std::io;
 	use std::io::IoSlice;
 	use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 	use std::time::Duration;
+
+	use once_cell::sync::Lazy;
+	use serde_json::Value;
 	use tracing_subscriber::fmt;
 	use tracing_subscriber::fmt::writer::Tee;
 	use tracing_subscriber::layer::SubscriberExt;

@@ -13,10 +13,6 @@ use std::io;
 use std::sync::Arc;
 use std::time::Duration;
 
-#[cfg(feature = "schema")]
-use crate::JsonSchema;
-use crate::http::SendDirectResponse;
-use crate::proxy::ProxyError;
 use axum_core::BoxError;
 use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
@@ -24,6 +20,11 @@ use rmcp::model::RequestId;
 pub use router::App;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+#[cfg(feature = "schema")]
+use crate::JsonSchema;
+use crate::http::SendDirectResponse;
+use crate::proxy::ProxyError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]

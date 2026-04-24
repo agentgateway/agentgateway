@@ -2,6 +2,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use ::http::{Method, Request};
+use hyper_util::client::legacy::Client;
+use protos::envoy::service::ext_proc::v3::processing_response;
+use serde_json::json;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
+use tonic::Status;
+use wiremock::{Mock, MockServer, ResponseTemplate};
+
 use crate::cel::Expression;
 use crate::http::ext_proc::proto::header_value_option::HeaderAppendAction;
 use crate::http::ext_proc::proto::{
@@ -17,14 +26,6 @@ use crate::test_helpers::extprocmock::{
 };
 use crate::test_helpers::proxymock::*;
 use crate::*;
-use ::http::{Method, Request};
-use hyper_util::client::legacy::Client;
-use protos::envoy::service::ext_proc::v3::processing_response;
-use serde_json::json;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::Sender;
-use tonic::Status;
-use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[tokio::test]
 async fn nop_ext_proc() {

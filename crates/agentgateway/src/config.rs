@@ -13,11 +13,10 @@ use serde::de::DeserializeOwned;
 use crate::control::caclient;
 use crate::telemetry::log::{LoggingFields, MetricFields};
 use crate::telemetry::trc;
-use crate::types;
 use crate::types::discovery::{Identity, WaypointIdentity};
 use crate::{
 	Address, Config, ConfigSource, DnsLookupFamily, NestedRawConfig, RawLoggingLevel, StringOrInt,
-	ThreadingMode, XDSConfig, cel, client, serdes, telemetry,
+	ThreadingMode, XDSConfig, cel, client, serdes, telemetry, types,
 };
 
 pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Result<Config> {
@@ -723,10 +722,11 @@ fn parse_headers(prefix: &str) -> Result<Vec<(String, String)>, anyhow::Error> {
 
 #[cfg(test)]
 mod parse_headers_tests {
-	use super::*;
 	use std::env;
 	use std::ffi::OsString;
 	use std::sync::{LazyLock, Mutex};
+
+	use super::*;
 
 	static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
@@ -798,9 +798,10 @@ mod parse_headers_tests {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use std::env;
 	use std::sync::{LazyLock, Mutex};
+
+	use super::*;
 
 	static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 

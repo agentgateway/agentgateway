@@ -4,14 +4,12 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ::http::{HeaderValue, StatusCode, header};
-use secrecy::ExposeSecret;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 use tracing::debug;
 
-use crate::http::jwt;
-use crate::http::{Body, PolicyResponse, Request, Response};
+use crate::http::{Body, PolicyResponse, Request, Response, jwt};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
 
@@ -24,13 +22,14 @@ mod session;
 #[cfg(test)]
 mod tests;
 
-pub use crate::http::oauth::TokenEndpointAuth;
 pub use local::LocalOidcConfig;
 pub use redirect::RedirectUri;
 pub use session::{
 	BrowserSession, CookieSecureMode, RESERVED_COOKIE_PREFIX, SameSiteMode, SessionConfig,
 	TransactionState,
 };
+
+pub use crate::http::oauth::TokenEndpointAuth;
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,

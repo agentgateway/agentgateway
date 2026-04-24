@@ -8,8 +8,9 @@ pub mod ratelimitmock;
 pub use common::MockInstance;
 
 mod common {
-	use hyper::server::conn::http2;
 	use std::net::SocketAddr;
+
+	use hyper::server::conn::http2;
 	use tokio::task::JoinHandle;
 	use tonic::body::Body;
 	use tower::BoxError;
@@ -97,14 +98,15 @@ mod common {
 
 #[cfg(test)]
 mod tests {
-	use super::{extauthmock, extprocmock, oteltracemock, ratelimitmock};
-	use crate::test_helpers::extauthmock::allow_response;
-	use crate::test_helpers::oteltracemock::ok_response;
 	use opentelemetry_proto::tonic::collector::trace::v1::{
 		ExportTraceServiceRequest, ExportTraceServiceResponse,
 	};
 	use protos::envoy::service::auth::v3::{CheckRequest, CheckResponse};
 	use tonic::Status;
+
+	use super::{extauthmock, extprocmock, oteltracemock, ratelimitmock};
+	use crate::test_helpers::extauthmock::allow_response;
+	use crate::test_helpers::oteltracemock::ok_response;
 
 	struct DevExtProcHandler;
 

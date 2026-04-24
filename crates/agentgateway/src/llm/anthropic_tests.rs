@@ -1,6 +1,5 @@
-use crate::llm::AIProvider;
-
 use super::OAUTH_TOKEN_PREFIX;
+use crate::llm::AIProvider;
 
 // ── set_required_fields integration tests ───────────────────────────────────
 

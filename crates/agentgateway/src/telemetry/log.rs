@@ -6,21 +6,24 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, ready};
 use std::time::{Duration, SystemTime};
 
-use agent_core::Timestamp;
 use agent_core::metrics::CustomField;
-use agent_core::strng;
 use agent_core::strng::{RichStrng, Strng};
 use agent_core::telemetry::{OptionExt, OtelLogSink, ValueBag, debug, display};
+use agent_core::{Timestamp, strng};
 use bytes::Buf;
 use crossbeam::atomic::AtomicCell;
 use frozen_collections::FzHashSet;
 use http_body::{Body, Frame, SizeHint};
 use indexmap::IndexMap;
 use itertools::Itertools;
-use opentelemetry::TraceFlags;
+use opentelemetry::logs::{AnyValue, LogRecord as _, Logger, LoggerProvider as _, Severity};
 use opentelemetry::trace::{
 	Span, SpanBuilder, SpanContext, SpanKind, TraceContextExt as _, TraceState, Tracer,
 };
+use opentelemetry::{Context as OtelContext, Key, KeyValue, TraceFlags};
+use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
+use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::logs::SdkLoggerProvider;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -28,8 +31,7 @@ use serde_json::Value;
 use tracing::{Level, trace};
 
 use crate::cel::{ContextBuilder, Expression, LLMContext};
-use crate::http::Request;
-use crate::http::health;
+use crate::http::{Request, health};
 use crate::llm::InputFormat;
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::ProxyResponseReason;
@@ -42,12 +44,6 @@ use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendInfo, BindKey, ListenerName, RouteName, Target};
 use crate::types::loadbalancer::ActiveHandle;
 use crate::{cel, llm, mcp};
-
-use opentelemetry::logs::{AnyValue, LogRecord as _, Logger, LoggerProvider as _, Severity};
-use opentelemetry::{Context as OtelContext, Key, KeyValue};
-use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
-use opentelemetry_sdk::Resource;
-use opentelemetry_sdk::logs::SdkLoggerProvider;
 
 /// AsyncLog is a wrapper around an item that can be atomically set.
 /// The intent is to provide additional info to the log after we have lost the RequestLog reference,

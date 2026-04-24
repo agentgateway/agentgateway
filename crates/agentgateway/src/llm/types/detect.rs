@@ -1,3 +1,10 @@
+use agent_core::prelude::Strng;
+use bytes::Bytes;
+use http::HeaderMap;
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
+use tracing::debug;
+
 use crate::llm::bedrock::Provider;
 use crate::llm::policy::PromptCachingConfig;
 use crate::llm::policy::webhook::ResponseChoice;
@@ -6,12 +13,6 @@ use crate::llm::{
 	ResponseType, SimpleChatCompletionMessage,
 };
 use crate::{json, llm, parse};
-use agent_core::prelude::Strng;
-use bytes::Bytes;
-use http::HeaderMap;
-use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::Value;
-use tracing::debug;
 
 fn lookup<'a, T, const C: usize>(
 	value: &'a Value,

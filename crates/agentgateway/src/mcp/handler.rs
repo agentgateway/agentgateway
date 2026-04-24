@@ -2,18 +2,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::http::Response;
-use crate::http::sessionpersistence::MCPSession;
-use crate::mcp;
-use crate::mcp::FailureMode;
-use crate::mcp::mergestream::{MergeFn, Messages};
-use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
-use crate::mcp::router::McpBackendGroup;
-use crate::mcp::streamablehttp::ServerSseMessage;
-use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, MCPInfo, mergestream, rbac, upstream};
-use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
 use agent_core::version::BuildInfo;
 use futures_core::Stream;
 use http::StatusCode;
@@ -26,6 +14,18 @@ use rmcp::model::{
 	ProtocolVersion, RequestId, ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerResult,
 };
 use tracing::{debug, warn};
+
+use crate::http::Response;
+use crate::http::sessionpersistence::MCPSession;
+use crate::mcp;
+use crate::mcp::mergestream::{MergeFn, Messages};
+use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
+use crate::mcp::router::McpBackendGroup;
+use crate::mcp::streamablehttp::ServerSseMessage;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
+use crate::mcp::{ClientError, FailureMode, MCPInfo, mergestream, rbac, upstream};
+use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
 
 const DELIMITER: &str = "_";
 
@@ -650,10 +650,11 @@ fn accepted_response() -> Response {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use futures_util::stream;
 	use rmcp::model::{CallToolResult, ListToolsResult};
 	use serde_json::json;
+
+	use super::*;
 
 	#[tokio::test]
 	async fn messages_to_response_captures_first_matching_tool_result() {

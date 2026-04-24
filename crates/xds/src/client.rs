@@ -1,11 +1,10 @@
 use std::collections::{HashMap, HashSet};
-use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
-use std::mem;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
+use std::{fmt, mem};
 
 use agent_core::env::ENV;
 use agent_core::metrics::{IncrementRecorder, Recorder};
@@ -17,6 +16,7 @@ use http::Request;
 use prost::{DecodeError, EncodeError};
 use prost_wkt_types::value::Kind;
 use prost_wkt_types::{Struct, Value};
+use protos::envoy::service::common::v3::Status;
 use split_iter::Splittable;
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -27,7 +27,6 @@ use super::Error;
 use crate::metrics::{ConnectionTerminationReason, Metrics};
 use crate::service::discovery::v3::aggregated_discovery_service_client::AggregatedDiscoveryServiceClient;
 use crate::service::discovery::v3::{Resource as ProtoResource, *};
-use protos::envoy::service::common::v3::Status;
 
 const INSTANCE_IPS: &str = "INSTANCE_IPS";
 const DEFAULT_IP: &str = "1.1.1.1";

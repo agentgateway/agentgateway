@@ -1,9 +1,10 @@
-use crate::cel::SourceContext;
-use futures::pin_mut;
-use rand::prelude::IndexedRandom;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use futures::pin_mut;
+use rand::prelude::IndexedRandom;
+
+use crate::cel::SourceContext;
 use crate::proxy::httpproxy::BackendCall;
 use crate::proxy::{ProxyError, WaypointService, httpproxy};
 use crate::store::{BackendPolicies, FrontendPolices, RoutePath};
@@ -16,7 +17,8 @@ use crate::types::agent::{
 	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference, Target,
 	TransportProtocol,
 };
-use crate::types::discovery::{NetworkAddress, WaypointIdentity, gatewayaddress::Destination};
+use crate::types::discovery::gatewayaddress::Destination;
+use crate::types::discovery::{NetworkAddress, WaypointIdentity};
 use crate::types::{agent, frontend};
 use crate::{ProxyInputs, Stores, *};
 
@@ -435,16 +437,15 @@ pub fn get_backend_policies(
 #[cfg(test)]
 mod tests {
 	use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-	use std::sync::Arc;
-	use std::sync::RwLock;
+	use std::sync::{Arc, RwLock};
 
 	use agent_core::strng;
 
 	use crate::store::{BackendPolicies, Stores};
 	use crate::types::agent::{ListenerProtocol, SimpleBackendReference};
+	use crate::types::discovery::gatewayaddress::Destination;
 	use crate::types::discovery::{
 		GatewayAddress, NamespacedHostname, NetworkAddress, Service, WaypointIdentity,
-		gatewayaddress::Destination,
 	};
 
 	fn stores_with_services(services: Vec<Service>) -> Stores {
@@ -805,11 +806,12 @@ mod tests {
 	}
 
 	fn make_proxy_inputs() -> Arc<crate::ProxyInputs> {
-		use crate::client::Client;
-		use crate::{BackendConfig, client};
 		use agent_core::metrics;
 		use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 		use prometheus_client::registry::Registry;
+
+		use crate::client::Client;
+		use crate::{BackendConfig, client};
 
 		let config = crate::config::parse_config("{}".to_string(), None).unwrap();
 		let encoder = config.session_encoder.clone();
@@ -890,8 +892,9 @@ mod tests {
 
 	#[test]
 	fn test_build_backend_call_aws_user_policies_override() {
-		use crate::http::auth::{AwsAuth, BackendAuth};
 		use secrecy::SecretString;
+
+		use crate::http::auth::{AwsAuth, BackendAuth};
 
 		let inputs = make_proxy_inputs();
 		let backend = make_aws_simple_backend();

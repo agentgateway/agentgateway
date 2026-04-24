@@ -247,12 +247,13 @@ impl ExtendedServerName {
 pub mod insecure {
 	use std::sync::Arc;
 
-	use crate::transport::tls::provider;
 	use rustls::client::WebPkiServerVerifier;
 	use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 	use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 	use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
 	use rustls::{DigitallySignedStruct, DistinguishedName, SignatureScheme};
+
+	use crate::transport::tls::provider;
 
 	#[derive(Debug)]
 	pub struct NoServerNameVerification {

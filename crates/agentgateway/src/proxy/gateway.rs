@@ -5,8 +5,9 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use agent_core::drain;
 use agent_core::drain::{DrainUpgrader, DrainWatcher};
+use agent_core::{drain, strng};
+use agent_hbone::server::H2Request;
 use anyhow::anyhow;
 use bytes::Bytes;
 use futures::pin_mut;
@@ -36,8 +37,6 @@ use crate::types::discovery::Service;
 use crate::types::discovery::gatewayaddress::Destination;
 use crate::types::frontend;
 use crate::{ProxyInputs, Stores, client};
-use agent_core::strng;
-use agent_hbone::server::H2Request;
 
 #[cfg(test)]
 #[path = "gateway_test.rs"]

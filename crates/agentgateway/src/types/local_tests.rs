@@ -1,14 +1,16 @@
-use crate::serdes::FileInlineOrRemote;
-use crate::types::agent::HeaderValueMatch;
-use crate::types::agent::{
-	ListenerTarget, PolicyPhase, PolicyTarget, PolicyType, ResourceName, TrafficPolicy,
-};
-use crate::types::local::NormalizedLocalConfig;
-use crate::*;
-use secrecy::SecretString;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
+
+use secrecy::SecretString;
+
+use crate::serdes::FileInlineOrRemote;
+use crate::types::agent::{
+	HeaderValueMatch, ListenerTarget, PolicyPhase, PolicyTarget, PolicyType, ResourceName,
+	TrafficPolicy,
+};
+use crate::types::local::NormalizedLocalConfig;
+use crate::*;
 
 const TEST_OIDC_JWKS: &str = r#"{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}"#;
 

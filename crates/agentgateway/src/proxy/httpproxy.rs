@@ -1,4 +1,3 @@
-use rand::RngExt;
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::ops::{Deref, DerefMut};
@@ -13,6 +12,7 @@ use headers::HeaderMapExt;
 use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
+use rand::RngExt;
 use rand::seq::{IndexedRandom, IteratorRandom};
 use tracing::{debug, trace};
 use types::agent::*;
@@ -1971,11 +1971,12 @@ fn should_retry(res: &Result<Response, SnapshottedProxyResponse>, pol: &retry::P
 
 #[cfg(test)]
 mod tests {
+	use std::collections::{HashMap, HashSet};
+	use std::net::SocketAddr;
+
 	use super::{hop_by_hop_headers, resolved_workload_target_hostname, select_service_target_port};
 	use crate::http;
 	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
-	use std::collections::{HashMap, HashSet};
-	use std::net::SocketAddr;
 
 	#[test]
 	fn resolved_workload_target_hostname_uses_explicit_workload_hostname() {
@@ -2494,9 +2495,10 @@ impl OptLogger for Option<&mut RequestLog> {
 
 #[cfg(test)]
 mod route_chain_tests {
+	use agent_core::strng;
+
 	use super::*;
 	use crate::test_helpers::proxymock;
-	use agent_core::strng;
 
 	fn route(name: &str, path: &str, target: RouteBackendTarget) -> Route {
 		Route {

@@ -1,6 +1,5 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::Arc;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use agent_core::strng;
 use divan::Bencher;
@@ -14,9 +13,8 @@ use crate::types::agent::{
 	HeaderMatch, HeaderValueMatch, Listener, ListenerProtocol, MethodMatch, PathMatch, QueryMatch,
 	QueryValueMatch, Route, RouteMatch,
 };
-use crate::types::discovery::{
-	GatewayAddress, NamespacedHostname, NetworkAddress, Service, gatewayaddress::Destination,
-};
+use crate::types::discovery::gatewayaddress::Destination;
+use crate::types::discovery::{GatewayAddress, NamespacedHostname, NetworkAddress, Service};
 use crate::*;
 
 fn run_test(req: &Request, routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Option<String> {

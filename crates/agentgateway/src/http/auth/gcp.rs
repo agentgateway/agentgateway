@@ -1,5 +1,3 @@
-use crate::{ConstString, apply, const_string};
-
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -12,6 +10,7 @@ use tracing::trace;
 
 use crate::serdes::schema;
 use crate::types::agent::Target;
+use crate::{ConstString, apply, const_string};
 
 const_string!(IdToken = "idToken");
 const_string!(AccessToken = "accessToken");

@@ -2,10 +2,9 @@ use std::path::{Path, PathBuf, absolute};
 use std::time::Duration;
 
 use agent_core::prelude::*;
+use agent_core::readiness;
 use notify::{EventKind, RecursiveMode};
 use tokio::fs;
-
-use agent_core::readiness;
 
 use crate::client::Client;
 use crate::store::Stores;
@@ -338,10 +337,11 @@ async fn watch_self_workload(
 
 #[cfg(test)]
 mod tests {
+	use agent_core::readiness::Ready;
+
 	use super::*;
 	use crate::store::{DiscoveryPreviousState, LocalWorkload, Stores};
 	use crate::types::discovery::Workload;
-	use agent_core::readiness::Ready;
 
 	const TASK_NAME: &str = "self workload";
 

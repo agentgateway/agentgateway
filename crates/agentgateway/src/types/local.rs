@@ -4,7 +4,15 @@ use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::agentcore;
+use ::http::Uri;
+use agent_core::prelude::Strng;
+use anyhow::{Error, anyhow, bail};
+use bytes::Bytes;
+use frozen_collections::Len;
+use itertools::Itertools;
+use macro_rules_attribute::apply;
+use secrecy::SecretString;
+
 use crate::client::Client;
 use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
@@ -14,10 +22,8 @@ use crate::http::{
 	HeaderName, HeaderOrPseudo, filters, health, retry, timeout, transformation_cel,
 };
 use crate::llm::policy::PromptGuard;
-use crate::llm::{AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider};
-use crate::llm::{anthropic, openai};
-use crate::mcp::FailureMode;
-use crate::mcp::McpAuthorization;
+use crate::llm::{AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider, anthropic, openai};
+use crate::mcp::{FailureMode, McpAuthorization};
 use crate::store::LocalWorkload;
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendPolicy, BackendReference,
@@ -32,15 +38,7 @@ use crate::types::agent::{
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
-use crate::*;
-use ::http::Uri;
-use agent_core::prelude::Strng;
-use anyhow::{Error, anyhow, bail};
-use bytes::Bytes;
-use frozen_collections::Len;
-use itertools::Itertools;
-use macro_rules_attribute::apply;
-use secrecy::SecretString;
+use crate::{agentcore, *};
 
 // Windows has different output, for now easier to just not deal with it
 #[cfg(all(test, target_family = "unix"))]

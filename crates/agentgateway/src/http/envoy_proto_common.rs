@@ -146,9 +146,10 @@ pub fn json_to_prost_value(value: JsonValue) -> Result<ProstValue, ProxyError> {
 
 #[cfg(test)]
 mod tests {
+	use ::http::{HeaderMap, HeaderName, header};
+
 	use super::*;
 	use crate::http::{Body, HeaderMutationAction, HeaderOrPseudo, RequestOrResponse};
-	use ::http::{HeaderMap, HeaderName, header};
 
 	fn header_option(
 		key: &str,

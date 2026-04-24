@@ -1,7 +1,6 @@
 use std::time::Duration;
 
-use frozen_collections::FzHashSet;
-use frozen_collections::Len;
+use frozen_collections::{FzHashSet, Len};
 use serde::{Deserialize, Serialize};
 
 use crate::telemetry::log::OrderedStringMap;

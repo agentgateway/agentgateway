@@ -1,3 +1,11 @@
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use protos::envoy::service::ext_proc::v3::{BodyMutation, body_mutation};
+use tokio::sync::mpsc;
+use tokio_stream;
+use tonic::{Request, Response as TonicResponse, Status, Streaming};
+
 use crate::http::ext_proc::proto::external_processor_server::{
 	ExternalProcessor, ExternalProcessorServer,
 };
@@ -7,12 +15,6 @@ use crate::http::ext_proc::proto::{
 };
 use crate::test_helpers::common::MockInstance;
 use crate::*;
-use async_trait::async_trait;
-use protos::envoy::service::ext_proc::v3::{BodyMutation, body_mutation};
-use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio_stream;
-use tonic::{Request, Response as TonicResponse, Status, Streaming};
 
 pub fn request_header_response(cr: Option<CommonResponse>) -> Result<ProcessingResponse, Status> {
 	Ok(ProcessingResponse {

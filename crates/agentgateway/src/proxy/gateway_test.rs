@@ -2,19 +2,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
-use crate::http::tests_common::*;
-use crate::http::{Body, Response};
-use crate::llm::{AIProvider, openai};
-use crate::proxy::request_builder::RequestBuilder;
-use crate::read_body;
-use crate::test_helpers::oteltracemock;
-use crate::test_helpers::proxymock::*;
-use crate::types::agent::{
-	Backend, BackendPolicy, BackendWithPolicies, Bind, BindProtocol, Listener, ListenerProtocol,
-	ListenerSet, PathMatch, ResourceName, Route, RouteMatch, Target,
-};
-use crate::types::backend;
-use crate::*;
 use ::http::{Method, Version, header};
 use agent_core::strng;
 use assert_matches::assert_matches;
@@ -39,6 +26,19 @@ use tokio_rustls::TlsConnector;
 use url::{Position, Url};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 use x509_parser::nom::AsBytes;
+
+use crate::http::tests_common::*;
+use crate::http::{Body, Response};
+use crate::llm::{AIProvider, openai};
+use crate::proxy::request_builder::RequestBuilder;
+use crate::test_helpers::oteltracemock;
+use crate::test_helpers::proxymock::*;
+use crate::types::agent::{
+	Backend, BackendPolicy, BackendWithPolicies, Bind, BindProtocol, Listener, ListenerProtocol,
+	ListenerSet, PathMatch, ResourceName, Route, RouteMatch, Target,
+};
+use crate::types::backend;
+use crate::{read_body, *};
 
 const TEST_PRIVATE_KEY_PEM: &str = "-----BEGIN PRIVATE KEY-----
 MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgltxBTVDLg7C6vE1T

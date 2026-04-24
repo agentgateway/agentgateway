@@ -1,10 +1,11 @@
+use std::str::FromStr;
+
 use axum::http::StatusCode;
 use axum::response::Response;
 use axum_core::response::IntoResponse;
 use bytes::Bytes;
 use http::Method;
 use http::uri::PathAndQuery;
-use std::str::FromStr;
 use tracing::{debug, warn};
 
 use crate::http::jwt::Claims;

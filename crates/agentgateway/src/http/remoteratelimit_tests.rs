@@ -599,8 +599,9 @@ fn apply_ok_response_passes_through() {
 
 #[test]
 fn apply_over_limit_response_returns_429() {
-	use crate::http::tests_common::request_for_uri;
 	use ::http::StatusCode;
+
+	use crate::http::tests_common::request_for_uri;
 
 	let mut req = request_for_uri("http://example.com/test");
 	let response = proto::RateLimitResponse {

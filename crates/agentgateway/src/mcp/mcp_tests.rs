@@ -12,10 +12,9 @@ use secrecy::SecretString;
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::{PolicySet, RuleSet};
 use crate::http::sessionpersistence::MCPSession;
-use crate::mcp::FailureMode;
-use crate::mcp::McpAuthorization;
 use crate::mcp::handler::Relay;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
+use crate::mcp::{FailureMode, McpAuthorization};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::test_helpers::extauthmock::{ExtAuthMock, deny_response};
 use crate::test_helpers::proxymock::{
@@ -1147,7 +1146,6 @@ mod mockserver {
 	use std::sync::Arc;
 
 	use http::request::Parts;
-
 	use rmcp::handler::server::wrapper::Parameters;
 	use rmcp::model::*;
 	use rmcp::service::RequestContext;
@@ -2275,9 +2273,10 @@ fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 
 #[tokio::test]
 async fn test_runtime_fanout_fail_open() {
-	use crate::mcp::mergestream::{MergeStream, Messages};
 	use futures_util::StreamExt;
 	use rmcp::model::{ListToolsResult, RequestId, ServerJsonRpcMessage};
+
+	use crate::mcp::mergestream::{MergeStream, Messages};
 
 	let ok_msg = ServerJsonRpcMessage::response(
 		rmcp::model::ServerResult::ListToolsResult(ListToolsResult {
@@ -2313,9 +2312,10 @@ async fn test_runtime_fanout_fail_open() {
 
 #[tokio::test]
 async fn test_runtime_fanout_fail_open_all_fail() {
-	use crate::mcp::mergestream::{MergeStream, Messages};
 	use futures_util::StreamExt;
 	use rmcp::model::{ListToolsResult, RequestId};
+
+	use crate::mcp::mergestream::{MergeStream, Messages};
 
 	let err_stream1 = Messages::from(Err(crate::mcp::ClientError::new(anyhow::anyhow!("bad 1"))));
 	let err_stream2 = Messages::from(Err(crate::mcp::ClientError::new(anyhow::anyhow!("bad 2"))));

@@ -27,8 +27,7 @@ use crate::http::{
 	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, health, remoteratelimit, retry,
 	timeout,
 };
-use crate::mcp::FailureMode;
-use crate::mcp::McpAuthorization;
+use crate::mcp::{FailureMode, McpAuthorization};
 use crate::telemetry::log::OrderedStringMap;
 use crate::transport::tls;
 use crate::types::discovery::{NamespacedHostname, Service};

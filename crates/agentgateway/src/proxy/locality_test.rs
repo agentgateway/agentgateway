@@ -8,6 +8,8 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
+use LoadBalancerMode::{Failover, Standard, Strict};
+use LoadBalancerScopes::{Node, Region, Zone};
 use agent_core::strng;
 use http::{Method, StatusCode};
 use wiremock::MockServer;
@@ -21,9 +23,6 @@ use crate::types::discovery::{
 	HealthStatus, LoadBalancer, LoadBalancerHealthPolicy, LoadBalancerMode, LoadBalancerScopes,
 	Locality, NamespacedHostname, Service, Workload,
 };
-
-use LoadBalancerMode::{Failover, Standard, Strict};
-use LoadBalancerScopes::{Node, Region, Zone};
 
 // ---------- tests ----------
 

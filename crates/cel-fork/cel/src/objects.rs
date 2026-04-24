@@ -1,8 +1,3 @@
-use bytes::Bytes;
-use cel::types::dynamic::{DynamicType, DynamicValue};
-use serde::de::Error as DeError;
-use serde::ser::Error;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::convert::{TryFrom, TryInto};
@@ -10,6 +5,12 @@ use std::fmt::{Debug, Display, Formatter};
 use std::ops;
 use std::ops::Deref;
 use std::sync::Arc;
+
+use bytes::Bytes;
+use cel::types::dynamic::{DynamicType, DynamicValue};
+use serde::de::Error as DeError;
+use serde::ser::Error;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::common::ast::{CallExpr, EntryExpr, Expr, OptimizedExpr, operators};
 use crate::common::value::CelVal;

@@ -12,10 +12,9 @@ mod tests;
 
 pub mod from_embeddings {
 	use crate::json;
-	use crate::llm::AIError;
 	use crate::llm::bedrock::Provider;
-	use crate::llm::types;
 	use crate::llm::types::ResponseType;
+	use crate::llm::{AIError, types};
 
 	pub fn translate(
 		req: &types::embeddings::Request,
@@ -186,7 +185,6 @@ pub mod from_completions {
 	use crate::llm::types::ResponseType;
 	use crate::llm::types::completions::typed::UsagePromptDetails;
 	use crate::llm::{AIError, AmendOnDrop, types};
-
 	use crate::{json, parse};
 
 	fn text_blocks_from_user_content(
@@ -899,10 +897,10 @@ pub mod from_completions {
 }
 
 pub mod from_messages {
-	use agent_core::strng;
 	use std::collections::HashSet;
 	use std::time::Instant;
 
+	use agent_core::strng;
 	use bytes::Bytes;
 	use types::bedrock;
 	use types::messages::typed as messages;
@@ -912,7 +910,6 @@ pub mod from_messages {
 	use crate::llm::bedrock::Provider;
 	use crate::llm::types::ResponseType;
 	use crate::llm::{AIError, AmendOnDrop, types};
-
 	use crate::{json, parse};
 
 	/// translate an Anthropic messages request to a Bedrock converse request
@@ -1627,7 +1624,6 @@ pub mod from_responses {
 	use crate::llm::bedrock::Provider;
 	use crate::llm::types::ResponseType;
 	use crate::llm::{AIError, AmendOnDrop, types};
-
 	use crate::{json, parse};
 
 	/// translate an OpenAI responses request to a Bedrock converse request

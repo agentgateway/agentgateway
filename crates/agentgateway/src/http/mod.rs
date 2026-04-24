@@ -241,8 +241,7 @@ use http::uri::PathAndQuery;
 use http_body::{Frame, SizeHint};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tower_serve_static::private::mime;
-use url::Url;
-use url::form_urlencoded;
+use url::{Url, form_urlencoded};
 
 use crate::cel::{BackendContext, LLMContext, RequestTime, SourceContext};
 use crate::client::PoolKey;

@@ -2,13 +2,20 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::net::TcpListener as StdTcpListener;
 use std::sync::Arc;
 
+use agent_xds::{RejectedConfig, XdsUpdate};
+use anyhow::Context;
+use futures_core::Stream;
+use hashbrown::{Equivalent, HashMap as HbHashMap};
+use itertools::Itertools;
+use tokio::sync::watch;
+use tracing::{Level, instrument, warn};
+
 use crate::cel::ContextBuilder;
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::{HTTPAuthorizationSet, NetworkAuthorizationSet};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
-use crate::http::oidc;
-use crate::http::{ext_authz, ext_proc, filters, health, remoteratelimit, retry, timeout};
+use crate::http::{ext_authz, ext_proc, filters, health, oidc, remoteratelimit, retry, timeout};
 use crate::llm::policy::ResponseGuard;
 use crate::mcp::McpAuthorizationSet;
 use crate::proxy::httpproxy::PolicyClient;
@@ -27,13 +34,6 @@ use crate::types::proto::agent::{
 };
 use crate::types::{agent, frontend};
 use crate::*;
-use agent_xds::{RejectedConfig, XdsUpdate};
-use anyhow::Context;
-use futures_core::Stream;
-use hashbrown::{Equivalent, HashMap as HbHashMap};
-use itertools::Itertools;
-use tokio::sync::watch;
-use tracing::{Level, instrument, warn};
 
 #[derive(Debug)]
 enum ResourceKind {

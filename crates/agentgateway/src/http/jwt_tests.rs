@@ -1,9 +1,10 @@
 use std::collections::HashSet;
 
-use super::{JWTValidationOptions, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
-use crate::telemetry::log::MetricsConfig;
 use itertools::Itertools;
 use serde_json::json;
+
+use super::{JWTValidationOptions, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
+use crate::telemetry::log::MetricsConfig;
 
 type ProviderInfo = (&'static str, &'static str, &'static str);
 

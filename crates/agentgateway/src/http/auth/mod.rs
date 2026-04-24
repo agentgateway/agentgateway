@@ -2,10 +2,15 @@ pub mod aws;
 pub mod azure;
 pub mod gcp;
 
+use std::borrow::Cow;
+
+use ::http::HeaderValue;
 pub use aws::AwsAuth;
 pub use azure::AzureAuth;
+use cookie::Cookie;
 pub use gcp::GcpAuth;
-use std::borrow::Cow;
+use secrecy::{ExposeSecret, SecretString};
+use url::form_urlencoded;
 
 use crate::http::Request;
 use crate::http::jwt::Claims;
@@ -14,10 +19,6 @@ use crate::proxy::ProxyError::ProcessingString;
 use crate::serdes::deser_key_from_file;
 use crate::types::agent::{BackendTarget, Target};
 use crate::*;
-use ::http::HeaderValue;
-use cookie::Cookie;
-use secrecy::{ExposeSecret, SecretString};
-use url::form_urlencoded;
 
 #[apply(schema!)]
 pub enum BackendAuth {

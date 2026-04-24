@@ -105,11 +105,12 @@ pub async fn inspect_body(body: &mut Body, limit: usize) -> anyhow::Result<Bytes
 mod tests {
 	use std::collections::HashMap;
 
-	use super::*;
-	use crate::http::Body;
 	use bytes::Bytes;
 	use http::HeaderMap;
 	use http_body::Body as _;
+
+	use super::*;
+	use crate::http::Body;
 
 	pub async fn read(body: Body) -> Bytes {
 		crate::http::read_body_with_limit(body, 1_097_152)

@@ -1,5 +1,6 @@
-use super::*;
 use ::http::{HeaderName, HeaderValue};
+
+use super::*;
 
 #[test]
 fn test_get_webhook_forward_headers() {
@@ -342,8 +343,9 @@ fn test_model_alias_pattern_validation() {
 // ============================================================================
 
 mod bedrock_guardrails_tests {
-	use super::super::bedrock_guardrails::*;
 	use serde_json::json;
+
+	use super::super::bedrock_guardrails::*;
 
 	#[test]
 	fn test_apply_guardrail_response_is_blocked_true() {
@@ -548,8 +550,9 @@ mod bedrock_guardrails_tests {
 // ============================================================================
 
 mod google_model_armor_tests {
-	use super::super::google_model_armor::*;
 	use serde_json::json;
+
+	use super::super::google_model_armor::*;
 
 	#[test]
 	fn test_match_state_deserialization() {
@@ -891,8 +894,9 @@ mod google_model_armor_tests {
 // ============================================================================
 
 mod prompt_guard_config_tests {
-	use super::*;
 	use serde_json::json;
+
+	use super::*;
 
 	#[test]
 	fn test_bedrock_guardrails_config_deserialization() {
@@ -1213,10 +1217,11 @@ mod prompt_guard_config_tests {
 
 #[test]
 fn test_bedrock_guardrails_user_credentials_take_precedence() {
+	use secrecy::SecretString;
+
 	use crate::http::auth::{AwsAuth, BackendAuth};
 	use crate::store::BindStore;
 	use crate::types::agent::BackendPolicy;
-	use secrecy::SecretString;
 
 	let guardrails = BedrockGuardrails {
 		guardrail_identifier: strng::new("test-guardrail"),
@@ -1278,10 +1283,11 @@ fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 
 #[test]
 fn test_google_model_armor_user_credentials_take_precedence() {
+	use secrecy::SecretString;
+
 	use crate::http::auth::BackendAuth;
 	use crate::store::BindStore;
 	use crate::types::agent::BackendPolicy;
-	use secrecy::SecretString;
 
 	let model_armor = GoogleModelArmor {
 		template_id: strng::new("test-template"),

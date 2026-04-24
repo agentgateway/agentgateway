@@ -3,6 +3,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use ::http::{HeaderMap, HeaderValue, StatusCode, Uri, header};
+use prost_types::Timestamp;
+use serde_json::Value as JsonValue;
+
 use crate::cel::{BufferedBody, Expression, Value};
 use crate::http::ext_authz::proto::attribute_context::HttpRequest;
 use crate::http::ext_authz::proto::authorization_client::AuthorizationClient;
@@ -13,17 +17,15 @@ use crate::http::ext_authz::proto::{
 use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::filters::BackendRequestTimeout;
 use crate::http::transformation_cel::SerAsStr;
-use crate::http::{HeaderName, HeaderOrPseudo, PolicyResponse, Request, Response, jwt};
-use crate::http::{RequestOrResponse, envoy_proto_common};
+use crate::http::{
+	HeaderName, HeaderOrPseudo, PolicyResponse, Request, RequestOrResponse, Response,
+	envoy_proto_common, jwt,
+};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendPolicy, SimpleBackendReference};
 use crate::*;
-use ::http::HeaderValue;
-use ::http::{HeaderMap, StatusCode, Uri, header};
-use prost_types::Timestamp;
-use serde_json::Value as JsonValue;
 
 #[cfg(test)]
 #[path = "ext_authz_tests.rs"]

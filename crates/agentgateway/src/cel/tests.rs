@@ -1,9 +1,10 @@
 use std::collections::HashSet;
 
-use super::*;
-use crate::http::Body;
 use http::{HeaderValue, Method};
 use serde_json::json;
+
+use super::*;
+use crate::http::Body;
 
 fn eval(expr: &str) -> Result<serde_json::Value, Error> {
 	let exec_serde = full_example_executor();
@@ -94,8 +95,9 @@ fn request_with_header_modes() -> crate::http::Request {
 }
 
 mod headers {
-	use crate::cel::tests::{eval_request, request_with_header_modes};
 	use cel::Value;
+
+	use crate::cel::tests::{eval_request, request_with_header_modes};
 
 	#[test]
 	fn lookup_default() {
@@ -239,10 +241,11 @@ mod headers {
 }
 
 mod query_accessors {
-	use crate::cel::tests::eval_request;
-	use crate::http::Body;
 	use cel::Value;
 	use http::Method;
+
+	use crate::cel::tests::eval_request;
+	use crate::http::Body;
 
 	fn request() -> crate::http::Request {
 		::http::Request::builder()

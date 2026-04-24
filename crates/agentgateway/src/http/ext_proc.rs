@@ -16,17 +16,15 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::cel::{Executor, Expression, RequestSnapshot};
 use crate::client::ResolvedDestination;
-use crate::http;
-use crate::http::envoy_proto_common;
 use crate::http::ext_proc::proto::{
 	BodyMutation, BodyResponse, HeaderMutation, HeadersResponse, HttpBody, HttpHeaders, HttpTrailers,
 	ImmediateResponse, Metadata, ProcessingRequest, ProcessingResponse, processing_response,
 };
-use crate::http::{HeaderName, PolicyResponse};
+use crate::http::{HeaderName, PolicyResponse, envoy_proto_common};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{BackendPolicy, SimpleBackendReference};
-use crate::*;
+use crate::{http, *};
 
 /// The namespace key used for ext_proc attributes in ProcessingRequest.attributes
 const EXTPROC_ATTRIBUTES_NAMESPACE: &str = "envoy.filters.http.ext_proc";
