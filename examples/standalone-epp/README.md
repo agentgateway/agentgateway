@@ -27,6 +27,7 @@ binds:
           inferenceRouting:
             endpointPicker:
               host: 127.0.0.1:9002
+            destinationMode: passthrough
 ```
 
 ### What it does
@@ -38,13 +39,16 @@ binds:
   ext-proc at `127.0.0.1:9002`.
 * EPP returns the selected backend `ip:port`, and `agentgateway` forwards
   directly to that destination without requiring matching local workload
-  endpoint entries.
+  endpoint entries because `destinationMode` is set to `passthrough`.
 
 ### Current v1 constraints
 
 * `inferenceRouting` is only supported on `service` route backends.
 * Standalone routing requires a top-level logical `services` entry, but does
   not require matching top-level `workloads` endpoint discovery data.
+* `destinationMode: passthrough` is required when EPP owns endpoint discovery.
+  Without it, EPP-selected destinations must match agentgateway's local service
+  endpoint data.
 * Standalone local config is fail-closed for now. If EPP is unavailable, the
   request fails instead of falling back to direct service endpoint balancing.
 * This example is meant to be mounted into the `agentgateway` sidecar in a

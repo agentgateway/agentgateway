@@ -1706,6 +1706,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting.destinationMode`|enum|Controls how an endpoint-picker-selected destination is used.<br>Possible values: `validated`, `passthrough`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request`|[]object||
@@ -2614,6 +2615,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.destinationMode`|enum|Controls how an endpoint-picker-selected destination is used.<br>Possible values: `validated`, `passthrough`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request`|[]object||
@@ -3499,6 +3501,7 @@
 |`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.inferenceRouting.destinationMode`|enum|Controls how an endpoint-picker-selected destination is used.<br>Possible values: `validated`, `passthrough`.|
 |`binds[].listeners[].routes[].backends[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request`|[]object||
@@ -6473,6 +6476,7 @@
 |`backends[].ai.policies.inferenceRouting.endpointPicker.service.port`|integer||
 |`backends[].ai.policies.inferenceRouting.endpointPicker.host`|string|Hostname or IP address|
 |`backends[].ai.policies.inferenceRouting.endpointPicker.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.inferenceRouting.destinationMode`|enum|Controls how an endpoint-picker-selected destination is used.<br>Possible values: `validated`, `passthrough`.|
 |`backends[].ai.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`backends[].ai.policies.ai.promptGuard`|object||
 |`backends[].ai.policies.ai.promptGuard.request`|[]object||
@@ -7381,6 +7385,7 @@
 |`backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service.port`|integer||
 |`backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.inferenceRouting.destinationMode`|enum|Controls how an endpoint-picker-selected destination is used.<br>Possible values: `validated`, `passthrough`.|
 |`backends[].ai.groups[].providers[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request`|[]object||
@@ -8265,6 +8270,7 @@
 |`backends[].policies.inferenceRouting.endpointPicker.service.port`|integer||
 |`backends[].policies.inferenceRouting.endpointPicker.host`|string|Hostname or IP address|
 |`backends[].policies.inferenceRouting.endpointPicker.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.inferenceRouting.destinationMode`|enum|Controls how an endpoint-picker-selected destination is used.<br>Possible values: `validated`, `passthrough`.|
 |`backends[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`backends[].policies.ai.promptGuard`|object||
 |`backends[].policies.ai.promptGuard.request`|[]object||
@@ -10647,6 +10653,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker.service.port`|integer||
 |`routeGroups[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.inferenceRouting.destinationMode`|enum|Controls how an endpoint-picker-selected destination is used.<br>Possible values: `validated`, `passthrough`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request`|[]object||
@@ -11555,6 +11562,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service.port`|integer||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.destinationMode`|enum|Controls how an endpoint-picker-selected destination is used.<br>Possible values: `validated`, `passthrough`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request`|[]object||
@@ -12440,6 +12448,7 @@
 |`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker.service.port`|integer||
 |`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.inferenceRouting.destinationMode`|enum|Controls how an endpoint-picker-selected destination is used.<br>Possible values: `validated`, `passthrough`.|
 |`routeGroups[].routes[].backends[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request`|[]object||

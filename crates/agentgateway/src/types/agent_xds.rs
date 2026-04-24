@@ -1276,6 +1276,7 @@ fn backend_policy_from_proto(
 			};
 			BackendPolicy::InferenceRouting(http::ext_proc::InferenceRouting {
 				target: Arc::new(resolve_simple_reference(ir.endpoint_picker.as_ref())),
+				destination_mode: http::ext_proc::InferenceRoutingDestinationMode::Validated,
 				failure_mode,
 			})
 		},

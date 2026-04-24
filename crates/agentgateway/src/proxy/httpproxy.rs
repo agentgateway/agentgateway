@@ -21,7 +21,7 @@ use types::discovery::*;
 use crate::cel::{BackendContext, RequestTime};
 use crate::client::{ApplicationTransport, Transport};
 use crate::http::backendtls::BackendTLS;
-use crate::http::ext_proc::ExtProcRequest;
+use crate::http::ext_proc::{ExtProcRequest, InferenceRoutingDestinationMode};
 use crate::http::filters::{AutoHostname, BackendRequestTimeout};
 use crate::http::transformation_cel::Transformation;
 use crate::http::{
@@ -1397,6 +1397,11 @@ async fn make_backend_call(
 	// In practice, these don't conflict: inference is for AI backends, MCP pinning is for MCP backends.
 	let service_override = ServiceCallOverride {
 		destination: inference_result.destination.or(policies.override_dest),
+		destination_passthrough: inference_result.destination.is_some()
+			&& matches!(
+				inference_result.destination_mode,
+				InferenceRoutingDestinationMode::Passthrough
+			),
 		inference_failed_open: inference_result.failed_open,
 	};
 
@@ -1809,7 +1814,9 @@ pub fn build_service_call(
 	} else {
 		None
 	};
-	if let Some(destination) = service_override.destination {
+	if let Some(destination) = service_override.destination
+		&& service_override.destination_passthrough
+	{
 		return Ok(BackendCall {
 			target: Target::Address(destination),
 			http_version_override,
@@ -1822,13 +1829,14 @@ pub fn build_service_call(
 	let workloads = &inputs.stores.read_discovery().workloads;
 	let (ep, handle, wl) = svc
 		.endpoints
-		.select_endpoint(workloads, svc.as_ref(), port, None)
+		.select_endpoint(workloads, svc.as_ref(), port, service_override.destination)
 		.ok_or(ProxyError::NoHealthyEndpoints)?;
 
 	let target_port = select_service_target_port(
 		ep.as_ref(),
 		svc.as_ref(),
 		port,
+		service_override.destination,
 		service_override.inference_failed_open,
 	)
 	.ok_or(ProxyError::NoHealthyEndpoints)?;
@@ -1916,9 +1924,14 @@ fn select_service_target_port(
 	ep: &Endpoint,
 	svc: &Service,
 	svc_port: u16,
+	override_dest: Option<SocketAddr>,
 	inference_failed_open: bool,
 ) -> Option<u16> {
 	let svc_target_port = svc.ports.get(&svc_port).copied().unwrap_or_default();
+	if let Some(ov) = override_dest {
+		// Use the explicit override. select_endpoint ensures this is actually in the endpoint.
+		return Some(ov.port());
+	}
 	if inference_failed_open
 		&& let Some(target_port) = ep.port.values().choose(&mut rand::rng()).copied()
 	{
@@ -1975,6 +1988,7 @@ fn should_retry(res: &Result<Response, SnapshottedProxyResponse>, pol: &retry::P
 #[cfg(test)]
 mod tests {
 	use std::collections::{HashMap, HashSet};
+	use std::net::SocketAddr;
 
 	use super::{hop_by_hop_headers, resolved_workload_target_hostname, select_service_target_port};
 	use crate::http;
@@ -2037,6 +2051,22 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn select_service_target_port_uses_override_destination_when_present() {
+		let endpoint = Endpoint {
+			workload_uid: "wl-1".into(),
+			port: HashMap::from([(8000, 8000), (8001, 8001)]),
+			status: HealthStatus::Healthy,
+		};
+		let service = multi_port_inference_service();
+		let override_dest = SocketAddr::from(([10, 0, 0, 1], 8001));
+
+		assert_eq!(
+			select_service_target_port(&endpoint, &service, 8000, Some(override_dest), true),
+			Some(8001)
+		);
+	}
+
+	#[tokio::test]
 	async fn select_service_target_port_uses_canonical_port_without_inference_fail_open() {
 		let endpoint = Endpoint {
 			workload_uid: "wl-1".into(),
@@ -2046,7 +2076,7 @@ mod tests {
 		let service = multi_port_inference_service();
 
 		assert_eq!(
-			select_service_target_port(&endpoint, &service, 8000, false),
+			select_service_target_port(&endpoint, &service, 8000, None, false),
 			Some(8000)
 		);
 	}
@@ -2062,7 +2092,7 @@ mod tests {
 		let mut seen = HashSet::new();
 
 		for _ in 0..64 {
-			let target_port = select_service_target_port(&endpoint, &service, 8000, true)
+			let target_port = select_service_target_port(&endpoint, &service, 8000, None, true)
 				.expect("expected a target port");
 			seen.insert(target_port);
 			if seen.len() == 2 {
@@ -2279,6 +2309,7 @@ pub struct BackendCall {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ServiceCallOverride {
 	pub destination: Option<SocketAddr>,
+	pub destination_passthrough: bool,
 	pub inference_failed_open: bool,
 }
 

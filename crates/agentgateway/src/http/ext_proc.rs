@@ -72,10 +72,27 @@ pub enum FailureMode {
 	FailOpen,
 }
 
+#[apply(schema!)]
+#[derive(Default, Copy, PartialEq, Eq)]
+/// Controls how an endpoint-picker-selected destination is used.
+pub enum InferenceRoutingDestinationMode {
+	/// Require the selected destination to match agentgateway's local service endpoints.
+	#[default]
+	Validated,
+	/// Trust the selected destination directly without local endpoint validation.
+	Passthrough,
+}
+
 #[apply(schema_ser_schema!)]
 pub struct InferenceRouting {
 	#[serde(rename = "endpointPicker")]
 	pub target: Arc<SimpleBackendReference>,
+	#[serde(
+		default,
+		rename = "destinationMode",
+		skip_serializing_if = "crate::serdes::is_default"
+	)]
+	pub destination_mode: InferenceRoutingDestinationMode,
 	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	pub failure_mode: FailureMode,
@@ -85,6 +102,8 @@ pub struct InferenceRouting {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct InferenceRoutingConfig {
 	endpoint_picker: Arc<SimpleBackendReference>,
+	#[serde(default)]
+	destination_mode: InferenceRoutingDestinationMode,
 }
 
 impl<'de> serde::Deserialize<'de> for InferenceRouting {
@@ -92,10 +111,13 @@ impl<'de> serde::Deserialize<'de> for InferenceRouting {
 	where
 		D: serde::Deserializer<'de>,
 	{
-		let InferenceRoutingConfig { endpoint_picker } =
-			InferenceRoutingConfig::deserialize(deserializer)?;
+		let InferenceRoutingConfig {
+			endpoint_picker,
+			destination_mode,
+		} = InferenceRoutingConfig::deserialize(deserializer)?;
 		Ok(Self {
 			target: endpoint_picker,
+			destination_mode,
 			// TODO: expose fail-open configuration for standalone EPP once the fallback behavior is
 			// explicitly supported and documented end-to-end.
 			failure_mode: FailureMode::FailClosed,
@@ -106,11 +128,13 @@ impl<'de> serde::Deserialize<'de> for InferenceRouting {
 #[derive(Debug, Default)]
 pub struct InferencePoolRouter {
 	ext_proc: Option<ExtProcInstance>,
+	destination_mode: InferenceRoutingDestinationMode,
 }
 
 #[derive(Debug, Default)]
 pub struct InferenceRequestResult {
 	pub destination: Option<SocketAddr>,
+	pub destination_mode: InferenceRoutingDestinationMode,
 	pub policy_response: PolicyResponse,
 	pub failed_open: bool,
 }
@@ -118,6 +142,7 @@ pub struct InferenceRequestResult {
 impl InferenceRouting {
 	pub fn build(&self, client: PolicyClient) -> InferencePoolRouter {
 		InferencePoolRouter {
+			destination_mode: self.destination_mode,
 			ext_proc: Some(ExtProcInstance::new(
 				client,
 				Vec::new(),
@@ -152,6 +177,7 @@ impl InferencePoolRouter {
 			.map_err(|e| ProxyError::Processing(anyhow!("EPP returned invalid address: {e}")))?;
 		Ok(InferenceRequestResult {
 			destination: dest,
+			destination_mode: self.destination_mode,
 			policy_response: pr.unwrap_or_default(),
 			failed_open,
 		})

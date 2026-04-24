@@ -5257,11 +5257,29 @@
       "properties": {
         "endpointPicker": {
           "$ref": "#/$defs/SimpleLocalBackend"
+        },
+        "destinationMode": {
+          "$ref": "#/$defs/InferenceRoutingDestinationMode"
         }
       },
       "additionalProperties": false,
       "required": [
         "endpointPicker"
+      ]
+    },
+    "InferenceRoutingDestinationMode": {
+      "description": "Controls how an endpoint-picker-selected destination is used.",
+      "oneOf": [
+        {
+          "description": "Require the selected destination to match agentgateway's local service endpoints.",
+          "type": "string",
+          "const": "validated"
+        },
+        {
+          "description": "Trust the selected destination directly without local endpoint validation.",
+          "type": "string",
+          "const": "passthrough"
+        }
       ]
     },
     "LocalAIProviders": {

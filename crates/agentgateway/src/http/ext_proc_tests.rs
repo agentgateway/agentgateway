@@ -365,6 +365,7 @@ fn configure_standalone_service(t: &TestBind) {
 async fn setup_inference_routing_mock(
 	target: Option<SocketAddr>,
 	request_headers_seen: Arc<AtomicUsize>,
+	destination_mode: Option<&'static str>,
 ) -> (MockInstance, TestBind, Client<MemoryConnector, Body>) {
 	let ext_proc = ExtProcMock::new(move || StandaloneInferenceRouter {
 		target,
@@ -375,6 +376,14 @@ async fn setup_inference_routing_mock(
 
 	let mut t = setup_proxy_test("{}").unwrap().with_bind(simple_bind());
 	configure_standalone_service(&t);
+	let mut inference_routing = json!({
+		"endpointPicker": {
+			"host": ext_proc.address.to_string(),
+		},
+	});
+	if let Some(destination_mode) = destination_mode {
+		inference_routing["destinationMode"] = json!(destination_mode);
+	}
 	t.attach_route(json!({
 		"name": "standalone-epp",
 		"backends": [
@@ -384,11 +393,7 @@ async fn setup_inference_routing_mock(
 					"port": STANDALONE_SERVICE_PORT,
 				},
 				"policies": {
-					"inferenceRouting": {
-						"endpointPicker": {
-							"host": ext_proc.address.to_string(),
-						},
-					},
+					"inferenceRouting": inference_routing,
 				},
 			}
 		],
@@ -403,8 +408,12 @@ async fn standalone_inference_routing_uses_epp_selected_destination_without_loca
 	let backend_a = named_backend("backend-a").await;
 	let backend_b = named_backend("backend-b").await;
 	let request_headers_seen = Arc::new(AtomicUsize::new(0));
-	let (_ext_proc, _bind, io) =
-		setup_inference_routing_mock(Some(*backend_b.address()), request_headers_seen.clone()).await;
+	let (_ext_proc, _bind, io) = setup_inference_routing_mock(
+		Some(*backend_b.address()),
+		request_headers_seen.clone(),
+		Some("passthrough"),
+	)
+	.await;
 
 	let res = send_request(io, Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 200);
@@ -436,10 +445,36 @@ async fn standalone_inference_routing_uses_epp_selected_destination_without_loca
 }
 
 #[tokio::test]
+async fn standalone_inference_routing_validates_selected_destination_by_default() {
+	let backend = named_backend("backend").await;
+	let request_headers_seen = Arc::new(AtomicUsize::new(0));
+	let (_ext_proc, _bind, io) =
+		setup_inference_routing_mock(Some(*backend.address()), request_headers_seen.clone(), None)
+			.await;
+
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 503);
+	assert_eq!(
+		request_headers_seen.load(Ordering::SeqCst),
+		1,
+		"gateway should consult the local EPP",
+	);
+	assert_eq!(
+		backend
+			.received_requests()
+			.await
+			.expect("backend recording should be enabled")
+			.len(),
+		0,
+		"validated mode should reject destinations outside local service endpoints",
+	);
+}
+
+#[tokio::test]
 async fn standalone_inference_routing_requires_epp_selected_destination() {
 	let request_headers_seen = Arc::new(AtomicUsize::new(0));
 	let (_ext_proc, _bind, io) =
-		setup_inference_routing_mock(None, request_headers_seen.clone()).await;
+		setup_inference_routing_mock(None, request_headers_seen.clone(), Some("passthrough")).await;
 
 	let res = send_request(io, Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 503);

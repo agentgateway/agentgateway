@@ -244,6 +244,7 @@ binds:
           inferenceRouting:
             endpointPicker:
               host: 127.0.0.1:9002
+            destinationMode: passthrough
 "#;
 
 	normalize_test_config(input)
