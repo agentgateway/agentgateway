@@ -478,7 +478,7 @@ export function getDefaultBackendValue(backendType: string): Record<string, unkn
         weight: 1,
       };
     case "ai":
-      return { backendType: "ai", ai: { name: "default", provider: { openAI: {} } }, weight: 1 };
+      return { backendType: "ai", ai: { name: "default", provider: "openAI" }, weight: 1 };
     default:
       return { backendType: "service", ...defaultValues };
   }
@@ -639,15 +639,36 @@ export function transformBeforeSubmit(data: unknown): unknown {
       }),
     };
   } else if (backendType === "ai" && ai !== undefined && ai !== null) {
-    console.log(`ai`, ai);
     const aiObj = ai as Record<string, unknown>;
-    console.log(`aiObj`, aiObj);
-    result.ai = { 
-      ...aiObj,
-      provider: aiObj.provider ? { [aiObj.provider as string]: {}} 
-        : undefined,
+    const validProviders = new Set([
+      "openAI",
+      "gemini",
+      "vertex",
+      "anthropic",
+      "bedrock",
+      "azureOpenAI",
+    ]);
+    const rawProvider = aiObj.provider;
+    let normalizedProvider: Record<string, unknown>;
+    if (typeof rawProvider === "string" && validProviders.has(rawProvider)) {
+      normalizedProvider = { [rawProvider]: {} };
+    } else if (
+      rawProvider &&
+      typeof rawProvider === "object" &&
+      !Array.isArray(rawProvider)
+    ) {
+      const providerObj = rawProvider as Record<string, unknown>;
+      const firstKey = Object.keys(providerObj)[0];
+      normalizedProvider = firstKey && validProviders.has(firstKey)
+        ? { [firstKey]: providerObj[firstKey] ?? {} }
+        : { openAI: {} };
+    } else {
+      normalizedProvider = { openAI: {} };
     }
-    console.log(`result`, result);
+    result.ai = {
+      ...aiObj,
+      provider: normalizedProvider,
+    };
   }
 
   // Add optional common fields
