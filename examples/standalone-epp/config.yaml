@@ -1,4 +1,12 @@
 # yaml-language-server: $schema=../../schema/local.json
+services:
+- name: my-model
+  namespace: default
+  hostname: my-model
+  vips: []
+  ports:
+    8000: 8000
+
 binds:
 - port: 8081
   listeners:

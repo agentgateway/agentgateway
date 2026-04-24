@@ -300,6 +300,11 @@ struct StandaloneInferenceRouter {
 	request_headers_seen: Arc<AtomicUsize>,
 }
 
+#[derive(Debug)]
+struct NoDestinationInferenceRouter {
+	request_headers_seen: Arc<AtomicUsize>,
+}
+
 #[async_trait::async_trait]
 impl Handler for StandaloneInferenceRouter {
 	async fn handle_request_headers(
@@ -329,6 +334,19 @@ impl Handler for StandaloneInferenceRouter {
 	}
 }
 
+#[async_trait::async_trait]
+impl Handler for NoDestinationInferenceRouter {
+	async fn handle_request_headers(
+		&mut self,
+		_headers: &HttpHeaders,
+		sender: &Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		self.request_headers_seen.fetch_add(1, Ordering::SeqCst);
+		let _ = sender.send(request_header_response(None)).await;
+		Ok(())
+	}
+}
+
 async fn named_backend(body: &'static str) -> MockServer {
 	let mock = MockServer::start().await;
 	Mock::given(wiremock::matchers::path_regex("/.*"))
@@ -338,9 +356,8 @@ async fn named_backend(body: &'static str) -> MockServer {
 	mock
 }
 
-fn configure_standalone_service_endpoints(t: &TestBind, endpoint_ports: &[u16]) {
-	use crate::store::LocalWorkload;
-	use crate::types::discovery::{NetworkAddress, Service, Workload};
+fn configure_standalone_service(t: &TestBind) {
+	use crate::types::discovery::{NetworkAddress, Service};
 
 	let service = Service {
 		name: "model-service".into(),
@@ -350,36 +367,18 @@ fn configure_standalone_service_endpoints(t: &TestBind, endpoint_ports: &[u16]) 
 			network: strng::EMPTY,
 			address: "127.0.0.1".parse().unwrap(),
 		}],
-		ports: HashMap::from([(STANDALONE_SERVICE_PORT, 0)]),
+		ports: HashMap::from([(STANDALONE_SERVICE_PORT, STANDALONE_SERVICE_PORT)]),
 		..Default::default()
 	};
-	let workloads = endpoint_ports
-		.iter()
-		.enumerate()
-		.map(|(idx, port)| LocalWorkload {
-			workload: Workload {
-				uid: strng::format!("standalone-backend-{idx}"),
-				name: strng::format!("standalone-backend-{idx}"),
-				namespace: "default".into(),
-				workload_ips: vec!["127.0.0.1".parse().unwrap()],
-				..Default::default()
-			},
-			services: HashMap::from([(
-				STANDALONE_SERVICE_REF.to_string(),
-				HashMap::from([(STANDALONE_SERVICE_PORT, *port)]),
-			)]),
-		})
-		.collect();
 
 	t.pi
 		.stores
 		.discovery
-		.sync_local(vec![service], workloads, Default::default())
+		.sync_local(vec![service], vec![], Default::default())
 		.unwrap();
 }
 
 async fn setup_inference_routing_mock(
-	endpoint_ports: &[u16],
 	target: SocketAddr,
 	request_headers_seen: Arc<AtomicUsize>,
 ) -> (MockInstance, TestBind, Client<MemoryConnector, Body>) {
@@ -391,7 +390,7 @@ async fn setup_inference_routing_mock(
 	.await;
 
 	let mut t = setup_proxy_test("{}").unwrap().with_bind(simple_bind());
-	configure_standalone_service_endpoints(&t, endpoint_ports);
+	configure_standalone_service(&t);
 	t.attach_route(json!({
 		"name": "standalone-epp",
 		"backends": [
@@ -416,16 +415,12 @@ async fn setup_inference_routing_mock(
 }
 
 #[tokio::test]
-async fn standalone_inference_routing_uses_epp_selected_service_endpoint() {
+async fn standalone_inference_routing_uses_epp_selected_destination_without_local_endpoints() {
 	let backend_a = named_backend("backend-a").await;
 	let backend_b = named_backend("backend-b").await;
 	let request_headers_seen = Arc::new(AtomicUsize::new(0));
-	let (_ext_proc, _bind, io) = setup_inference_routing_mock(
-		&[backend_a.address().port(), backend_b.address().port()],
-		*backend_b.address(),
-		request_headers_seen.clone(),
-	)
-	.await;
+	let (_ext_proc, _bind, io) =
+		setup_inference_routing_mock(*backend_b.address(), request_headers_seen.clone()).await;
 
 	let res = send_request(io, Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 200);
@@ -457,15 +452,37 @@ async fn standalone_inference_routing_uses_epp_selected_service_endpoint() {
 }
 
 #[tokio::test]
-async fn standalone_inference_routing_rejects_endpoint_outside_service() {
-	let backend = named_backend("backend-a").await;
+async fn standalone_inference_routing_requires_epp_selected_destination() {
 	let request_headers_seen = Arc::new(AtomicUsize::new(0));
-	let (_ext_proc, _bind, io) = setup_inference_routing_mock(
-		&[backend.address().port()],
-		"127.0.0.1:65535".parse().unwrap(),
-		request_headers_seen.clone(),
-	)
+	let request_headers_seen_for_handler = request_headers_seen.clone();
+	let ext_proc = ExtProcMock::new(move || NoDestinationInferenceRouter {
+		request_headers_seen: request_headers_seen_for_handler.clone(),
+	})
+	.spawn()
 	.await;
+
+	let mut t = setup_proxy_test("{}").unwrap().with_bind(simple_bind());
+	configure_standalone_service(&t);
+	t.attach_route(json!({
+		"name": "standalone-epp",
+		"backends": [
+			{
+				"service": {
+					"name": STANDALONE_SERVICE_REF,
+					"port": STANDALONE_SERVICE_PORT,
+				},
+				"policies": {
+					"inferenceRouting": {
+						"endpointPicker": {
+							"host": ext_proc.address.to_string(),
+						},
+					},
+				},
+			}
+		],
+	}))
+	.await;
+	let io = t.serve_http(BIND_KEY);
 
 	let res = send_request(io, Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 503);
@@ -473,15 +490,6 @@ async fn standalone_inference_routing_rejects_endpoint_outside_service() {
 		request_headers_seen.load(Ordering::SeqCst),
 		1,
 		"gateway should consult EPP before rejecting the request",
-	);
-	assert_eq!(
-		backend
-			.received_requests()
-			.await
-			.expect("backend recording should be enabled")
-			.len(),
-		0,
-		"gateway should not forward traffic to a non-selected endpoint",
 	);
 }
 
