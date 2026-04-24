@@ -10,7 +10,14 @@ use crate::http::buflist::BufList;
 
 #[derive(Clone, Debug)]
 pub struct RecordedBodyHandle {
-	state: Arc<Mutex<RecordedBodyState>>,
+	inner: Arc<Mutex<RecordedBodyHandleInner>>,
+	limit: usize,
+}
+
+#[derive(Debug)]
+struct RecordedBodyHandleInner {
+	state: RecordedBodyState,
+	recorded: usize,
 }
 
 #[derive(Debug)]
@@ -27,8 +34,8 @@ impl Default for RecordedBodyState {
 
 impl RecordedBodyHandle {
 	pub fn bytes(&self) -> Bytes {
-		let mut state = self.state.lock();
-		match &mut *state {
+		let mut inner = self.inner.lock();
+		match &mut inner.state {
 			RecordedBodyState::Recording(buffer) => {
 				// This *should* not happen... but that is a recommended pattern of the caller, not something
 				// we enforce.
@@ -41,26 +48,28 @@ impl RecordedBodyHandle {
 	}
 
 	fn push(&self, bytes: Bytes) {
-		let mut state = self.state.lock();
-		if let RecordedBodyState::Recording(buffer) = &mut *state {
-			buffer.push(bytes);
+		let mut inner = self.inner.lock();
+		let remaining = self.limit.saturating_sub(inner.recorded);
+		if let RecordedBodyState::Recording(buffer) = &mut inner.state {
+			let to_record = bytes.len().min(remaining);
+			if to_record == 0 {
+				return;
+			}
+			buffer.push(bytes.slice(0..to_record));
+			inner.recorded += to_record;
 		} else {
 			debug_assert!(false, "push() cannot be called on a complete body handle.")
 		}
 	}
 
 	fn complete(&self) {
-		let mut state = self.state.lock();
-		let RecordedBodyState::Recording(buffer) = &mut *state else {
-			debug_assert!(
-				false,
-				"complete() cannot be called on a complete body handle."
-			);
+		let mut inner = self.inner.lock();
+		let RecordedBodyState::Recording(buffer) = &mut inner.state else {
 			return;
 		};
 		let mut buffer = std::mem::take(buffer);
 		let len = buffer.remaining();
-		*state = RecordedBodyState::Complete(buffer.copy_to_bytes(len));
+		inner.state = RecordedBodyState::Complete(buffer.copy_to_bytes(len));
 	}
 }
 
@@ -78,8 +87,16 @@ pub struct RecordedBody<B = crate::http::Body> {
 
 impl<B> RecordedBody<B> {
 	pub fn new(inner: B) -> (Self, RecordedBodyHandle) {
+		Self::new_with_limit(inner, usize::MAX)
+	}
+
+	pub fn new_with_limit(inner: B, limit: usize) -> (Self, RecordedBodyHandle) {
 		let handle = RecordedBodyHandle {
-			state: Arc::new(Mutex::new(RecordedBodyState::default())),
+			inner: Arc::new(Mutex::new(RecordedBodyHandleInner {
+				state: RecordedBodyState::default(),
+				recorded: 0,
+			})),
+			limit,
 		};
 		(
 			Self {
@@ -126,7 +143,10 @@ where
 				}
 				Poll::Ready(Some(Ok(Frame::data(bytes))))
 			},
-			Err(Ok(trailers)) => Poll::Ready(Some(Ok(Frame::trailers(trailers)))),
+			Err(Ok(trailers)) => {
+				this.handle.complete();
+				Poll::Ready(Some(Ok(Frame::trailers(trailers))))
+			},
 			Err(Err(_unknown)) => {
 				tracing::warn!("An unknown body frame has been recorded");
 				Poll::Ready(None)
@@ -172,6 +192,49 @@ mod tests {
 
 		assert_eq!(got, Bytes::from_static(b"hello world"));
 		assert_eq!(recorded.bytes(), Bytes::from_static(b"hello world"));
+	}
+
+	#[tokio::test]
+	async fn reuses_completed_bytes() {
+		let (body, recorded) = RecordedBody::new(mock_body(vec![b"hello", b"world"]));
+
+		let got = crate::http::Body::new(body)
+			.collect()
+			.await
+			.unwrap()
+			.to_bytes();
+
+		assert_eq!(got, Bytes::from_static(b"helloworld"));
+		assert_eq!(recorded.bytes(), Bytes::from_static(b"helloworld"));
+		assert_eq!(recorded.bytes(), Bytes::from_static(b"helloworld"));
+	}
+
+	#[tokio::test]
+	async fn records_up_to_limit() {
+		let (body, recorded) = RecordedBody::new_with_limit(mock_body(vec![b"hello", b"world"]), 7);
+
+		let got = crate::http::Body::new(body)
+			.collect()
+			.await
+			.unwrap()
+			.to_bytes();
+
+		assert_eq!(got, Bytes::from_static(b"helloworld"));
+		assert_eq!(recorded.bytes(), Bytes::from_static(b"hellowo"));
+	}
+
+	#[tokio::test]
+	async fn zero_limit_records_nothing() {
+		let (body, recorded) = RecordedBody::new_with_limit(mock_body(vec![b"hello"]), 0);
+
+		let got = crate::http::Body::new(body)
+			.collect()
+			.await
+			.unwrap()
+			.to_bytes();
+
+		assert_eq!(got, Bytes::from_static(b"hello"));
+		assert!(recorded.bytes().is_empty());
 	}
 
 	#[tokio::test]

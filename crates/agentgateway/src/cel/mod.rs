@@ -223,7 +223,8 @@ impl ContextBuilder {
 				return;
 			}
 			let body = std::mem::replace(req.body_mut(), crate::http::Body::empty());
-			let (body, handle) = crate::http::RecordedBody::new(body);
+			let limit = crate::http::buffer_limit(req);
+			let (body, handle) = crate::http::RecordedBody::new_with_limit(body, limit);
 			*req.body_mut() = crate::http::Body::new(body);
 			req.extensions_mut().insert(handle);
 		}
@@ -249,7 +250,8 @@ impl ContextBuilder {
 				return;
 			}
 			let body = std::mem::replace(resp.body_mut(), crate::http::Body::empty());
-			let (body, handle) = crate::http::RecordedBody::new(body);
+			let limit = crate::http::response_buffer_limit(resp);
+			let (body, handle) = crate::http::RecordedBody::new_with_limit(body, limit);
 			*resp.body_mut() = crate::http::Body::new(body);
 			resp.extensions_mut().insert(handle);
 		}
