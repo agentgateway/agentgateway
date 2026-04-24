@@ -217,23 +217,27 @@ impl ContextBuilder {
 
 impl Expression {
 	/// new_permissive compiles the expression. If the expression cannot be compiled, its instead replaced
-	/// with an expression that always fails to evaluate
-	pub fn new_permissive(original_expression: impl Into<String>) -> Self {
+	/// with an expression that always fails to evaluate. The returned error is the compilation error
+	/// from the original expression, if one was suppressed.
+	pub fn new_permissive(original_expression: impl Into<String>) -> (Self, Option<Error>) {
 		let expr = original_expression.into();
 		match Self::new_strict(&expr) {
-			Ok(ok) => ok,
+			Ok(ok) => (ok, None),
 			Err(err) => {
 				debug!("ignoring failed expression: {}", err);
 				let fail_message =
 					serde_json::to_string(&format!("the expression {expr:?} could not be compiled"))
 						.expect("string serialization must succeed");
-				Self {
-					attributes: Default::default(),
-					expression: Self::new_strict(format!("fail({fail_message})"))
-						.expect("must be valid")
-						.expression,
-					original_expression: expr,
-				}
+				(
+					Self {
+						attributes: Default::default(),
+						expression: Self::new_strict(format!("fail({fail_message})"))
+							.expect("must be valid")
+							.expression,
+						original_expression: expr,
+					},
+					Some(err),
+				)
 			},
 		}
 	}

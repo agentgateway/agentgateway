@@ -36,16 +36,17 @@ fn test_permissive() {
 				.contains("could not be compiled")
 		);
 	};
-	let valid = Expression::new_permissive("1 + 1");
+	let (valid, err) = Expression::new_permissive("1 + 1");
+	assert!(err.is_none());
 	assert_eq!(2, exec.eval(&valid).unwrap().json().unwrap());
 
-	assert_compile_failure(Expression::new_permissive("1 +"));
+	assert_compile_failure(Expression::new_permissive("1 +").0);
 
-	assert_compile_failure(Expression::new_permissive("'"));
+	assert_compile_failure(Expression::new_permissive("'").0);
 
-	assert_compile_failure(Expression::new_permissive("\"h"));
+	assert_compile_failure(Expression::new_permissive("\"h").0);
 
-	assert_compile_failure(Expression::new_permissive(r#"" || true || "#));
+	assert_compile_failure(Expression::new_permissive(r#"" || true || "#).0);
 }
 #[test]
 fn test_eval() {

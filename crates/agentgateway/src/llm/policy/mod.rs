@@ -907,6 +907,7 @@ impl Policy {
 						continue;
 					}
 				},
+				HeaderValueMatch::Invalid => continue,
 			}
 			headers.insert(header_name, have.clone());
 		}

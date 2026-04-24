@@ -40,20 +40,35 @@ pub struct LocalTransform {
 pub struct TransformationMetadata(pub serde_json::Map<String, serde_json::Value>);
 
 impl TransformerConfig {
-	fn try_from_local_config(req: LocalTransform, strict: bool) -> anyhow::Result<Self> {
-		let compile = |s: &str| {
+	fn try_from_local_config<F>(
+		req: LocalTransform,
+		strict: bool,
+		warnings: &mut F,
+	) -> anyhow::Result<Self>
+	where
+		F: FnMut(&str, &cel::Error),
+	{
+		fn compile<F>(s: &str, strict: bool, warnings: &mut F) -> anyhow::Result<cel::Expression>
+		where
+			F: FnMut(&str, &cel::Error),
+		{
 			if strict {
-				cel::Expression::new_strict(s)
+				Ok(cel::Expression::new_strict(s)?)
 			} else {
-				Ok(cel::Expression::new_permissive(s))
+				let (expression, err) = cel::Expression::new_permissive(s);
+				if let Some(err) = &err {
+					warnings(s, err);
+				}
+				Ok(expression)
 			}
-		};
+		}
+
 		let set = req
 			.set
 			.into_iter()
 			.map(|(k, v)| {
 				let tk = HeaderOrPseudo::try_from(k.as_str())?;
-				let tv = compile(v.as_str())?;
+				let tv = compile(v.as_str(), strict, warnings)?;
 				Ok::<_, anyhow::Error>((tk, tv))
 			})
 			.collect::<Result<_, _>>()?;
@@ -62,7 +77,7 @@ impl TransformerConfig {
 			.into_iter()
 			.map(|(k, v)| {
 				let tk = HeaderOrPseudo::try_from(k.as_str())?;
-				let tv = compile(v.as_str())?;
+				let tv = compile(v.as_str(), strict, warnings)?;
 				Ok::<_, anyhow::Error>((tk, tv))
 			})
 			.collect::<Result<_, _>>()?;
@@ -71,11 +86,14 @@ impl TransformerConfig {
 			.into_iter()
 			.map(|k| HeaderName::try_from(k.as_str()))
 			.collect::<Result<_, _>>()?;
-		let body = req.body.map(|b| compile(b.as_str())).transpose()?;
+		let body = req
+			.body
+			.map(|b| compile(b.as_str(), strict, warnings))
+			.transpose()?;
 		let metadata = req
 			.metadata
 			.into_iter()
-			.map(|(k, v)| Ok::<_, anyhow::Error>((k, compile(v.as_str())?)))
+			.map(|(k, v)| Ok::<_, anyhow::Error>((k, compile(v.as_str(), strict, warnings)?)))
 			.collect::<Result<_, _>>()?;
 		Ok(TransformerConfig {
 			set,
@@ -92,14 +110,25 @@ impl Transformation {
 		value: LocalTransformationConfig,
 		strict: bool,
 	) -> anyhow::Result<Self> {
+		Self::try_from_local_config_with_warnings(value, strict, |_, _| {})
+	}
+
+	pub fn try_from_local_config_with_warnings<F>(
+		value: LocalTransformationConfig,
+		strict: bool,
+		mut warnings: F,
+	) -> anyhow::Result<Self>
+	where
+		F: FnMut(&str, &cel::Error),
+	{
 		let LocalTransformationConfig { request, response } = value;
 		let request = if let Some(req) = request {
-			TransformerConfig::try_from_local_config(req, strict)?
+			TransformerConfig::try_from_local_config(req, strict, &mut warnings)?
 		} else {
 			Default::default()
 		};
 		let response = if let Some(resp) = response {
-			TransformerConfig::try_from_local_config(resp, strict)?
+			TransformerConfig::try_from_local_config(resp, strict, &mut warnings)?
 		} else {
 			Default::default()
 		};

@@ -58,6 +58,48 @@ impl Diagnostics {
 	}
 }
 
+fn permissive_cel_expression(
+	diagnostics: &mut Diagnostics,
+	context: impl AsRef<str>,
+	original_expression: impl Into<String>,
+) -> cel::Expression {
+	let original_expression = original_expression.into();
+	let (expression, err) = cel::Expression::new_permissive(original_expression.clone());
+	tracing::error!("howardjohn: build permissive {:?} {:?}", expression, err);
+	if let Some(err) = err {
+		diagnostics.add_warning(format!(
+			"invalid CEL expression for {}: {err}; replacing {original_expression:?} with an expression that always fails",
+			context.as_ref(),
+		));
+	}
+	expression
+}
+
+fn permissive_cel_expression_arc(
+	diagnostics: &mut Diagnostics,
+	context: impl AsRef<str>,
+	original_expression: impl Into<String>,
+) -> Arc<cel::Expression> {
+	Arc::new(permissive_cel_expression(
+		diagnostics,
+		context,
+		original_expression,
+	))
+}
+
+fn regex_or_warn_invalid(
+	diagnostics: &mut Diagnostics,
+	context: impl AsRef<str>,
+	pattern: &str,
+) -> Result<regex::Regex, regex::Error> {
+	regex::Regex::new(pattern).inspect_err(|err| {
+		diagnostics.add_warning(format!(
+			"invalid regex for {}: {err}; replacing {pattern:?} with a matcher that never matches",
+			context.as_ref(),
+		));
+	})
+}
+
 fn convert_tls_cipher_suites(
 	raw_suites: &[i32],
 	diagnostics: &mut Diagnostics,
@@ -188,30 +230,40 @@ fn route_backend_reference_from_proto(
 	})
 }
 
-impl From<&proto::agent::backend_policy_spec::McpAuthorization> for McpAuthorization {
-	fn from(rbac: &proto::agent::backend_policy_spec::McpAuthorization) -> Self {
-		let mut allow_exprs = Vec::new();
-		// We do NOT want to NACK invalid CEL expressions. Instead, we ensure they always evaluate to errors.
-		for allow_rule in &rbac.allow {
-			let expr = cel::Expression::new_permissive(allow_rule);
-			allow_exprs.push(Arc::new(expr));
-		}
-
-		let mut deny_exprs = Vec::new();
-		for deny_rule in &rbac.deny {
-			let expr = cel::Expression::new_permissive(deny_rule);
-			deny_exprs.push(Arc::new(expr));
-		}
-
-		let mut require_exprs = Vec::new();
-		for require_rule in &rbac.require {
-			let expr = cel::Expression::new_permissive(require_rule);
-			require_exprs.push(Arc::new(expr));
-		}
-
-		let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
-		McpAuthorization::new(authorization::RuleSet::new(policy_set))
+fn mcp_authorization_from_proto(
+	rbac: &proto::agent::backend_policy_spec::McpAuthorization,
+	diagnostics: &mut Diagnostics,
+) -> McpAuthorization {
+	let mut allow_exprs = Vec::new();
+	// We do NOT want to NACK invalid CEL expressions. Instead, we ensure they always evaluate to errors.
+	for allow_rule in &rbac.allow {
+		allow_exprs.push(permissive_cel_expression_arc(
+			diagnostics,
+			"backend.mcpAuthorization.allow",
+			allow_rule,
+		));
 	}
+
+	let mut deny_exprs = Vec::new();
+	for deny_rule in &rbac.deny {
+		deny_exprs.push(permissive_cel_expression_arc(
+			diagnostics,
+			"backend.mcpAuthorization.deny",
+			deny_rule,
+		));
+	}
+
+	let mut require_exprs = Vec::new();
+	for require_rule in &rbac.require {
+		require_exprs.push(permissive_cel_expression_arc(
+			diagnostics,
+			"backend.mcpAuthorization.require",
+			require_rule,
+		));
+	}
+
+	let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
+	McpAuthorization::new(authorization::RuleSet::new(policy_set))
 }
 
 fn mcp_authentication_from_proto(
@@ -376,7 +428,9 @@ fn convert_backend_ai_policy(
 					Kind::Regex(rr) => {
 						llm::policy::RequestGuardKind::Regex(convert_regex_rules(rr, diagnostics))
 					},
-					Kind::Webhook(wh) => llm::policy::RequestGuardKind::Webhook(convert_webhook(wh)?),
+					Kind::Webhook(wh) => {
+						llm::policy::RequestGuardKind::Webhook(convert_webhook(wh, diagnostics)?)
+					},
 					Kind::OpenaiModeration(m) => {
 						let pols = m
 							.inline_policies
@@ -464,7 +518,7 @@ fn convert_backend_ai_policy(
 					llm::policy::ResponseGuardKind::Regex(convert_regex_rules(rr, diagnostics))
 				},
 				response_guard::Kind::Webhook(wh) => {
-					llm::policy::ResponseGuardKind::Webhook(convert_webhook(wh).ok()?)
+					llm::policy::ResponseGuardKind::Webhook(convert_webhook(wh, diagnostics).ok()?)
 				},
 				response_guard::Kind::GoogleModelArmor(gma) => {
 					let pols = gma
@@ -546,8 +600,12 @@ fn convert_backend_ai_policy(
 				ai.transformations
 					.iter()
 					.map(|(k, v)| {
-						let ve = cel::Expression::new_permissive(v);
-						Ok::<_, ProtoError>((k.to_owned(), Arc::new(ve)))
+						let ve = permissive_cel_expression_arc(
+							diagnostics,
+							format!("backend.ai.transformations.{k}"),
+							v,
+						);
+						Ok::<_, ProtoError>((k.to_owned(), ve))
 					})
 					.collect::<Result<_, _>>()?,
 			)
@@ -1054,7 +1112,7 @@ fn mcp_target_from_proto(
 
 fn route_match_from_proto(
 	s: &proto::agent::RouteMatch,
-	_diagnostics: &mut Diagnostics,
+	diagnostics: &mut Diagnostics,
 ) -> Result<RouteMatch, ProtoError> {
 	use crate::types::proto::agent::path_match::*;
 	let path = match &s.path {
@@ -1067,7 +1125,9 @@ fn route_match_from_proto(
 		}) => PathMatch::Exact(strng::new(prefix)),
 		Some(proto::agent::PathMatch {
 			kind: Some(Kind::Regex(r)),
-		}) => PathMatch::Regex(regex::Regex::new(r)?),
+		}) => regex_or_warn_invalid(diagnostics, "route.path", r)
+			.map(PathMatch::Regex)
+			.unwrap_or(PathMatch::Invalid),
 		Some(proto::agent::PathMatch { kind: None }) => {
 			return Err(ProtoError::Generic("invalid path match".to_string()));
 		},
@@ -1075,7 +1135,7 @@ fn route_match_from_proto(
 	let method = s.method.as_ref().map(|m| MethodMatch {
 		method: strng::new(&m.exact),
 	});
-	let headers = match convert_header_match(&s.headers) {
+	let headers = match convert_header_match(diagnostics, "route.headers", &s.headers) {
 		Ok(h) => h,
 		Err(e) => return Err(ProtoError::Generic(format!("invalid header match: {e}"))),
 	};
@@ -1091,7 +1151,9 @@ fn route_match_from_proto(
 			}),
 			Some(proto::agent::query_match::Value::Regex(e)) => Ok(QueryMatch {
 				name: strng::new(&h.name),
-				value: QueryValueMatch::Regex(regex::Regex::new(e)?),
+				value: regex_or_warn_invalid(diagnostics, format!("route.queryParams.{}", h.name), e)
+					.map(QueryValueMatch::Regex)
+					.unwrap_or(QueryValueMatch::Invalid),
 			}),
 		})
 		.collect::<Result<Vec<_>, _>>()?;
@@ -1111,36 +1173,46 @@ fn default_as_none<T: Default + PartialEq>(i: T) -> Option<T> {
 	}
 }
 
-impl From<&proto::agent::traffic_policy_spec::Rbac> for Authorization {
-	fn from(rbac: &proto::agent::traffic_policy_spec::Rbac) -> Self {
-		// Convert allow rules
-		let mut allow_exprs = Vec::new();
-		for allow_rule in &rbac.allow {
-			let expr = cel::Expression::new_permissive(allow_rule);
-			allow_exprs.push(Arc::new(expr));
-		}
-		// Convert deny rules
-		let mut deny_exprs = Vec::new();
-		for deny_rule in &rbac.deny {
-			let expr = cel::Expression::new_permissive(deny_rule);
-			deny_exprs.push(Arc::new(expr));
-		}
-
-		let mut require_exprs = Vec::new();
-		for require_rule in &rbac.require {
-			let expr = cel::Expression::new_permissive(require_rule);
-			require_exprs.push(Arc::new(expr));
-		}
-
-		// Create PolicySet using the same pattern as in de_policies function
-		let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
-		Authorization(authorization::RuleSet::new(policy_set))
+fn authorization_from_proto(
+	rbac: &proto::agent::traffic_policy_spec::Rbac,
+	diagnostics: &mut Diagnostics,
+) -> Authorization {
+	// Convert allow rules
+	let mut allow_exprs = Vec::new();
+	for allow_rule in &rbac.allow {
+		allow_exprs.push(permissive_cel_expression_arc(
+			diagnostics,
+			"traffic.authorization.allow",
+			allow_rule,
+		));
 	}
+	// Convert deny rules
+	let mut deny_exprs = Vec::new();
+	for deny_rule in &rbac.deny {
+		deny_exprs.push(permissive_cel_expression_arc(
+			diagnostics,
+			"traffic.authorization.deny",
+			deny_rule,
+		));
+	}
+
+	let mut require_exprs = Vec::new();
+	for require_rule in &rbac.require {
+		require_exprs.push(permissive_cel_expression_arc(
+			diagnostics,
+			"traffic.authorization.require",
+			require_rule,
+		));
+	}
+
+	// Create PolicySet using the same pattern as in de_policies function
+	let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
+	Authorization(authorization::RuleSet::new(policy_set))
 }
 
 fn transformation_from_proto(
 	spec: &proto::agent::traffic_policy_spec::TransformationPolicy,
-	_diagnostics: &mut Diagnostics,
+	diagnostics: &mut Diagnostics,
 ) -> Result<Transformation, ProtoError> {
 	fn convert_transform(
 		t: &Option<proto::agent::traffic_policy_spec::transformation_policy::Transform>,
@@ -1181,8 +1253,12 @@ fn transformation_from_proto(
 	let request = Some(convert_transform(&spec.request));
 	let response = Some(convert_transform(&spec.response));
 	let config = LocalTransformationConfig { request, response };
-	Transformation::try_from_local_config(config, false)
-		.map_err(|e| ProtoError::Generic(e.to_string()))
+	Transformation::try_from_local_config_with_warnings(config, false, |expression, err| {
+		diagnostics.add_warning(format!(
+			"invalid CEL expression for transformation: {err}; replacing {expression:?} with an expression that always fails",
+		));
+	})
+	.map_err(|e| ProtoError::Generic(e.to_string()))
 }
 
 fn backend_policy_from_proto(
@@ -1252,7 +1328,7 @@ fn backend_policy_from_proto(
 			BackendPolicy::BackendAuth(backend_auth_from_proto(auth.clone(), diagnostics)?)
 		},
 		Some(bps::Kind::McpAuthorization(rbac)) => {
-			BackendPolicy::McpAuthorization(McpAuthorization::from(rbac))
+			BackendPolicy::McpAuthorization(mcp_authorization_from_proto(rbac, diagnostics))
 		},
 		Some(bps::Kind::McpAuthentication(ma)) => {
 			BackendPolicy::McpAuthentication(mcp_authentication_from_proto(ma, diagnostics)?)
@@ -1329,18 +1405,23 @@ fn backend_policy_from_proto(
 				.collect::<Vec<_>>();
 			BackendPolicy::RequestMirror(mirrors)
 		},
-		Some(bps::Kind::Health(h)) => BackendPolicy::Health(convert_health(h)),
+		Some(bps::Kind::Health(h)) => BackendPolicy::Health(convert_health(h, diagnostics)),
 		None => return Err(ProtoError::MissingRequiredField),
 	})
 }
 
-fn convert_health(h: &proto::agent::backend_policy_spec::Health) -> health::Policy {
+fn convert_health(
+	h: &proto::agent::backend_policy_spec::Health,
+	diagnostics: &mut Diagnostics,
+) -> health::Policy {
 	let unhealthy_expression = if h.unhealthy_condition.is_empty() {
 		None
 	} else {
-		Some(Arc::new(cel::Expression::new_permissive(
+		Some(permissive_cel_expression_arc(
+			diagnostics,
+			"backend.health.unhealthyCondition",
 			&h.unhealthy_condition,
-		)))
+		))
 	};
 	let eviction = h.eviction.as_ref().map(|ev| health::Eviction {
 		duration: ev.duration.map(convert_duration),
@@ -1447,8 +1528,12 @@ fn traffic_policy_from_proto(
 						.metadata
 						.iter()
 						.map(|(k, v)| {
-							let ve = cel::Expression::new_permissive(v);
-							Ok::<_, ProtoError>((k.to_owned(), Arc::new(ve)))
+							let ve = permissive_cel_expression_arc(
+								diagnostics,
+								format!("traffic.extAuthz.grpc.metadata.{k}"),
+								v,
+							);
+							Ok::<_, ProtoError>((k.to_owned(), ve))
 						})
 						.collect::<Result<_, _>>()?;
 					http::ext_authz::Protocol::Grpc {
@@ -1461,16 +1546,12 @@ fn traffic_policy_from_proto(
 					}
 				},
 				external_auth::Protocol::Http(h) => http::ext_authz::Protocol::Http {
-					path: h
-						.path
-						.as_ref()
-						.map(cel::Expression::new_permissive)
-						.map(Arc::new),
-					redirect: h
-						.redirect
-						.as_ref()
-						.map(cel::Expression::new_permissive)
-						.map(Arc::new),
+					path: h.path.as_ref().map(|expr| {
+						permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.http.path", expr)
+					}),
+					redirect: h.redirect.as_ref().map(|expr| {
+						permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.http.redirect", expr)
+					}),
 					include_response_headers: h
 						.include_response_headers
 						.iter()
@@ -1481,8 +1562,12 @@ fn traffic_policy_from_proto(
 						.iter()
 						.map(|(k, v)| {
 							let tk = HeaderOrPseudo::try_from(k.as_str())?;
-							let tv = cel::Expression::new_permissive(v.as_str());
-							Ok::<_, anyhow::Error>((tk, Arc::new(tv)))
+							let tv = permissive_cel_expression_arc(
+								diagnostics,
+								format!("traffic.extAuthz.http.addRequestHeaders.{k}"),
+								v.as_str(),
+							);
+							Ok::<_, anyhow::Error>((tk, tv))
 						})
 						.collect::<Result<_, _>>()
 						.map_err(|e| ProtoError::Generic(e.to_string()))?,
@@ -1490,7 +1575,11 @@ fn traffic_policy_from_proto(
 						.metadata
 						.iter()
 						.map(|(k, v)| {
-							let ve = cel::Expression::new_permissive(v);
+							let ve = permissive_cel_expression(
+								diagnostics,
+								format!("traffic.extAuthz.http.metadata.{k}"),
+								v,
+							);
 							Ok::<_, ProtoError>((k.to_owned(), Arc::new(ve)))
 						})
 						.collect::<Result<_, _>>()?,
@@ -1520,7 +1609,9 @@ fn traffic_policy_from_proto(
 				include_request_body,
 			})
 		},
-		Some(tps::Kind::Authorization(rbac)) => TrafficPolicy::Authorization(Authorization::from(rbac)),
+		Some(tps::Kind::Authorization(rbac)) => {
+			TrafficPolicy::Authorization(authorization_from_proto(rbac, diagnostics))
+		},
 		Some(tps::Kind::Jwt(jwt)) => {
 			let mode = match tps::jwt::Mode::try_from(jwt.mode)
 				.map_err(|_| ProtoError::EnumParse("invalid JWT mode".to_string()))?
@@ -1615,7 +1706,11 @@ fn traffic_policy_from_proto(
 							.map(|e| {
 								http::remoteratelimit::Descriptor(
 									e.key.clone(),
-									cel::Expression::new_permissive(e.value.clone()),
+									permissive_cel_expression(
+										diagnostics,
+										format!("traffic.remoteRateLimit.descriptors.{}", e.key),
+										e.value.clone(),
+									),
 								)
 							})
 							.collect();
@@ -1629,20 +1724,18 @@ fn traffic_policy_from_proto(
 								},
 								tps::remote_rate_limit::Type::Tokens => http::localratelimit::RateLimitType::Tokens,
 							},
-							limit_override: d
-								.limit_override
-								.as_ref()
-								.map(|expr| Arc::new(cel::Expression::new_permissive(expr))),
+							limit_override: d.limit_override.as_ref().map(|expr| {
+								permissive_cel_expression_arc(
+									diagnostics,
+									"traffic.remoteRateLimit.limitOverride",
+									expr,
+								)
+							}),
 						})
 					},
 				)
 				.collect::<Result<Vec<_>, _>>()?;
 			let target = resolve_simple_reference(rrl.target.as_ref());
-			if matches!(target, SimpleBackendReference::Invalid) {
-				return Err(ProtoError::Generic(
-					"remote_rate_limit: target must be set".into(),
-				));
-			}
 			let failure_mode = match tps::remote_rate_limit::FailureMode::try_from(rrl.failure_mode) {
 				Ok(tps::remote_rate_limit::FailureMode::FailOpen) => {
 					http::remoteratelimit::FailureMode::FailOpen
@@ -1671,6 +1764,8 @@ fn traffic_policy_from_proto(
 				_ => http::ext_proc::FailureMode::FailClosed,
 			};
 			fn to_cel_attrs(
+				diagnostics: &mut Diagnostics,
+				context: &str,
 				attrs: &HashMap<String, String>,
 			) -> Option<HashMap<String, Arc<cel::Expression>>> {
 				if attrs.is_empty() {
@@ -1679,7 +1774,12 @@ fn traffic_policy_from_proto(
 					Some(
 						attrs
 							.iter()
-							.map(|(k, v)| (k.clone(), Arc::new(cel::Expression::new_permissive(v))))
+							.map(|(k, v)| {
+								(
+									k.clone(),
+									permissive_cel_expression_arc(diagnostics, format!("{context}.{k}"), v),
+								)
+							})
 							.collect(),
 					)
 				}
@@ -1689,8 +1789,16 @@ fn traffic_policy_from_proto(
 				// Not supported inline from xDS
 				policies: Vec::new(),
 				failure_mode,
-				request_attributes: to_cel_attrs(&ep.request_attributes),
-				response_attributes: to_cel_attrs(&ep.response_attributes),
+				request_attributes: to_cel_attrs(
+					diagnostics,
+					"traffic.extProc.requestAttributes",
+					&ep.request_attributes,
+				),
+				response_attributes: to_cel_attrs(
+					diagnostics,
+					"traffic.extProc.responseAttributes",
+					&ep.response_attributes,
+				),
 				metadata_context: if ep.metadata_context.is_empty() {
 					None
 				} else {
@@ -1703,7 +1811,16 @@ fn traffic_policy_from_proto(
 									data
 										.context
 										.iter()
-										.map(|(k, v)| (k.clone(), Arc::new(cel::Expression::new_permissive(v))))
+										.map(|(k, v)| {
+											(
+												k.clone(),
+												permissive_cel_expression_arc(
+													diagnostics,
+													format!("traffic.extProc.metadataContext.{namespace}.{k}"),
+													v,
+												),
+											)
+										})
 										.collect(),
 								);
 								meta
@@ -1954,20 +2071,29 @@ fn frontend_policy_from_proto(
 		Some(fps::Kind::NetworkAuthorization(rbac)) => {
 			let mut allow_exprs = Vec::new();
 			for allow_rule in &rbac.allow {
-				let expr = cel::Expression::new_permissive(allow_rule);
-				allow_exprs.push(Arc::new(expr));
+				allow_exprs.push(permissive_cel_expression_arc(
+					diagnostics,
+					"frontend.networkAuthorization.allow",
+					allow_rule,
+				));
 			}
 
 			let mut deny_exprs = Vec::new();
 			for deny_rule in &rbac.deny {
-				let expr = cel::Expression::new_permissive(deny_rule);
-				deny_exprs.push(Arc::new(expr));
+				deny_exprs.push(permissive_cel_expression_arc(
+					diagnostics,
+					"frontend.networkAuthorization.deny",
+					deny_rule,
+				));
 			}
 
 			let mut require_exprs = Vec::new();
 			for require_rule in &rbac.require {
-				let expr = cel::Expression::new_permissive(require_rule);
-				require_exprs.push(Arc::new(expr));
+				require_exprs.push(permissive_cel_expression_arc(
+					diagnostics,
+					"frontend.networkAuthorization.require",
+					require_rule,
+				));
 			}
 
 			let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
@@ -1984,8 +2110,12 @@ fn frontend_policy_from_proto(
 						.add
 						.iter()
 						.map(|f| {
-							let expr = cel::Expression::new_permissive(&f.expression);
-							Ok::<_, ProtoError>((f.name.clone(), Arc::new(expr)))
+							let expr = permissive_cel_expression_arc(
+								diagnostics,
+								format!("frontend.logging.fields.add.{}", f.name),
+								&f.expression,
+							);
+							Ok::<_, ProtoError>((f.name.clone(), expr))
 						})
 						.collect::<Result<Vec<_>, _>>()?;
 					let rm = f.remove.clone();
@@ -2022,8 +2152,7 @@ fn frontend_policy_from_proto(
 				filter: p
 					.filter
 					.as_ref()
-					.map(cel::Expression::new_permissive)
-					.map(Arc::new),
+					.map(|expr| permissive_cel_expression_arc(diagnostics, "frontend.logging.filter", expr)),
 				add: Arc::new(add),
 				remove: Arc::new(FzHashSet::new(rm)),
 				otlp,
@@ -2034,7 +2163,7 @@ fn frontend_policy_from_proto(
 		},
 		Some(fps::Kind::Tracing(t)) => {
 			// Convert protobuf to TracingConfig
-			let tracing_config = types::agent::TracingConfig::from(t);
+			let tracing_config = tracing_config_from_proto(t, diagnostics);
 
 			// Prepare LoggingFields with the CEL attributes from TracingConfig
 			let logging_fields = Arc::new(crate::telemetry::log::LoggingFields {
@@ -2052,62 +2181,74 @@ fn frontend_policy_from_proto(
 	})
 }
 
-impl From<&proto::agent::frontend_policy_spec::Tracing> for types::agent::TracingConfig {
-	fn from(t: &proto::agent::frontend_policy_spec::Tracing) -> Self {
-		let provider_backend = resolve_simple_reference(t.provider_backend.as_ref());
+fn tracing_config_from_proto(
+	t: &proto::agent::frontend_policy_spec::Tracing,
+	diagnostics: &mut Diagnostics,
+) -> types::agent::TracingConfig {
+	let provider_backend = resolve_simple_reference(t.provider_backend.as_ref());
 
-		let attributes: OrderedStringMap<Arc<cel::Expression>> = t
-			.attributes
-			.iter()
-			.map(|a| {
-				let expr = cel::Expression::new_permissive(&a.value);
-				(a.name.clone(), Arc::new(expr))
-			})
-			.collect();
+	let attributes: OrderedStringMap<Arc<cel::Expression>> = t
+		.attributes
+		.iter()
+		.map(|a| {
+			(
+				a.name.clone(),
+				permissive_cel_expression_arc(
+					diagnostics,
+					format!("frontend.tracing.attributes.{}", a.name),
+					&a.value,
+				),
+			)
+		})
+		.collect();
 
-		let resources: OrderedStringMap<Arc<cel::Expression>> = t
-			.resources
-			.iter()
-			.map(|a| {
-				let expr = cel::Expression::new_permissive(&a.value);
-				(a.name.clone(), Arc::new(expr))
-			})
-			.collect();
+	let resources: OrderedStringMap<Arc<cel::Expression>> = t
+		.resources
+		.iter()
+		.map(|a| {
+			(
+				a.name.clone(),
+				permissive_cel_expression_arc(
+					diagnostics,
+					format!("frontend.tracing.resources.{}", a.name),
+					&a.value,
+				),
+			)
+		})
+		.collect();
 
-		// Optional per-policy sampling overrides
-		let random_sampling = t
-			.random_sampling
-			.as_ref()
-			.map(|s| Arc::new(cel::Expression::new_permissive(s)));
-		let client_sampling = t
-			.client_sampling
-			.as_ref()
-			.map(|s| Arc::new(cel::Expression::new_permissive(s)));
+	// Optional per-policy sampling overrides
+	let random_sampling = t
+		.random_sampling
+		.as_ref()
+		.map(|s| permissive_cel_expression_arc(diagnostics, "frontend.tracing.randomSampling", s));
+	let client_sampling = t
+		.client_sampling
+		.as_ref()
+		.map(|s| permissive_cel_expression_arc(diagnostics, "frontend.tracing.clientSampling", s));
 
-		let path = t.path.clone().unwrap_or_else(|| "/v1/traces".to_string());
+	let path = t.path.clone().unwrap_or_else(|| "/v1/traces".to_string());
 
-		let protocol =
-			match crate::types::proto::agent::frontend_policy_spec::tracing::Protocol::try_from(
-				t.protocol,
-			) {
-				Ok(crate::types::proto::agent::frontend_policy_spec::tracing::Protocol::Grpc) => {
-					types::agent::TracingProtocol::Grpc
-				},
-				_ => types::agent::TracingProtocol::Http,
-			};
+	let protocol =
+		match crate::types::proto::agent::frontend_policy_spec::tracing::Protocol::try_from(t.protocol)
+		{
+			Ok(crate::types::proto::agent::frontend_policy_spec::tracing::Protocol::Grpc) => {
+				types::agent::TracingProtocol::Grpc
+			},
+			_ => types::agent::TracingProtocol::Http,
+		};
 
-		types::agent::TracingConfig {
-			provider_backend,
-			// Not supported inline from xDS
-			policies: Vec::new(),
-			attributes,
-			resources,
-			remove: t.remove.clone(),
-			random_sampling,
-			client_sampling,
-			path,
-			protocol,
-		}
+	types::agent::TracingConfig {
+		provider_backend,
+		// Not supported inline from xDS
+		policies: Vec::new(),
+		attributes,
+		resources,
+		remove: t.remove.clone(),
+		random_sampling,
+		client_sampling,
+		path,
+		protocol,
 	}
 }
 
@@ -2288,10 +2429,15 @@ fn convert_prompt_caching(
 
 fn convert_webhook(
 	w: &proto::agent::backend_policy_spec::ai::Webhook,
+	diagnostics: &mut Diagnostics,
 ) -> Result<llm::policy::Webhook, ProtoError> {
 	let target = resolve_simple_reference(w.backend.as_ref());
 
-	let forward_header_matches = convert_header_match(&w.forward_header_matches)?;
+	let forward_header_matches = convert_header_match(
+		diagnostics,
+		"backend.ai.webhook.forwardHeaderMatches",
+		&w.forward_header_matches,
+	)?;
 
 	Ok(llm::policy::Webhook {
 		target,
@@ -2383,7 +2529,11 @@ fn resolve_reference(target: Option<&proto::agent::BackendReference>) -> Backend
 	}
 }
 
-fn convert_header_match(h: &[proto::agent::HeaderMatch]) -> Result<Vec<HeaderMatch>, ProtoError> {
+fn convert_header_match(
+	diagnostics: &mut Diagnostics,
+	context: &str,
+	h: &[proto::agent::HeaderMatch],
+) -> Result<Vec<HeaderMatch>, ProtoError> {
 	let headers = h
 		.iter()
 		.map(|h| match &h.value {
@@ -2396,7 +2546,9 @@ fn convert_header_match(h: &[proto::agent::HeaderMatch]) -> Result<Vec<HeaderMat
 			}),
 			Some(proto::agent::header_match::Value::Regex(e)) => Ok(HeaderMatch {
 				name: crate::http::HeaderOrPseudo::try_from(h.name.as_str())?,
-				value: HeaderValueMatch::Regex(regex::Regex::new(e)?),
+				value: regex_or_warn_invalid(diagnostics, format!("{context}.{}", h.name), e)
+					.map(HeaderValueMatch::Regex)
+					.unwrap_or(HeaderValueMatch::Invalid),
 			}),
 		})
 		.collect::<Result<Vec<_>, _>>()?;

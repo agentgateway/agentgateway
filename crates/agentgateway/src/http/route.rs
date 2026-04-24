@@ -28,6 +28,7 @@ fn matches_request(m: &RouteMatch, request: &Request) -> bool {
 				.map(|m| m.start() == 0 && m.end() == path.len())
 				.unwrap_or(false)
 		},
+		PathMatch::Invalid => false,
 		PathMatch::PathPrefix(p) => {
 			let p = p.trim_end_matches('/');
 			let Some(suffix) = request.uri().path().trim_end_matches('/').strip_prefix(p) else {
@@ -67,6 +68,7 @@ fn matches_request(m: &RouteMatch, request: &Request) -> bool {
 					return false;
 				}
 			},
+			HeaderValueMatch::Invalid => return false,
 		}
 	}
 	// TODO: this re-parses the query string on every call; hoist to caller if this becomes a hot path.
@@ -93,6 +95,7 @@ fn matches_request(m: &RouteMatch, request: &Request) -> bool {
 					return false;
 				}
 			},
+			QueryValueMatch::Invalid => return false,
 		}
 	}
 	true
@@ -267,6 +270,8 @@ fn get_path_rank(path: &PathMatch) -> u8 {
 		PathMatch::Exact(_) => 3,
 		PathMatch::PathPrefix(_) => 2,
 		PathMatch::Regex(_) => 1,
+		// Because this can never match, its rank is irrelevant
+		PathMatch::Invalid => 0,
 	}
 }
 
@@ -274,5 +279,7 @@ fn get_path_length(path: &PathMatch) -> usize {
 	match path {
 		PathMatch::Exact(p) | PathMatch::PathPrefix(p) => p.len(),
 		PathMatch::Regex(r) => r.as_str().len(),
+		// Because this can never match, its rank is irrelevant
+		PathMatch::Invalid => 0,
 	}
 }
