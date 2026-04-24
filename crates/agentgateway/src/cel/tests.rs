@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use http::{HeaderValue, Method};
+use http_body_util::BodyExt;
 use serde_json::json;
 
 use super::*;
@@ -69,6 +70,98 @@ fn expression() {
 		.body(Body::empty())
 		.unwrap();
 	assert_eq!(Value::Bool(true), eval_request(expr, req).unwrap());
+}
+
+#[tokio::test]
+async fn log_only_request_body_records_without_buffering() {
+	let exp = Expression::new_strict("request.body").unwrap();
+	let mut cb = ContextBuilder::new();
+	cb.register_log_expression(&exp);
+	let mut req = ::http::Request::builder()
+		.method(Method::POST)
+		.uri("http://example.com")
+		.body(Body::from("hello"))
+		.unwrap();
+
+	cb.maybe_buffer_request_body(&mut req).await;
+
+	assert!(req.extensions().get::<BufferedBody>().is_none());
+	assert!(
+		req
+			.extensions()
+			.get::<crate::http::RecordedBodyHandle>()
+			.is_some()
+	);
+
+	let snapshot = cb.maybe_snapshot_request(&mut req, false).unwrap();
+	let body = std::mem::replace(req.body_mut(), Body::empty());
+	let sent = body.collect().await.unwrap().to_bytes();
+	assert_eq!(sent, bytes::Bytes::from_static(b"hello"));
+
+	let exec = Executor::new_logger(Some(&snapshot), None, None, None, None);
+	assert_eq!(
+		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
+		bytes::Bytes::from_static(b"hello")
+	);
+}
+
+#[tokio::test]
+async fn request_body_expression_buffers_before_log() {
+	let exp = Expression::new_strict("request.body").unwrap();
+	let mut cb = ContextBuilder::new();
+	cb.register_expression(&exp);
+	let mut req = ::http::Request::builder()
+		.method(Method::POST)
+		.uri("http://example.com")
+		.body(Body::from("hello"))
+		.unwrap();
+
+	cb.maybe_buffer_request_body(&mut req).await;
+
+	assert!(req.extensions().get::<BufferedBody>().is_some());
+	assert!(
+		req
+			.extensions()
+			.get::<crate::http::RecordedBodyHandle>()
+			.is_none()
+	);
+	let exec = Executor::new_request(&req);
+	assert_eq!(
+		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
+		bytes::Bytes::from_static(b"hello")
+	);
+}
+
+#[tokio::test]
+async fn log_only_response_body_records_without_buffering() {
+	let exp = Expression::new_strict("response.body").unwrap();
+	let mut cb = ContextBuilder::new();
+	cb.register_log_expression(&exp);
+	let mut resp = ::http::Response::builder()
+		.status(200)
+		.body(Body::from("world"))
+		.unwrap();
+
+	cb.maybe_buffer_response_body(&mut resp).await;
+
+	assert!(resp.extensions().get::<BufferedBody>().is_none());
+	assert!(
+		resp
+			.extensions()
+			.get::<crate::http::RecordedBodyHandle>()
+			.is_some()
+	);
+
+	let snapshot = cb.maybe_snapshot_response(&mut resp).unwrap();
+	let body = std::mem::replace(resp.body_mut(), Body::empty());
+	let sent = body.collect().await.unwrap().to_bytes();
+	assert_eq!(sent, bytes::Bytes::from_static(b"world"));
+
+	let exec = Executor::new_logger(None, Some(&snapshot), None, None, None);
+	assert_eq!(
+		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
+		bytes::Bytes::from_static(b"world")
+	);
 }
 
 #[test]

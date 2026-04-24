@@ -371,13 +371,13 @@ impl CelLogging {
 	pub fn new(cfg: Config, metrics: MetricsConfig) -> Self {
 		let mut cel_context = cel::ContextBuilder::new();
 		if let Some(f) = &cfg.filter {
-			cel_context.register_expression(f.as_ref());
+			cel_context.register_log_expression(f.as_ref());
 		}
 		for v in cfg.fields.add.values_unordered() {
-			cel_context.register_expression(v.as_ref());
+			cel_context.register_log_expression(v.as_ref());
 		}
 		for v in metrics.metric_fields.add.values_unordered() {
-			cel_context.register_expression(v.as_ref());
+			cel_context.register_log_expression(v.as_ref());
 		}
 
 		Self {
@@ -390,7 +390,7 @@ impl CelLogging {
 
 	pub fn register(&mut self, fields: &LoggingFields) {
 		for v in fields.add.values_unordered() {
-			self.cel_context.register_expression(v.as_ref());
+			self.cel_context.register_log_expression(v.as_ref());
 		}
 	}
 

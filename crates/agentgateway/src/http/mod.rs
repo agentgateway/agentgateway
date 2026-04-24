@@ -23,6 +23,7 @@ pub(crate) mod oauth;
 pub mod oidc;
 pub mod outlierdetection;
 mod peekbody;
+mod recordbody;
 pub mod remoteratelimit;
 pub mod sessionpersistence;
 #[cfg(any(test, feature = "internal_benches"))]
@@ -33,6 +34,8 @@ pub type Error = axum_core::Error;
 pub type Body = axum_core::body::Body;
 pub type Request = ::http::Request<Body>;
 pub type Response = ::http::Response<Body>;
+
+pub use recordbody::{RecordedBody, RecordedBodyHandle};
 
 pub(crate) fn iter_request_cookies<'a>(
 	req: &'a Request,

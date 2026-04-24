@@ -173,10 +173,10 @@ impl FrontendPolices {
 			return;
 		};
 		if let Some(f) = filter {
-			ctx.register_expression(f)
+			ctx.register_log_expression(f)
 		}
 		for (_, v) in fields_add.iter() {
-			ctx.register_expression(v)
+			ctx.register_log_expression(v)
 		}
 	}
 }

@@ -26,7 +26,7 @@ use crate::cel::{Error, Expression, ROOT_CONTEXT, query};
 use crate::http::ext_authz::ExtAuthzDynamicMetadata;
 use crate::http::ext_proc::ExtProcDynamicMetadata;
 use crate::http::transformation_cel::TransformationMetadata;
-use crate::http::{apikey, basicauth, jwt};
+use crate::http::{RecordedBodyHandle, apikey, basicauth, jwt};
 use crate::llm::{LLMInfo, LLMRequest};
 use crate::mcp::{MCPInfo, MCPTool};
 use crate::serdes::schema;
@@ -70,6 +70,10 @@ pub struct Executor<'a> {
 
 fn is_extension_or_direct_none<T: Send + Sync + 'static>(e: &ExtensionOrDirect<T>) -> bool {
 	e.deref().is_none()
+}
+
+fn is_body_extension_or_direct_none(e: &BodyExtensionOrDirect) -> bool {
+	e.is_none()
 }
 
 #[apply(schema!)]
@@ -502,6 +506,7 @@ pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestS
 		version: req.version(),
 		headers: req.headers().clone(),
 		body: ext::<BufferedBody>(req, clear),
+		recorded_body: ext::<RecordedBodyHandle>(req, clear),
 
 		jwt: ext::<jwt::Claims>(req, clear),
 		api_key: ext::<apikey::Claims>(req, clear),
@@ -523,29 +528,26 @@ pub fn snapshot_response(resp: &mut crate::http::Response) -> ResponseSnapshot {
 		code: resp.status(),
 		headers: resp.headers().clone(),
 		body: resp.extensions_mut().remove::<BufferedBody>(),
+		recorded_body: resp.extensions_mut().remove::<RecordedBodyHandle>(),
 	}
 }
 
 #[derive(Debug, Clone)]
 pub struct RequestSnapshot {
-	/// The request's method
 	pub method: http::Method,
 
-	/// The request's URI
 	pub path: http::Uri,
 
 	pub host: Option<::http::uri::Authority>,
 
 	pub scheme: Option<::http::uri::Scheme>,
 
-	/// The request's version
 	pub version: http::Version,
 
-	// TODO: do not use header_map, which will make multi-headers a list
-	/// The request's headers
 	pub headers: http::HeaderMap,
 
 	pub body: Option<BufferedBody>,
+	pub recorded_body: Option<RecordedBodyHandle>,
 
 	pub jwt: Option<jwt::Claims>,
 
@@ -599,8 +601,8 @@ pub struct RequestRef<'a> {
 	/// The request's headers
 	pub headers: Headers<'a>,
 
-	#[serde(skip_serializing_if = "is_extension_or_direct_none")]
-	pub body: ExtensionOrDirect<'a, BufferedBody>,
+	#[serde(skip_serializing_if = "is_body_extension_or_direct_none")]
+	pub body: BodyExtensionOrDirect<'a>,
 
 	#[serde(skip_serializing_if = "is_extension_or_direct_none")]
 	pub start_time: ExtensionOrDirect<'a, RequestTime>,
@@ -609,14 +611,12 @@ pub struct RequestRef<'a> {
 	pub end_time: Option<&'a RequestTime>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ResponseSnapshot {
-	#[serde(with = "http_serde::status_code")]
 	pub code: http::StatusCode,
-	#[serde(with = "http_serde::header_map")]
 	pub headers: http::HeaderMap,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub body: Option<BufferedBody>,
+	pub recorded_body: Option<RecordedBodyHandle>,
 }
 
 #[derive(Debug, Clone, Serialize, cel::DynamicType)]
@@ -627,8 +627,8 @@ pub struct ResponseRef<'a> {
 	/// The headers of the response.
 	pub headers: Headers<'a>,
 
-	#[serde(skip_serializing_if = "is_extension_or_direct_none")]
-	pub body: ExtensionOrDirect<'a, BufferedBody>,
+	#[serde(skip_serializing_if = "is_body_extension_or_direct_none")]
+	pub body: BodyExtensionOrDirect<'a>,
 }
 
 impl<'a> From<&'a ResponseSnapshot> for ResponseRef<'a> {
@@ -636,7 +636,10 @@ impl<'a> From<&'a ResponseSnapshot> for ResponseRef<'a> {
 		Self {
 			code: value.code.as_u16(),
 			headers: Headers::new(&value.headers),
-			body: value.body.as_ref().into(),
+			body: BodyExtensionOrDirect::Direct {
+				buffered: value.body.as_ref(),
+				recorded: value.recorded_body.as_ref(),
+			},
 		}
 	}
 }
@@ -728,7 +731,10 @@ impl<'a> From<&'a RequestSnapshot> for RequestRef<'a> {
 			scheme: value.scheme.as_ref(),
 			version: value.version,
 			headers: Headers::new(&value.headers),
-			body: value.body.as_ref().into(),
+			body: BodyExtensionOrDirect::Direct {
+				buffered: value.body.as_ref(),
+				recorded: value.recorded_body.as_ref(),
+			},
 			start_time: value.start_time.as_ref().into(),
 			end_time: None,
 		}
@@ -745,7 +751,7 @@ impl<'a, B> From<&'a ::http::Request<B>> for RequestRef<'a> {
 			scheme: req.uri().scheme(),
 			version: req.version(),
 			headers: Headers::new(req.headers()),
-			body: req.extensions().into(),
+			body: BodyExtensionOrDirect::Extension(req.extensions()),
 			start_time: req.extensions().into(),
 			// Only known in snapshot phase...
 			end_time: None,
@@ -758,7 +764,7 @@ impl<'a> From<&'a crate::http::Response> for ResponseRef<'a> {
 		Self {
 			code: resp.status().as_u16(),
 			headers: Headers::new(resp.headers()),
-			body: resp.extensions().into(),
+			body: BodyExtensionOrDirect::Extension(resp.extensions()),
 		}
 	}
 }
@@ -799,6 +805,77 @@ impl DynamicType for BufferedBody {
 
 	fn materialize(&self) -> Value<'_> {
 		Value::Bytes(BytesValue::Bytes(self.0.clone()))
+	}
+}
+
+#[derive(Debug, Clone)]
+pub enum BodyExtensionOrDirect<'a> {
+	Extension(&'a http::Extensions),
+	Direct {
+		buffered: Option<&'a BufferedBody>,
+		recorded: Option<&'a RecordedBodyHandle>,
+	},
+}
+
+impl BodyExtensionOrDirect<'_> {
+	fn buffered(&self) -> Option<&BufferedBody> {
+		match self {
+			BodyExtensionOrDirect::Extension(e) => e.get::<BufferedBody>(),
+			BodyExtensionOrDirect::Direct { buffered, .. } => *buffered,
+		}
+	}
+
+	fn recorded(&self) -> Option<&RecordedBodyHandle> {
+		match self {
+			BodyExtensionOrDirect::Extension(e) => e.get::<RecordedBodyHandle>(),
+			BodyExtensionOrDirect::Direct { recorded, .. } => *recorded,
+		}
+	}
+
+	fn bytes(&self) -> Option<Bytes> {
+		if let Some(buffered) = self.buffered() {
+			Some(buffered.0.clone())
+		} else {
+			self.recorded().map(RecordedBodyHandle::bytes)
+		}
+	}
+
+	fn is_none(&self) -> bool {
+		self.buffered().is_none() && self.recorded().is_none()
+	}
+}
+
+impl Default for BodyExtensionOrDirect<'_> {
+	fn default() -> Self {
+		Self::Direct {
+			buffered: None,
+			recorded: None,
+		}
+	}
+}
+
+impl Serialize for BodyExtensionOrDirect<'_> {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		match self.bytes() {
+			Some(bytes) => BufferedBody(bytes).serialize(serializer),
+			None => serializer.serialize_none(),
+		}
+	}
+}
+
+impl DynamicType for BodyExtensionOrDirect<'_> {
+	fn auto_materialize(&self) -> bool {
+		true
+	}
+
+	fn materialize(&self) -> Value<'_> {
+		match self.bytes() {
+			Some(bytes) => Value::Bytes(BytesValue::Bytes(bytes)),
+			None => Value::Null,
+		}
 	}
 }
 
@@ -1464,7 +1541,10 @@ impl ExecutorSerde {
 				scheme: req.scheme.as_ref(),
 				version: req.version,
 				headers: Headers::new(&req.headers),
-				body: ExtensionOrDirect::Direct(req.body.as_ref()),
+				body: BodyExtensionOrDirect::Direct {
+					buffered: req.body.as_ref(),
+					recorded: None,
+				},
 				start_time: ExtensionOrDirect::Direct(req.start_time.as_ref()),
 				end_time: req.end_time.as_ref(),
 			});
@@ -1475,7 +1555,10 @@ impl ExecutorSerde {
 			exec.response = Some(ResponseRef {
 				code: resp.code,
 				headers: Headers::new(&resp.headers),
-				body: ExtensionOrDirect::Direct(resp.body.as_ref()),
+				body: BodyExtensionOrDirect::Direct {
+					buffered: resp.body.as_ref(),
+					recorded: None,
+				},
 			});
 		}
 		exec.llm_request = self.llm_request.as_ref();
