@@ -296,12 +296,7 @@ const STANDALONE_SERVICE_PORT: u16 = 8000;
 
 #[derive(Clone)]
 struct StandaloneInferenceRouter {
-	target: SocketAddr,
-	request_headers_seen: Arc<AtomicUsize>,
-}
-
-#[derive(Debug)]
-struct NoDestinationInferenceRouter {
+	target: Option<SocketAddr>,
 	request_headers_seen: Arc<AtomicUsize>,
 }
 
@@ -314,35 +309,24 @@ impl Handler for StandaloneInferenceRouter {
 	) -> Result<(), Status> {
 		self.request_headers_seen.fetch_add(1, Ordering::SeqCst);
 		let _ = sender
-			.send(request_header_response(Some(CommonResponse {
-				header_mutation: Some(HeaderMutation {
-					set_headers: vec![HeaderValueOption {
-						header: Some(HeaderValue {
-							key: "x-gateway-destination-endpoint".to_string(),
-							value: self.target.to_string(),
-							raw_value: Vec::new(),
-						}),
-						append: Some(false),
-						..Default::default()
-					}],
-					remove_headers: vec![],
-				}),
-				..Default::default()
+			.send(request_header_response(self.target.map(|target| {
+				CommonResponse {
+					header_mutation: Some(HeaderMutation {
+						set_headers: vec![HeaderValueOption {
+							header: Some(HeaderValue {
+								key: "x-gateway-destination-endpoint".to_string(),
+								value: target.to_string(),
+								raw_value: Vec::new(),
+							}),
+							append: Some(false),
+							..Default::default()
+						}],
+						remove_headers: vec![],
+					}),
+					..Default::default()
+				}
 			})))
 			.await;
-		Ok(())
-	}
-}
-
-#[async_trait::async_trait]
-impl Handler for NoDestinationInferenceRouter {
-	async fn handle_request_headers(
-		&mut self,
-		_headers: &HttpHeaders,
-		sender: &Sender<Result<ProcessingResponse, Status>>,
-	) -> Result<(), Status> {
-		self.request_headers_seen.fetch_add(1, Ordering::SeqCst);
-		let _ = sender.send(request_header_response(None)).await;
 		Ok(())
 	}
 }
@@ -379,7 +363,7 @@ fn configure_standalone_service(t: &TestBind) {
 }
 
 async fn setup_inference_routing_mock(
-	target: SocketAddr,
+	target: Option<SocketAddr>,
 	request_headers_seen: Arc<AtomicUsize>,
 ) -> (MockInstance, TestBind, Client<MemoryConnector, Body>) {
 	let ext_proc = ExtProcMock::new(move || StandaloneInferenceRouter {
@@ -420,7 +404,7 @@ async fn standalone_inference_routing_uses_epp_selected_destination_without_loca
 	let backend_b = named_backend("backend-b").await;
 	let request_headers_seen = Arc::new(AtomicUsize::new(0));
 	let (_ext_proc, _bind, io) =
-		setup_inference_routing_mock(*backend_b.address(), request_headers_seen.clone()).await;
+		setup_inference_routing_mock(Some(*backend_b.address()), request_headers_seen.clone()).await;
 
 	let res = send_request(io, Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 200);
@@ -454,35 +438,8 @@ async fn standalone_inference_routing_uses_epp_selected_destination_without_loca
 #[tokio::test]
 async fn standalone_inference_routing_requires_epp_selected_destination() {
 	let request_headers_seen = Arc::new(AtomicUsize::new(0));
-	let request_headers_seen_for_handler = request_headers_seen.clone();
-	let ext_proc = ExtProcMock::new(move || NoDestinationInferenceRouter {
-		request_headers_seen: request_headers_seen_for_handler.clone(),
-	})
-	.spawn()
-	.await;
-
-	let mut t = setup_proxy_test("{}").unwrap().with_bind(simple_bind());
-	configure_standalone_service(&t);
-	t.attach_route(json!({
-		"name": "standalone-epp",
-		"backends": [
-			{
-				"service": {
-					"name": STANDALONE_SERVICE_REF,
-					"port": STANDALONE_SERVICE_PORT,
-				},
-				"policies": {
-					"inferenceRouting": {
-						"endpointPicker": {
-							"host": ext_proc.address.to_string(),
-						},
-					},
-				},
-			}
-		],
-	}))
-	.await;
-	let io = t.serve_http(BIND_KEY);
+	let (_ext_proc, _bind, io) =
+		setup_inference_routing_mock(None, request_headers_seen.clone()).await;
 
 	let res = send_request(io, Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 503);
