@@ -1,0 +1,53 @@
+# override per-benchmark via -f single-workload/<target>-values.yaml
+
+job:
+  image:
+    repository: quay.io/inference-perf/inference-perf
+    tag: "" # defaults to .Chart.AppVersion
+  nodeSelector: {}
+  serviceAccountName: ""
+  resources: {}
+
+
+logLevel: INFO
+gcsPath: ""
+s3Path: ""
+
+token:
+  hfSecret:
+    name: ""
+    key: ""
+  hfToken: ""
+
+gcsCredentials:
+  secretName: "" # secret containing GCP key (key.json)
+gcsProject: ""  # GCP project ID (sets GOOGLE_CLOUD_PROJECT in the pod)
+
+config:
+  load:
+    type: constant
+    interval: 5
+    stages:
+      - rate: 2
+        duration: 30
+      - rate: 5
+        duration: 30
+      - rate: 10
+        duration: 30
+  api:
+    type: completion
+    streaming: true
+  server:
+    type: vllm # agentgateway is wire compatible with vllm /v1/completions
+    base_url: ""
+    model_name: ""
+    ignore_eos: true
+  tokenizer:
+    pretrained_model_name_or_path: ""
+  data:
+    type: shareGPT
+  report:
+    request_lifecycle:
+      summary: true
+      per_stage: true
+      per_request: true
