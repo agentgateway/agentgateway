@@ -53,7 +53,7 @@ anyhow = "1.0"
 arc-swap = "1.9"
 arcstr = { version = "1.2", features = ["serde"] }
 assert_matches = "1.5.0"
-async-openai = { version = "0.34", default-features = false, features = ["chat-completion-types", "moderation-types", "response-types", "realtime-types"] }
+async-openai = { version = "0.35", default-features = false, features = ["chat-completion-types", "moderation-types", "response-types", "realtime-types"] }
 async-stream = "0.3"
 async-trait = "0.1"
 aws-config = { version = "1.8", default-features = false, features = ["default-https-client", "rt-tokio", "sso"] }
@@ -67,9 +67,9 @@ axum-core = "0.5"
 axum-extra = { version = "0.12", features = ["json-lines", "typed-header"] }
 # Disable default features to avoid pulling in native-tls and requiring openssl
 # TODO: allow default features if we ever add an openssl feature
-azure_identity = { version = "0.33", default-features = false }
-azure_core = { version = "0.33", default-features = false }
-typespec_client_core = { default-features = false, version = "0.12" }
+azure_identity = { version = "0.34", default-features = false }
+azure_core = { version = "0.34", default-features = false }
+typespec_client_core = { default-features = false, version = "0.13" }
 base64 = "0.22"
 cookie = { version = "0.18", default-features = false }
 bcrypt = "0.19"
@@ -93,7 +93,7 @@ google-cloud-auth = { version = "1.8", default-features = false, features = [
     # To installing a global default which is annoying so prefer to do it this way.
     "default-rustls-provider",
 ] }
-hashbrown = "0.16"
+hashbrown = "0.17"
 h2 = "0.4"
 headers = "0.4"
 hex = "0.4"
@@ -181,7 +181,7 @@ sse-stream = "0.2"
 stacker = "0.1"
 tempfile = "3.27"
 thiserror = "2.0"
-tiktoken-rs = "0.9"
+tiktoken-rs = "0.11"
 tokio = { version = "1.50", features = ["full", "macros", "sync"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws_lc_rs"] }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
