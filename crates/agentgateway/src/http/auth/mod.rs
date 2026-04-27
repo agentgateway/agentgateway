@@ -1,5 +1,6 @@
 pub mod aws;
 pub mod azure;
+mod copilot;
 pub mod gcp;
 
 use std::borrow::Cow;
@@ -42,6 +43,8 @@ pub enum BackendAuth {
 	Aws(aws::AwsAuth),
 	#[serde(rename = "azure")]
 	Azure(azure::AzureAuth),
+	#[serde(rename = "copilot")]
+	Copilot,
 }
 
 #[derive(Clone)]
@@ -116,6 +119,11 @@ pub async fn apply_backend_auth(
 			.map_err(ProxyError::BackendAuthenticationFailed)?;
 			req.headers_mut().insert(http::header::AUTHORIZATION, token);
 		},
+		BackendAuth::Copilot => {
+			copilot::insert_headers(req)
+				.await
+				.map_err(ProxyError::BackendAuthenticationFailed)?;
+		},
 	}
 	Ok(())
 }
@@ -137,6 +145,7 @@ pub async fn apply_late_backend_auth(
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 		},
 		BackendAuth::Azure(_) => {},
+		BackendAuth::Copilot => {},
 	};
 	Ok(())
 }
