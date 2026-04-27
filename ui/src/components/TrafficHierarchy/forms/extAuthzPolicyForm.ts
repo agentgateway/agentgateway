@@ -9,34 +9,86 @@ export const schema: RJSFSchema = {
             enum: ["host", "service", "backend"],
             default: "host",
         },
-        host: { 
-            type: "string",
-            title: "Host",
-        },
-        serviceName: { 
-            type: "string",
-            title: "Service Name",
-        },
-        servicePort: { 
-            type: "number",
-            title: "Service Port",
-        },
-        backend: { 
-            type: "string",
-            title: "Backend",
-        },
-        protocol: { 
+        protocol: {
             type: "string",
             title: "Protocol",
             enum: ["grpc", "http"],
             default: "grpc",
         },
-        failureMode: { 
+        failureMode: {
             type: "string",
             title: "Failure Mode",
             enum: ["allow", "deny"],
             default: "deny",
         }
+    },
+    dependencies: {
+        targetType: {
+            oneOf: [
+                {
+                    properties: {
+                        targetType: { const: "host" },
+                        host: {
+                            type: "string",
+                            title: "Host",
+                        },
+                        protocol: {
+                            type: "string",
+                            enum: ["grpc", "http"],
+                        },
+                        failureMode: {
+                            type: "string",
+                            enum: ["allow", "deny"],
+                        }
+                    },
+                    required: ["host"],
+                },
+                {
+                    properties: {
+                        targetType: { const: "service" },
+                        serviceNamespace: {
+                            type: "string",
+                            title: "Service Namespace",
+                        },
+                        serviceHostname: {
+                            type: "string",
+                            title: "Service Hostname",
+                        },
+                        servicePort: {
+                            type: "number",
+                            title: "Service Port",
+                        },
+                        protocol: {
+                            type: "string",
+                            enum: ["grpc", "http"],
+                        },
+                        failureMode: {
+                            type: "string",
+                            enum: ["allow", "deny"],
+                        }
+                    },
+                    required: ["serviceNamespace", "serviceHostname", "servicePort"],
+                },
+                {
+                    properties: {
+                        targetType: { const: "backend" },
+                        backend: {
+                            type: "string",
+                            title: "Backend",
+                        },
+                        protocol: {
+                            type: "string",
+                            enum: ["grpc", "http"],
+                        },
+                        failureMode: {
+                            type: "string",
+                            enum: ["allow", "deny"],
+                        }
+                    },
+                    required: ["backend"],
+                },
+            ],
+        },
     },
 };
 
@@ -50,11 +102,16 @@ export const uiSchema: UiSchema = {
         "ui:placeholder": "authz.example.com:9001",
         "ui:help": "Hostname or IP address of the authorization service",
     },
-    serviceName: { 
-        "ui:placeholder": "authz-service.namespace.svc.cluster.local",
-        "ui:help": "Service name for the authorization service",
+    serviceNamespace: {
+        "ui:placeholder": "default",
+        "ui:help": "Kubernetes namespace of the authorization service",
+    },
+    serviceHostname: {
+        "ui:placeholder": "authz-service",
+        "ui:help": "Service hostname (e.g., authz-service or authz-service.svc.cluster.local)",
     },
     servicePort: {
+        "ui:placeholder": "9001",
         "ui:help": "Port for the authorization service",
     },
     backend: { 
@@ -82,18 +139,20 @@ export function transformForForm(data: unknown): unknown {
     const d = data as Record<string, unknown>;
     const result: Record<string, unknown> = {};
 
-    if (typeof d.host === "string") { 
+    if (typeof d.host === "string") {
         result.targetType = "host";
-        result.host = d.host; 
-    } else if (d.service) { 
+        result.host = d.host;
+    } else if (d.service) {
         const svc = d.service as Record<string, unknown>;
+        const name = svc.name as Record<string, unknown>;
         result.targetType = "service";
-        result.serviceName = svc.name;
+        result.serviceNamespace = name.namespace ?? "default";
+        result.serviceHostname = name.hostname ?? "";
         result.servicePort = svc.port;
     } else if (typeof d.backend === "string") { 
         result.targetType = "backend";
         result.backend = d.backend;
-    } else { 
+    } else {
         result.targetType = "host";
     }
 
@@ -114,8 +173,11 @@ export function transformBeforeSubmit(data: unknown): unknown {
 
     if (d.targetType === "host" && d.host) {
       result.host = d.host;
-    } else if (d.targetType === "service" && d.serviceName) {
-      result.service = { name: d.serviceName, port: d.servicePort };
+    } else if (d.targetType === "service" && d.serviceNamespace && d.serviceHostname) {
+      result.service = {
+        name: { namespace: d.serviceNamespace as string, hostname: d.serviceHostname as string },
+        port: d.servicePort as number,
+      };
     } else if (d.targetType === "backend" && d.backend) {
       result.backend = d.backend;
     }

@@ -886,14 +886,23 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         const formConfig = getFormForPolicy(sel.node.policyType) as any;
         const transformed = formConfig?.transformForForm ? formConfig.transformForForm(raw) : raw;
         setFormData(transformed as Record<string, unknown>);
-      } else if (sel.type === "listenerPolicy") { 
+      } else if (sel.type === "listenerPolicy") {
         const raw = sel.listener.listener.policies as Record<string, unknown> ?? {};
-        setFormData((raw[sel.policyType] ?? {}) as Record<string, unknown>);
+        const policyData = raw[sel.policyType] ?? {};
+        const formConfig = getFormForPolicy(sel.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(policyData) : policyData;
+        setFormData(transformed as Record<string, unknown>);
       } else if (sel.type === "backendPolicy") {
         const raw = (sel.backend.backend as any)?.policies ?? {};
-        setFormData((raw[sel.policyType] ?? {}) as Record<string, unknown>);
+        const policyData = raw[sel.policyType] ?? {};
+        const formConfig = getFormForPolicy(sel.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(policyData) : policyData;
+        setFormData(transformed as Record<string, unknown>);
       } else if (sel.type === "llmPolicy" || sel.type === "mcpPolicy") {
-        setFormData(sel.node.policy as Record<string, unknown>);
+        const policyData = sel.node.policy as Record<string, unknown>;
+        const formConfig = getFormForPolicy(sel.node.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(policyData) : policyData;
+        setFormData(transformed as Record<string, unknown>);
       } else if (sel.type === "mcpTarget") {
         const form = forms.mcpTarget as any;
         const targetData = sel.node.target as Record<string, unknown>;
@@ -967,14 +976,23 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         const formConfig = getFormForPolicy(selected.node.policyType) as any;
         const transformed = formConfig?.transformForForm ? formConfig.transformForForm(raw) : raw;
         setFormData(transformed as Record<string, unknown>);
-      } else if (selected.type === "listenerPolicy") { 
+      } else if (selected.type === "listenerPolicy") {
         const raw = selected.listener.listener.policies as Record<string, unknown> ?? {};
-        setFormData((raw[selected.policyType] ?? {}) as Record<string, unknown>);
+        const policyData = raw[selected.policyType] ?? {};
+        const formConfig = getFormForPolicy(selected.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(policyData) : policyData;
+        setFormData(transformed as Record<string, unknown>);
       } else if (selected.type === "backendPolicy") {
         const raw = (selected.backend.backend as any)?.policies ?? {};
-        setFormData((raw[selected.policyType] ?? {}) as Record<string, unknown>);
+        const policyData = raw[selected.policyType] ?? {};
+        const formConfig = getFormForPolicy(selected.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(policyData) : policyData;
+        setFormData(transformed as Record<string, unknown>);
       } else if (selected.type === "llmPolicy" || selected.type === "mcpPolicy") {
-        setFormData(selected.node.policy as Record<string, unknown>);
+        const policyData = selected.node.policy as Record<string, unknown>;
+        const formConfig = getFormForPolicy(selected.node.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(policyData) : policyData;
+        setFormData(transformed as Record<string, unknown>);
       } else if (selected.type === "model") {
         setFormData(selected.node.model as unknown as Record<string, unknown>);
       } else if (selected.type === "mcpTarget") {
@@ -1109,8 +1127,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           acc[p.policyType] = p.policy;
           return acc;
         }, {} as Record<string, unknown>);
-        console.log(`fd`, fd);
-        console.log(`dataToSave`, dataToSave);
         await api.createOrUpdateLLM({
           ...currentConfig,
           policies: { ...currentPolicies, [selected.node.policyType]: dataToSave },
