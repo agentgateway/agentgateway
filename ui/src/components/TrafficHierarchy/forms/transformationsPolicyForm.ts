@@ -68,9 +68,10 @@ export const schema: RJSFSchema = {
 export const uiSchema: UiSchema = {
   "ui:title": "",
   request: {
-    add: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value" },
-    set: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value" },
-    metadata: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "key", "ui:valuePlaceholder": "value" },
+    "ui:label": false,
+    add: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value", "ui:label": false, },
+    set: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value", "ui:label": false, },
+    metadata: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "key", "ui:valuePlaceholder": "value", "ui:label": false, },
     body: {
       "ui:widget": "textarea",
       "ui:placeholder": "e.g., request.body + '{\"extra\": true}'",
@@ -79,9 +80,10 @@ export const uiSchema: UiSchema = {
     remove: { "ui:help": "Header names to remove from the request" },
   },
   response: {
-    add: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value" },
-    set: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value" },
-    metadata: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "key", "ui:valuePlaceholder": "value" },
+    "ui:title": false,
+    add: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value", "ui:label": false, },
+    set: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "header-name", "ui:valuePlaceholder": "header-value", "ui:label": false, },
+    metadata: { "ui:field": "keyValueMap", "ui:keyPlaceholder": "key", "ui:valuePlaceholder": "value", "ui:label": false, },
     body: {
       "ui:widget": "textarea",
       "ui:placeholder": "e.g., response.body",
