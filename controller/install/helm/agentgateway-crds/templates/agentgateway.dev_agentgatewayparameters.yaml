@@ -427,6 +427,11 @@ spec:
                 description: Configure Istio integration. If enabled, Agentgateway
                   can natively connect to Istio enabled pods with mTLS.
                 properties:
+                  additionalTrustDomains:
+                    description: |-
+                      Comma-separated list of additional SPIFFE trust domains accepted on inbound HBONE
+                      connections. The local trust_domain is always implicitly included.
+                    type: string
                   caAddress:
                     description: The address of the Istio CA. If unset, defaults to
                       `https://istiod.istio-system.svc:15012`.
