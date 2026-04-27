@@ -10,6 +10,7 @@ const TOKEN_ENV_VARS: &[&str] = &["GH_COPILOT_TOKEN", "COPILOT_GITHUB_TOKEN"];
 const DOMAIN: &str = "github.com";
 const TOKEN_URL: &str = "https://api.github.com/copilot_internal/v2/token";
 const TOKEN_REFRESH_SKEW_SECS: u64 = 300;
+const EXCHANGE_FAILURE_RETRY_SECS: u64 = 300;
 
 #[derive(Clone, Debug)]
 struct ApiToken {
@@ -83,7 +84,9 @@ async fn load_api_token() -> anyhow::Result<String> {
 
 			// Preserve support for callers that provide an already-exchanged Copilot token.
 			tracing::warn!(error = %err, "failed to exchange GitHub token for Copilot API token; using source token directly");
-			Ok(source_token)
+			let token = fallback_api_token(source_token, now);
+			*cache.lock().expect("copilot token cache mutex poisoned") = Some(token.clone());
+			Ok(token.token)
 		},
 	}
 }
@@ -109,7 +112,7 @@ fn cached_api_token(
 
 async fn fetch_api_token(source_token: &str, now: u64) -> anyhow::Result<ApiToken> {
 	let response = reqwest::Client::new()
-		.post(TOKEN_URL)
+		.get(TOKEN_URL)
 		.header(reqwest::header::ACCEPT, "application/json")
 		.bearer_auth(source_token)
 		.header(
@@ -137,6 +140,16 @@ async fn fetch_api_token(source_token: &str, now: u64) -> anyhow::Result<ApiToke
 		expires_at_unix: response.expires_at,
 		refresh_at_unix: refresh_at_unix(now, response.expires_at, response.refresh_in),
 	})
+}
+
+fn fallback_api_token(source_token: String, now: u64) -> ApiToken {
+	let retry_at = now.saturating_add(EXCHANGE_FAILURE_RETRY_SECS);
+	ApiToken {
+		source_token: source_token.clone(),
+		token: source_token,
+		expires_at_unix: retry_at,
+		refresh_at_unix: retry_at,
+	}
 }
 
 fn refresh_at_unix(now: u64, expires_at: u64, refresh_in: Option<u64>) -> u64 {
@@ -293,5 +306,15 @@ enterprise.example.com:
 			Some("api")
 		);
 		assert_eq!(cached_api_token(&cache, "other-source", 1_400, true), None);
+	}
+
+	#[test]
+	fn fallback_api_token_uses_source_token_temporarily() {
+		let token = fallback_api_token("source".to_string(), 1_000);
+
+		assert_eq!(token.source_token, "source");
+		assert_eq!(token.token, "source");
+		assert_eq!(token.refresh_at_unix, 1_300);
+		assert_eq!(token.expires_at_unix, 1_300);
 	}
 }
