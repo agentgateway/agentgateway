@@ -226,12 +226,18 @@ impl Session {
 			}) if req_id.is_some() => {
 				Err(mcp::Error::Authorization(req_id.unwrap(), resource_type, resource_name).into())
 			},
-			Err(UpstreamError::OpenAPIHttpError { status, body, tool: _ }) => {
+			Err(UpstreamError::OpenAPIHttpError {
+				status,
+				body,
+				tool: _,
+			}) => {
 				let resp = ::http::Response::builder()
 					.status(status)
 					.header(::http::header::CONTENT_TYPE, "application/json")
 					.body(bytes::Bytes::from(body))
-					.map_err(|e| ProxyError::Processing(anyhow!("failed to build OpenAPI error response: {e}")))?;
+					.map_err(|e| {
+						ProxyError::Processing(anyhow!("failed to build OpenAPI error response: {e}"))
+					})?;
 				Err(mcp::Error::UpstreamError(Box::new(http::SendDirectResponse(resp))).into())
 			},
 			// TODO: this is too broad. We have a big tangle of errors to untangle though
@@ -789,7 +795,7 @@ mod tests {
 
 	use super::*;
 	use crate::mcp;
-	use crate::mcp::upstream::{ UpstreamError};
+	use crate::mcp::upstream::UpstreamError;
 	use crate::proxy::ProxyError;
 
 	#[rstest]
@@ -828,5 +834,4 @@ mod tests {
 		};
 		assert_eq!(resp.status(), status);
 	}
-
 }
