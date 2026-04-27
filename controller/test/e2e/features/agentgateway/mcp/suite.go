@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
@@ -174,7 +173,7 @@ func (s *testingSuite) TestSSEEndpoint() {
 		Headers: map[string]any{
 			"Content-Type": gomega.MatchRegexp(`^text/event-stream(?:\s*;.*)?$`),
 		},
-	}, headers, initBody, "--max-time", "8")
+	}, headers, initBody)
 
 	_ = s.initializeSession(initBody, headers, "sse")
 }
@@ -251,12 +250,11 @@ func (s *testingSuite) runDynamicRoutingCase(clientName string, routeHeaders map
 	headers := withRouteHeaders(mcpHeaders(nil), routeHeaders)
 
 	// Deterministic 200 with retry/backoff
-	s.waitForMCP200(8080, headers, initBody, label,
-		100*time.Millisecond, 250*time.Millisecond, 500*time.Millisecond, 1*time.Second)
+	s.waitForMCP200(headers, initBody, label)
 
 	// Get full response for logging + session extraction
 	// nolint: bodyclose // false positive
-	resp, body, err := s.execCurlMCP(headers, initBody, "--max-time", "10")
+	resp, body, err := s.execCurlMCP(headers, initBody)
 	s.Require().NoError(err, "%s initialize failed", label)
 	s.T().Logf("%s initialize body: %s", label, body)
 

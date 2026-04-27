@@ -70,19 +70,12 @@ func (c *requestConfig) executeNative() (*http.Response, error) {
 		}
 	}
 
-	// Create context with timeout
-	ctx := context.Background()
-	if c.connectionTimeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(c.connectionTimeout)*time.Second)
-		defer cancel()
-	}
 	if method == "" {
 		method = "GET"
 	}
 
 	// Create request
-	req, err := http.NewRequestWithContext(ctx, method, fullURL, bodyReader)
+	req, err := http.NewRequest(method, fullURL, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
