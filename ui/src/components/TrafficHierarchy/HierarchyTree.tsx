@@ -3000,6 +3000,11 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
     }
   }, [selectedKeys, ensureExpanded]);
 
+  // re-expand all nodes when treeData changes, ie after a mutation
+  useEffect(() => { 
+    setExpandedKeys(getAllKeys(treeData));
+  }, [treeData, getAllKeys]);
+
   const handleExpandAll = useCallback(() => {
     setExpandedKeys(getAllKeys(treeData));
   }, [treeData, getAllKeys]);
