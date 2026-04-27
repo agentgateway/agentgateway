@@ -892,7 +892,10 @@ impl Route {
 		Ok((
 			r,
 			strng::new(&s.listener_key),
-			s.route_group_key.as_ref().map(strng::new),
+			s.route_group_key
+				.as_ref()
+				.filter(|k| !k.is_empty())
+				.map(strng::new),
 		))
 	}
 }
