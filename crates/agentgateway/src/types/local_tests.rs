@@ -177,6 +177,42 @@ async fn test_llm_simple_config() {
 }
 
 #[tokio::test]
+async fn test_llm_copilot_config() {
+	let normalized = normalize_test_yaml(
+		r#"
+llm:
+  models:
+  - name: copilot/gpt-5.4
+    provider: copilot
+    params:
+      model: gpt-5.4
+"#,
+	)
+	.await
+	.expect("normalize copilot llm config");
+
+	let ai_backend = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			crate::types::agent::Backend::AI(_, ai) => Some(ai),
+			_ => None,
+		})
+		.expect("ai backend");
+	let provider = ai_backend
+		.providers
+		.iter()
+		.iter()
+		.next()
+		.expect("provider")
+		.0
+		.provider
+		.clone();
+
+	assert!(matches!(provider, crate::llm::AIProvider::Copilot(_)));
+}
+
+#[tokio::test]
 async fn test_mcp_simple_config() {
 	test_config_parsing("mcp_simple").await;
 }

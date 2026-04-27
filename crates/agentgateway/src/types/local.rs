@@ -22,7 +22,9 @@ use crate::http::{
 	HeaderName, HeaderOrPseudo, filters, health, retry, timeout, transformation_cel,
 };
 use crate::llm::policy::PromptGuard;
-use crate::llm::{AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider, anthropic, openai};
+use crate::llm::{
+	AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider, anthropic, copilot, openai,
+};
 use crate::mcp::{FailureMode, McpAuthorization};
 use crate::store::LocalWorkload;
 use crate::types::agent::{
@@ -1919,6 +1921,7 @@ json(request.body).model
 		let provider = match &model_config.provider {
 			LocalModelAIProvider::Anthropic => AIProvider::Anthropic(anthropic::Provider { model }),
 			LocalModelAIProvider::OpenAI => AIProvider::OpenAI(openai::Provider { model }),
+			LocalModelAIProvider::Copilot => AIProvider::Copilot(copilot::Provider { model }),
 			LocalModelAIProvider::Gemini => AIProvider::Gemini(crate::llm::gemini::Provider { model }),
 			LocalModelAIProvider::Vertex => AIProvider::Vertex(crate::llm::vertex::Provider {
 				model,
