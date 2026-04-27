@@ -940,12 +940,11 @@ impl Handler {
 					.to_vec(),
 			)
 			.map_err(|e| UpstreamError::OpenAPIError(e.into()))?;
-			Err(UpstreamError::OpenAPIError(anyhow::anyhow!(
-				"Upstream API call for tool '{}' failed with status {}: {}",
-				name,
+			Err(UpstreamError::OpenAPIHttpError {
 				status,
-				body
-			)))
+				body,
+				tool: name.to_string(),
+			})
 		}
 	}
 

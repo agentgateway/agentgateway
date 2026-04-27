@@ -75,6 +75,12 @@ pub enum UpstreamError {
 	Http(#[from] mcp::ClientError),
 	#[error("openapi upstream error: {0}")]
 	OpenAPIError(#[from] anyhow::Error),
+	#[error("openapi upstream send error: Upstream API call for tool '{tool}' failed with status {status}: {body}")]
+	OpenAPIHttpError {
+		status: ::http::StatusCode,
+		body: String,
+		tool: String,
+	},
 	#[error("{0}")]
 	Proxy(#[from] ProxyError),
 	#[error("stdio upstream error: {0}")]
