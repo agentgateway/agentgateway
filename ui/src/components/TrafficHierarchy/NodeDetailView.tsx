@@ -1076,7 +1076,17 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         if (form?.transformBeforeSubmit) {
           dataToSave = form.transformBeforeSubmit(fd) as Record<string, unknown>;
         }
-        await api.updateMCPTargetByIndex(selected.node.targetIndex, dataToSave);
+        
+        // Merge back policies filtered out by form
+        const targetWithPolicies = {
+          ...dataToSave,
+          policies: selected.node.policies.reduce((acc, p) => {
+            acc[p.policyType] = p.policy;
+            return acc;
+          }, {} as Record<string, unknown>),
+        };
+
+        await api.updateMCPTargetByIndex(selected.node.targetIndex, targetWithPolicies);
         toast.success("Target updated successfully");
         await mutate();
         navigate(`${basePath}/mcp/target/${selected.node.targetIndex}`);
