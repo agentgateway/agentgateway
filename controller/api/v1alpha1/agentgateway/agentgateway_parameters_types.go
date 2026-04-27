@@ -175,7 +175,7 @@ type IstioSpec struct {
 	// +optional
 	TrustDomain string `json:"trustDomain,omitempty"`
 	// Comma-separated list of additional SPIFFE trust domains accepted on inbound HBONE
-	// connections. The local trust_domain is always implicitly included.
+	// connections. The local trust domain is always implicitly included.
 	//
 	// +optional
 	AdditionalTrustDomains string `json:"additionalTrustDomains,omitempty"`
