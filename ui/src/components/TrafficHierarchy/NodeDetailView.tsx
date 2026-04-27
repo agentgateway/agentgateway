@@ -1,4 +1,4 @@
-import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import { DeleteOutlined } from "@ant-design/icons";
 import styled from "@emotion/styled";
 import Form from "@rjsf/antd";
 import { Breadcrumb, Button, Popconfirm, Space, Spin } from "antd";
@@ -1438,12 +1438,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             {!isEditing && (
               <Space>
                 <Button
-                  icon={<PlusOutlined />}
-                  onClick={() => handleAddListener(node.bind.port)}
-                >
-                  Add Listener
-                </Button>
-                <Button
                   type="primary"
                   icon={<Edit2 size={14} />}
                   onClick={() => navigate(location.pathname + "?edit=true")}
@@ -1533,18 +1527,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             </TitleLeft>
             {!isEditing && (
               <Space>
-                <Button
-                  icon={<PlusOutlined />}
-                  onClick={() =>
-                    handleAddRoute(
-                      selected.bind.bind.port,
-                      node.listenerIndex,
-                      isTcp,
-                    )
-                  }
-                >
-                  {isTcp ? "Add TCP Route" : "Add Route"}
-                </Button>
                 <Button
                   type="primary"
                   icon={<Edit2 size={14} />}
@@ -2473,39 +2455,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             </TitleLeft>
             {!isEditing && (
               <Space>
-                {selected.type === "llm" && (
-                  <Button
-                    icon={<PlusOutlined />}
-                    onClick={async () => {
-                      try {
-                        const newModel = {
-                          name: `model-${(hierarchy.llm?.models.length ?? 0) + 1}`,
-                          provider: "openAI",
-                        };
-                        await api.createLLMModel(newModel);
-                        toast.success("Model created successfully");
-
-                        // Wait for config to refresh and get the updated data
-                        const freshConfig = await mutate();
-
-                        // Find the index of the newly created model from fresh data
-                        const llmConfig = freshConfig?.llm as any;
-                        const newIndex = llmConfig?.models
-                          ? llmConfig.models.length - 1
-                          : 0;
-                        navigate(
-                          `${basePath}/llm/model/${newIndex}?edit=true&creating=true`,
-                        );
-                      } catch (e: unknown) {
-                        toast.error(
-                          getErrorMessage(e, "Failed to create model"),
-                        );
-                      }
-                    }}
-                  >
-                    Add Model
-                  </Button>
-                )}
                 <Button
                   type="primary"
                   icon={<Edit2 size={14} />}
