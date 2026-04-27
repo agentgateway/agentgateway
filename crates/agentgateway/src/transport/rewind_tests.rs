@@ -38,6 +38,23 @@ async fn test_discard() {
 	assert_eq!(&dest[..7], b" world\0");
 }
 
+#[tokio::test]
+async fn test_keep_after() {
+	let (mut client, mut rw) = setup_socket();
+
+	client.write_all(b"hello").await.unwrap();
+	let mut dest = [0u8; 5];
+	rw.read_exact(&mut dest).await.unwrap();
+	assert_eq!(&dest, b"hello");
+
+	let mut rw = rw.keep_after(2);
+
+	client.write_all(b" world").await.unwrap();
+	let mut dest = [0u8; 9];
+	rw.read_exact(&mut dest).await.unwrap();
+	assert_eq!(&dest, b"llo world");
+}
+
 fn setup_socket() -> (DuplexStream, RewindSocket) {
 	let (client, server) = tokio::io::duplex(8192);
 	let base = Socket::from_memory(

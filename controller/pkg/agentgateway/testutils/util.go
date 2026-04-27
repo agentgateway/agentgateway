@@ -27,7 +27,10 @@ import (
 
 	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
 	agwv1alpha1 "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/policyselection"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	"github.com/agentgateway/agentgateway/controller/pkg/controller"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
@@ -155,6 +158,8 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 	stop := test.NewStop(t)
 	debugger := new(krt.DebugHandler)
 	opts := krtutil.NewKrtOptions(stop, debugger)
+	resolver := BuildRemoteHTTPResolver(ctx.Collections)
+	jwksLookup := BuildJWKSLookup(ctx.Collections)
 	t.Cleanup(func() {
 		if t.Failed() {
 			b, _ := yaml.Marshal(debugger)
@@ -166,7 +171,7 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 		// Only used for NACK, so no need to do anything special here.
 		fc,
 		ctx.Collections,
-		agwPluginFactory(ctx.Collections),
+		agwPluginFactory(ctx.Collections, resolver, jwksLookup),
 		nil,
 		opts,
 		nil,
@@ -189,16 +194,20 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 
 // agwPluginFactory is a factory function that returns the agent gateway plugins
 // It is based on agwPluginFactory(cfg)(ctx, cfg.AgwCollections) in start.go
-func agwPluginFactory(agwCollections *plugins.AgwCollections) plugins.AgwPlugin {
-	agwPlugins := controller.Plugins(agwCollections)
+func agwPluginFactory(agwCollections *plugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup) plugins.AgwPlugin {
+	agwPlugins := controller.Plugins(agwCollections, resolver, jwksLookup)
 	mergedPlugins := plugins.MergePlugins(agwPlugins...)
 	return mergedPlugins
 }
 
 func BuildMockPolicyContext(t test.Failer, inputs []any) plugins.PolicyCtx {
+	collections := BuildMockCollection(t, inputs)
+	resolver := BuildRemoteHTTPResolver(collections)
 	return plugins.PolicyCtx{
 		Krt:         krt.TestingDummyContext{},
-		Collections: BuildMockCollection(t, inputs),
+		Collections: collections,
+		Resolver:    resolver,
+		JWKSLookup:  jwks.NewLookup(jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace), jwks.NewResolver(resolver)),
 	}
 }
 
@@ -233,4 +242,18 @@ func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 	}
 	col.SetupIndexes()
 	return col
+}
+
+func BuildRemoteHTTPResolver(collections *plugins.AgwCollections) remotehttp.Resolver {
+	return remotehttp.NewResolver(remotehttp.Inputs{
+		ConfigMaps:     collections.ConfigMaps,
+		Services:       collections.Services,
+		Backends:       collections.Backends,
+		PolicySelector: policyselection.NewSelector(collections.AgentgatewayPolicies, collections.BackendTLSPolicies),
+	})
+}
+
+func BuildJWKSLookup(collections *plugins.AgwCollections) jwks.Lookup {
+	persistedJWKS := jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace)
+	return jwks.NewLookup(persistedJWKS, jwks.NewResolver(BuildRemoteHTTPResolver(collections)))
 }

@@ -1,5 +1,6 @@
-use chrono::{DateTime, FixedOffset, Timelike, Utc};
 use std::time::{Duration, Instant, SystemTime};
+
+use chrono::{DateTime, FixedOffset, Timelike, Utc};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Timestamp {

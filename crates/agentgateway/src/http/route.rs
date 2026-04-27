@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::cmp;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -9,7 +10,7 @@ use crate::http::Request;
 use crate::types::agent;
 use crate::types::agent::{
 	BackendReference, HeaderMatch, HeaderValueMatch, Listener, PathMatch, QueryValueMatch, Route,
-	RouteBackendReference, RouteMatch, RouteName,
+	RouteBackendReference, RouteMatch, RouteName, RouteSet,
 };
 use crate::*;
 
@@ -27,6 +28,7 @@ fn matches_request(m: &RouteMatch, request: &Request) -> bool {
 				.map(|m| m.start() == 0 && m.end() == path.len())
 				.unwrap_or(false)
 		},
+		PathMatch::Invalid => false,
 		PathMatch::PathPrefix(p) => {
 			let p = p.trim_end_matches('/');
 			let Some(suffix) = request.uri().path().trim_end_matches('/').strip_prefix(p) else {
@@ -66,6 +68,7 @@ fn matches_request(m: &RouteMatch, request: &Request) -> bool {
 					return false;
 				}
 			},
+			HeaderValueMatch::Invalid => return false,
 		}
 	}
 	// TODO: this re-parses the query string on every call; hoist to caller if this becomes a hot path.
@@ -92,6 +95,7 @@ fn matches_request(m: &RouteMatch, request: &Request) -> bool {
 					return false;
 				}
 			},
+			QueryValueMatch::Invalid => return false,
 		}
 	}
 	true
@@ -129,24 +133,25 @@ pub fn select_best_route(
 			// the request is rejected (per GAMMA spec).
 			let svc = wps.as_ref();
 			let svc_nh = svc.namespaced_hostname();
-			let (has_svc_routes, svc_route_match) = {
+			let svc_routes = {
 				let binds = stores.read_binds();
-				match binds.get_service_routes(&svc_nh) {
-					Some(svc_routes) => {
-						let mut result = None;
-						for hnm in agent::HostnameMatch::all_matches(&svc.hostname) {
-							result = svc_routes
-								.get_hostname(&hnm)
-								.find(|(_, m)| matches_request(m, request))
-								.map(|(route, matcher)| (route, matcher.path.clone()));
-							if result.is_some() {
-								break;
-							}
+				binds.get_service_routes(&svc_nh)
+			};
+			let (has_svc_routes, svc_route_match) = match svc_routes {
+				Some(svc_routes) => {
+					let mut result = None;
+					for hnm in agent::HostnameMatch::all_matches(&svc.hostname) {
+						result = svc_routes
+							.get_hostname(&hnm)
+							.find(|(_, m)| matches_request(m, request))
+							.map(|(route, matcher)| (route, matcher.path.clone()));
+						if result.is_some() {
+							break;
 						}
-						(true, result)
-					},
-					None => (false, None),
-				}
+					}
+					(true, result)
+				},
+				None => (false, None),
 			};
 			if let Some(result) = svc_route_match {
 				return Some(result);
@@ -171,10 +176,11 @@ pub fn select_best_route(
 				inline_policies: vec![],
 				backends: vec![RouteBackendReference {
 					weight: 1,
-					backend: BackendReference::Service {
+					target: BackendReference::Service {
 						name: svc.namespaced_hostname(),
 						port: dst.port(), // TODO: get from req
-					},
+					}
+					.into(),
 					inline_policies: Vec::new(),
 				}],
 			};
@@ -186,12 +192,94 @@ pub fn select_best_route(
 		} else {
 			(None, Cow::Borrowed(host))
 		};
-	for hnm in agent::HostnameMatch::all_matches(&host) {
-		let mut candidates = listener.routes.get_hostname(&hnm);
+	let listener_routes = {
+		let binds = stores.read_binds();
+		binds.get_listener_routes(&listener.key)
+	};
+	if let Some(routes) = listener_routes {
+		for hnm in agent::HostnameMatch::all_matches(&host) {
+			let mut candidates = routes.get_hostname(&hnm);
+			let best_match = candidates.find(|(_, m)| matches_request(m, request));
+			if let Some((route, matcher)) = best_match {
+				return Some((route, matcher.path.clone()));
+			}
+		}
+	}
+	default_response
+}
+
+pub fn select_best_route_group(
+	rg: &RouteSet,
+	request: &Request,
+) -> Option<(Arc<Route>, PathMatch)> {
+	let host = http::get_host(request).ok()?;
+	for hnm in agent::HostnameMatch::all_matches(host) {
+		let mut candidates = rg.get_hostname(&hnm);
 		let best_match = candidates.find(|(_, m)| matches_request(m, request));
 		if let Some((route, matcher)) = best_match {
 			return Some((route, matcher.path.clone()));
 		}
 	}
-	default_response
+	None
+}
+
+pub fn best_match_for_route(route: &Route, request: &Request) -> Option<PathMatch> {
+	let mut best: Option<&agent::RouteMatch> = None;
+	for candidate in route.matches.iter().filter(|m| matches_request(m, request)) {
+		if let Some(current) = best {
+			if compare_route_match(candidate, current) == cmp::Ordering::Greater {
+				best = Some(candidate);
+			}
+		} else {
+			best = Some(candidate);
+		}
+	}
+	best.map(|m| m.path.clone())
+}
+
+fn compare_route_match(a: &agent::RouteMatch, b: &agent::RouteMatch) -> cmp::Ordering {
+	let path_rank1 = get_path_rank(&a.path);
+	let path_rank2 = get_path_rank(&b.path);
+	if path_rank1 != path_rank2 {
+		return path_rank1.cmp(&path_rank2);
+	}
+
+	let path_len1 = get_path_length(&a.path);
+	let path_len2 = get_path_length(&b.path);
+	if path_len1 != path_len2 {
+		return path_len1.cmp(&path_len2);
+	}
+
+	let method1 = a.method.is_some();
+	let method2 = b.method.is_some();
+	if method1 != method2 {
+		return method1.cmp(&method2);
+	}
+
+	let header_count1 = a.headers.len();
+	let header_count2 = b.headers.len();
+	if header_count1 != header_count2 {
+		return header_count1.cmp(&header_count2);
+	}
+
+	a.query.len().cmp(&b.query.len())
+}
+
+fn get_path_rank(path: &PathMatch) -> u8 {
+	match path {
+		PathMatch::Exact(_) => 3,
+		PathMatch::PathPrefix(_) => 2,
+		PathMatch::Regex(_) => 1,
+		// Because this can never match, its rank is irrelevant
+		PathMatch::Invalid => 0,
+	}
+}
+
+fn get_path_length(path: &PathMatch) -> usize {
+	match path {
+		PathMatch::Exact(p) | PathMatch::PathPrefix(p) => p.len(),
+		PathMatch::Regex(r) => r.as_str().len(),
+		// Because this can never match, its rank is irrelevant
+		PathMatch::Invalid => 0,
+	}
 }

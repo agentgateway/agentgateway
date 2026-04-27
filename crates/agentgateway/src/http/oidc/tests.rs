@@ -84,7 +84,11 @@ fn test_id_token_validator() -> jwt::Jwt {
 		jwt::JWTValidationOptions::default(),
 	)
 	.expect("validator provider");
-	jwt::Jwt::from_providers(vec![provider], jwt::Mode::Strict)
+	jwt::Jwt::from_providers(
+		vec![provider],
+		jwt::Mode::Strict,
+		crate::http::auth::AuthorizationLocation::bearer_header(),
+	)
 }
 
 fn test_redirect_uri() -> RedirectUri {

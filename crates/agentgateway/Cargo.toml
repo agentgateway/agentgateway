@@ -20,6 +20,7 @@ agent-core.workspace = true
 agent-celx.workspace = true
 agent-hbone.workspace = true
 agent-xds.workspace = true
+agent-pool.workspace = true
 anyhow.workspace = true
 arc-swap.workspace = true
 async-compression.workspace = true
@@ -63,7 +64,6 @@ http-body.workspace = true
 http-serde.workspace = true
 http.workspace = true
 httpdate.workspace = true
-hyper-util-fork.workspace = true
 hyper-util.workspace = true
 hyper.workspace = true
 include_dir.workspace = true
@@ -99,7 +99,7 @@ libc.workspace = true
 rcgen.workspace = true
 regex.workspace = true
 
-rmcp = { version = "1.3", features = [
+rmcp = { version = "1.5", features = [
     "client",
     "server",
     "base64",
@@ -168,7 +168,7 @@ rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true
-rmcp = { version = "1.3", features = [
+rmcp = { version = "1.5", features = [
     "client",
     "server",
     "base64",

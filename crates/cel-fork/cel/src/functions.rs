@@ -269,6 +269,7 @@ pub fn string<'a>(ftx: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
 		Value::Timestamp(t) => Value::String(format_timestamp(&t).into()),
 
 		Value::Duration(v) => Value::String(crate::duration::format_duration(&v).into()),
+		Value::Bool(v) => Value::String(v.to_string().into()),
 		Value::Int(v) => Value::String(v.to_string().into()),
 		Value::UInt(v) => Value::String(v.to_string().into()),
 		Value::Float(v) => Value::String(v.to_string().into()),
@@ -1109,6 +1110,8 @@ mod tests {
 	fn test_string() {
 		[
 			("string", "'foo'.string() == 'foo'"),
+			("bool", "true.string() == 'true'"),
+			("global bool", "string(true) == 'true'"),
 			("int", "10.string() == '10'"),
 			("float", "10.5.string() == '10.5'"),
 			("bytes", "b'foo'.string() == 'foo'"),

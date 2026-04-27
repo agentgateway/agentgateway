@@ -30,7 +30,10 @@ fn build_test_request() -> crate::http::Request {
 	let source = SourceContext {
 		address: "127.0.0.1".parse().unwrap(),
 		port: 54321,
+		raw_address: "127.0.0.1".parse().unwrap(),
+		raw_port: 54321,
 		tls: None,
+		unverified_workload: None,
 	};
 	req.extensions_mut().insert(source);
 
@@ -267,12 +270,17 @@ fn test_extension_or_direct_serialization() {
 	let value = SourceContext {
 		address: "192.168.1.1".parse().unwrap(),
 		port: 8080,
+		raw_address: "192.168.1.1".parse().unwrap(),
+		raw_port: 8080,
 		tls: None,
+		unverified_workload: None,
 	};
 	let ext_or_direct: ExtensionOrDirect<SourceContext> = ExtensionOrDirect::Direct(Some(&value));
 	let json = serde_json::to_value(&ext_or_direct).expect("failed to serialize");
 	assert_eq!(json["address"], "192.168.1.1");
 	assert_eq!(json["port"], 8080);
+	assert_eq!(json["rawAddress"], "192.168.1.1");
+	assert_eq!(json["rawPort"], 8080);
 
 	// Test Direct with None
 	let ext_or_direct_none: ExtensionOrDirect<SourceContext> = ExtensionOrDirect::Direct(None);

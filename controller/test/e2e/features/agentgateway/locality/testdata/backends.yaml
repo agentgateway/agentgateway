@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-zone-a
+  namespace: agentgateway-locality
+  labels:
+    app.kubernetes.io/name: backend-zone-a
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend-zone-a
+  template:
+    metadata:
+      labels:
+        app: backend-zone-a
+        app.kubernetes.io/name: backend-zone-a
+    spec:
+      containers:
+        - image: ghcr.io/agentgateway/testbox:0.0.1
+          imagePullPolicy: IfNotPresent
+          name: testbox
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 2
+            failureThreshold: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-zone-b
+  namespace: agentgateway-locality
+  labels:
+    app.kubernetes.io/name: backend-zone-b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend-zone-b
+  template:
+    metadata:
+      labels:
+        app: backend-zone-b
+        app.kubernetes.io/name: backend-zone-b
+    spec:
+      containers:
+        - image: ghcr.io/agentgateway/testbox:0.0.1
+          imagePullPolicy: IfNotPresent
+          name: testbox
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 2
+            failureThreshold: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-region-b
+  namespace: agentgateway-locality
+  labels:
+    app.kubernetes.io/name: backend-region-b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend-region-b
+  template:
+    metadata:
+      labels:
+        app: backend-region-b
+        app.kubernetes.io/name: backend-region-b
+    spec:
+      containers:
+        - image: ghcr.io/agentgateway/testbox:0.0.1
+          imagePullPolicy: IfNotPresent
+          name: testbox
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 2
+            failureThreshold: 10

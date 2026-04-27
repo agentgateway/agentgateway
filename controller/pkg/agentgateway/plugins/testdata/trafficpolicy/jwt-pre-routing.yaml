@@ -12,6 +12,9 @@ spec:
     phase: PreRouting
     jwtAuthentication:
       mode: Strict
+      location:
+        queryParameter:
+          name: access_token
       providers:
       - issuer: https://example.com
         audiences:
@@ -49,6 +52,9 @@ output:
           namespace: default
       traffic:
         jwt:
+          authorizationLocation:
+            queryParameter:
+              name: access_token
           mode: STRICT
           providers:
           - audiences:

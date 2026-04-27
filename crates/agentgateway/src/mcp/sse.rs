@@ -90,11 +90,12 @@ impl LegacySSEService {
 		request: Request,
 		inputs: RelayInputs,
 	) -> Result<Response, ProxyError> {
+		let idle_ttl = inputs.backend.session_idle_ttl;
 		let relay = inputs.build_new_connections()?;
 
 		// GET requests establish an SSE stream.
 		// We will return the sessionId, and all future responses will get sent on the rx channel to send to this channel.
-		let (session, rx) = self.session_manager.create_legacy_session(relay);
+		let (session, rx) = self.session_manager.create_legacy_session(relay, idle_ttl);
 		let mut base_url = request
 			.extensions()
 			.get::<filters::OriginalUrl>()
@@ -122,10 +123,10 @@ impl LegacySSEService {
 		);
 		let (parts, _) = request.into_parts();
 		Ok(Sse::new(stream).into_response().map(|b| {
-			http::Body::new(DropBody::new(
+			DropBody::new(
 				b,
 				session::dropper(self.session_manager.clone(), session, parts),
-			))
+			)
 		}))
 	}
 }

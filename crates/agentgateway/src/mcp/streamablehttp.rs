@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
-use crate::http::{Request, Response};
-use crate::mcp::handler::RelayInputs;
-use crate::mcp::session::SessionManager;
-use crate::*;
 use ::http::StatusCode;
 use rmcp::model::{ClientJsonRpcMessage, ClientRequest, ServerJsonRpcMessage};
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
 
+use crate::http::{DropBody, Request, Response};
+use crate::mcp::handler::RelayInputs;
+use crate::mcp::session::SessionManager;
 use crate::proxy::ProxyError;
+use crate::*;
 
 #[derive(Debug, Clone)]
 pub struct StreamableHttpServerConfig {
@@ -114,9 +114,15 @@ impl StreamableHttpService {
 				.stateless_send_and_initialize(part.clone(), message)
 				.await;
 
+			let (tx, rx) = tokio::sync::oneshot::channel::<()>();
 			// Clean up upstream resources (e.g., stdio processes)
-			let _ = session.delete_session(part).await;
-			return response;
+			tokio::task::spawn(async move {
+				// Wait until the response is actually completed.
+				let _ = rx.await;
+				trace!("cleaning up stateless session");
+				let _ = session.delete_session(part).await;
+			});
+			return response.map(|r| r.map(|b| DropBody::new(b, tx)));
 		}
 
 		let session_id = part
@@ -141,6 +147,7 @@ impl StreamableHttpService {
 		{
 			return mcp::Error::MissingSessionHeader.into();
 		}
+		let idle_ttl = inputs.backend.session_idle_ttl;
 		let relay = inputs.build_new_connections()?;
 		let mut session = self.session_manager.create_session(relay);
 		let mut resp = session.send(part, message).await?;
@@ -149,7 +156,7 @@ impl StreamableHttpService {
 			return mcp::Error::InvalidSessionIdHeader.into();
 		};
 		resp.headers_mut().insert(HEADER_SESSION_ID, sid);
-		self.session_manager.insert_session(session);
+		self.session_manager.insert_session(session, idle_ttl);
 		Ok(resp)
 	}
 
@@ -165,7 +172,7 @@ impl StreamableHttpService {
 			.and_then(|header| header.to_str().ok())
 			.is_some_and(|header| header.contains(EVENT_STREAM_MIME_TYPE))
 		{
-			return mcp::Error::InvalidAccept.into();
+			return mcp::Error::InvalidAcceptGet.into();
 		}
 
 		let Some(session_id) = request

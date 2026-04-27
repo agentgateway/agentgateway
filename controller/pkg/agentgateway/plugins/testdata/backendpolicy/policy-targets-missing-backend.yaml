@@ -1,0 +1,47 @@
+# Policy targeting a non-existent backend should produce no output.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+    - kind: AgentgatewayBackend
+      name: missing
+      group: agentgateway.dev
+  backend:
+    health:
+      unhealthyCondition: "response.code >= 500"
+      eviction:
+         duration: 60s
+         restoreHealth: 100
+         consecutiveFailures: 3
+         healthThreshold: 50
+---
+# Output
+output: []
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: agentgateway.dev
+        name: StatusSummary
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is not attached: AgentgatewayBackend default/missing not
+          found'
+        reason: Pending
+        status: "False"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

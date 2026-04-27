@@ -94,6 +94,17 @@ func (this *Route) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for RouteGroup
+func (this *RouteGroup) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for RouteGroup
+func (this *RouteGroup) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for TCPRoute
 func (this *TCPRoute) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
@@ -168,6 +179,50 @@ func (this *BackendAuthPolicy) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON is a custom unmarshaler for BackendAuthPolicy
 func (this *BackendAuthPolicy) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for AuthorizationLocation
+func (this *AuthorizationLocation) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for AuthorizationLocation
+func (this *AuthorizationLocation) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for AuthorizationLocation_Header
+func (this *AuthorizationLocation_Header) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for AuthorizationLocation_Header
+func (this *AuthorizationLocation_Header) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for AuthorizationLocation_QueryParameter
+func (this *AuthorizationLocation_QueryParameter) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for AuthorizationLocation_QueryParameter
+func (this *AuthorizationLocation_QueryParameter) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for AuthorizationLocation_Cookie
+func (this *AuthorizationLocation_Cookie) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for AuthorizationLocation_Cookie
+func (this *AuthorizationLocation_Cookie) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
@@ -688,6 +743,17 @@ func (this *FrontendPolicySpec_TracingAttribute) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for FrontendPolicySpec_ProxyProtocol
+func (this *FrontendPolicySpec_ProxyProtocol) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for FrontendPolicySpec_ProxyProtocol
+func (this *FrontendPolicySpec_ProxyProtocol) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for JWTValidationOptions
 func (this *JWTValidationOptions) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
@@ -1073,6 +1139,17 @@ func (this *BackendPolicySpec_Ai_GoogleModelArmor) UnmarshalJSON(b []byte) error
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for BackendPolicySpec_Ai_AzureContentSafety
+func (this *BackendPolicySpec_Ai_AzureContentSafety) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_Ai_AzureContentSafety
+func (this *BackendPolicySpec_Ai_AzureContentSafety) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for BackendPolicySpec_Ai_RequestRejection
 func (this *BackendPolicySpec_Ai_RequestRejection) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
@@ -1378,6 +1455,17 @@ func (this *AIBackend_AzureOpenAI) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON is a custom unmarshaler for AIBackend_AzureOpenAI
 func (this *AIBackend_AzureOpenAI) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for AIBackend_Azure
+func (this *AIBackend_Azure) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for AIBackend_Azure
+func (this *AIBackend_Azure) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 

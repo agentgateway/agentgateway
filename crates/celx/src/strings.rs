@@ -2,10 +2,9 @@
 // under Apache 2.0 license (https://github.com/Kuadrant/wasm-shim/blob/main/LICENSE)
 // TODO: https://github.com/cel-rust/cel-rust/issues/103, have this upstreamed
 
-use cel::Context;
 use cel::extractors::{Argument, This};
 use cel::objects::StringValue;
-use cel::{ExecutionError, FunctionContext, ResolveResult, Value};
+use cel::{Context, ExecutionError, FunctionContext, ResolveResult, Value};
 
 pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("charAt", char_at);

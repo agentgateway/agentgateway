@@ -7,6 +7,12 @@ mod tls;
 use std::str::FromStr;
 use std::task;
 
+use ::http::HeaderValue;
+use ::http::uri::{Authority, Scheme};
+use agent_pool::pool::ExpectedCapacity;
+use agent_pool::rt::TokioIo;
+use tracing::event;
+
 use crate::http::backendtls::VersionedBackendTLS;
 use crate::http::filters;
 use crate::http::filters::BackendRequestTimeout;
@@ -15,16 +21,10 @@ use crate::transport::stream::{LoggingMode, Socket};
 use crate::transport::{hbone, stream};
 use crate::types::agent::Target;
 use crate::*;
-use ::http::HeaderValue;
-use ::http::uri::{Authority, Scheme};
-use axum_core::BoxError;
-use http_body::Frame;
-use hyper_util_fork::rt::TokioIo;
-use tracing::event;
 
 #[derive(Clone)]
 pub struct Client {
-	client: hyper_util_fork::client::legacy::Client<Connector, http::Body, PoolKey>,
+	client: agent_pool::Client<Connector, PoolKey>,
 	connector: Connector,
 }
 
@@ -172,6 +172,46 @@ impl From<Option<VersionedBackendTLS>> for Transport {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct PoolKey(Target, SocketAddr, Transport, ::http::Version);
+
+impl agent_pool::pool::Key for PoolKey {
+	fn expected_capacity(&self) -> ExpectedCapacity {
+		match self.2.application() {
+			ApplicationTransport::Plaintext => {
+				if self.3 == ::http::Version::HTTP_11 {
+					ExpectedCapacity::Http1
+				} else {
+					ExpectedCapacity::Http2
+				}
+			},
+			ApplicationTransport::Tls(c) => {
+				let mut h2 = false;
+				let mut h1 = false;
+				for alpn in &c.config.alpn_protocols {
+					if alpn == b"h2" {
+						h2 = true
+					}
+					if alpn == b"http/1.1" {
+						h1 = true
+					}
+				}
+				if h1 && !h2 {
+					ExpectedCapacity::Http1
+				} else if h2 && !h1 {
+					ExpectedCapacity::Http2
+				} else {
+					ExpectedCapacity::Auto
+				}
+			},
+		}
+	}
+
+	fn shard(&self) -> usize {
+		match self.1.ip() {
+			std::net::IpAddr::V4(addr) => addr.octets()[3] as usize,
+			std::net::IpAddr::V6(addr) => addr.segments()[7] as usize,
+		}
+	}
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct ResolvedDestination(pub SocketAddr);
@@ -409,8 +449,7 @@ impl Client {
 		metrics: Option<Arc<crate::metrics::Metrics>>,
 	) -> Client {
 		let resolver = dns::CachedResolver::new(cfg.resolver_cfg.clone(), cfg.resolver_opts.clone());
-		let mut b =
-			::hyper_util_fork::client::legacy::Client::builder(::hyper_util::rt::TokioExecutor::new());
+		let mut b = agent_pool::Client::<_, PoolKey>::builder(::hyper_util::rt::TokioExecutor::new());
 		b.pool_timer(hyper_util::rt::tokio::TokioTimer::new());
 		b.pool_idle_timeout(backend_config.pool_idle_timeout);
 		b.timer(hyper_util::rt::tokio::TokioTimer::new());
@@ -604,7 +643,7 @@ impl Client {
 
 			duration = dur,
 		);
-		let mut resp = resp?.map(BodyLog::wrap);
+		let mut resp = resp?;
 
 		event!(
 			target: "upstream response",
@@ -619,51 +658,5 @@ impl Client {
 			.insert(transport::BufferLimit::new(buffer_limit));
 		resp.extensions_mut().insert(ResolvedDestination(dest));
 		Ok(resp)
-	}
-}
-
-/// BodyLog wraps a body with logging on errors. These otherwise get masked by hyper.
-#[must_use]
-#[derive(Debug)]
-struct BodyLog<B>(B);
-
-impl<B> BodyLog<B> {
-	pub fn wrap(body: B) -> http::Body
-	where
-		B: http_body::Body<Data = Bytes> + Unpin + Send + 'static,
-		B::Error: Into<BoxError> + Debug,
-	{
-		http::Body::new(BodyLog(body))
-	}
-}
-
-impl<B> http_body::Body for BodyLog<B>
-where
-	B: http_body::Body + Unpin,
-	<B as http_body::Body>::Error: std::fmt::Debug,
-{
-	type Data = B::Data;
-	type Error = B::Error;
-
-	#[inline]
-	fn poll_frame(
-		mut self: Pin<&mut Self>,
-		cx: &mut Context<'_>,
-	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-		let res = ready!(Pin::new(&mut self.0).poll_frame(cx));
-		if let Some(Err(err)) = &res {
-			debug!("warning: error from body stream: {err:?}")
-		};
-		Poll::Ready(res)
-	}
-
-	#[inline]
-	fn size_hint(&self) -> http_body::SizeHint {
-		self.0.size_hint()
-	}
-
-	#[inline]
-	fn is_end_stream(&self) -> bool {
-		self.0.is_end_stream()
 	}
 }

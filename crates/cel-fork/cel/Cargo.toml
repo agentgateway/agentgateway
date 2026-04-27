@@ -23,7 +23,7 @@ bytes = { version = "1"}
 
 thiserror = "2.0"
 paste = "1.0"
-hashbrown = "0.16.1"
+hashbrown = "0.17.0"
 vector-map = { version = "1.0.2", features = ["serde_impl"] }
 itertools = "0.14.0"
 http = "1.4.0"

@@ -6,21 +6,24 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, ready};
 use std::time::{Duration, SystemTime};
 
-use agent_core::Timestamp;
 use agent_core::metrics::CustomField;
-use agent_core::strng;
 use agent_core::strng::{RichStrng, Strng};
 use agent_core::telemetry::{OptionExt, OtelLogSink, ValueBag, debug, display};
+use agent_core::{Timestamp, strng};
 use bytes::Buf;
 use crossbeam::atomic::AtomicCell;
 use frozen_collections::FzHashSet;
 use http_body::{Body, Frame, SizeHint};
 use indexmap::IndexMap;
 use itertools::Itertools;
-use opentelemetry::TraceFlags;
+use opentelemetry::logs::{AnyValue, LogRecord as _, Logger, LoggerProvider as _, Severity};
 use opentelemetry::trace::{
 	Span, SpanBuilder, SpanContext, SpanKind, TraceContextExt as _, TraceState, Tracer,
 };
+use opentelemetry::{Context as OtelContext, Key, KeyValue, TraceFlags};
+use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
+use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::logs::SdkLoggerProvider;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -28,8 +31,7 @@ use serde_json::Value;
 use tracing::{Level, trace};
 
 use crate::cel::{ContextBuilder, Expression, LLMContext};
-use crate::http::Request;
-use crate::http::health;
+use crate::http::{Request, health};
 use crate::llm::InputFormat;
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::ProxyResponseReason;
@@ -42,12 +44,6 @@ use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendInfo, BindKey, ListenerName, RouteName, Target};
 use crate::types::loadbalancer::ActiveHandle;
 use crate::{cel, llm, mcp};
-
-use opentelemetry::logs::{AnyValue, LogRecord as _, Logger, LoggerProvider as _, Severity};
-use opentelemetry::{Context as OtelContext, Key, KeyValue};
-use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
-use opentelemetry_sdk::Resource;
-use opentelemetry_sdk::logs::SdkLoggerProvider;
 
 /// AsyncLog is a wrapper around an item that can be atomically set.
 /// The intent is to provide additional info to the log after we have lost the RequestLog reference,
@@ -375,13 +371,13 @@ impl CelLogging {
 	pub fn new(cfg: Config, metrics: MetricsConfig) -> Self {
 		let mut cel_context = cel::ContextBuilder::new();
 		if let Some(f) = &cfg.filter {
-			cel_context.register_expression(f.as_ref());
+			cel_context.register_log_expression(f.as_ref());
 		}
 		for v in cfg.fields.add.values_unordered() {
-			cel_context.register_expression(v.as_ref());
+			cel_context.register_log_expression(v.as_ref());
 		}
 		for v in metrics.metric_fields.add.values_unordered() {
-			cel_context.register_expression(v.as_ref());
+			cel_context.register_log_expression(v.as_ref());
 		}
 
 		Self {
@@ -394,7 +390,7 @@ impl CelLogging {
 
 	pub fn register(&mut self, fields: &LoggingFields) {
 		for v in fields.add.values_unordered() {
-			self.cel_context.register_expression(v.as_ref());
+			self.cel_context.register_log_expression(v.as_ref());
 		}
 	}
 
@@ -891,6 +887,20 @@ impl Drop for DropOnLog {
 				None
 			}
 		});
+		let mcp_tool_name = mcp.as_ref().and_then(|m| {
+			if matches!(m.resource_type(), Some(MCPOperation::Tool)) {
+				m.resource_name().map(str::to_owned)
+			} else {
+				None
+			}
+		});
+		let mcp_prompt_name = mcp.as_ref().and_then(|m| {
+			if matches!(m.resource_type(), Some(MCPOperation::Prompt)) {
+				m.resource_name().map(str::to_owned)
+			} else {
+				None
+			}
+		});
 
 		let mut kv = vec![
 			("gateway", route_identifier.gateway.as_deref().map(display)),
@@ -938,6 +948,8 @@ impl Drop for DropOnLog {
 			("mcp.target", mcp_target.as_ref().map(display)),
 			("mcp.resource.type", mcp_resource_type.as_ref().map(display)),
 			("mcp.resource.uri", mcp_resource_uri.as_ref().map(display)),
+			("gen_ai.tool.name", mcp_tool_name.as_ref().map(display)),
+			("gen_ai.prompt.name", mcp_prompt_name.as_ref().map(display)),
 			(
 				"mcp.session.id",
 				mcp
@@ -1266,13 +1278,19 @@ impl opentelemetry_sdk::logs::LogExporter for PolicyGrpcLogExporter {
 			}
 			let req =
 				opentelemetry_proto::tonic::collector::logs::v1::ExportLogsServiceRequest { resource_logs };
+			// Drop tonic Response inside the spawned task so guard is released on the Tokio runtime, not on
+			// the BatchProcessor OS thread which has no Tokio context.
 			handle
-				.spawn(async move { client.export(req).await })
+				.spawn(async move {
+					client
+						.export(req)
+						.await
+						.map(|_| ())
+						.map_err(|e| e.message().to_string())
+				})
 				.await
 				.map_err(|e| OTelSdkError::InternalFailure(e.to_string()))?
-				.map(|_| ())
-				.map_err(|e: tonic::Status| OTelSdkError::InternalFailure(e.message().to_string()))
-				as OTelSdkResult
+				.map_err(OTelSdkError::InternalFailure) as OTelSdkResult
 		}
 	}
 

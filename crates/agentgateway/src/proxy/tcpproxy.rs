@@ -1,9 +1,10 @@
-use crate::cel::SourceContext;
-use futures::pin_mut;
-use rand::prelude::IndexedRandom;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use futures::pin_mut;
+use rand::prelude::IndexedRandom;
+
+use crate::cel::SourceContext;
 use crate::proxy::httpproxy::BackendCall;
 use crate::proxy::{ProxyError, WaypointService, httpproxy};
 use crate::store::{BackendPolicies, FrontendPolices, RoutePath};
@@ -13,10 +14,11 @@ use crate::telemetry::metrics::TCPLabels;
 use crate::transport::stream::{Socket, TCPConnectionInfo, TLSConnectionInfo, WaypointTLSInfo};
 use crate::types::agent::{
 	BackendPolicy, BindKey, Listener, ListenerProtocol, SimpleBackend, SimpleBackendReference,
-	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference,
+	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference, Target,
 	TransportProtocol,
 };
-use crate::types::discovery::{NetworkAddress, WaypointIdentity, gatewayaddress::Destination};
+use crate::types::discovery::gatewayaddress::Destination;
+use crate::types::discovery::{NetworkAddress, WaypointIdentity};
 use crate::types::{agent, frontend};
 use crate::{ProxyInputs, Stores, *};
 
@@ -37,11 +39,16 @@ impl TCPProxy {
 			.ext::<TCPConnectionInfo>()
 			.expect("tcp connection must be set");
 		let tls = connection.ext::<TLSConnectionInfo>();
-		let src = SourceContext {
-			address: tcp.peer_addr.ip(),
-			port: tcp.peer_addr.port(),
-			tls: tls.and_then(|t| t.src_identity.clone()),
-		};
+		let unverified_workload = crate::cel::WorkloadContext::from_stores(
+			&self.inputs.stores,
+			&self.inputs.cfg.network,
+			tcp.peer_addr.ip(),
+		);
+		let src = SourceContext::from_tcp_connection(
+			tcp,
+			tls.and_then(|t| t.src_identity.clone()),
+			unverified_workload,
+		);
 		let mut log: DropOnLog = RequestLog::new(
 			log::CelLogging::new(
 				self.inputs.cfg.logging.clone(),
@@ -65,12 +72,17 @@ impl TCPProxy {
 		connection: Socket,
 		log: &mut RequestLog,
 	) -> Result<(), ProxyError> {
-		let frontend_policies = self.inputs.stores.read_binds().listener_frontend_policies(
-			&self.selected_listener.name,
-			connection
-				.ext::<WaypointService>()
-				.map(WaypointService::as_policy_ref),
-		);
+		let frontend_policies = {
+			let binds = self.inputs.stores.read_binds();
+			let bind_port = binds.bind(&self.bind_name).map(|bind| bind.address.port());
+			binds.listener_frontend_policies(
+				&self.selected_listener.name,
+				bind_port,
+				connection
+					.ext::<WaypointService>()
+					.map(WaypointService::as_policy_ref),
+			)
+		};
 
 		// Apply frontend policies for access logging (skip tracing for TCP)
 		frontend_policies.register_cel_expressions(log.cel.ctx());
@@ -143,7 +155,7 @@ impl TCPProxy {
 		log.route_name = Some(selected_route.name.clone());
 
 		let route_path = RoutePath {
-			route: &selected_route.name,
+			routes: vec![&selected_route.name],
 			service: selected_route.service_key.as_ref(),
 			listener: &selected_listener.name,
 		};
@@ -208,7 +220,7 @@ impl TCPProxy {
 				inputs,
 				backend_policies,
 				log,
-				None,
+				httpproxy::ServiceCallOverride::default(),
 				svc,
 				port,
 				sni.as_deref(),
@@ -220,6 +232,22 @@ impl TCPProxy {
 				network_gateway: None,
 				waypoint: None,
 				backend_policies,
+			},
+			SimpleBackend::Aws(_, config) => {
+				let default_policies = BackendPolicies {
+					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
+					backend_auth: Some(http::auth::BackendAuth::Aws(
+						http::auth::AwsAuth::Implicit {},
+					)),
+					..Default::default()
+				};
+				BackendCall {
+					target: Target::Hostname(config.get_host().into(), 443),
+					http_version_override: None,
+					transport_override: None,
+					network_gateway: None,
+					backend_policies: default_policies.merge(backend_policies),
+				}
 			},
 			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
 		};
@@ -268,9 +296,15 @@ fn select_best_route(
 	// Assume matches are ordered already (not true today)
 
 	// Try explicit TCP routes first
-	for hnm in agent::HostnameMatch::all_matches_or_none(host) {
-		if let Some(r) = listener.tcp_routes.get_hostname(&hnm) {
-			return Some(Arc::new(r.clone()));
+	let listener_tcp_routes = {
+		let binds = stores.read_binds();
+		binds.get_listener_tcp_routes(&listener.key)
+	};
+	if let Some(listener_tcp_routes) = listener_tcp_routes {
+		for hnm in agent::HostnameMatch::all_matches_or_none(host) {
+			if let Some(r) = listener_tcp_routes.get_hostname(&hnm) {
+				return Some(Arc::new(r.clone()));
+			}
 		}
 	}
 
@@ -282,17 +316,18 @@ fn select_best_route(
 		// over listener-attached routes. If service routes exist but none match,
 		// the request is rejected (per GAMMA spec).
 		let svc_nh = svc.namespaced_hostname();
-		{
+		let svc_tcp_routes = {
 			let binds = stores.read_binds();
-			if let Some(svc_tcp_routes) = binds.get_service_tcp_routes(&svc_nh) {
-				for hnm in agent::HostnameMatch::all_matches(&svc.hostname) {
-					if let Some(r) = svc_tcp_routes.get_hostname(&hnm) {
-						return Some(Arc::new(r.clone()));
-					}
+			binds.get_service_tcp_routes(&svc_nh)
+		};
+		if let Some(svc_tcp_routes) = svc_tcp_routes {
+			for hnm in agent::HostnameMatch::all_matches(&svc.hostname) {
+				if let Some(r) = svc_tcp_routes.get_hostname(&hnm) {
+					return Some(Arc::new(r.clone()));
 				}
-				// GAMMA: service routes exist but none matched -> reject
-				return None;
 			}
+			// GAMMA: service routes exist but none matched -> reject
+			return None;
 		}
 
 		// No service-keyed routes: generate default passthrough
@@ -403,16 +438,15 @@ pub fn get_backend_policies(
 #[cfg(test)]
 mod tests {
 	use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-	use std::sync::Arc;
-	use std::sync::RwLock;
+	use std::sync::{Arc, RwLock};
 
 	use agent_core::strng;
 
-	use crate::store::Stores;
+	use crate::store::{BackendPolicies, Stores};
 	use crate::types::agent::{ListenerProtocol, SimpleBackendReference};
+	use crate::types::discovery::gatewayaddress::Destination;
 	use crate::types::discovery::{
 		GatewayAddress, NamespacedHostname, NetworkAddress, Service, WaypointIdentity,
-		gatewayaddress::Destination,
 	};
 
 	fn stores_with_services(services: Vec<Service>) -> Stores {
@@ -468,8 +502,6 @@ mod tests {
 			},
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HBONE,
-			tcp_routes: Default::default(),
-			routes: Default::default(),
 		})
 	}
 
@@ -681,8 +713,6 @@ mod tests {
 			},
 			hostname: Default::default(),
 			protocol: ListenerProtocol::TLS(None), // Not HBONE
-			tcp_routes: Default::default(),
-			routes: Default::default(),
 		});
 
 		let route = super::select_best_route(None, listener, &stores, &network, dst, None);
@@ -774,5 +804,126 @@ mod tests {
 		);
 		assert!(route.is_some(), "should fall through to default");
 		assert_eq!(route.unwrap().key.as_str(), "_waypoint-default-tcp");
+	}
+
+	fn make_proxy_inputs() -> Arc<crate::ProxyInputs> {
+		use agent_core::metrics;
+		use hickory_resolver::config::{ResolverConfig, ResolverOpts};
+		use prometheus_client::registry::Registry;
+
+		use crate::client::Client;
+		use crate::{BackendConfig, client};
+
+		let config = crate::config::parse_config("{}".to_string(), None).unwrap();
+		let encoder = config.session_encoder.clone();
+		let stores = Stores::with_ipv6_enabled(config.ipv6_enabled);
+		let client = Client::new(
+			&client::Config {
+				resolver_cfg: ResolverConfig::default(),
+				resolver_opts: ResolverOpts::default(),
+			},
+			None,
+			BackendConfig::default(),
+			None,
+		);
+		Arc::new(crate::ProxyInputs {
+			cfg: Arc::new(config),
+			stores: stores.clone(),
+			metrics: Arc::new(crate::metrics::Metrics::new(
+				metrics::sub_registry(&mut Registry::default()),
+				Default::default(),
+			)),
+			upstream: client,
+			ca: None,
+			mcp_state: crate::mcp::App::new(stores, encoder),
+		})
+	}
+
+	fn make_aws_simple_backend() -> super::SimpleBackend {
+		use crate::aws::{AwsBackendConfig, AwsService};
+		super::SimpleBackend::Aws(
+			crate::types::agent::ResourceName::new(strng::new("test-aws"), strng::new("ns")),
+			AwsBackendConfig {
+				service: AwsService::AgentCore(
+					crate::agentcore::AgentCoreConfig::new(
+						"arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123".to_string(),
+						None,
+					)
+					.unwrap(),
+				),
+			},
+		)
+	}
+
+	#[test]
+	fn test_build_backend_call_aws_defaults() {
+		let inputs = make_proxy_inputs();
+		let backend = make_aws_simple_backend();
+		let result = super::TCPProxy::build_backend_call(
+			&mut None,
+			None,
+			&inputs,
+			&backend,
+			BackendPolicies::default(),
+		)
+		.unwrap();
+
+		assert!(
+			matches!(
+				&result.target,
+				super::Target::Hostname(h, 443)
+					if h.as_str() == "bedrock-agentcore.us-east-1.amazonaws.com"
+			),
+			"target should be Hostname with port 443"
+		);
+		assert!(result.backend_policies.backend_tls.is_some());
+		assert!(
+			matches!(
+				&result.backend_policies.backend_auth,
+				Some(crate::http::auth::BackendAuth::Aws(
+					crate::http::auth::AwsAuth::Implicit {}
+				))
+			),
+			"should default to AWS implicit auth"
+		);
+		assert!(result.http_version_override.is_none());
+		assert!(result.transport_override.is_none());
+		assert!(result.network_gateway.is_none());
+	}
+
+	#[test]
+	fn test_build_backend_call_aws_user_policies_override() {
+		use secrecy::SecretString;
+
+		use crate::http::auth::{AwsAuth, BackendAuth};
+
+		let inputs = make_proxy_inputs();
+		let backend = make_aws_simple_backend();
+
+		let user_policies = BackendPolicies {
+			backend_auth: Some(BackendAuth::Aws(AwsAuth::ExplicitConfig {
+				access_key_id: SecretString::from("AKID"),
+				secret_access_key: SecretString::from("SECRET"),
+				region: Some("us-west-2".to_string()),
+				session_token: None,
+			})),
+			..Default::default()
+		};
+
+		let result =
+			super::TCPProxy::build_backend_call(&mut None, None, &inputs, &backend, user_policies)
+				.unwrap();
+
+		assert!(
+			matches!(
+				&result.backend_policies.backend_auth,
+				Some(BackendAuth::Aws(AwsAuth::ExplicitConfig { .. }))
+			),
+			"user-provided auth should override default implicit auth"
+		);
+		assert!(
+			result.backend_policies.backend_tls.is_some(),
+			"TLS should still be present from defaults"
+		);
 	}
 }

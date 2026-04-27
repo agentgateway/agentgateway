@@ -1,6 +1,5 @@
 use std::convert::Infallible;
 
-use ::http::HeaderMap;
 use anyhow::anyhow;
 use bytes::Bytes;
 use http_body::{Body, Frame};
@@ -17,18 +16,15 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::cel::{Executor, Expression, RequestSnapshot};
 use crate::client::ResolvedDestination;
-use crate::http;
-use crate::http::envoy_proto_common;
 use crate::http::ext_proc::proto::{
-	BodyMutation, BodyResponse, HeaderMutation, HeaderValueOption, HeadersResponse, HttpBody,
-	HttpHeaders, HttpTrailers, ImmediateResponse, Metadata, ProcessingRequest, ProcessingResponse,
-	processing_response,
+	BodyMutation, BodyResponse, HeaderMutation, HeadersResponse, HttpBody, HttpHeaders, HttpTrailers,
+	ImmediateResponse, Metadata, ProcessingRequest, ProcessingResponse, processing_response,
 };
-use crate::http::{HeaderName, HeaderOrPseudo, PolicyResponse};
+use crate::http::{HeaderName, PolicyResponse, envoy_proto_common};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{BackendPolicy, SimpleBackendReference};
-use crate::*;
+use crate::{http, *};
 
 /// The namespace key used for ext_proc attributes in ProcessingRequest.attributes
 const EXTPROC_ATTRIBUTES_NAMESPACE: &str = "envoy.filters.http.ext_proc";
@@ -76,21 +72,77 @@ pub enum FailureMode {
 	FailOpen,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema!)]
+#[derive(Default, Copy, PartialEq, Eq)]
+/// Controls how an endpoint-picker-selected destination is used.
+pub enum InferenceRoutingDestinationMode {
+	/// Require the selected destination to match agentgateway's local service endpoints.
+	#[default]
+	Validated,
+	/// Trust the selected destination directly without local endpoint validation.
+	Passthrough,
+}
+
+#[apply(schema_ser_schema!)]
 pub struct InferenceRouting {
+	#[serde(rename = "endpointPicker")]
 	pub target: Arc<SimpleBackendReference>,
+	#[serde(
+		default,
+		rename = "destinationMode",
+		skip_serializing_if = "crate::serdes::is_default"
+	)]
+	pub destination_mode: InferenceRoutingDestinationMode,
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	#[cfg_attr(feature = "schema", schemars(skip))]
 	pub failure_mode: FailureMode,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InferenceRoutingConfig {
+	endpoint_picker: Arc<SimpleBackendReference>,
+	#[serde(default)]
+	destination_mode: InferenceRoutingDestinationMode,
+}
+
+impl<'de> serde::Deserialize<'de> for InferenceRouting {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let InferenceRoutingConfig {
+			endpoint_picker,
+			destination_mode,
+		} = InferenceRoutingConfig::deserialize(deserializer)?;
+		Ok(Self {
+			target: endpoint_picker,
+			destination_mode,
+			// TODO: expose fail-open configuration for standalone EPP once the fallback behavior is
+			// explicitly supported and documented end-to-end.
+			failure_mode: FailureMode::FailClosed,
+		})
+	}
 }
 
 #[derive(Debug, Default)]
 pub struct InferencePoolRouter {
 	ext_proc: Option<ExtProcInstance>,
+	destination_mode: InferenceRoutingDestinationMode,
+}
+
+#[derive(Debug, Default)]
+pub struct InferenceRequestResult {
+	pub destination: Option<SocketAddr>,
+	pub destination_mode: InferenceRoutingDestinationMode,
+	pub policy_response: PolicyResponse,
+	pub failed_open: bool,
 }
 
 impl InferenceRouting {
 	pub fn build(&self, client: PolicyClient) -> InferencePoolRouter {
 		InferencePoolRouter {
+			destination_mode: self.destination_mode,
 			ext_proc: Some(ExtProcInstance::new(
 				client,
 				Vec::new(),
@@ -108,12 +160,13 @@ impl InferencePoolRouter {
 	pub async fn mutate_request(
 		&mut self,
 		req: &mut http::Request,
-	) -> Result<(Option<SocketAddr>, PolicyResponse), ProxyError> {
+	) -> Result<InferenceRequestResult, ProxyError> {
 		let Some(ext_proc) = &mut self.ext_proc else {
-			return Ok((None, Default::default()));
+			return Ok(Default::default());
 		};
 		let r = std::mem::take(req);
 		let (new_req, pr) = ext_proc.mutate_request(r).await?;
+		let failed_open = ext_proc.did_fail_open();
 		*req = new_req;
 		let dest = req
 			.headers()
@@ -122,7 +175,12 @@ impl InferencePoolRouter {
 			.map(|v| v.parse::<SocketAddr>())
 			.transpose()
 			.map_err(|e| ProxyError::Processing(anyhow!("EPP returned invalid address: {e}")))?;
-		Ok((dest, pr.unwrap_or_default()))
+		Ok(InferenceRequestResult {
+			destination: dest,
+			destination_mode: self.destination_mode,
+			policy_response: pr.unwrap_or_default(),
+			failed_open,
+		})
 	}
 
 	pub async fn mutate_response(
@@ -253,6 +311,10 @@ struct ExtProcInstance {
 }
 
 impl ExtProcInstance {
+	fn did_fail_open(&self) -> bool {
+		self.skipped
+	}
+
 	fn new(
 		client: PolicyClient,
 		policies: Vec<BackendPolicy>,
@@ -450,6 +512,9 @@ impl ExtProcInstance {
 						}
 					});
 				}
+				// Skip content-length as the EPP sets it to invalid values
+				// https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/943
+				req.headers_mut().remove(http::header::CONTENT_LENGTH);
 				return Ok((req, None));
 			}
 		}
@@ -630,6 +695,9 @@ impl ExtProcInstance {
 						}
 					});
 				}
+				// Skip content-length as the EPP sets it to invalid values
+				// https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/943
+				resp.headers_mut().remove(http::header::CONTENT_LENGTH);
 				return Ok((resp, None));
 			}
 		}
@@ -646,16 +714,14 @@ fn to_immediate_response(rp: &ProcessingResponse) -> Option<PolicyResponse> {
 				grpc_status: _,
 				details: _,
 			} = ir;
-			let mut rb =
+			let rb =
 				::http::response::Builder::new().status(status.map(|s| s.code).unwrap_or(200) as u16);
 
-			if let Some(hm) = rb.headers_mut() {
-				apply_header_mutations(hm, headers.as_ref());
-			}
-			let resp = rb
+			let mut resp = rb
 				.body(http::Body::from(body.to_string()))
 				.map_err(|e| ProxyError::Processing(e.into()))
 				.unwrap();
+			apply_header_mutations_response(&mut resp, headers.as_ref());
 			Some(crate::http::PolicyResponse {
 				direct_response: Some(resp),
 				response_headers: None,
@@ -745,56 +811,13 @@ async fn handle_response_for_request_mutation(
 	(res, false)
 }
 
-fn apply_header_with_action(headers: &mut HeaderMap, hk: &HeaderName, hvo: &HeaderValueOption) {
-	let Some(_) = hvo.header else {
-		return;
-	};
-
-	// Skip content-length as the EPP sets it to invalid values
-	// https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/943
-	if hk == http::header::CONTENT_LENGTH {
-		debug!("skipping invalid content-length");
-		return;
-	}
-
-	let _ = envoy_proto_common::apply_header_value_option(headers, hk, hvo);
-}
-
-fn apply_header_mutations(headers: &mut HeaderMap, h: Option<&HeaderMutation>) {
-	if let Some(hm) = h {
-		for rm in &hm.remove_headers {
-			headers.remove(rm);
-		}
-		for set in &hm.set_headers {
-			let Some(h) = &set.header else { continue };
-			let Ok(hk) = HeaderName::try_from(h.key.as_str()) else {
-				warn!("invalid header key: {}", h.key);
-				continue;
-			};
-			apply_header_with_action(headers, &hk, set);
-		}
-	}
-}
-
 fn apply_header_mutations_request(req: &mut http::Request, h: Option<&HeaderMutation>) {
 	if let Some(hm) = h {
 		for rm in &hm.remove_headers {
 			req.headers_mut().remove(rm);
 		}
 		for set in &hm.set_headers {
-			let Some(h) = &set.header else { continue };
-			match HeaderOrPseudo::try_from(h.key.as_str()) {
-				Ok(HeaderOrPseudo::Header(hk)) => {
-					apply_header_with_action(req.headers_mut(), &hk, set);
-				},
-				Ok(_) => {
-					let mut rr = crate::http::RequestOrResponse::Request(req);
-					let _ = envoy_proto_common::apply_pseudo_header_option(&mut rr, set);
-				},
-				Err(e) => {
-					warn!("invalid header key: {} {e}", h.key);
-				},
-			}
+			envoy_proto_common::apply_header_option(&mut req.into(), set);
 		}
 	}
 }
@@ -805,19 +828,7 @@ fn apply_header_mutations_response(resp: &mut http::Response, h: Option<&HeaderM
 			resp.headers_mut().remove(rm);
 		}
 		for set in &hm.set_headers {
-			let Some(h) = &set.header else { continue };
-			match crate::http::HeaderOrPseudo::try_from(h.key.as_str()) {
-				Ok(crate::http::HeaderOrPseudo::Header(hk)) => {
-					apply_header_with_action(resp.headers_mut(), &hk, set);
-				},
-				Ok(_) => {
-					let mut rr = crate::http::RequestOrResponse::Response(resp);
-					let _ = envoy_proto_common::apply_pseudo_header_option(&mut rr, set);
-				},
-				Err(e) => {
-					warn!("invalid header key: {} {e}", h.key);
-				},
-			}
+			envoy_proto_common::apply_header_option(&mut resp.into(), set);
 		}
 	}
 }
@@ -957,8 +968,7 @@ pub(crate) fn extract_dynamic_metadata(
 	// Get or create metadata container, merging with existing metadata
 	let mut dynamic_metadata = req
 		.extensions_mut()
-		.remove::<Arc<ExtProcDynamicMetadata>>()
-		.map(|arc| (*arc).clone())
+		.remove::<ExtProcDynamicMetadata>()
 		.unwrap_or_default();
 
 	// Merge new fields into existing metadata
@@ -969,7 +979,7 @@ pub(crate) fn extract_dynamic_metadata(
 	}
 
 	if !dynamic_metadata.0.is_empty() {
-		req.extensions_mut().insert(Arc::new(dynamic_metadata));
+		req.extensions_mut().insert(dynamic_metadata);
 	}
 
 	Ok(())

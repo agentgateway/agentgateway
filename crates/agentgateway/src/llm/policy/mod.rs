@@ -1,3 +1,9 @@
+use ::http::HeaderMap;
+use bytes::Bytes;
+use itertools::Itertools;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
 use crate::http::filters::HeaderModifier;
 use crate::http::jwt::Claims;
 use crate::http::{Response, StatusCode, auth};
@@ -7,14 +13,10 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
 use crate::types::agent::{BackendPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference};
 use crate::*;
-use ::http::HeaderMap;
-use bytes::Bytes;
-use itertools::Itertools;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod webhook;
 
+mod azure_content_safety;
 mod bedrock_guardrails;
 mod google_model_armor;
 mod moderation;
@@ -187,6 +189,9 @@ pub struct PromptCachingConfig {
 
 	#[serde(rename = "minTokens")]
 	pub min_tokens: Option<usize>,
+
+	#[serde(rename = "cacheMessageOffset")]
+	pub cache_message_offset: usize,
 }
 
 impl Default for PromptCachingConfig {
@@ -196,6 +201,7 @@ impl Default for PromptCachingConfig {
 			cache_messages: true,
 			cache_tools: false,
 			min_tokens: Some(1024),
+			cache_message_offset: 0,
 		}
 	}
 }
@@ -428,8 +434,42 @@ impl Policy {
 					}
 				},
 				RequestGuardKind::BedrockGuardrails(bg) => {
+					match Self::apply_bedrock_guardrails_request(
+						req,
+						claims.clone(),
+						&client,
+						&g.rejection,
+						bg,
+					)
+					.await?
+					{
+						GuardrailOutcome::Rejected(res) => {
+							Self::record_guardrail_trip(
+								&client,
+								crate::telemetry::metrics::GuardrailPhase::Request,
+								crate::telemetry::metrics::GuardrailAction::Reject,
+							);
+							return Ok(Some(res));
+						},
+						GuardrailOutcome::Masked => {
+							Self::record_guardrail_trip(
+								&client,
+								crate::telemetry::metrics::GuardrailPhase::Request,
+								crate::telemetry::metrics::GuardrailAction::Mask,
+							);
+						},
+						GuardrailOutcome::None => {
+							Self::record_guardrail_trip(
+								&client,
+								crate::telemetry::metrics::GuardrailPhase::Request,
+								crate::telemetry::metrics::GuardrailAction::Allow,
+							);
+						},
+					}
+				},
+				RequestGuardKind::GoogleModelArmor(gma) => {
 					if let Some(res) =
-						Self::apply_bedrock_guardrails_request(req, claims.clone(), &client, &g.rejection, bg)
+						Self::apply_google_model_armor_request(req, claims.clone(), &client, &g.rejection, gma)
 							.await?
 					{
 						Self::record_guardrail_trip(
@@ -446,10 +486,15 @@ impl Policy {
 						);
 					}
 				},
-				RequestGuardKind::GoogleModelArmor(gma) => {
-					if let Some(res) =
-						Self::apply_google_model_armor_request(req, claims.clone(), &client, &g.rejection, gma)
-							.await?
+				RequestGuardKind::AzureContentSafety(acs) => {
+					if let Some(res) = Self::apply_azure_content_safety_request(
+						req,
+						claims.clone(),
+						&client,
+						&g.rejection,
+						acs,
+					)
+					.await?
 					{
 						Self::record_guardrail_trip(
 							&client,
@@ -491,12 +536,20 @@ impl Policy {
 		client: &PolicyClient,
 		rej: &RequestRejection,
 		guardrails: &BedrockGuardrails,
-	) -> anyhow::Result<Option<Response>> {
+	) -> anyhow::Result<GuardrailOutcome> {
 		let resp = bedrock_guardrails::send_request(req, claims.clone(), client, guardrails).await?;
 		if resp.is_blocked() {
-			Ok(Some(rej.as_response()))
+			Ok(GuardrailOutcome::Rejected(rej.as_response()))
+		} else if resp.is_anonymized() {
+			let output_texts = resp.output_texts();
+			let mut msgs = req.get_messages();
+			for (msg, text) in msgs.iter_mut().zip(output_texts) {
+				msg.content = text.into();
+			}
+			req.set_messages(msgs);
+			Ok(GuardrailOutcome::Masked)
 		} else {
-			Ok(None)
+			Ok(GuardrailOutcome::None)
 		}
 	}
 
@@ -506,7 +559,7 @@ impl Policy {
 		client: &PolicyClient,
 		rej: &RequestRejection,
 		guardrails: &BedrockGuardrails,
-	) -> anyhow::Result<Option<Response>> {
+	) -> anyhow::Result<GuardrailOutcome> {
 		// Extract text content from response choices
 		let content: Vec<String> = resp
 			.to_webhook_choices()
@@ -515,15 +568,23 @@ impl Policy {
 			.collect();
 
 		if content.is_empty() {
-			return Ok(None);
+			return Ok(GuardrailOutcome::None);
 		}
 
 		let guardrail_resp =
 			bedrock_guardrails::send_response(content, claims, client, guardrails).await?;
 		if guardrail_resp.is_blocked() {
-			Ok(Some(rej.as_response()))
+			Ok(GuardrailOutcome::Rejected(rej.as_response()))
+		} else if guardrail_resp.is_anonymized() {
+			let output_texts = guardrail_resp.output_texts();
+			let mut choices = resp.to_webhook_choices();
+			for (choice, text) in choices.iter_mut().zip(output_texts) {
+				choice.message.content = text.into();
+			}
+			resp.set_webhook_choices(choices)?;
+			Ok(GuardrailOutcome::Masked)
 		} else {
-			Ok(None)
+			Ok(GuardrailOutcome::None)
 		}
 	}
 
@@ -540,6 +601,43 @@ impl Policy {
 		} else {
 			Ok(None)
 		}
+	}
+
+	async fn apply_azure_content_safety_request(
+		req: &mut dyn RequestType,
+		claims: Option<Claims>,
+		client: &PolicyClient,
+		rej: &RequestRejection,
+		config: &AzureContentSafety,
+	) -> anyhow::Result<Option<Response>> {
+		if let Some(ref analyze_text) = config.analyze_text {
+			let resp = azure_content_safety::send_analyze_text_for_request(
+				req,
+				claims.clone(),
+				client,
+				config,
+				analyze_text,
+			)
+			.await?;
+			let threshold = analyze_text.severity_threshold.unwrap_or(2);
+			if resp.is_blocked(threshold) {
+				return Ok(Some(rej.as_response()));
+			}
+		}
+		if let Some(ref detect_jailbreak) = config.detect_jailbreak {
+			let resp = azure_content_safety::send_detect_jailbreak_for_request(
+				req,
+				claims.clone(),
+				client,
+				config,
+				detect_jailbreak,
+			)
+			.await?;
+			if resp.jailbreak_detected() {
+				return Ok(Some(rej.as_response()));
+			}
+		}
+		Ok(None)
 	}
 
 	async fn apply_google_model_armor_response(
@@ -567,6 +665,41 @@ impl Policy {
 		} else {
 			Ok(None)
 		}
+	}
+
+	async fn apply_azure_content_safety_response(
+		resp: &mut dyn ResponseType,
+		claims: Option<Claims>,
+		client: &PolicyClient,
+		rej: &RequestRejection,
+		config: &AzureContentSafety,
+	) -> anyhow::Result<Option<Response>> {
+		let content: Vec<String> = resp
+			.to_webhook_choices()
+			.into_iter()
+			.map(|c| c.message.content.to_string())
+			.collect();
+
+		if content.is_empty() {
+			return Ok(None);
+		}
+
+		if let Some(ref analyze_text) = config.analyze_text {
+			let guardrail_resp = azure_content_safety::send_analyze_text_for_response(
+				content.clone(),
+				claims,
+				client,
+				config,
+				analyze_text,
+			)
+			.await?;
+			let threshold = analyze_text.severity_threshold.unwrap_or(2);
+			if guardrail_resp.is_blocked(threshold) {
+				return Ok(Some(rej.as_response()));
+			}
+		}
+		// Note: detect_jailbreak is request-only, not applied to responses.
+		Ok(None)
 	}
 
 	fn apply_regex(
@@ -775,6 +908,7 @@ impl Policy {
 						continue;
 					}
 				},
+				HeaderValueMatch::Invalid => continue,
 			}
 			headers.insert(header_name, have.clone());
 		}
@@ -929,8 +1063,36 @@ impl Policy {
 					}
 				},
 				ResponseGuardKind::BedrockGuardrails(bg) => {
+					match Self::apply_bedrock_guardrails_response(resp, None, client, &g.rejection, bg)
+						.await?
+					{
+						GuardrailOutcome::Rejected(res) => {
+							Self::record_guardrail_trip(
+								client,
+								crate::telemetry::metrics::GuardrailPhase::Response,
+								crate::telemetry::metrics::GuardrailAction::Reject,
+							);
+							return Ok(Some(res));
+						},
+						GuardrailOutcome::Masked => {
+							Self::record_guardrail_trip(
+								client,
+								crate::telemetry::metrics::GuardrailPhase::Response,
+								crate::telemetry::metrics::GuardrailAction::Mask,
+							);
+						},
+						GuardrailOutcome::None => {
+							Self::record_guardrail_trip(
+								client,
+								crate::telemetry::metrics::GuardrailPhase::Response,
+								crate::telemetry::metrics::GuardrailAction::Allow,
+							);
+						},
+					}
+				},
+				ResponseGuardKind::GoogleModelArmor(gma) => {
 					if let Some(res) =
-						Self::apply_bedrock_guardrails_response(resp, None, client, &g.rejection, bg).await?
+						Self::apply_google_model_armor_response(resp, None, client, &g.rejection, gma).await?
 					{
 						Self::record_guardrail_trip(
 							client,
@@ -946,9 +1108,9 @@ impl Policy {
 						);
 					}
 				},
-				ResponseGuardKind::GoogleModelArmor(gma) => {
+				ResponseGuardKind::AzureContentSafety(acs) => {
 					if let Some(res) =
-						Self::apply_google_model_armor_response(resp, None, client, &g.rejection, gma).await?
+						Self::apply_azure_content_safety_response(resp, None, client, &g.rejection, acs).await?
 					{
 						Self::record_guardrail_trip(
 							client,
@@ -990,6 +1152,7 @@ pub enum RequestGuardKind {
 	OpenAIModeration(Moderation),
 	BedrockGuardrails(BedrockGuardrails),
 	GoogleModelArmor(GoogleModelArmor),
+	AzureContentSafety(AzureContentSafety),
 }
 
 #[apply(schema!)]
@@ -1066,7 +1229,11 @@ pub struct Moderation {
 	/// Model to use. Defaults to `omni-moderation-latest`
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[serde(
+		default,
+		deserialize_with = "crate::types::local::de_from_local_backend_policy",
+		skip_serializing_if = "Vec::is_empty"
+	)]
 	#[cfg_attr(
 		feature = "schema",
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
@@ -1084,7 +1251,11 @@ pub struct BedrockGuardrails {
 	/// AWS region where the guardrail is deployed
 	pub region: Strng,
 	/// Backend policies for AWS authentication (optional, defaults to implicit AWS auth)
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[serde(
+		default,
+		deserialize_with = "crate::types::local::de_from_local_backend_policy",
+		skip_serializing_if = "Vec::is_empty"
+	)]
 	#[cfg_attr(
 		feature = "schema",
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
@@ -1103,12 +1274,75 @@ pub struct GoogleModelArmor {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub location: Option<Strng>,
 	/// Backend policies for GCP authentication (optional, defaults to implicit GCP auth)
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[serde(
+		default,
+		deserialize_with = "crate::types::local::de_from_local_backend_policy",
+		skip_serializing_if = "Vec::is_empty"
+	)]
 	#[cfg_attr(
 		feature = "schema",
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
 	pub policies: Vec<BackendPolicy>,
+}
+
+/// Configuration for Azure Content Safety integration.
+///
+/// Uses the Azure AI Content Safety APIs to detect harmful content
+/// and jailbreak attempts. The endpoint and authentication are shared
+/// across all enabled features.
+#[apply(schema!)]
+pub struct AzureContentSafety {
+	/// The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")
+	pub endpoint: Strng,
+	/// Backend policies for Azure authentication (optional, defaults to implicit Azure auth)
+	#[serde(
+		default,
+		deserialize_with = "crate::types::local::de_from_local_backend_policy",
+		skip_serializing_if = "Vec::is_empty"
+	)]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+	)]
+	pub policies: Vec<BackendPolicy>,
+	/// Cached implicit Azure auth credential, shared across requests.
+	#[serde(skip)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub cached_azure_auth: crate::http::auth::AzureAuth,
+	/// Analyze Text configuration for detecting harmful content categories
+	/// (Hate, SelfHarm, Sexual, Violence) and blocklist matches.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub analyze_text: Option<AnalyzeTextConfig>,
+	/// Detect Text Jailbreak configuration for detecting jailbreak attempts.
+	/// Only applicable to request guards.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub detect_jailbreak: Option<DetectJailbreakConfig>,
+}
+
+/// Configuration for the Analyze Text API.
+#[apply(schema!)]
+pub struct AnalyzeTextConfig {
+	/// Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub severity_threshold: Option<i32>,
+	/// API version to use (default: "2024-09-01")
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub api_version: Option<Strng>,
+	/// Blocklist names to check against
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub blocklist_names: Option<Vec<String>>,
+	/// When true, further analysis stops if a blocklist is hit
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub halt_on_blocklist_hit: Option<bool>,
+}
+
+/// Configuration for the Detect Jailbreak API.
+#[apply(schema!)]
+pub struct DetectJailbreakConfig {
+	/// API version to use (default: "2024-02-15-preview")
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub api_version: Option<Strng>,
 }
 
 #[apply(schema!)]
@@ -1155,6 +1389,7 @@ pub enum ResponseGuardKind {
 	Webhook(Webhook),
 	BedrockGuardrails(BedrockGuardrails),
 	GoogleModelArmor(GoogleModelArmor),
+	AzureContentSafety(AzureContentSafety),
 }
 
 #[apply(schema!)]

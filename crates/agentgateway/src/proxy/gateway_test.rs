@@ -1,33 +1,44 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
+use std::time::Duration;
 
-use crate::http::tests_common::*;
-use crate::http::{Body, Response};
-use crate::llm::{AIProvider, openai};
-use crate::proxy::request_builder::RequestBuilder;
-use crate::read_body;
-use crate::test_helpers::proxymock::*;
-use crate::types::agent::{
-	Backend, BackendPolicy, BackendWithPolicies, Bind, BindProtocol, Listener, ListenerProtocol,
-	ListenerSet, PathMatch, ResourceName, Route, RouteMatch, RouteSet, Target,
-};
-use crate::types::backend;
-use crate::*;
 use ::http::{Method, Version, header};
 use agent_core::strng;
 use assert_matches::assert_matches;
 use http_body_util::BodyExt;
+use hyper::client::conn::http1;
 use hyper_util::client::legacy::Client;
+use hyper_util::rt::TokioIo;
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
+use ppp::v2::{
+	Builder as ProxyV2Builder, Command as ProxyV2Command, Protocol as ProxyV2Protocol,
+	Version as ProxyV2Version,
+};
 use rand::RngExt;
+use rustls_pki_types::ServerName;
 use serde::Serialize;
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
+use tokio_rustls::TlsConnector;
 use url::{Position, Url};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 use x509_parser::nom::AsBytes;
+
+use crate::http::tests_common::*;
+use crate::http::{Body, Response};
+use crate::llm::{AIProvider, openai};
+use crate::proxy::request_builder::RequestBuilder;
+use crate::test_helpers::oteltracemock;
+use crate::test_helpers::proxymock::*;
+use crate::types::agent::{
+	Backend, BackendPolicy, BackendWithPolicies, Bind, BindProtocol, Listener, ListenerProtocol,
+	ListenerSet, PathMatch, ResourceName, Route, RouteMatch, Target,
+};
+use crate::types::backend;
+use crate::{read_body, *};
 
 const TEST_PRIVATE_KEY_PEM: &str = "-----BEGIN PRIVATE KEY-----
 MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgltxBTVDLg7C6vE1T
@@ -120,6 +131,61 @@ fn route_with_prefix(target: std::net::SocketAddr, prefix: &str) -> Route {
 	route
 }
 
+fn https_bind() -> Bind {
+	Bind {
+		key: BIND_KEY,
+		address: "127.0.0.1:0".parse().unwrap(),
+		listeners: ListenerSet::from_list([Listener {
+			key: LISTENER_KEY,
+			name: Default::default(),
+			hostname: strng::new("*.example.com"),
+			protocol: ListenerProtocol::HTTPS(
+				types::local::LocalTLSServerConfig {
+					cert: "../../examples/tls/certs/cert.pem".into(),
+					key: "../../examples/tls/certs/key.pem".into(),
+					root: None,
+					cipher_suites: None,
+					min_tls_version: None,
+					max_tls_version: None,
+				}
+				.try_into()
+				.unwrap(),
+			),
+		}]),
+		protocol: BindProtocol::tls,
+		tunnel_protocol: Default::default(),
+	}
+}
+
+async fn serve_https_http1_connection(
+	t: &TestBind,
+	sni: &str,
+) -> (
+	http1::SendRequest<Body>,
+	tokio::task::JoinHandle<Result<(), hyper::Error>>,
+) {
+	let io = t.serve(BIND_KEY);
+	let tls: crate::http::backendtls::BackendTLS = crate::http::backendtls::ResolvedBackendTLS {
+		cert: None,
+		key: None,
+		root: Some(include_bytes!("../../../../examples/tls/certs/ca-cert.pem").to_vec()),
+		hostname: Some(sni.to_string()),
+		insecure: false,
+		insecure_host: true,
+		alpn: None,
+		subject_alt_names: None,
+	}
+	.try_into()
+	.unwrap();
+	let tls = TlsConnector::from(tls.base_config().config)
+		.connect(ServerName::try_from(sni.to_string()).unwrap(), io)
+		.await
+		.unwrap();
+	let (sender, conn) = http1::handshake(TokioIo::new(tls)).await.unwrap();
+	let conn = tokio::spawn(conn);
+	(sender, conn)
+}
+
 fn find_set_cookie_pair(headers: &::http::HeaderMap, prefix: &str) -> String {
 	headers
 		.get_all(header::SET_COOKIE)
@@ -141,6 +207,37 @@ fn query_param(uri: &str, name: &str) -> String {
 		.query_pairs()
 		.find_map(|(key, value)| (key == name).then(|| value.into_owned()))
 		.unwrap_or_else(|| panic!("missing query param {name}"))
+}
+
+fn build_proxy_v1_header(src: &str, dst: &str) -> Vec<u8> {
+	let src: std::net::SocketAddrV4 = src.parse().unwrap();
+	let dst: std::net::SocketAddrV4 = dst.parse().unwrap();
+	format!(
+		"PROXY TCP4 {} {} {} {}\r\n",
+		src.ip(),
+		dst.ip(),
+		src.port(),
+		dst.port()
+	)
+	.into_bytes()
+}
+
+fn build_proxy_v2_header(src: &str, dst: &str) -> Vec<u8> {
+	let src: std::net::SocketAddrV4 = src.parse().unwrap();
+	let dst: std::net::SocketAddrV4 = dst.parse().unwrap();
+	let addresses = ppp::v2::Addresses::IPv4(ppp::v2::IPv4 {
+		source_address: *src.ip(),
+		destination_address: *dst.ip(),
+		source_port: src.port(),
+		destination_port: dst.port(),
+	});
+	ProxyV2Builder::with_addresses(
+		ProxyV2Version::Two | ProxyV2Command::Proxy,
+		ProxyV2Protocol::Stream,
+		addresses,
+	)
+	.build()
+	.unwrap()
 }
 
 async fn oidc_backend_mock() -> (MockServer, Arc<StdMutex<Option<String>>>) {
@@ -185,6 +282,155 @@ async fn basic_handling() {
 }
 
 #[tokio::test]
+async fn proxy_policy_optional_mode_allows_plain_http() {
+	let mock = simple_mock().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
+	t.attach_frontend_policy(json!({
+		"proxyProtocol": {
+			"version": "all",
+			"mode": "optional",
+		},
+	}))
+	.await;
+
+	let io = t.serve_http(BIND_KEY);
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+}
+
+#[tokio::test]
+async fn proxy_policy_v1_accepts_v1_header() {
+	let mock = simple_mock().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
+	t.attach_frontend_policy(json!({
+		"proxyProtocol": {
+			"version": "v1",
+		},
+	}))
+	.await;
+
+	let mut io = t.serve_tunnel(BIND_KEY);
+	io.write_all(&build_proxy_v1_header("192.168.1.10:40000", "127.0.0.1:80"))
+		.await
+		.unwrap();
+	let (mut sender, conn) = http1::handshake(TokioIo::new(io)).await.unwrap();
+	let conn = tokio::spawn(conn);
+	let res = sender
+		.send_request(
+			::http::Request::builder()
+				.method(Method::GET)
+				.uri("/")
+				.header(header::HOST, "lo")
+				.header(header::CONNECTION, "close")
+				.body(Body::empty())
+				.unwrap(),
+		)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), 200);
+	conn.abort();
+}
+
+#[tokio::test]
+async fn proxy_policy_v1_rejects_v2_header() {
+	let mock = simple_mock().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
+	t.attach_frontend_policy(json!({
+		"proxyProtocol": {
+			"version": "v1",
+		},
+	}))
+	.await;
+
+	let mut io = t.serve_tunnel(BIND_KEY);
+	io.write_all(&build_proxy_v2_header("192.168.1.10:40000", "127.0.0.1:80"))
+		.await
+		.unwrap();
+	io.write_all(b"GET / HTTP/1.1\r\nHost: lo\r\n\r\n")
+		.await
+		.unwrap();
+	io.shutdown().await.unwrap();
+
+	let mut response = [0u8; 1];
+	let read = tokio::time::timeout(Duration::from_secs(2), io.read(&mut response))
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(read, 0);
+}
+
+#[tokio::test]
+async fn tracing_exports_to_otel_trace_mock() {
+	unsafe {
+		// Drop export time to make tests fast
+		std::env::set_var("OTEL_BLRP_SCHEDULE_DELAY", "20");
+		std::env::set_var("OTEL_BSP_SCHEDULE_DELAY", "20");
+	}
+	struct CountingTraceHandler {
+		exports: Arc<AtomicUsize>,
+	}
+
+	#[async_trait::async_trait]
+	impl oteltracemock::Handler for CountingTraceHandler {
+		async fn export(
+			&mut self,
+			_request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
+		) -> Result<
+			opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceResponse,
+			tonic::Status,
+		> {
+			self.exports.fetch_add(1, Ordering::SeqCst);
+			oteltracemock::ok_response()
+		}
+	}
+
+	let exports = Arc::new(AtomicUsize::new(0));
+	let otel = oteltracemock::OtelTraceMock::new({
+		let exports = Arc::clone(&exports);
+		move || CountingTraceHandler {
+			exports: Arc::clone(&exports),
+		}
+	})
+	.spawn()
+	.await;
+
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_frontend_policy(json!({
+			"tracing": {
+				"host": otel.address.to_string(),
+				"randomSampling": true
+			}
+		}))
+		.await;
+
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+
+	tokio::time::timeout(Duration::from_secs(2), async {
+		while exports.load(Ordering::SeqCst) == 0 {
+			tokio::task::yield_now().await;
+		}
+	})
+	.await
+	.unwrap();
+
+	assert_eq!(exports.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
 async fn multiple_requests() {
 	let (_mock, _bind, io) = basic_setup().await;
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
@@ -199,7 +445,8 @@ async fn basic_http2() {
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(simple_bind(basic_route(*mock.address())));
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
 	let io = t.serve_http2(strng::new("bind"));
 	let res = RequestBuilder::new(Method::GET, "http://lo")
 		.version(Version::HTTP_2)
@@ -216,7 +463,8 @@ async fn reserved_oidc_cookies_are_stripped_before_proxying() {
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(simple_bind(basic_route(*mock.address())));
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
 	let io = t.serve_http(BIND_KEY);
 
 	let res = send_request_headers(
@@ -247,7 +495,8 @@ async fn gateway_phase_oidc_redirects_before_route_selection() {
 	let (mock, _token_response) = oidc_backend_mock().await;
 	let mut bind = setup_proxy_test_with_oidc()
 		.with_backend(*mock.address())
-		.with_bind(simple_bind(route_with_prefix(*mock.address(), "/upstream")));
+		.with_bind(simple_bind())
+		.with_route(route_with_prefix(*mock.address(), "/upstream"));
 	bind
 		.attach_gateway_policy(gateway_oidc_policy(format!("{}/token", mock.uri())))
 		.await;
@@ -266,7 +515,8 @@ async fn gateway_phase_oidc_callback_authenticates_and_strips_reserved_cookies()
 	let (mock, token_response) = oidc_backend_mock().await;
 	let mut bind = setup_proxy_test_with_oidc()
 		.with_backend(*mock.address())
-		.with_bind(simple_bind(route_with_prefix(*mock.address(), "/upstream")));
+		.with_bind(simple_bind())
+		.with_route(route_with_prefix(*mock.address(), "/upstream"));
 	bind
 		.attach_gateway_policy(gateway_oidc_policy(format!("{}/token", mock.uri())))
 		.await;
@@ -340,7 +590,8 @@ async fn gateway_phase_oidc_bypasses_cors_preflight_requests() {
 	let (mock, _token_response) = oidc_backend_mock().await;
 	let mut bind = setup_proxy_test_with_oidc()
 		.with_backend(*mock.address())
-		.with_bind(simple_bind(route_with_prefix(*mock.address(), "/upstream")));
+		.with_bind(simple_bind())
+		.with_route(route_with_prefix(*mock.address(), "/upstream"));
 	bind
 		.attach_gateway_policy(gateway_oidc_policy(format!("{}/token", mock.uri())))
 		.await;
@@ -944,38 +1195,13 @@ async fn direct_response() {
 #[tokio::test]
 async fn tls_termination() {
 	let mock = simple_mock().await;
-	let route = basic_route(*mock.address());
-	let bind = Bind {
-		key: BIND_KEY,
-		// not really used
-		address: "127.0.0.1:0".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
-			key: LISTENER_KEY,
-			name: Default::default(),
-			hostname: strng::new("*.example.com"),
-			protocol: ListenerProtocol::HTTPS(
-				types::local::LocalTLSServerConfig {
-					cert: "../../examples/tls/certs/cert.pem".into(),
-					key: "../../examples/tls/certs/key.pem".into(),
-					root: None,
-					cipher_suites: None,
-					min_tls_version: None,
-					max_tls_version: None,
-				}
-				.try_into()
-				.unwrap(),
-			),
-			tcp_routes: Default::default(),
-			routes: RouteSet::from_list(vec![route]),
-		}]),
-		protocol: BindProtocol::tls,
-		tunnel_protocol: Default::default(),
-	};
+	let bind = https_bind();
 
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(bind);
+		.with_bind(bind)
+		.with_route(basic_route(*mock.address()));
 
 	let io = t.serve_https(strng::new("bind"), Some("a.example.com"));
 	let res = RequestBuilder::new(Method::GET, "http://a.example.com")
@@ -988,6 +1214,125 @@ async fn tls_termination() {
 	let io = t.serve_https(strng::new("bind"), Some("not-the-domain"));
 	let res = RequestBuilder::new(Method::GET, "http://lo").send(io).await;
 	assert_matches!(res, Err(_));
+}
+
+#[tokio::test]
+async fn tls_connection_reuses_listener_after_route_insert() {
+	let existing = body_mock(b"existing-route").await;
+	let added = body_mock(b"added-route").await;
+	let bind = https_bind();
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*existing.address())
+		.with_backend(*added.address())
+		.with_bind(bind)
+		.with_route(route_with_prefix(*existing.address(), "/existing"));
+
+	let (mut sender, conn) = serve_https_http1_connection(&t, "a.example.com").await;
+
+	let res = sender
+		.send_request(
+			::http::Request::builder()
+				.method(Method::GET)
+				.uri("/existing")
+				.version(Version::HTTP_11)
+				.header(header::HOST, "a.example.com")
+				.body(Body::empty())
+				.unwrap(),
+		)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), 200);
+	assert_eq!(
+		res.into_body().collect().await.unwrap().to_bytes().as_ref(),
+		b"existing-route"
+	);
+
+	t.pi
+		.stores
+		.binds
+		.write()
+		.insert_route(route_with_prefix(*added.address(), "/added"), LISTENER_KEY);
+
+	let res = sender
+		.send_request(
+			::http::Request::builder()
+				.method(Method::GET)
+				.uri("/added")
+				.version(Version::HTTP_11)
+				.header(header::HOST, "a.example.com")
+				.body(Body::empty())
+				.unwrap(),
+		)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), 200);
+	assert_eq!(
+		res.into_body().collect().await.unwrap().to_bytes().as_ref(),
+		b"added-route"
+	);
+
+	drop(sender);
+	conn.abort();
+}
+
+#[tokio::test]
+async fn tls_connection_drains_when_listener_changes() {
+	let existing = body_mock(b"existing-route").await;
+	let bind = https_bind();
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*existing.address())
+		.with_bind(bind)
+		.with_route(route_with_prefix(*existing.address(), "/existing"));
+
+	let (mut sender, conn) = serve_https_http1_connection(&t, "a.example.com").await;
+
+	let res = sender
+		.send_request(
+			::http::Request::builder()
+				.method(Method::GET)
+				.uri("/existing")
+				.version(Version::HTTP_11)
+				.header(header::HOST, "a.example.com")
+				.body(Body::empty())
+				.unwrap(),
+		)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), 200);
+
+	t.pi.stores.binds.write().insert_listener(
+		Listener {
+			key: LISTENER_KEY,
+			name: Default::default(),
+			hostname: strng::new("*.example.com"),
+			protocol: ListenerProtocol::HTTPS(crate::types::agent::ServerTLSConfig::new_invalid()),
+		},
+		BIND_KEY,
+	);
+
+	agent_core::test_helpers::check_eventually(
+		Duration::from_secs(1),
+		|| async { conn.is_finished() },
+		|b| *b,
+	)
+	.await
+	.expect("connection should drain after listener change");
+
+	let res = sender
+		.send_request(
+			::http::Request::builder()
+				.method(Method::GET)
+				.uri("/existing")
+				.version(Version::HTTP_11)
+				.header(header::HOST, "a.example.com")
+				.body(Body::empty())
+				.unwrap(),
+		)
+		.await;
+	assert_matches!(res, Err(_));
+	let _ = conn.await;
 }
 
 #[tokio::test]
@@ -1010,7 +1355,8 @@ async fn tls_backend_connection() {
 			),
 			inline_policies: vec![BackendPolicy::BackendTLS(backend_tls)],
 		})
-		.with_bind(simple_bind(basic_route(*mock.address())));
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
 
 	let res = send_http_version(&t, Version::HTTP_2).await;
 	assert_eq!(res.status(), 200);
@@ -1042,7 +1388,8 @@ async fn tls_backend_connection_alpn() {
 			),
 			inline_policies: vec![BackendPolicy::BackendTLS(backend_tls)],
 		})
-		.with_bind(simple_bind(basic_route(*mock.address())));
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
 
 	let res = send_http_version(&t, Version::HTTP_11).await;
 	assert_eq!(res.status(), 200);
@@ -1088,7 +1435,8 @@ async fn tls_backend_http2_version() {
 				BackendPolicy::HTTP(backend_version),
 			],
 		})
-		.with_bind(simple_bind(basic_route(*mock.address())));
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
 
 	let res = send_http_version(&t, Version::HTTP_2).await;
 	assert_eq!(res.status(), 200);
@@ -1128,7 +1476,8 @@ async fn tls_backend_http1_version() {
 				BackendPolicy::HTTP(backend_version),
 			],
 		})
-		.with_bind(simple_bind(basic_route(*mock.address())));
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
 
 	let res = send_http_version(&t, Version::HTTP_2).await;
 	assert_eq!(res.status(), 200);
@@ -1169,7 +1518,8 @@ async fn tls_backend_version_with_alpn() {
 				BackendPolicy::HTTP(backend_version),
 			],
 		})
-		.with_bind(simple_bind(basic_route(*mock.address())));
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
 
 	let res = send_http_version(&t, Version::HTTP_2).await;
 	assert_eq!(res.status(), 200);
@@ -1372,7 +1722,7 @@ async fn tunnel_absolute_form() {
 	assert_eq!(&body.uri.to_string(), "http://lo/foo");
 	assert_eq!(
 		body.headers.get("proxy-authorization").unwrap().as_bytes(),
-		b"Basic my-key"
+		b"Bearer my-key"
 	);
 }
 
@@ -1431,7 +1781,15 @@ async fn tunnel_connect() {
 			&tunnel_addr,
 			json!({
 				"backendAuth": {
-					"key": "my-key"
+					"key": {
+						"value": "my-key",
+						"location": {
+							"header": {
+								"name":"authorization",
+								"prefix": "Basic "
+							},
+						}
+					}
 				}
 			}),
 		)
@@ -1722,7 +2080,7 @@ fn setup_dfp() -> (TestBind, Client<MemoryConnector, Body>) {
 		.binds
 		.write()
 		.insert_backend(dynamic_backend.name(), dynamic_backend.into());
-	let t = t.with_bind(simple_bind(route));
+	let t = t.with_bind(simple_bind()).with_route(route);
 	let io = t.serve_http(BIND_KEY);
 	(t, io)
 }
@@ -1754,8 +2112,6 @@ fn setup_dfp_https() -> (TestBind, Client<MemoryConnector, Body>) {
 				.try_into()
 				.unwrap(),
 			),
-			tcp_routes: Default::default(),
-			routes: RouteSet::from_list(vec![route]),
 		}]),
 		protocol: BindProtocol::tls,
 		tunnel_protocol: Default::default(),
@@ -1767,7 +2123,7 @@ fn setup_dfp_https() -> (TestBind, Client<MemoryConnector, Body>) {
 		.binds
 		.write()
 		.insert_backend(dynamic_backend.name(), dynamic_backend.into());
-	let t = t.with_bind(bind);
+	let t = t.with_bind(bind).with_route(route);
 	let io = t.serve_https(BIND_KEY, None);
 	(t, io)
 }
@@ -1898,8 +2254,6 @@ async fn auto_protocol_plaintext_http() {
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTP,
-			tcp_routes: Default::default(),
-			routes: RouteSet::from_list(vec![route]),
 		}]),
 		protocol: BindProtocol::auto,
 		tunnel_protocol: Default::default(),
@@ -1908,7 +2262,8 @@ async fn auto_protocol_plaintext_http() {
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(bind);
+		.with_bind(bind)
+		.with_route(route);
 	let io = t.serve_http(strng::new("bind"));
 	let res = RequestBuilder::new(Method::GET, "http://lo")
 		.send(io)
@@ -1925,36 +2280,14 @@ async fn auto_protocol_plaintext_http() {
 async fn auto_protocol_tls_detection() {
 	let mock = simple_mock().await;
 	let route = basic_route(*mock.address());
-	let bind = Bind {
-		key: BIND_KEY,
-		address: "127.0.0.1:0".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
-			key: LISTENER_KEY,
-			name: Default::default(),
-			hostname: strng::new("*.example.com"),
-			protocol: ListenerProtocol::HTTPS(
-				types::local::LocalTLSServerConfig {
-					cert: "../../examples/tls/certs/cert.pem".into(),
-					key: "../../examples/tls/certs/key.pem".into(),
-					root: None,
-					cipher_suites: None,
-					min_tls_version: None,
-					max_tls_version: None,
-				}
-				.try_into()
-				.unwrap(),
-			),
-			tcp_routes: Default::default(),
-			routes: RouteSet::from_list(vec![route]),
-		}]),
-		protocol: BindProtocol::auto,
-		tunnel_protocol: Default::default(),
-	};
+	let mut bind = https_bind();
+	bind.protocol = BindProtocol::auto;
 
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(bind);
+		.with_bind(bind)
+		.with_route(route);
 	let io = t.serve_https(strng::new("bind"), Some("a.example.com"));
 	let res = RequestBuilder::new(Method::GET, "http://a.example.com")
 		.send(io)
@@ -1969,36 +2302,14 @@ async fn auto_protocol_tls_detection() {
 async fn auto_protocol_tls_wrong_sni() {
 	let mock = simple_mock().await;
 	let route = basic_route(*mock.address());
-	let bind = Bind {
-		key: BIND_KEY,
-		address: "127.0.0.1:0".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
-			key: LISTENER_KEY,
-			name: Default::default(),
-			hostname: strng::new("*.example.com"),
-			protocol: ListenerProtocol::HTTPS(
-				types::local::LocalTLSServerConfig {
-					cert: "../../examples/tls/certs/cert.pem".into(),
-					key: "../../examples/tls/certs/key.pem".into(),
-					root: None,
-					cipher_suites: None,
-					min_tls_version: None,
-					max_tls_version: None,
-				}
-				.try_into()
-				.unwrap(),
-			),
-			tcp_routes: Default::default(),
-			routes: RouteSet::from_list(vec![route]),
-		}]),
-		protocol: BindProtocol::auto,
-		tunnel_protocol: Default::default(),
-	};
+	let mut bind = https_bind();
+	bind.protocol = BindProtocol::auto;
 
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(bind);
+		.with_bind(bind)
+		.with_route(route);
 	let io = t.serve_https(strng::new("bind"), Some("not-the-domain"));
 	let res = RequestBuilder::new(Method::GET, "http://lo").send(io).await;
 	assert_matches!(res, Err(_));
@@ -2010,36 +2321,14 @@ async fn auto_protocol_tls_wrong_sni() {
 async fn auto_protocol_plaintext_rejected_for_https_only() {
 	let mock = simple_mock().await;
 	let route = basic_route(*mock.address());
-	let bind = Bind {
-		key: BIND_KEY,
-		address: "127.0.0.1:0".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
-			key: LISTENER_KEY,
-			name: Default::default(),
-			hostname: strng::new("*.example.com"),
-			protocol: ListenerProtocol::HTTPS(
-				types::local::LocalTLSServerConfig {
-					cert: "../../examples/tls/certs/cert.pem".into(),
-					key: "../../examples/tls/certs/key.pem".into(),
-					root: None,
-					cipher_suites: None,
-					min_tls_version: None,
-					max_tls_version: None,
-				}
-				.try_into()
-				.unwrap(),
-			),
-			tcp_routes: Default::default(),
-			routes: RouteSet::from_list(vec![route]),
-		}]),
-		protocol: BindProtocol::auto,
-		tunnel_protocol: Default::default(),
-	};
+	let mut bind = https_bind();
+	bind.protocol = BindProtocol::auto;
 
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(bind);
+		.with_bind(bind)
+		.with_route(route);
 	// Send plaintext HTTP — should fail because only HTTPS listeners exist
 	let io = t.serve_http(strng::new("bind"));
 	let res = RequestBuilder::new(Method::GET, "http://a.example.com")
@@ -2063,8 +2352,6 @@ async fn auto_protocol_tls_rejected_for_http_only() {
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTP,
-			tcp_routes: Default::default(),
-			routes: RouteSet::from_list(vec![route]),
 		}]),
 		protocol: BindProtocol::auto,
 		tunnel_protocol: Default::default(),
@@ -2073,7 +2360,8 @@ async fn auto_protocol_tls_rejected_for_http_only() {
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(bind);
+		.with_bind(bind)
+		.with_route(route);
 	// Send TLS — should fail because only HTTP listeners exist (no TLS listener match)
 	let io = t.serve_https(strng::new("bind"), Some("example.com"));
 	let res = RequestBuilder::new(Method::GET, "http://example.com")
@@ -2100,8 +2388,6 @@ async fn auto_protocol_mixed_listeners() {
 				name: Default::default(),
 				hostname: strng::new("http.local"),
 				protocol: ListenerProtocol::HTTP,
-				tcp_routes: Default::default(),
-				routes: RouteSet::from_list(vec![route]),
 			},
 			Listener {
 				key: strng::new("https-listener"),
@@ -2119,8 +2405,6 @@ async fn auto_protocol_mixed_listeners() {
 					.try_into()
 					.unwrap(),
 				),
-				tcp_routes: Default::default(),
-				routes: RouteSet::from_list(vec![route2]),
 			},
 		]),
 		protocol: BindProtocol::auto,
@@ -2130,7 +2414,9 @@ async fn auto_protocol_mixed_listeners() {
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(bind);
+		.with_bind(bind)
+		.with_route_for_listener(strng::new("http-listener"), route)
+		.with_route_for_listener(strng::new("https-listener"), route2);
 
 	// Plaintext HTTP to http.local should route to the HTTP listener
 	let io = t.serve_http(strng::new("bind"));
@@ -2177,8 +2463,6 @@ async fn auto_protocol_peek_timeout() {
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTP,
-			tcp_routes: Default::default(),
-			routes: RouteSet::from_list(vec![route]),
 		}]),
 		protocol: BindProtocol::auto,
 		tunnel_protocol: Default::default(),
@@ -2187,7 +2471,8 @@ async fn auto_protocol_peek_timeout() {
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
-		.with_bind(bind);
+		.with_bind(bind)
+		.with_route(route);
 
 	// Get raw duplex stream but don't send any data
 	let _client = t.serve(strng::new("bind"));

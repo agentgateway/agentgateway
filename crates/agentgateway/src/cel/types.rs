@@ -4,25 +4,14 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::cel::{Error, Expression, ROOT_CONTEXT, query};
-use crate::http::ext_authz::ExtAuthzDynamicMetadata;
-use crate::http::ext_proc::ExtProcDynamicMetadata;
-use crate::http::transformation_cel::TransformationMetadata;
-use crate::http::{apikey, basicauth, jwt};
-use crate::llm::{LLMInfo, LLMRequest};
-use crate::mcp::{MCPInfo, MCPTool};
-use crate::serdes::schema;
-use crate::transport::tls::TlsInfo;
-use crate::{apply, llm};
 use agent_core::env::ENV;
 use agent_core::strng::Strng;
 use bytes::Bytes;
-use cel::Value;
 use cel::common::ast::OptimizedExpr;
 use cel::context::VariableResolver;
 use cel::objects::{BytesValue, ListValue, StringValue};
 use cel::types::dynamic::{DynamicType, DynamicValue};
-use cel::{ExecutionError, FunctionContext};
+use cel::{ExecutionError, FunctionContext, Value};
 use chrono::{DateTime, FixedOffset};
 use http::{Extensions, HeaderMap, Method, Uri, Version};
 use prometheus_client::encoding::EncodeLabelValue;
@@ -32,6 +21,17 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::json;
 use tracing::event;
+
+use crate::cel::{Error, Expression, ROOT_CONTEXT, query};
+use crate::http::ext_authz::ExtAuthzDynamicMetadata;
+use crate::http::ext_proc::ExtProcDynamicMetadata;
+use crate::http::transformation_cel::TransformationMetadata;
+use crate::http::{RecordedBodyHandle, apikey, basicauth, jwt};
+use crate::llm::{LLMInfo, LLMRequest};
+use crate::mcp::{MCPInfo, MCPTool};
+use crate::serdes::schema;
+use crate::transport::tls::TlsInfo;
+use crate::{apply, llm};
 
 #[derive(Debug, Default, cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
@@ -72,6 +72,10 @@ fn is_extension_or_direct_none<T: Send + Sync + 'static>(e: &ExtensionOrDirect<T
 	e.deref().is_none()
 }
 
+fn is_body_extension_or_direct_none(e: &BodyExtensionOrDirect) -> bool {
+	e.is_none()
+}
+
 #[apply(schema!)]
 #[derive(cel::DynamicType)]
 pub struct EnvContext {
@@ -105,10 +109,85 @@ pub struct SourceContext {
 	#[serde(default)]
 	/// The port of the downstream connection.
 	pub port: u16,
+	#[serde(default = "dummy_address", rename = "rawAddress")]
+	#[dynamic(rename = "rawAddress")]
+	/// The original TCP peer IP address of the downstream connection.
+	/// This can differ from the `address` when using tunneling protocols like PROXY.
+	pub raw_address: IpAddr,
+	#[serde(default, rename = "rawPort")]
+	#[dynamic(rename = "rawPort")]
+	/// The original TCP peer port of the downstream connection.
+	/// This can differ from the `port` when using tunneling protocols like PROXY.
+	pub raw_port: u16,
 	/// The (Istio SPIFFE) identity of the downstream connection, if available.
 	#[serde(flatten, default, deserialize_with = "none_if_empty")]
 	#[dynamic(flatten)]
 	pub tls: Option<crate::transport::tls::TlsInfo>,
+	/// The workload context of the downstream connection, resolved from the
+	/// workload discovery store by source IP. Available when the source pod is
+	/// known to the controller's workload discovery store.
+	///
+	/// Fields are nested under `unverified` to signal that they are derived
+	/// from the source IP (not cryptographically authenticated). Policy
+	/// authors should prefer `source.identity.*` for trust-sensitive checks.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub unverified_workload: Option<WorkloadContext>,
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+/// Workload context wrapper. All fields live under `unverified` to make it
+/// clear that the data is resolved by IP, not cryptographically verified.
+pub struct WorkloadContext {
+	/// The pod name of the source workload.
+	#[serde(default)]
+	pub name: Strng,
+	/// The namespace of the source workload.
+	#[serde(default)]
+	pub namespace: Strng,
+	/// The service account of the source workload.
+	#[serde(default)]
+	pub service_account: Strng,
+}
+
+impl SourceContext {
+	pub fn from_tcp_connection(
+		tcp: &crate::transport::stream::TCPConnectionInfo,
+		tls: Option<crate::transport::tls::TlsInfo>,
+		unverified_workload: Option<WorkloadContext>,
+	) -> Self {
+		let raw_peer_addr = tcp.raw_peer_addr.unwrap_or(tcp.peer_addr);
+		Self {
+			address: tcp.peer_addr.ip(),
+			port: tcp.peer_addr.port(),
+			raw_address: raw_peer_addr.ip(),
+			raw_port: raw_peer_addr.port(),
+			tls,
+			unverified_workload,
+		}
+	}
+}
+
+impl WorkloadContext {
+	/// Resolve the source workload from the discovery store by IP address.
+	pub fn from_stores(
+		stores: &crate::Stores,
+		network: &Strng,
+		addr: IpAddr,
+	) -> Option<WorkloadContext> {
+		let discovery = stores.read_discovery();
+		discovery
+			.workloads
+			.find_address(&crate::types::discovery::NetworkAddress {
+				network: network.clone(),
+				address: addr,
+			})
+			.map(|w| WorkloadContext {
+				name: w.name.clone(),
+				namespace: w.namespace.clone(),
+				service_account: w.service_account.clone(),
+			})
+	}
 }
 fn none_if_empty<'de, D>(deserializer: D) -> Result<Option<TlsInfo>, D::Error>
 where
@@ -132,11 +211,11 @@ pub struct BackendContext {
 	/// The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.
 	#[serde(default)]
 	pub name: Strng,
-	/// The type of backend. For example, `ai`, `mcp`, `static`, `dynamic`, or `service`.
+	/// The type of backend.
 	#[serde(rename = "type")]
 	#[serde(default)]
 	pub backend_type: BackendType,
-	/// The protocol of backend. For example, `http`, `tcp`, `a2a`, `mcp`, or `llm`.
+	/// The protocol of backend.
 	#[serde(default)]
 	pub protocol: BackendProtocol,
 }
@@ -427,6 +506,7 @@ pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestS
 		version: req.version(),
 		headers: req.headers().clone(),
 		body: ext::<BufferedBody>(req, clear),
+		recorded_body: ext::<RecordedBodyHandle>(req, clear),
 
 		jwt: ext::<jwt::Claims>(req, clear),
 		api_key: ext::<apikey::Claims>(req, clear),
@@ -448,29 +528,26 @@ pub fn snapshot_response(resp: &mut crate::http::Response) -> ResponseSnapshot {
 		code: resp.status(),
 		headers: resp.headers().clone(),
 		body: resp.extensions_mut().remove::<BufferedBody>(),
+		recorded_body: resp.extensions_mut().remove::<RecordedBodyHandle>(),
 	}
 }
 
 #[derive(Debug, Clone)]
 pub struct RequestSnapshot {
-	/// The request's method
 	pub method: http::Method,
 
-	/// The request's URI
 	pub path: http::Uri,
 
 	pub host: Option<::http::uri::Authority>,
 
 	pub scheme: Option<::http::uri::Scheme>,
 
-	/// The request's version
 	pub version: http::Version,
 
-	// TODO: do not use header_map, which will make multi-headers a list
-	/// The request's headers
 	pub headers: http::HeaderMap,
 
 	pub body: Option<BufferedBody>,
+	pub recorded_body: Option<RecordedBodyHandle>,
 
 	pub jwt: Option<jwt::Claims>,
 
@@ -524,8 +601,8 @@ pub struct RequestRef<'a> {
 	/// The request's headers
 	pub headers: Headers<'a>,
 
-	#[serde(skip_serializing_if = "is_extension_or_direct_none")]
-	pub body: ExtensionOrDirect<'a, BufferedBody>,
+	#[serde(skip_serializing_if = "is_body_extension_or_direct_none")]
+	pub body: BodyExtensionOrDirect<'a>,
 
 	#[serde(skip_serializing_if = "is_extension_or_direct_none")]
 	pub start_time: ExtensionOrDirect<'a, RequestTime>,
@@ -534,14 +611,12 @@ pub struct RequestRef<'a> {
 	pub end_time: Option<&'a RequestTime>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ResponseSnapshot {
-	#[serde(with = "http_serde::status_code")]
 	pub code: http::StatusCode,
-	#[serde(with = "http_serde::header_map")]
 	pub headers: http::HeaderMap,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub body: Option<BufferedBody>,
+	pub recorded_body: Option<RecordedBodyHandle>,
 }
 
 #[derive(Debug, Clone, Serialize, cel::DynamicType)]
@@ -552,8 +627,8 @@ pub struct ResponseRef<'a> {
 	/// The headers of the response.
 	pub headers: Headers<'a>,
 
-	#[serde(skip_serializing_if = "is_extension_or_direct_none")]
-	pub body: ExtensionOrDirect<'a, BufferedBody>,
+	#[serde(skip_serializing_if = "is_body_extension_or_direct_none")]
+	pub body: BodyExtensionOrDirect<'a>,
 }
 
 impl<'a> From<&'a ResponseSnapshot> for ResponseRef<'a> {
@@ -561,7 +636,10 @@ impl<'a> From<&'a ResponseSnapshot> for ResponseRef<'a> {
 		Self {
 			code: value.code.as_u16(),
 			headers: Headers::new(&value.headers),
-			body: value.body.as_ref().into(),
+			body: BodyExtensionOrDirect::Direct {
+				buffered: value.body.as_ref(),
+				recorded: value.recorded_body.as_ref(),
+			},
 		}
 	}
 }
@@ -653,7 +731,10 @@ impl<'a> From<&'a RequestSnapshot> for RequestRef<'a> {
 			scheme: value.scheme.as_ref(),
 			version: value.version,
 			headers: Headers::new(&value.headers),
-			body: value.body.as_ref().into(),
+			body: BodyExtensionOrDirect::Direct {
+				buffered: value.body.as_ref(),
+				recorded: value.recorded_body.as_ref(),
+			},
 			start_time: value.start_time.as_ref().into(),
 			end_time: None,
 		}
@@ -670,7 +751,7 @@ impl<'a, B> From<&'a ::http::Request<B>> for RequestRef<'a> {
 			scheme: req.uri().scheme(),
 			version: req.version(),
 			headers: Headers::new(req.headers()),
-			body: req.extensions().into(),
+			body: BodyExtensionOrDirect::Extension(req.extensions()),
 			start_time: req.extensions().into(),
 			// Only known in snapshot phase...
 			end_time: None,
@@ -683,7 +764,7 @@ impl<'a> From<&'a crate::http::Response> for ResponseRef<'a> {
 		Self {
 			code: resp.status().as_u16(),
 			headers: Headers::new(resp.headers()),
-			body: resp.extensions().into(),
+			body: BodyExtensionOrDirect::Extension(resp.extensions()),
 		}
 	}
 }
@@ -724,6 +805,77 @@ impl DynamicType for BufferedBody {
 
 	fn materialize(&self) -> Value<'_> {
 		Value::Bytes(BytesValue::Bytes(self.0.clone()))
+	}
+}
+
+#[derive(Debug, Clone)]
+pub enum BodyExtensionOrDirect<'a> {
+	Extension(&'a http::Extensions),
+	Direct {
+		buffered: Option<&'a BufferedBody>,
+		recorded: Option<&'a RecordedBodyHandle>,
+	},
+}
+
+impl BodyExtensionOrDirect<'_> {
+	fn buffered(&self) -> Option<&BufferedBody> {
+		match self {
+			BodyExtensionOrDirect::Extension(e) => e.get::<BufferedBody>(),
+			BodyExtensionOrDirect::Direct { buffered, .. } => *buffered,
+		}
+	}
+
+	fn recorded(&self) -> Option<&RecordedBodyHandle> {
+		match self {
+			BodyExtensionOrDirect::Extension(e) => e.get::<RecordedBodyHandle>(),
+			BodyExtensionOrDirect::Direct { recorded, .. } => *recorded,
+		}
+	}
+
+	fn bytes(&self) -> Option<Bytes> {
+		if let Some(buffered) = self.buffered() {
+			Some(buffered.0.clone())
+		} else {
+			self.recorded().map(RecordedBodyHandle::bytes)
+		}
+	}
+
+	fn is_none(&self) -> bool {
+		self.buffered().is_none() && self.recorded().is_none()
+	}
+}
+
+impl Default for BodyExtensionOrDirect<'_> {
+	fn default() -> Self {
+		Self::Direct {
+			buffered: None,
+			recorded: None,
+		}
+	}
+}
+
+impl Serialize for BodyExtensionOrDirect<'_> {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		match self.bytes() {
+			Some(bytes) => BufferedBody(bytes).serialize(serializer),
+			None => serializer.serialize_none(),
+		}
+	}
+}
+
+impl DynamicType for BodyExtensionOrDirect<'_> {
+	fn auto_materialize(&self) -> bool {
+		true
+	}
+
+	fn materialize(&self) -> Value<'_> {
+		match self.bytes() {
+			Some(bytes) => Value::Bytes(BytesValue::Bytes(bytes)),
+			None => Value::Null,
+		}
 	}
 }
 
@@ -1389,7 +1541,10 @@ impl ExecutorSerde {
 				scheme: req.scheme.as_ref(),
 				version: req.version,
 				headers: Headers::new(&req.headers),
-				body: ExtensionOrDirect::Direct(req.body.as_ref()),
+				body: BodyExtensionOrDirect::Direct {
+					buffered: req.body.as_ref(),
+					recorded: None,
+				},
 				start_time: ExtensionOrDirect::Direct(req.start_time.as_ref()),
 				end_time: req.end_time.as_ref(),
 			});
@@ -1400,7 +1555,10 @@ impl ExecutorSerde {
 			exec.response = Some(ResponseRef {
 				code: resp.code,
 				headers: Headers::new(&resp.headers),
-				body: ExtensionOrDirect::Direct(resp.body.as_ref()),
+				body: BodyExtensionOrDirect::Direct {
+					buffered: resp.body.as_ref(),
+					recorded: None,
+				},
 			});
 		}
 		exec.llm_request = self.llm_request.as_ref();
@@ -1460,12 +1618,19 @@ pub fn full_example_executor() -> ExecutorSerde {
 		source: Some(SourceContext {
 			address: "127.0.0.1".parse().unwrap(),
 			port: 12345,
+			raw_address: "127.0.0.1".parse().unwrap(),
+			raw_port: 12345,
 			tls: Some(TlsInfo {
 				identity: None,
 				subject_alt_names: vec!["san".into()],
 				issuer: Default::default(),
 				subject: Default::default(),
 				subject_cn: Some("cn".into()),
+			}),
+			unverified_workload: Some(WorkloadContext {
+				name: "pod-1".into(),
+				namespace: "ns-1".into(),
+				service_account: "sa-1".into(),
 			}),
 		}),
 		jwt: Some(jwt::Claims {

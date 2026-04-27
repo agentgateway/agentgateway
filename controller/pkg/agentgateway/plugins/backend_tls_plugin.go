@@ -1,7 +1,6 @@
 package plugins
 
 import (
-	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,13 +12,14 @@ import (
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/util/sets"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/policyselection"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
@@ -70,20 +70,20 @@ func translatePoliciesForBackendTLS(
 	// Condition reporting for BackendTLSPolicy is tricky. The references are to Service (or other backends), but we report
 	// per-gateway.
 	// This means most of the results are aggregated.
-	conds := map[string]*condition{
+	conds := map[string]*Condition{
 		string(gwv1.PolicyConditionAccepted): {
-			reason:  string(gwv1.PolicyReasonAccepted),
-			message: "Configuration is valid",
+			Reason:  string(gwv1.PolicyReasonAccepted),
+			Message: "Configuration is valid",
 		},
 		string(gwv1.BackendTLSPolicyConditionResolvedRefs): {
-			reason:  string(gwv1.BackendTLSPolicyReasonResolvedRefs),
-			message: "Configuration is valid",
+			Reason:  string(gwv1.BackendTLSPolicyReasonResolvedRefs),
+			Message: "Configuration is valid",
 		},
 	}
 
 	caCert, err := getBackendTLSCACert(krtctx, cfgmaps, btls, conds)
 	if err != nil {
-		conds[string(gwv1.PolicyConditionAccepted)].error = &ConfigError{
+		conds[string(gwv1.PolicyConditionAccepted)].Error = &ConfigError{
 			Reason:  string(gwv1.BackendTLSPolicyReasonNoValidCACertificate),
 			Message: err.Error(),
 		}
@@ -129,16 +129,14 @@ func translatePoliciesForBackendTLS(
 			}
 		}
 
-		backendTLSPoliciesForThisTarget := krt.FetchOne(krtctx, targetIndex, krt.FilterKey(tgtRef.String()))
-		if backendTLSPoliciesForThisTarget != nil {
-			if err := checkConflicted(btls, target, backendTLSPoliciesForThisTarget); err != nil {
-				conds[string(gwv1.PolicyConditionAccepted)].error = &ConfigError{
-					Reason:  string(gwv1.PolicyReasonConflicted),
-					Message: err.Error(),
-				}
-				// We cannot send this policy to agentgateway, as it would not know the priority logic.
-				continue
+		backendTLSPoliciesForThisTarget := krtutil.FetchIndexObjects(krtctx, targetIndex, tgtRef)
+		if err := checkConflicted(btls, target, backendTLSPoliciesForThisTarget); err != nil {
+			conds[string(gwv1.PolicyConditionAccepted)].Error = &ConfigError{
+				Reason:  string(gwv1.PolicyReasonConflicted),
+				Message: err.Error(),
 			}
+			// We cannot send this policy to agentgateway, as it would not know the priority logic.
+			continue
 		}
 
 		switch string(target.Kind) {
@@ -241,9 +239,9 @@ func translatePoliciesForBackendTLS(
 			Kind:  ptr.Of(gwv1.Kind(gvk.KubernetesGateway.Kind)),
 			Name:  gwv1.ObjectName(g.Name),
 		}
-		ancestorStatus = append(ancestorStatus, setAncestorStatus(pr, status, btls.Generation, conds, gwv1.GatewayController(controllerName)))
+		ancestorStatus = append(ancestorStatus, SetAncestorStatus(pr, status, btls.Generation, conds, gwv1.GatewayController(controllerName)))
 	}
-	status.Ancestors = mergeAncestors(controllerName, status.Ancestors, ancestorStatus)
+	status.Ancestors = MergeAncestors(controllerName, status.Ancestors, ancestorStatus)
 	return status, policies
 }
 
@@ -253,9 +251,9 @@ func translatePoliciesForBackendTLS(
 func checkConflicted(
 	btls *gwv1.BackendTLSPolicy,
 	target gwv1.LocalPolicyTargetReferenceWithSectionName,
-	allMatches *krt.IndexObject[utils.TypedNamespacedName, *gwv1.BackendTLSPolicy],
+	allMatches []*gwv1.BackendTLSPolicy,
 ) error {
-	for _, m := range allMatches.Objects {
+	for _, m := range allMatches {
 		if m.UID == btls.UID {
 			// This is ourself, skip it
 			continue
@@ -267,31 +265,11 @@ func checkConflicted(
 			continue
 		}
 		// If the one we match with is higher priority, we are conflicted
-		if comparePolicy(m, btls) {
+		if policyselection.HasHigherPriority(m, btls) {
 			return fmt.Errorf("policy %v matches the same target but with higher priority", m.Name)
 		}
 	}
 	return nil
-}
-
-// comparePolicy compares two objects, and returns true if the first is a higher priority than the second.
-// Priority is determined by creation timestamp and alphabetical order
-func comparePolicy(a, b metav1.Object) bool {
-	ts := a.GetCreationTimestamp().Compare(b.GetCreationTimestamp().Time)
-	if ts < 0 {
-		return true
-	}
-	if ts > 0 {
-		return false
-	}
-	ns := cmp.Compare(a.GetNamespace(), b.GetNamespace())
-	if ns < 0 {
-		return true
-	}
-	if ns > 0 {
-		return false
-	}
-	return a.GetName() < b.GetName()
 }
 
 func targetEqual(a, b gwv1.LocalPolicyTargetReferenceWithSectionName) bool {
@@ -308,7 +286,7 @@ func getBackendTLSCACert(
 	krtctx krt.HandlerContext,
 	cfgmaps krt.Collection[*corev1.ConfigMap],
 	btls *gwv1.BackendTLSPolicy,
-	conds map[string]*condition,
+	conds map[string]*Condition,
 ) ([]byte, error) {
 	validation := btls.Spec.Validation
 	if wk := validation.WellKnownCACertificates; wk != nil {
@@ -317,7 +295,7 @@ func getBackendTLSCACert(
 			return nil, nil
 
 		default:
-			conds[string(gwv1.PolicyConditionAccepted)].error = &ConfigError{
+			conds[string(gwv1.PolicyConditionAccepted)].Error = &ConfigError{
 				Reason:  string(gwv1.PolicyReasonInvalid),
 				Message: fmt.Sprintf("Unknown wellKnownCACertificates: %v", *wk),
 			}
@@ -334,7 +312,7 @@ func getBackendTLSCACert(
 	var sb strings.Builder
 	for _, ref := range validation.CACertificateRefs {
 		if ref.Group != gwv1.Group(wellknown.ConfigMapGVK.Group) || ref.Kind != gwv1.Kind(wellknown.ConfigMapGVK.Kind) {
-			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].error = &ConfigError{
+			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].Error = &ConfigError{
 				Reason:  string(gwv1.BackendTLSPolicyReasonInvalidKind),
 				Message: "Certificate reference invalid: " + string(ref.Kind),
 			}
@@ -346,7 +324,7 @@ func getBackendTLSCACert(
 		}
 		cfgmap := krt.FetchOne(krtctx, cfgmaps, krt.FilterObjectName(nn))
 		if cfgmap == nil {
-			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].error = &ConfigError{
+			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].Error = &ConfigError{
 				Reason:  string(gwv1.BackendTLSPolicyReasonInvalidCACertificateRef),
 				Message: "Certificate reference not found",
 			}
@@ -354,7 +332,7 @@ func getBackendTLSCACert(
 		}
 		caCert, err := GetCACertFromConfigMap(ptr.Flatten(cfgmap))
 		if err != nil {
-			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].error = &ConfigError{
+			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].Error = &ConfigError{
 				Reason:  string(gwv1.BackendTLSPolicyReasonInvalidCACertificateRef),
 				Message: "Certificate invalid: " + err.Error(),
 			}

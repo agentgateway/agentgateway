@@ -47,6 +47,27 @@ impl RewindSocket {
 	pub fn discard(self) -> SocketType {
 		self.io
 	}
+
+	/// Keep only the unread suffix of the bytes observed so far and replay it on the
+	/// next reads.
+	pub fn keep_after(mut self, consumed: usize) -> Self {
+		match std::mem::replace(&mut self.state, State::Draining(None)) {
+			State::Filling(buffer) => {
+				assert!(
+					consumed <= buffer.len(),
+					"keep_after({consumed}) exceeds buffered length {}",
+					buffer.len()
+				);
+				let mut remaining = buffer.freeze();
+				remaining.advance(consumed);
+				self.state = State::Draining((!remaining.is_empty()).then_some(remaining));
+				self
+			},
+			State::Draining(_) => {
+				panic!("keep_after() may only be called before rewind()")
+			},
+		}
+	}
 }
 
 pub enum State {

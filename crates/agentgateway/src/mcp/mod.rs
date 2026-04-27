@@ -11,11 +11,8 @@ mod upstream;
 use std::fmt::{Display, Write};
 use std::io;
 use std::sync::Arc;
+use std::time::Duration;
 
-#[cfg(feature = "schema")]
-use crate::JsonSchema;
-use crate::http::SendDirectResponse;
-use crate::proxy::ProxyError;
 use axum_core::BoxError;
 use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
@@ -23,6 +20,11 @@ use rmcp::model::RequestId;
 pub use router::App;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+#[cfg(feature = "schema")]
+use crate::JsonSchema;
+use crate::http::SendDirectResponse;
+use crate::proxy::ProxyError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -38,6 +40,8 @@ pub enum FailureMode {
 	FailOpen,
 }
 
+pub(crate) const DEFAULT_SESSION_IDLE_TTL: Duration = Duration::from_mins(30);
+
 #[cfg(test)]
 #[path = "mcp_tests.rs"]
 mod tests;
@@ -48,6 +52,8 @@ pub enum Error {
 	MethodNotAllowed,
 	#[error("client must accept both application/json and text/event-stream")]
 	InvalidAccept,
+	#[error("client must accept text/event-stream")]
+	InvalidAcceptGet,
 	#[error("client must send application/json")]
 	InvalidContentType,
 	#[error("fail to deserialize request body: {0}")]

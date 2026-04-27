@@ -16,7 +16,7 @@ use crate::telemetry::trc;
 use crate::types::discovery::{Identity, WaypointIdentity};
 use crate::{
 	Address, Config, ConfigSource, DnsLookupFamily, NestedRawConfig, RawLoggingLevel, StringOrInt,
-	ThreadingMode, XDSConfig, cel, client, serdes, telemetry,
+	ThreadingMode, XDSConfig, cel, client, serdes, telemetry, types,
 };
 
 pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Result<Config> {
@@ -167,6 +167,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				anyhow::bail!("auth token {p} not found")
 			},
 		};
+		let ca_headers = parse_headers("CA_HEADER_");
 		let ca_cert = parse_default(
 			"CA_ROOT_CA",
 			"./var/run/secrets/istio/root-cert.pem".to_string(),
@@ -179,6 +180,21 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		} else {
 			crate::control::RootCert::Default
 		};
+		// Build the allowed trust domains list. The local trust domain is always first.
+		// ADDITIONAL_TRUST_DOMAINS is a comma-separated list of extra domains to accept.
+		let mut allowed_trust_domains: Vec<Strng> = vec![td.clone().into()];
+		let additional = parse("ADDITIONAL_TRUST_DOMAINS")?
+			.or(raw.additional_trust_domains)
+			.unwrap_or_default();
+		for domain in additional.split(',') {
+			let domain = domain.trim();
+			if !domain.is_empty() {
+				allowed_trust_domains.push(domain.into());
+			}
+		}
+		let skip_validate_trust_domain = parse::<bool>("SKIP_VALIDATE_TRUST_DOMAIN")?
+			.or(raw.skip_validate_trust_domain)
+			.unwrap_or(false);
 		Some(caclient::Config {
 			address: addr,
 			secret_ttl: Duration::from_secs(86400),
@@ -187,14 +203,65 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				namespace: ns.into(),
 				service_account: sa.into(),
 			},
-
 			auth,
 			ca_cert: ca_root_cert,
+			ca_headers: ca_headers?,
+			allowed_trust_domains: allowed_trust_domains.into(),
+			skip_validate_trust_domain,
 		})
 	} else {
 		None
 	};
 	let network = parse("NETWORK")?.or(raw.network).unwrap_or_default();
+
+	// Self-identity for locality-aware load balancing.
+	// Priority:
+	//  1. Operator explicitly set LOCALITY -> Static. This is the one field WDS would otherwise
+	//     fill in from the node, so it's the only real "override" signal. NETWORK and NODE_NAME
+	//     are commonly set by istio-ambient/downward-API in normal k8s deploys and must not
+	//     bypass WDS.
+	//  2. POD_NAME+NAMESPACE known -> WDS. Standard k8s case: the control plane delivers our
+	//     own Workload with locality derived from the node we're scheduled on.
+	//  3. No pod identity but some env (NODE_NAME / NETWORK) -> Static with what we have.
+	//     Covers non-pod deploys where WDS self-lookup isn't possible.
+	let locality_env = parse::<String>("LOCALITY")?;
+	let node_env =
+		empty_to_none(Some(ENV.node_name.clone())).or_else(|| parse("NODE_NAME").ok().flatten());
+	let pod_name =
+		empty_to_none(Some(ENV.pod_name.clone())).or_else(|| parse("POD_NAME").ok().flatten());
+	let pod_namespace =
+		empty_to_none(Some(ENV.pod_namespace.clone())).or_else(|| parse("NAMESPACE").ok().flatten());
+
+	let build_static = || types::discovery::Workload {
+		name: pod_name.clone().unwrap_or_default().into(),
+		namespace: pod_namespace.clone().unwrap_or_default().into(),
+		network: network.clone().into(),
+		node: node_env.clone().unwrap_or_default().into(),
+		cluster_id: cluster.clone().into(),
+		locality: locality_env
+			.as_deref()
+			.map(types::discovery::Locality::parse)
+			.unwrap_or_default(),
+		..Default::default()
+	};
+
+	let self_identity = if locality_env.is_some() {
+		Some(types::discovery::SelfIdentitySource::Static(Arc::new(
+			build_static(),
+		)))
+	} else if let (Some(name), Some(ns)) = (pod_name.clone(), pod_namespace.clone()) {
+		Some(types::discovery::SelfIdentitySource::Wds {
+			name: name.into(),
+			namespace: ns.into(),
+			cluster_id: cluster.clone().into(),
+		})
+	} else if node_env.is_some() || !network.is_empty() {
+		Some(types::discovery::SelfIdentitySource::Static(Arc::new(
+			build_static(),
+		)))
+	} else {
+		None
+	};
 	let termination_min_deadline = parse_duration("CONNECTION_MIN_TERMINATION_DEADLINE")?
 		.or(raw.connection_min_termination_deadline)
 		.unwrap_or_default();
@@ -256,7 +323,8 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 
 	Ok(crate::Config {
 		ipv6_enabled,
-		network: network.into(),
+		network: network.clone().into(),
+		self_identity,
 		admin_addr,
 		stats_addr,
 		readiness_addr,
@@ -407,6 +475,13 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			node_name: ENV.node_name.clone(),
 			role: ENV.role.clone(),
 			node_id: ENV.node_id.clone(),
+		},
+		mcp: crate::McpConfig {
+			session_ttl: raw
+				.mcp
+				.as_ref()
+				.and_then(|m| m.session_ttl)
+				.unwrap_or(crate::mcp::DEFAULT_SESSION_IDLE_TTL),
 		},
 		session_encoder,
 		oidc_cookie_encoder,
@@ -577,16 +652,16 @@ fn resolve_dns_config(
 ) {
 	let resolved_cfg = if cfg.name_servers().is_empty() {
 		warn!(
-			"no DNS nameservers found in system config, using defaults. /etc/hosts entries will still be resolved"
+			"no DNS nameservers found in system config, using Google Public DNS defaults. /etc/hosts entries will still be resolved"
 		);
-		hickory_resolver::config::ResolverConfig::default()
+		hickory_resolver::config::ResolverConfig::udp_and_tcp(&hickory_resolver::config::GOOGLE)
 	} else {
 		cfg
 	};
 	let nameservers: Vec<_> = resolved_cfg
 		.name_servers()
 		.iter()
-		.map(|ns| ns.to_string())
+		.map(|ns| format!("{:?}", ns))
 		.collect();
 
 	let ip_strategy = dns_lookup_family.to_lookup_strategy(ipv6_enabled);
@@ -617,11 +692,116 @@ fn get_cpu_count() -> anyhow::Result<usize> {
 	}
 }
 
+fn parse_headers(prefix: &str) -> Result<Vec<(String, String)>, anyhow::Error> {
+	let mut headers = Vec::new();
+
+	for (key, value) in env::vars() {
+		let stripped_key: Option<&str> = key.strip_prefix(prefix);
+		match stripped_key {
+			Some(stripped_key) => {
+				// Env vars are typically uppercase and often use `_` instead of `-`.
+				// Normalize the suffix after `prefix` so values like
+				// `CA_HEADER_AUTHORIZATION` and `CA_HEADER_X_CUSTOM_HEADER`
+				// map to valid header names such as `authorization` and
+				// `x-custom-header`.
+				let normalized_key = stripped_key.to_ascii_lowercase().replace('_', "-");
+				// attempt to parse the normalized key
+				let metadata_key = http::header::HeaderName::from_str(&normalized_key)
+					.map_err(|_| anyhow::anyhow!("invalid header key: {}", key))?;
+				// attempt to parse the value
+				http::HeaderValue::from_str(&value)
+					.map_err(|_| anyhow::anyhow!("invalid header value: {}", value))?;
+				headers.push((metadata_key.to_string(), value));
+			},
+			None => continue,
+		}
+	}
+
+	Ok(headers)
+}
+
+#[cfg(test)]
+mod parse_headers_tests {
+	use std::env;
+	use std::ffi::OsString;
+	use std::sync::{LazyLock, Mutex};
+
+	use super::*;
+
+	static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+	struct TempEnvVar {
+		key: String,
+		previous: Option<OsString>,
+	}
+
+	impl TempEnvVar {
+		fn set(key: &str, value: &str) -> Self {
+			let previous = env::var_os(key);
+			unsafe {
+				env::set_var(key, value);
+			}
+			Self {
+				key: key.to_string(),
+				previous,
+			}
+		}
+	}
+
+	impl Drop for TempEnvVar {
+		fn drop(&mut self) {
+			match &self.previous {
+				Some(value) => unsafe {
+					env::set_var(&self.key, value);
+				},
+				None => unsafe {
+					env::remove_var(&self.key);
+				},
+			}
+		}
+	}
+
+	#[test]
+	fn test_parse_headers_valid_header_and_normalizes_name() {
+		let _guard = ENV_LOCK.lock().expect("env mutex poisoned");
+		let _header = TempEnvVar::set("TEST_PARSE_HEADERS_X-Test-Header", "header-value");
+
+		let headers = parse_headers("TEST_PARSE_HEADERS_").expect("header parsing should succeed");
+
+		assert!(headers.contains(&("x-test-header".to_string(), "header-value".to_string())));
+	}
+
+	#[test]
+	fn test_parse_headers_rejects_invalid_header_key() {
+		let _guard = ENV_LOCK.lock().expect("env mutex poisoned");
+		let _header = TempEnvVar::set("TEST_PARSE_HEADERS_Bad@Header", "header-value");
+
+		let err = parse_headers("TEST_PARSE_HEADERS_").expect_err("invalid header key should fail");
+
+		assert!(
+			err
+				.to_string()
+				.contains("invalid header key: TEST_PARSE_HEADERS_Bad@Header")
+		);
+	}
+
+	#[test]
+	fn test_parse_headers_rejects_invalid_header_value() {
+		let _guard = ENV_LOCK.lock().expect("env mutex poisoned");
+		let _header = TempEnvVar::set("TEST_PARSE_HEADERS_X-Test-Header", "bad\nvalue");
+
+		let err = parse_headers("TEST_PARSE_HEADERS_").expect_err("invalid header value should fail");
+
+		assert!(err.to_string().contains("invalid header value: bad\nvalue"));
+	}
+}
+
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use std::env;
 	use std::sync::{LazyLock, Mutex};
+
+	use super::*;
 
 	static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
@@ -727,11 +907,7 @@ config:
 
 	#[test]
 	fn resolve_dns_config_uses_defaults_when_nameservers_empty() {
-		let empty_cfg = hickory_resolver::config::ResolverConfig::from_parts(
-			None,
-			vec![],
-			hickory_resolver::config::NameServerConfigGroup::new(),
-		);
+		let empty_cfg = hickory_resolver::config::ResolverConfig::from_parts(None, vec![], vec![]);
 		let mut custom_opts = hickory_resolver::config::ResolverOpts::default();
 		custom_opts.ndots = 42;
 
@@ -752,7 +928,8 @@ config:
 
 	#[test]
 	fn resolve_dns_config_keeps_valid_config() {
-		let valid_cfg = hickory_resolver::config::ResolverConfig::default();
+		let valid_cfg =
+			hickory_resolver::config::ResolverConfig::udp_and_tcp(&hickory_resolver::config::GOOGLE);
 		let mut custom_opts = hickory_resolver::config::ResolverOpts::default();
 		custom_opts.ndots = 7;
 

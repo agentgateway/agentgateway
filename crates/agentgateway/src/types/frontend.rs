@@ -1,7 +1,6 @@
 use std::time::Duration;
 
-use frozen_collections::FzHashSet;
-use frozen_collections::Len;
+use frozen_collections::{FzHashSet, Len};
 use serde::{Deserialize, Serialize};
 
 use crate::telemetry::log::OrderedStringMap;
@@ -60,6 +59,14 @@ pub struct HTTP {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	#[serde(default)]
 	pub http2_keepalive_timeout: Option<Duration>,
+
+	/// Maximum duration a connection is allowed to remain open. After this duration,
+	/// the connection is gracefully closed after the current in-flight request completes.
+	/// Useful for ensuring even traffic distribution behind load balancers during scaling events.
+	#[serde(with = "serde_dur_option")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	#[serde(default)]
+	pub max_connection_duration: Option<Duration>,
 }
 
 impl Default for HTTP {
@@ -76,6 +83,8 @@ impl Default for HTTP {
 
 			http2_keepalive_interval: None,
 			http2_keepalive_timeout: None,
+
+			max_connection_duration: None,
 		}
 	}
 }
@@ -112,6 +121,52 @@ impl Default for TLS {
 #[apply(schema!)]
 pub struct TCP {
 	pub keepalives: super::agent::KeepaliveConfig,
+}
+
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum ProxyVersion {
+	V1,
+	#[default]
+	V2,
+	All,
+}
+
+impl ProxyVersion {
+	pub fn allows_v1(self) -> bool {
+		matches!(self, Self::V1 | Self::All)
+	}
+
+	pub fn allows_v2(self) -> bool {
+		matches!(self, Self::V2 | Self::All)
+	}
+}
+
+impl std::fmt::Display for ProxyVersion {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::V1 => f.write_str("v1"),
+			Self::V2 => f.write_str("v2"),
+			Self::All => f.write_str("all"),
+		}
+	}
+}
+
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum ProxyMode {
+	#[default]
+	Strict,
+	Optional,
+}
+
+#[apply(schema!)]
+#[derive(Default, PartialEq, Eq)]
+pub struct Proxy {
+	#[serde(default)]
+	pub version: ProxyVersion,
+	#[serde(default)]
+	pub mode: ProxyMode,
 }
 
 #[apply(schema!)]

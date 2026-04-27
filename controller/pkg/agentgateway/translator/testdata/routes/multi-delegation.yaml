@@ -1,0 +1,225 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: parent
+  namespace: default
+spec:
+  parentRefs:
+  - name: test-gateway
+  hostnames:
+  - delegation.example
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team1
+    backendRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: "*"
+      namespace: team1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: child-team1-foo
+  namespace: team1
+spec:
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team1/foo
+    backendRefs:
+    - name: httpbin
+      port: 8000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: child-team1-bar-baz
+  namespace: team1
+spec:
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team1/baz
+    backendRefs:
+    - name: httpbin
+      port: 8000
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team1/bar
+    backendRefs:
+    - name: httpbin
+      port: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: httpbin
+  namespace: team1
+spec:
+  ports:
+  - port: 8000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: child-team2
+  namespace: team2
+spec:
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team2/foo
+    backendRefs:
+    - name: httpbin
+      port: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: httpbin
+  namespace: team2
+spec:
+  ports:
+  - port: 8000
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - routeGroupKey: team1/*
+        weight: 1
+      hostnames:
+      - delegation.example
+      key: default/parent.00.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          pathPrefix: /anything/team1
+      name:
+        kind: HTTPRoute
+        name: parent
+        namespace: default
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8000
+          service:
+            hostname: httpbin.team1.svc.cluster.local
+            namespace: team1
+        weight: 1
+      key: team1/child-team1-bar-baz.00.routegroup.team1.wildcard
+      matches:
+      - path:
+          pathPrefix: /anything/team1/baz
+      name:
+        kind: HTTPRoute
+        name: child-team1-bar-baz
+        namespace: team1
+      routeGroupKey: team1/*
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8000
+          service:
+            hostname: httpbin.team1.svc.cluster.local
+            namespace: team1
+        weight: 1
+      key: team1/child-team1-bar-baz.01.routegroup.team1.wildcard
+      matches:
+      - path:
+          pathPrefix: /anything/team1/bar
+      name:
+        kind: HTTPRoute
+        name: child-team1-bar-baz
+        namespace: team1
+      routeGroupKey: team1/*
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8000
+          service:
+            hostname: httpbin.team1.svc.cluster.local
+            namespace: team1
+        weight: 1
+      key: team1/child-team1-foo.00.routegroup.team1.wildcard
+      matches:
+      - path:
+          pathPrefix: /anything/team1/foo
+      name:
+        kind: HTTPRoute
+        name: child-team1-foo
+        namespace: team1
+      routeGroupKey: team1/*
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: parent
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: child-team1-bar-baz
+    namespace: team1
+  spec: null
+  status:
+    parents: []
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: child-team1-foo
+    namespace: team1
+  spec: null
+  status:
+    parents: []
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: child-team2
+    namespace: team2
+  spec: null
+  status:
+    parents: []

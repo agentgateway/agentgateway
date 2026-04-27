@@ -1,14 +1,16 @@
-use super::*;
-use crate::cel::{RequestSnapshot, SourceContext};
-use crate::http::authorization::PolicySet;
-use crate::http::{jwt, Body};
-use crate::mcp::{MCPInfo, ResourceId, ResourceType};
+use std::net::{IpAddr, Ipv4Addr};
+
+use ::http::Method;
 #[cfg(test)]
 use assert_matches::assert_matches;
 use divan::Bencher;
-use http::Method;
 use serde_json::json;
-use std::net::{IpAddr, Ipv4Addr};
+
+use super::*;
+use crate::cel::{RequestSnapshot, SourceContext};
+use crate::http::authorization::PolicySet;
+use crate::http::{Body, jwt};
+use crate::mcp::{MCPInfo, ResourceId, ResourceType};
 
 fn create_policy_set(policies: Vec<&str>) -> PolicySet {
 	let mut policy_set = PolicySet::default();
@@ -184,7 +186,10 @@ fn test_network_authorization_allows_source_cidr() {
 	let source = SourceContext {
 		address: IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)),
 		port: 15000,
+		raw_address: IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)),
+		raw_port: 15000,
 		tls: None,
+		unverified_workload: None,
 	};
 
 	assert_matches!(network_authz.apply(&source), Ok(()));
@@ -202,7 +207,10 @@ fn test_network_authorization_deny_takes_precedence() {
 	let source = SourceContext {
 		address: IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)),
 		port: 15000,
+		raw_address: IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)),
+		raw_port: 15000,
 		tls: None,
+		unverified_workload: None,
 	};
 
 	assert_matches!(network_authz.apply(&source), Err(_));

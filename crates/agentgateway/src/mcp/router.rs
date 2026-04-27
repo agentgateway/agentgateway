@@ -1,19 +1,17 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use agent_core::prelude::Strng;
 use axum::response::Response;
 
-use crate::ProxyInputs;
 use crate::http::authorization::RuleSets;
 use crate::http::sessionpersistence::Encoder;
 use crate::http::*;
-use crate::mcp::FailureMode;
-use crate::mcp::auth;
 use crate::mcp::handler::RelayInputs;
 use crate::mcp::session::SessionManager;
 use crate::mcp::sse::LegacySSEService;
 use crate::mcp::streamablehttp::{StreamableHttpServerConfig, StreamableHttpService};
-use crate::mcp::{MCPInfo, McpAuthorizationSet};
+use crate::mcp::{FailureMode, MCPInfo, McpAuthorizationSet, auth};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::{MustSnapshot, PolicyClient};
 use crate::store::{BackendPolicies, Stores};
@@ -21,6 +19,7 @@ use crate::telemetry::log::RequestLog;
 use crate::types::agent::{
 	BackendTargetRef, McpBackend, McpTargetSpec, ResourceName, SimpleBackend, SimpleBackendReference,
 };
+use crate::{ProxyInputs, mcp};
 
 #[derive(Debug, Clone)]
 pub struct App {
@@ -30,7 +29,7 @@ pub struct App {
 
 impl App {
 	pub fn new(state: Stores, encoder: Encoder) -> Self {
-		let session: Arc<SessionManager> = Arc::new(crate::mcp::session::SessionManager::new(encoder));
+		let session = crate::mcp::session::SessionManager::new(encoder);
 		Self { state, session }
 	}
 
@@ -87,6 +86,7 @@ impl App {
 					let backend_policies = backend_policies
 						.clone()
 						.merge(binds.sub_backend_policies(sub_backend_target, inline_pols));
+					tracing::trace!("merged policies {:?}", backend_policies);
 					Ok::<_, ProxyError>(Arc::new(McpTarget {
 						name: t.name.clone(),
 						spec: t.spec.clone(),
@@ -101,9 +101,11 @@ impl App {
 				targets: nt,
 				stateful: backend.stateful,
 				failure_mode: backend.failure_mode,
+				session_idle_ttl: backend.session_idle_ttl,
 			}
 		};
-		let sm = self.session.clone();
+		let sessions = self.session.clone();
+		sessions.ensure_idle_running();
 		let client = PolicyClient { inputs: pi.clone() };
 		let authorization_policies = backend_policies
 			.mcp_authorization
@@ -135,7 +137,7 @@ impl App {
 		if req.uri().path() == "/sse" {
 			// Legacy handling
 			// Assume this is streamable HTTP otherwise
-			let sse = LegacySSEService::new(sm);
+			let sse = LegacySSEService::new(sessions);
 			Box::pin(sse.handle(
 				req,
 				RelayInputs {
@@ -147,7 +149,7 @@ impl App {
 			.await
 		} else {
 			let streamable = StreamableHttpService::new(
-				sm,
+				sessions,
 				StreamableHttpServerConfig {
 					stateful_mode: backend.stateful,
 				},
@@ -170,6 +172,18 @@ pub struct McpBackendGroup {
 	pub targets: Vec<Arc<McpTarget>>,
 	pub stateful: bool,
 	pub failure_mode: FailureMode,
+	pub session_idle_ttl: Duration,
+}
+
+impl Default for McpBackendGroup {
+	fn default() -> Self {
+		Self {
+			targets: vec![],
+			stateful: true,
+			failure_mode: crate::mcp::FailureMode::default(),
+			session_idle_ttl: mcp::DEFAULT_SESSION_IDLE_TTL,
+		}
+	}
 }
 
 #[derive(Debug)]

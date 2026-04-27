@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 
 use ::http::StatusCode;
 use ::http::header::CONTENT_TYPE;
@@ -11,7 +12,8 @@ use futures_util::StreamExt;
 use headers::HeaderMapExt;
 use rmcp::model::{
 	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, Implementation,
-	ProtocolVersion, RequestId, ServerJsonRpcMessage,
+	InitializeRequest, JsonRpcRequest, ProtocolVersion, RequestId, RootsCapabilities,
+	ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE};
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
@@ -34,6 +36,15 @@ pub struct Session {
 	tx: Option<Sender<ServerJsonRpcMessage>>,
 }
 
+#[derive(Debug, Clone)]
+struct SessionEntry {
+	session: Session,
+	last_access: Instant,
+	idle_ttl: Duration,
+}
+
+const SESSION_REAP_INTERVAL: Duration = Duration::from_secs(30);
+
 impl Session {
 	/// send a message to upstream server(s)
 	pub async fn send(
@@ -47,6 +58,7 @@ impl Session {
 		};
 		Self::handle_error(req_id, self.send_internal(parts, message).await).await
 	}
+
 	/// send a message to upstream server(s), when using stateless mode. In stateless mode, every message
 	/// is wrapped in an InitializeRequest (except the actual InitializeRequest from the downstream).
 	/// This ensures servers that require an InitializeRequest behave correctly.
@@ -56,28 +68,68 @@ impl Session {
 		parts: Parts,
 		message: ClientJsonRpcMessage,
 	) -> Result<Response, ProxyError> {
-		let is_init = matches!(&message, ClientJsonRpcMessage::Request(r) if matches!(&r.request, &ClientRequest::InitializeRequest(_)));
+		let (req_id, request_type) = match &message {
+			ClientJsonRpcMessage::Request(r) => (Some(r.id.clone()), Some(&r.request)),
+			_ => (None, None),
+		};
+		let is_init = request_type.is_some_and(|r| matches!(r, ClientRequest::InitializeRequest(_)));
 		if !is_init {
-			// first, send the initialize
 			let init_request = rmcp::model::InitializeRequest::new(get_client_info());
-			let _ = self
-				.send(
-					parts.clone(),
-					ClientJsonRpcMessage::request(init_request.into(), RequestId::Number(0)),
-				)
-				.await?;
-
-			// And we need to notify as well.
-			let notification = ClientJsonRpcMessage::notification(
-				rmcp::model::InitializedNotification {
-					method: Default::default(),
-					extensions: Default::default(),
-				}
-				.into(),
-			);
-			let _ = self.send(parts.clone(), notification).await?;
+			// first, determine how widely to send the initialize
+			match request_type {
+				Some(ClientRequest::CallToolRequest(_)) | Some(ClientRequest::GetPromptRequest(_)) => {
+					// Single-target methods only hit one backend, so initialize/initialized should be scoped
+					// to that backend rather than fanning out.
+					let name = match request_type {
+						Some(ClientRequest::CallToolRequest(ctr)) => ctr.params.name.to_string(),
+						Some(ClientRequest::GetPromptRequest(gpr)) => gpr.params.name.clone(),
+						_ => unreachable!("match arm guarantees single-target request type"),
+					};
+					let (service_name, _) = match self.relay.parse_resource_name(&name) {
+						Ok(target) => target,
+						Err(err) => return Self::handle_error(req_id.clone(), Err(err)).await,
+					};
+					let res = self
+						.send_init_single(parts.clone(), init_request, service_name)
+						.await;
+					if let Some(sessions) = self.relay.get_sessions() {
+						let s = http::sessionpersistence::SessionState::MCP(
+							http::sessionpersistence::MCPSessionState::new(sessions),
+						);
+						if let Ok(id) = s.encode(&self.encoder) {
+							self.id = id.into();
+						}
+					}
+					Self::handle_error(Some(RequestId::Number(0)), res).await?;
+					// Now send the initialized notification
+					let _ = Self::handle_error(
+						None,
+						self
+							.send_initialized_notification_single(parts.clone(), service_name)
+							.await,
+					)
+					.await?;
+				},
+				_ => {
+					// We should fan out the initialize request to all MCP servers
+					let _ = self
+						.send(
+							parts.clone(),
+							ClientJsonRpcMessage::request(init_request.into(), RequestId::Number(0)),
+						)
+						.await?;
+					let notification = ClientJsonRpcMessage::notification(
+						rmcp::model::InitializedNotification {
+							method: Default::default(),
+							extensions: Default::default(),
+						}
+						.into(),
+					);
+					let _ = self.send(parts.clone(), notification).await?;
+				},
+			}
 		}
-		// Now we can send the message like normal
+		// Now we can send the message like normal (if it's tools/call, it'll go to the initialized target)
 		self.send(parts, message).await
 	}
 
@@ -179,6 +231,57 @@ impl Session {
 		}
 	}
 
+	async fn send_init_single(
+		&self,
+		parts: Parts,
+		mut init_request: InitializeRequest,
+		service_name: &str,
+	) -> Result<Response, UpstreamError> {
+		let method = init_request.method.as_str().to_string();
+		let ctx = IncomingRequestContext::new(&parts);
+		let (_, log, _) = mcp::handler::setup_request_log(parts, &method);
+		let session_id = self.id.to_string();
+		log.non_atomic_mutate(|l| {
+			l.method_name = Some(method.clone());
+			l.session_id = Some(session_id);
+		});
+
+		init_request.params.capabilities.roots = self.get_roots_capabilities();
+		self
+			.relay
+			.send_single(
+				JsonRpcRequest::new(RequestId::Number(0), init_request.into()),
+				ctx,
+				service_name,
+				Some(log),
+			)
+			.await
+	}
+
+	async fn send_initialized_notification_single(
+		&self,
+		parts: Parts,
+		service_name: &str,
+	) -> Result<Response, UpstreamError> {
+		let initialized = rmcp::model::InitializedNotification {
+			method: Default::default(),
+			extensions: Default::default(),
+		};
+		let method = initialized.method.as_str().to_string();
+		let ctx = IncomingRequestContext::new(&parts);
+		let (_, log, _) = mcp::handler::setup_request_log(parts, &method);
+		let session_id = self.id.to_string();
+		log.non_atomic_mutate(|l| {
+			l.method_name = Some(method.clone());
+			l.session_id = Some(session_id);
+		});
+
+		self
+			.relay
+			.send_notification_single(initialized.into(), ctx, service_name)
+			.await
+	}
+
 	async fn send_internal(
 		&mut self,
 		parts: Parts,
@@ -208,7 +311,7 @@ impl Session {
 						// Instead, we hijack this to tell them not to so they do not send requests that we cannot
 						// actually support
 						// This could probably be more easily done without multiplexing but for now neither supports.
-						ir.params.capabilities.roots = None;
+						ir.params.capabilities.roots = self.get_roots_capabilities();
 
 						let pv = ir.params.protocol_version.clone();
 						let res = self
@@ -237,6 +340,8 @@ impl Session {
 							.send_fanout(r, ctx, self.relay.merge_tools(cel))
 							.await
 					},
+					// TODO(keithmattix): should we forward pings or should we do our own independent pings
+					// as heuristic for the connection pool (and handle client pings as a local reply from agentgateway)?
 					ClientRequest::PingRequest(_) | ClientRequest::SetLevelRequest(_) => {
 						self
 							.relay
@@ -250,18 +355,10 @@ impl Session {
 							.await
 					},
 					ClientRequest::ListResourcesRequest(_) => {
-						if !self.relay.is_multiplexing() {
-							self
-								.relay
-								.send_fanout(r, ctx, self.relay.merge_resources(cel))
-								.await
-						} else {
-							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-							// Find a mapping of URL
-							Err(UpstreamError::InvalidMethodWithMultiplexing(
-								r.request.method().to_string(),
-							))
-						}
+						self
+							.relay
+							.send_fanout(r, ctx, self.relay.merge_resources(cel))
+							.await
 					},
 					ClientRequest::ListResourceTemplatesRequest(_) => {
 						if !self.relay.is_multiplexing() {
@@ -405,12 +502,17 @@ impl Session {
 			)),
 		}
 	}
+
+	fn get_roots_capabilities(&self) -> Option<RootsCapabilities> {
+		None
+	}
 }
 
 #[derive(Debug)]
 pub struct SessionManager {
 	encoder: http::sessionpersistence::Encoder,
-	sessions: RwLock<HashMap<String, Session>>,
+	sessions: Arc<RwLock<HashMap<String, SessionEntry>>>,
+	idle_reaper: OnceLock<tokio::task::AbortHandle>,
 }
 
 fn session_id() -> Arc<str> {
@@ -418,23 +520,25 @@ fn session_id() -> Arc<str> {
 }
 
 impl SessionManager {
-	pub fn new(encoder: http::sessionpersistence::Encoder) -> Self {
-		Self {
+	pub fn new(encoder: http::sessionpersistence::Encoder) -> Arc<Self> {
+		Arc::new(Self {
 			encoder,
-			sessions: Default::default(),
-		}
+			sessions: Arc::new(RwLock::new(HashMap::new())),
+			idle_reaper: OnceLock::new(),
+		})
+	}
+
+	pub fn ensure_idle_running(&self) {
+		self
+			.idle_reaper
+			.get_or_init(|| tokio::spawn(run_idle_reaper(self.sessions.clone())).abort_handle());
 	}
 
 	pub fn get_session(&self, id: &str, builder: RelayInputs) -> Option<Session> {
-		Some(
-			self
-				.sessions
-				.read()
-				.ok()?
-				.get(id)
-				.cloned()?
-				.with_inputs(builder),
-		)
+		let mut sessions = self.sessions.write().ok()?;
+		let entry = sessions.get_mut(id)?;
+		entry.last_access = Instant::now();
+		Some(entry.session.clone().with_inputs(builder))
 	}
 
 	pub fn get_or_resume_session(
@@ -442,9 +546,11 @@ impl SessionManager {
 		id: &str,
 		builder: RelayInputs,
 	) -> Result<Option<Session>, mcp::Error> {
-		if let Some(s) = self.sessions.read().expect("poisoned").get(id).cloned() {
-			return Ok(Some(s.with_inputs(builder)));
+		if let Some(s) = self.sessions.write().expect("poisoned").get_mut(id) {
+			s.last_access = Instant::now();
+			return Ok(Some(s.session.clone().with_inputs(builder)));
 		}
+		let idle_ttl = builder.backend.session_idle_ttl;
 		let d = http::sessionpersistence::SessionState::decode(id, &self.encoder)
 			.map_err(|_| mcp::Error::InvalidSessionIdHeader)?;
 		let http::sessionpersistence::SessionState::MCP(state) = d else {
@@ -463,7 +569,14 @@ impl SessionManager {
 			encoder: self.encoder.clone(),
 		};
 		let mut sm = self.sessions.write().expect("write lock");
-		sm.insert(id.to_string(), sess.clone());
+		sm.insert(
+			id.to_string(),
+			SessionEntry {
+				session: sess.clone(),
+				last_access: Instant::now(),
+				idle_ttl,
+			},
+		);
 		Ok(Some(sess))
 	}
 
@@ -480,9 +593,16 @@ impl SessionManager {
 		}
 	}
 
-	pub fn insert_session(&self, sess: Session) {
+	pub fn insert_session(&self, sess: Session, idle_ttl: Duration) {
 		let mut sm = self.sessions.write().expect("write lock");
-		sm.insert(sess.id.to_string(), sess);
+		sm.insert(
+			sess.id.to_string(),
+			SessionEntry {
+				session: sess,
+				last_access: Instant::now(),
+				idle_ttl,
+			},
+		);
 	}
 
 	/// create_stateless_session creates a session for stateless mode.
@@ -501,7 +621,11 @@ impl SessionManager {
 
 	/// create_legacy_session establishes a legacy SSE session.
 	/// These will have the ability to send messages to them via a channel.
-	pub fn create_legacy_session(&self, relay: Relay) -> (Session, Receiver<ServerJsonRpcMessage>) {
+	pub fn create_legacy_session(
+		&self,
+		relay: Relay,
+		idle_ttl: Duration,
+	) -> (Session, Receiver<ServerJsonRpcMessage>) {
 		let (tx, rx) = tokio::sync::mpsc::channel(64);
 		let id = session_id();
 		let sess = Session {
@@ -511,17 +635,52 @@ impl SessionManager {
 			encoder: self.encoder.clone(),
 		};
 		let mut sm = self.sessions.write().expect("write lock");
-		sm.insert(id.to_string(), sess.clone());
+		sm.insert(
+			id.to_string(),
+			SessionEntry {
+				session: sess.clone(),
+				last_access: Instant::now(),
+				idle_ttl,
+			},
+		);
 		(sess, rx)
 	}
 
 	pub async fn delete_session(&self, id: &str, parts: Parts) -> Option<Response> {
 		let sess = {
 			let mut sm = self.sessions.write().expect("write lock");
-			sm.remove(id)?
+			sm.remove(id)?.session
 		};
 		// Swallow the error
 		sess.delete_session(parts).await.ok()
+	}
+}
+
+impl Drop for SessionManager {
+	fn drop(&mut self) {
+		if let Some(abort) = self.idle_reaper.take() {
+			abort.abort();
+		}
+	}
+}
+
+async fn run_idle_reaper(sessions: Arc<RwLock<HashMap<String, SessionEntry>>>) {
+	let mut ticker = tokio::time::interval(SESSION_REAP_INTERVAL);
+	ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+	loop {
+		ticker.tick().await;
+		reap_expired_entries(&sessions);
+	}
+}
+
+fn reap_expired_entries(sessions: &Arc<RwLock<HashMap<String, SessionEntry>>>) {
+	let now = Instant::now();
+	let mut guard = sessions.write().expect("write lock");
+	let pre = guard.len();
+	guard.retain(|_, entry| now.duration_since(entry.last_access) < entry.idle_ttl);
+	let post = guard.len();
+	if post < pre {
+		tracing::debug!("reaped {} sessions", pre - post);
 	}
 }
 
@@ -608,7 +767,7 @@ impl sse_stream::Timer for TokioSseTimer {
 
 fn get_client_info() -> ClientInfo {
 	let mut client_info = ClientInfo::default();
-	client_info.protocol_version = ProtocolVersion::V_2025_06_18;
+	client_info.protocol_version = ProtocolVersion::V_2025_11_25;
 	client_info.capabilities = rmcp::model::ClientCapabilities::default();
 	client_info.client_info =
 		Implementation::new("agentgateway", BuildInfo::new().version.to_string());

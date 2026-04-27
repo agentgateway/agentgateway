@@ -207,6 +207,7 @@ pub async fn grpc_connector(
 	url: String,
 	auth: AuthSource,
 	root: RootCert,
+	headers: Vec<(http::header::HeaderName, http::HeaderValue)>,
 ) -> anyhow::Result<GrpcChannel> {
 	let root = root.to_client_config().await?;
 	let (target, transport) = get_target(&url, root)?;
@@ -216,6 +217,7 @@ pub async fn grpc_connector(
 		transport,
 		client,
 		auth: Arc::new(AuthSourceLoader::new(auth).await?),
+		headers,
 	})
 }
 
@@ -225,6 +227,7 @@ pub struct GrpcChannel {
 	transport: Transport,
 	client: client::Client,
 	auth: Arc<AuthSourceLoader>,
+	headers: Vec<(http::header::HeaderName, http::HeaderValue)>,
 }
 
 impl tower::Service<::http::Request<tonic::body::Body>> for GrpcChannel {
@@ -241,9 +244,13 @@ impl tower::Service<::http::Request<tonic::body::Body>> for GrpcChannel {
 		let auth = self.auth.clone();
 		let target = self.target.clone();
 		let transport = self.transport.clone();
+		let ca_headers = self.headers.clone();
 		let mut req = req.map(http::Body::new);
 
 		Box::pin(async move {
+			ca_headers.iter().for_each(|(k, v)| {
+				req.headers_mut().insert(k.clone(), v.clone());
+			});
 			auth.insert_headers(req.headers_mut())?;
 			http::modify_req_uri(&mut req, |uri| {
 				uri.authority = Some(Authority::try_from(target.to_string())?);

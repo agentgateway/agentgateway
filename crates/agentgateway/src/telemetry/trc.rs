@@ -309,14 +309,19 @@ impl opentelemetry_sdk::trace::SpanExporter for PolicyGrpcSpanExporter {
 			let req = opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest {
 				resource_spans,
 			};
-			// Ensure export runs on the application's Tokio runtime
+			// Drop tonic Response inside the spawned task so guard is released on the Tokio runtime, not on
+			// the BatchProcessor OS thread which has no Tokio context.
 			handle
-				.spawn(async move { client.export(req).await })
+				.spawn(async move {
+					client
+						.export(req)
+						.await
+						.map(|_| ())
+						.map_err(|e| e.message().to_string())
+				})
 				.await
 				.map_err(|e| OTelSdkError::InternalFailure(e.to_string()))?
-				.map(|_| ())
-				.map_err(|e: tonic::Status| OTelSdkError::InternalFailure(e.message().to_string()))
-				as OTelSdkResult
+				.map_err(OTelSdkError::InternalFailure) as OTelSdkResult
 		}
 	}
 
@@ -501,10 +506,16 @@ pub fn set_resource_defaults_from_config(cfg: &crate::Config) {
 		attrs.push(KeyValue::new("host.name", self_id.hostname().to_string()));
 	}
 	// Use gateway name/namespace as authoritative service identity
-	let service_name = cfg.xds.gateway.to_string();
-	let service_namespace = cfg.xds.namespace.to_string();
-	attrs.retain(|kv| kv.key.as_str() != "service.namespace");
-	attrs.push(KeyValue::new("service.namespace", service_namespace));
+	let (service_name, service_namespace) = if cfg.xds.address.is_some() {
+		(cfg.xds.gateway.to_string(), cfg.xds.namespace.to_string())
+	} else {
+		(Default::default(), Default::default())
+	};
+
+	if !service_namespace.is_empty() {
+		attrs.retain(|kv| kv.key.as_str() != "service.namespace");
+		attrs.push(KeyValue::new("service.namespace", service_namespace));
+	}
 
 	// Resolve service name: config > OTEL_SERVICE_NAME env > default
 	let resolved_service_name = if service_name.is_empty() {

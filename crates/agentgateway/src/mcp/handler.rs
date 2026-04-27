@@ -2,18 +2,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::http::Response;
-use crate::http::sessionpersistence::MCPSession;
-use crate::mcp;
-use crate::mcp::FailureMode;
-use crate::mcp::mergestream::{MergeFn, Messages};
-use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
-use crate::mcp::router::McpBackendGroup;
-use crate::mcp::streamablehttp::ServerSseMessage;
-use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, MCPInfo, mergestream, rbac, upstream};
-use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
 use agent_core::version::BuildInfo;
 use futures_core::Stream;
 use http::StatusCode;
@@ -25,7 +13,19 @@ use rmcp::model::{
 	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
 	ProtocolVersion, RequestId, ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerResult,
 };
-use tracing::warn;
+use tracing::{debug, warn};
+
+use crate::http::Response;
+use crate::http::sessionpersistence::MCPSession;
+use crate::mcp;
+use crate::mcp::mergestream::{MergeFn, Messages};
+use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
+use crate::mcp::router::McpBackendGroup;
+use crate::mcp::streamablehttp::ServerSseMessage;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
+use crate::mcp::{ClientError, FailureMode, MCPInfo, mergestream, rbac, upstream};
+use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
 
 const DELIMITER: &str = "_";
 
@@ -34,6 +34,22 @@ fn resource_name(default_target_name: Option<&String>, target: &str, name: &str)
 		format!("{target}{DELIMITER}{name}")
 	} else {
 		name.to_string()
+	}
+}
+
+fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -> String {
+	if default_target_name.is_none() {
+		// Transform URI to service+scheme:// format for multiplexing
+		// e.g., "http://example.com" becomes "service+http://example.com"
+		if let Some(scheme_end) = uri.find("://") {
+			let (scheme, rest) = uri.split_at(scheme_end);
+			format!("{target}+{scheme}{rest}")
+		} else {
+			// URI must have a scheme - if not, return as-is and let validation handle it
+			uri.to_string()
+		}
+	} else {
+		uri.to_string()
 	}
 }
 
@@ -276,6 +292,7 @@ impl Relay {
 	}
 	pub fn merge_resources(&self, cel: CelExecWrapper) -> Box<MergeFn> {
 		let policies = self.policies.clone();
+		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams| {
 			let resources = streams
 				.into_iter()
@@ -295,8 +312,11 @@ impl Relay {
 								&cel,
 							)
 						})
-						// TODO(https://github.com/agentgateway/agentgateway/issues/404) map this to the service name,
-						// if we add support for multiple services.
+						// Prefix URI with service name when multiplexing to avoid conflicts
+						.map(|mut r| {
+							r.uri = resource_uri(default_target_name.as_ref(), server_name.as_str(), &r.uri);
+							r
+						})
 						.collect_vec()
 				})
 				.collect_vec();
@@ -410,7 +430,19 @@ impl Relay {
 				Ok(s) => streams.push((name, s)),
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
-						warn!("upstream '{}' failed for GET stream, skipping: {}", name, e);
+						let is_405 = if let UpstreamError::Http(ClientError::Status(ref r)) = e
+							&& r.status() == StatusCode::METHOD_NOT_ALLOWED
+						{
+							true
+						} else {
+							false
+						};
+						if !is_405 {
+							// per spec, a 405 is a valid response to say a GET stream is not supported so avoid log spam.
+							warn!("upstream '{}' failed for GET stream, skipping: {}", name, e);
+						} else {
+							debug!("upstream '{}' failed for GET stream, skipping: {}", name, e);
+						}
 					} else {
 						return Err(e);
 					}
@@ -486,14 +518,33 @@ impl Relay {
 
 		Ok(accepted_response())
 	}
+
+	pub async fn send_notification_single(
+		&self,
+		r: ClientNotification,
+		ctx: IncomingRequestContext,
+		service_name: &str,
+	) -> Result<Response, UpstreamError> {
+		let Ok(us) = self.upstreams.get(service_name) else {
+			return Err(UpstreamError::InvalidRequest(format!(
+				"unknown service {service_name}"
+			)));
+		};
+		us.generic_notification(r, &ctx).await?;
+		Ok(accepted_response())
+	}
+
 	fn get_info(
 		pv: ProtocolVersion,
 		multiplexing: bool,
 		upstream_instructions: Vec<(String, String)>,
 	) -> ServerInfo {
 		let capabilities = if multiplexing {
-			// These are not supported when multiplexing.
-			ServerCapabilities::builder().enable_tools().build()
+			// Resources are now supported with multiplexing using proper URI prefixing
+			ServerCapabilities::builder()
+				.enable_tools()
+				.enable_resources()
+				.build()
 		} else {
 			ServerCapabilities::builder()
 				.enable_tools()
@@ -599,10 +650,11 @@ fn accepted_response() -> Response {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use futures_util::stream;
 	use rmcp::model::{CallToolResult, ListToolsResult};
 	use serde_json::json;
+
+	use super::*;
 
 	#[tokio::test]
 	async fn messages_to_response_captures_first_matching_tool_result() {

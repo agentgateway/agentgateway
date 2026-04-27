@@ -1,16 +1,17 @@
-use crate::cel::Expression;
-use crate::http::envoy_proto_common;
+use ::http::{HeaderMap, StatusCode};
+use itertools::Itertools;
+
+use crate::cel::{Executor, Expression};
 use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::localratelimit::RateLimitType;
 use crate::http::remoteratelimit::proto::rate_limit_descriptor::Entry;
 use crate::http::remoteratelimit::proto::rate_limit_service_client::RateLimitServiceClient;
 use crate::http::remoteratelimit::proto::{RateLimitDescriptor, RateLimitRequest};
-use crate::http::{PolicyResponse, Request};
+use crate::http::{PolicyResponse, Request, envoy_proto_common};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{BackendPolicy, SimpleBackendReference};
 use crate::*;
-use ::http::{HeaderMap, StatusCode};
 
 #[cfg(test)]
 #[path = "remoteratelimit_tests.rs"]
@@ -81,6 +82,21 @@ pub struct DescriptorEntry {
 	#[serde(default)]
 	#[serde(rename = "type")]
 	pub limit_type: RateLimitType,
+	/// limitOverride determines the optional expression to determine the limit of the request.
+	/// This tells the remote server what limit to apply to the request.
+	/// The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:
+	/// `{"unit":"second","requestsPerUnit":100}`.
+	/// Valid units: second, minute, hour, day, month, year
+	/// If the expression fails to evaluate, the descriptor is skipped.
+	pub limit_override: Option<Arc<cel::Expression>>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DescriptorLimitOverride {
+	unit: String,
+	#[serde(alias = "requests_per_unit")]
+	requests_per_unit: u32,
 }
 
 #[derive(serde::Deserialize)]
@@ -144,6 +160,7 @@ impl RemoteRateLimit {
 		cost: Option<u64>,
 	) -> Option<RateLimitRequest> {
 		let mut descriptors = Vec::with_capacity(self.descriptors.0.len());
+		let exec = Executor::new_request(req);
 		let candidate_count = self
 			.descriptors
 			.0
@@ -161,7 +178,7 @@ impl RemoteRateLimit {
 			.iter()
 			.filter(|e| e.limit_type == limit_type)
 		{
-			if let Some(rl_entries) = Self::eval_descriptor(req, &desc_entry.entries) {
+			if let Some(rl_entries) = Self::eval_descriptor(&exec, &desc_entry.entries) {
 				// Rate limit servers require each descriptor to have at least one entry.
 				if rl_entries.is_empty() {
 					trace!(
@@ -181,22 +198,31 @@ impl RemoteRateLimit {
 					limit_type,
 					kv_pairs.join(", ")
 				);
+				let limit = match Self::eval_limit_override(&exec, desc_entry.limit_override.as_deref()) {
+					Ok(limit) => limit,
+					Err(e) => {
+						trace!(
+							"ratelimit limit override evaluation failed for domain={}, type={:?}, expr={:?}, error={}",
+							self.domain, limit_type, desc_entry.limit_override, e
+						);
+						continue;
+					},
+				};
 				descriptors.push(RateLimitDescriptor {
 					entries: rl_entries,
-					limit: None,
+					limit,
 					hits_addend: cost,
 				});
 			} else {
-				let attempted: Vec<String> = desc_entry
-					.entries
-					.iter()
-					.map(|d| format!("{}={:?}", d.0, d.1))
-					.collect();
 				trace!(
 					"ratelimit descriptor evaluation failed for domain={}, type={:?}, skipping descriptor: {}",
 					self.domain,
 					limit_type,
-					attempted.join(", ")
+					desc_entry
+						.entries
+						.iter()
+						.map(|d| format!("{}={:?}", d.0, d.1))
+						.join(", ")
 				);
 			}
 		}
@@ -304,23 +330,22 @@ impl RemoteRateLimit {
 		request: proto::RateLimitRequest,
 	) -> Result<proto::RateLimitResponse, ProxyError> {
 		trace!("connecting to {:?}", self.target);
-		let descriptor_summaries: Vec<String> = request
-			.descriptors
-			.iter()
-			.map(|d| {
-				let kvs: Vec<String> = d
-					.entries
-					.iter()
-					.map(|e| format!("{}={}", e.key, e.value))
-					.collect();
-				format!("[hits_addend={:?}; {}]", d.hits_addend, kvs.join(", "))
-			})
-			.collect();
 		trace!(
 			"ratelimit request summary (domain: {}): descriptors={} {}",
 			request.domain,
 			request.descriptors.len(),
-			descriptor_summaries.join(" | ")
+			request
+				.descriptors
+				.iter()
+				.map(|d| {
+					let kvs: Vec<String> = d
+						.entries
+						.iter()
+						.map(|e| format!("{}={}", e.key, e.value))
+						.collect();
+					format!("[hits_addend={:?}; {}]", d.hits_addend, kvs.join(", "))
+				})
+				.join(" | ")
 		);
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
@@ -373,9 +398,36 @@ impl RemoteRateLimit {
 		Ok(res)
 	}
 
-	fn eval_descriptor(req: &Request, entries: &Vec<Descriptor>) -> Option<Vec<Entry>> {
+	fn eval_limit_override(
+		exec: &cel::Executor<'_>,
+		limit_override: Option<&Expression>,
+	) -> anyhow::Result<Option<proto::rate_limit_descriptor::RateLimitOverride>> {
+		let Some(expr) = limit_override else {
+			return Ok(None);
+		};
+
+		let raw = exec
+			.eval(expr)?
+			.json()
+			.map_err(|_| cel::Error::JsonConvert)?;
+		let override_config: DescriptorLimitOverride = serde_json::from_value(raw)?;
+		let unit = match override_config.unit.to_ascii_lowercase().as_str() {
+			"second" => proto::RateLimitUnit::Second,
+			"minute" => proto::RateLimitUnit::Minute,
+			"hour" => proto::RateLimitUnit::Hour,
+			"day" => proto::RateLimitUnit::Day,
+			"month" => proto::RateLimitUnit::Month,
+			"year" => proto::RateLimitUnit::Year,
+			unit => anyhow::bail!("invalid limit override unit: {unit}"),
+		};
+		Ok(Some(proto::rate_limit_descriptor::RateLimitOverride {
+			requests_per_unit: override_config.requests_per_unit,
+			unit: unit as i32,
+		}))
+	}
+
+	fn eval_descriptor(exec: &cel::Executor<'_>, entries: &Vec<Descriptor>) -> Option<Vec<Entry>> {
 		let mut rl_entries = Vec::with_capacity(entries.len());
-		let exec = cel::Executor::new_request(req);
 		for Descriptor(k, lookup) in entries {
 			// We drop the entire set if we cannot eval one; emit trace to aid debugging
 			match exec.eval(lookup) {
@@ -406,11 +458,12 @@ impl RemoteRateLimit {
 	}
 
 	pub fn expressions(&self) -> impl Iterator<Item = &Expression> {
-		self
-			.descriptors
-			.0
-			.iter()
-			.flat_map(|v| v.entries.iter().map(|v| &v.1))
+		self.descriptors.0.iter().flat_map(|v| {
+			v.entries
+				.iter()
+				.map(|entry| &entry.1)
+				.chain(v.limit_override.iter().map(|expr| expr.as_ref()))
+		})
 	}
 }
 

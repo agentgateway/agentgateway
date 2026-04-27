@@ -107,15 +107,24 @@ type AwsAgentCoreBackend struct {
 	Qualifier *string `json:"qualifier,omitempty"`
 }
 
+// StaticBackend specifies a static backend endpoint — either TCP (host + port) or Unix Domain Socket.
+// +kubebuilder:validation:XValidation:rule="has(self.unixPath) || (has(self.host) && has(self.port))",message="must specify either unixPath or both host and port"
+// +kubebuilder:validation:XValidation:rule="!has(self.unixPath) || (!has(self.host) && !has(self.port))",message="unixPath and host/port are mutually exclusive"
 type StaticBackend struct {
-	// host to connect to.
-	// +required
-	Host ShortString `json:"host"`
-	// port to connect to.
+	// host to connect to (for TCP backends).
+	// +optional
+	Host ShortString `json:"host,omitempty"`
+	// port to connect to (for TCP backends).
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
-	// +required
-	Port int32 `json:"port"`
+	// +optional
+	Port int32 `json:"port,omitempty"`
+	// unixPath is the filesystem path to a Unix Domain Socket. The gateway pod
+	// must share a volume with the target (e.g., via emptyDir sidecar pattern).
+	// Mutually exclusive with host/port.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	UnixPath *string `json:"unixPath,omitempty"`
 }
 
 // AIBackend specifies the AI backend configuration
@@ -185,7 +194,7 @@ type NamedLLMProvider struct {
 }
 
 // LLMProvider specifies the target large language model provider that the backend should route requests to.
-// +kubebuilder:validation:ExactlyOneOf=openai;azureopenai;anthropic;gemini;vertexai;bedrock
+// +kubebuilder:validation:ExactlyOneOf=openai;azureopenai;azure;anthropic;gemini;vertexai;bedrock
 // +kubebuilder:validation:XValidation:rule="has(self.host) || has(self.port) ? has(self.host) && has(self.port) : true",message="both host and port must be set together"
 // +kubebuilder:validation:XValidation:rule="!(has(self.path) && has(self.pathPrefix))",message="path and pathPrefix are mutually exclusive"
 // +kubebuilder:validation:XValidation:rule="has(self.pathPrefix) ? has(self.host) : true",message="pathPrefix requires host to be set"
@@ -197,6 +206,11 @@ type LLMProvider struct {
 	// Azure OpenAI provider
 	// +optional
 	AzureOpenAI *AzureOpenAIConfig `json:"azureopenai,omitempty"`
+
+	// Azure provider with resource-based configuration.
+	// Supports both Azure OpenAI and Azure AI Foundry resource types.
+	// +optional
+	Azure *AzureConfig `json:"azure,omitempty"`
 
 	// Anthropic provider
 	// +optional
@@ -247,7 +261,7 @@ type OpenAIConfig struct {
 	Model *ShortString `json:"model,omitempty"`
 }
 
-// AzureOpenAIConfig settings for the [Azure OpenAI](https://learn.microsoft.com/en-us/azure/ai-foundry/?view=foundry-classic) LLM provider.
+// AzureOpenAIConfig settings for the [Azure OpenAI](https://learn.microsoft.com/en-us/azure/foundry/?view=foundry-classic) LLM provider.
 // +kubebuilder:validation:XValidation:message="deploymentName is required for this apiVersion",rule="!has(self.apiVersion) || self.apiVersion == 'v1' ? true : has(self.deploymentName)"
 type AzureOpenAIConfig struct {
 	// The endpoint for the Azure OpenAI API to use, such as `my-endpoint.openai.azure.com`.
@@ -256,17 +270,57 @@ type AzureOpenAIConfig struct {
 	Endpoint ShortString `json:"endpoint"`
 
 	// The name of the Azure OpenAI model deployment to use.
-	// For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
+	// For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
 	// This is required if `apiVersion` is not `v1`. For `v1`, the model can be
 	// set in the request.
 	// +optional
 	DeploymentName *ShortString `json:"deploymentName,omitempty"`
 
 	// The version of the Azure OpenAI API to use.
-	// For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/ai-foundry/?view=foundry-classicreference#api-specs).
+	// For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/foundry/openai/reference).
 	// If unset, defaults to `v1`.
 	// +optional
 	ApiVersion *TinyString `json:"apiVersion,omitempty"`
+}
+
+// AzureResourceType specifies the type of Azure endpoint.
+// +kubebuilder:validation:Enum=OpenAI;Foundry
+type AzureResourceType string
+
+const (
+	// AzureResourceTypeOpenAI uses the Azure OpenAI endpoint: {resourceName}.openai.azure.com
+	AzureResourceTypeOpenAI AzureResourceType = "OpenAI"
+	// AzureResourceTypeFoundry uses the Azure AI Foundry endpoint: {resourceName}-resource.services.ai.azure.com
+	AzureResourceTypeFoundry AzureResourceType = "Foundry"
+)
+
+// AzureConfig settings for Azure AI backends, supporting both Azure OpenAI and Azure AI Foundry.
+// +kubebuilder:validation:XValidation:message="projectName is required when resourceType is Foundry",rule="self.resourceType != 'Foundry' || has(self.projectName)"
+type AzureConfig struct {
+	// The Azure resource name used to construct the endpoint host.
+	// For OpenAI: {resourceName}.openai.azure.com
+	// For Foundry: {resourceName}-resource.services.ai.azure.com
+	// +required
+	ResourceName ShortString `json:"resourceName"`
+
+	// The type of Azure endpoint. Determines the host suffix.
+	// +required
+	ResourceType AzureResourceType `json:"resourceType"`
+
+	// Optional: Override the model name, such as `gpt-4o-mini`.
+	// If unset, the model name is taken from the request.
+	// +optional
+	Model *ShortString `json:"model,omitempty"`
+
+	// The version of the Azure OpenAI API to use.
+	// If unset, defaults to `v1`.
+	// +optional
+	ApiVersion *TinyString `json:"apiVersion,omitempty"`
+
+	// The Foundry project name, required when `resourceType` is `Foundry`.
+	// Used to construct paths: /api/projects/{projectName}/openai/v1/...
+	// +optional
+	ProjectName *ShortString `json:"projectName,omitempty"`
 }
 
 // GeminiConfig settings for the [Gemini](https://ai.google.dev/gemini-api/docs) LLM provider.

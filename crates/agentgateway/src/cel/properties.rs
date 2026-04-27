@@ -8,6 +8,10 @@ pub(super) fn properties<'e>(
 		Unspecified => {},
 		Optimized { original, .. } => properties(&original.expr, all, path),
 		Call(call) => {
+			// A Call produces a computed value, so any outer Select chain we inherited
+			// does not name a property on Idents inside the call. Drop it so e.g.
+			// `a["b"].c` tracks `a`, not `a.c`.
+			path.clear();
 			if let Some(t) = &call.target {
 				properties(&t.expr, all, path)
 			}

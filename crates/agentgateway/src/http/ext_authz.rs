@@ -1,14 +1,13 @@
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use ::http::{HeaderMap, StatusCode, Uri, header};
+use ::http::{HeaderMap, HeaderValue, StatusCode, Uri, header};
 use prost_types::Timestamp;
 use serde_json::Value as JsonValue;
-use url::form_urlencoded;
 
 use crate::cel::{BufferedBody, Expression, Value};
-use crate::http::envoy_proto_common;
 use crate::http::ext_authz::proto::attribute_context::HttpRequest;
 use crate::http::ext_authz::proto::authorization_client::AuthorizationClient;
 use crate::http::ext_authz::proto::check_response::HttpResponse;
@@ -18,12 +17,16 @@ use crate::http::ext_authz::proto::{
 use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::filters::BackendRequestTimeout;
 use crate::http::transformation_cel::SerAsStr;
-use crate::http::{HeaderName, HeaderOrPseudo, PolicyResponse, Request, Response, jwt};
+use crate::http::{
+	HeaderName, HeaderOrPseudo, PolicyResponse, Request, RequestOrResponse, Response,
+	envoy_proto_common, jwt,
+};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendPolicy, SimpleBackendReference};
 use crate::*;
+
 #[cfg(test)]
 #[path = "ext_authz_tests.rs"]
 mod tests;
@@ -171,6 +174,39 @@ impl ExtAuthz {
 	}
 }
 impl ExtAuthz {
+	async fn buffer_request_body(
+		req: &mut Request,
+		body_opts: &BodyOptions,
+	) -> Result<BufferedRequestBody, BufferRequestBodyError> {
+		let max_size = body_opts.max_request_bytes as usize;
+
+		let peek_limit = max_size.saturating_add(1);
+		let body = crate::http::inspect_body_with_limit(req.body_mut(), peek_limit)
+			.await
+			.map_err(BufferRequestBodyError::Read)?;
+		let is_partial = body.len() > max_size;
+
+		if is_partial && !body_opts.allow_partial_message {
+			return Err(BufferRequestBodyError::TooLarge);
+		}
+
+		let body = if is_partial {
+			body.slice(0..max_size)
+		} else {
+			body
+		};
+		let original_size = match is_partial {
+			false => i64::try_from(body.len()).unwrap_or(i64::MAX),
+			true => -1,
+		};
+
+		Ok(BufferedRequestBody {
+			body,
+			is_partial,
+			original_size,
+		})
+	}
+
 	/// Handle authorization failure with FailureMode configuration
 	fn handle_auth_failure(&self, error_msg: &str) -> Result<PolicyResponse, ProxyError> {
 		match &self.failure_mode {
@@ -251,14 +287,18 @@ impl ExtAuthz {
 		// Handle multi-value headers: comma-separated except cookies use "; " separator
 		// https://github.com/envoyproxy/envoy/blob/d9e0412bd471a80e0938102c0c8cbff1caedd4cf/source/common/http/header_map_impl.cc#L28-L33
 		let mut headers = std::collections::HashMap::new();
+		let pseudo_headers = crate::http::get_request_pseudo_headers(req);
 
 		if self.include_request_headers.is_empty() {
+			// Envoy includes pseudo-headers, so we do too.
+			for (pseudo, value) in &pseudo_headers {
+				headers.insert(pseudo.to_string(), value.clone());
+			}
 			for name in req.headers().keys() {
 				self.get_header_values(req, name, &mut headers);
 			}
 		} else {
 			// Only include requested headers (both regular and pseudo headers)
-			let pseudo_headers = crate::http::get_request_pseudo_headers(req);
 			for header_spec in &self.include_request_headers {
 				match header_spec {
 					HeaderOrPseudo::Header(header_name) => {
@@ -274,27 +314,25 @@ impl ExtAuthz {
 		}
 
 		let (body, raw_body, original_body_size) = if let Some(body_opts) = &self.include_request_body {
-			let max_size = body_opts.max_request_bytes as usize;
-
-			let original_size = 0;
-			match crate::http::inspect_body_with_limit(req.body_mut(), max_size).await {
-				Ok(body_bytes) => {
-					let bytes = body_bytes.to_vec();
-
+			match Self::buffer_request_body(req, body_opts).await {
+				Ok(buffered) => {
+					let bytes = buffered.body;
 					if body_opts.pack_as_bytes {
-						(String::new(), bytes, original_size)
+						(String::new(), bytes.to_vec(), buffered.original_size)
 					} else {
 						(
-							String::from_utf8_lossy(&bytes).into_owned(),
+							String::from_utf8_lossy(bytes.as_ref()).into_owned(),
 							Vec::new(),
-							original_size,
+							buffered.original_size,
 						)
 					}
 				},
-				Err(e) => {
-					debug!("Failed to read request body for ext_authz: {:?}", e);
-					(String::new(), Vec::new(), 0)
+				Err(BufferRequestBodyError::TooLarge) => {
+					return Err(ProxyError::ExternalAuthorizationFailed(Some(
+						StatusCode::PAYLOAD_TOO_LARGE,
+					)));
 				},
+				Err(BufferRequestBodyError::Read(e)) => return Err(ProxyError::Processing(e)),
 			}
 		} else {
 			(String::new(), Vec::new(), 0)
@@ -319,7 +357,12 @@ impl ExtAuthz {
 					.path_and_query()
 					.map(|pq| pq.to_string())
 					.unwrap_or_else(|| req.uri().path().to_string()),
-				host: req.uri().host().unwrap_or("").to_string(),
+				host: req
+					.uri()
+					.authority()
+					.map(|s| s.as_str())
+					.unwrap_or("")
+					.to_string(),
 				scheme: req
 					.uri()
 					.scheme()
@@ -443,13 +486,11 @@ impl ExtAuthz {
 				let status = http_status
 					.and_then(|s| StatusCode::from_u16(s.code as u16).ok())
 					.unwrap_or(StatusCode::FORBIDDEN);
-				let mut rb = ::http::response::Builder::new().status(status);
-				if let Some(hm) = rb.headers_mut() {
-					process_headers(hm, headers, None);
-				}
-				let resp = rb
+				let rb = ::http::response::Builder::new().status(status);
+				let mut resp = rb
 					.body(http::Body::from(body))
 					.map_err(|e| ProxyError::Processing(e.into()))?;
+				process_headers(RequestOrResponse::Response(&mut resp), headers, None);
 				return Ok(PolicyResponse {
 					direct_response: Some(resp),
 					response_headers: None,
@@ -481,24 +522,7 @@ impl ExtAuthz {
 					}
 				}
 
-				// Apply pseudo-header mutations first
-				apply_pseudo_headers_to_request(req, &headers);
-
-				// Then process regular headers, excluding host and any pseudo-headers
-				let filtered_headers: Vec<_> = headers
-					.into_iter()
-					.filter(|h| {
-						h.header
-							.as_ref()
-							.map(|hdr| {
-								let k = hdr.key.as_str();
-								k.to_lowercase() != "host" && !k.starts_with(':')
-							})
-							.unwrap_or(true)
-					})
-					.collect();
-
-				process_headers(req.headers_mut(), filtered_headers, None);
+				process_headers(req.into(), headers, None);
 
 				apply_query_parameters_to_request(
 					req,
@@ -508,7 +532,7 @@ impl ExtAuthz {
 
 				if !response_headers_to_add.is_empty() {
 					let mut hm = HeaderMap::new();
-					process_headers(&mut hm, response_headers_to_add, None);
+					process_raw_headers(&mut hm, response_headers_to_add);
 					if !hm.is_empty() {
 						res.response_headers = Some(hm);
 					}
@@ -534,17 +558,18 @@ impl ExtAuthz {
 			unreachable!();
 		};
 
-		let body = if let Some(body_opts) = &self.include_request_body {
-			let max_size = body_opts.max_request_bytes as usize;
-			match crate::http::inspect_body_with_limit(req.body_mut(), max_size).await {
-				Ok(body_bytes) => body_bytes,
-				Err(e) => {
-					debug!("Failed to read request body for ext_authz: {:?}", e);
-					Bytes::new()
+		let (body, is_partial_body) = if let Some(body_opts) = &self.include_request_body {
+			match Self::buffer_request_body(req, body_opts).await {
+				Ok(buffered) => (buffered.body, buffered.is_partial),
+				Err(BufferRequestBodyError::TooLarge) => {
+					return Err(ProxyError::ExternalAuthorizationFailed(Some(
+						StatusCode::PAYLOAD_TOO_LARGE,
+					)));
 				},
+				Err(BufferRequestBodyError::Read(e)) => return Err(ProxyError::Processing(e)),
 			}
 		} else {
-			Bytes::new()
+			(Bytes::new(), false)
 		};
 
 		let path: Uri = match path {
@@ -572,7 +597,8 @@ impl ExtAuthz {
 					},
 				}
 			},
-			None => Uri::try_from(req.uri().path()).expect("pre-validated"),
+			None => Uri::try_from(http::get_path_and_query(req.uri()))
+				.map_err(|_| ProxyError::ExternalAuthorizationFailed(None))?,
 		};
 
 		// If the user defined their own path expression, use that.
@@ -590,12 +616,20 @@ impl ExtAuthz {
 		};
 		for h in include {
 			if let Some(hv) = http::get_pseudo_or_header_value(h, req) {
-				let _ = http::apply_header_or_pseudo(
-					&mut http::RequestOrResponse::Request(&mut check_req),
+				let value = http::HeaderOrPseudoValue::from_raw(h, hv.as_bytes());
+				http::RequestOrResponse::Request(&mut check_req).apply_header(
 					h,
-					hv.as_bytes(),
+					value,
+					http::HeaderMutationAction::OverwriteIfExistsOrAdd,
 				);
 			}
+		}
+		if self.include_request_body.is_some() {
+			check_req.headers_mut().insert(
+				// Don't love this but its part of the "specification" so we follow it.
+				HeaderName::from_static("x-envoy-auth-partial-body"),
+				HeaderValue::from_static(if is_partial_body { "true" } else { "false" }),
+			);
 		}
 
 		// Insert any headers derived from CEL expressions.
@@ -603,7 +637,11 @@ impl ExtAuthz {
 			let exec = cel::Executor::new_request(req);
 			let res = exec.eval(hv).ok();
 			let resv = http::HeaderOrPseudoValue::from_cel_result(hn, res);
-			http::RequestOrResponse::Request(&mut check_req).apply_header(hn, resv, false);
+			http::RequestOrResponse::Request(&mut check_req).apply_header(
+				hn,
+				resv,
+				http::HeaderMutationAction::OverwriteIfExistsOrAdd,
+			);
 		}
 		// Set the default request timeout. This can be overridden by a timeout on the Backend object itself.
 		check_req
@@ -713,7 +751,10 @@ impl ExtAuthz {
 						)]),
 					})
 				} else {
-					None
+					// Envoy always set this, even if there is no metadata, so do the same for compatibility.
+					Some(Metadata {
+						filter_metadata: HashMap::new(),
+					})
 				}
 			},
 		})
@@ -739,19 +780,16 @@ impl ExtAuthz {
 	}
 }
 
-/// Apply HTTP/2 pseudo-headers returned by the ext_authz server to the inbound request
-fn apply_pseudo_headers_to_request(req: &mut Request, headers: &[HeaderValueOption]) {
-	for header in headers {
-		let Some(h) = header.header.as_ref() else {
-			continue;
-		};
-		// Only consider pseudo-headers (start with ':') and ignore others
-		if !h.key.starts_with(':') {
-			continue;
-		}
-		let mut rr = crate::http::RequestOrResponse::Request(req);
-		let _ = envoy_proto_common::apply_pseudo_header_option(&mut rr, header);
-	}
+struct BufferedRequestBody {
+	body: Bytes,
+	is_partial: bool,
+	original_size: i64,
+}
+
+#[derive(Debug)]
+enum BufferRequestBodyError {
+	TooLarge,
+	Read(anyhow::Error),
 }
 
 fn apply_query_parameters_to_request(
@@ -759,59 +797,42 @@ fn apply_query_parameters_to_request(
 	query_parameters_to_set: &[proto::QueryParameter],
 	query_parameters_to_remove: &[String],
 ) -> Result<(), ProxyError> {
-	if query_parameters_to_set.is_empty() && query_parameters_to_remove.is_empty() {
-		return Ok(());
-	}
-
-	crate::http::modify_url(req.uri_mut(), |url| {
-		let mut pairs = url
-			.query()
-			.map(|query| {
-				form_urlencoded::parse(query.as_bytes())
-					.map(|(key, value)| (key.into_owned(), value.into_owned()))
-					.collect::<Vec<_>>()
-			})
-			.unwrap_or_default();
-
-		for param in query_parameters_to_set {
-			pairs.retain(|(key, _)| key != &param.key);
-			pairs.push((param.key.clone(), param.value.clone()));
-		}
-
-		if !query_parameters_to_remove.is_empty() {
-			pairs.retain(|(key, _)| !query_parameters_to_remove.contains(key));
-		}
-
-		let mut serializer = form_urlencoded::Serializer::new(String::new());
-		for (key, value) in pairs {
-			serializer.append_pair(&key, &value);
-		}
-
-		let query = serializer.finish();
-		url.set_query((!query.is_empty()).then_some(query.as_str()));
-		Ok(())
-	})
+	crate::http::modify_query_parameters(
+		req.uri_mut(),
+		query_parameters_to_set
+			.iter()
+			.map(|param| (param.key.as_str(), param.value.as_str())),
+		query_parameters_to_remove.iter().map(String::as_str),
+	)
 	.map_err(ProxyError::Processing)
 }
 
 fn process_headers(
-	hm: &mut HeaderMap,
+	mut rr: http::RequestOrResponse,
 	headers: Vec<HeaderValueOption>,
 	allowlist: Option<&[String]>,
 ) {
 	for header in headers {
+		let header = header.borrow();
 		let Some(ref h) = header.header else { continue };
 
 		// If allowlist is provided, only process headers in the allowlist
-		if let Some(allowed) = allowlist {
-			let header_name_lower = h.key.to_lowercase();
-			if !allowed
+		let header_name_lower = h.key.to_lowercase();
+		if let Some(allowed) = allowlist
+			&& !allowed
 				.iter()
 				.any(|name| name.to_lowercase() == header_name_lower)
-			{
-				continue;
-			}
+		{
+			continue;
 		}
+
+		envoy_proto_common::apply_header_option(&mut rr, header)
+	}
+}
+
+fn process_raw_headers(hm: &mut HeaderMap, headers: Vec<HeaderValueOption>) {
+	for header in headers {
+		let Some(ref h) = header.header else { continue };
 
 		let Ok(hn) = HeaderName::from_bytes(h.key.as_bytes()) else {
 			warn!("Invalid header name: {}", h.key);

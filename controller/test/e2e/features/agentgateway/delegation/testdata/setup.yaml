@@ -1,0 +1,145 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: infra
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team1
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team2
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team2-root
+---
+# testbox deployment in team1
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc1
+  namespace: team1
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: svc1
+  template:
+    metadata:
+      labels:
+        app: svc1
+        app.kubernetes.io/name: svc1
+    spec:
+      securityContext:
+        sysctls:
+        - name: net.ipv4.ip_unprivileged_port_start
+          value: "0"
+      containers:
+      - image: ghcr.io/agentgateway/testbox:0.0.1
+        imagePullPolicy: IfNotPresent
+        name: testbox
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+        env:
+        - name: INSTANCE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        startupProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 1
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 5
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc1
+  namespace: team1
+spec:
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 80
+  selector:
+    app.kubernetes.io/name: svc1
+---
+# testbox deployment in team2
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc2
+  namespace: team2
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: svc2
+  template:
+    metadata:
+      labels:
+        app: svc2
+        app.kubernetes.io/name: svc2
+    spec:
+      securityContext:
+        sysctls:
+        - name: net.ipv4.ip_unprivileged_port_start
+          value: "0"
+      containers:
+      - image: ghcr.io/agentgateway/testbox:0.0.1
+        imagePullPolicy: IfNotPresent
+        name: testbox
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+        env:
+        - name: INSTANCE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        startupProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 1
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 5
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc2
+  namespace: team2
+spec:
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 80
+  selector:
+    app.kubernetes.io/name: svc2

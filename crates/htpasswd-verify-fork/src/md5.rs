@@ -131,8 +131,18 @@ pub fn format_hash(password: &str, salt: &str) -> String {
 	format!("{}{}${}", APR1_ID, salt, password)
 }
 
-/// Assumes the hash is in the correct format - $apr1$salt$password
+/// Verifies an APR1 hash in the format `$apr1$<salt>$<digest>`.
+/// Returns `Err` if the hash is malformed, including missing prefix/separator
+/// or an invalid salt/digest.
 pub fn verify_apr1_hash(hash: &str, password: &str) -> Result<bool, &'static str> {
-	let salt = &hash[6..14];
+	let rest = hash
+		.strip_prefix(APR1_ID)
+		.ok_or("hash does not start with $apr1$")?;
+	let (salt, digest) = rest
+		.split_once('$')
+		.ok_or("hash missing digest separator")?;
+	if salt.is_empty() || salt.len() > 8 || digest.is_empty() {
+		return Err("hash has invalid APR1 salt or digest");
+	}
 	Ok(format_hash(&md5_apr1_encode(password, salt), salt) == hash)
 }

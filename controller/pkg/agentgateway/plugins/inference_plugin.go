@@ -142,11 +142,6 @@ func validateInferencePoolEndpointPickerRef(krtctx krt.HandlerContext, pool *inf
 		errs = append(errs, fmt.Sprintf("endpointPickerRef.kind must be %q, got %q", wellknown.ServiceKind, kind))
 	}
 
-	// InferencePool v1 only supports a single target port.
-	if len(pool.Spec.TargetPorts) != 1 {
-		errs = append(errs, "inferencePool.targetPorts must contain exactly one entry")
-	}
-
 	if epr.Port == nil {
 		errs = append(errs, "endpointPickerRef.port must be specified")
 		return inferencePoolValidationError(errs)
@@ -282,24 +277,24 @@ func desiredInferencePoolParentRefs(attachedGateways map[types.NamespacedName]st
 	return refs
 }
 
-func inferencePoolConditionMap(controllerName string, validationErr error) map[string]*condition {
+func inferencePoolConditionMap(controllerName string, validationErr error) map[string]*Condition {
 	msg := "InferencePool has been accepted"
 	if controllerName != "" {
 		msg = fmt.Sprintf("InferencePool has been accepted by controller %s", controllerName)
 	}
 
-	conds := map[string]*condition{
+	conds := map[string]*Condition{
 		string(inf.InferencePoolConditionAccepted): {
-			reason:  string(inf.InferencePoolReasonAccepted),
-			message: msg,
+			Reason:  string(inf.InferencePoolReasonAccepted),
+			Message: msg,
 		},
 		string(inf.InferencePoolConditionResolvedRefs): {
-			reason:  string(inf.InferencePoolReasonResolvedRefs),
-			message: "All InferencePool references have been resolved",
+			Reason:  string(inf.InferencePoolReasonResolvedRefs),
+			Message: "All InferencePool references have been resolved",
 		},
 	}
 	if validationErr != nil {
-		conds[string(inf.InferencePoolConditionResolvedRefs)].error = &ConfigError{
+		conds[string(inf.InferencePoolConditionResolvedRefs)].Error = &ConfigError{
 			Reason:  string(inf.InferencePoolReasonInvalidExtensionRef),
 			Message: "error: " + validationErr.Error(),
 		}

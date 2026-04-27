@@ -1,0 +1,23 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/responses/input-list.json
+info:
+  input:
+    - role: user
+      content: Hello
+  model: gpt-4o
+  stream: true
+---
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello"
+    }
+  ],
+  "model": "gpt-4o",
+  "stream": true,
+  "stream_options": {
+    "include_usage": true
+  }
+}

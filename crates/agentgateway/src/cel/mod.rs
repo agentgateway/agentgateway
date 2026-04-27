@@ -146,11 +146,29 @@ impl ContextBuilder {
 		// TODO: different types
 		self.request_attributes |= expression.attributes
 	}
+	/// register_log_expression registers the given expressions attributes as required attributes.
+	/// This should only be used for "log" expressions. Log expressions are ones that run after the complete
+	/// request and response (including the body) are complete. I.e. if its not executed during DropOnLog,
+	/// its probably not the correct usage.
+	/// The benefit of this compared to register_expression is that we can do more optimal processing of
+	/// bodies, as we know they will complete before we need them, so we can lazily observe the body instead
+	/// of proactively buffering.
+	pub fn register_log_expression(&mut self, expression: &Expression) {
+		self.logging_attributes |= expression.attributes
+	}
 	fn any_has(&self, attr: impl Into<FlagSet<Attributes>>) -> bool {
 		let x = attr.into();
 		self.request_attributes.contains(x)
 			|| self.response_attributes.contains(x)
 			|| self.logging_attributes.contains(x)
+	}
+	fn before_log_has(&self, attr: impl Into<FlagSet<Attributes>>) -> bool {
+		let x = attr.into();
+		self.request_attributes.contains(x) || self.response_attributes.contains(x)
+	}
+	fn log_only_has(&self, attr: impl Into<FlagSet<Attributes>>) -> bool {
+		let x = attr.into();
+		self.logging_attributes.contains(x) && !self.before_log_has(x)
 	}
 	pub fn maybe_snapshot_response(
 		&self,
@@ -185,7 +203,7 @@ impl ContextBuilder {
 		}
 	}
 	pub async fn maybe_buffer_request_body(&self, req: &mut crate::http::Request) {
-		if self.any_has(Attributes::RequestBody) {
+		if self.before_log_has(Attributes::RequestBody) {
 			if req.extensions().get::<BufferedBody>().is_some() {
 				return;
 			}
@@ -193,10 +211,26 @@ impl ContextBuilder {
 				return;
 			};
 			req.extensions_mut().insert(BufferedBody(body));
+		} else if self.log_only_has(Attributes::RequestBody) {
+			if req.extensions().get::<BufferedBody>().is_some() {
+				return;
+			}
+			if req
+				.extensions()
+				.get::<crate::http::RecordedBodyHandle>()
+				.is_some()
+			{
+				return;
+			}
+			let body = std::mem::replace(req.body_mut(), crate::http::Body::empty());
+			let limit = crate::http::buffer_limit(req);
+			let (body, handle) = crate::http::RecordedBody::new_with_limit(body, limit);
+			*req.body_mut() = crate::http::Body::new(body);
+			req.extensions_mut().insert(handle);
 		}
 	}
 	pub async fn maybe_buffer_response_body(&self, resp: &mut crate::http::Response) {
-		if self.any_has(Attributes::ResponseBody) {
+		if self.before_log_has(Attributes::ResponseBody) {
 			if resp.extensions().get::<BufferedBody>().is_some() {
 				return;
 			}
@@ -204,6 +238,22 @@ impl ContextBuilder {
 				return;
 			};
 			resp.extensions_mut().insert(BufferedBody(body));
+		} else if self.log_only_has(Attributes::ResponseBody) {
+			if resp.extensions().get::<BufferedBody>().is_some() {
+				return;
+			}
+			if resp
+				.extensions()
+				.get::<crate::http::RecordedBodyHandle>()
+				.is_some()
+			{
+				return;
+			}
+			let body = std::mem::replace(resp.body_mut(), crate::http::Body::empty());
+			let limit = crate::http::response_buffer_limit(resp);
+			let (body, handle) = crate::http::RecordedBody::new_with_limit(body, limit);
+			*resp.body_mut() = crate::http::Body::new(body);
+			resp.extensions_mut().insert(handle);
 		}
 	}
 
@@ -217,23 +267,27 @@ impl ContextBuilder {
 
 impl Expression {
 	/// new_permissive compiles the expression. If the expression cannot be compiled, its instead replaced
-	/// with an expression that always fails to evaluate
-	pub fn new_permissive(original_expression: impl Into<String>) -> Self {
+	/// with an expression that always fails to evaluate. The returned error is the compilation error
+	/// from the original expression, if one was suppressed.
+	pub fn new_permissive(original_expression: impl Into<String>) -> (Self, Option<Error>) {
 		let expr = original_expression.into();
 		match Self::new_strict(&expr) {
-			Ok(ok) => ok,
+			Ok(ok) => (ok, None),
 			Err(err) => {
 				debug!("ignoring failed expression: {}", err);
 				let fail_message =
 					serde_json::to_string(&format!("the expression {expr:?} could not be compiled"))
 						.expect("string serialization must succeed");
-				Self {
-					attributes: Default::default(),
-					expression: Self::new_strict(format!("fail({fail_message})"))
-						.expect("must be valid")
-						.expression,
-					original_expression: expr,
-				}
+				(
+					Self {
+						attributes: Default::default(),
+						expression: Self::new_strict(format!("fail({fail_message})"))
+							.expect("must be valid")
+							.expression,
+						original_expression: expr,
+					},
+					Some(err),
+				)
 			},
 		}
 	}

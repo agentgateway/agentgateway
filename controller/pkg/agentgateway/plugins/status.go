@@ -1,6 +1,8 @@
 package plugins
 
 import (
+	"fmt"
+
 	"istio.io/istio/pilot/pkg/model/kstatus"
 	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/ptr"
@@ -9,19 +11,19 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-type condition struct {
-	// reason defines the reason to report on success. Ignored if error is set
-	reason string
-	// message defines the message to report on success. Ignored if error is set
-	message string
-	// status defines the status to report on success. The inverse will be set if error is set
+type Condition struct {
+	// Reason defines the Reason to report on success. Ignored if error is set
+	Reason string
+	// Message defines the Message to report on success. Ignored if error is set
+	Message string
+	// Status defines the Status to report on success. The inverse will be set if error is set
 	// If not set, will default to StatusTrue
-	status metav1.ConditionStatus
-	// error defines an error state; the reason and message will be replaced with that of the error and
-	// the status inverted
-	error *ConfigError
-	// setOnce, if enabled, will only set the condition if it is not yet present or set to this reason
-	setOnce string
+	Status metav1.ConditionStatus
+	// Error defines an Error state; the Reason and Message will be replaced with that of the Error and
+	// the Status inverted
+	Error *ConfigError
+	// SetOnce, if enabled, will only set the Condition if it is not yet present or set to this Reason
+	SetOnce string
 }
 
 // ConfigError represents an invalid configuration that will be reported back to the user.
@@ -30,9 +32,9 @@ type ConfigError struct {
 	Message string
 }
 
-// mergeAncestors merges an existing ancestor with in incoming one. We preserve order, prune stale references set by our controller,
+// MergeAncestors merges an existing ancestor with in incoming one. We preserve order, prune stale references set by our controller,
 // and add any new references from our controller.
-func mergeAncestors(controllerName string, existing []gwv1.PolicyAncestorStatus, incoming []gwv1.PolicyAncestorStatus) []gwv1.PolicyAncestorStatus {
+func MergeAncestors(controllerName string, existing []gwv1.PolicyAncestorStatus, incoming []gwv1.PolicyAncestorStatus) []gwv1.PolicyAncestorStatus {
 	n := 0
 	for _, x := range existing {
 		if controllerName != string(x.ControllerName) {
@@ -42,7 +44,7 @@ func mergeAncestors(controllerName string, existing []gwv1.PolicyAncestorStatus,
 			continue
 		}
 		replacement := slices.IndexFunc(incoming, func(status gwv1.PolicyAncestorStatus) bool {
-			return parentRefEqual(status.AncestorRef, x.AncestorRef)
+			return ParentRefEquals(status.AncestorRef, x.AncestorRef)
 		})
 		if replacement != -1 {
 			// We found a replacement!
@@ -55,11 +57,44 @@ func mergeAncestors(controllerName string, existing []gwv1.PolicyAncestorStatus,
 	existing = existing[:n]
 	// Add all remaining ones.
 	existing = append(existing, incoming...)
-	// There is a max of 16
-	return existing[:min(len(existing), 16)]
+	// There is a max of 16. If we exceed this, insert an entry describing the truncation
+	if len(existing) > 16 {
+		lastOwned := -1
+		for i := range min(len(existing), 16) {
+			if string(existing[i].ControllerName) == controllerName {
+				lastOwned = i
+			}
+		}
+		if lastOwned == -1 {
+			// We didn't own any of them... just truncate. :-(
+			return existing[:16]
+		}
+
+		ignored := len(existing) - 15
+		trimmed := make([]gwv1.PolicyAncestorStatus, 0, 16)
+		trimmed = append(trimmed, existing[:lastOwned]...)
+		trimmed = append(trimmed, existing[lastOwned+1:16]...)
+		trimmed = append(trimmed, gwv1.PolicyAncestorStatus{
+			AncestorRef: gwv1.ParentReference{
+				Group: ptr.Of(gwv1.Group("agentgateway.dev")),
+				Name:  "StatusSummary",
+			},
+			ControllerName: gwv1.GatewayController(controllerName),
+			Conditions: []metav1.Condition{
+				{
+					Type:    "StatusSummarized",
+					Status:  metav1.ConditionTrue,
+					Reason:  "StatusSummary",
+					Message: fmt.Sprintf("%d AncestorRefs ignored due to max status size", ignored),
+				},
+			},
+		})
+		return trimmed
+	}
+	return existing
 }
 
-func parentRefEqual(a, b gwv1.ParentReference) bool {
+func ParentRefEquals(a, b gwv1.ParentReference) bool {
 	return ptr.Equal(a.Group, b.Group) &&
 		ptr.Equal(a.Kind, b.Kind) &&
 		a.Name == b.Name &&
@@ -68,15 +103,15 @@ func parentRefEqual(a, b gwv1.ParentReference) bool {
 		ptr.Equal(a.Port, b.Port)
 }
 
-func setAncestorStatus(
+func SetAncestorStatus(
 	pr gwv1.ParentReference,
 	status *gwv1.PolicyStatus,
 	generation int64,
-	conds map[string]*condition,
+	conds map[string]*Condition,
 	controller gwv1.GatewayController,
 ) gwv1.PolicyAncestorStatus {
 	currentAncestor := slices.FindFunc(status.Ancestors, func(ex gwv1.PolicyAncestorStatus) bool {
-		return parentRefEqual(ex.AncestorRef, pr)
+		return ex.ControllerName == controller && ParentRefEquals(ex.AncestorRef, pr)
 	})
 	var currentConds []metav1.Condition
 	if currentAncestor != nil {
@@ -90,34 +125,34 @@ func setAncestorStatus(
 }
 
 // setConditions sets the existingConditions with the new conditions
-func setConditions(generation int64, existingConditions []metav1.Condition, conditions map[string]*condition) []metav1.Condition {
+func setConditions(generation int64, existingConditions []metav1.Condition, conditions map[string]*Condition) []metav1.Condition {
 	// Sort keys for deterministic ordering
 	for _, k := range slices.Sort(maps.Keys(conditions)) {
 		cond := conditions[k]
 		setter := kstatus.UpdateConditionIfChanged
-		if cond.setOnce != "" {
+		if cond.SetOnce != "" {
 			setter = func(conditions []metav1.Condition, condition metav1.Condition) []metav1.Condition {
-				return kstatus.CreateCondition(conditions, condition, cond.setOnce)
+				return kstatus.CreateCondition(conditions, condition, cond.SetOnce)
 			}
 		}
-		// A condition can be "negative polarity" (ex: ListenerInvalid) or "positive polarity" (ex:
-		// ListenerValid), so in order to determine the status we should set each `condition` defines its
+		// A Condition can be "negative polarity" (ex: ListenerInvalid) or "positive polarity" (ex:
+		// ListenerValid), so in order to determine the status we should set each `Condition` defines its
 		// default positive status. When there is an error, we will invert that. Example: If we have
-		// condition ListenerInvalid, the status will be set to StatusFalse. If an error is reported, it
+		// Condition ListenerInvalid, the status will be set to StatusFalse. If an error is reported, it
 		// will be inverted to StatusTrue to indicate listeners are invalid. See
 		// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
 		// for more information
-		if cond.error != nil {
+		if cond.Error != nil {
 			existingConditions = setter(existingConditions, metav1.Condition{
 				Type:               k,
-				Status:             kstatus.InvertStatus(cond.status),
+				Status:             kstatus.InvertStatus(cond.Status),
 				ObservedGeneration: generation,
 				LastTransitionTime: metav1.Now(),
-				Reason:             cond.error.Reason,
-				Message:            cond.error.Message,
+				Reason:             cond.Error.Reason,
+				Message:            cond.Error.Message,
 			})
 		} else {
-			status := cond.status
+			status := cond.Status
 			if status == "" {
 				status = kstatus.StatusTrue
 			}
@@ -126,8 +161,8 @@ func setConditions(generation int64, existingConditions []metav1.Condition, cond
 				Status:             status,
 				ObservedGeneration: generation,
 				LastTransitionTime: metav1.Now(),
-				Reason:             cond.reason,
-				Message:            cond.message,
+				Reason:             cond.Reason,
+				Message:            cond.Message,
 			})
 		}
 	}

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ::cel::extractors::{Argument, This};
 use ::cel::objects::{MapValue, StringValue, ValueType};
 use ::cel::{Context, FunctionContext, ResolveResult, Value};
@@ -12,7 +14,6 @@ use serde::Deserializer;
 use sha1::Sha1;
 use sha2::Sha256;
 use sha2::digest::Digest;
-use std::sync::Arc;
 use uuid::Uuid;
 
 pub fn insert_all(ctx: &mut Context) {

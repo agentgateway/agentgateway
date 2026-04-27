@@ -2,8 +2,7 @@ use aws_smithy_eventstream::frame::{DecodedFrame, MessageFrameDecoder};
 pub use aws_smithy_types::event_stream::Message;
 use bytes::{Bytes, BytesMut};
 use serde::Serialize;
-use tokio_sse_codec::{Event, Frame, SseEncoder};
-use tokio_util::codec::Decoder;
+use tokio_util::codec::{BytesCodec, Decoder};
 
 use super::transform::parser as transform_parser;
 use crate::*;
@@ -118,16 +117,12 @@ pub fn transform<O: Serialize>(
 	mut f: impl FnMut(Message) -> Option<O> + Send + 'static,
 ) -> http::Body {
 	let decoder = EventStreamCodec::with_max_size(buffer_limit);
-	let encoder = SseEncoder::new();
+	let encoder = BytesCodec::new();
 
 	transform_parser(b, decoder, encoder, move |o| {
 		let transformed = f(o)?;
 		let json_bytes = serde_json::to_vec(&transformed).ok()?;
-		Some(Frame::Event(Event::<Bytes> {
-			data: Bytes::from(json_bytes),
-			name: std::borrow::Cow::Borrowed(""),
-			id: None,
-		}))
+		Some(crate::parse::encode_sse_event("", Bytes::from(json_bytes)))
 	})
 }
 
@@ -137,19 +132,15 @@ pub fn transform_multi<O: Serialize>(
 	mut f: impl FnMut(Message) -> Vec<(&'static str, O)> + Send + 'static,
 ) -> http::Body {
 	let decoder = EventStreamCodec::with_max_size(buffer_limit);
-	let encoder = SseEncoder::new();
+	let encoder = BytesCodec::new();
 
 	transform_parser(b, decoder, encoder, move |msg| {
 		f(msg)
 			.into_iter()
 			.filter_map(|(event_name, event)| {
-				serde_json::to_vec(&event).ok().map(|json_bytes| {
-					Frame::Event(Event::<Bytes> {
-						data: Bytes::from(json_bytes),
-						name: std::borrow::Cow::Borrowed(event_name),
-						id: None,
-					})
-				})
+				serde_json::to_vec(&event)
+					.ok()
+					.map(|json_bytes| crate::parse::encode_sse_event(event_name, Bytes::from(json_bytes)))
 			})
 			.collect::<Vec<_>>()
 	})

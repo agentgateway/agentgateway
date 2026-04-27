@@ -1,0 +1,56 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: gw-policy
+  namespace: default
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: super-gateway
+  traffic:
+    jwtAuthentication:
+      mode: Strict
+      providers:
+      # Issuer must match the 'iss' claim in JWT tokens
+      - issuer: https://idp.example.com/realms/my-org
+        jwks:
+          remote:
+            jwksPath: realms/my-org/protocol/openid-connect/certs
+            backendRef:
+              group: agentgateway.dev
+              kind: AgentgatewayBackend
+              name: idp-jwks
+              port: 443
+---
+# Main backend pointing to actual JWKS endpoint with tunnel policy
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: idp-jwks
+  namespace: default
+spec:
+  static:
+    # Actual JWKS endpoint
+    host: idp.example.com
+    port: 443
+  policies:
+    tls: {}
+    # Tunnel policy to route through corporate proxy
+    tunnel:
+      backendRef:
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+        name: corporate-proxy
+        port: 8080
+---
+# Proxy backend (corporate HTTP proxy)
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: corporate-proxy
+  namespace: default
+spec:
+  static:
+    host: proxy.internal.example.com
+    port: 8080

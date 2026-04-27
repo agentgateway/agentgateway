@@ -501,3 +501,17 @@ spec:
       local:
         - requests: 100
           unit: Minutes
+---
+_err: "spec.frontend.proxyProtocol.version: Unsupported value"
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-proxy-invalid-version
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  frontend:
+    proxyProtocol:
+      version: V3

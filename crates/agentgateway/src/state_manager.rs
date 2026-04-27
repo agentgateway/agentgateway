@@ -2,12 +2,14 @@ use std::path::{Path, PathBuf, absolute};
 use std::time::Duration;
 
 use agent_core::prelude::*;
+use agent_core::readiness;
 use notify::{EventKind, RecursiveMode};
 use tokio::fs;
 
 use crate::client::Client;
 use crate::store::Stores;
 use crate::types::agent::ListenerTarget;
+use crate::types::discovery::SelfIdentitySource;
 use crate::types::proto::agent::Resource as ADPResource;
 use crate::types::proto::workload::Address as XdsAddress;
 use crate::{ConfigSource, client, control, store};
@@ -42,6 +44,7 @@ impl StateManager {
 				addr.clone(),
 				xds.auth.clone(),
 				xds.ca_cert.clone(),
+				vec![],
 			)
 			.await?;
 			Some(
@@ -68,6 +71,7 @@ impl StateManager {
 					gateway_name: xds.gateway.clone(),
 					gateway_namespace: xds.namespace.clone(),
 					listener_name: None,
+					port: None,
 				},
 			};
 			Box::pin(local_client.run()).await?;
@@ -151,11 +155,11 @@ impl LocalClient {
 						|| (current_config_path.is_some() && current_config_path != real_config_path))
 				}) {
 					real_config_path = current_config_path.clone();
-					info!("Config file changed, reloading...");
+					debug!("Config file changed, reloading...");
 					match lc.reload_config(next_state.clone()).await {
 						Ok(nxt) => {
 							next_state = nxt;
-							info!("Config reloaded successfully")
+							debug!("Config reloaded successfully")
 						},
 						Err(e) => {
 							error!("Failed to reload config: {}", e)
@@ -196,11 +200,15 @@ impl LocalClient {
 		info!("loaded config from {:?}", self.cfg);
 
 		// Sync the state
-		let next_binds =
-			self
-				.stores
-				.binds
-				.sync_local(config.binds, config.policies, config.backends, prev.binds);
+		let next_binds = self.stores.binds.sync_local(
+			config.binds,
+			config.listener_routes,
+			config.listener_tcp_routes,
+			config.policies,
+			config.backends,
+			config.route_groups,
+			prev.binds,
+		);
 		let next_discovery =
 			self
 				.stores
@@ -218,4 +226,199 @@ impl LocalClient {
 pub struct PreviousState {
 	pub binds: store::BindPreviousState,
 	pub discovery: store::DiscoveryPreviousState,
+}
+
+const SELF_WORKLOAD_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Populates the discovery store's self_workload according to `config.self_identity`.
+///
+/// For `Static`, sets the cached workload synchronously and rebuckets.
+/// For `Wds`, blocks readiness until WDS delivers the workload or timeout expires.
+pub fn start_self_workload_resolution(
+	config: &crate::Config,
+	stores: Stores,
+	ready: &readiness::Ready,
+) {
+	match &config.self_identity {
+		Some(SelfIdentitySource::Static(w)) => {
+			let store = stores.discovery.read();
+			store.self_workload.set((**w).clone());
+			store.rebucket_all();
+		},
+		Some(SelfIdentitySource::Wds {
+			name,
+			namespace,
+			cluster_id,
+		}) => {
+			let task = ready.register_task("self workload");
+			let name = name.clone();
+			let namespace = namespace.clone();
+			let cluster_id = cluster_id.clone();
+			let has_xds = config.xds.address.is_some();
+			tokio::spawn(async move {
+				watch_self_workload(stores, name, namespace, cluster_id, Some(task), has_xds).await;
+			});
+		},
+		None => {},
+	}
+}
+
+async fn watch_self_workload(
+	stores: Stores,
+	name: Strng,
+	namespace: Strng,
+	cluster_id: Strng,
+	mut ready_task: Option<readiness::BlockReady>,
+	has_xds: bool,
+) {
+	let mut inserts = stores.discovery.read().workloads.subscribe_inserts();
+
+	// allow a cluster id mismatch as a very common misconfiguration is that the control plane and
+	// dataplane mismatch on this but if we do hit a conflict (should be rare) we use the cluster_id
+	// as a tiebreaker
+	let lookup = || {
+		let store = stores.discovery.read();
+		store
+			.workloads
+			.find_by_name(&name, &namespace)
+			.max_by_key(|w| w.cluster_id == cluster_id)
+			.cloned()
+	};
+
+	{
+		let store = stores.discovery.read();
+		if let Some(w) = lookup() {
+			store.self_workload.set((*w).clone());
+			store.rebucket_all();
+			return;
+		}
+	}
+
+	// Without XDS nothing will ever insert workloads; drop the task and stop.
+	if !has_xds {
+		return;
+	}
+
+	// wait for any change before starting our timeout if the control plane is down, or xDS is
+	// otherwise slow we don't want to bail early without locality info
+	if inserts.changed().await.is_err() {
+		return;
+	}
+
+	let deadline = tokio::time::sleep(SELF_WORKLOAD_TIMEOUT);
+	tokio::pin!(deadline);
+	loop {
+		{
+			let store = stores.discovery.read();
+			if let Some(w) = lookup() {
+				store.self_workload.set((*w).clone());
+				store.rebucket_all();
+				return;
+			}
+		}
+		tokio::select! {
+			_ = &mut deadline, if ready_task.is_some() => {
+				warn!(
+					%namespace, %name,
+					"timed out waiting for own workload in WDS after {:?}; unblocking readiness, still watching",
+					SELF_WORKLOAD_TIMEOUT
+				);
+				// drop the task, but keep looping so we can still populate the self_workload if it shows up later
+				ready_task = None;
+			}
+			r = inserts.changed() => {
+				if r.is_err() {
+					return;
+				}
+			}
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use agent_core::readiness::Ready;
+
+	use super::*;
+	use crate::store::{DiscoveryPreviousState, LocalWorkload, Stores};
+	use crate::types::discovery::Workload;
+
+	const TASK_NAME: &str = "self workload";
+
+	fn test_config() -> crate::Config {
+		crate::config::parse_config("{}".to_string(), None).expect("parse default config")
+	}
+
+	fn test_stores() -> Stores {
+		Stores::new(false, crate::ThreadingMode::Multithreaded)
+	}
+
+	fn wds_identity(name: &str, ns: &str, cluster: &str) -> SelfIdentitySource {
+		SelfIdentitySource::Wds {
+			name: name.into(),
+			namespace: ns.into(),
+			cluster_id: cluster.into(),
+		}
+	}
+
+	async fn wait_task_dropped(ready: &Ready) {
+		while ready.pending().contains(TASK_NAME) {
+			tokio::time::sleep(Duration::from_millis(10)).await;
+		}
+	}
+
+	#[tokio::test]
+	async fn wds_without_xds_must_not_block_readiness_forever() {
+		let mut config = test_config();
+		assert!(
+			config.xds.address.is_none(),
+			"precondition violated — XDS_ADDRESS leaked from env"
+		);
+		config.self_identity = Some(wds_identity("gw", "ns", "c"));
+
+		let stores = test_stores();
+		let ready = Ready::new();
+		start_self_workload_resolution(&config, stores, &ready);
+
+		assert!(ready.pending().contains(TASK_NAME));
+
+		tokio::time::timeout(Duration::from_secs(5), wait_task_dropped(&ready))
+			.await
+			.expect("'self workload' readiness task blocked forever without XDS");
+	}
+
+	#[tokio::test]
+	async fn wds_populates_self_workload_when_matching_workload_is_inserted() {
+		let mut config = test_config();
+		config.xds.address = Some("http://example.invalid:15010".to_string());
+		config.self_identity = Some(wds_identity("gw", "ns", "c"));
+
+		let stores = test_stores();
+		let ready = Ready::new();
+		start_self_workload_resolution(&config, stores.clone(), &ready);
+
+		let workload = Workload {
+			uid: "uid-1".into(),
+			name: "gw".into(),
+			namespace: "ns".into(),
+			cluster_id: "c".into(),
+			..Default::default()
+		};
+		stores
+			.discovery
+			.sync_local(
+				vec![],
+				vec![LocalWorkload {
+					workload,
+					services: Default::default(),
+				}],
+				DiscoveryPreviousState::default(),
+			)
+			.expect("sync_local");
+
+		tokio::time::timeout(Duration::from_secs(5), wait_task_dropped(&ready))
+			.await
+			.expect("task should clear once matching workload is inserted");
+		assert!(stores.discovery.read().self_workload.get().is_some());
+	}
 }

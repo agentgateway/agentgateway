@@ -19,6 +19,7 @@ message Resource {
     istio.workload.Workload workload = 7;
     // Service represents a service - a group of workloads that can be accessed together.
     istio.workload.Service service = 8;
+    RouteGroup route_group = 9;
   }
 }
 
@@ -86,10 +87,15 @@ message Listener {
 message Route {
   // Unique key for this route
   string key = 1;
+
+  // Parent key. Must be one of listener or route group
   // Key for the listener this is a part of.
   string listener_key = 2;
   // Service this route targets (set when parentRef is a Service).
   istio.workload.NamespacedHostname service_key = 9;
+  // Key for the route group this route is a part of.
+  optional string route_group_key = 10;
+
   // User facing name for this resource
   RouteName name = 3;
 
@@ -97,6 +103,12 @@ message Route {
   repeated RouteMatch matches = 6;
   repeated RouteBackend backends = 7;
   repeated TrafficPolicySpec traffic_policies = 8;
+}
+
+message RouteGroup {
+  string key = 1;
+  string namespace = 2;
+  string name = 3;
 }
 
 message TCPRoute {
@@ -221,12 +233,35 @@ message BackendAuthPolicy {
   }
 }
 
-// No fields needed for passthrough authentication.
-message Passthrough {}
+message AuthorizationLocation {
+  message Header {
+    string name = 1;
+    optional string prefix = 2;
+  }
+
+  message QueryParameter {
+    string name = 1;
+  }
+
+  message Cookie {
+    string name = 1;
+  }
+
+  oneof kind {
+    Header header = 1;
+    QueryParameter query_parameter = 2;
+    Cookie cookie = 3;
+  }
+}
+
+message Passthrough {
+  AuthorizationLocation authorization_location = 1;
+}
 
 // Contains a secret for authentication, e.g. an API key.
 message Key {
   string secret = 1;
+  AuthorizationLocation authorization_location = 2;
 }
 
 // GCP-specific backend authentication.
@@ -412,6 +447,7 @@ message Header {
 
 message RouteBackend {
   BackendReference backend = 1;
+  optional string route_group_key = 6;
   int32 weight = 2;
   // Reserved tag number for removed field: filters(4)
   reserved 4;
@@ -433,6 +469,7 @@ message PolicyTarget {
     string name = 1;
     string namespace = 2;
     optional string listener = 3;
+    optional uint32 port = 4;
   }
   message RouteTarget {
     string name = 1;
@@ -469,6 +506,7 @@ message FrontendPolicySpec {
     optional uint32 http2_frame_size = 6;
     google.protobuf.Duration http2_keepalive_interval = 7;
     google.protobuf.Duration http2_keepalive_timeout = 8;
+    google.protobuf.Duration max_connection_duration = 9;
   }
   message TLS {
     // TLS handshake timeout
@@ -583,6 +621,22 @@ message FrontendPolicySpec {
     string value = 2; // CEL expression
   }
 
+  message ProxyProtocol {
+    enum Version {
+      V2 = 0;
+      V1 = 1;
+      ALL = 2;
+    }
+
+    enum Mode {
+      STRICT = 0;
+      OPTIONAL = 1;
+    }
+
+    Version version = 1;
+    Mode mode = 2;
+  }
+
   oneof kind {
     TCP tcp = 1;
     TLS tls = 2;
@@ -590,6 +644,7 @@ message FrontendPolicySpec {
     Logging logging = 4;
     Tracing tracing = 5;
     NetworkAuthorization network_authorization = 6;
+    ProxyProtocol proxy_protocol = 7;
   }
 }
 
@@ -621,6 +676,7 @@ message TrafficPolicySpec {
     message Descriptor {
       repeated Entry entries = 1;
       Type type = 2;
+      optional string limit_override = 3; // CEL expr returning {unit, requestsPerUnit}
     }
     message Entry {
       string key = 1;
@@ -714,6 +770,7 @@ message TrafficPolicySpec {
     Mode mode = 1;
     repeated JWTProvider providers = 2;
     MCP mcp = 3;
+    AuthorizationLocation authorization_location = 4;
   }
 
   // Basic authentication configuration using htpasswd file
@@ -734,6 +791,8 @@ message TrafficPolicySpec {
 
     // How the basic authentication should behave
     Mode mode = 3;
+
+    AuthorizationLocation authorization_location = 4;
   }
 
   // API Key authentication
@@ -755,6 +814,8 @@ message TrafficPolicySpec {
 
     // How the API key authentication should behave
     Mode mode = 2;
+
+    AuthorizationLocation authorization_location = 3;
   }
 
   message TransformationPolicy {
@@ -909,6 +970,25 @@ message BackendPolicySpec {
       repeated BackendPolicySpec inline_policies = 4;
     }
 
+    message AzureContentSafety {
+      // The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")
+      string endpoint = 1;
+
+      // Severity threshold (0-6). Content at or above this level is blocked. Default: 2.
+      optional int32 severity_threshold = 2;
+
+      // API version to use (default: "2024-09-01")
+      optional string api_version = 3;
+
+      // Blocklist names to check against
+      repeated string blocklist_names = 4;
+
+      // When true, further analysis stops if a blocklist is hit
+      optional bool halt_on_blocklist_hit = 5;
+
+      repeated BackendPolicySpec inline_policies = 6;
+    }
+
     // Response sent when rejecting a request
     message RequestRejection {
       bytes body = 1;
@@ -924,6 +1004,7 @@ message BackendPolicySpec {
         Webhook webhook = 3;
         GoogleModelArmor google_model_armor = 4;
         BedrockGuardrails bedrock_guardrails = 5;
+        AzureContentSafety azure_content_safety = 6;
       }
     }
 
@@ -937,6 +1018,7 @@ message BackendPolicySpec {
         Moderation openai_moderation = 4;
         GoogleModelArmor google_model_armor = 5;
         BedrockGuardrails bedrock_guardrails = 6;
+        AzureContentSafety azure_content_safety = 7;
       }
     }
 
@@ -954,6 +1036,7 @@ message BackendPolicySpec {
       bool cache_messages = 2;
       bool cache_tools = 3;
       optional uint32 min_tokens = 4;
+      optional uint32 cache_message_offset = 5;
     }
 
     map<string, string> defaults = 2;
@@ -1125,6 +1208,7 @@ message BackendPolicySpec {
     Mode mode = 6;
     // JWT validation options controlling which claims must be present.
     JWTValidationOptions jwt_validation_options = 7;
+    AuthorizationLocation authorization_location = 8;
   }
 
   oneof kind {
@@ -1150,6 +1234,7 @@ message BackendPolicySpec {
 message StaticBackend {
   string host = 1;
   int32 port = 2;
+  string unix_path = 3;
 }
 
 message DynamicForwardProxy {}
@@ -1194,6 +1279,25 @@ message AIBackend {
     optional string model = 1;
     string host = 2;
     optional string api_version = 3;
+    optional string project_name = 4;
+  }
+  // Azure provider with explicit resource-based configuration.
+  // Supports both Azure OpenAI and Azure AI Foundry resource types.
+  message Azure {
+    // The Azure resource name used to construct the endpoint host.
+    string resource_name = 1;
+    // The type of Azure endpoint.
+    AzureResourceType resource_type = 2;
+    // Optional model name override.
+    optional string model = 3;
+    // Optional Azure API version. Defaults to "v1" if not set.
+    optional string api_version = 4;
+    // Foundry project name, required when resource_type is FOUNDRY.
+    optional string project_name = 5;
+  }
+  enum AzureResourceType {
+    OPEN_AI = 0;
+    FOUNDRY = 1;
   }
 
   message Provider {
@@ -1208,6 +1312,7 @@ message AIBackend {
       Anthropic anthropic = 7;
       Bedrock bedrock = 8;
       AzureOpenAI azureopenai = 11;
+      Azure azure = 13;
     }
     repeated BackendPolicySpec inline_policies = 10;
   }

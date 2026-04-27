@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::error::Error as StdError;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use agent_core::drain;
 use agent_core::drain::{DrainUpgrader, DrainWatcher};
+use agent_core::{drain, strng};
+use agent_hbone::server::H2Request;
 use anyhow::anyhow;
 use bytes::Bytes;
 use futures::pin_mut;
@@ -27,19 +29,22 @@ use crate::transport::BufferLimit;
 use crate::transport::stream::{
 	Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
 };
+use crate::transport::tls::TlsInfo;
 use crate::types::agent::{
 	BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
 };
 use crate::types::discovery::Service;
 use crate::types::discovery::gatewayaddress::Destination;
 use crate::types::frontend;
-use crate::{ProxyInputs, client};
-use agent_core::strng;
-use agent_hbone::server::H2Request;
+use crate::{ProxyInputs, Stores, client};
 
 #[cfg(test)]
 #[path = "gateway_test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "locality_test.rs"]
+mod locality_tests;
 
 #[derive(Debug, Clone, PartialEq)]
 
@@ -388,17 +393,12 @@ impl Gateway {
 	pub async fn proxy_bind(
 		bind_name: BindKey,
 		bind_protocol: BindProtocol,
-		mut raw_stream: Socket,
+		raw_stream: Socket,
 		inputs: Arc<ProxyInputs>,
 		drain: DrainWatcher,
 	) {
-		let policies = inputs
-			.stores
-			.read_binds()
-			.frontend_policies(inputs.cfg.gateway_ref());
-		if let Some(tcp) = policies.tcp.as_ref() {
-			raw_stream.apply_tcp_settings(tcp)
-		}
+		let policies = Self::frontend_policies_for_bind(&bind_name, &inputs);
+
 		let peer_addr = raw_stream.tcp().peer_addr;
 		event!(
 			target: "downstream connection",
@@ -415,6 +415,7 @@ impl Gateway {
 				let err = Self::proxy(
 					bind_name,
 					inputs,
+					None,
 					None,
 					raw_stream,
 					Arc::new(policies),
@@ -436,12 +437,14 @@ impl Gateway {
 				)
 				.await
 				{
-					Ok((selected_listener, stream)) => match selected_listener.protocol {
+					Ok((selected_listener, stream)) => match &selected_listener.protocol {
 						ListenerProtocol::HTTPS(_) => {
+							let rx = inputs.stores.read_binds().subscribe_listener_changes();
 							let _ = Self::proxy(
 								bind_name,
 								inputs,
 								Some(selected_listener),
+								Some(rx),
 								stream,
 								Arc::new(policies),
 								drain,
@@ -497,10 +500,12 @@ impl Gateway {
 							{
 								Ok((selected_listener, tls_stream)) => match selected_listener.protocol {
 									ListenerProtocol::HTTPS(_) => {
+										let rx = inputs.stores.read_binds().subscribe_listener_changes();
 										let _ = Self::proxy(
 											bind_name,
 											inputs,
 											Some(selected_listener),
+											Some(rx),
 											tls_stream,
 											Arc::new(policies),
 											drain,
@@ -538,8 +543,16 @@ impl Gateway {
 							}
 						} else {
 							// Plaintext HTTP
-							let err =
-								Self::proxy(bind_name, inputs, None, stream, Arc::new(policies), drain).await;
+							let err = Self::proxy(
+								bind_name,
+								inputs,
+								None,
+								None,
+								stream,
+								Arc::new(policies),
+								drain,
+							)
+							.await;
 							if let Err(e) = err {
 								warn!(src.addr = %peer_addr, "proxy error: {e}");
 							}
@@ -553,6 +566,17 @@ impl Gateway {
 		}
 	}
 
+	fn frontend_policies_for_bind(bind_name: &BindKey, inputs: &Arc<ProxyInputs>) -> FrontendPolices {
+		{
+			let binds = inputs.stores.read_binds();
+			let gateway = binds
+				.bind(bind_name)
+				.map(|bind| inputs.cfg.gateway_port_ref(bind.address.port()))
+				.unwrap_or_else(|| inputs.cfg.gateway_ref());
+			binds.frontend_policies(gateway)
+		}
+	}
+
 	pub async fn handle_tunnel(
 		bind_name: BindKey,
 		bind_protocol: BindProtocol,
@@ -561,13 +585,16 @@ impl Gateway {
 		inputs: Arc<ProxyInputs>,
 		drain: DrainWatcher,
 	) {
-		let policies = inputs
-			.stores
-			.read_binds()
-			.frontend_policies(inputs.cfg.gateway_ref());
+		let policies = Self::frontend_policies_for_bind(&bind_name, &inputs);
 		if let Some(tcp) = policies.tcp.as_ref() {
 			raw_stream.apply_tcp_settings(tcp)
 		}
+		// Tunnel protocol can come from the bind or policies; policies override.
+		let tunnel_protocol = if policies.proxy.is_some() {
+			TunnelProtocol::Proxy
+		} else {
+			tunnel_protocol
+		};
 		let peer_addr = raw_stream.tcp().peer_addr;
 		event!(
 			target: "downstream connection",
@@ -595,8 +622,19 @@ impl Gateway {
 				let _ = Self::terminate_gateway_hbone(inputs, raw_stream, policies, drain).await;
 			},
 			TunnelProtocol::Proxy => {
-				let _ =
-					Self::terminate_proxy_protocol(bind_name, bind_protocol, inputs, raw_stream, drain).await;
+				let proxy_policy = policies.proxy.clone().unwrap_or_default();
+				let err = Self::terminate_proxy_protocol(
+					bind_name,
+					bind_protocol,
+					inputs,
+					raw_stream,
+					proxy_policy,
+					drain,
+				)
+				.await;
+				if let Err(e) = err {
+					warn!(src.addr = %peer_addr, "proxy protocol error: {e}");
+				}
 			},
 		}
 	}
@@ -605,6 +643,7 @@ impl Gateway {
 		bind_name: BindKey,
 		inputs: Arc<ProxyInputs>,
 		selected_listener: Option<Arc<Listener>>,
+		listener_change: Option<watch::Receiver<u64>>,
 		mut stream: Socket,
 		policies: Arc<FrontendPolices>,
 		drain: DrainWatcher,
@@ -642,11 +681,16 @@ impl Gateway {
 			.get_or_create(&transport_labels)
 			.inc();
 
-		let src = crate::cel::SourceContext {
-			address: tcp.peer_addr.ip(),
-			port: tcp.peer_addr.port(),
-			tls: tls.and_then(|t| t.src_identity.clone()),
-		};
+		let unverified_workload = crate::cel::WorkloadContext::from_stores(
+			&inputs.stores,
+			&inputs.cfg.network,
+			tcp.peer_addr.ip(),
+		);
+		let src = crate::cel::SourceContext::from_tcp_connection(
+			tcp,
+			tls.and_then(|t| t.src_identity.clone()),
+			unverified_workload,
+		);
 		if let Some(network_authorization) = policies.network_authorization.as_ref()
 			&& let Err(e) = network_authorization.apply(&src)
 		{
@@ -655,10 +699,12 @@ impl Gateway {
 		stream.ext_mut().insert(src);
 
 		let transport_metrics = inputs.metrics.clone();
+		let _max_dur_metrics = transport_metrics.clone();
+		let _max_dur_labels = transport_labels.clone();
 		let proxy = super::httpproxy::HTTPProxy {
 			bind_name,
 			inputs,
-			selected_listener,
+			selected_listener: selected_listener.clone(),
 			target_address,
 		};
 		let connection = Arc::new(stream.get_ext());
@@ -673,6 +719,12 @@ impl Gateway {
 			.map(|h| h.max_buffer_size)
 			.unwrap_or(def.max_buffer_size);
 
+		let max_connection_duration = policies
+			.http
+			.as_ref()
+			.and_then(|h| h.max_connection_duration);
+		let drain_proxy = proxy.clone();
+
 		let serve = server.serve_connection_with_upgrades(
 			TokioIo::new(stream),
 			hyper::service::service_fn(move |mut req| {
@@ -682,16 +734,56 @@ impl Gateway {
 				async move { proxy.proxy(connection, req).map(Ok::<_, Infallible>).await }
 			}),
 		);
-		// Wrap it in the graceful watcher, will ensure GOAWAY/Connect:clone when we shutdown
-		let serve = drain.wrap_connection(serve);
-		let res = serve.await;
+		let (connection_drain_tx, connection_drain_rx) = drain::new();
+		let parent_drain = drain.clone();
+		let listener_drain = selected_listener.clone().zip(listener_change);
+		let watch_task = tokio::spawn(async move {
+			let max_connection_duration = async {
+				match max_connection_duration {
+					Some(d) => tokio::time::sleep(d).await,
+					None => std::future::pending::<()>().await,
+				}
+			};
+			tokio::pin!(max_connection_duration);
+			let mode = if let Some((serving_listener, listener_change)) = listener_drain {
+				let stores = drain_proxy.inputs.stores.clone();
+				let bind_name = drain_proxy.bind_name.clone();
+				let listener_key = serving_listener.key.clone();
+				tokio::select! {
+					drain = parent_drain.wait_for_drain() => drain.mode(),
+					_ = Self::wait_for_listener_change(
+						stores,
+						bind_name.clone(),
+						serving_listener.clone(),
+						listener_change,
+					) => {
+						info!(bind=%bind_name, listener=%listener_key, "listener changed, draining downstream TLS connection");
+						drain::DrainMode::Graceful
+					},
+					_ = &mut max_connection_duration => {
+						debug!("connection closed: max connection duration reached");
+						drain::DrainMode::Graceful
+					},
+				}
+			} else {
+				tokio::select! {
+					drain = parent_drain.wait_for_drain() => drain.mode(),
+					_ = &mut max_connection_duration => {
+						debug!("connection closed: max connection duration reached");
+						drain::DrainMode::Graceful
+					},
+				}
+			};
+			connection_drain_tx.start_drain_and_wait(mode).await;
+		});
+		let res = connection_drain_rx.wrap_connection(serve).await;
+		watch_task.abort();
 		match res {
 			Ok(_) => Ok(()),
 			Err(e) => {
-				if let Some(te) = e.downcast_ref::<hyper::Error>()
-					&& te.is_timeout()
-				{
-					// This is just closing an idle connection; no need to log which is misleading
+				if should_ignore_downstream_connection_error(e.as_ref()) {
+					// Expected for idle keepalive expiry and clients tearing down long-lived
+					// streams such as SSE before the server finishes the response.
 					return Ok(());
 				}
 				anyhow::bail!("{e}");
@@ -727,6 +819,39 @@ impl Gateway {
 			target_address,
 		};
 		proxy.proxy(stream).await
+	}
+
+	async fn wait_for_listener_change(
+		stores: Stores,
+		bind_name: BindKey,
+		listener_snapshot: Arc<Listener>,
+		mut listener_change_rx: watch::Receiver<u64>,
+	) {
+		if Self::listener_snapshot_changed(&stores, &bind_name, &listener_snapshot) {
+			return;
+		}
+		loop {
+			if listener_change_rx.changed().await.is_err() {
+				return;
+			}
+			if Self::listener_snapshot_changed(&stores, &bind_name, &listener_snapshot) {
+				return;
+			}
+		}
+	}
+
+	fn listener_snapshot_changed(
+		stores: &Stores,
+		bind_name: &BindKey,
+		serving_listener: &Listener,
+	) -> bool {
+		match stores
+			.read_binds()
+			.get_bind_listener(bind_name, &serving_listener.key)
+		{
+			Some(current) => current.as_ref() != serving_listener,
+			None => true,
+		}
 	}
 
 	// maybe_terminate_tls will observe the TLS handshake, and once the client hello has been received, select
@@ -826,46 +951,23 @@ impl Gateway {
 		tokio::time::timeout(to, handshake).await?
 	}
 
-	/// Handle incoming connection with PROXY protocol v2 header.
-	///
-	/// Used for Istio sandwich waypoint mode where ztunnel handles mTLS termination
-	/// and forwards traffic to agentgateway using PROXY protocol. The PROXY header
-	/// contains the original client addresses and peer identity (TLV 0xD0).
-	async fn terminate_proxy_protocol(
-		bind_name: BindKey,
-		bind_protocol: BindProtocol,
-		inp: Arc<ProxyInputs>,
-		mut raw_stream: Socket,
-		drain: DrainWatcher,
-	) -> anyhow::Result<()> {
-		use std::time::Instant;
+	fn apply_proxy_protocol_info(
+		raw_stream: &mut Socket,
+		pp_info: super::proxy_protocol::ProxyProtocolInfo,
+	) {
+		if let (Some(src_addr), Some(dst_addr)) = (pp_info.src_addr, pp_info.dst_addr) {
+			// Capture the original TCP peer before we overwrite it with the client address
+			// from the PROXY header.
+			let raw_peer_addr = raw_stream.tcp().peer_addr;
 
-		use super::proxy_protocol::parse_proxy_protocol;
-		use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
-		use crate::transport::tls::TlsInfo;
-
-		// PROXY protocol header is small (~232 bytes max), should arrive quickly.
-		// Use a relatively short timeout to detect misbehaving or slow clients.
-		const PROXY_PROTOCOL_TIMEOUT: Duration = Duration::from_secs(5);
-
-		// Parse PROXY protocol header from the stream with timeout
-		let pp_info = tokio::time::timeout(
-			PROXY_PROTOCOL_TIMEOUT,
-			parse_proxy_protocol(&mut raw_stream),
-		)
-		.await??;
-
-		// Capture ztunnel's address (the original TCP peer) before we overwrite it
-		let raw_peer_addr = raw_stream.tcp().peer_addr;
-
-		// Update TCPConnectionInfo with real source/dest from PROXY header
-		// This overwrites ztunnel's loopback address with the actual client address
-		raw_stream.ext_mut().insert(TCPConnectionInfo {
-			peer_addr: pp_info.src_addr,
-			local_addr: pp_info.dst_addr,
-			start: Instant::now(),
-			raw_peer_addr: Some(raw_peer_addr),
-		});
+			// Update TCPConnectionInfo with real source/dest from PROXY header
+			raw_stream.ext_mut().insert(TCPConnectionInfo {
+				peer_addr: src_addr,
+				local_addr: dst_addr,
+				start: Instant::now(),
+				raw_peer_addr: Some(raw_peer_addr),
+			});
+		}
 
 		// Insert TLSConnectionInfo with identity from TLV 0xD0
 		// Even though there's no TLS on this connection, we use this struct
@@ -883,9 +985,47 @@ impl Gateway {
 				negotiated_alpn: None,
 			});
 		}
+	}
 
-		// Continue with normal protocol handling - the identity is now in the socket
-		// extensions and will flow through to CEL authorization via with_source()
+	/// Handle incoming connection with a PROXY protocol header.
+	async fn terminate_proxy_protocol(
+		bind_name: BindKey,
+		bind_protocol: BindProtocol,
+		inp: Arc<ProxyInputs>,
+		raw_stream: Socket,
+		policy: frontend::Proxy,
+		drain: DrainWatcher,
+	) -> anyhow::Result<()> {
+		// PROXY protocol header is small (~232 bytes max), should arrive quickly.
+		// Use a relatively short timeout to detect misbehaving or slow clients.
+		const PROXY_PROTOCOL_TIMEOUT: Duration = Duration::from_secs(5);
+
+		let (ext, metrics, inner) = raw_stream.into_parts();
+		let mut rewind = Socket::new_rewind(inner);
+		let pp_info = tokio::time::timeout(
+			PROXY_PROTOCOL_TIMEOUT,
+			crate::proxy::proxy_protocol::detect_proxy_protocol(&mut rewind, policy.version),
+		)
+		.await??;
+
+		let raw_stream = match pp_info {
+			Some(pp_info) => {
+				let mut raw_stream =
+					Socket::from_rewind(ext, metrics, rewind.keep_after(pp_info.consumed_len));
+				Self::apply_proxy_protocol_info(&mut raw_stream, pp_info.info);
+				raw_stream
+			},
+			None => {
+				if policy.mode == frontend::ProxyMode::Strict {
+					anyhow::bail!("PROXY protocol header missing");
+				}
+				rewind.rewind();
+				Socket::from_rewind(ext, metrics, rewind)
+			},
+		};
+
+		// Continue with normal protocol handling. Any PROXY-derived identity is now in the socket
+		// extensions and will flow through to CEL authorization via with_source().
 		Self::proxy_bind(bind_name, bind_protocol, raw_stream, inp, drain).await;
 		Ok(())
 	}
@@ -1038,24 +1178,24 @@ impl Gateway {
 					},
 					hostname: Default::default(),
 					protocol: ListenerProtocol::HBONE,
-					tcp_routes: Default::default(),
-					routes: Default::default(),
 				})
 			});
 
 		let should_sniff_tls = svc.port_is_tls(socket.target_address().port());
 		let wps = WaypointService(svc);
 		// Ensure we load policies per-stream so we don't cache stale policies on long-lived HBONE connections.
-		let policies = pi
-			.stores
-			.read_binds()
-			.listener_frontend_policies(&listener.name, Some(wps.as_policy_ref()));
+		let policies = pi.stores.read_binds().listener_frontend_policies(
+			&listener.name,
+			None,
+			Some(wps.as_policy_ref()),
+		);
 		socket.ext_mut().insert(wps);
 		if is_http {
 			let _ = Self::proxy(
 				bind_name,
 				pi,
 				Some(listener),
+				None,
 				socket,
 				Arc::new(policies),
 				drain,
@@ -1235,6 +1375,7 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 		http2_frame_size,
 		http2_keepalive_interval,
 		http2_keepalive_timeout,
+		max_connection_duration: _,
 	} = c.unwrap_or(&def);
 
 	if let Some(m) = http1_max_headers {
@@ -1282,6 +1423,16 @@ fn is_accept_error_per_connection(e: &std::io::Error) -> bool {
 		e.raw_os_error(),
 		Some(libc::ECONNABORTED | libc::ECONNRESET | libc::EPERM)
 	)
+}
+
+fn should_ignore_downstream_connection_error(err: &(dyn StdError + 'static)) -> bool {
+	if let Some(hyper_err) = err.downcast_ref::<hyper::Error>()
+		&& (hyper_err.is_timeout() || hyper_err.is_incomplete_message())
+	{
+		return true;
+	}
+
+	false
 }
 
 fn build_response(status: StatusCode) -> ::http::Response<()> {

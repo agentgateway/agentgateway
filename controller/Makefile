@@ -106,7 +106,11 @@ fmt:  ## Format the code with golangci-lint
 
 .PHONY: fmt-changed
 fmt-changed: ## Format only the changed code with golangci-lint (skip deleted files)
-	git status -s -uno | awk '{print $$2}' | grep '.*.go$$' | xargs -r -I{} bash -lc '[ -f "{}" ] && $(CUSTOM_GOLANGCI_LINT_FMT) "{}" || true'
+	@if git -C .. rev-parse --show-toplevel >/dev/null 2>&1; then \
+		git -C .. status -s -uno | awk '{print $$2}'; \
+	else \
+		jj -R .. diff --name-only 2>/dev/null; \
+	fi | sed 's#^controller/##' | awk '/.*\.go$$/' | xargs -r -I{} bash -lc '[ -f "{}" ] && $(CUSTOM_GOLANGCI_LINT_FMT) "{}" || true'
 
 # must be a separate target so that make waits for it to complete before moving on
 .PHONY: mod-download
@@ -178,6 +182,7 @@ e2e-test: testbox-docker kind-load-testbox
 e2e-test: go-test
 e2e-test: TEST_TAG = e2e
 e2e-test: GO_TEST_ARGS = $(E2E_GO_TEST_ARGS)
+e2e-test: export VERSION := $(VERSION)
 
 
 # https://go.dev/blog/cover#heat-maps
@@ -419,6 +424,10 @@ agentgateway-controller-docker: agentgateway-controller $(CONTROLLER_OUTPUT_DIR)
 		--build-arg GOARCH=$(GOARCH) \
 		-t $(IMAGE_REGISTRY)/$(AGENTGATEWAY_IMAGE_REPO):$(VERSION)
 
+.PHONY: agentgateway-docker
+agentgateway-docker: ## Build the proxy Docker image from the root Makefile
+	$(MAKE) -C .. docker IMAGE_TAG=$(VERSION)
+
 .PHONY: agentgateway-controller-docker-local
 agentgateway-controller-docker-local: agentgateway-controller $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway
 	docker buildx build --push $(PLATFORM) $(CONTROLLER_OUTPUT_DIR) -f $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway \
@@ -573,6 +582,17 @@ else
 	kubectl apply --kustomize "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=$(GIE_CRD_VERSION)"
 endif
 
+# Source the Istio CRDs from the vendored istio.io/istio module so the CRD
+# version always matches the API version agentgateway is compiled against.
+# The controller consumes Istio's ambient collections (WorkloadEntry,
+# ServiceEntry, AuthorizationPolicy...) so these CRDs must exist for those
+# informers to receive objects.
+ISTIO_CRDS_FILE := $(shell go list -m -f '{{.Dir}}' istio.io/istio)/manifests/charts/base/files/crd-all.gen.yaml
+
+.PHONY: istio-crds
+istio-crds: ## Install Istio CRDs (WorkloadEntry, ServiceEntry, etc.) from the vendored istio module
+	kubectl apply --server-side -f "$(ISTIO_CRDS_FILE)"
+
 .PHONY: metallb
 metallb: ## Install the MetalLB load balancer
 	kubectl apply -f ./test/setup/metallb.yaml
@@ -583,7 +603,7 @@ metallb: ## Install the MetalLB load balancer
 deploy-agentgateway: package-agentgateway-charts deploy-agentgateway-crd-chart deploy-agentgateway-chart ## Deploy the agentgateway chart and CRDs
 
 .PHONY: setup-base
-setup-base: kind-create gw-api-crds gie-crds metallb ## Setup the base infrastructure (kind cluster, CRDs, and MetalLB)
+setup-base: kind-create gw-api-crds gie-crds istio-crds metallb ## Setup the base infrastructure (kind cluster, CRDs, and MetalLB)
 
 # Creates a functional kind cluster, builds and loads all images, and packages charts
 # Does NOT deploy anything to the cluster
@@ -628,6 +648,7 @@ kind-reload-%: kind-build-and-load-% kind-set-image-% ; ## Use to build specifie
 
 .PHONY: kind-build-and-load ## Use to build all images and load them into kind
 kind-build-and-load: kind-build-and-load-agentgateway-controller
+kind-build-and-load: kind-build-and-load-agentgateway
 kind-build-and-load: kind-build-and-load-testbox
 
 .PHONY: kind-load ## Use to load all images into kind

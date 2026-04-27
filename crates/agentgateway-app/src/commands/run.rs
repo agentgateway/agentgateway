@@ -1,12 +1,13 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::{RunArgs, read_config_contents};
 use agent_core::{strng, telemetry, version};
 use agentgateway::app::Bound;
 use agentgateway::types::agent::ListenerTarget;
 use agentgateway::{BackendConfig, Config, LoggingFormat, client, serdes};
 use tracing::info;
+
+use crate::{RunArgs, read_config_contents};
 
 pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 	let RunArgs {
@@ -81,6 +82,7 @@ async fn validate(contents: String, filename: Option<PathBuf>) -> anyhow::Result
 				gateway_name: strng::literal!("default"),
 				gateway_namespace: strng::literal!("default"),
 				listener_name: None,
+				port: None,
 			},
 			cs.as_str(),
 		)
