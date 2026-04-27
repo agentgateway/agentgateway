@@ -37,9 +37,10 @@ import (
 )
 
 type resolvedBinding struct {
-	Gateway types.NamespacedName
-	Parent  types.NamespacedName
-	Target  types.NamespacedName
+	Gateway    types.NamespacedName
+	Parent     types.NamespacedName
+	Target     types.NamespacedName
+	ServiceKey *types.NamespacedName
 }
 
 func (b resolvedBinding) RouteGroupKey() string {
@@ -47,14 +48,15 @@ func (b resolvedBinding) RouteGroupKey() string {
 }
 
 type routeGroupBindingKey struct {
-	Gateway   *types.NamespacedName // +noKrtEquals
-	Source    types.NamespacedName
-	Namespace string
-	Name      string
+	Gateway    *types.NamespacedName // +noKrtEquals
+	Source     types.NamespacedName
+	Namespace  string
+	Name       string
+	ServiceKey *types.NamespacedName
 }
 
 func (k routeGroupBindingKey) String() string {
-	return strings.Join([]string{k.gatewayKey(), k.Source.String(), k.Namespace, k.Name}, "/")
+	return strings.Join([]string{k.gatewayKey(), k.serviceKey(), k.Source.String(), k.Namespace, k.Name}, "/")
 }
 
 func (b routeGroupBindingKey) ResourceName() string {
@@ -65,7 +67,8 @@ func (b routeGroupBindingKey) Equals(other routeGroupBindingKey) bool {
 	return b.Source == other.Source &&
 		b.Namespace == other.Namespace &&
 		b.Name == other.Name &&
-		b.GatewayNN() == other.GatewayNN()
+		b.GatewayNN() == other.GatewayNN() &&
+		b.ServiceKeyNN() == other.ServiceKeyNN()
 }
 
 func (b routeGroupBindingKey) GatewayNN() types.NamespacedName {
@@ -75,11 +78,25 @@ func (b routeGroupBindingKey) GatewayNN() types.NamespacedName {
 	return *b.Gateway
 }
 
+func (b routeGroupBindingKey) ServiceKeyNN() types.NamespacedName {
+	if b.ServiceKey == nil {
+		return types.NamespacedName{}
+	}
+	return *b.ServiceKey
+}
+
 func (b routeGroupBindingKey) gatewayKey() string {
 	if b.Gateway == nil {
 		return ""
 	}
 	return b.Gateway.String()
+}
+
+func (b routeGroupBindingKey) serviceKey() string {
+	if b.ServiceKey == nil {
+		return ""
+	}
+	return b.ServiceKey.String()
 }
 
 // isDelegatedChildHTTPRoute returns true for routes that may be delegated children:
@@ -184,6 +201,9 @@ func buildHTTPRouteGroupBindings(
 					if parent.ParentGateway != (types.NamespacedName{}) {
 						binding.Gateway = ptr.Of(parent.ParentGateway)
 					}
+					if parent.ServiceKey != nil {
+						binding.ServiceKey = parent.ServiceKey
+					}
 					if seen.InsertContains(binding.ResourceName()) {
 						continue
 					}
@@ -245,11 +265,16 @@ func buildDelegatedHTTPRoutes(
 			}
 			for _, gateway := range resolveGateways(krtctx, c, sets.New[string]()) {
 				resolvedBinding := resolvedBinding{
-					Gateway: gateway,
-					Parent:  c.Source,
-					Target:  target,
+					Gateway:    gateway,
+					Parent:     c.Source,
+					Target:     target,
+					ServiceKey: c.ServiceKey,
 				}
-				if seen.InsertContains(resolvedBinding.Gateway.String() + "/" + resolvedBinding.RouteGroupKey()) {
+				dedupeKey := resolvedBinding.Gateway.String() + "/" + resolvedBinding.RouteGroupKey()
+				if c.ServiceKey != nil {
+					dedupeKey += "/" + c.ServiceKey.String()
+				}
+				if seen.InsertContains(dedupeKey) {
 					continue
 				}
 				resolved = append(resolved, resolvedBinding)
@@ -277,6 +302,13 @@ func buildDelegatedHTTPRoutes(
 				route.ListenerKey = ""
 				route.RouteGroupKey = ptr.Of(binding.RouteGroupKey())
 				route.Key = delegatedRouteKey(route.GetKey(), binding.RouteGroupKey())
+				if binding.ServiceKey != nil {
+					route.ServiceKey = &workloadapi.NamespacedHostname{
+						Namespace: binding.ServiceKey.Namespace,
+						Hostname:  binding.ServiceKey.Name,
+					}
+					route.Hostnames = nil
+				}
 				resources = append(resources, ToResourceForGateway(binding.Gateway, AgwRoute{Route: route}))
 			}
 		}

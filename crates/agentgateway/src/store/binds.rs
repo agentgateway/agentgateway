@@ -1416,10 +1416,11 @@ impl Store {
 		diagnostics: &mut Diagnostics,
 	) -> anyhow::Result<()> {
 		let (route, listener_name, rgk) = Route::from_xds(&raw, diagnostics)?;
-		if let Some(sk) = route.service_key.clone() {
-			self.insert_service_route(route, sk);
-		} else if let Some(rgk) = rgk {
+		if let Some(rgk) = rgk {
+			// use group over service key here, the leaf route has a service key for policy
 			self.insert_route_into_group(route, rgk);
+		} else if let Some(sk) = route.service_key.clone() {
+			self.insert_service_route(route, sk);
 		} else {
 			self.insert_route(route, listener_name);
 		}
@@ -1853,6 +1854,103 @@ mod tests {
 				.routes
 				.as_ref()
 				.is_some_and(|routes| routes.contains(&strng::literal!("route")))
+		);
+	}
+
+	#[test]
+	fn delegated_child_dispatches_to_group_and_inherits_service_policies() {
+		use crate::types::proto::agent::RouteName as XdsRouteName;
+		use crate::types::proto::workload::NamespacedHostname as XdsNamespacedHostname;
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(true))));
+		let listener = listener();
+		let svc = NamespacedHostname {
+			namespace: strng::literal!("ns"),
+			hostname: strng::literal!("svc-a.ns.svc.cluster.local"),
+		};
+		let rgk: RouteGroupKey = strng::literal!("ns/svc-a-children");
+
+		// Service-targeted timeout policy on svc-a. Service targets are stored
+		// as Backend(Service { ... }) — the same view NamespacedHostname uses
+		// in as_policy_target_ref().
+		let svc_policy_key: PolicyKey = strng::literal!("svc-a-timeout");
+		let svc_policy_target = PolicyTarget::Backend(BackendTarget::Service {
+			hostname: svc.hostname.clone(),
+			namespace: svc.namespace.clone(),
+			port: None,
+		});
+		let svc_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(7)),
+			backend_request_timeout: None,
+		};
+
+		let xds_route = XdsRoute {
+			key: "child-route".to_string(),
+			listener_key: String::new(),
+			service_key: Some(XdsNamespacedHostname {
+				namespace: svc.namespace.to_string(),
+				hostname: svc.hostname.to_string(),
+			}),
+			route_group_key: Some(rgk.to_string()),
+			name: Some(XdsRouteName {
+				kind: "HTTPRoute".to_string(),
+				name: "child".to_string(),
+				namespace: "ns".to_string(),
+				rule_name: None,
+			}),
+			hostnames: vec![],
+			matches: vec![],
+			backends: vec![],
+			traffic_policies: vec![],
+		};
+
+		{
+			let mut store = updater.write();
+			store.policies_by_key.insert(
+				svc_policy_key.clone(),
+				Arc::new(TargetedPolicy {
+					key: svc_policy_key.clone(),
+					name: None,
+					target: svc_policy_target.clone(),
+					policy: TrafficPolicy::Timeout(svc_timeout.clone()).into(),
+				}),
+			);
+			store
+				.policies_by_target
+				.entry(svc_policy_target)
+				.or_default()
+				.insert(svc_policy_key);
+			store
+				.insert_xds_route(xds_route, &mut Diagnostics::default())
+				.expect("insert_xds_route should succeed");
+		}
+
+		let store = updater.read();
+
+		let group = store
+			.lookup_route_group(&rgk)
+			.expect("route should be in the route group");
+		let in_group = group
+			.iter()
+			.find(|r| r.key == strng::literal!("child-route"))
+			.expect("delegated child should be in the group");
+		assert!(
+			store.get_service_routes(&svc).is_none(),
+			"route with route_group_key must not also live in service-keyed routes",
+		);
+
+		let pols = store.route_policies(
+			&RoutePath {
+				listener: &listener,
+				service: in_group.service_key.as_ref(),
+				routes: vec![&in_group.name],
+			},
+			&[],
+		);
+		assert_eq!(
+			pols.timeout,
+			Some(svc_timeout),
+			"Service-targeted policy on svc-a must apply when traffic reaches the delegated child",
 		);
 	}
 
