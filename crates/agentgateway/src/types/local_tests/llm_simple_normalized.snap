@@ -235,10 +235,6 @@ backends:
                       - backendAuth:
                           key:
                             value: "<redacted>"
-                            location:
-                              header:
-                                name: authorization
-                                prefix: "Bearer "
                   info:
                     health: 1
                     request_latency: 0
@@ -284,10 +280,6 @@ backends:
                       - backendAuth:
                           key:
                             value: "<redacted>"
-                            location:
-                              header:
-                                name: authorization
-                                prefix: "Bearer "
                   info:
                     health: 1
                     request_latency: 0

@@ -31,9 +31,7 @@ async fn test_backend_auth_passthrough_happy_path() {
 	};
 	apply_backend_auth(
 		&backend_info,
-		&BackendAuth::Passthrough {
-			location: None,
-		},
+		&BackendAuth::Passthrough { location: None },
 		&mut req,
 	)
 	.await
@@ -145,7 +143,10 @@ async fn test_backend_auth_key_default_sets_non_explicit_extension() {
 		.extensions()
 		.get::<AppliedBackendAuthLocation>()
 		.expect("extension must be set");
-	assert!(!ext.explicit, "default location must not be marked explicit");
+	assert!(
+		!ext.explicit,
+		"default location must not be marked explicit"
+	);
 }
 
 #[tokio::test]

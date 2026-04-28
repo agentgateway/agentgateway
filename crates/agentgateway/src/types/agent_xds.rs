@@ -2027,9 +2027,11 @@ fn optional_authorization_location(
 			name: header.name.parse()?,
 			prefix: header.prefix.clone().map(Into::into),
 		})),
-		Some(Kind::QueryParameter(query)) => Ok(Some(http::auth::AuthorizationLocation::QueryParameter {
-			name: query.name.clone().into(),
-		})),
+		Some(Kind::QueryParameter(query)) => {
+			Ok(Some(http::auth::AuthorizationLocation::QueryParameter {
+				name: query.name.clone().into(),
+			}))
+		},
 		Some(Kind::Cookie(cookie)) => Ok(Some(http::auth::AuthorizationLocation::Cookie {
 			name: cookie.name.clone().into(),
 		})),
