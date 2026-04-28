@@ -15,7 +15,8 @@ import (
 )
 
 type backendConfigDump struct {
-	Services []backendService `json:"services"`
+	Services []backendService  `json:"services"`
+	Backends []topLevelBackend `json:"backends"`
 }
 
 type backendService struct {
@@ -31,21 +32,41 @@ type backendEndpoint struct {
 type backendEndpointState struct {
 	Endpoint struct {
 		WorkloadUID string `json:"workloadUid"`
+		Name        string `json:"name"`
 	} `json:"endpoint"`
-	Info struct {
-		Health         *float64 `json:"health"`
-		RequestLatency *float64 `json:"requestLatency"`
-		TotalRequests  *int64   `json:"totalRequests"`
-	} `json:"info"`
+	Info backendEndpointInfo `json:"info"`
+}
+
+type backendEndpointInfo struct {
+	Health              *float64 `json:"health"`
+	RequestLatency      *float64 `json:"requestLatency"`
+	RequestLatencySnake *float64 `json:"request_latency"`
+	TotalRequests       *int64   `json:"totalRequests"`
+	TotalRequestsSnake  *int64   `json:"total_requests"`
+}
+
+type topLevelBackend struct {
+	Backend map[string]topLevelBackendVariant `json:"backend"`
+}
+
+type topLevelBackendVariant struct {
+	Name      string          `json:"name"`
+	Namespace string          `json:"namespace"`
+	Target    json.RawMessage `json:"target"`
+}
+
+type backendTargetProviders struct {
+	Providers []backendEndpoint `json:"providers"`
 }
 
 type backendRow struct {
-	Name      string
-	Namespace string
-	Endpoint  string
-	Health    string
-	Requests  int64
-	LatencyMS float64
+	Type      string  `json:"type" yaml:"type"`
+	Name      string  `json:"name" yaml:"name"`
+	Namespace string  `json:"namespace" yaml:"namespace"`
+	Endpoint  string  `json:"endpoint" yaml:"endpoint"`
+	Health    string  `json:"health" yaml:"health"`
+	Requests  int64   `json:"requests" yaml:"requests"`
+	LatencyMS float64 `json:"latencyMs" yaml:"latencyMs"`
 }
 
 func backendsCommand(common *commonFlags) flag.Command {
@@ -100,23 +121,7 @@ func parseBackendRows(raw json.RawMessage, showAll bool) ([]backendRow, error) {
 
 			for _, endpointName := range endpointNames {
 				state := endpoints.Active[endpointName]
-				row := backendRow{
-					Name:      service.Name,
-					Namespace: service.Namespace,
-					Endpoint:  formatEndpointName(endpointName, service.Namespace),
-				}
-				if row.Endpoint == "" {
-					row.Endpoint = formatEndpointName(state.Endpoint.WorkloadUID, service.Namespace)
-				}
-				if state.Info.Health != nil {
-					row.Health = formatFloat(*state.Info.Health)
-				}
-				if state.Info.RequestLatency != nil {
-					row.LatencyMS = *state.Info.RequestLatency * 1000
-				}
-				if state.Info.TotalRequests != nil {
-					row.Requests = *state.Info.TotalRequests
-				}
+				row := buildBackendRow("Service", service.Name, service.Namespace, endpointName, state)
 				if !showAll && row.Requests == 0 {
 					continue
 				}
@@ -124,8 +129,30 @@ func parseBackendRows(raw json.RawMessage, showAll bool) ([]backendRow, error) {
 			}
 		}
 	}
+	for _, backend := range dump.Backends {
+		for _, variant := range backend.Backend {
+			for _, provider := range variant.providers() {
+				endpointNames := make([]string, 0, len(provider.Active))
+				for endpointName := range provider.Active {
+					endpointNames = append(endpointNames, endpointName)
+				}
+				sort.Strings(endpointNames)
+
+				for _, endpointName := range endpointNames {
+					row := buildBackendRow("Backend", variant.Name, variant.Namespace, endpointName, provider.Active[endpointName])
+					if !showAll && row.Requests == 0 {
+						continue
+					}
+					rows = append(rows, row)
+				}
+			}
+		}
+	}
 
 	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].Type != rows[j].Type {
+			return rows[i].Type < rows[j].Type
+		}
 		if rows[i].Namespace != rows[j].Namespace {
 			return rows[i].Namespace < rows[j].Namespace
 		}
@@ -138,11 +165,58 @@ func parseBackendRows(raw json.RawMessage, showAll bool) ([]backendRow, error) {
 	return rows, nil
 }
 
+func (v topLevelBackendVariant) providers() []backendEndpoint {
+	var target backendTargetProviders
+	if err := json.Unmarshal(v.Target, &target); err != nil {
+		return nil
+	}
+	return target.Providers
+}
+
+func buildBackendRow(backendType, name, namespace, endpointName string, state backendEndpointState) backendRow {
+	row := backendRow{
+		Type:      backendType,
+		Name:      name,
+		Namespace: namespace,
+		Endpoint:  formatEndpointName(endpointName, namespace),
+	}
+	if row.Endpoint == "" {
+		row.Endpoint = formatEndpointName(state.Endpoint.Name, namespace)
+	}
+	if row.Endpoint == "" {
+		row.Endpoint = formatEndpointName(state.Endpoint.WorkloadUID, namespace)
+	}
+	if state.Info.Health != nil {
+		row.Health = formatFloat(*state.Info.Health)
+	}
+	if requestLatency := state.Info.requestLatency(); requestLatency != nil {
+		row.LatencyMS = *requestLatency * 1000
+	}
+	if totalRequests := state.Info.totalRequests(); totalRequests != nil {
+		row.Requests = *totalRequests
+	}
+	return row
+}
+
+func (i backendEndpointInfo) requestLatency() *float64 {
+	if i.RequestLatency != nil {
+		return i.RequestLatency
+	}
+	return i.RequestLatencySnake
+}
+
+func (i backendEndpointInfo) totalRequests() *int64 {
+	if i.TotalRequests != nil {
+		return i.TotalRequests
+	}
+	return i.TotalRequestsSnake
+}
+
 func printBackendTable(w io.Writer, rows []backendRow) {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tNAMESPACE\tENDPOINT\tHEALTH\tREQUESTS\tLATENCY")
+	fmt.Fprintln(tw, "TYPE\tNAME\tNAMESPACE\tENDPOINT\tHEALTH\tREQUESTS\tLATENCY")
 	for _, row := range rows {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%s\n", row.Name, row.Namespace, row.Endpoint, row.Health, row.Requests, formatLatencyMS(row))
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%d\t%s\n", row.Type, row.Name, row.Namespace, row.Endpoint, row.Health, row.Requests, formatLatencyMS(row))
 	}
 	_ = tw.Flush()
 }

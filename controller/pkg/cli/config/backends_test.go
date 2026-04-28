@@ -58,7 +58,7 @@ func TestParseBackendRowsIgnoresUnneededFields(t *testing.T) {
 	if rows[0].Endpoint != "echo-a" {
 		t.Fatalf("rows not sorted by endpoint: %#v", rows)
 	}
-	if rows[0].Name != "echo" || rows[0].Namespace != "default" || rows[0].Health != "1.00" {
+	if rows[0].Type != "Service" || rows[0].Name != "echo" || rows[0].Namespace != "default" || rows[0].Health != "1.00" {
 		t.Fatalf("unexpected row fields: %#v", rows[0])
 	}
 	if got, want := rows[0].Requests, int64(0); got != want {
@@ -119,6 +119,112 @@ func TestParseBackendRowsFiltersZeroRequestEndpointsByDefault(t *testing.T) {
 	}
 }
 
+func TestParseBackendRowsIncludesTopLevelBackendProviders(t *testing.T) {
+	raw := []byte(`{
+		"backends": [
+			{
+				"backend": {
+					"ai": {
+						"name": "openai",
+						"namespace": "default",
+						"target": {
+							"providers": [
+								{
+									"active": {
+										"backend": {
+											"endpoint": {
+												"name": "backend"
+											},
+											"info": {
+												"health": 0.875,
+												"requestLatency": 1.466366426,
+												"totalRequests": 1
+											}
+										}
+									},
+									"rejected": {}
+								}
+							]
+						}
+					}
+				}
+			}
+		]
+	}`)
+
+	rows, err := parseBackendRows(raw, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(rows))
+	}
+	row := rows[0]
+	if row.Type != "Backend" || row.Name != "openai" || row.Namespace != "default" || row.Endpoint != "backend" {
+		t.Fatalf("unexpected row identity: %#v", row)
+	}
+	if row.Health != "0.88" {
+		t.Fatalf("health = %q, want %q", row.Health, "0.88")
+	}
+	if row.Requests != 1 {
+		t.Fatalf("requests = %d, want 1", row.Requests)
+	}
+	if got, want := formatLatencyMS(row), "1466.37ms"; got != want {
+		t.Fatalf("latency = %q, want %q", got, want)
+	}
+}
+
+func TestParseBackendRowsIgnoresTopLevelBackendStringTargets(t *testing.T) {
+	raw := []byte(`{
+		"backends": [
+			{
+				"backend": {
+					"host": {
+						"name": "httpbin",
+						"namespace": "default",
+						"target": "httpbingo.org:80"
+					}
+				}
+			},
+			{
+				"backend": {
+					"ai": {
+						"name": "openai",
+						"namespace": "default",
+						"target": {
+							"providers": [
+								{
+									"active": {
+										"backend": {
+											"endpoint": {"name": "backend"},
+											"info": {
+												"health": 1,
+												"requestLatency": 1.25,
+												"totalRequests": 2
+											}
+										}
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		]
+	}`)
+
+	rows, err := parseBackendRows(raw, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(rows))
+	}
+	if rows[0].Name != "openai" || rows[0].Endpoint != "backend" {
+		t.Fatalf("unexpected row: %#v", rows[0])
+	}
+}
+
 func TestFormatEndpointName(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -170,6 +276,7 @@ func TestFormatEndpointName(t *testing.T) {
 func TestPrintBackendTable(t *testing.T) {
 	var out bytes.Buffer
 	printBackendTable(&out, []backendRow{{
+		Type:      "Service",
 		Name:      "agentgateway",
 		Namespace: "agentgateway-system",
 		Endpoint:  "//Pod/agentgateway-system/agentgateway-6cbd9c8cb7-7t5xv",
@@ -179,7 +286,7 @@ func TestPrintBackendTable(t *testing.T) {
 	}})
 
 	got := out.String()
-	for _, want := range []string{"NAME", "NAMESPACE", "ENDPOINT", "HEALTH", "REQUESTS", "LATENCY"} {
+	for _, want := range []string{"TYPE", "NAME", "NAMESPACE", "ENDPOINT", "HEALTH", "REQUESTS", "LATENCY"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("table output missing %q:\n%s", want, got)
 		}
