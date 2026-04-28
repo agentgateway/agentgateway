@@ -1752,6 +1752,7 @@ type AttributeAdd struct {
 type MetricLabels struct {
 	// `attributes` specifies customizations to the labels that are
 	// added to Prometheus metrics.
+	// +required
 	Attributes MetricAttributes `json:"attributes"`
 }
 
