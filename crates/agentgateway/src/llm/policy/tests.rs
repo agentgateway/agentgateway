@@ -1295,7 +1295,7 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 		location: Some(strng::new("us-central1")),
 		policies: vec![BackendPolicy::BackendAuth(BackendAuth::Key {
 			value: SecretString::new("user-provided-api-key".into()),
-			location: crate::http::auth::AuthorizationLocation::default(),
+			location: None,
 		})],
 	};
 

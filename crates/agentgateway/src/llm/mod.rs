@@ -14,7 +14,7 @@ use serde::de::DeserializeOwned;
 use tiktoken_rs::CoreBPE;
 use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
 
-use crate::http::auth::{AwsAuth, AzureAuth, BackendAuth, GcpAuth};
+use crate::http::auth::{AppliedBackendAuthLocation, AwsAuth, AzureAuth, BackendAuth, GcpAuth};
 use crate::http::jwt::Claims;
 use crate::http::{Body, Request, Response};
 pub use crate::llm::types::{RequestType, ResponseType};
@@ -537,11 +537,27 @@ impl AIProvider {
 			AIProvider::Anthropic(_) => {
 				http::modify_req(req, |req| {
 					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
-						// OAuth tokens ("sk-ant-oat*") keep Authorization: Bearer; drop any x-api-key.
-						// All other tokens are moved to x-api-key (standard API key auth).
-						if authz.token().starts_with(anthropic::OAUTH_TOKEN_PREFIX) {
+						// Check whether the backend auth location was explicitly configured by the user.
+						// When explicit and targeting the Authorization header, we must not rewrite it
+						// (e.g. Databricks Anthropic Messages API requires Authorization: Bearer <jwt>).
+						let explicit_authorization = req
+							.extensions
+							.get::<AppliedBackendAuthLocation>()
+							.is_some_and(|auth| {
+								auth.explicit
+									&& matches!(
+										&auth.location,
+										crate::http::auth::AuthorizationLocation::Header { name, .. }
+											if *name == http::header::AUTHORIZATION
+									)
+							});
+
+						if authz.token().starts_with(anthropic::OAUTH_TOKEN_PREFIX) || explicit_authorization {
+							// OAuth tokens ("sk-ant-oat*") keep Authorization: Bearer; drop any x-api-key.
+							// Explicitly configured Authorization auth also keeps the header as-is.
 							req.headers.remove("x-api-key");
 						} else {
+							// All other tokens are moved to x-api-key (standard API key auth).
 							req.headers.remove(http::header::AUTHORIZATION);
 							let mut api_key = HeaderValue::from_str(authz.token())?;
 							api_key.set_sensitive(true);

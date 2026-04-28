@@ -1150,7 +1150,7 @@ where
 			BackendAuthCompat::Full(auth) => auth,
 			BackendAuthCompat::PlainKey { key } => BackendAuth::Key {
 				value: key,
-				location: crate::http::auth::AuthorizationLocation::default(),
+				location: None,
 			},
 		})
 	})
@@ -1952,10 +1952,10 @@ json(request.body).model
 		// Create backend auth policy
 		let mut pols = vec![];
 		if let Some(key) = p.api_key.as_ref() {
-			let backend_auth = BackendAuth::Key {
-				value: key.0.clone(),
-				location: crate::http::auth::AuthorizationLocation::default(),
-			};
+		let backend_auth = BackendAuth::Key {
+			value: key.0.clone(),
+			location: None,
+		};
 			pols.push(BackendPolicy::BackendAuth(backend_auth));
 		}
 

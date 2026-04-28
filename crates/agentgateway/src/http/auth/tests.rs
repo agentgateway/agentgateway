@@ -32,7 +32,7 @@ async fn test_backend_auth_passthrough_happy_path() {
 	apply_backend_auth(
 		&backend_info,
 		&BackendAuth::Passthrough {
-			location: AuthorizationLocation::default(),
+			location: None,
 		},
 		&mut req,
 	)
@@ -69,7 +69,7 @@ async fn test_backend_auth_key() {
 
 	let key_auth = BackendAuth::Key {
 		value: SecretString::new("my-secret-key".into()),
-		location: AuthorizationLocation::default(),
+		location: None,
 	};
 	apply_backend_auth(&backend_info, &key_auth, &mut req)
 		.await
@@ -104,7 +104,7 @@ async fn test_backend_auth_key_query_parameter() {
 
 	let key_auth = BackendAuth::Key {
 		value: SecretString::new("my-secret-key".into()),
-		location: AuthorizationLocation::QueryParameter { name: "key".into() },
+		location: Some(AuthorizationLocation::QueryParameter { name: "key".into() }),
 	};
 	apply_backend_auth(&backend_info, &key_auth, &mut req)
 		.await
@@ -114,6 +114,70 @@ async fn test_backend_auth_key_query_parameter() {
 		req.uri().to_string(),
 		"http://example.com/search?keep=yes&key=my-secret-key"
 	);
+}
+
+#[tokio::test]
+async fn test_backend_auth_key_default_sets_non_explicit_extension() {
+	// When location is None (defaulted), the extension must have explicit=false.
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let inputs = t.inputs();
+
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs,
+	};
+
+	let key_auth = BackendAuth::Key {
+		value: SecretString::new("my-secret-key".into()),
+		location: None,
+	};
+	apply_backend_auth(&backend_info, &key_auth, &mut req)
+		.await
+		.expect("apply backend auth");
+
+	let ext = req
+		.extensions()
+		.get::<AppliedBackendAuthLocation>()
+		.expect("extension must be set");
+	assert!(!ext.explicit, "default location must not be marked explicit");
+}
+
+#[tokio::test]
+async fn test_backend_auth_key_explicit_location_sets_explicit_extension() {
+	// When location is Some(...), the extension must have explicit=true.
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let inputs = t.inputs();
+
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs,
+	};
+
+	let key_auth = BackendAuth::Key {
+		value: SecretString::new("my-secret-key".into()),
+		location: Some(AuthorizationLocation::bearer_header()),
+	};
+	apply_backend_auth(&backend_info, &key_auth, &mut req)
+		.await
+		.expect("apply backend auth");
+
+	let ext = req
+		.extensions()
+		.get::<AppliedBackendAuthLocation>()
+		.expect("extension must be set");
+	assert!(ext.explicit, "explicit location must be marked explicit");
 }
 
 #[tokio::test]

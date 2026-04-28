@@ -24,8 +24,8 @@ use crate::*;
 #[apply(schema!)]
 pub enum BackendAuth {
 	Passthrough {
-		#[serde(default)]
-		location: AuthorizationLocation,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		location: Option<AuthorizationLocation>,
 	},
 	Key {
 		#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
@@ -34,8 +34,8 @@ pub enum BackendAuth {
 			deserialize_with = "deser_key_from_file"
 		)]
 		value: SecretString,
-		#[serde(default)]
-		location: AuthorizationLocation,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		location: Option<AuthorizationLocation>,
 	},
 	#[serde(rename = "gcp")]
 	Gcp(gcp::GcpAuth),
@@ -45,6 +45,17 @@ pub enum BackendAuth {
 	Azure(azure::AzureAuth),
 	#[serde(rename = "copilot")]
 	Copilot,
+}
+
+/// Records the auth location that was applied to a request by [`apply_backend_auth`],
+/// and whether the location was explicitly configured by the user (vs. defaulted).
+///
+/// Downstream providers (e.g. Anthropic) inspect this to decide whether to rewrite
+/// auth headers.
+#[derive(Clone, Debug)]
+pub struct AppliedBackendAuthLocation {
+	pub location: AuthorizationLocation,
+	pub explicit: bool,
 }
 
 #[derive(Clone)]
@@ -59,21 +70,24 @@ pub fn apply_tunnel_auth(auth: &BackendAuth) -> Result<HeaderValue, ProxyError> 
 		BackendAuth::Key {
 			value: key,
 			location,
-		} => match location {
-			AuthorizationLocation::Header { name: _, prefix } => {
-				let value = key.expose_secret();
-				let value = match prefix {
-					Some(prefix) => Cow::Owned(format!("{prefix}{value}")),
-					None => Cow::Borrowed(value),
-				};
-				let mut header_value =
-					HeaderValue::from_str(&value).map_err(|e| ProxyError::Processing(e.into()))?;
-				header_value.set_sensitive(true);
-				Ok(header_value)
-			},
-			_ => Err(ProcessingString(
-				"only header auth is supported in tunnel".to_string(),
-			)),
+		} => {
+			let resolved = location.as_ref().cloned().unwrap_or_default();
+			match &resolved {
+				AuthorizationLocation::Header { name: _, prefix } => {
+					let value = key.expose_secret();
+					let value = match prefix {
+						Some(prefix) => Cow::Owned(format!("{prefix}{value}")),
+						None => Cow::Borrowed(value),
+					};
+					let mut header_value =
+						HeaderValue::from_str(&value).map_err(|e| ProxyError::Processing(e.into()))?;
+					header_value.set_sensitive(true);
+					Ok(header_value)
+				},
+				_ => Err(ProcessingString(
+					"only header auth is supported in tunnel".to_string(),
+				)),
+			}
 		},
 		_ => Err(ProcessingString(
 			"only key auth is supported in tunnel".to_string(),
@@ -87,6 +101,8 @@ pub async fn apply_backend_auth(
 ) -> Result<(), ProxyError> {
 	match auth {
 		BackendAuth::Passthrough { location } => {
+			let explicit = location.is_some();
+			let resolved = location.as_ref().cloned().unwrap_or_default();
 			// They should have a JWT policy defined. That will strip the token. Here we add it back
 			// TODO: should we also support API key, etc?
 			if let Some(token) = req
@@ -94,13 +110,25 @@ pub async fn apply_backend_auth(
 				.get::<Claims>()
 				.map(|claim| claim.jwt.expose_secret().to_string())
 			{
-				location.insert(req, &token)?;
+				resolved.insert(req, &token)?;
 			}
+			req.extensions_mut().insert(AppliedBackendAuthLocation {
+				location: resolved,
+				explicit,
+			});
 		},
 		BackendAuth::Key {
 			value: key,
 			location,
-		} => location.insert(req, key.expose_secret())?,
+		} => {
+			let explicit = location.is_some();
+			let resolved = location.as_ref().cloned().unwrap_or_default();
+			resolved.insert(req, key.expose_secret())?;
+			req.extensions_mut().insert(AppliedBackendAuthLocation {
+				location: resolved,
+				explicit,
+			});
+		},
 		BackendAuth::Gcp(g) => {
 			gcp::insert_token(g, &backend_info.call_target, req.headers_mut())
 				.await

@@ -639,17 +639,11 @@ fn backend_auth_from_proto(
 	use proto::agent::{azure_explicit_config, gcp};
 	Ok(match s.kind {
 		Some(proto::agent::backend_auth_policy::Kind::Passthrough(p)) => BackendAuth::Passthrough {
-			location: authorization_location(
-				p.authorization_location.as_ref(),
-				http::auth::AuthorizationLocation::bearer_header(),
-			)?,
+			location: optional_authorization_location(p.authorization_location.as_ref())?,
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Key(k)) => BackendAuth::Key {
 			value: k.secret.into(),
-			location: authorization_location(
-				k.authorization_location.as_ref(),
-				http::auth::AuthorizationLocation::bearer_header(),
-			)?,
+			location: optional_authorization_location(k.authorization_location.as_ref())?,
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Gcp(g)) => BackendAuth::Gcp(match g.token_type {
 			None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
@@ -2014,6 +2008,32 @@ fn authorization_location(
 			name: cookie.name.clone().into(),
 		}),
 		None => Ok(default),
+	}
+}
+
+/// Like [`authorization_location`], but returns `None` when the proto field is absent,
+/// preserving the distinction between "not set" (default) and "explicitly configured".
+fn optional_authorization_location(
+	location: Option<&proto::agent::AuthorizationLocation>,
+) -> Result<Option<http::auth::AuthorizationLocation>, ProtoError> {
+	use proto::agent::authorization_location::Kind;
+
+	let Some(location) = location else {
+		return Ok(None);
+	};
+
+	match location.kind.as_ref() {
+		Some(Kind::Header(header)) => Ok(Some(http::auth::AuthorizationLocation::Header {
+			name: header.name.parse()?,
+			prefix: header.prefix.clone().map(Into::into),
+		})),
+		Some(Kind::QueryParameter(query)) => Ok(Some(http::auth::AuthorizationLocation::QueryParameter {
+			name: query.name.clone().into(),
+		})),
+		Some(Kind::Cookie(cookie)) => Ok(Some(http::auth::AuthorizationLocation::Cookie {
+			name: cookie.name.clone().into(),
+		})),
+		None => Ok(None),
 	}
 }
 
