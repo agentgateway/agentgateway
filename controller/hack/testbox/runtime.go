@@ -45,3 +45,18 @@ func serveGRPC(name string, listener net.Listener, server *grpc.Server) shutdown
 		}
 	}
 }
+
+func chainShutdowns(shutdowns ...shutdownFunc) shutdownFunc {
+	return func(ctx context.Context) error {
+		var retErr error
+		for i := len(shutdowns) - 1; i >= 0; i-- {
+			if shutdowns[i] == nil {
+				continue
+			}
+			if err := shutdowns[i](ctx); err != nil && retErr == nil {
+				retErr = err
+			}
+		}
+		return retErr
+	}
+}

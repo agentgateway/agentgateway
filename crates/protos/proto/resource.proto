@@ -818,6 +818,61 @@ message TrafficPolicySpec {
     AuthorizationLocation authorization_location = 3;
   }
 
+  // OIDC browser authentication configuration.
+  //
+  // Provider metadata (issuer validation, authorization/token endpoints, JWKS)
+  // is resolved by the controller from the issuer's discovery document. The
+  // dataplane never fetches the discovery or JWKS URLs itself.
+  message OIDC {
+    // Client authentication method at the token endpoint.
+    //
+    // `NONE` is public-client mode: no client authentication is presented and
+    // `client_secret` must be empty on the wire. PKCE still protects the
+    // authorization code exchange (see the runtime oidc/callback.rs).
+    enum TokenEndpointAuth {
+      TOKEN_ENDPOINT_AUTH_UNSPECIFIED = 0;
+      CLIENT_SECRET_BASIC = 1;
+      CLIENT_SECRET_POST = 2;
+      NONE = 3;
+    }
+
+    // Stable identity for session/cookie naming. Encoded as
+    // "route/<namespace>/<name>/<rule>" or "policy/<namespace>/<name>"; the
+    // dataplane parses it via http::oidc::PolicyId.
+    string policy_id = 1;
+
+    // IdP issuer identifier (matches the "iss" claim on id tokens).
+    string issuer = 2;
+
+    // Absolute authorization endpoint URL (the /authorize URL).
+    string authorization_endpoint = 3;
+
+    // Absolute token endpoint URL (the /token URL).
+    string token_endpoint = 4;
+
+    // Client authentication method advertised by the IdP (or overridden by the
+    // user).
+    TokenEndpointAuth token_endpoint_auth = 5;
+
+    // JWKS content, as JSON, pre-fetched by the controller. The dataplane does
+    // not fetch jwks_uri.
+    string jwks_inline = 6;
+
+    // OIDC client identifier registered with the IdP.
+    string client_id = 7;
+
+    // OIDC client secret resolved from the user-supplied Secret reference.
+    // Transported over xDS to the dataplane; the cookie crypto secret is
+    // delivered out-of-band as an environment variable, not here.
+    string client_secret = 8;
+
+    // Absolute callback URI registered with the IdP.
+    string redirect_uri = 9;
+
+    // Requested scopes. When empty, the dataplane falls back to ["openid"].
+    repeated string scopes = 10;
+  }
+
   message TransformationPolicy {
     message Transform {
       repeated HeaderTransformation set = 1;
@@ -898,6 +953,7 @@ message TrafficPolicySpec {
     BasicAuthentication basic_auth = 19;
     APIKey api_key_auth = 20;
     HostRewrite host_rewrite = 21;
+    OIDC oidc = 22;
   }
 }
 

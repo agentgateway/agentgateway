@@ -17,6 +17,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/jwtauth"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/locality"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/mcp"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/oidc"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/otel"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/policystatus"
 	global_rate_limit "github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/rate_limit/global"
@@ -35,6 +36,7 @@ func AgentgatewaySuiteRunner() e2e.SuiteRunner {
 	agentgatewaySuiteRunner.Register("BasicAuth", basicauth.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("ApiKeyAuth", apikeyauth.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("JwtAuth", jwtauth.NewTestingSuite)
+	agentgatewaySuiteRunner.Register("OIDC", oidc.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("Locality", locality.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("CSRF", csrf.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("Delegation", delegation.NewTestingSuite)

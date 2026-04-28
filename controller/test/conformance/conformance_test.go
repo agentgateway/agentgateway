@@ -27,6 +27,8 @@ import (
 	"sigs.k8s.io/yaml"
 
 	_ "sigs.k8s.io/gateway-api-inference-extension/conformance"
+
+	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 )
 
 func TestConformance(t *testing.T) {
@@ -90,6 +92,12 @@ func exemptExperimentalFeatures(options *suite.ConformanceOptions) {
 		if feature.Channel == features.FeatureChannelExperimental {
 			options.ExemptFeatures.Insert(feature.Name)
 		}
+	}
+	// Agentgateway-specific features are not Gateway API conformance criteria;
+	// the GatewayClass advertises them but the conformance suite must not
+	// expect a matching upstream profile.
+	for _, feature := range agwplugins.AgentgatewaySupportedFeatures {
+		options.ExemptFeatures.Insert(feature.Name)
 	}
 }
 

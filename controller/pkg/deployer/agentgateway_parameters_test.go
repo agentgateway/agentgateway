@@ -449,3 +449,90 @@ func TestAddSessionKeyChecksumAnnotation(t *testing.T) {
 		deployment.Spec.Template.Annotations[sessionKeyChecksumAnnotation],
 	)
 }
+
+func TestApplyManagedOIDCCookieSecretDefaults_UsesUserProvidedOIDCCookieSecret(t *testing.T) {
+	vals := &AgentgatewayHelmGateway{
+		AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
+			Env: []corev1.EnvVar{
+				{Name: "OIDC_COOKIE_SECRET", Value: "inline-key"},
+			},
+		},
+	}
+
+	applyManagedOIDCCookieSecretDefaults(vals, "gw", true)
+
+	assert.Nil(t, vals.OIDCCookieSecretName)
+}
+
+func TestApplyManagedOIDCCookieSecretDefaults_SetsSecretNameWhenEnabled(t *testing.T) {
+	vals := &AgentgatewayHelmGateway{}
+
+	applyManagedOIDCCookieSecretDefaults(vals, "gw", true)
+
+	require.NotNil(t, vals.OIDCCookieSecretName)
+	assert.Equal(t, "gw-oidc-cookie-secret", *vals.OIDCCookieSecretName)
+}
+
+func TestApplyManagedOIDCCookieSecretDefaults_NilWhenDisabled(t *testing.T) {
+	vals := &AgentgatewayHelmGateway{}
+
+	applyManagedOIDCCookieSecretDefaults(vals, "gw", false)
+
+	assert.Nil(t, vals.OIDCCookieSecretName)
+}
+
+func TestUsesManagedOIDCCookieSecretResolvedParameters_GatewayEnvDisablesManagedSecret(t *testing.T) {
+	resolved := &resolvedParameters{
+		gatewayClassAGWP: &agentgateway.AgentgatewayParameters{
+			Spec: agentgateway.AgentgatewayParametersSpec{
+				AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
+					Env: []corev1.EnvVar{{Name: "RUST_LOG", Value: "info"}},
+				},
+			},
+		},
+		gatewayAGWP: &agentgateway.AgentgatewayParameters{
+			Spec: agentgateway.AgentgatewayParametersSpec{
+				AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
+					Env: []corev1.EnvVar{{Name: "OIDC_COOKIE_SECRET", Value: "inline-key"}},
+				},
+			},
+		},
+	}
+
+	assert.False(t, usesManagedOIDCCookieSecretResolvedParameters(resolved))
+}
+
+func TestBuildOIDCCookieSecret_UsesExistingValidKey(t *testing.T) {
+	const existingKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw-oidc-cookie-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"key": []byte(existingKey),
+		},
+	}
+	generator := &agentgatewayParametersHelmValuesGenerator{
+		secretClient: newSyncedSecretClient(t, secret),
+		oidcCookieGen: func() (string, error) {
+			return "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100", nil
+		},
+	}
+	gw := &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw",
+			Namespace: "default",
+		},
+		Spec: gwv1.GatewaySpec{
+			GatewayClassName: "agentgateway",
+		},
+	}
+
+	managedSecret, err := generator.buildOIDCCookieSecret(context.Background(), gw, "gw-oidc-cookie-secret")
+	require.NoError(t, err)
+	require.NotNil(t, managedSecret)
+	assert.Equal(t, existingKey, string(managedSecret.Data["key"]))
+	assert.Equal(t, corev1.SecretTypeOpaque, managedSecret.Type)
+	assert.Equal(t, "gw-oidc-cookie-secret", managedSecret.Name)
+}

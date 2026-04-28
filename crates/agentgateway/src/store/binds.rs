@@ -100,6 +100,11 @@ pub struct Store {
 	listener_change_tx: watch::Sender<u64>,
 	listener_change_rx: watch::Receiver<u64>,
 
+	/// Cookie-crypto encoder applied to xDS-delivered OIDC policies at
+	/// Store ingestion. Set once at startup from the gateway runtime config;
+	/// when absent, OIDC policies arriving via xDS are rejected.
+	oidc_cookie_encoder: Option<crate::http::sessionpersistence::Encoder>,
+
 	tx: tokio::sync::mpsc::UnboundedSender<BindEvent>,
 	rx: Option<tokio::sync::mpsc::UnboundedReceiver<BindEvent>>,
 }
@@ -521,9 +526,18 @@ impl Store {
 			tcp_routes: Default::default(),
 			listener_change_tx,
 			listener_change_rx,
+			oidc_cookie_encoder: None,
 			tx,
 			rx: Some(rx),
 		}
+	}
+
+	/// Install the ambient cookie-crypto encoder used to compile xDS OIDC
+	/// policies into runtime [`crate::http::oidc::OidcPolicy`] values. Must be
+	/// called before xDS ingestion begins on a gateway that may receive OIDC
+	/// policies; xDS proto-decode rejects OIDC policies until it is set.
+	pub fn set_oidc_cookie_encoder(&mut self, encoder: crate::http::sessionpersistence::Encoder) {
+		self.oidc_cookie_encoder = Some(encoder);
 	}
 
 	fn listener_target_ref(listener: &ListenerKey) -> RouteTargetRef<'_> {
@@ -1415,7 +1429,8 @@ impl Store {
 		raw: XdsRoute,
 		diagnostics: &mut Diagnostics,
 	) -> anyhow::Result<()> {
-		let (route, listener_name, rgk) = Route::from_xds(&raw, diagnostics)?;
+		let (route, listener_name, rgk) =
+			Route::from_xds(&raw, diagnostics, self.oidc_cookie_encoder.as_ref())?;
 		if let Some(sk) = route.service_key.clone() {
 			self.insert_service_route(route, sk);
 		} else if let Some(rgk) = rgk {
@@ -1454,7 +1469,11 @@ impl Store {
 		raw: XdsPolicy,
 		diagnostics: &mut Diagnostics,
 	) -> anyhow::Result<()> {
-		let policy = crate::types::agent_xds::targeted_policy_from_proto(&raw, diagnostics)?;
+		let policy = crate::types::agent_xds::targeted_policy_from_proto(
+			&raw,
+			diagnostics,
+			self.oidc_cookie_encoder.as_ref(),
+		)?;
 		self.insert_policy(policy);
 		Ok(())
 	}

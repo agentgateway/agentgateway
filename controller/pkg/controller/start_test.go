@@ -30,9 +30,9 @@ func TestPluginsRegistersJWKSAwareBuiltins(t *testing.T) {
 	resolver := testutils.BuildRemoteHTTPResolver(collections)
 	jwksLookup := testutils.BuildJWKSLookup(collections)
 
-	plug := plugins.MergePlugins(controller.Plugins(collections, resolver, jwksLookup)...)
+	plug := plugins.MergePlugins(controller.Plugins(collections, resolver, jwksLookup, nil)...)
 
-	if got := len(controller.Plugins(collections, resolver, jwksLookup)); got != 5 {
+	if got := len(controller.Plugins(collections, resolver, jwksLookup, nil)); got != 5 {
 		t.Fatalf("expected 5 built-in plugins, got %d", got)
 	}
 	if _, ok := plug.ContributesPolicies[wellknown.AgentgatewayPolicyGVK.GroupKind()]; !ok {
@@ -49,7 +49,7 @@ func TestPluginsPreserveExtraContributionWhenMerged(t *testing.T) {
 	jwksLookup := testutils.BuildJWKSLookup(collections)
 	extraGK := schema.GroupKind{Group: "test.agentgateway.dev", Kind: "ExtraPolicy"}
 
-	plug := plugins.MergePlugins(append(controller.Plugins(collections, resolver, jwksLookup), plugins.AgwPlugin{
+	plug := plugins.MergePlugins(append(controller.Plugins(collections, resolver, jwksLookup, nil), plugins.AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]plugins.PolicyPlugin{
 			extraGK: {},
 		},

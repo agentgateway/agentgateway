@@ -1144,12 +1144,12 @@
 |`binds[].listeners[].routes[].policies.oidc.discovery.url`|string||
 |`binds[].listeners[].routes[].policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`binds[].listeners[].routes[].policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
-|`binds[].listeners[].routes[].policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
+|`binds[].listeners[].routes[].policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `none`.|
 |`binds[].listeners[].routes[].policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`binds[].listeners[].routes[].policies.oidc.jwks.file`|string||
 |`binds[].listeners[].routes[].policies.oidc.jwks.url`|string||
 |`binds[].listeners[].routes[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
-|`binds[].listeners[].routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`binds[].listeners[].routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange. Omit for a public<br>client; in that case PKCE alone protects the authorization code<br>exchange and the IdP must advertise `none` as a supported token-<br>endpoint auth method (or this gateway must explicitly select it via<br>`token_endpoint_auth`).|
 |`binds[].listeners[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`binds[].listeners[].routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`binds[].listeners[].routes[].policies.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
@@ -4307,12 +4307,12 @@
 |`binds[].listeners[].policies.oidc.discovery.url`|string||
 |`binds[].listeners[].policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`binds[].listeners[].policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
-|`binds[].listeners[].policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
+|`binds[].listeners[].policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `none`.|
 |`binds[].listeners[].policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`binds[].listeners[].policies.oidc.jwks.file`|string||
 |`binds[].listeners[].policies.oidc.jwks.url`|string||
 |`binds[].listeners[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
-|`binds[].listeners[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`binds[].listeners[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange. Omit for a public<br>client; in that case PKCE alone protects the authorization code<br>exchange and the IdP must advertise `none` as a supported token-<br>endpoint auth method (or this gateway must explicitly select it via<br>`token_endpoint_auth`).|
 |`binds[].listeners[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`binds[].listeners[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`binds[].listeners[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
@@ -5919,12 +5919,12 @@
 |`policies[].policy.oidc.discovery.url`|string||
 |`policies[].policy.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`policies[].policy.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
-|`policies[].policy.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
+|`policies[].policy.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `none`.|
 |`policies[].policy.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`policies[].policy.oidc.jwks.file`|string||
 |`policies[].policy.oidc.jwks.url`|string||
 |`policies[].policy.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
-|`policies[].policy.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`policies[].policy.oidc.clientSecret`|string|OAuth2 client secret used for token exchange. Omit for a public<br>client; in that case PKCE alone protects the authorization code<br>exchange and the IdP must advertise `none` as a supported token-<br>endpoint auth method (or this gateway must explicitly select it via<br>`token_endpoint_auth`).|
 |`policies[].policy.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`policies[].policy.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`policies[].policy.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
@@ -10091,12 +10091,12 @@
 |`routeGroups[].routes[].policies.oidc.discovery.url`|string||
 |`routeGroups[].routes[].policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`routeGroups[].routes[].policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
-|`routeGroups[].routes[].policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
+|`routeGroups[].routes[].policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `none`.|
 |`routeGroups[].routes[].policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`routeGroups[].routes[].policies.oidc.jwks.file`|string||
 |`routeGroups[].routes[].policies.oidc.jwks.url`|string||
 |`routeGroups[].routes[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
-|`routeGroups[].routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`routeGroups[].routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange. Omit for a public<br>client; in that case PKCE alone protects the authorization code<br>exchange and the IdP must advertise `none` as a supported token-<br>endpoint auth method (or this gateway must explicitly select it via<br>`token_endpoint_auth`).|
 |`routeGroups[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`routeGroups[].routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`routeGroups[].routes[].policies.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
@@ -14008,12 +14008,12 @@
 |`llm.policies.oidc.discovery.url`|string||
 |`llm.policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`llm.policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
-|`llm.policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
+|`llm.policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `none`.|
 |`llm.policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`llm.policies.oidc.jwks.file`|string||
 |`llm.policies.oidc.jwks.url`|string||
 |`llm.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
-|`llm.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`llm.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange. Omit for a public<br>client; in that case PKCE alone protects the authorization code<br>exchange and the IdP must advertise `none` as a supported token-<br>endpoint auth method (or this gateway must explicitly select it via<br>`token_endpoint_auth`).|
 |`llm.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`llm.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`llm.policies.jwtAuth`|object|Authenticate incoming JWT requests.|
@@ -15479,12 +15479,12 @@
 |`mcp.policies.oidc.discovery.url`|string||
 |`mcp.policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`mcp.policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
-|`mcp.policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
+|`mcp.policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `none`.|
 |`mcp.policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`mcp.policies.oidc.jwks.file`|string||
 |`mcp.policies.oidc.jwks.url`|string||
 |`mcp.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
-|`mcp.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`mcp.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange. Omit for a public<br>client; in that case PKCE alone protects the authorization code<br>exchange and the IdP must advertise `none` as a supported token-<br>endpoint auth method (or this gateway must explicitly select it via<br>`token_endpoint_auth`).|
 |`mcp.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`mcp.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`mcp.policies.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
