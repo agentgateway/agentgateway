@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use axum::http::StatusCode;
 use axum::response::Response;
 use axum_core::response::IntoResponse;
@@ -194,26 +192,7 @@ fn request_uri_for_oauth_metadata(req: &Request) -> Uri {
 		.map(|u| u.0.clone())
 		.unwrap_or_else(|| req.uri().clone());
 
-	apply_forwarded_scheme(uri, req.headers())
-}
-
-fn apply_forwarded_scheme(uri: Uri, headers: &HeaderMap<HeaderValue>) -> Uri {
-	let Some(scheme) = forwarded_scheme(headers) else {
-		return uri;
-	};
-	if uri.authority().is_none() {
-		return uri;
-	}
-
-	let original = uri.clone();
-	let mut parts = uri.into_parts();
-	parts.scheme = Some(scheme);
-	Uri::from_parts(parts).unwrap_or(original)
-}
-
-fn forwarded_scheme(headers: &HeaderMap<HeaderValue>) -> Option<Scheme> {
-	crate::http::x_headers::forwarded_proto(headers)
-		.and_then(|proto| Scheme::from_str(proto.as_str()).ok())
+	crate::http::x_headers::apply_forwarded_scheme(uri, req.headers())
 }
 
 pub(super) async fn authorization_server_metadata(

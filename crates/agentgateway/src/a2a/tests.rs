@@ -99,6 +99,36 @@ async fn test_classify_request_uses_original_url_for_agent_card() {
 }
 
 #[tokio::test]
+async fn test_classify_request_uses_x_forwarded_proto_for_agent_card() {
+	let original: Uri = "http://example.com/api/.well-known/agent-card.json"
+		.parse()
+		.unwrap();
+	let mut req = ::http::Request::builder()
+		.method(Method::GET)
+		.uri("http://backend.internal/.well-known/agent-card.json")
+		.header("x-forwarded-proto", "https")
+		.body(http::Body::empty())
+		.unwrap();
+	req
+		.extensions_mut()
+		.insert(crate::http::filters::OriginalUrl(original));
+
+	let ty = classify_request(&mut req).await;
+
+	match ty {
+		RequestType::AgentCard(uri) => {
+			assert_eq!(
+				uri,
+				"https://example.com/api/.well-known/agent-card.json"
+					.parse::<Uri>()
+					.unwrap()
+			)
+		},
+		other => panic!("expected agent card request, got {other:?}"),
+	}
+}
+
+#[tokio::test]
 async fn test_classify_request_returns_unknown_method_on_invalid_json() {
 	let mut req = ::http::Request::builder()
 		.method(Method::POST)
