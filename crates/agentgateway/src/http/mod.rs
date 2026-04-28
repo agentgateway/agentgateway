@@ -489,7 +489,7 @@ pub fn get_request_pseudo_headers(req: &Request) -> Vec<(HeaderOrPseudo, String)
 }
 
 pub mod x_headers {
-	use http::{HeaderMap, HeaderName, HeaderValue};
+	use http::{HeaderMap, HeaderName, HeaderValue, Uri, uri::Scheme};
 
 	pub const X_RATELIMIT_LIMIT: HeaderName = HeaderName::from_static("x-ratelimit-limit");
 	pub const X_RATELIMIT_REMAINING: HeaderName = HeaderName::from_static("x-ratelimit-remaining");
@@ -517,6 +517,24 @@ pub mod x_headers {
 			.map(str::trim)
 			.find(|value| !value.is_empty())
 			.map(|value| value.to_ascii_lowercase())
+	}
+
+	pub fn forwarded_scheme(headers: &HeaderMap<HeaderValue>) -> Option<Scheme> {
+		forwarded_proto(headers).and_then(|proto| proto.parse().ok())
+	}
+
+	pub fn apply_forwarded_scheme(uri: Uri, headers: &HeaderMap<HeaderValue>) -> Uri {
+		let Some(scheme) = forwarded_scheme(headers) else {
+			return uri;
+		};
+		if uri.authority().is_none() {
+			return uri;
+		}
+
+		let original = uri.clone();
+		let mut parts = uri.into_parts();
+		parts.scheme = Some(scheme);
+		Uri::from_parts(parts).unwrap_or(original)
 	}
 }
 
