@@ -43,8 +43,6 @@ func ToAgwResource(t any) *api.Resource {
 		return &api.Resource{Kind: &api.Resource_Listener{Listener: tt.Listener}}
 	case AgwRoute:
 		return &api.Resource{Kind: &api.Resource_Route{Route: tt.Route}}
-	case AgwRouteGroup:
-		return &api.Resource{Kind: &api.Resource_RouteGroup{RouteGroup: tt.RouteGroup}}
 	case AgwTCPRoute:
 		return &api.Resource{Kind: &api.Resource_TcpRoute{TcpRoute: tt.TCPRoute}}
 	case AgwPolicy:
@@ -120,18 +118,6 @@ func (g AgwRoute) ResourceName() string {
 }
 
 func (g AgwRoute) Equals(other AgwRoute) bool {
-	return protoconv.Equals(g, other)
-}
-
-type AgwRouteGroup struct {
-	*api.RouteGroup
-}
-
-func (g AgwRouteGroup) ResourceName() string {
-	return g.Key
-}
-
-func (g AgwRouteGroup) Equals(other AgwRouteGroup) bool {
 	return protoconv.Equals(g, other)
 }
 

@@ -197,20 +197,9 @@ func buildHTTPRouteGroupBindings(
 	return raw
 }
 
-func buildHTTPRouteGroupResources(
-	bindings krt.Collection[routeGroupBindingKey],
-	krtopts krtutil.KrtOptions,
-) krt.Collection[agwir.AgwResource] {
-	return krt.NewCollection(bindings, func(krtctx krt.HandlerContext, binding routeGroupBindingKey) *agwir.AgwResource {
-		return ptr.Of(ToResourceForGateway(binding.GatewayNN(), AgwRouteGroup{
-			RouteGroup: &api.RouteGroup{
-				Key:       utils.InternalRouteGroupKey(binding.Namespace, binding.Name),
-				Namespace: binding.Namespace,
-				Name:      binding.Name,
-			},
-		}))
-	}, krtopts.ToOptions("HTTPRouteGroups")...)
-}
+// NOTE: We intentionally do not send RouteGroup resources over xDS. The data plane has no use for
+// them today (routes already carry route_group_key). If RouteGroup gains meaningful fields in the
+// future, re-add this and handle XdsKind::RouteGroup in the data plane's insert_xds().
 
 func buildDelegatedHTTPRoutes(
 	httpRouteCol krt.Collection[*gwv1.HTTPRoute],
@@ -446,7 +435,6 @@ func AgwRouteCollection(
 		},
 	)
 	status.RegisterStatus(queue, httpRouteStatus, GetStatus)
-	httpRouteGroups := buildHTTPRouteGroupResources(httpRouteGroupBindings, krtopts)
 	delegatedHTTPRoutes, delegatedHTTPAncestors := buildDelegatedHTTPRoutes(httpRouteCol, httpRouteGroupBindings, inputs, krtopts)
 
 	grpcRouteStatus, grpcRoutes := createRouteCollectionGeneric(grpcRouteCol, inputs, krtopts, "GRPCRoutes",
@@ -503,7 +491,6 @@ func AgwRouteCollection(
 	routes := krt.JoinCollection(
 		[]krt.Collection[agwir.AgwResource]{
 			httpRoutes,
-			httpRouteGroups,
 			delegatedHTTPRoutes,
 			grpcRoutes,
 			tcpRoutes,
