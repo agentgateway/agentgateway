@@ -429,9 +429,11 @@ spec:
                 properties:
                   additionalTrustDomains:
                     description: |-
-                      Comma-separated list of additional SPIFFE trust domains accepted on inbound HBONE
-                      connections. The local trust domain is always implicitly included.
-                    type: string
+                      Additional SPIFFE trust domains accepted on inbound HBONE connections.
+                      The local trust domain is always implicitly included.
+                    items:
+                      type: string
+                    type: array
                   caAddress:
                     description: The address of the Istio CA. If unset, defaults to
                       `https://istiod.istio-system.svc:15012`.

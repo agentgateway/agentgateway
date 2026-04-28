@@ -174,11 +174,11 @@ type IstioSpec struct {
 	//
 	// +optional
 	TrustDomain string `json:"trustDomain,omitempty"`
-	// Comma-separated list of additional SPIFFE trust domains accepted on inbound HBONE
-	// connections. The local trust domain is always implicitly included.
+	// Additional SPIFFE trust domains accepted on inbound HBONE connections.
+	// The local trust domain is always implicitly included.
 	//
 	// +optional
-	AdditionalTrustDomains string `json:"additionalTrustDomains,omitempty"`
+	AdditionalTrustDomains []string `json:"additionalTrustDomains,omitempty"`
 }
 
 // +kubebuilder:validation:XValidation:rule="self.min <= self.max",message="The 'min' value must be less than or equal to the 'max' value."

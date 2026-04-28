@@ -178,7 +178,7 @@ spec:
             {{- end }}
             {{- if and (not (hasKey $userEnvNames "ADDITIONAL_TRUST_DOMAINS")) (hasKey $gateway "istio") $gateway.istio.additionalTrustDomains }}
             - name: ADDITIONAL_TRUST_DOMAINS
-              value: {{ $gateway.istio.additionalTrustDomains | quote }}
+              value: {{ $gateway.istio.additionalTrustDomains | join "," | quote }}
             {{- end }}
           {{- /* User-specified env vars */}}
           {{- with $gateway.env }}

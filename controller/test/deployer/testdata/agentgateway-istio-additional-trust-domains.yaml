@@ -20,7 +20,9 @@ spec:
   istio:
     caAddress: https://foo:443
     trustDomain: not.cluster.local
-    additionalTrustDomains: extra.domain.com,another.domain.com
+    additionalTrustDomains:
+      - extra.domain.com
+      - another.domain.com
 ---
 kind: Gateway
 apiVersion: gateway.networking.k8s.io/v1
