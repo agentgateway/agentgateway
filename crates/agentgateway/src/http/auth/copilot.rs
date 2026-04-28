@@ -8,7 +8,7 @@ const TOKEN_ENV_VARS: &[&str] = &["GH_COPILOT_TOKEN", "COPILOT_GITHUB_TOKEN"];
 const DOMAIN: &str = "github.com";
 
 pub(super) async fn insert_headers(req: &mut Request) -> anyhow::Result<()> {
-	let token = load_token()?;
+	let token = load_token().await?;
 	let mut auth = HeaderValue::from_str(&format!("Bearer {token}"))?;
 	auth.set_sensitive(true);
 
@@ -40,7 +40,7 @@ pub(super) async fn insert_headers(req: &mut Request) -> anyhow::Result<()> {
 	Ok(())
 }
 
-fn load_token() -> anyhow::Result<String> {
+async fn load_token() -> anyhow::Result<String> {
 	for key in TOKEN_ENV_VARS {
 		if let Ok(token) = std::env::var(key)
 			&& !token.trim().is_empty()
@@ -50,7 +50,7 @@ fn load_token() -> anyhow::Result<String> {
 	}
 
 	for path in copilot_config_paths() {
-		if let Ok(contents) = std::fs::read_to_string(path)
+		if let Ok(contents) = tokio::fs::read_to_string(path).await
 			&& let Some(token) = extract_json_oauth_token(&contents, DOMAIN)
 		{
 			return Ok(token);
@@ -58,7 +58,7 @@ fn load_token() -> anyhow::Result<String> {
 	}
 
 	for path in gh_config_paths() {
-		if let Ok(contents) = std::fs::read_to_string(path)
+		if let Ok(contents) = tokio::fs::read_to_string(path).await
 			&& let Some(token) = extract_yaml_oauth_token(&contents, DOMAIN)
 		{
 			return Ok(token);
