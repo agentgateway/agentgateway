@@ -1,0 +1,116 @@
+# Configuration:
+#
+# Parent infra/root:
+#   - Delegate /anything/team1, headers header1=val1, queries query1=val1, to team1 namespace
+#   - Delegate /anything/team2, headers header2=val2, queries query2=val2, to team2 namespace
+#
+# Child team1/svc1:
+#   - Route /anything/team1/foo, headers header1=val1,headerX=valX, queries query1=val1,queryX=valX, to team1/svc1
+#   - No parentRefs
+#
+# Child team2/svc2:
+#   - Route /anything/team2/foo, headers headerX=valX, queries queryX=valX, to team2/svc2
+#   - Parent infra/root
+#   - Route does not match headers and queries required by parent!
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: root
+  namespace: infra
+spec:
+  parentRefs:
+  - name: gateway
+    namespace: agentgateway-base
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team1
+      headers:
+      - type: Exact
+        name: header1
+        value: val1
+      queryParams:
+      - type: Exact
+        name: query1
+        value: val1
+    backendRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: "*"
+      namespace: team1
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team2
+      headers:
+      - type: Exact
+        name: header2
+        value: val2
+      queryParams:
+      - type: Exact
+        name: query2
+        value: val2
+    backendRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: "*"
+      namespace: team2
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: svc1
+  namespace: team1
+spec:
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team1/foo
+      headers:
+      - type: Exact
+        name: header1
+        value: val1
+      - type: Exact
+        name: headerX
+        value: valX
+      queryParams:
+      - type: Exact
+        name: query1
+        value: val1
+      - type: Exact
+        name: queryX
+        value: valX
+    backendRefs:
+    - name: svc1
+      port: 8000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: svc2
+  namespace: team2
+spec:
+  parentRefs:
+  - name: root
+    namespace: infra
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+  rules:
+  - matches:
+    - path:
+        type: Exact
+        value: /anything/team2/foo
+      headers:
+      - type: Exact
+        name: headerX
+        value: valX
+      queryParams:
+      - type: Exact
+        name: queryX
+        value: valX
+    backendRefs:
+    - name: svc2
+      port: 8000

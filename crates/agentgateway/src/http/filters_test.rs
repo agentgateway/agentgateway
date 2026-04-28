@@ -3,7 +3,7 @@ use std::num::NonZeroU16;
 use regex;
 
 use crate::http::StatusCode;
-use crate::http::filters::{RequestRedirect, UrlRewrite};
+use crate::http::filters::{HeaderModifier, RequestRedirect, UrlRewrite};
 use crate::http::tests_common::*;
 use crate::types::agent::{HostRedirect, PathMatch, PathRedirect};
 use crate::*;
@@ -924,4 +924,33 @@ fn rewrite_test() {
 			.ok();
 		assert_eq!(got, want, "{name}");
 	}
+}
+
+#[test]
+fn request_header_modifier_lifts_host_to_authority() {
+	let mut req = request_for_uri("http://example.com/path");
+	let modifier = HeaderModifier {
+		add: vec![("host".into(), "new.example.com:8443".into())],
+		set: vec![],
+		remove: vec![],
+	};
+	modifier.apply_request(&mut req).unwrap();
+	assert_eq!(req.uri().to_string(), "http://new.example.com:8443/path");
+	assert!(req.headers().get(http::header::HOST).is_none());
+}
+
+#[test]
+fn request_header_modifier_remove_host_keeps_authority() {
+	let mut req = request_for_uri("http://example.com/path");
+	req
+		.headers_mut()
+		.insert(http::header::HOST, "stale.example.com".parse().unwrap());
+	let modifier = HeaderModifier {
+		add: vec![],
+		set: vec![],
+		remove: vec!["host".into()],
+	};
+	modifier.apply_request(&mut req).unwrap();
+	assert_eq!(req.uri().to_string(), "http://example.com/path");
+	assert!(req.headers().get(http::header::HOST).is_none());
 }

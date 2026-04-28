@@ -1,0 +1,40 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: mcp-backend
+spec:
+  mcp:
+    targets:
+    - name: mcp-example
+      selector:
+        namespaces:
+          matchLabels:
+            kubernetes.io/metadata.name: mcp-servers
+  policies:
+    mcp:
+      authentication:
+        jwks:
+          jwksPath: /
+          backendRef:
+              group: agentgateway.dev
+              kind: AgentgatewayBackend
+              name: test-jwks
+---
+# Output
+output: []
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: mcp-backend
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: 'failed to translate backend: backend default/test-jwks not found,
+        policy default/inline_policy'
+      reason: TranslationError
+      status: "False"
+      type: Accepted

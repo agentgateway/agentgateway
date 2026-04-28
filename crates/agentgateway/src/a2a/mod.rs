@@ -27,6 +27,7 @@ async fn classify_request(req: &mut Request<Body>) -> RequestType {
 				.get::<filters::OriginalUrl>()
 				.map(|u| u.0.clone())
 				.unwrap_or_else(|| req.uri().clone());
+			let uri = crate::http::x_headers::apply_forwarded_scheme(uri, req.headers());
 			RequestType::AgentCard(uri)
 		},
 		(m, _) if m == http::Method::POST => {

@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=../../schema/local.json
+# Top-level named MCP backend referenced by a route via its key.
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - backend: /shared-mcp
+backends:
+- name: shared-mcp
+  mcp:
+    targets:
+    - name: default
+      mcp:
+        backend: /aws-agent-core-mcp-target
+        path: /mcp
+- name: aws-agent-core-mcp-target
+  aws:
+    agentCore:
+      agentRuntimeArn: arn:aws:bedrock-agentcore:us-east-1:12345678:runtime/mcp-runtime
+  policies:
+    backendAuth:
+      aws: {}

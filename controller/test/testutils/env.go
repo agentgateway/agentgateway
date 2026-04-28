@@ -71,6 +71,11 @@ const (
 	// DefaultNamespace is the default namespace to use for resources that don't specify one
 	// Typically "default" for kind/k8s clusters, may differ for OpenShift/CRC
 	DefaultNamespace = "DEFAULT_NAMESPACE"
+
+	// Version is the image tag used for the controller and proxy images.
+	// When set, this overrides the chart's AppVersion, ensuring locally-built
+	// images (loaded via `make setup`) are used instead of pulling from the registry.
+	Version = "VERSION"
 )
 
 // ShouldSkipInstallAndTeardown returns true if kgateway installation and teardown should be skipped.

@@ -63,6 +63,8 @@
 |`source`|object|`source` contains attributes about the source of the request.|
 |`source.address`|string|The IP address of the downstream connection.|
 |`source.port`|integer|The port of the downstream connection.|
+|`source.rawAddress`|string|The original TCP peer IP address of the downstream connection.<br>This can differ from the `address` when using tunneling protocols like PROXY.|
+|`source.rawPort`|integer|The original TCP peer port of the downstream connection.<br>This can differ from the `port` when using tunneling protocols like PROXY.|
 |`source.identity`|object|The (Istio SPIFFE) identity of the downstream connection, if available.|
 |`source.identity.trustDomain`|string|The trust domain of the identity.|
 |`source.identity.namespace`|string|The namespace of the identity.|
@@ -71,6 +73,10 @@
 |`source.issuer`|string|The issuer from the downstream certificate, if available.|
 |`source.subject`|string|The subject from the downstream certificate, if available.|
 |`source.subjectCn`|string|The CN of the subject from the downstream certificate, if available.|
+|`source.unverifiedWorkload`|object|The workload context of the downstream connection, resolved from the<br>workload discovery store by source IP. Available when the source pod is<br>known to the controller's workload discovery store.<br><br>Fields are nested under `unverified` to signal that they are derived<br>from the source IP (not cryptographically authenticated). Policy<br>authors should prefer `source.identity.*` for trust-sensitive checks.|
+|`source.unverifiedWorkload.name`|string|The pod name of the source workload.|
+|`source.unverifiedWorkload.namespace`|string|The namespace of the source workload.|
+|`source.unverifiedWorkload.serviceAccount`|string|The service account of the source workload.|
 |`mcp`|object|`mcp` contains attributes about the MCP request.<br>Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.<br>Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.|
 |`mcp.methodName`|string||
 |`mcp.sessionId`|string||
@@ -88,8 +94,8 @@
 |`mcp.resource.name`|string|The name of the resource|
 |`backend`|object|`backend` contains information about the backend being used.|
 |`backend.name`|string|The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.|
-|`backend.type`|string|The type of backend. For example, `ai`, `mcp`, `static`, `dynamic`, or `service`.|
-|`backend.protocol`|string|The protocol of backend. For example, `http`, `tcp`, `a2a`, `mcp`, or `llm`.|
+|`backend.type`|enum|The type of backend.<br>Possible values: `ai`, `mcp`, `static`, `dynamic`, `service`, `unknown`.|
+|`backend.protocol`|enum|The protocol of backend.<br>Possible values: `http`, `tcp`, `a2a`, `mcp`, `llm`.|
 |`extauthz`|object|`extauthz` contains dynamic metadata from ext_authz filters|
 |`extproc`|object|`extproc` contains dynamic metadata from ext_proc filters|
 |`metadata`|object|`metadata` contains values set by transformation metadata expressions.|

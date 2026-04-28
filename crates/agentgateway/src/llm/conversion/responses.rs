@@ -36,13 +36,11 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Bod
 						}
 					});
 				},
-				types::responses::typed::ResponseStreamEvent::ResponseOutputTextDelta(_) => {
-					if !saw_token {
-						saw_token = true;
-						log.non_atomic_mutate(|r| {
-							r.response.first_token = Some(Instant::now());
-						});
-					}
+				types::responses::typed::ResponseStreamEvent::ResponseOutputTextDelta(_) if !saw_token => {
+					saw_token = true;
+					log.non_atomic_mutate(|r| {
+						r.response.first_token = Some(Instant::now());
+					});
 				},
 				types::responses::typed::ResponseStreamEvent::ResponseCompleted(completed) => {
 					log.non_atomic_mutate(|r| {

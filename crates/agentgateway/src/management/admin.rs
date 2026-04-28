@@ -1,6 +1,7 @@
 // Originally derived from https://github.com/istio/ztunnel (Apache 2.0 licensed)
 
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -9,11 +10,14 @@ use std::time::Duration;
 use agent_core::drain::DrainWatcher;
 use agent_core::version::BuildInfo;
 use agent_core::{signal, telemetry};
+use bytes::Bytes;
 use hyper::Request;
 use hyper::body::Incoming;
 use hyper::header::{CONTENT_TYPE, HeaderValue};
 use tokio::runtime::Handle;
 use tokio::time;
+use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::{info, warn};
 use tracing_subscriber::filter;
 
@@ -140,6 +144,7 @@ impl Service {
 					.await,
 				),
 				"/debug/tasks" => handle_tokio_tasks(req, &state.dataplane_handle).await,
+				"/debug/trace" => Ok(handle_debug_trace().await),
 				"/config_dump" => {
 					handle_config_dump(
 						&state.config_dump_handlers,
@@ -266,6 +271,26 @@ async fn handle_server_shutdown(
 		},
 		_ => empty_response(hyper::StatusCode::METHOD_NOT_ALLOWED),
 	}
+}
+
+pub async fn handle_debug_trace() -> Response {
+	let rx = crate::proxy::dtrace::track();
+	let sse_stream = ReceiverStream::new(rx).map(|msg| {
+		let payload = serde_json::to_string(&msg).unwrap_or_else(|e| {
+			serde_json::json!({
+				"type": "serialization_error",
+				"error": e.to_string(),
+			})
+			.to_string()
+		});
+		Ok::<Bytes, Infallible>(Bytes::from(format!("data: {payload}\n\n")))
+	});
+	::http::Response::builder()
+		.status(hyper::StatusCode::OK)
+		.header("Content-Type", "text/event-stream")
+		.header("Cache-Control", "no-cache")
+		.body(crate::http::Body::from_stream(sse_stream))
+		.expect("builder with known status code should not fail")
 }
 
 #[cfg(target_os = "linux")]

@@ -4,7 +4,10 @@ use ::http::{HeaderValue, Method, StatusCode, header};
 use serde::de::Error;
 
 use crate::http::{PolicyResponse, Request, filters};
+use crate::proxy::dtrace::{self};
 use crate::*;
+
+const TRACE_POLICY_KIND: &str = "cors";
 
 #[derive(Default, Debug, Clone)]
 enum WildcardOrList<T> {
@@ -73,7 +76,7 @@ where
 	}
 }
 
-#[apply(schema_ser!)]
+#[apply(schema_ser_schema!)]
 #[cfg_attr(feature = "schema", schemars(with = "CorsSerde"))]
 pub struct Cors {
 	allow_credentials: bool,
@@ -98,9 +101,7 @@ impl<'de> serde::Deserialize<'de> for Cors {
 	}
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_de!)]
 pub struct CorsSerde {
 	#[serde(default)]
 	pub allow_credentials: bool,
@@ -141,6 +142,7 @@ impl Cors {
 	pub fn apply(&self, req: &mut Request) -> Result<PolicyResponse, filters::Error> {
 		// If no origin, return immediately
 		let Some(origin) = req.headers().get(header::ORIGIN) else {
+			dtrace::pol_result!(dtrace::Info, Skip, "request has no Origin header");
 			return Ok(Default::default());
 		};
 		// Determine whether this is a CORS preflight request:
@@ -172,6 +174,11 @@ impl Cors {
 			if is_preflight {
 				// Semantics: do not forward non-matching preflight requests.
 				// If it is a preflight and the origin does not match, respond locally with 200 and no CORS headers.
+				dtrace::pol_result!(
+					dtrace::Severity::Warn,
+					Apply,
+					"short-circuited preflight request for disallowed origin {origin:?}",
+				);
 				let response = ::http::Response::builder()
 					.status(StatusCode::OK)
 					.body(crate::http::Body::empty())?;
@@ -181,12 +188,22 @@ impl Cors {
 				});
 			} else {
 				// If not a preflight, and origin is not allowed, do nothing (let it pass through without CORS headers).
+				dtrace::pol_result!(
+					dtrace::Severity::Warn,
+					Skip,
+					"origin {origin:?} is not allowed",
+				);
 				return Ok(Default::default());
 			}
 		}
 
 		if req.method() == Method::OPTIONS {
 			// Handle preflight request
+			dtrace::pol_result!(
+				dtrace::Severity::Success,
+				Apply,
+				"allowed preflight request for origin {origin:?}",
+			);
 			let mut rb = ::http::Response::builder()
 				.status(StatusCode::OK)
 				.header(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
@@ -212,6 +229,11 @@ impl Cors {
 			});
 		}
 
+		dtrace::pol_result!(
+			dtrace::Severity::Info,
+			Apply,
+			"attached CORS response headers for origin {origin:?}",
+		);
 		let mut response_headers = http::HeaderMap::with_capacity(3);
 		response_headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin.clone());
 		if self.allow_credentials {

@@ -12,8 +12,8 @@ use crate::cel::Expression;
 use crate::{serde_dur_option, *};
 
 /// Eviction sub-policy: how long to remove a backend from the active set after an unhealthy response.
-#[derive(Debug, Clone, Default, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser!)]
+#[derive(Default)]
 pub struct Eviction {
 	/// Base ejection time. When absent, falls back to `Retry-After` header (e.g. 429)
 	/// or retry policy backoff, then a default (e.g. 3s).
@@ -46,8 +46,8 @@ pub struct Eviction {
 ///
 /// Maps to the proto `Health` message containing an `unhealthy_condition` CEL expression
 /// and an optional `Eviction` sub-message with eviction settings.
-#[derive(Debug, Clone, Default, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default)]
+#[apply(schema_ser!)]
 pub struct Policy {
 	/// CEL expression evaluated per response; `true` means this response is unhealthy (evict).
 	/// When absent, any 5xx response, or a connection failure, is treated as unhealthy.
@@ -120,9 +120,8 @@ impl Policy {
 }
 
 /// Local/config eviction sub-policy with duration as string; mirrors `Eviction`.
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[derive(Default)]
+#[apply(schema_de!)]
 pub struct LocalEviction {
 	#[serde(
 		default,
@@ -144,9 +143,8 @@ pub struct LocalEviction {
 
 /// Local/config health policy with CEL as string; converted to Policy by compiling the expression.
 /// Mirrors the proto `Health` message structure.
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[derive(Default)]
+#[apply(schema_de!)]
 pub struct LocalHealthPolicy {
 	/// CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.
 	/// When unset, any 5xx or connection failure is treated as unhealthy.

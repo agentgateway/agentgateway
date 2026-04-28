@@ -58,6 +58,11 @@ spec:
         add:
           - expression: 'request.headers["user-agent"]'
             name: http.useragent
+    metrics:
+      attributes:
+        add:
+          - expression: 'request.headers["x-org-id"]'
+            name: org
 
 ---
 # Output
@@ -95,6 +100,26 @@ output:
             - response.code
           filter: response.code != 200
       key: frontend/default/agw:frontend-logging:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      frontend:
+        metrics:
+          fields:
+            add:
+            - expression: request.headers["x-org-id"]
+              name: org
+      key: frontend/default/agw:frontend-metrics:default/test
       name:
         kind: AgentgatewayPolicy
         name: agw

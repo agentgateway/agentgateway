@@ -3,17 +3,15 @@ use base64::Engine;
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-use crate::http::Request;
-use crate::proxy::httpproxy::PolicyClient;
 use tracing::debug;
 
-use super::provider;
 use super::session::{
 	BrowserSession, TransactionState, generate_nonce, generate_pkce_verifier, generate_state,
 	generate_transaction_id, normalize_original_uri,
 };
-use super::{Error, OidcPolicy, build_redirect_response, cap_session_expiry, now_unix};
+use super::{Error, OidcPolicy, build_redirect_response, cap_session_expiry, now_unix, provider};
+use crate::http::Request;
+use crate::proxy::httpproxy::PolicyClient;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

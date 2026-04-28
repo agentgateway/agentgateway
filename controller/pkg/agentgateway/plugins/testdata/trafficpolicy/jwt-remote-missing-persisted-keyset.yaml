@@ -1,0 +1,80 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: test-jwks
+  namespace: default
+spec:
+  static:
+    host: login.test.com
+    port: 443
+  policies:
+    tls: {}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-remote-missing-persisted-keyset
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    phase: PreRouting
+    jwtAuthentication:
+      mode: Strict
+      providers:
+      - issuer: https://sts.windows.net/test-path/
+        audiences:
+        - api://test
+        jwks:
+          remote:
+            backendRef:
+              name: test-jwks
+              kind: AgentgatewayBackend
+              group: agentgateway.dev
+            jwksPath: test-path/discovery/v2.0/keys
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/jwt-remote-missing-persisted-keyset:jwt:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: jwt-remote-missing-persisted-keyset
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        jwt:
+          mode: STRICT
+        phase: GATEWAY
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: jwt-remote-missing-persisted-keyset
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: jwks keyset for "https://login.test.com:443/test-path/discovery/v2.0/keys"
+          isn't available (not yet fetched or fetch failed)
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

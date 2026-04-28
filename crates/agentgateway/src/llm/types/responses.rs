@@ -382,6 +382,10 @@ impl RequestType for Request {
 		serde_json::to_vec(&self).map_err(AIError::RequestMarshal)
 	}
 
+	fn to_openai_chat_completions(&self) -> Result<Vec<u8>, AIError> {
+		conversion::openai_compat::from_responses::translate(self)
+	}
+
 	fn to_bedrock(
 		&self,
 		provider: &crate::llm::bedrock::Provider,
@@ -499,7 +503,7 @@ impl ResponseType for Response {
 			anyhow::bail!("webhook response message count mismatch");
 		}
 
-		for (msg, wh) in message_outputs.into_iter().zip(choices.into_iter()) {
+		for (msg, wh) in message_outputs.into_iter().zip(choices) {
 			// Replace message content with webhook's modified content
 			msg.content = vec![Content::OutputText(OutputText {
 				annotations: vec![],

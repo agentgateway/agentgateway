@@ -1,6 +1,5 @@
-use crate::llm::AIError;
-use crate::llm::types;
 use crate::llm::types::ResponseType;
+use crate::llm::{AIError, types};
 
 #[cfg(test)]
 #[path = "vertex_tests.rs"]

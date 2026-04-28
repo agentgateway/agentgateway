@@ -1,12 +1,12 @@
 use std::time::Instant;
 
 use agent_core::strng;
+use bytes::Bytes;
 use tracing::debug;
 
 use crate::http::Response;
 use crate::llm::{AmendOnDrop, types};
 use crate::{llm, parse};
-use bytes::Bytes;
 
 /// Parse a Google error response, handling both single object and array-wrapped formats.
 /// Google's OpenAI-compatible endpoints consistently return `[{"error": {...}}]`
@@ -122,21 +122,20 @@ pub(crate) fn extract_system_text(
 
 pub mod from_messages {
 	use std::collections::{HashMap, HashSet};
+	use std::time::Instant;
 
+	use agent_core::strng;
+	use bytes::Bytes;
 	use itertools::Itertools;
 	use messages::{ToolResultContent, ToolResultContentPart};
+	use serde_json::Value;
 	use types::completions::typed as completions;
 	use types::messages::typed as messages;
 
 	use crate::json;
-	use crate::llm::{AIError, AmendOnDrop, types};
-
 	use crate::llm::types::ResponseType;
+	use crate::llm::{AIError, AmendOnDrop, types};
 	use crate::parse::sse::SseJsonEvent;
-	use agent_core::strng;
-	use bytes::Bytes;
-	use serde_json::Value;
-	use std::time::Instant;
 
 	/// translate an Anthropic messages to an OpenAI completions request
 	pub fn translate(req: &types::messages::Request) -> Result<Vec<u8>, AIError> {

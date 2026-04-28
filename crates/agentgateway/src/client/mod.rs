@@ -7,6 +7,12 @@ mod tls;
 use std::str::FromStr;
 use std::task;
 
+use ::http::HeaderValue;
+use ::http::uri::{Authority, Scheme};
+use agent_pool::pool::ExpectedCapacity;
+use agent_pool::rt::TokioIo;
+use tracing::event;
+
 use crate::http::backendtls::VersionedBackendTLS;
 use crate::http::filters;
 use crate::http::filters::BackendRequestTimeout;
@@ -15,11 +21,6 @@ use crate::transport::stream::{LoggingMode, Socket};
 use crate::transport::{hbone, stream};
 use crate::types::agent::Target;
 use crate::*;
-use ::http::HeaderValue;
-use ::http::uri::{Authority, Scheme};
-use agent_pool::pool::ExpectedCapacity;
-use agent_pool::rt::TokioIo;
-use tracing::event;
 
 #[derive(Clone)]
 pub struct Client {

@@ -705,6 +705,275 @@ async fn test_get_server_prefix_multiple_servers_err() {
 	assert!(result.is_err(), "multiple servers should yield error");
 }
 
+fn tool_schema_for<'a>(
+	tools: &'a [(Tool, UpstreamOpenAPICall)],
+	tool_name: &str,
+) -> &'a serde_json::Map<String, serde_json::Value> {
+	tools
+		.iter()
+		.find(|(tool, _)| tool.name == tool_name)
+		.map(|(tool, _)| &*tool.input_schema)
+		.expect("tool should exist")
+}
+
+fn nested_schema<'a>(
+	schema: &'a serde_json::Map<String, serde_json::Value>,
+	name: &str,
+) -> &'a serde_json::Map<String, serde_json::Value> {
+	schema
+		.get("properties")
+		.and_then(serde_json::Value::as_object)
+		.and_then(|props| props.get(name))
+		.and_then(serde_json::Value::as_object)
+		.expect("nested schema should exist")
+}
+
+#[test]
+fn test_parse_openapi_schema_includes_path_level_parameters_in_tool_schema() {
+	let raw = r#"{
+		"openapi": "3.0.0",
+		"info": {"title": "Path Params", "version": "1.0.0"},
+		"paths": {
+			"/workspaces/{workspace_gid}/tags": {
+				"parameters": [
+					{
+						"name": "workspace_gid",
+						"in": "path",
+						"required": true,
+						"schema": {"type": "string"}
+					}
+				],
+				"get": {
+					"operationId": "getTagsForWorkspace",
+					"summary": "Get tags in a workspace",
+					"responses": {
+						"200": {"description": "ok"}
+					}
+				}
+			}
+		}
+	}"#;
+	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+	let (_tool, upstream) = tools
+		.iter()
+		.find(|(tool, _)| tool.name == "getTagsForWorkspace")
+		.expect("tool should exist");
+
+	assert_eq!(upstream.path, "/workspaces/{workspace_gid}/tags");
+
+	let schema = tool_schema_for(&tools, "getTagsForWorkspace");
+	let path_schema = nested_schema(schema, "path");
+	let properties = path_schema
+		.get("properties")
+		.and_then(serde_json::Value::as_object)
+		.expect("path object should include properties");
+	assert!(
+		properties.contains_key("workspace_gid"),
+		"path-level workspace_gid should be exposed in tool schema"
+	);
+	let required = path_schema
+		.get("required")
+		.and_then(serde_json::Value::as_array)
+		.expect("path object should include required array");
+	assert!(
+		required.iter().any(|value| value == "workspace_gid"),
+		"workspace_gid should be required in the path schema"
+	);
+}
+
+#[test]
+fn test_parse_openapi_schema_operation_level_parameter_overrides_path_level_parameter() {
+	let raw = r#"{
+		"openapi": "3.0.0",
+		"info": {"title": "Path Params", "version": "1.0.0"},
+		"paths": {
+			"/workspaces/{workspace_gid}/tags/{tag_gid}": {
+				"parameters": [
+					{
+						"name": "workspace_gid",
+						"in": "path",
+						"required": true,
+						"description": "path-level parameter",
+						"schema": {"type": "string"}
+					},
+					{
+						"name": "tag_gid",
+						"in": "path",
+						"required": true,
+						"schema": {"type": "string"}
+					}
+				],
+				"get": {
+					"operationId": "getWorkspaceTag",
+					"parameters": [
+						{
+							"name": "workspace_gid",
+							"in": "path",
+							"required": true,
+							"description": "operation-level parameter",
+							"schema": {"type": "string", "pattern": "^ws_"}
+						}
+					],
+					"responses": {
+						"200": {"description": "ok"}
+					}
+				}
+			}
+		}
+	}"#;
+	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+
+	let schema = tool_schema_for(&tools, "getWorkspaceTag");
+	let path_schema = nested_schema(schema, "path");
+	let path_properties = path_schema
+		.get("properties")
+		.and_then(serde_json::Value::as_object)
+		.expect("path object should include properties");
+	let workspace_gid = path_properties
+		.get("workspace_gid")
+		.and_then(serde_json::Value::as_object)
+		.expect("workspace_gid property should exist");
+	assert_eq!(
+		workspace_gid.get("description"),
+		Some(&json!("operation-level parameter"))
+	);
+	assert_eq!(workspace_gid.get("pattern"), Some(&json!("^ws_")));
+
+	let required = path_schema
+		.get("required")
+		.and_then(serde_json::Value::as_array)
+		.expect("path object should include required array");
+	assert_eq!(required, &vec![json!("workspace_gid"), json!("tag_gid")]);
+
+	assert!(
+		path_properties.contains_key("tag_gid"),
+		"the unmodified sibling path parameter should keep its slot"
+	);
+}
+
+#[test]
+fn test_parse_openapi_schema_operation_level_header_override_is_case_insensitive() {
+	let raw = r#"{
+		"openapi": "3.0.0",
+		"info": {"title": "Header Params", "version": "1.0.0"},
+		"paths": {
+			"/workspaces": {
+				"parameters": [
+					{
+						"name": "X-Request-Id",
+						"in": "header",
+						"required": true,
+						"description": "path-level header",
+						"schema": {"type": "string"}
+					}
+				],
+				"get": {
+					"operationId": "listWorkspaces",
+					"parameters": [
+						{
+							"name": "x-request-id",
+							"in": "header",
+							"required": true,
+							"description": "operation-level header",
+							"schema": {"type": "string", "pattern": "^req_"}
+						}
+					],
+					"responses": {
+						"200": {"description": "ok"}
+					}
+				}
+			}
+		}
+	}"#;
+	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+	let (tool, upstream) = tools
+		.iter()
+		.find(|(tool, _)| tool.name == "listWorkspaces")
+		.expect("tool should exist");
+
+	assert_eq!(
+		upstream.allowed_headers,
+		HashSet::from(["x-request-id".to_string()])
+	);
+
+	let schema = &*tool.input_schema;
+	let header_schema = nested_schema(schema, "header");
+	let header_properties = header_schema
+		.get("properties")
+		.and_then(serde_json::Value::as_object)
+		.expect("header object should include properties");
+	assert_eq!(header_properties.len(), 1);
+	let request_id = header_properties
+		.get("x-request-id")
+		.and_then(serde_json::Value::as_object)
+		.expect("operation-level header should win");
+	assert_eq!(
+		request_id.get("description"),
+		Some(&json!("operation-level header"))
+	);
+	assert_eq!(request_id.get("pattern"), Some(&json!("^req_")));
+
+	let required = header_schema
+		.get("required")
+		.and_then(serde_json::Value::as_array)
+		.expect("header object should include required array");
+	assert_eq!(required, &vec![json!("x-request-id")]);
+}
+
+#[test]
+fn test_parse_openapi_schema_ignores_path_level_cookie_parameters() {
+	let raw = r#"{
+		"openapi": "3.0.0",
+		"info": {"title": "Cookie Params", "version": "1.0.0"},
+		"paths": {
+			"/workspaces/{workspace_gid}/tags": {
+				"parameters": [
+					{
+						"name": "session",
+						"in": "cookie",
+						"required": false,
+						"schema": {"type": "string"}
+					},
+					{
+						"name": "workspace_gid",
+						"in": "path",
+						"required": true,
+						"schema": {"type": "string"}
+					}
+				],
+				"get": {
+					"operationId": "getTagsForWorkspace",
+					"responses": {
+						"200": {"description": "ok"}
+					}
+				}
+			}
+		}
+	}"#;
+	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+
+	let schema = tool_schema_for(&tools, "getTagsForWorkspace");
+	let properties = schema
+		.get("properties")
+		.and_then(serde_json::Value::as_object)
+		.expect("root schema should include properties");
+	assert!(
+		!properties.contains_key("cookie"),
+		"path-level cookie parameters should not create a cookie schema"
+	);
+
+	let path_schema = nested_schema(schema, "path");
+	let path_properties = path_schema
+		.get("properties")
+		.and_then(serde_json::Value::as_object)
+		.expect("path object should include properties");
+	assert!(path_properties.contains_key("workspace_gid"));
+}
+
 #[rstest]
 #[case::empty_string(json!({"verbose": ""}), vec![("verbose", "")])]
 #[case::string_value(json!({"verbose": "true"}), vec![("verbose", "true")])]
@@ -1170,7 +1439,9 @@ async fn test_openapi_from_url() {
 
 	// Convert to runtime backends
 	let backend_name = ResourceName::new("test-users".into(), "".into());
-	let result = local_backend.as_backends(backend_name, client).await;
+	let result = local_backend
+		.as_backends(backend_name, client, crate::mcp::DEFAULT_SESSION_IDLE_TTL)
+		.await;
 
 	// Verify the conversion succeeded
 	assert!(

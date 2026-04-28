@@ -17,8 +17,14 @@ binds:
                 guardrailIdentifier: bedrock-guardrail-identifier
                 guardrailVersion: DRAFT
                 region: us-west-2
+                policies:
+                  backendAuth:
+                    aws: {}
             response:
             - bedrockGuardrails:
                 guardrailIdentifier: bedrock-guardrail-identifier
                 guardrailVersion: DRAFT
                 region: us-west-2
+                policies:
+                  backendAuth:
+                    aws: {}

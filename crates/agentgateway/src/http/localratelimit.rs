@@ -582,10 +582,7 @@ mod ratelimit {
 
 			// Acquire refilled tokens
 			let deadline = Instant::now() + Duration::from_secs(1);
-			loop {
-				let Err((_, _, wait)) = rl.try_wait_n(5) else {
-					break;
-				};
+			while let Err((_, _, wait)) = rl.try_wait_n(5) {
 				assert!(Instant::now() < deadline, "timed out waiting for refills");
 				std::thread::sleep(wait.max(Duration::from_millis(1)));
 			}

@@ -66,6 +66,8 @@ pub struct Config {
 	pub auth: AuthSource,
 	pub ca_cert: RootCert,
 	pub ca_headers: Vec<(String, String)>,
+	pub allowed_trust_domains: Arc<[Strng]>,
+	pub skip_validate_trust_domain: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -83,10 +85,18 @@ pub struct WorkloadCertificate {
 	private_key: PrivateKeyDer<'static>,
 	expiry: Expiration,
 	identity: Identity,
+	allowed_trust_domains: Arc<[Strng]>,
+	skip_validate_trust_domain: bool,
 }
 
 impl WorkloadCertificate {
-	fn new(key: &[u8], cert: &[u8], chain: Vec<&[u8]>) -> Result<WorkloadCertificate, Error> {
+	fn new(
+		key: &[u8],
+		cert: &[u8],
+		chain: Vec<&[u8]>,
+		allowed_trust_domains: Arc<[Strng]>,
+		skip_validate_trust_domain: bool,
+	) -> Result<WorkloadCertificate, Error> {
 		let cert = parse_cert(cert.to_vec())?;
 		let mut roots_store = RootCertStore::empty();
 		let identity = cert
@@ -126,6 +136,8 @@ impl WorkloadCertificate {
 			private_key: key,
 			chain: cert_and_chain,
 			identity,
+			allowed_trust_domains,
+			skip_validate_trust_domain,
 		})
 	}
 	pub fn is_expired(&self) -> bool {
@@ -183,8 +195,6 @@ impl WorkloadCertificate {
 		})
 	}
 	pub fn hbone_termination(&self) -> Result<ServerConfig, Error> {
-		let Identity::Spiffe { trust_domain, .. } = &self.identity;
-
 		// TODO: this is too expensive to build per request
 		let roots = self.roots.clone();
 		let raw_client_cert_verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
@@ -192,10 +202,17 @@ impl WorkloadCertificate {
 			transport::tls::provider(),
 		)
 		.build()?;
-		let client_cert_verifier = transport::tls::trustdomain::TrustDomainVerifier::new(
-			raw_client_cert_verifier,
-			Some(trust_domain.clone()),
-		);
+		// Verify the client's SPIFFE trust domain is in the allowed set, unless explicitly
+		// disabled via skip_validate_trust_domain. CA-level certificate validation still applies.
+		let client_cert_verifier: Arc<dyn rustls::server::danger::ClientCertVerifier> =
+			if self.skip_validate_trust_domain {
+				raw_client_cert_verifier
+			} else {
+				transport::tls::trustdomain::TrustDomainVerifier::new(
+					raw_client_cert_verifier,
+					self.allowed_trust_domains.clone(),
+				)
+			};
 		let mut sc = ServerConfig::builder_with_provider(transport::tls::provider())
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
 			.expect("server config must be valid")
@@ -510,6 +527,8 @@ impl CaClient {
 			&private_key,
 			leaf_cert,
 			chain_certs,
+			config.allowed_trust_domains.clone(),
+			config.skip_validate_trust_domain,
 		)?);
 
 		// Verify the certificate matches our identity

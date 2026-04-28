@@ -1,0 +1,62 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: metrics-invalid-expression
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  frontend:
+    metrics:
+      attributes:
+        add:
+        - expression: 'invalid_{{expression}}'
+          name: bad_field
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      frontend:
+        metrics:
+          fields:
+            add:
+            - expression: invalid_{{expression}}
+              name: bad_field
+      key: frontend/default/metrics-invalid-expression:frontend-metrics:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: metrics-invalid-expression
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: metrics-invalid-expression
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: 'frontend metrics field "bad_field" is not a valid CEL expression:
+          invalid_{{expression}}'
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

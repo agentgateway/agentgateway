@@ -82,6 +82,8 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 			.await?;
 	let stores = state_mgr.stores();
 
+	state_manager::start_self_workload_resolution(&config, stores.clone(), &ready);
+
 	let mut xds_rx_for_task = xds_rx.clone();
 	tokio::spawn(async move {
 		// When we get the initial XDS state, unblock readiness

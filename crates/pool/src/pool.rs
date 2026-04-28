@@ -1,6 +1,3 @@
-use hashbrown::HashMap;
-use hashbrown::hash_map::EntryRef;
-use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 use std::collections::VecDeque;
 use std::collections::hash_map::DefaultHasher;
 use std::error::Error as StdError;
@@ -14,18 +11,22 @@ use std::sync::{Arc, Weak};
 use std::task::{self, Poll};
 use std::time::{Duration, Instant};
 
+use futures_channel::oneshot;
+use futures_core::ready;
+use futures_util::future::Either;
+use hashbrown::HashMap;
+use hashbrown::hash_map::EntryRef;
+use http::{Request, Response};
+use hyper::rt::{Sleep, Timer as _};
+use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
+use tracing::{debug, trace};
+
 use crate::client::RequestBody;
 use crate::common::exec;
 use crate::common::exec::Exec;
 use crate::common::timer::Timer;
 use crate::connect::Connected;
 use crate::pool;
-use futures_channel::oneshot;
-use futures_core::ready;
-use futures_util::future::Either;
-use http::{Request, Response};
-use hyper::rt::{Sleep, Timer as _};
-use tracing::{debug, trace};
 
 // per https://datatracker.ietf.org/doc/html/rfc9113#section-6.5.2-2.6.1, servers are expected to
 // but not required to set this to at least 100. In practice, a wide range of clients will have failures
@@ -254,8 +255,18 @@ impl H2Pool {
 		if let HttpConnection::Http2(h) = conn {
 			self.0.push_front(h.clone_without_load_incremented());
 			if reserve {
+				// IMPORTANT: must not wrap this `try_reserve_stream_slot` call in a
+				// `debug_assert!` — `debug_assert!` is stripped entirely in release
+				// builds, which also strips the side-effecting reserve. Callers pass
+				// `reserve=true` to get a `ReservedHttp2Connection` whose slot is
+				// accounted; without the increment the corresponding Drop releases
+				// an unreserved slot, wrapping `active_streams` to `usize::MAX` and
+				// permanently blocking the connection from further reservations
+				// (and preventing it from ever returning to `idle`, which leaks the
+				// underlying TCP connection).
+				let result = h.load.try_reserve_stream_slot();
 				debug_assert!(
-					h.load.try_reserve_stream_slot() != CapacityReservationResult::NoCapacity,
+					result != CapacityReservationResult::NoCapacity,
 					"a new stream should always be able to be reserved"
 				);
 			}
@@ -1212,10 +1223,15 @@ impl<K: Key> Future for IdleTask<K> {
 
 #[cfg(all(test, not(miri)))]
 mod tests {
-	use super::*;
-	use super::{ExpectedCapacity, Key, Pool};
-	use crate::connect::Connected;
-	use crate::rt::{TokioExecutor, TokioIo};
+	use std::collections::HashSet;
+	use std::fmt::Debug;
+	use std::future::Future;
+	use std::hash::Hash;
+	use std::pin::Pin;
+	use std::sync::{Arc, Once};
+	use std::task::{self, Poll};
+	use std::time::{Duration, Instant};
+
 	use assert_matches::assert_matches;
 	use bytes::Bytes;
 	use futures_channel::oneshot::Receiver;
@@ -1225,16 +1241,11 @@ mod tests {
 	use hyper::server::conn::{http1, http2};
 	use hyper::service::service_fn;
 	use hyper::{Request, Response};
-	use std::collections::HashSet;
-	use std::fmt::Debug;
-	use std::future::Future;
-	use std::hash::Hash;
-	use std::pin::Pin;
-	use std::sync::Arc;
-	use std::sync::Once;
-	use std::task::{self, Poll};
-	use std::time::{Duration, Instant};
 	use tracing_subscriber::EnvFilter;
+
+	use super::{ExpectedCapacity, Key, Pool, *};
+	use crate::connect::Connected;
+	use crate::rt::{TokioExecutor, TokioIo};
 
 	#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 	struct KeyImpl(http::uri::Scheme, http::uri::Authority, ExpectedCapacity);

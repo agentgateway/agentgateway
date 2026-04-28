@@ -1,16 +1,14 @@
 use std::fmt::Write as _;
 use std::time::Duration;
 
-use crate::http::sessionpersistence;
 use base64::Engine;
-use cookie::Cookie;
-use cookie::SameSite;
+use cookie::{Cookie, SameSite};
 use rand::RngExt;
-use secrecy::ExposeSecret;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Serialize, Serializer};
 
 use super::{Error, PolicyId, now_unix};
+use crate::http::sessionpersistence;
 
 pub const RESERVED_COOKIE_PREFIX: &str = "agw_oidc_";
 // Use a conservative budget below the common ~4 KiB browser per-cookie limit so

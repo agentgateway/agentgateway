@@ -4,6 +4,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
@@ -67,7 +68,7 @@ fn parse_hash_entry(entry: &'_ str) -> Option<(Cow<'_, str>, Hash<'_>)> {
 	let separator = entry.find(':')?;
 	let username = &entry[..separator];
 	let hash_id = &entry[(separator + 1)..];
-	Some((Cow::Borrowed(username), Hash::parse(hash_id)))
+	Hash::parse(hash_id).map(|hash| (Cow::Borrowed(username), hash))
 }
 
 impl<'a> Hash<'a> {
@@ -75,26 +76,33 @@ impl<'a> Hash<'a> {
 		let password = password.as_ref();
 		match self {
 			Hash::MD5(hash) => md5::md5_apr1_encode(password, &hash.salt).as_str() == hash.hash,
-			Hash::BCrypt(hash) => bcrypt::verify(password, hash).unwrap(),
+			Hash::BCrypt(hash) => bcrypt::verify(password, hash).unwrap_or(false),
 			Hash::SHA1(hash) => BASE64_STANDARD.encode(Sha1::digest(password)).as_str() == *hash,
 			Hash::Crypt(hash) => pwhash::unix_crypt::verify(password, hash),
 		}
 	}
 
 	/// Parses the hash part of the htpasswd entry.
-	pub fn parse(hash: &'a str) -> Hash<'a> {
+	pub fn parse(hash: &'a str) -> Option<Hash<'a>> {
 		if hash.starts_with(APR1_ID) {
-			Hash::MD5(MD5Hash {
-				salt: Cow::Borrowed(&hash[(APR1_ID.len())..(APR1_ID.len() + 8)]),
-				hash: Cow::Borrowed(&hash[(APR1_ID.len() + 8 + 1)..]),
-			})
+			let rest = hash.strip_prefix(APR1_ID)?;
+			let (salt, digest) = rest.split_once('$')?;
+			if salt.is_empty() || salt.len() > 8 || digest.is_empty() {
+				return None;
+			}
+			Some(Hash::MD5(MD5Hash {
+				salt: Cow::Borrowed(salt),
+				hash: Cow::Borrowed(digest),
+			}))
 		} else if hash.starts_with(BCRYPT_ID) {
-			Hash::BCrypt(Cow::Borrowed(hash))
+			bcrypt::HashParts::from_str(hash)
+				.ok()
+				.map(|_| Hash::BCrypt(Cow::Borrowed(hash)))
 		} else if hash.starts_with("{SHA}") {
-			Hash::SHA1(Cow::Borrowed(&hash[SHA1_ID.len()..]))
+			Some(Hash::SHA1(Cow::Borrowed(&hash[SHA1_ID.len()..])))
 		} else {
 			// Ignore plaintext, assume crypt
-			Hash::Crypt(Cow::Borrowed(hash))
+			Some(Hash::Crypt(Cow::Borrowed(hash)))
 		}
 	}
 
@@ -168,8 +176,29 @@ crypt_test:bGVh02xkuGli2";
 	}
 
 	#[test]
+	fn malformed_apr1_verify_returns_error() {
+		assert!(md5::verify_apr1_hash("$apr1$", "password").is_err());
+	}
+
+	#[test]
 	fn user_not_found() {
 		let htpasswd = Htpasswd::new(DATA);
 		assert_eq!(htpasswd.check("user_does_not_exist", "password"), false);
+	}
+
+	#[test]
+	fn malformed_apr1_entry_is_ignored() {
+		let htpasswd = Htpasswd::new("broken:$apr1$\nuser:$apr1$lZL6V/ci$eIMz/iKDkbtys/uU7LEK00");
+		assert!(!htpasswd.check("broken", "password"));
+		assert!(htpasswd.check("user", "password"));
+	}
+
+	#[test]
+	fn malformed_bcrypt_entry_is_ignored() {
+		let htpasswd = Htpasswd::new(
+			"broken:$2y$05$short\nbcrypt_test:$2y$05$nC6nErr9XZJuMJ57WyCob.EuZEjylDt2KaHfbfOtyb.EgL1I2jCVa",
+		);
+		assert!(!htpasswd.check("broken", "password"));
+		assert!(htpasswd.check("bcrypt_test", "password"));
 	}
 }

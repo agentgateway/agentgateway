@@ -1,0 +1,52 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+assertion_line: 137
+description: "Config normalization test for named_mcp_backend: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/3000
+    address: "[::]:3000"
+    protocol: http
+    tunnelProtocol: direct
+    listeners:
+      ns/name/bind/3000/listener0:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: ""
+        key: ns/name/bind/3000/listener0
+        listenerName: listener0
+        protocol: HTTP
+listener_routes:
+  - - ns/name/bind/3000/listener0
+    - - backends:
+          - backend: shared-mcp
+            weight: 1
+        key: ns/name/bind/3000/listener0/default/route0
+        matches:
+          - path:
+              pathPrefix: /
+        name: route0
+        namespace: default
+listener_tcp_routes:
+  - - ns/name/bind/3000/listener0
+    - []
+policies: []
+backends:
+  - backend:
+      mcp:
+        name: shared-mcp
+        namespace: ""
+        target:
+          targets:
+            - name: everything
+              stdio:
+                cmd: npx
+                args:
+                  - "@modelcontextprotocol/server-everything"
+          stateful: true
+          alwaysUsePrefix: false
+          failureMode: failClosed
+          sessionIdleTtl: 12m0s
+route_groups: []
+workloads: []
+services: []

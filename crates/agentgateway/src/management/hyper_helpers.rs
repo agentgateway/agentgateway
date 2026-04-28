@@ -15,6 +15,8 @@ use tokio::net::TcpListener;
 use tracing::info;
 
 use crate::http::{Body, Response};
+use crate::transport::stream::Socket;
+use crate::types::frontend;
 
 pub fn http1_server() -> http1::Builder {
 	let mut b = http1::Builder::new();
@@ -45,6 +47,7 @@ pub struct Server<S> {
 	binds: Vec<TcpListener>,
 	drain_rx: DrainWatcher,
 	state: S,
+	allow_proxy_protocol: bool,
 }
 
 impl<S> Server<S> {
@@ -63,7 +66,13 @@ impl<S> Server<S> {
 			binds,
 			drain_rx,
 			state: s,
+			allow_proxy_protocol: false,
 		})
+	}
+
+	pub fn with_optional_proxy_protocol(mut self) -> Self {
+		self.allow_proxy_protocol = true;
+		self
 	}
 
 	pub fn address(&self) -> SocketAddr {
@@ -90,6 +99,7 @@ impl<S> Server<S> {
 		let drain = self.drain_rx;
 		let state = Arc::new(self.state);
 		let f = Arc::new(f);
+		let allow_proxy_protocol = self.allow_proxy_protocol;
 		info!(
 				%address,
 				component=self.name,
@@ -105,11 +115,17 @@ impl<S> Server<S> {
 				let stream = tokio_stream::wrappers::TcpListenerStream::new(bind);
 				let mut stream = stream.take_until(Box::pin(drain_stream.wait_for_drain()));
 				while let Some(Ok(socket)) = stream.next().await {
-					socket.set_nodelay(true).unwrap();
 					let drain = drain_connections.clone();
 					let f = f.clone();
 					let state = state.clone();
 					tokio::spawn(async move {
+						let socket = match prepare_socket(socket, allow_proxy_protocol).await {
+							Ok(socket) => socket,
+							Err(err) => {
+								tracing::warn!(%err, "management connection setup failed");
+								return Ok(());
+							},
+						};
 						let serve = http1_server()
 							.half_close(true)
 							.header_read_timeout(Duration::from_secs(2))
@@ -151,4 +167,30 @@ impl<S> Server<S> {
 			});
 		}
 	}
+}
+
+async fn prepare_socket(
+	socket: tokio::net::TcpStream,
+	allow_proxy_protocol: bool,
+) -> anyhow::Result<Socket> {
+	let socket = Socket::from_tcp(socket)?;
+	if !allow_proxy_protocol {
+		return Ok(socket);
+	}
+
+	let (ext, metrics, inner) = socket.into_parts();
+	let mut rewind = Socket::new_rewind(inner);
+	let pp_info = tokio::time::timeout(
+		Duration::from_secs(5),
+		crate::proxy::proxy_protocol::detect_proxy_protocol(&mut rewind, frontend::ProxyVersion::All),
+	)
+	.await??;
+
+	Ok(match pp_info {
+		Some(pp_info) => Socket::from_rewind(ext, metrics, rewind.keep_after(pp_info.consumed_len)),
+		None => {
+			rewind.rewind();
+			Socket::from_rewind(ext, metrics, rewind)
+		},
+	})
 }

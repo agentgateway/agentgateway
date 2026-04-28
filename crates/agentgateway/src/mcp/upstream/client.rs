@@ -62,7 +62,7 @@ impl McpHttpClient {
 
 		let resp = self
 			.client
-			.call_with_default_policies(req, &self.backend, policies)
+			.call_with_explicit_policies(req, &self.backend, policies)
 			.await?;
 
 		// Capture resolved destination on first request if stateful

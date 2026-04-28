@@ -1,14 +1,13 @@
 use std::time::Instant;
 
 use agent_core::strng;
+use bytes::Bytes;
 
 use crate::http::Body;
-use crate::llm::AIError;
-use crate::llm::AmendOnDrop;
 use crate::llm::types::completions::typed as completions;
 use crate::llm::types::messages::typed as messages;
+use crate::llm::{AIError, AmendOnDrop};
 use crate::parse;
-use bytes::Bytes;
 
 /// Translate a Google error response into an Anthropic Messages error response.
 pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, AIError> {
@@ -39,7 +38,6 @@ pub mod from_completions {
 	use crate::llm::types::completions::typed::UsagePromptDetails;
 	use crate::llm::types::messages::typed as messages;
 	use crate::llm::{AIError, AmendOnDrop, types};
-
 	use crate::{json, parse};
 
 	fn user_content_to_messages(

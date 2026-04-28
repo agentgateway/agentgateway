@@ -191,7 +191,7 @@ macro_rules! provider_env_model_test {
 }
 
 fn llm_config(provider: &str, env: &str, model: &str) -> String {
-	let policies = if provider == "azureOpenAI" {
+	let policies = if provider == "azure" {
 		r#"
       policies:
         backendAuth:
@@ -219,9 +219,10 @@ fn llm_config(provider: &str, env: &str, model: &str) -> String {
               projectId: $VERTEX_PROJECT
               region: us-east5
               "#
-	} else if provider == "azureOpenAI" {
+	} else if provider == "azure" {
 		r#"
-              host: $AZURE_HOST
+              resourceName: $AZURE_RESOURCE_NAME
+              resourceType: $AZURE_RESOURCE_TYPE
               "#
 	} else {
 		""
@@ -534,6 +535,49 @@ mod gemini {
 		"gemini-2.5-flash",
 		send_messages_count_tokens
 	);
+	provider_model_test!(
+		responses,
+		"gemini",
+		"GEMINI_API_KEY",
+		"gemini-2.5-flash",
+		send_responses,
+		false
+	);
+	provider_model_test!(
+		responses_streaming,
+		"gemini",
+		"GEMINI_API_KEY",
+		"gemini-2.5-flash",
+		send_streaming_responses_and_drain,
+	);
+
+	// NOTE: AsyncLog::non_atomic_mutate is racey be design.
+	// We need to drain the response to ensure flush is called.
+	async fn send_streaming_responses_and_drain(gw: &AgentGateway) {
+		use http_body_util::BodyExt;
+
+		let resp = gw
+			.send_request_json(
+				"http://localhost/v1/responses",
+				json!({
+					"max_output_tokens": 16,
+					"input": "give me a 1 word answer",
+					"stream": true,
+				}),
+			)
+			.await;
+
+		let test_id = test_id_from_response(&resp);
+		assert_eq!(resp.status(), StatusCode::OK);
+		// drain response
+		resp
+			.into_body()
+			.collect()
+			.await
+			.expect("collect streaming responses body")
+			.to_bytes();
+		assert_request_log("/v1/responses", true, &test_id).await;
+	}
 }
 
 mod vertex {
@@ -607,29 +651,18 @@ mod vertex {
 	);
 }
 
-mod azureopenai {
+mod azure {
 	use super::*;
-	send_completions_tests!("azureOpenAI", "", "gpt-4o-mini");
-	send_completions_tool_tests!("azureOpenAI", "", "gpt-4o-mini");
-	send_messages_tests!("azureOpenAI", "", "gpt-4o-mini");
-	send_messages_image_tests!(
-		"azureOpenAI",
-		"",
-		"gpt-4o-mini",
-		send_messages_with_image_url
-	);
-	send_messages_tool_tests!("azureOpenAI", "", "gpt-4o-mini");
-	send_responses_tests!("azureOpenAI", "", "gpt-4o-mini");
-	send_embeddings_tests!(
-		embeddings,
-		"azureOpenAI",
-		"",
-		"text-embedding-3-small",
-		None
-	);
+	send_completions_tests!("azure", "", "gpt-4o-mini");
+	send_completions_tool_tests!("azure", "", "gpt-4o-mini");
+	send_messages_tests!("azure", "", "gpt-4o-mini");
+	send_messages_image_tests!("azure", "", "gpt-4o-mini", send_messages_with_image_url);
+	send_messages_tool_tests!("azure", "", "gpt-4o-mini");
+	send_responses_tests!("azure", "", "gpt-4o-mini");
+	send_embeddings_tests!(embeddings, "azure", "", "text-embedding-3-small", None);
 	provider_model_test!(
 		messages_count_tokens_completions_backend,
-		"azureOpenAI",
+		"azure",
 		"",
 		"gpt-4o-mini",
 		send_messages_count_tokens
@@ -647,7 +680,10 @@ pub async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGatewa
 	if provider == "vertex" && !require_env("VERTEX_PROJECT") {
 		return None;
 	}
-	if provider == "azureOpenAI" && !require_env("AZURE_HOST") {
+	if provider == "azure" && !require_env("AZURE_RESOURCE_NAME") {
+		return None;
+	}
+	if provider == "azure" && !require_env("AZURE_RESOURCE_TYPE") {
 		return None;
 	}
 	let gw = AgentGateway::new(llm_config(provider, env, model))
@@ -658,6 +694,18 @@ pub async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGatewa
 
 async fn assert_log(path: &str, streaming: bool, test_id: &str) {
 	assert_log_with_output_range(path, streaming, test_id, 1, 100).await;
+}
+
+async fn assert_request_log(path: &str, streaming: bool, test_id: &str) {
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.path", path),
+		("req.id", test_id),
+	])
+	.await
+	.unwrap();
+	let stream = log.get("streaming").unwrap().as_bool().unwrap();
+	assert_eq!(stream, streaming, "unexpected streaming value: {stream}");
 }
 
 async fn assert_log_with_output_range(

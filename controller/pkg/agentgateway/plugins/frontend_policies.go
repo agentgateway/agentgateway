@@ -18,8 +18,10 @@ const (
 	frontendNetworkAuthzSuffix  = ":frontend-network-authz"
 	frontendTlsPolicySuffix     = ":frontend-tls"
 	frontendHttpPolicySuffix    = ":frontend-http"
+	frontendProxyPolicySuffix   = ":frontend-proxy"
 	frontendLoggingPolicySuffix = ":frontend-logging"
 	frontendTracingPolicySuffix = ":frontend-tracing"
+	frontendMetricsPolicySuffix = ":frontend-metrics"
 )
 
 func translateFrontendPolicyToAgw(
@@ -51,6 +53,10 @@ func translateFrontendPolicyToAgw(
 		appendPolicy("http")(translateFrontendHTTP(policy, policyName), nil)
 	}
 
+	if s := frontend.ProxyProtocol; s != nil {
+		appendPolicy("proxyProtocol")(translateFrontendProxyProtocol(policy, policyName), nil)
+	}
+
 	if s := frontend.TLS; s != nil {
 		appendPolicy("tls")(translateFrontendTLS(policy, policyName), nil)
 	}
@@ -69,6 +75,10 @@ func translateFrontendPolicyToAgw(
 
 	if s := frontend.Tracing; s != nil {
 		appendPolicy("tracing")(translateFrontendTracing(policyCtx, policy, policyName))
+	}
+
+	if s := frontend.Metrics; s != nil {
+		appendPolicy("metrics")(translateFrontendMetrics(policy, policyName))
 	}
 
 	return agwPolicies, errors.Join(errs...)
@@ -276,6 +286,52 @@ func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string) 
 	return tcpPolicy
 }
 
+func translateFrontendProxyProtocol(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
+	proxy := policy.Spec.Frontend.ProxyProtocol
+	version := api.FrontendPolicySpec_ProxyProtocol_V2
+	switch proxy.Version {
+	case agentgateway.ProxyProtocolVersionV1:
+		version = api.FrontendPolicySpec_ProxyProtocol_V1
+	case agentgateway.ProxyProtocolVersionAll:
+		version = api.FrontendPolicySpec_ProxyProtocol_ALL
+	case agentgateway.ProxyProtocolVersionV2, "":
+		version = api.FrontendPolicySpec_ProxyProtocol_V2
+	default:
+		logger.Warn("unknown proxy protocol version", "version", proxy.Version)
+	}
+
+	mode := api.FrontendPolicySpec_ProxyProtocol_STRICT
+	switch proxy.Mode {
+	case agentgateway.ProxyProtocolModeOptional:
+		mode = api.FrontendPolicySpec_ProxyProtocol_OPTIONAL
+	case agentgateway.ProxyProtocolModeStrict, "":
+		mode = api.FrontendPolicySpec_ProxyProtocol_STRICT
+	default:
+		logger.Warn("unknown proxy protocol mode", "mode", proxy.Mode)
+	}
+
+	proxyPolicy := &api.Policy{
+		Key:  name + frontendProxyPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Frontend{
+			Frontend: &api.FrontendPolicySpec{
+				Kind: &api.FrontendPolicySpec_ProxyProtocol_{
+					ProxyProtocol: &api.FrontendPolicySpec_ProxyProtocol{
+						Version: version,
+						Mode:    mode,
+					},
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated proxy policy",
+		"policy", policy.Name,
+		"agentgateway_policy", proxyPolicy.Name)
+
+	return proxyPolicy
+}
+
 func translateFrontendNetworkAuthorization(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
 	auth := policy.Spec.Frontend.NetworkAuthorization
 	var allowPolicies, denyPolicies, requirePolicies []string
@@ -425,6 +481,9 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	if v := http.HTTP2KeepaliveTimeout; v != nil {
 		spec.Http2KeepaliveTimeout = durationpb.New(v.Duration)
 	}
+	if v := http.MaxConnectionDuration; v != nil {
+		spec.MaxConnectionDuration = durationpb.New(v.Duration)
+	}
 
 	httpPolicy := &api.Policy{
 		Key:  name + frontendHttpPolicySuffix,
@@ -443,4 +502,42 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 		"agentgateway_policy", httpPolicy.Name)
 
 	return httpPolicy
+}
+
+func translateFrontendMetrics(policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
+	metricsSpec := policy.Spec.Frontend.Metrics
+	spec := &api.FrontendPolicySpec_Metrics{}
+	var errs []error
+
+	fields := make([]*api.FrontendPolicySpec_Metrics_Field, 0, len(metricsSpec.Attributes.Add))
+	for _, add := range metricsSpec.Attributes.Add {
+		if !isCEL(add.Expression) {
+			errs = append(errs, fmt.Errorf("frontend metrics field %q is not a valid CEL expression: %s", add.Name, add.Expression))
+		}
+		fields = append(fields, &api.FrontendPolicySpec_Metrics_Field{
+			Name:       add.Name,
+			Expression: string(add.Expression),
+		})
+	}
+	spec.Fields = &api.FrontendPolicySpec_Metrics_Fields{
+		Add: fields,
+	}
+
+	metricsPolicy := &api.Policy{
+		Key:  name + frontendMetricsPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Frontend{
+			Frontend: &api.FrontendPolicySpec{
+				Kind: &api.FrontendPolicySpec_Metrics_{
+					Metrics: spec,
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated metrics policy",
+		"policy", policy.Name,
+		"agentgateway_policy", metricsPolicy.Name)
+
+	return metricsPolicy, errors.Join(errs...)
 }

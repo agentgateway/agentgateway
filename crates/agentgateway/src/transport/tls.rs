@@ -247,12 +247,13 @@ impl ExtendedServerName {
 pub mod insecure {
 	use std::sync::Arc;
 
-	use crate::transport::tls::provider;
 	use rustls::client::WebPkiServerVerifier;
 	use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 	use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 	use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
 	use rustls::{DigitallySignedStruct, DistinguishedName, SignatureScheme};
+
+	use crate::transport::tls::provider;
 
 	#[derive(Debug)]
 	pub struct NoServerNameVerification {
@@ -547,39 +548,48 @@ pub mod trustdomain {
 	#[derive(Debug)]
 	pub struct TrustDomainVerifier {
 		base: Arc<dyn ClientCertVerifier>,
-		trust_domain: Option<Strng>,
+		allowed_trust_domains: Arc<[Strng]>,
 	}
 
 	impl TrustDomainVerifier {
-		pub fn new(base: Arc<dyn ClientCertVerifier>, trust_domain: Option<Strng>) -> Arc<Self> {
-			Arc::new(Self { base, trust_domain })
+		pub fn new(
+			base: Arc<dyn ClientCertVerifier>,
+			allowed_trust_domains: Arc<[Strng]>,
+		) -> Arc<Self> {
+			Arc::new(Self {
+				base,
+				allowed_trust_domains,
+			})
 		}
 
 		fn verify_trust_domain(&self, client_cert: &CertificateDer<'_>) -> Result<(), rustls::Error> {
 			use x509_parser::prelude::*;
-			let Some(want_trust_domain) = &self.trust_domain else {
-				// No need to verify
+			if self.allowed_trust_domains.is_empty() {
+				// No restriction configured; rely on CA-level trust only.
 				return Ok(());
-			};
+			}
 			let (_, c) = X509Certificate::from_der(client_cert)
 				.map_err(|_e| rustls::Error::InvalidCertificate(rustls::CertificateError::BadEncoding))?;
 			let (ids, _) = super::sans(c).map_err(|_e| {
 				rustls::Error::InvalidCertificate(rustls::CertificateError::ApplicationVerificationFailure)
 			})?;
 			trace!(
-				"verifying client identities {ids:?} against trust domain {:?}",
-				want_trust_domain
+				"verifying client identities {ids:?} against allowed trust domains {:?}",
+				self.allowed_trust_domains
 			);
 			ids
 				.iter()
 				.find(|id| match id {
-					Identity::Spiffe { trust_domain, .. } => trust_domain == want_trust_domain,
+					Identity::Spiffe { trust_domain, .. } => {
+						self.allowed_trust_domains.contains(trust_domain)
+					},
 				})
 				.ok_or_else(|| {
 					rustls::Error::InvalidCertificate(rustls::CertificateError::Other(rustls::OtherError(
 						Arc::new(super::LocalError::Invalid(format!(
-							"identity verification error: peer did not present the expected trustdomain ({}), got {}",
-							&self.trust_domain.as_ref().unwrap(),
+							"identity verification error: peer did not present an allowed trustdomain \
+							(allowed: [{}]), got {}",
+							self.allowed_trust_domains.join(", "),
 							super::display_list(&ids)
 						))),
 					)))
@@ -628,6 +638,136 @@ pub mod trustdomain {
 
 		fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
 			self.base.supported_verify_schemes()
+		}
+	}
+
+	#[cfg(test)]
+	mod tests {
+		use std::time::{Duration, SystemTime};
+
+		use rcgen::{
+			CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, Issuer, KeyPair,
+			KeyUsagePurpose, SanType, SerialNumber,
+		};
+		use rustls::pki_types::CertificateDer;
+
+		use super::*;
+
+		/// Generate a leaf cert with a SPIFFE URI SAN for the given trust domain, signed by a test CA.
+		fn make_spiffe_cert(trust_domain: &str) -> CertificateDer<'static> {
+			let kp = KeyPair::generate().unwrap();
+			let ca_kp = KeyPair::generate().unwrap();
+
+			let mut params = CertificateParams::default();
+			params.not_before = SystemTime::now().into();
+			params.not_after = (SystemTime::now() + Duration::from_secs(3600)).into();
+			params.serial_number = Some(SerialNumber::from_slice(&[1]));
+			let mut dn = DistinguishedName::new();
+			dn.push(DnType::OrganizationName, trust_domain);
+			params.distinguished_name = dn;
+			params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
+			params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ClientAuth];
+			let spiffe_uri = format!("spiffe://{trust_domain}/ns/default/sa/test");
+			params.subject_alt_names = vec![SanType::URI(spiffe_uri.try_into().unwrap())];
+
+			let mut ca_params = CertificateParams::default();
+			ca_params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+			ca_params.not_before = SystemTime::now().into();
+			ca_params.not_after = (SystemTime::now() + Duration::from_secs(3600)).into();
+			let _ca_cert = ca_params.self_signed(&ca_kp).unwrap();
+			let issuer = Issuer::from_params(&ca_params, &ca_kp);
+
+			let cert = params.signed_by(&kp, &issuer).unwrap();
+			CertificateDer::from(cert.der().to_vec())
+		}
+
+		/// Minimal no-op ClientCertVerifier — only used to satisfy TrustDomainVerifier's
+		/// constructor; none of its methods are called by verify_trust_domain.
+		#[derive(Debug)]
+		struct NopClientVerifier;
+
+		impl ClientCertVerifier for NopClientVerifier {
+			fn root_hint_subjects(&self) -> &[rustls::DistinguishedName] {
+				&[]
+			}
+
+			fn verify_client_cert(
+				&self,
+				_end_entity: &CertificateDer<'_>,
+				_intermediates: &[CertificateDer<'_>],
+				_now: UnixTime,
+			) -> Result<ClientCertVerified, rustls::Error> {
+				Ok(ClientCertVerified::assertion())
+			}
+
+			fn verify_tls12_signature(
+				&self,
+				_message: &[u8],
+				_cert: &CertificateDer<'_>,
+				_dss: &DigitallySignedStruct,
+			) -> Result<HandshakeSignatureValid, rustls::Error> {
+				Ok(HandshakeSignatureValid::assertion())
+			}
+
+			fn verify_tls13_signature(
+				&self,
+				_message: &[u8],
+				_cert: &CertificateDer<'_>,
+				_dss: &DigitallySignedStruct,
+			) -> Result<HandshakeSignatureValid, rustls::Error> {
+				Ok(HandshakeSignatureValid::assertion())
+			}
+
+			fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+				vec![]
+			}
+		}
+
+		fn verifier(domains: &[&str]) -> Arc<TrustDomainVerifier> {
+			let allowed: Arc<[Strng]> = domains.iter().map(strng::new).collect();
+			TrustDomainVerifier::new(Arc::new(NopClientVerifier), allowed)
+		}
+
+		#[test]
+		fn empty_list_always_passes() {
+			let v = verifier(&[]);
+			let cert = make_spiffe_cert("any.domain");
+			assert!(v.verify_trust_domain(&cert).is_ok());
+		}
+
+		#[test]
+		fn single_domain_matching_cert_passes() {
+			let v = verifier(&["cluster.local"]);
+			let cert = make_spiffe_cert("cluster.local");
+			assert!(v.verify_trust_domain(&cert).is_ok());
+		}
+
+		#[test]
+		fn single_domain_mismatched_cert_rejected() {
+			let v = verifier(&["cluster.local"]);
+			let cert = make_spiffe_cert("other.domain");
+			assert!(v.verify_trust_domain(&cert).is_err());
+		}
+
+		#[test]
+		fn multiple_domains_first_matches() {
+			let v = verifier(&["cluster.local", "peer.cluster"]);
+			let cert = make_spiffe_cert("cluster.local");
+			assert!(v.verify_trust_domain(&cert).is_ok());
+		}
+
+		#[test]
+		fn multiple_domains_second_matches() {
+			let v = verifier(&["cluster.local", "peer.cluster"]);
+			let cert = make_spiffe_cert("peer.cluster");
+			assert!(v.verify_trust_domain(&cert).is_ok());
+		}
+
+		#[test]
+		fn multiple_domains_no_match_rejected() {
+			let v = verifier(&["cluster.local", "peer.cluster"]);
+			let cert = make_spiffe_cert("untrusted.domain");
+			assert!(v.verify_trust_domain(&cert).is_err());
 		}
 	}
 }

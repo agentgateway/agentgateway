@@ -144,6 +144,7 @@ const ANTHROPIC: &str = "anthropic";
 const BEDROCK: &str = "bedrock";
 const VERTEX: &str = "vertex";
 const OPENAI: &str = "openai";
+const GEMINI: &str = "gemini";
 const COMPLETIONS: &str = "completions";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
@@ -165,10 +166,10 @@ mod requests {
 		("reasoning", &[COMPLETIONS, BEDROCK, VERTEX]),
 	];
 	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[BEDROCK]),
-		("instructions", &[BEDROCK]),
-		("input-list", &[BEDROCK]),
-		("parallel-tool-call", &[BEDROCK]),
+		("basic", &[BEDROCK, GEMINI]),
+		("instructions", &[BEDROCK, GEMINI]),
+		("input-list", &[BEDROCK, GEMINI]),
+		("parallel-tool-call", &[BEDROCK, GEMINI]),
 	];
 	pub const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
@@ -254,14 +255,16 @@ mod requests {
 			guardrail_version: None,
 		};
 
-		let bed_request =
-			|i| conversion::bedrock::from_responses::translate(&i, &bedrock_provider, None, None);
-
 		for (name, providers) in RESPONSES_REQUESTS {
 			let test = &format!("requests/responses/{name}.json");
 			for provider in *providers {
 				match *provider {
-					BEDROCK => test_request(BEDROCK, test, bed_request),
+					BEDROCK => test_request(BEDROCK, test, |req| {
+						conversion::bedrock::from_responses::translate(&req, &bedrock_provider, None, None)
+					}),
+					GEMINI => test_request(GEMINI, test, |req| {
+						conversion::openai_compat::from_responses::translate(&req)
+					}),
 					other => panic!("unsupported provider in RESPONSES_REQUESTS: {other}"),
 				}
 			}

@@ -15,6 +15,7 @@ import (
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/kube/krt"
+	"istio.io/istio/pkg/ptr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -320,7 +321,7 @@ func (r *gatewayReconciler) Reconcile(req types.NamespacedName) (rErr error) {
 			Reason:             string(gwv1.GatewayReasonInvalidParameters),
 			Message:            err.Error(),
 		}
-		if statusErr := r.updateGatewayStatusWithRetry(ctx, gw, condition); statusErr != nil {
+		if statusErr := r.updateGatewayStatusWithRetry(gw, condition); statusErr != nil {
 			return fmt.Errorf("failed to update status for Gateway %s: %w", req, statusErr)
 		}
 		return err
@@ -335,7 +336,7 @@ func (r *gatewayReconciler) Reconcile(req types.NamespacedName) (rErr error) {
 			Reason:             string(gwv1.GatewayReasonAccepted),
 			Message:            reports.GatewayAcceptedMessage,
 		}
-		if statusErr := r.updateGatewayStatusWithRetry(ctx, gw, condition); statusErr != nil {
+		if statusErr := r.updateGatewayStatusWithRetry(gw, condition); statusErr != nil {
 			return fmt.Errorf("failed to update status for Gateway %s: %w", req, statusErr)
 		}
 	}
@@ -361,7 +362,7 @@ func (r *gatewayReconciler) Reconcile(req types.NamespacedName) (rErr error) {
 		}
 	}
 	// update status (whether we generated a service or not, for unmanaged)
-	err = r.updateStatus(ctx, gw, generatedSvc)
+	err = r.updateStatus(gw, generatedSvc)
 	if err != nil {
 		return fmt.Errorf("error updating status for Gateway %s: %w", req, err)
 	}
@@ -369,7 +370,7 @@ func (r *gatewayReconciler) Reconcile(req types.NamespacedName) (rErr error) {
 	return nil
 }
 
-func (r *gatewayReconciler) updateStatus(ctx context.Context, gw *gwv1.Gateway, svcMeta *metav1.ObjectMeta) error {
+func (r *gatewayReconciler) updateStatus(gw *gwv1.Gateway, svcMeta *metav1.ObjectMeta) error {
 	var svc *corev1.Service
 	if svcMeta != nil {
 		svcnns := client.ObjectKey{
@@ -395,7 +396,7 @@ func (r *gatewayReconciler) updateStatus(ctx context.Context, gw *gwv1.Gateway, 
 
 	// update gateway addresses in the status
 	desiredAddresses := getDesiredAddresses(gw, svc)
-	return updateGatewayAddresses(ctx, r.gwClient, client.ObjectKeyFromObject(gw), desiredAddresses)
+	return updateGatewayAddresses(r.gwClient, client.ObjectKeyFromObject(gw), desiredAddresses)
 }
 
 func getDesiredAddresses(gw *gwv1.Gateway, svc *corev1.Service) []gwv1.GatewayStatusAddress {
@@ -448,7 +449,6 @@ func getDesiredAddresses(gw *gwv1.Gateway, svc *corev1.Service) []gwv1.GatewaySt
 // The updateFunc receives the latest Gateway and should modify its status as needed.
 // If updateFunc returns false, the update is skipped (no changes needed).
 func updateGatewayStatusWithRetryFunc(
-	_ context.Context,
 	cli kclient.Client[*gwv1.Gateway],
 	gwNN types.NamespacedName,
 	updateFunc func(*gwv1.Gateway) (gwv1.GatewayStatus, bool),
@@ -479,18 +479,18 @@ func updateGatewayStatusWithRetryFunc(
 
 // updateGatewayAddresses updates the addresses of a Gateway resource.
 func updateGatewayAddresses(
-	ctx context.Context,
 	cli kclient.Client[*gwv1.Gateway],
 	gwNN types.NamespacedName,
 	desired []gwv1.GatewayStatusAddress,
 ) error {
 	return updateGatewayStatusWithRetryFunc(
-		ctx,
 		cli,
 		gwNN,
 		func(gw *gwv1.Gateway) (gwv1.GatewayStatus, bool) {
 			// Check if an update is needed
-			if slices.Equal(desired, gw.Status.Addresses) {
+			if slices.EqualFunc(desired, gw.Status.Addresses, func(a gwv1.GatewayStatusAddress, b gwv1.GatewayStatusAddress) bool {
+				return a.Value == b.Value && ptr.Equal(a.Type, b.Type)
+			}) {
 				return gw.Status, false
 			}
 			newStatus := gw.Status.DeepCopy()
@@ -502,9 +502,8 @@ func updateGatewayAddresses(
 
 // updateGatewayStatusWithRetry attempts to update the Gateway status with retry logic
 // to handle transient failures when updating the status subresource
-func (r *gatewayReconciler) updateGatewayStatusWithRetry(ctx context.Context, gw *gwv1.Gateway, condition metav1.Condition) error {
+func (r *gatewayReconciler) updateGatewayStatusWithRetry(gw *gwv1.Gateway, condition metav1.Condition) error {
 	return updateGatewayStatusWithRetryFunc(
-		ctx,
 		r.gwClient,
 		client.ObjectKeyFromObject(gw),
 		func(latest *gwv1.Gateway) (gwv1.GatewayStatus, bool) {

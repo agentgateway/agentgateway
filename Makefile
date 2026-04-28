@@ -43,22 +43,25 @@ build-target:
 # lint
 .PHONY: lint
 lint:
-	cargo fmt --check
+	cargo fmt --check -- --config imports_granularity=Module,group_imports=StdExternalCrate,normalize_comments=true
 	cargo clippy --all-targets -- -D warnings
 
 .PHONY: fix-lint
-fix-lint:
+fix-lint: format
 	cargo clippy --fix --allow-staged --allow-dirty --allow-no-vcs
-	cargo fmt
 
 .PHONY: format
 format:
-	cargo fmt
+	cargo fmt -- --config imports_granularity=Module,group_imports=StdExternalCrate,normalize_comments=true
 
 # test
 .PHONY: test
 test:
 	cargo test --all-targets
+
+.PHONY: test-release
+test-release:
+	cargo test --profile quick-release --all-targets
 
 # clean
 .PHONY: clean

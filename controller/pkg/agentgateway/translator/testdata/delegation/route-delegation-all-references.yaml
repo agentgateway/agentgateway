@@ -1,0 +1,314 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: parent
+  namespace: default
+spec:
+  parentRefs:
+  - name: test-gateway
+  hostnames:
+  - delegation.example
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team1
+    backendRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: "*"
+      namespace: team1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: child-team1-foo
+  namespace: team1
+spec:
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team1/foo
+    backendRefs:
+      - name: route-backend
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team1/grandchild
+    backendRefs:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+        name: "*"
+        namespace: grandchild
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: grandchild
+  namespace: grandchild
+spec:
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team1/grandchild/foo
+    backendRefs:
+      - name: grandchild
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: grandchild
+  namespace: grandchild
+spec:
+  static:
+    host: grandchild.example.com
+    port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: route-backend
+  namespace: team1
+spec:
+  static:
+    host: route-backend.example.com
+    port: 80
+  policies:
+    tunnel:
+      backendRef:
+        name: backend-policy
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: backend-policy
+  namespace: team1
+spec:
+  static:
+    host: backend-policy.example.com
+    port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: policy
+  namespace: team1
+spec:
+  static:
+    host: policy.example.com
+    port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: team1
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: child-team1-foo
+      group: gateway.networking.k8s.io
+  traffic:
+    extAuth:
+      grpc: {}
+      backendRef:
+        name: policy
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    backend:
+      key: grandchild/grandchild
+      name:
+        name: grandchild
+        namespace: grandchild
+      static:
+        host: grandchild.example.com
+        port: 80
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    backend:
+      key: team1/backend-policy
+      name:
+        name: backend-policy
+        namespace: team1
+      static:
+        host: backend-policy.example.com
+        port: 80
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    backend:
+      key: team1/policy
+      name:
+        name: policy
+        namespace: team1
+      static:
+        host: policy.example.com
+        port: 80
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    backend:
+      inlinePolicies:
+      - backendTunnel:
+          proxy:
+            backend: team1/backend-policy
+      key: team1/route-backend
+      name:
+        name: route-backend
+        namespace: team1
+      static:
+        host: route-backend.example.com
+        port: 80
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/team1/agw:extauth:team1/child-team1-foo
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: team1
+      target:
+        route:
+          kind: HTTPRoute
+          name: child-team1-foo
+          namespace: team1
+      traffic:
+        extAuthz:
+          grpc: {}
+          target:
+            backend: team1/policy
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - routeGroupKey: team1/*
+        weight: 1
+      hostnames:
+      - delegation.example
+      key: default/parent.00.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          pathPrefix: /anything/team1
+      name:
+        kind: HTTPRoute
+        name: parent
+        namespace: default
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          backend: grandchild/grandchild
+        weight: 1
+      key: grandchild/grandchild.00.routegroup.grandchild.wildcard
+      matches:
+      - path:
+          pathPrefix: /anything/team1/grandchild/foo
+      name:
+        kind: HTTPRoute
+        name: grandchild
+        namespace: grandchild
+      routeGroupKey: grandchild/*
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          backend: team1/route-backend
+        weight: 1
+      key: team1/child-team1-foo.00.routegroup.team1.wildcard
+      matches:
+      - path:
+          pathPrefix: /anything/team1/foo
+      name:
+        kind: HTTPRoute
+        name: child-team1-foo
+        namespace: team1
+      routeGroupKey: team1/*
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - routeGroupKey: grandchild/*
+        weight: 1
+      key: team1/child-team1-foo.01.routegroup.team1.wildcard
+      matches:
+      - path:
+          pathPrefix: /anything/team1/grandchild
+      name:
+        kind: HTTPRoute
+        name: child-team1-foo
+        namespace: team1
+      routeGroupKey: team1/*
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: parent
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: grandchild
+    namespace: grandchild
+  spec: null
+  status:
+    parents: []
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: child-team1-foo
+    namespace: team1
+  spec: null
+  status:
+    parents: []

@@ -309,14 +309,19 @@ impl opentelemetry_sdk::trace::SpanExporter for PolicyGrpcSpanExporter {
 			let req = opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest {
 				resource_spans,
 			};
-			// Ensure export runs on the application's Tokio runtime
+			// Drop tonic Response inside the spawned task so guard is released on the Tokio runtime, not on
+			// the BatchProcessor OS thread which has no Tokio context.
 			handle
-				.spawn(async move { client.export(req).await })
+				.spawn(async move {
+					client
+						.export(req)
+						.await
+						.map(|_| ())
+						.map_err(|e| e.message().to_string())
+				})
 				.await
 				.map_err(|e| OTelSdkError::InternalFailure(e.to_string()))?
-				.map(|_| ())
-				.map_err(|e: tonic::Status| OTelSdkError::InternalFailure(e.message().to_string()))
-				as OTelSdkResult
+				.map_err(OTelSdkError::InternalFailure) as OTelSdkResult
 		}
 	}
 
@@ -687,7 +692,7 @@ mod tests {
 			cel_context: crate::cel::ContextBuilder::new(),
 			filter: None,
 			fields: LoggingFields::default(),
-			metric_fields: Arc::new(MetricFields::default()),
+			metric_fields: MetricFields::default(),
 		};
 		let mut registry = Registry::default();
 		let metrics = Arc::new(Metrics::new(&mut registry, Default::default()));

@@ -3,10 +3,6 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use ::cel::types::dynamic::DynamicType;
-use axum_core::RequestExt;
-use axum_extra::TypedHeader;
-use axum_extra::headers::Authorization;
-use axum_extra::headers::authorization::Bearer;
 use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet, KeyAlgorithm};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use secrecy::SecretString;
@@ -14,12 +10,16 @@ use serde_json::{Map, Value};
 
 use crate::client::Client;
 use crate::http::Request;
+use crate::http::auth::AuthorizationLocation;
+use crate::proxy::dtrace::{self};
 use crate::telemetry::log::RequestLog;
 use crate::*;
 
 #[cfg(test)]
 #[path = "jwt_tests.rs"]
 mod tests;
+
+const TRACE_POLICY_KIND: &str = "jwt";
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum TokenError {
@@ -37,6 +37,9 @@ pub enum TokenError {
 
 	#[error("token uses the unknown key {0:?}")]
 	UnknownKeyId(String),
+
+	#[error("failed to strip validated credentials from the request: {0}")]
+	CredentialRemoval(String),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -63,6 +66,7 @@ pub enum JwkError {
 pub struct Jwt {
 	mode: Mode,
 	providers: Vec<Provider>,
+	location: AuthorizationLocation,
 }
 
 #[derive(Clone)]
@@ -78,13 +82,16 @@ impl serde::Serialize for Jwt {
 		S: serde::Serializer,
 	{
 		#[derive(serde::Serialize)]
+		#[serde(rename_all = "camelCase")]
 		pub struct Serde<'a> {
 			mode: Mode,
 			providers: &'a Vec<Provider>,
+			location: &'a AuthorizationLocation,
 		}
 		Serde {
 			mode: self.mode,
 			providers: &self.providers,
+			location: &self.location,
 		}
 		.serialize(serializer)
 	}
@@ -114,20 +121,23 @@ impl Debug for Jwt {
 	}
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(untagged, deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_de!)]
+#[serde(untagged)]
 pub enum LocalJwtConfig {
 	#[serde(rename_all = "camelCase")]
 	Multi {
 		#[serde(default)]
 		mode: Mode,
+		#[serde(default)]
+		location: AuthorizationLocation,
 		providers: Vec<ProviderConfig>,
 	},
 	#[serde(rename_all = "camelCase")]
 	Single {
 		#[serde(default)]
 		mode: Mode,
+		#[serde(default)]
+		location: AuthorizationLocation,
 		issuer: String,
 		audiences: Option<Vec<String>>,
 		jwks: serdes::FileInlineOrRemote,
@@ -136,9 +146,7 @@ pub enum LocalJwtConfig {
 	},
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_de!)]
 pub struct ProviderConfig {
 	pub issuer: String,
 	pub audiences: Option<Vec<String>>,
@@ -175,9 +183,8 @@ pub enum Mode {
 /// when the `exp` claim is present, regardless of this setting).
 ///
 /// Defaults to `["exp"]`.
-#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[derive(Eq, PartialEq)]
+#[apply(schema_de!)]
 pub struct JWTValidationOptions {
 	/// Claims that must be present in the token before validation.
 	/// Only "exp", "nbf", "aud", "iss", "sub" are enforced; others
@@ -217,16 +224,22 @@ impl Default for JWTValidationOptions {
 
 impl LocalJwtConfig {
 	pub async fn try_into(self, client: Client) -> Result<Jwt, JwkError> {
-		let (mode, providers_cfg) = match self {
-			LocalJwtConfig::Multi { mode, providers } => (mode, providers),
+		let (mode, authorization_location, providers_cfg) = match self {
+			LocalJwtConfig::Multi {
+				mode,
+				location: authorization_location,
+				providers,
+			} => (mode, authorization_location, providers),
 			LocalJwtConfig::Single {
 				mode,
+				location: authorization_location,
 				issuer,
 				audiences,
 				jwks,
 				jwt_validation_options,
 			} => (
 				mode,
+				authorization_location,
 				vec![ProviderConfig {
 					issuer,
 					audiences,
@@ -246,7 +259,11 @@ impl LocalJwtConfig {
 			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
 			providers.push(provider);
 		}
-		Ok(Jwt { mode, providers })
+		Ok(Jwt {
+			mode,
+			providers,
+			location: authorization_location,
+		})
 	}
 }
 
@@ -337,8 +354,16 @@ impl Provider {
 }
 
 impl Jwt {
-	pub fn from_providers(providers: Vec<Provider>, mode: Mode) -> Jwt {
-		Jwt { mode, providers }
+	pub fn from_providers(
+		providers: Vec<Provider>,
+		mode: Mode,
+		authorization_location: AuthorizationLocation,
+	) -> Jwt {
+		Jwt {
+			mode,
+			providers,
+			location: authorization_location,
+		}
 	}
 }
 
@@ -395,33 +420,61 @@ impl Jwt {
 		log: Option<&mut RequestLog>,
 		req: &mut Request,
 	) -> Result<(), TokenError> {
-		let Ok(TypedHeader(Authorization(bearer))) = req
-			.extract_parts::<TypedHeader<Authorization<Bearer>>>()
-			.await
-		else {
+		let Some(token) = self.location.extract(req) else {
 			// In strict mode, we require a token
 			if self.mode == Mode::Strict {
+				dtrace::pol_result!(
+					dtrace::Error,
+					Apply,
+					"rejected request because JWT is required but missing"
+				);
 				return Err(TokenError::Missing);
 			}
 			// Otherwise with no, don't attempt to authenticate.
+			dtrace::pol_result!(
+				dtrace::Info,
+				Skip,
+				"request has no bearer token and JWT mode is not strict"
+			);
 			return Ok(());
 		};
-		let claims = match self.validate_claims(bearer.token()) {
+		let claims = match self.validate_claims(&token) {
 			Ok(claims) => claims,
 			Err(e) if self.mode == Mode::Permissive => {
-				debug!("token verification failed ({e}), continue due to permissive mode");
+				dtrace::pol_result!(
+					dtrace::Warn,
+					Skip,
+					"token verification failed ({e}), continue due to permissive mode"
+				);
 				return Ok(());
 			},
-			Err(e) => return Err(e),
+			Err(e) => {
+				dtrace::pol_result!(
+					dtrace::Severity::Error,
+					Apply,
+					"rejected request because JWT validation failed: {e}"
+				);
+				return Err(e);
+			},
 		};
+
 		if let Some(serde_json::Value::String(sub)) = claims.inner.get("sub")
 			&& let Some(log) = log
 		{
 			log.jwt_sub = Some(sub.to_string());
 		};
 		// Remove the token.
-		req.headers_mut().remove(http::header::AUTHORIZATION);
+		self
+			.location
+			.remove(req)
+			.map_err(|e| TokenError::CredentialRemoval(e.to_string()))?;
 		// Insert the claims into extensions so we can reference it later
+		dtrace::pol_result!(
+			dtrace::Severity::Info,
+			Apply,
+			"authenticated request with JWT claims {}",
+			serde_json::to_string(&claims).unwrap_or_else(|_| "invalid claims".to_string())
+		);
 		req.extensions_mut().insert(claims);
 		Ok(())
 	}

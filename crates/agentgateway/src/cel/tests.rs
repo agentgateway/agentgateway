@@ -1,9 +1,11 @@
 use std::collections::HashSet;
 
+use http::{HeaderValue, Method};
+use http_body_util::BodyExt;
+use serde_json::json;
+
 use super::*;
 use crate::http::Body;
-use http::{HeaderValue, Method};
-use serde_json::json;
 
 fn eval(expr: &str) -> Result<serde_json::Value, Error> {
 	let exec_serde = full_example_executor();
@@ -36,16 +38,17 @@ fn test_permissive() {
 				.contains("could not be compiled")
 		);
 	};
-	let valid = Expression::new_permissive("1 + 1");
+	let (valid, err) = Expression::new_permissive("1 + 1");
+	assert!(err.is_none());
 	assert_eq!(2, exec.eval(&valid).unwrap().json().unwrap());
 
-	assert_compile_failure(Expression::new_permissive("1 +"));
+	assert_compile_failure(Expression::new_permissive("1 +").0);
 
-	assert_compile_failure(Expression::new_permissive("'"));
+	assert_compile_failure(Expression::new_permissive("'").0);
 
-	assert_compile_failure(Expression::new_permissive("\"h"));
+	assert_compile_failure(Expression::new_permissive("\"h").0);
 
-	assert_compile_failure(Expression::new_permissive(r#"" || true || "#));
+	assert_compile_failure(Expression::new_permissive(r#"" || true || "#).0);
 }
 #[test]
 fn test_eval() {
@@ -67,6 +70,98 @@ fn expression() {
 		.body(Body::empty())
 		.unwrap();
 	assert_eq!(Value::Bool(true), eval_request(expr, req).unwrap());
+}
+
+#[tokio::test]
+async fn log_only_request_body_records_without_buffering() {
+	let exp = Expression::new_strict("request.body").unwrap();
+	let mut cb = ContextBuilder::new();
+	cb.register_log_expression(&exp);
+	let mut req = ::http::Request::builder()
+		.method(Method::POST)
+		.uri("http://example.com")
+		.body(Body::from("hello"))
+		.unwrap();
+
+	cb.maybe_buffer_request_body(&mut req).await;
+
+	assert!(req.extensions().get::<BufferedBody>().is_none());
+	assert!(
+		req
+			.extensions()
+			.get::<crate::http::RecordedBodyHandle>()
+			.is_some()
+	);
+
+	let snapshot = cb.maybe_snapshot_request(&mut req, false).unwrap();
+	let body = std::mem::replace(req.body_mut(), Body::empty());
+	let sent = body.collect().await.unwrap().to_bytes();
+	assert_eq!(sent, bytes::Bytes::from_static(b"hello"));
+
+	let exec = Executor::new_logger(Some(&snapshot), None, None, None, None);
+	assert_eq!(
+		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
+		bytes::Bytes::from_static(b"hello")
+	);
+}
+
+#[tokio::test]
+async fn request_body_expression_buffers_before_log() {
+	let exp = Expression::new_strict("request.body").unwrap();
+	let mut cb = ContextBuilder::new();
+	cb.register_expression(&exp);
+	let mut req = ::http::Request::builder()
+		.method(Method::POST)
+		.uri("http://example.com")
+		.body(Body::from("hello"))
+		.unwrap();
+
+	cb.maybe_buffer_request_body(&mut req).await;
+
+	assert!(req.extensions().get::<BufferedBody>().is_some());
+	assert!(
+		req
+			.extensions()
+			.get::<crate::http::RecordedBodyHandle>()
+			.is_none()
+	);
+	let exec = Executor::new_request(&req);
+	assert_eq!(
+		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
+		bytes::Bytes::from_static(b"hello")
+	);
+}
+
+#[tokio::test]
+async fn log_only_response_body_records_without_buffering() {
+	let exp = Expression::new_strict("response.body").unwrap();
+	let mut cb = ContextBuilder::new();
+	cb.register_log_expression(&exp);
+	let mut resp = ::http::Response::builder()
+		.status(200)
+		.body(Body::from("world"))
+		.unwrap();
+
+	cb.maybe_buffer_response_body(&mut resp).await;
+
+	assert!(resp.extensions().get::<BufferedBody>().is_none());
+	assert!(
+		resp
+			.extensions()
+			.get::<crate::http::RecordedBodyHandle>()
+			.is_some()
+	);
+
+	let snapshot = cb.maybe_snapshot_response(&mut resp).unwrap();
+	let body = std::mem::replace(resp.body_mut(), Body::empty());
+	let sent = body.collect().await.unwrap().to_bytes();
+	assert_eq!(sent, bytes::Bytes::from_static(b"world"));
+
+	let exec = Executor::new_logger(None, Some(&snapshot), None, None, None);
+	assert_eq!(
+		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
+		bytes::Bytes::from_static(b"world")
+	);
 }
 
 #[test]
@@ -93,8 +188,9 @@ fn request_with_header_modes() -> crate::http::Request {
 }
 
 mod headers {
-	use crate::cel::tests::{eval_request, request_with_header_modes};
 	use cel::Value;
+
+	use crate::cel::tests::{eval_request, request_with_header_modes};
 
 	#[test]
 	fn lookup_default() {
@@ -238,10 +334,11 @@ mod headers {
 }
 
 mod query_accessors {
-	use crate::cel::tests::eval_request;
-	use crate::http::Body;
 	use cel::Value;
 	use http::Method;
+
+	use crate::cel::tests::eval_request;
+	use crate::http::Body;
 
 	fn request() -> crate::http::Request {
 		::http::Request::builder()
@@ -323,9 +420,11 @@ fn test_properties() {
 	test(r#"!a.b"#, &["a.b"]);
 	test(r#"a.b < c"#, &["a.b", "c"]);
 	test(r#"a.b + c + 2"#, &["a.b", "c"]);
-	// This is not right! Should just be 'a' probably
-	test(r#"a["b"].c"#, &["a.c"]);
+	test(r#"a["b"].c"#, &["a"]);
+	test(r#"a["b"]["c"]"#, &["a"]);
 	test(r#"a.b[0]"#, &["a.b"]);
+	test(r#"a.b[0].c"#, &["a.b"]);
+	test(r#"a[b.c]"#, &["a", "b.c"]);
 	test(r#"{"a":"b"}.a"#, &[]);
 	// Test extauthz namespace recognition
 	test(r#"extauthz.user_id"#, &["extauthz.user_id"]);

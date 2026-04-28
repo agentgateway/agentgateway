@@ -95,10 +95,12 @@ export function MCPPlaygroundPage() {
             let routePath = "/";
             if (route.matches?.[0]?.path) {
               const pathMatch = route.matches[0].path;
-              if ("exact" in pathMatch) {
-                routePath = pathMatch.exact;
-              } else if ("pathPrefix" in pathMatch) {
-                routePath = pathMatch.pathPrefix;
+              if(pathMatch !== 'invalid') {
+                if ("exact" in pathMatch) {
+                  routePath = pathMatch.exact;
+                } else if ("pathPrefix" in pathMatch) {
+                  routePath = pathMatch.pathPrefix;
+                }
               }
             }
 

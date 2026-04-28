@@ -374,7 +374,7 @@ async fn send_model_armor_request<T: Serialize>(
 	);
 
 	let resp = client
-		.call_with_explicit_policies(req, mock_be, pols)
+		.call_with_explicit_policies_list(req, mock_be, pols)
 		.await?;
 
 	let resp: SanitizeResponse = json::from_response_body(resp).await?;

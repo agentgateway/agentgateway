@@ -251,6 +251,16 @@ export interface ExecutorSerde {
      */
     port?: number;
     /**
+     * The original TCP peer IP address of the downstream connection.
+     * This can differ from the `address` when using tunneling protocols like PROXY.
+     */
+    rawAddress?: string;
+    /**
+     * The original TCP peer port of the downstream connection.
+     * This can differ from the `port` when using tunneling protocols like PROXY.
+     */
+    rawPort?: number;
+    /**
      * The (Istio SPIFFE) identity of the downstream connection, if available.
      */
     identity?: {
@@ -283,6 +293,29 @@ export interface ExecutorSerde {
      * The CN of the subject from the downstream certificate, if available.
      */
     subjectCn?: string | null;
+    /**
+     * The workload context of the downstream connection, resolved from the
+     * workload discovery store by source IP. Available when the source pod is
+     * known to the controller's workload discovery store.
+     *
+     * Fields are nested under `unverified` to signal that they are derived
+     * from the source IP (not cryptographically authenticated). Policy
+     * authors should prefer `source.identity.*` for trust-sensitive checks.
+     */
+    unverifiedWorkload?: {
+      /**
+       * The pod name of the source workload.
+       */
+      name?: string;
+      /**
+       * The namespace of the source workload.
+       */
+      namespace?: string;
+      /**
+       * The service account of the source workload.
+       */
+      serviceAccount?: string;
+    } | null;
   } | null;
   /**
    * `mcp` contains attributes about the MCP request.
@@ -354,11 +387,11 @@ export interface ExecutorSerde {
      */
     name?: string;
     /**
-     * The type of backend. For example, `ai`, `mcp`, `static`, `dynamic`, or `service`.
+     * The type of backend.
      */
     type?: "ai" | "mcp" | "static" | "dynamic" | "service" | "unknown";
     /**
-     * The protocol of backend. For example, `http`, `tcp`, `a2a`, `mcp`, or `llm`.
+     * The protocol of backend.
      */
     protocol?: "http" | "tcp" | "a2a" | "mcp" | "llm";
   } | null;

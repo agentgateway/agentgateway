@@ -10,17 +10,7 @@ use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, SimpleChatC
 pub struct Response {
 	pub object: String,
 	pub model: String,
-	pub data: Vec<Embedding>,
 	pub usage: Usage,
-	#[serde(flatten, default)]
-	pub rest: serde_json::Value,
-}
-
-#[derive(Debug, Deserialize, Clone, Serialize)]
-pub struct Embedding {
-	pub index: u32,
-	pub object: String,
-	pub embedding: Vec<f32>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }

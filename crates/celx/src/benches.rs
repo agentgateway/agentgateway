@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use cel::{Context, Program, Value, context::DefaultVariableResolver};
+use cel::context::DefaultVariableResolver;
+use cel::{Context, Program, Value};
 use divan::{Bencher, black_box};
 
 use crate::insert_all;

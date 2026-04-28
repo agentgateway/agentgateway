@@ -28,18 +28,10 @@ type BackendPlugin struct {
 }
 
 type PolicyPlugin struct {
-	Build           func(PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy])
+	Build func(PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy])
+	// BuildReferences is called with the base ReferenceIndex (before PolicyAttachments)
+	// to avoid self-referential graph construction.
 	BuildReferences func(input PolicyPluginInput) krt.Collection[*PolicyAttachment]
-}
-
-// ApplyPolicies extracts all policies from the collection
-func (p *PolicyPlugin) ApplyPolicies(inputs PolicyPluginInput) (krt.Collection[AgwPolicy], krt.StatusCollection[controllers.Object, any], krt.Collection[*PolicyAttachment]) {
-	status, col := p.Build(inputs)
-	var refs krt.Collection[*PolicyAttachment]
-	if p.BuildReferences != nil {
-		refs = p.BuildReferences(inputs)
-	}
-	return col, status, refs
 }
 
 // AgwPolicy wraps an Agw policy for collection handling

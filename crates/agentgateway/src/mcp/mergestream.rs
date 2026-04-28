@@ -6,9 +6,8 @@ use itertools::Itertools;
 use rmcp::model::{RequestId, ServerJsonRpcMessage, ServerResult};
 use tracing::warn;
 
-use crate::mcp::ClientError;
-use crate::mcp::FailureMode;
 use crate::mcp::streamablehttp::StreamableHttpPostResponse;
+use crate::mcp::{ClientError, FailureMode};
 use crate::*;
 
 pub(crate) struct Messages(BoxStream<'static, Result<ServerJsonRpcMessage, ClientError>>);

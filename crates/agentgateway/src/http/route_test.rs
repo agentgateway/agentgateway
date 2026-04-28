@@ -1,6 +1,5 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::Arc;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use agent_core::strng;
 use divan::Bencher;
@@ -12,24 +11,29 @@ use crate::http::tests_common::*;
 use crate::store::Stores;
 use crate::types::agent::{
 	HeaderMatch, HeaderValueMatch, Listener, ListenerProtocol, MethodMatch, PathMatch, QueryMatch,
-	QueryValueMatch, Route, RouteMatch, RouteSet,
+	QueryValueMatch, Route, RouteMatch,
 };
-use crate::types::discovery::{
-	GatewayAddress, NamespacedHostname, NetworkAddress, Service, gatewayaddress::Destination,
-};
+use crate::types::discovery::gatewayaddress::Destination;
+use crate::types::discovery::{GatewayAddress, NamespacedHostname, NetworkAddress, Service};
 use crate::*;
 
 fn run_test(req: &Request, routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Option<String> {
 	let stores = Stores::with_ipv6_enabled(true);
 	let dummy_dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 1000);
 
-	let listener = setup_listener(routes);
+	let (listener, routes) = setup_listener(routes);
+	for route in routes {
+		stores
+			.binds
+			.write()
+			.insert_route(route, listener.key.clone());
+	}
 
 	let result = super::select_best_route(stores.clone(), dummy_dest, &listener, req);
 	result.map(|(r, _)| r.key.to_string())
 }
 
-fn setup_listener(routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Arc<Listener> {
+fn setup_listener(routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> (Arc<Listener>, Vec<Route>) {
 	let mk_route = |name: &str, hostnames: Vec<&str>, matches: Vec<RouteMatch>| Route {
 		key: name.into(),
 		service_key: None,
@@ -40,22 +44,21 @@ fn setup_listener(routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> Arc<Listener
 		inline_policies: vec![],
 	};
 
-	Arc::new(Listener {
-		key: Default::default(),
-		name: Default::default(),
-		hostname: Default::default(),
-		protocol: ListenerProtocol::HTTP,
-		tcp_routes: Default::default(),
-		routes: RouteSet::from_list(
-			routes
-				.iter()
-				.map(|r| {
-					let r = r.clone();
-					mk_route(r.0, r.1, r.2)
-				})
-				.collect(),
-		),
-	})
+	(
+		Arc::new(Listener {
+			key: Default::default(),
+			name: Default::default(),
+			hostname: Default::default(),
+			protocol: ListenerProtocol::HTTP,
+		}),
+		routes
+			.iter()
+			.map(|r| {
+				let r = r.clone();
+				mk_route(r.0, r.1, r.2)
+			})
+			.collect(),
+	)
 }
 
 fn attach_waypoint_service(req: &mut Request, stores: &Stores, service_key: &NamespacedHostname) {
@@ -847,8 +850,6 @@ fn hbone_listener() -> Arc<Listener> {
 		name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HBONE,
-		tcp_routes: Default::default(),
-		routes: RouteSet::from_list(vec![]),
 	})
 }
 
@@ -1397,23 +1398,22 @@ fn bench(b: Bencher, (host, route): (u64, u64)) {
 		name: Default::default(),
 		hostname: Default::default(),
 		protocol: ListenerProtocol::HTTP,
-		tcp_routes: Default::default(),
-		routes: RouteSet::from_list(
-			routes
-				.into_iter()
-				.map(|(name, host, matches)| Route {
-					key: name.into(),
-					service_key: None,
-					name: Default::default(),
-					hostnames: host.into_iter().map(|s| s.into()).collect(),
-					matches,
-					backends: vec![],
-					inline_policies: vec![],
-				})
-				.collect(),
-		),
 	});
 	let stores = Stores::with_ipv6_enabled(true);
+	for route in routes.into_iter().map(|(name, host, matches)| Route {
+		key: name.into(),
+		service_key: None,
+		name: Default::default(),
+		hostnames: host.into_iter().map(|s| s.into()).collect(),
+		matches,
+		backends: vec![],
+		inline_policies: vec![],
+	}) {
+		stores
+			.binds
+			.write()
+			.insert_route(route, listener.key.clone());
+	}
 	let dummy_dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 1000);
 	let req = request("http://example.com", http::Method::GET, &[]);
 

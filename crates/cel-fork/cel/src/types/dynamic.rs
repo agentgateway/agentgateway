@@ -2,12 +2,13 @@ use std::fmt::Debug;
 use std::net::IpAddr;
 use std::sync::Arc;
 
-use crate::Value;
-use crate::functions::FunctionContext;
-use crate::objects::StringValue;
 use cel::objects::KeyRef;
 use cel::{to_value, types};
 use vector_map::VecMap;
+
+use crate::Value;
+use crate::functions::FunctionContext;
+use crate::objects::StringValue;
 
 pub fn maybe_materialize_optional<T: DynamicType>(t: &Option<T>) -> Value<'_> {
 	match t {

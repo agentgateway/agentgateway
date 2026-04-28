@@ -1,32 +1,40 @@
 binds:
-  - port: 8080
-    tunnelProtocol: direct
-    listeners:
-      - protocol: HTTP
-        name: listener
-        hostname: "*"
-        routes:
-          - hostnames: []
-            matches:
-              - path:
-                  pathPrefix: /
-            backends:
-              - ai:
-                  name: smallthinker-backend
-                  provider:
-                    openAI:
-                      model: smallthinker
-                  hostOverride: localhost:11434
-            name: route
-            policies:
-              cors:
-                allowCredentials: false
-                allowHeaders:
-                  - "*"
-                allowMethods:
-                  - GET
-                  - POST
-                  - OPTIONS
-                allowOrigins:
-                  - "*"
-                exposeHeaders: []
+- port: 8080
+  tunnelProtocol: direct
+  listeners:
+  - protocol: HTTP
+    name: listener
+    hostname: '*'
+    routes:
+    - hostnames: []
+      matches:
+      - path:
+          pathPrefix: /
+      backends:
+      - ai:
+          name: smallthinker-backend
+          provider:
+            openAI:
+              model: smallthinker
+          hostOverride: localhost:11434
+      name: route
+      policies:
+        cors:
+          allowCredentials: false
+          allowHeaders:
+          - '*'
+          allowMethods:
+          - GET
+          - POST
+          - OPTIONS
+          allowOrigins:
+          - '*'
+          exposeHeaders: []
+llm:
+  port: 1234
+  models: []
+  policies:
+    basicAuth:
+      htpasswd: /asdf
+      realm: asdf
+      mode: optional

@@ -1,0 +1,19 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/responses/instructions.json
+info:
+  model: gpt-4o
+  max_output_tokens: 1024
+  input: What is the weather like in San Francisco? Use the get_weather tool.
+---
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is the weather like in San Francisco? Use the get_weather tool."
+    }
+  ],
+  "model": "gpt-4o",
+  "max_completion_tokens": 1024,
+  "stream": false
+}

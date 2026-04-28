@@ -1764,7 +1764,7 @@ EOF
 
 ```shell
 kubectl apply -f- <<EOF
-apiVersion: gateway.agentgateway.dev/v1alpha1
+apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
   name: token-rate-limit

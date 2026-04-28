@@ -1,8 +1,11 @@
+pub(crate) mod dtrace;
 mod gateway;
 pub mod httpproxy;
 pub mod proxy_protocol;
 pub mod request_builder;
 pub mod tcpproxy;
+
+use std::sync::Arc;
 
 use agent_pool::Error as HyperError;
 pub use gateway::Gateway;
@@ -45,6 +48,7 @@ impl ProxyResponse {
 			| ProxyError::InvalidRequest
 			| ProxyError::ProcessingString(_)
 			| ProxyError::Processing(_)
+			| ProxyError::RouteCycleDetected
 			| ProxyError::Body(_)
 			| ProxyError::Http(_)
 			| ProxyError::BackendUnsupportedMirror
@@ -130,6 +134,8 @@ pub enum ProxyError {
 	ListenerNotFound,
 	#[error("route not found")]
 	RouteNotFound,
+	#[error("route delegation cycle detected")]
+	RouteCycleDetected,
 	#[error("misdirected request")]
 	MisdirectedRequest,
 	#[error("no valid backends")]
@@ -218,6 +224,7 @@ impl ProxyError {
 			ProxyError::BindNotFound => StatusCode::NOT_FOUND,
 			ProxyError::ListenerNotFound => StatusCode::NOT_FOUND,
 			ProxyError::RouteNotFound => StatusCode::NOT_FOUND,
+			ProxyError::RouteCycleDetected => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MisdirectedRequest => StatusCode::MISDIRECTED_REQUEST,
 			ProxyError::NoValidBackends => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::BackendDoesNotExist => StatusCode::INTERNAL_SERVER_ERROR,
@@ -279,6 +286,7 @@ impl ProxyError {
 			ProxyError::UpstreamTCPProxy(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::MethodNotAllowed) => StatusCode::METHOD_NOT_ALLOWED,
 			ProxyError::MCP(mcp::Error::InvalidAccept) => StatusCode::NOT_ACCEPTABLE,
+			ProxyError::MCP(mcp::Error::InvalidAcceptGet) => StatusCode::NOT_ACCEPTABLE,
 			ProxyError::MCP(mcp::Error::InvalidContentType) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
 			ProxyError::MCP(mcp::Error::Deserialize(_)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::StartSession(_)) => StatusCode::INTERNAL_SERVER_ERROR,

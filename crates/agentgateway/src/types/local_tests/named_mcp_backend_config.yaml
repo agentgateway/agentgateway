@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=../../schema/local.json
+# Top-level named MCP backend referenced by a route via its key.
+config:
+  mcp:
+    sessionTtl: 12m
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - backend: shared-mcp
+backends:
+- name: shared-mcp
+  mcp:
+    targets:
+    - name: everything
+      stdio:
+        cmd: npx
+        args: ["@modelcontextprotocol/server-everything"]

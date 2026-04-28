@@ -1,16 +1,20 @@
 use std::hash::Hash;
 
 use ::cel::Value;
-use axum_core::RequestExt;
-use axum_extra::TypedHeader;
-use axum_extra::headers::Authorization;
-use headers::authorization::Bearer;
 use macro_rules_attribute::apply;
 use secrecy::{ExposeSecret, SecretString};
 
 use crate::http::Request;
+use crate::http::auth::AuthorizationLocation;
 use crate::proxy::ProxyError;
+use crate::proxy::dtrace::{self, pol_result};
 use crate::*;
+
+#[cfg(test)]
+#[path = "apikey_tests.rs"]
+mod tests;
+
+const TRACE_POLICY_KIND: &str = "api_key";
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -79,7 +83,6 @@ impl PartialEq for APIKey {
 impl Eq for APIKey {}
 
 #[apply(schema_ser!)]
-#[cfg_attr(feature = "schema", schemars(with = "LocalAPIKeys"))]
 pub struct APIKeyAuthentication {
 	// A map of API keys to the metadata for that key
 	#[serde(serialize_with = "ser_redact")]
@@ -87,39 +90,62 @@ pub struct APIKeyAuthentication {
 
 	/// Validation mode for API Key authentication
 	pub mode: Mode,
+
+	#[serde(default)]
+	pub location: AuthorizationLocation,
 }
 
 impl APIKeyAuthentication {
-	pub fn new(keys: impl IntoIterator<Item = (APIKey, UserMetadata)>, mode: Mode) -> Self {
+	pub fn new(
+		keys: impl IntoIterator<Item = (APIKey, UserMetadata)>,
+		mode: Mode,
+		location: AuthorizationLocation,
+	) -> Self {
 		Self {
 			users: Arc::new(keys.into_iter().collect()),
 			mode,
+			location,
 		}
 	}
-
 	async fn verify(&self, req: &mut Request) -> Result<Option<Claims>, ProxyError> {
-		// Extract Bearer authorization header
-		// TODO: allow extracting from other places
-		let Ok(TypedHeader(Authorization(bearer))) = req
-			.extract_parts::<TypedHeader<Authorization<Bearer>>>()
-			.await
-		else {
+		let Some(key) = self.location.extract(req) else {
 			// In strict mode, we require credentials
 			if self.mode == Mode::Strict {
+				pol_result!(
+					dtrace::Error,
+					Apply,
+					"rejected request because API key is required but missing"
+				);
 				return Err(ProxyError::APIKeyAuthenticationFailure(Error::Missing));
 			}
 			// Otherwise without credentials, don't attempt to authenticate
+			pol_result!(
+				dtrace::Info,
+				Skip,
+				"request has no API key and auth mode is optional"
+			);
 			return Ok(None);
 		};
 
-		let key = APIKey::new(bearer.token());
+		let key = APIKey::new(key);
 		if let Some(meta) = self.users.get(&key) {
+			pol_result!(
+				dtrace::Info,
+				Apply,
+				"authenticated request with API key with metadata {}",
+				serde_json::to_string(meta).unwrap_or_default()
+			);
 			let claims = Claims {
 				key,
 				metadata: meta.clone(),
 			};
 			Ok(Some(claims))
 		} else {
+			pol_result!(
+				dtrace::Error,
+				Apply,
+				"rejected request because API key credentials are invalid"
+			);
 			Err(ProxyError::APIKeyAuthenticationFailure(
 				Error::InvalidCredentials,
 			))
@@ -129,7 +155,7 @@ impl APIKeyAuthentication {
 	pub async fn apply(&self, req: &mut Request) -> Result<(), ProxyError> {
 		let res = self.verify(req).await?;
 		if let Some(claims) = res {
-			req.headers_mut().remove(http::header::AUTHORIZATION);
+			self.location.remove(req)?;
 			// Insert the claims into extensions so we can reference it later
 			req.extensions_mut().insert(claims);
 		}
@@ -145,6 +171,9 @@ pub struct LocalAPIKeys {
 	/// Validation mode for API keys
 	#[serde(default)]
 	pub mode: Mode,
+
+	#[serde(default)]
+	pub location: AuthorizationLocation,
 }
 
 #[apply(schema_de!)]
@@ -161,6 +190,7 @@ impl LocalAPIKeys {
 				.into_iter()
 				.map(|k| (k.key, k.metadata.unwrap_or_default())),
 			self.mode,
+			self.location,
 		)
 	}
 }

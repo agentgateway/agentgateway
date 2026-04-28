@@ -70,6 +70,25 @@ func TestAttachments(t *testing.T) {
 				SubBackend: true,
 			},
 		},
+		{
+			name: "backend-mcp",
+			policy: `backend:
+  mcp:
+    authorization:
+      action: Allow
+      policy:
+        matchExpressions:
+        - "true"`,
+			attachments: Attachments{
+				Gateway:    true,
+				Port:       false,
+				Listener:   true,
+				Route:      true,
+				RouteRule:  true,
+				Backend:    true,
+				SubBackend: false,
+			},
+		},
 	}
 	tm := `apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

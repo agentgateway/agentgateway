@@ -1,12 +1,11 @@
-use axum_core::RequestExt;
-use axum_extra::TypedHeader;
-use axum_extra::headers::Authorization;
-use axum_extra::headers::authorization::Basic;
+use base64::Engine;
 use htpasswd_verify_fork::Htpasswd;
 use macro_rules_attribute::apply;
 
 use crate::http::Request;
+use crate::http::auth::AuthorizationLocation;
 use crate::proxy::ProxyError;
+use crate::proxy::dtrace::{self};
 use crate::*;
 
 #[cfg(test)]
@@ -56,21 +55,32 @@ pub struct BasicAuthentication {
 
 	/// Validation mode for basic authentication
 	pub mode: Mode,
+
+	#[serde(default = "default_authorization_location")]
+	pub authorization_location: AuthorizationLocation,
 }
 
 fn default_realm() -> String {
 	"Restricted".to_string()
 }
 
+const TRACE_POLICY_KIND: &str = "basic_auth";
+
 impl BasicAuthentication {
 	/// Create a new BasicAuthentication from a file path
-	pub fn new(htpasswd: &str, realm: Option<String>, mode: Mode) -> Self {
+	pub fn new(
+		htpasswd: &str,
+		realm: Option<String>,
+		mode: Mode,
+		authorization_location: AuthorizationLocation,
+	) -> Self {
 		let htpasswd = Htpasswd::new(htpasswd);
 
 		Self {
 			htpasswd: Arc::new(htpasswd),
 			realm,
 			mode,
+			authorization_location,
 		}
 	}
 
@@ -78,7 +88,7 @@ impl BasicAuthentication {
 	pub async fn apply(&self, req: &mut Request) -> Result<(), ProxyError> {
 		let res = self.verify(req).await?;
 		if let Some(claims) = res {
-			req.headers_mut().remove(http::header::AUTHORIZATION);
+			self.authorization_location.remove(req)?;
 			// Insert the claims into extensions so we can reference it later
 			req.extensions_mut().insert(claims);
 		}
@@ -86,38 +96,63 @@ impl BasicAuthentication {
 	}
 
 	async fn verify(&self, req: &mut Request) -> Result<Option<Claims>, ProxyError> {
-		// Extract Basic authorization header
-		let Ok(TypedHeader(Authorization(basic))) = req
-			.extract_parts::<TypedHeader<Authorization<Basic>>>()
-			.await
-		else {
+		let Some(encoded_credentials) = self.authorization_location.extract(req) else {
 			// In strict mode, we require credentials
 			if self.mode == Mode::Strict {
+				dtrace::pol_result!(
+					dtrace::Error,
+					Apply,
+					"rejected request because basic auth credentials are required but missing"
+				);
 				return Err(ProxyError::BasicAuthenticationFailure(Error::Missing {
 					realm: self.realm.clone().unwrap_or_else(default_realm),
 				}));
 			}
 			// Otherwise without credentials, don't attempt to authenticate
+			dtrace::pol_result!(
+				dtrace::Info,
+				Skip,
+				"request has no basic auth credentials and auth mode is optional"
+			);
 			return Ok(None);
 		};
 
-		let username = basic.username();
-		let password = basic.password();
+		let invalid_credentials = || {
+			ProxyError::BasicAuthenticationFailure(Error::InvalidCredentials {
+				realm: self.realm.clone().unwrap_or_else(default_realm),
+			})
+		};
+		let (username, password) = base64::engine::general_purpose::STANDARD
+			.decode(encoded_credentials.as_ref())
+			.ok()
+			.and_then(|decoded| String::from_utf8(decoded).ok())
+			.and_then(|decoded| {
+				decoded
+					.split_once(':')
+					.map(|(username, password)| (username.to_owned(), password.to_owned()))
+			})
+			.ok_or_else(invalid_credentials)?;
 
 		// Verify credentials
-		let valid = self.htpasswd.check(username, password);
+		let valid = self.htpasswd.check(&username, &password);
 
 		if valid {
 			// Authentication successful
+			dtrace::pol_result!(
+				dtrace::Info,
+				Apply,
+				"authenticated request as basic auth user {username}"
+			);
 			Ok(Some(Claims {
 				username: username.into(),
 			}))
 		} else {
-			Err(ProxyError::BasicAuthenticationFailure(
-				Error::InvalidCredentials {
-					realm: self.realm.clone().unwrap_or_else(default_realm),
-				},
-			))
+			dtrace::pol_result!(
+				dtrace::Error,
+				Apply,
+				"rejected request because basic auth credentials are invalid"
+			);
+			Err(invalid_credentials())
 		}
 	}
 }
@@ -128,6 +163,7 @@ impl std::fmt::Debug for BasicAuthentication {
 			.field("htpasswd", &"<redacted>")
 			.field("realm", &self.realm)
 			.field("mode", &self.mode)
+			.field("authorization_location", &self.authorization_location)
 			.finish()
 	}
 }
@@ -143,6 +179,9 @@ pub struct LocalBasicAuth {
 	/// Validation mode for basic authentication
 	#[serde(default)]
 	pub mode: Mode,
+
+	#[serde(default = "default_authorization_location")]
+	pub authorization_location: AuthorizationLocation,
 }
 
 impl LocalBasicAuth {
@@ -151,6 +190,11 @@ impl LocalBasicAuth {
 			&self.htpasswd.load()?,
 			self.realm,
 			self.mode,
+			self.authorization_location,
 		))
 	}
+}
+
+fn default_authorization_location() -> AuthorizationLocation {
+	AuthorizationLocation::basic_header()
 }

@@ -3,13 +3,11 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use protos::istio::v1::auth::istio_certificate_service_server::*;
+use protos::istio::v1::auth::{IstioCertificateRequest, IstioCertificateResponse};
 use rcgen::{CertificateSigningRequestParams, Issuer, KeyPair};
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
-
-use protos::istio::v1::auth::IstioCertificateRequest;
-use protos::istio::v1::auth::IstioCertificateResponse;
-use protos::istio::v1::auth::istio_certificate_service_server::*;
 
 #[derive(Debug)]
 pub struct MockCaService {

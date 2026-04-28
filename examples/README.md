@@ -42,3 +42,8 @@ The `http` example shows how to use agentgateway to serve generic HTTP traffic.
 ### [Prompt Enrichment](prompt-enrichment/README.md)
 
 The `prompt-enrichment` example shows how to append or preprend prompts to agentgateway AI requests.
+
+### [Standalone EPP](standalone-epp/README.md)
+
+The `standalone-epp` example shows the v1 local config shape for running agentgateway as the sidecar proxy
+next to a standalone EPP deployment on Kubernetes.

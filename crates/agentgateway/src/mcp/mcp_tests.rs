@@ -4,7 +4,7 @@ use agent_core::strng;
 use itertools::Itertools;
 use openapiv3::OpenAPI;
 use rmcp::RoleClient;
-use rmcp::model::InitializeRequestParams;
+use rmcp::model::{ClientJsonRpcMessage, InitializeRequestParams, RequestId};
 use rmcp::service::RunningService;
 use rmcp::transport::StreamableHttpServerConfig;
 use secrecy::SecretString;
@@ -12,10 +12,9 @@ use secrecy::SecretString;
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::{PolicySet, RuleSet};
 use crate::http::sessionpersistence::MCPSession;
-use crate::mcp::FailureMode;
-use crate::mcp::McpAuthorization;
 use crate::mcp::handler::Relay;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
+use crate::mcp::{FailureMode, McpAuthorization};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::test_helpers::extauthmock::{ExtAuthMock, deny_response};
 use crate::test_helpers::proxymock::{
@@ -71,7 +70,8 @@ async fn stream_to_multiplex() {
 			],
 			true,
 		)
-		.with_bind(simple_bind(basic_named_route(strng::new("/mcp"))));
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
 	let io = t.serve_real_listener(strng::new("bind")).await;
 	let client = mcp_streamable_client(io).await;
 	let tools = client.list_tools(None).await.unwrap();
@@ -143,6 +143,147 @@ async fn stream_to_multiplex() {
 }
 
 #[tokio::test]
+async fn stateless_multiplex_tool_call_initializes_only_target() {
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			false,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+	let a_init_before = mock_a.init_count().await;
+	let b_init_before = mock_b.init_count().await;
+
+	// A direct tool call to one target should initialize only that target.
+	let _ = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("a_echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+	let a_init_after = mock_a.init_count().await;
+	let b_init_after = mock_b.init_count().await;
+	assert_eq!(a_init_after, a_init_before + 1);
+	assert_eq!(b_init_after, b_init_before);
+}
+
+#[tokio::test]
+async fn stateless_multiplex_get_prompt_initializes_only_target() {
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			false,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+	let a_init_before = mock_a.init_count().await;
+	let b_init_before = mock_b.init_count().await;
+
+	let _ = client
+		.get_prompt(
+			rmcp::model::GetPromptRequestParams::new("a_example_prompt").with_arguments(
+				serde_json::json!({"message": "hello"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+
+	let a_init_after = mock_a.init_count().await;
+	let b_init_after = mock_b.init_count().await;
+	assert_eq!(a_init_after, a_init_before + 1);
+	assert_eq!(b_init_after, b_init_before);
+}
+
+#[tokio::test]
+async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("a", mock_a.addr),
+				fake_streamable_target("b", mock_b.addr),
+			],
+			stateful: false,
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		PolicyClient {
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		},
+	)
+	.unwrap();
+	let session_manager =
+		super::session::SessionManager::new(http::sessionpersistence::Encoder::base64());
+	let mut session = session_manager.create_stateless_session(relay);
+	let parts = ::http::Request::<()>::builder()
+		.method(http::Method::POST)
+		.uri("http://example.test/mcp")
+		.body(())
+		.unwrap()
+		.into_parts()
+		.0;
+
+	session
+		.stateless_send_and_initialize(
+			parts.clone(),
+			ClientJsonRpcMessage::request(
+				rmcp::model::CallToolRequest::new(
+					rmcp::model::CallToolRequestParams::new("a_echo").with_arguments(
+						serde_json::json!({"hi": "world"})
+							.as_object()
+							.cloned()
+							.unwrap(),
+					),
+				)
+				.into(),
+				RequestId::Number(1),
+			),
+		)
+		.await
+		.unwrap();
+
+	let sessions = match http::sessionpersistence::SessionState::decode(
+		session.id.as_ref(),
+		&http::sessionpersistence::Encoder::base64(),
+	)
+	.unwrap()
+	{
+		http::sessionpersistence::SessionState::MCP(state) => state.sessions,
+		_ => panic!("expected MCP session state"),
+	};
+	assert_eq!(sessions.len(), 2);
+	assert_eq!(sessions[0].target_name.as_deref(), Some("a"));
+	assert!(sessions[0].session.is_some());
+	assert_eq!(sessions[1].target_name.as_deref(), Some("b"));
+	assert!(sessions[1].session.is_none());
+
+	let response = session.delete_session(parts).await.unwrap();
+	assert_eq!(response.status(), http::StatusCode::ACCEPTED);
+	assert_eq!(mock_b.init_count().await, 0);
+}
+
+#[tokio::test]
 async fn stateless_to_stateful() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, false, false).await;
@@ -165,9 +306,10 @@ async fn stream_to_stream_single_tls() {
 		&mock,
 		true,
 		false,
-		vec![BackendPolicy::BackendAuth(BackendAuth::Key(
-			SecretString::new("my-key".into()),
-		))],
+		vec![BackendPolicy::BackendAuth(BackendAuth::Key {
+			value: SecretString::new("my-key".into()),
+			location: crate::http::auth::AuthorizationLocation::default(),
+		})],
 	)
 	.await;
 	let client = mcp_streamable_client(io).await;
@@ -584,6 +726,8 @@ fn access_log_payload_policy() -> crate::types::frontend::LoggingPolicy {
 				"mcp_session_cel": "mcp.sessionId",
 				"mcp_tool_name_cel": "mcp.tool.name",
 				"mcp_tool_target_cel": "mcp.tool.target",
+				"mcp_prompt_name_cel": "mcp.prompt.name",
+				"mcp_prompt_target_cel": "mcp.prompt.target",
 				"mcp_args_cel": "mcp.tool.arguments",
 				"mcp_result_cel": "mcp.tool.result",
 				"mcp_error_cel": "mcp.tool.error"
@@ -618,7 +762,7 @@ async fn setup_access_log_mcp_proxy(mock: &MockServer) -> (TestBind, SocketAddr)
 		t.pi
 			.stores
 			.read_binds()
-			.listener_frontend_policies(&listener_name, None)
+			.listener_frontend_policies(&listener_name, None, None)
 			.access_log
 			.is_some()
 	);
@@ -689,7 +833,10 @@ async fn tool_call_exposes_payload_fields_to_access_log_cel() {
 	assert_eq!(result_json["hi"], "world");
 	assert!(log.get("mcp_error_cel").is_none());
 
-	assert!(log.get("gen_ai.tool.name").is_none());
+	assert_eq!(
+		log.get("gen_ai.tool.name"),
+		Some(&serde_json::json!("echo"))
+	);
 	assert!(log.get("gen_ai.tool.call.arguments").is_none());
 	assert!(log.get("gen_ai.tool.call.result").is_none());
 }
@@ -742,7 +889,10 @@ async fn tool_call_error_exposes_error_payload_to_access_log_cel() {
 			.is_some_and(|message| message.contains("tool"))
 	);
 	assert!(log.get("mcp_result_cel").is_none());
-	assert!(log.get("gen_ai.tool.name").is_none());
+	assert_eq!(
+		log.get("gen_ai.tool.name"),
+		Some(&serde_json::json!("does_not_exist"))
+	);
 	assert!(log.get("gen_ai.tool.call.arguments").is_none());
 	assert!(log.get("gen_ai.tool.call.result").is_none());
 }
@@ -792,9 +942,49 @@ async fn legacy_sse_tool_call_exposes_arguments_without_terminal_payloads() {
 	assert!(log.get("mcp_result_cel").is_none());
 	assert!(log.get("mcp_error_cel").is_none());
 
-	assert!(log.get("gen_ai.tool.name").is_none());
+	assert_eq!(
+		log.get("gen_ai.tool.name"),
+		Some(&serde_json::json!("echo"))
+	);
 	assert!(log.get("gen_ai.tool.call.arguments").is_none());
 	assert!(log.get("gen_ai.tool.call.result").is_none());
+}
+
+#[tokio::test]
+async fn prompt_request_emits_gen_ai_prompt_name() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_t, io) = setup_access_log_mcp_proxy(&mock).await;
+	let client = mcp_streamable_client(io).await;
+
+	let _result = client
+		.get_prompt(
+			rmcp::model::GetPromptRequestParams::new("example_prompt").with_arguments(
+				serde_json::json!({ "message": "hello" })
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("mcp_prompt_name_cel", "example_prompt"),
+	])
+	.await
+	.unwrap();
+
+	assert_eq!(
+		log.get("mcp_method_cel"),
+		Some(&serde_json::json!("prompts/get"))
+	);
+	assert_eq!(
+		log.get("gen_ai.prompt.name"),
+		Some(&serde_json::json!("example_prompt"))
+	);
+	assert!(log.get("gen_ai.tool.name").is_none());
+	assert!(log.get("mcp_tool_name_cel").is_none());
 }
 
 async fn setup_proxy(
@@ -814,7 +1004,8 @@ async fn setup_proxy_policies(
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_mcp_backend_policies(mock.addr, stateful, legacy_sse, policies)
-		.with_bind(simple_bind(basic_route(mock.addr)));
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
 	let io = t.serve_real_listener(BIND_KEY).await;
 	(t, io)
 }
@@ -870,7 +1061,14 @@ pub async fn mcp_sse_client(s: SocketAddr) -> LegacyService {
 
 struct MockServer {
 	addr: SocketAddr,
+	init_counter: std::sync::Arc<tokio::sync::Mutex<i32>>,
 	_cancel: tokio::sync::oneshot::Sender<()>,
+}
+
+impl MockServer {
+	async fn init_count(&self) -> i32 {
+		*self.init_counter.lock().await
+	}
 }
 
 async fn mock_streamable_http_server(stateful: bool) -> MockServer {
@@ -878,9 +1076,13 @@ async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 	use rmcp::transport::streamable_http_server::StreamableHttpService;
 	use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 	agent_core::telemetry::testing::setup_test_logging();
+	let init_counter = std::sync::Arc::new(tokio::sync::Mutex::new(0_i32));
 
 	let service = StreamableHttpService::new(
-		|| Ok(Counter::new()),
+		{
+			let init_counter = init_counter.clone();
+			move || Ok(Counter::new(init_counter.clone()))
+		},
 		LocalSessionManager::default().into(),
 		StreamableHttpServerConfig::default()
 			.with_sse_retry(None)
@@ -899,7 +1101,11 @@ async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 			.await;
 		info!("server stopped");
 	});
-	MockServer { addr, _cancel: tx }
+	MockServer {
+		addr,
+		init_counter,
+		_cancel: tx,
+	}
 }
 
 async fn mock_sse_server() -> MockServer {
@@ -930,14 +1136,16 @@ async fn mock_sse_server() -> MockServer {
 			})
 			.await;
 	});
-	MockServer { addr, _cancel: tx }
+	MockServer {
+		addr,
+		init_counter: std::sync::Arc::new(tokio::sync::Mutex::new(0)),
+		_cancel: tx,
+	}
 }
 mod mockserver {
 	use std::sync::Arc;
 
 	use http::request::Parts;
-	use rmcp::handler::server::router::prompt::PromptRouter;
-	use rmcp::handler::server::router::tool::ToolRouter;
 	use rmcp::handler::server::wrapper::Parameters;
 	use rmcp::model::*;
 	use rmcp::service::RequestContext;
@@ -972,18 +1180,15 @@ mod mockserver {
 	#[derive(Clone)]
 	pub struct Counter {
 		counter: Arc<Mutex<i32>>,
-		tool_router: ToolRouter<Counter>,
-		prompt_router: PromptRouter<Counter>,
+		init_counter: Arc<Mutex<i32>>,
 	}
 
 	#[tool_router]
 	impl Counter {
-		#[allow(dead_code)]
-		pub fn new() -> Self {
+		pub fn new(init_counter: Arc<Mutex<i32>>) -> Self {
 			Self {
 				counter: Arc::new(Mutex::new(0)),
-				tool_router: Self::tool_router(),
-				prompt_router: Self::prompt_router(),
+				init_counter,
 			}
 		}
 
@@ -1049,6 +1254,14 @@ mod mockserver {
 					.get("authorization")
 					.map(|s| String::from_utf8_lossy(s.as_bytes()))
 					.unwrap_or_default(),
+			)]))
+		}
+
+		#[tool(description = "Get initialize call count")]
+		async fn get_init_count(&self) -> Result<CallToolResult, McpError> {
+			let init_counter = self.init_counter.lock().await;
+			Ok(CallToolResult::success(vec![Content::text(
+				init_counter.to_string(),
 			)]))
 		}
 	}
@@ -1178,6 +1391,8 @@ mod mockserver {
 			_request: InitializeRequestParams,
 			_: RequestContext<RoleServer>,
 		) -> Result<InitializeResult, McpError> {
+			let mut init_counter = self.init_counter.lock().await;
+			*init_counter += 1;
 			Ok(self.get_info())
 		}
 	}
@@ -1441,8 +1656,7 @@ mod legacymockserver {
 async fn test_zero_targets_fail_closed() {
 	let backend = McpBackendGroup {
 		targets: vec![],
-		stateful: true,
-		failure_mode: FailureMode::FailClosed,
+		..Default::default()
 	};
 	let client = PolicyClient {
 		inputs: setup_proxy_test("{}").unwrap().pi,
@@ -1455,8 +1669,8 @@ async fn test_zero_targets_fail_closed() {
 async fn test_zero_targets_fail_open() {
 	let backend = McpBackendGroup {
 		targets: vec![],
-		stateful: true,
 		failure_mode: FailureMode::FailOpen,
+		..Default::default()
 	};
 	let client = PolicyClient {
 		inputs: setup_proxy_test("{}").unwrap().pi,
@@ -1475,6 +1689,7 @@ async fn test_setup_partial_success_fail_open() {
 					cmd: "this-binary-does-not-exist-agentgateway-test".into(),
 					args: vec![],
 					env: Default::default(),
+					clear_env: false,
 				},
 				backend_policies: Default::default(),
 				backend: None,
@@ -1486,6 +1701,7 @@ async fn test_setup_partial_success_fail_open() {
 					cmd: "cat".into(),
 					args: vec![],
 					env: Default::default(),
+					clear_env: false,
 				},
 				backend_policies: Default::default(),
 				backend: None,
@@ -1494,6 +1710,7 @@ async fn test_setup_partial_success_fail_open() {
 		],
 		stateful: false,
 		failure_mode: FailureMode::FailOpen,
+		..Default::default()
 	};
 	let client = PolicyClient {
 		inputs: setup_proxy_test("{}").unwrap().pi,
@@ -1512,6 +1729,7 @@ async fn test_all_targets_fail_open_still_errors() {
 					cmd: "this-binary-does-not-exist-agentgateway-test-1".into(),
 					args: vec![],
 					env: Default::default(),
+					clear_env: false,
 				},
 				backend_policies: Default::default(),
 				backend: None,
@@ -1523,6 +1741,7 @@ async fn test_all_targets_fail_open_still_errors() {
 					cmd: "this-binary-does-not-exist-agentgateway-test-2".into(),
 					args: vec![],
 					env: Default::default(),
+					clear_env: false,
 				},
 				backend_policies: Default::default(),
 				backend: None,
@@ -1531,6 +1750,7 @@ async fn test_all_targets_fail_open_still_errors() {
 		],
 		stateful: false,
 		failure_mode: FailureMode::FailOpen,
+		..Default::default()
 	};
 	let client = PolicyClient {
 		inputs: setup_proxy_test("{}").unwrap().pi,
@@ -1610,6 +1830,7 @@ fn fake_stdio_target(name: &str) -> Arc<McpTarget> {
 			cmd: "cat".into(),
 			args: vec![],
 			env: Default::default(),
+			clear_env: false,
 		},
 		backend_policies: Default::default(),
 		backend: None,
@@ -1652,8 +1873,7 @@ fn test_openapi_targets_emit_stateless_session_state() {
 				"openapi",
 				SocketAddr::from(([127, 0, 0, 1], 30031)),
 			)],
-			stateful: true,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -1700,8 +1920,7 @@ fn test_sse_targets_emit_stateless_session_state() {
 				"sse",
 				SocketAddr::from(([127, 0, 0, 1], 30032)),
 			)],
-			stateful: true,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -1746,7 +1965,7 @@ async fn test_stdio_targets_remain_non_stateless() {
 		McpBackendGroup {
 			targets: vec![fake_stdio_target("stdio")],
 			stateful: false,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -1770,6 +1989,7 @@ async fn test_fanout_deletion_fail_open_skips_failed_upstreams() {
 			],
 			stateful: true,
 			failure_mode: FailureMode::FailOpen,
+			session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -1801,8 +2021,7 @@ fn test_set_sessions_matches_by_target_name() {
 				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30001))),
 				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30002))),
 			],
-			stateful: true,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -1850,8 +2069,7 @@ fn test_set_sessions_rejects_mismatched_target_set() {
 				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30011))),
 				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30012))),
 			],
-			stateful: true,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -1894,8 +2112,7 @@ fn test_merge_initialize_merges_upstream_instructions_when_multiplexing() {
 				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30101))),
 				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30102))),
 			],
-			stateful: true,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -1968,8 +2185,7 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 				"alpha",
 				SocketAddr::from(([127, 0, 0, 1], 30103)),
 			)],
-			stateful: true,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -2019,8 +2235,7 @@ fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 				"solo",
 				SocketAddr::from(([127, 0, 0, 1], 30104)),
 			)],
-			stateful: true,
-			failure_mode: FailureMode::FailClosed,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient {
@@ -2058,9 +2273,10 @@ fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 
 #[tokio::test]
 async fn test_runtime_fanout_fail_open() {
-	use crate::mcp::mergestream::{MergeStream, Messages};
 	use futures_util::StreamExt;
 	use rmcp::model::{ListToolsResult, RequestId, ServerJsonRpcMessage};
+
+	use crate::mcp::mergestream::{MergeStream, Messages};
 
 	let ok_msg = ServerJsonRpcMessage::response(
 		rmcp::model::ServerResult::ListToolsResult(ListToolsResult {
@@ -2096,9 +2312,10 @@ async fn test_runtime_fanout_fail_open() {
 
 #[tokio::test]
 async fn test_runtime_fanout_fail_open_all_fail() {
-	use crate::mcp::mergestream::{MergeStream, Messages};
 	use futures_util::StreamExt;
 	use rmcp::model::{ListToolsResult, RequestId};
+
+	use crate::mcp::mergestream::{MergeStream, Messages};
 
 	let err_stream1 = Messages::from(Err(crate::mcp::ClientError::new(anyhow::anyhow!("bad 1"))));
 	let err_stream2 = Messages::from(Err(crate::mcp::ClientError::new(anyhow::anyhow!("bad 2"))));
@@ -2136,7 +2353,8 @@ async fn mcp_local_ratelimit() {
 	let mut t = setup_proxy_test("{}")
 		.unwrap()
 		.with_mcp_backend(mock.addr, true, false)
-		.with_bind(simple_bind(basic_route(mock.addr)));
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
 
 	// Attach local rate limit policy
 	// MCP protocol overhead: initialize + notification + SSE GET = 3 requests
@@ -2204,7 +2422,8 @@ async fn mcp_extauth_deny() {
 	let mut t = setup_proxy_test("{}")
 		.unwrap()
 		.with_mcp_backend(mock.addr, true, false)
-		.with_bind(simple_bind(basic_route(mock.addr)));
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
 
 	// Attach extAuthz policy pointing to our mock server
 	t.attach_route_policy(serde_json::json!({
@@ -2266,7 +2485,8 @@ async fn mcp_remote_ratelimit_deny() {
 	let mut t = setup_proxy_test("{}")
 		.unwrap()
 		.with_mcp_backend(mock.addr, true, false)
-		.with_bind(simple_bind(basic_route(mock.addr)));
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
 
 	// Attach remoteRateLimit policy pointing to our mock server
 	t.attach_route_policy(serde_json::json!({

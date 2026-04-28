@@ -126,12 +126,15 @@ impl Process {
 			let mut shutdown_resp = None;
 			loop {
 				tokio::select! {
-					Some((msg, ctx)) = sender_rx.recv() => {
-						if let Err(e) = proc.send(msg, &ctx).await {
-							error!("Error sending message to stdio process: {:?}", e);
-							terminal_err = Some(e);
-							break;
-						}
+					req = sender_rx.recv() => match req {
+						Some((msg, ctx)) => {
+							if let Err(e) = proc.send(msg, &ctx).await {
+								error!("Error sending message to stdio process: {:?}", e);
+								terminal_err = Some(e);
+								break;
+							}
+						},
+						None => break,
 					},
 					msg = proc.receive() => {
 						match msg {
@@ -152,12 +155,12 @@ impl Process {
 							}
 						}
 					},
-					Some((_, resp)) = shutdown_rx.recv() => {
-						shutdown_resp = Some(resp);
-						break;
-					},
-					else => {
-						break;
+					req = shutdown_rx.recv() => match req {
+						Some((_, resp)) => {
+							shutdown_resp = Some(resp);
+							break;
+						},
+						None => break,
 					},
 				}
 			}

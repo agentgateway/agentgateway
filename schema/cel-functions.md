@@ -3,6 +3,16 @@
 The table below lists the CEL functions available in agentgateway.
 See the [CEL documentation](https://agentgateway.dev/docs/standalone/latest/reference/cel/) for more information.
 
+## Body Variables
+
+`request.body` and `response.body` expose body bytes to CEL. Capturing these values is bounded by the configured body buffer limit. The default limit is 2 MiB.
+
+When a body variable is used by request-time or response-time expressions, agentgateway eagerly buffers the body so the expression can inspect it before forwarding continues. If the body exceeds the configured limit, buffering fails and the expression cannot read a complete body.
+
+When a body variable is used only by logging, tracing, or other post request/response expressions, agentgateway does not eagerly buffer the body. Instead, it records bytes as the proxy stream is polled and makes the recorded bytes available to the log expression after the stream is done.
+
+If the recorded log-only body exceeds the configured limit, `request.body` or `response.body` contains the truncated prefix up to that limit. The proxied stream itself is still forwarded in full and is not failed due to the logging capture limit. There is currently no CEL field that indicates truncation.
+
 ## Functions
 
 | Function           | Purpose                                                                                                                                                                                                                                                                          |

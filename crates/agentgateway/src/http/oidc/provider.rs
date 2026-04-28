@@ -5,11 +5,10 @@ use anyhow::Context;
 use base64::Engine;
 use secrecy::{ExposeSecret, SecretString};
 
+use super::{Error, Provider, TokenEndpointAuth};
 use crate::http::Body;
 use crate::http::filters::BackendRequestTimeout;
 use crate::proxy::httpproxy::PolicyClient;
-
-use super::{Error, Provider, TokenEndpointAuth};
 
 #[derive(Debug, serde::Deserialize)]
 pub(crate) struct TokenResponse {

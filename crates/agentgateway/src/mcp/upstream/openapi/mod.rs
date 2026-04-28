@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -277,6 +278,25 @@ fn resolve_request_body<'a>(
 	}
 }
 
+fn parameter_type(parameter: &Parameter) -> Result<ParameterType, ParseError> {
+	match parameter {
+		Parameter::Header { .. } => Ok(ParameterType::Header),
+		Parameter::Query { .. } => Ok(ParameterType::Query),
+		Parameter::Path { .. } => Ok(ParameterType::Path),
+		_ => Err(ParseError::UnsupportedReference(
+			"parameter type COOKIE is not supported".to_string(),
+		)),
+	}
+}
+
+fn parameter_merge_name(parameter: &Parameter) -> String {
+	let name = &parameter.parameter_data_ref().name;
+	match parameter {
+		Parameter::Header { .. } => name.to_ascii_lowercase(),
+		_ => name.clone(),
+	}
+}
+
 /// We need to rework this and I don't want to forget.
 ///
 /// We need to be able to handle data which can end up in multiple destinations:
@@ -342,39 +362,45 @@ pub(crate) fn parse_openapi_schema(
 								final_schema.properties.insert(name.clone(), schema.clone());
 							}
 
+							let mut parameters: Vec<&Parameter> = Vec::new();
+							let mut parameter_indexes: HashMap<(String, ParameterType), usize> = HashMap::new();
+							for parameter_ref in item.parameters.iter() {
+								let parameter = resolve_parameter(parameter_ref, open_api)?;
+								let Ok(param_type) = parameter_type(parameter) else {
+									continue;
+								};
+								let key = (parameter_merge_name(parameter), param_type);
+								match parameter_indexes.entry(key) {
+									Entry::Occupied(e) => parameters[*e.get()] = parameter,
+									Entry::Vacant(e) => {
+										e.insert(parameters.len());
+										parameters.push(parameter);
+									},
+								}
+							}
+							for parameter_ref in op.parameters.iter() {
+								let parameter = resolve_parameter(parameter_ref, open_api)?;
+								let key = (parameter_merge_name(parameter), parameter_type(parameter)?);
+								match parameter_indexes.entry(key) {
+									Entry::Occupied(e) => parameters[*e.get()] = parameter,
+									Entry::Vacant(e) => {
+										e.insert(parameters.len());
+										parameters.push(parameter);
+									},
+								}
+							}
+
 							let mut param_schemas: HashMap<ParameterType, Vec<(String, JsonObject, bool)>> =
 								HashMap::new();
-							op.parameters
+							parameters
 								.iter()
-								.try_for_each(|p| -> Result<(), ParseError> {
-									let item = resolve_parameter(p, open_api)?;
-									let (name, schema, required) = build_schema_property(open_api, item)?;
-									match item {
-										Parameter::Header { .. } => {
-											param_schemas
-												.entry(ParameterType::Header)
-												.or_insert_with(Vec::new)
-												.push((name, schema, required));
-											Ok(())
-										},
-										Parameter::Query { .. } => {
-											param_schemas
-												.entry(ParameterType::Query)
-												.or_insert_with(Vec::new)
-												.push((name, schema, required));
-											Ok(())
-										},
-										Parameter::Path { .. } => {
-											param_schemas
-												.entry(ParameterType::Path)
-												.or_insert_with(Vec::new)
-												.push((name, schema, required));
-											Ok(())
-										},
-										_ => Err(ParseError::UnsupportedReference(
-											"parameter type COOKIE is not supported".to_string(),
-										)),
-									}
+								.try_for_each(|parameter| -> Result<(), ParseError> {
+									let (name, schema, required) = build_schema_property(open_api, parameter)?;
+									param_schemas
+										.entry(parameter_type(parameter)?)
+										.or_insert_with(Vec::new)
+										.push((name, schema, required));
+									Ok(())
 								})?;
 
 							// Extract allowed header names before consuming param_schemas

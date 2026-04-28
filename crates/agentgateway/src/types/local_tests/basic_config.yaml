@@ -1,4 +1,7 @@
 # yaml-language-server: $schema=../../schema/local.json
+config:
+  mcp:
+    sessionTtl: 8m
 frontendPolicies:
   accessLog:
     add:

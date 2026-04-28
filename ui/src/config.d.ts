@@ -23,6 +23,7 @@ export type LoggingFormat = "text" | "json";
 export type LocalListenerProtocol = "HTTP" | "HTTPS" | "TLS" | "TCP" | "HBONE";
 export type TLSVersion = "TLS_V1_0" | "TLS_V1_1" | "TLS_V1_2" | "TLS_V1_3";
 export type HeaderValueMatch =
+  | "invalid"
   | {
       exact: string;
     }
@@ -30,6 +31,7 @@ export type HeaderValueMatch =
       regex: string;
     };
 export type QueryValueMatch =
+  | "invalid"
   | {
       exact: string;
     }
@@ -117,6 +119,10 @@ export type RequestGuard1 =
   | {
       googleModelArmor: GoogleModelArmor;
       [k: string]: unknown;
+    }
+  | {
+      azureContentSafety: AzureContentSafety;
+      [k: string]: unknown;
     };
 export type RegexRule =
   | {
@@ -128,10 +134,47 @@ export type RegexRule =
 export type Builtin = "ssn" | "creditCard" | "phoneNumber" | "email" | "caSin";
 export type BackendAuth =
   | {
-      passthrough: {};
+      passthrough: {
+        location?:
+          | {
+              header: {
+                name: string;
+                prefix?: string | null;
+              };
+            }
+          | {
+              queryParameter: {
+                name: string;
+              };
+            }
+          | {
+              cookie: {
+                name: string;
+              };
+            };
+      };
     }
   | {
-      key: FileOrInline;
+      key: {
+        value: FileOrInline;
+        location?:
+          | {
+              header: {
+                name: string;
+                prefix?: string | null;
+              };
+            }
+          | {
+              queryParameter: {
+                name: string;
+              };
+            }
+          | {
+              cookie: {
+                name: string;
+              };
+            };
+      };
     }
   | {
       gcp: GcpAuth;
@@ -227,6 +270,10 @@ export type ResponseGuard1 =
   | {
       googleModelArmor: GoogleModelArmor;
       [k: string]: unknown;
+    }
+  | {
+      azureContentSafety: AzureContentSafety;
+      [k: string]: unknown;
     };
 export type Expression = string;
 export type RouteType =
@@ -280,14 +327,48 @@ export type RemoteRateLimit1 =
 export type LocalJwtConfig =
   | {
       mode?: "strict" | "optional" | "permissive";
+      location?:
+        | {
+            header: {
+              name: string;
+              prefix?: string | null;
+            };
+          }
+        | {
+            queryParameter: {
+              name: string;
+            };
+          }
+        | {
+            cookie: {
+              name: string;
+            };
+          };
       providers: ProviderConfig[];
     }
   | {
       mode?: "strict" | "optional" | "permissive";
+      location?:
+        | {
+            header: {
+              name: string;
+              prefix?: string | null;
+            };
+          }
+        | {
+            queryParameter: {
+              name: string;
+            };
+          }
+        | {
+            cookie: {
+              name: string;
+            };
+          };
       issuer: string;
       audiences?: string[] | null;
       jwks: FileInlineOrRemote;
-      jwtValidationOptions?: JWTValidationOptions2;
+      jwtValidationOptions?: JWTValidationOptions;
     };
 export type TokenEndpointAuth = "clientSecretBasic" | "clientSecretPost";
 export type APIKey = string;
@@ -448,6 +529,10 @@ export type LocalRouteBackend = {
   policies?: LocalBackendPolicies | null;
   [k: string]: unknown;
 } & LocalRouteBackend1;
+/**
+ * Controls how an endpoint-picker-selected destination is used.
+ */
+export type InferenceRoutingDestinationMode = "validated" | "passthrough";
 export type LocalRouteBackend1 =
   | "invalid"
   | {
@@ -480,6 +565,10 @@ export type LocalRouteBackend1 =
   | {
       aws: LocalAwsBackend;
       [k: string]: unknown;
+    }
+  | {
+      routeGroup: string;
+      [k: string]: unknown;
     };
 export type LocalMcpTarget = {
   name: string;
@@ -489,17 +578,19 @@ export type LocalMcpTarget = {
 export type LocalMcpTarget1 =
   | {
       sse: {
-        host: string;
+        host?: string | null;
         port?: number | null;
         path?: string | null;
+        backend?: string | null;
       };
       [k: string]: unknown;
     }
   | {
       mcp: {
-        host: string;
+        host?: string | null;
         port?: number | null;
         path?: string | null;
+        backend?: string | null;
       };
       [k: string]: unknown;
     }
@@ -510,14 +601,16 @@ export type LocalMcpTarget1 =
         env?: {
           [k: string]: string;
         };
+        clear_env?: boolean;
       };
       [k: string]: unknown;
     }
   | {
       openapi: {
-        host: string;
+        host?: string | null;
         port?: number | null;
         path?: string | null;
+        backend?: string | null;
         schema: FileInlineOrRemote;
       };
       [k: string]: unknown;
@@ -547,7 +640,7 @@ export type AIProvider =
       bedrock: Provider5;
     }
   | {
-      azureOpenAI: Provider6;
+      azure: Provider6;
     };
 export type LocalAwsBackend = {
   agentCore: LocalAgentCoreBackend;
@@ -690,6 +783,32 @@ export type BackendTarget =
         port?: number | null;
       };
     };
+export type FullLocalBackend = {
+  name: string;
+  policies?: LocalBackendPolicies | null;
+  [k: string]: unknown;
+} & FullLocalBackend1;
+export type FullLocalBackend1 =
+  | {
+      host: string;
+      [k: string]: unknown;
+    }
+  | {
+      mcp: LocalMcpBackend;
+      [k: string]: unknown;
+    }
+  | {
+      ai: LocalAIBackend;
+      [k: string]: unknown;
+    }
+  | {
+      aws: LocalAwsBackend;
+      [k: string]: unknown;
+    };
+/**
+ * The type of Azure endpoint to connect to.
+ */
+export type AzureResourceType = "openAI" | "foundry";
 
 export interface LocalConfig {
   config?: RawConfig;
@@ -707,6 +826,7 @@ export interface LocalConfig {
     [k: string]: unknown;
   };
   backends?: FullLocalBackend[];
+  routeGroups?: LocalRouteGroup[];
   llm?: LocalLLMConfig | null;
   mcp?: LocalSimpleMcpConfig | null;
 }
@@ -727,6 +847,15 @@ export interface RawConfig {
   namespace?: string | null;
   gateway?: string | null;
   trustDomain?: string | null;
+  /**
+   * Comma-separated list of additional SPIFFE trust domains accepted on inbound HBONE
+   * connections. The local trust_domain is always implicitly included.
+   */
+  additionalTrustDomains?: string | null;
+  /**
+   * When true, skip SPIFFE trust-domain verification on inbound HBONE connections.
+   */
+  skipValidateTrustDomain?: boolean | null;
   serviceAccount?: string | null;
   clusterId?: string | null;
   network?: string | null;
@@ -746,6 +875,10 @@ export interface RawConfig {
    * Configuration for stateful session management
    */
   session?: RawSession | null;
+  /**
+   * MCP gateway settings.
+   */
+  mcp?: RawMcpConfig | null;
   connectionTerminationDeadline?: string | null;
   connectionMinTerminationDeadline?: string | null;
   workerThreads?: string | null;
@@ -778,8 +911,11 @@ export interface RawSession {
    */
   key: string;
 }
+export interface RawMcpConfig {
+  sessionTtl?: string | null;
+}
 export interface RawTracing {
-  otlpEndpoint: string;
+  otlpEndpoint?: string | null;
   headers?: {
     [k: string]: string;
   };
@@ -903,6 +1039,7 @@ export interface LocalRoute {
 export interface RouteMatch {
   headers?: HeaderMatch[];
   path?:
+    | "invalid"
     | {
         exact: string;
       }
@@ -1083,6 +1220,23 @@ export interface LocalMcpAuthentication {
   resourceMetadata: ResourceMetadata;
   jwks: FileInlineOrRemote;
   mode?: "strict" | "optional" | "permissive";
+  authorizationLocation?:
+    | {
+        header: {
+          name: string;
+          prefix?: string | null;
+        };
+      }
+    | {
+        queryParameter: {
+          name: string;
+        };
+      }
+    | {
+        cookie: {
+          name: string;
+        };
+      };
   jwtValidationOptions?: JWTValidationOptions;
 }
 export interface ResourceMetadata {
@@ -1166,14 +1320,6 @@ export interface SimpleLocalBackendPolicies {
    */
   requestHeaderModifier?: HeaderModifier | null;
   /**
-   * Headers to be modified in the response.
-   */
-  responseHeaderModifier?: HeaderModifier | null;
-  /**
-   * Directly respond to the request with a redirect.
-   */
-  requestRedirect?: RequestRedirect | null;
-  /**
    * Modify requests and responses sent to and from the backend.
    */
   transformations?: LocalTransformationConfig | null;
@@ -1193,10 +1339,6 @@ export interface SimpleLocalBackendPolicies {
    * Specify TCP settings for the backend
    */
   tcp?: TCP | null;
-  /**
-   * Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.
-   */
-  health?: LocalHealthPolicy | null;
   /**
    * Specify a tunnel to use when connecting to the backend
    */
@@ -1247,27 +1389,6 @@ export interface Duration {
   secs: number;
   nanos: number;
   [k: string]: unknown;
-}
-/**
- * Local/config health policy with CEL as string; converted to Policy by compiling the expression.
- * Mirrors the proto `Health` message structure.
- */
-export interface LocalHealthPolicy {
-  /**
-   * CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.
-   * When unset, any 5xx or connection failure is treated as unhealthy.
-   */
-  unhealthyExpression?: string | null;
-  eviction?: LocalEviction | null;
-}
-/**
- * Local/config eviction sub-policy with duration as string; mirrors `Eviction`.
- */
-export interface LocalEviction {
-  duration?: string | null;
-  restoreHealth?: number | null;
-  consecutiveFailures?: number | null;
-  healthThreshold?: number | null;
 }
 export interface Tunnel {
   /**
@@ -1336,6 +1457,63 @@ export interface GoogleModelArmor {
    */
   policies?: SimpleLocalBackendPolicies | null;
 }
+/**
+ * Configuration for Azure Content Safety integration.
+ *
+ * Uses the Azure AI Content Safety APIs to detect harmful content
+ * and jailbreak attempts. The endpoint and authentication are shared
+ * across all enabled features.
+ */
+export interface AzureContentSafety {
+  /**
+   * The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")
+   */
+  endpoint: string;
+  /**
+   * Backend policies for Azure authentication (optional, defaults to implicit Azure auth)
+   */
+  policies?: SimpleLocalBackendPolicies | null;
+  /**
+   * Analyze Text configuration for detecting harmful content categories
+   * (Hate, SelfHarm, Sexual, Violence) and blocklist matches.
+   */
+  analyzeText?: AnalyzeTextConfig | null;
+  /**
+   * Detect Text Jailbreak configuration for detecting jailbreak attempts.
+   * Only applicable to request guards.
+   */
+  detectJailbreak?: DetectJailbreakConfig | null;
+}
+/**
+ * Configuration for the Analyze Text API.
+ */
+export interface AnalyzeTextConfig {
+  /**
+   * Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.
+   */
+  severityThreshold?: number | null;
+  /**
+   * API version to use (default: "2024-09-01")
+   */
+  apiVersion?: string | null;
+  /**
+   * Blocklist names to check against
+   */
+  blocklistNames?: string[] | null;
+  /**
+   * When true, further analysis stops if a blocklist is hit
+   */
+  haltOnBlocklistHit?: boolean | null;
+}
+/**
+ * Configuration for the Detect Jailbreak API.
+ */
+export interface DetectJailbreakConfig {
+  /**
+   * API version to use (default: "2024-02-15-preview")
+   */
+  apiVersion?: string | null;
+}
 export interface RequestRejection1 {
   body?: Bytes1;
   status?: number;
@@ -1390,55 +1568,7 @@ export interface ProviderConfig {
   issuer: string;
   audiences?: string[] | null;
   jwks: FileInlineOrRemote;
-  jwtValidationOptions?: JWTValidationOptions1;
-}
-/**
- * JWT validation options controlling which claims must be present in a token.
- *
- * The `required_claims` set specifies which RFC 7519 registered claims must
- * exist in the token payload before validation proceeds. Only the following
- * values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered
- * claims such as `iat` and `jti` are **not** enforced by the underlying
- * `jsonwebtoken` library and will be silently ignored.
- *
- * This only enforces **presence**. Standard claims like `exp` and `nbf`
- * have their values validated independently (e.g., expiry is always checked
- * when the `exp` claim is present, regardless of this setting).
- *
- * Defaults to `["exp"]`.
- */
-export interface JWTValidationOptions1 {
-  /**
-   * Claims that must be present in the token before validation.
-   * Only "exp", "nbf", "aud", "iss", "sub" are enforced; others
-   * (including "iat" and "jti") are ignored.
-   * Defaults to ["exp"]. Use an empty list to require no claims.
-   */
-  requiredClaims?: string[];
-}
-/**
- * JWT validation options controlling which claims must be present in a token.
- *
- * The `required_claims` set specifies which RFC 7519 registered claims must
- * exist in the token payload before validation proceeds. Only the following
- * values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered
- * claims such as `iat` and `jti` are **not** enforced by the underlying
- * `jsonwebtoken` library and will be silently ignored.
- *
- * This only enforces **presence**. Standard claims like `exp` and `nbf`
- * have their values validated independently (e.g., expiry is always checked
- * when the `exp` claim is present, regardless of this setting).
- *
- * Defaults to `["exp"]`.
- */
-export interface JWTValidationOptions2 {
-  /**
-   * Claims that must be present in the token before validation.
-   * Only "exp", "nbf", "aud", "iss", "sub" are enforced; others
-   * (including "iat" and "jti") are ignored.
-   * Defaults to ["exp"]. Use an empty list to require no claims.
-   */
-  requiredClaims?: string[];
+  jwtValidationOptions?: JWTValidationOptions;
 }
 /**
  * Browser-based OIDC authentication policy.
@@ -1513,6 +1643,23 @@ export interface LocalBasicAuth {
    * Validation mode for basic authentication
    */
   mode?: "strict" | "optional";
+  authorizationLocation?:
+    | {
+        header: {
+          name: string;
+          prefix?: string | null;
+        };
+      }
+    | {
+        queryParameter: {
+          name: string;
+        };
+      }
+    | {
+        cookie: {
+          name: string;
+        };
+      };
 }
 export interface LocalAPIKeys {
   /**
@@ -1523,6 +1670,23 @@ export interface LocalAPIKeys {
    * Validation mode for API keys
    */
   mode?: "strict" | "optional";
+  location?:
+    | {
+        header: {
+          name: string;
+          prefix?: string | null;
+        };
+      }
+    | {
+        queryParameter: {
+          name: string;
+        };
+      }
+    | {
+        cookie: {
+          name: string;
+        };
+      };
 }
 export interface LocalAPIKey {
   key: APIKey;
@@ -1560,14 +1724,6 @@ export interface LocalBackendPolicies {
    */
   requestHeaderModifier?: HeaderModifier | null;
   /**
-   * Headers to be modified in the response.
-   */
-  responseHeaderModifier?: HeaderModifier | null;
-  /**
-   * Directly respond to the request with a redirect.
-   */
-  requestRedirect?: RequestRedirect | null;
-  /**
    * Modify requests and responses sent to and from the backend.
    */
   transformations?: LocalTransformationConfig | null;
@@ -1588,13 +1744,21 @@ export interface LocalBackendPolicies {
    */
   tcp?: TCP | null;
   /**
-   * Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.
-   */
-  health?: LocalHealthPolicy | null;
-  /**
    * Specify a tunnel to use when connecting to the backend
    */
   backendTunnel?: Tunnel | null;
+  /**
+   * Headers to be modified in the response.
+   */
+  responseHeaderModifier?: HeaderModifier | null;
+  /**
+   * Directly respond to the request with a redirect.
+   */
+  requestRedirect?: RequestRedirect | null;
+  /**
+   * Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.
+   */
+  health?: LocalHealthPolicy | null;
   /**
    * Authorization policies for MCP access.
    */
@@ -1604,9 +1768,38 @@ export interface LocalBackendPolicies {
    */
   a2a?: A2APolicy | null;
   /**
+   * Route requests through an endpoint picker before forwarding to the selected backend.
+   */
+  inferenceRouting?: InferenceRouting | null;
+  /**
    * Mark this as LLM traffic to enable LLM processing.
    */
   ai?: Policy | null;
+}
+/**
+ * Local/config health policy with CEL as string; converted to Policy by compiling the expression.
+ * Mirrors the proto `Health` message structure.
+ */
+export interface LocalHealthPolicy {
+  /**
+   * CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.
+   * When unset, any 5xx or connection failure is treated as unhealthy.
+   */
+  unhealthyExpression?: string | null;
+  eviction?: LocalEviction | null;
+}
+/**
+ * Local/config eviction sub-policy with duration as string; mirrors `Eviction`.
+ */
+export interface LocalEviction {
+  duration?: string | null;
+  restoreHealth?: number | null;
+  consecutiveFailures?: number | null;
+  healthThreshold?: number | null;
+}
+export interface InferenceRouting {
+  endpointPicker: SimpleLocalBackend;
+  destinationMode?: InferenceRoutingDestinationMode;
 }
 export interface LocalMcpBackend {
   targets: LocalMcpTarget[];
@@ -1624,14 +1817,6 @@ export interface MCPLocalBackendPolicies {
    */
   requestHeaderModifier?: HeaderModifier | null;
   /**
-   * Headers to be modified in the response.
-   */
-  responseHeaderModifier?: HeaderModifier | null;
-  /**
-   * Directly respond to the request with a redirect.
-   */
-  requestRedirect?: RequestRedirect | null;
-  /**
    * Modify requests and responses sent to and from the backend.
    */
   transformations?: LocalTransformationConfig | null;
@@ -1651,10 +1836,6 @@ export interface MCPLocalBackendPolicies {
    * Specify TCP settings for the backend
    */
   tcp?: TCP | null;
-  /**
-   * Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.
-   */
-  health?: LocalHealthPolicy | null;
   /**
    * Specify a tunnel to use when connecting to the backend
    */
@@ -1711,8 +1892,21 @@ export interface Provider5 {
 }
 export interface Provider6 {
   model?: string | null;
-  host: string;
+  /**
+   * The Azure resource name used to construct the endpoint host.
+   */
+  resourceName: string;
+  /**
+   * The type of Azure endpoint. Determines the host suffix.
+   */
+  resourceType: "openAI" | "foundry";
   apiVersion?: string | null;
+  /**
+   * The Foundry project name, required when `resourceType` is `foundry`.
+   * Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.
+   * This is distinct from `resourceName` which is used for the host.
+   */
+  projectName?: string | null;
 }
 export interface LocalAIProviders {
   providers: LocalNamedAIProvider[];
@@ -1793,6 +1987,11 @@ export interface LocalFrontendPolicies {
    */
   networkAuthorization?: RuleSet | null;
   /**
+   * Enable downstream PROXY protocol handling on this gateway or port, including
+   * version matching and whether PROXY headers are required or optional.
+   */
+  proxyProtocol?: Proxy | null;
+  /**
    * Settings for request access logs.
    */
   accessLog?: LoggingPolicy | null;
@@ -1811,6 +2010,12 @@ export interface HTTP2 {
   http2FrameSize?: number | null;
   http2KeepaliveInterval?: string | null;
   http2KeepaliveTimeout?: string | null;
+  /**
+   * Maximum duration a connection is allowed to remain open. After this duration,
+   * the connection is gracefully closed after the current in-flight request completes.
+   * Useful for ensuring even traffic distribution behind load balancers during scaling events.
+   */
+  maxConnectionDuration?: string | null;
 }
 export interface TLS {
   handshakeTimeout?: string;
@@ -1821,6 +2026,10 @@ export interface TLS {
 }
 export interface TCP2 {
   keepalives: KeepaliveConfig1;
+}
+export interface Proxy {
+  version?: "v1" | "v2" | "all";
+  mode?: "strict" | "optional";
 }
 export interface LoggingPolicy {
   filter?: Expression | null;
@@ -1864,6 +2073,7 @@ export interface ListenerTarget {
   gatewayName: string;
   gatewayNamespace: string;
   listenerName?: string | null;
+  port?: number | null;
 }
 export interface RouteName {
   name: string;
@@ -1871,10 +2081,9 @@ export interface RouteName {
   ruleName?: string | null;
   kind?: string | null;
 }
-export interface FullLocalBackend {
+export interface LocalRouteGroup {
   name: string;
-  host: string;
-  policies?: LocalBackendPolicies | null;
+  routes: LocalRoute[];
 }
 export interface LocalLLMConfig {
   port?: number | null;
@@ -1899,7 +2108,7 @@ export interface LocalLLMModels {
   /**
    * provider of the LLM we are connecting too
    */
-  provider: "openAI" | "gemini" | "vertex" | "anthropic" | "bedrock" | "azureOpenAI";
+  provider: "openAI" | "gemini" | "vertex" | "anthropic" | "bedrock" | "azure";
   /**
    * defaults allows setting default values for the request. If these are not present in the request body, they will be set.
    * To override even when set, use `overrides`.
@@ -1966,13 +2175,21 @@ export interface LocalLLMParams {
   vertexRegion?: string | null;
   vertexProject?: string | null;
   /**
-   * For Azure: the host of the deployment
+   * For Azure: the resource name of the deployment
    */
-  azureHost?: string | null;
+  azureResourceName?: string | null;
+  /**
+   * For Azure: the type of Azure endpoint (openAI or foundry)
+   */
+  azureResourceType?: AzureResourceType | null;
   /**
    * For Azure: the API version to use
    */
   azureApiVersion?: string | null;
+  /**
+   * For Azure: the Foundry project name (required for foundry resource type)
+   */
+  azureProjectName?: string | null;
   /**
    * Override the upstream host for this provider.
    */

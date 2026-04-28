@@ -80,6 +80,19 @@ fn test_transformation_pseudoheader() {
 }
 
 #[test]
+fn test_transformation_host_header_lifts_to_authority() {
+	let mut req = ::http::Request::builder()
+		.method("GET")
+		.uri("https://www.rust-lang.org/")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let xfm = build([("host", r#""example.com:8443""#)]);
+	xfm.apply_request(&mut req);
+	assert_eq!(req.uri().to_string().as_str(), "https://example.com:8443/");
+	assert!(req.headers().get(::http::header::HOST).is_none());
+}
+
+#[test]
 fn test_transformation_metadata() {
 	let mut req = ::http::Request::builder()
 		.method("GET")

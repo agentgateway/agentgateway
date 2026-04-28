@@ -3,7 +3,8 @@ use std::sync::Arc;
 
 use once_cell::sync::Lazy;
 use rustls::ClientConfig;
-use rustls_pki_types::{CertificateDer, ServerName, pem::PemObject};
+use rustls_pki_types::pem::PemObject;
+use rustls_pki_types::{CertificateDer, ServerName};
 use serde::Serializer;
 
 use crate::transport;

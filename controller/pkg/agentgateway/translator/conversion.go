@@ -576,6 +576,23 @@ func buildAgwHTTPDestination(
 	var invalidBackendErr *reporter.RouteCondition
 	var res []*api.RouteBackend
 	for _, fwd := range forwardTo {
+		// Handle HTTPRoute backend refs as delegation (route group) references
+		ref := NormalizeReference(fwd.Group, fwd.Kind, wellknown.ServiceGVK)
+		if ref == wellknown.HTTPRouteGVK {
+			weight := int32(1)
+			if fwd.Weight != nil {
+				weight = *fwd.Weight
+			}
+			backendNs := ns
+			if fwd.Namespace != nil {
+				backendNs = string(*fwd.Namespace)
+			}
+			res = append(res, &api.RouteBackend{
+				Weight:        weight,
+				RouteGroupKey: ptr.Of(utils.InternalRouteGroupKey(backendNs, string(fwd.Name))),
+			})
+			continue
+		}
 		dst, err := buildAgwDestination(ctx, fwd, ns, wellknown.HTTPRouteGVK)
 		if err != nil {
 			logger.Error("erroring building agent gateway destination", "error", err)

@@ -161,11 +161,7 @@ pub(super) async fn protected_resource_metadata(
 }
 
 fn get_redirect_url(req: &Request, strip_base: &str) -> String {
-	let uri = req
-		.extensions()
-		.get::<filters::OriginalUrl>()
-		.map(|u| u.0.clone())
-		.unwrap_or_else(|| req.uri().clone());
+	let uri = request_uri_for_oauth_metadata(req);
 
 	uri
 		.path()
@@ -175,11 +171,7 @@ fn get_redirect_url(req: &Request, strip_base: &str) -> String {
 }
 
 fn strip_oauth_protected_resource_prefix(req: &Request) -> String {
-	let uri = req
-		.extensions()
-		.get::<filters::OriginalUrl>()
-		.map(|u| u.0.clone())
-		.unwrap_or_else(|| req.uri().clone());
+	let uri = request_uri_for_oauth_metadata(req);
 
 	let path = uri.path();
 	const OAUTH_PREFIX: &str = "/.well-known/oauth-protected-resource";
@@ -191,6 +183,16 @@ fn strip_oauth_protected_resource_prefix(req: &Request) -> String {
 		// If the prefix is not found, return the original URI
 		uri.to_string()
 	}
+}
+
+fn request_uri_for_oauth_metadata(req: &Request) -> Uri {
+	let uri = req
+		.extensions()
+		.get::<filters::OriginalUrl>()
+		.map(|u| u.0.clone())
+		.unwrap_or_else(|| req.uri().clone());
+
+	crate::http::x_headers::apply_forwarded_scheme(uri, req.headers())
 }
 
 pub(super) async fn authorization_server_metadata(
@@ -237,11 +239,7 @@ pub(super) async fn authorization_server_metadata(
 			// https://github.com/keycloak/keycloak/issues/39629
 			// We can workaround this by proxying it
 
-			let current_uri = req
-				.extensions()
-				.get::<filters::OriginalUrl>()
-				.map(|u| u.0.clone())
-				.unwrap_or_else(|| req.uri().clone());
+			let current_uri = request_uri_for_oauth_metadata(req);
 			let Some(serde_json::Value::String(re)) =
 				json::traverse_mut(&mut resp, &["registration_endpoint"])
 			else {
@@ -295,4 +293,23 @@ pub(super) async fn client_registration(
 	);
 
 	Ok(upstream)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn request_uri_for_oauth_metadata_uses_x_forwarded_proto() {
+		let req = ::http::Request::builder()
+			.uri("http://example.com/.well-known/oauth-protected-resource/mcp")
+			.header("x-forwarded-proto", "https")
+			.body(Body::empty())
+			.expect("request should build");
+
+		assert_eq!(
+			request_uri_for_oauth_metadata(&req).to_string(),
+			"https://example.com/.well-known/oauth-protected-resource/mcp"
+		);
+	}
 }

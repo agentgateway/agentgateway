@@ -2,7 +2,7 @@
   "predictions": [
     {
       "embeddings": {
-        "values": [0.1, 0.2, 0.3],
+        "values": [-0.006603240966796875,-0.054168701171875,0.0121917724609375],
         "statistics": {
           "token_count": 4,
           "truncated": false
@@ -11,7 +11,7 @@
     },
     {
       "embeddings": {
-        "values": [0.4, 0.5, 0.6],
+        "values": [0.024810791015625,0.070068359375,0.04156494140625],
         "statistics": {
           "token_count": 5,
           "truncated": false

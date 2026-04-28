@@ -19,21 +19,21 @@ info:
   "response": {
     "object": "list",
     "model": "text-embedding-3-small",
+    "usage": {
+      "prompt_tokens": 8,
+      "total_tokens": 8
+    },
     "data": [
       {
-        "index": 0,
         "object": "embedding",
+        "index": 0,
         "embedding": [
           -0.029852388,
           0.00078823726,
           -0.08126111
         ]
       }
-    ],
-    "usage": {
-      "prompt_tokens": 8,
-      "total_tokens": 8
-    }
+    ]
   },
   "parsed": {
     "input_tokens": 8,

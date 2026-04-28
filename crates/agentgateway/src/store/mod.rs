@@ -1,6 +1,6 @@
 mod binds;
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 pub use binds::{
 	BackendPolicies, BindEvent, BindListeners, FrontendPolices, GatewayPolicies, LLMRequestPolicies,
@@ -18,6 +18,29 @@ pub use discovery::{
 };
 
 use crate::store;
+use crate::types::discovery::Workload;
+
+/// Set-once holder for the gateway's own Workload (locality-aware LB reads this).
+/// Populated at startup in Static mode, or when WDS delivers a matching workload in Wds mode.
+/// TODO ArcSwap or something to support updates after startup
+#[derive(Clone, Debug, Default)]
+pub struct SelfWorkload(Arc<OnceLock<Workload>>);
+
+impl SelfWorkload {
+	pub fn new() -> Self {
+		Self::default()
+	}
+	pub fn get(&self) -> Option<&Workload> {
+		self.0.get()
+	}
+	/// First call wins; later calls are no-ops.
+	pub fn set(&self, w: Workload) {
+		let _ = self.0.set(w);
+	}
+	pub fn is_resolved(&self) -> bool {
+		self.0.get().is_some()
+	}
+}
 
 #[derive(Clone, Debug)]
 pub struct Stores {

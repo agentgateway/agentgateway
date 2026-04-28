@@ -1,5 +1,6 @@
-use super::*;
 use ::http::{HeaderName, HeaderValue};
+
+use super::*;
 
 #[test]
 fn test_get_webhook_forward_headers() {
@@ -342,25 +343,40 @@ fn test_model_alias_pattern_validation() {
 // ============================================================================
 
 mod bedrock_guardrails_tests {
-	use super::super::bedrock_guardrails::*;
 	use serde_json::json;
+
+	use super::super::bedrock_guardrails::*;
 
 	#[test]
 	fn test_apply_guardrail_response_is_blocked_true() {
 		let json = json!({
-			"action": "GUARDRAIL_INTERVENED"
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [{"text": "Sorry, I can't help with that."}],
+			"assessments": [{
+				"contentPolicy": {
+					"filters": [{
+						"action": "BLOCKED",
+						"type": "HATE",
+						"confidence": "HIGH"
+					}]
+				}
+			}]
 		});
 		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
 		assert!(response.is_blocked());
+		assert!(!response.is_anonymized());
 	}
 
 	#[test]
 	fn test_apply_guardrail_response_is_blocked_false() {
 		let json = json!({
-			"action": "NONE"
+			"action": "NONE",
+			"outputs": [{"text": "Hello, world!"}],
+			"assessments": [{}]
 		});
 		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
 		assert!(!response.is_blocked());
+		assert!(!response.is_anonymized());
 	}
 
 	#[test]
@@ -410,6 +426,15 @@ mod bedrock_guardrails_tests {
 		let json = json!({
 			"action": "GUARDRAIL_INTERVENED",
 			"outputs": [{"text": "I can't help with that request."}],
+			"assessments": [{
+				"topicPolicy": {
+					"topics": [{
+						"action": "BLOCKED",
+						"name": "Finance",
+						"type": "DENY"
+					}]
+				}
+			}],
 			"usage": {
 				"topicPolicyUnits": 1,
 				"contentPolicyUnits": 0,
@@ -417,10 +442,106 @@ mod bedrock_guardrails_tests {
 			}
 		});
 
-		// Our struct only cares about the action field
 		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
 		assert!(response.is_blocked());
+		assert!(!response.is_anonymized());
 		assert_eq!(response.action, GuardrailAction::GuardrailIntervened);
+	}
+
+	#[test]
+	fn test_apply_guardrail_response_anonymized() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [{"text": "My name is {NAME} and my email is {EMAIL}"}],
+			"assessments": [{
+				"sensitiveInformationPolicy": {
+					"piiEntities": [
+						{
+							"action": "ANONYMIZED",
+							"match": "John Doe",
+							"type": "NAME"
+						},
+						{
+							"action": "ANONYMIZED",
+							"match": "john@example.com",
+							"type": "EMAIL"
+						}
+					]
+				}
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert!(!response.is_blocked());
+		assert!(response.is_anonymized());
+		assert_eq!(
+			response.output_texts(),
+			vec!["My name is {NAME} and my email is {EMAIL}"]
+		);
+	}
+
+	#[test]
+	fn test_apply_guardrail_response_mixed_block_and_anonymize() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [{"text": "blocked"}],
+			"assessments": [{
+				"sensitiveInformationPolicy": {
+					"piiEntities": [{
+						"action": "ANONYMIZED",
+						"match": "John Doe",
+						"type": "NAME"
+					}]
+				},
+				"contentPolicy": {
+					"filters": [{
+						"action": "BLOCKED",
+						"type": "HATE",
+						"confidence": "HIGH"
+					}]
+				}
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert!(response.is_blocked());
+		assert!(!response.is_anonymized());
+	}
+
+	#[test]
+	fn test_apply_guardrail_response_output_texts() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [
+				{"text": "First message with {NAME}"},
+				{"text": "Second message with {EMAIL}"}
+			],
+			"assessments": [{
+				"sensitiveInformationPolicy": {
+					"piiEntities": [{
+						"action": "ANONYMIZED",
+						"match": "test",
+						"type": "NAME"
+					}]
+				}
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert!(response.is_anonymized());
+		assert_eq!(
+			response.output_texts(),
+			vec!["First message with {NAME}", "Second message with {EMAIL}"]
+		);
+	}
+
+	#[test]
+	fn test_apply_guardrail_response_intervened_no_assessments() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [{"text": "modified content"}],
+			"assessments": []
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert!(!response.is_blocked());
+		assert!(response.is_anonymized());
 	}
 }
 
@@ -429,8 +550,9 @@ mod bedrock_guardrails_tests {
 // ============================================================================
 
 mod google_model_armor_tests {
-	use super::super::google_model_armor::*;
 	use serde_json::json;
+
+	use super::super::google_model_armor::*;
 
 	#[test]
 	fn test_match_state_deserialization() {
@@ -772,8 +894,9 @@ mod google_model_armor_tests {
 // ============================================================================
 
 mod prompt_guard_config_tests {
-	use super::*;
 	use serde_json::json;
+
+	use super::*;
 
 	#[test]
 	fn test_bedrock_guardrails_config_deserialization() {
@@ -944,6 +1067,64 @@ mod prompt_guard_config_tests {
 	}
 
 	#[test]
+	fn test_bedrock_guardrails_without_policies() {
+		let json = json!({
+			"promptGuard": {
+				"request": [{
+					"bedrockGuardrails": {
+						"guardrailIdentifier": "my-guardrail-id",
+						"guardrailVersion": "DRAFT",
+						"region": "us-west-2"
+					}
+				}],
+				"response": [{
+					"bedrockGuardrails": {
+						"guardrailIdentifier": "my-guardrail-id",
+						"guardrailVersion": "DRAFT",
+						"region": "us-west-2"
+					}
+				}]
+			}
+		});
+
+		let policy: Policy = serde_json::from_value(json).unwrap();
+		let prompt_guard = policy.prompt_guard.unwrap();
+		assert_eq!(prompt_guard.request.len(), 1);
+		assert_eq!(prompt_guard.response.len(), 1);
+
+		match &prompt_guard.request[0].kind {
+			RequestGuardKind::BedrockGuardrails(bg) => {
+				assert!(bg.policies.is_empty());
+			},
+			_ => panic!("Expected BedrockGuardrails guard kind"),
+		}
+	}
+
+	#[test]
+	fn test_google_model_armor_without_policies() {
+		let json = json!({
+			"promptGuard": {
+				"request": [{
+					"googleModelArmor": {
+						"templateId": "my-template",
+						"projectId": "my-project"
+					}
+				}]
+			}
+		});
+
+		let policy: Policy = serde_json::from_value(json).unwrap();
+		let prompt_guard = policy.prompt_guard.unwrap();
+
+		match &prompt_guard.request[0].kind {
+			RequestGuardKind::GoogleModelArmor(gma) => {
+				assert!(gma.policies.is_empty());
+			},
+			_ => panic!("Expected GoogleModelArmor guard kind"),
+		}
+	}
+
+	#[test]
 	fn test_mixed_guardrails_request_and_response() {
 		let json = json!({
 			"promptGuard": {
@@ -1036,10 +1217,11 @@ mod prompt_guard_config_tests {
 
 #[test]
 fn test_bedrock_guardrails_user_credentials_take_precedence() {
+	use secrecy::SecretString;
+
 	use crate::http::auth::{AwsAuth, BackendAuth};
 	use crate::store::BindStore;
 	use crate::types::agent::BackendPolicy;
-	use secrecy::SecretString;
 
 	let guardrails = BedrockGuardrails {
 		guardrail_identifier: strng::new("test-guardrail"),
@@ -1101,18 +1283,20 @@ fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 
 #[test]
 fn test_google_model_armor_user_credentials_take_precedence() {
+	use secrecy::SecretString;
+
 	use crate::http::auth::BackendAuth;
 	use crate::store::BindStore;
 	use crate::types::agent::BackendPolicy;
-	use secrecy::SecretString;
 
 	let model_armor = GoogleModelArmor {
 		template_id: strng::new("test-template"),
 		project_id: strng::new("test-project"),
 		location: Some(strng::new("us-central1")),
-		policies: vec![BackendPolicy::BackendAuth(BackendAuth::Key(
-			SecretString::new("user-provided-api-key".into()),
-		))],
+		policies: vec![BackendPolicy::BackendAuth(BackendAuth::Key {
+			value: SecretString::new("user-provided-api-key".into()),
+			location: crate::http::auth::AuthorizationLocation::default(),
+		})],
 	};
 
 	let pols = model_armor.build_request_policies();
@@ -1121,7 +1305,13 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 	let resolved = store.inline_backend_policies(&pols);
 
 	assert!(
-		matches!(resolved.backend_auth, Some(BackendAuth::Key(_))),
+		matches!(
+			resolved.backend_auth,
+			Some(BackendAuth::Key {
+				value: _,
+				location: _
+			})
+		),
 		"Expected user-provided Key auth to take precedence over \
 		 the implicit GCP fallback, but got: {:?}",
 		resolved.backend_auth

@@ -40,13 +40,20 @@ func NewA2APlugin(agw *AgwCollections) AgwPlugin {
 // translatePoliciesForService generates A2A policies for a single service
 func translatePoliciesForService(krtctx krt.HandlerContext, svc *corev1.Service, clusterDomain string, references ReferenceIndex) []AgwPolicy {
 	var a2aPolicies []AgwPolicy
-	gatewayTargets := references.LookupGatewaysForBackend(krtctx, utils.TypedNamespacedName{
-		Kind: wellknown.ServiceKind,
-		NamespacedName: types.NamespacedName{
-			Namespace: svc.Namespace,
-			Name:      svc.Name,
-		},
-	}).UnsortedList()
+	// Lazily compute so we don't run it for each Service
+	var computedGatewayTargets *[]types.NamespacedName
+	gatewayTargets := func() []types.NamespacedName {
+		if computedGatewayTargets == nil {
+			computedGatewayTargets = ptr.Of(references.LookupGatewaysForBackend(krtctx, utils.TypedNamespacedName{
+				Kind: wellknown.ServiceKind,
+				NamespacedName: types.NamespacedName{
+					Namespace: svc.Namespace,
+					Name:      svc.Name,
+				},
+			}).UnsortedList())
+		}
+		return *computedGatewayTargets
+	}
 
 	for _, port := range svc.Spec.Ports {
 		// support legacy kgateway.dev/a2a and agentgateway.dev/a2a
@@ -71,7 +78,7 @@ func translatePoliciesForService(krtctx krt.HandlerContext, svc *corev1.Service,
 				},
 			}
 
-			a2aPolicies = appendPolicyForGateways(a2aPolicies, gatewayTargets, policy)
+			a2aPolicies = appendPolicyForGateways(a2aPolicies, gatewayTargets(), policy)
 		}
 	}
 

@@ -245,7 +245,7 @@ function step_deploy_helm() {
 	   "$@"
 }
 function step_setup_gateway_api() {
-	make --no-print-directory -C controller gw-api-crds gie-crds
+	make --no-print-directory -C controller gw-api-crds gie-crds istio-crds
 }
 function step_preload_images() {(
   if [[ "${TEST_MODE}" == "e2e" ]]; then

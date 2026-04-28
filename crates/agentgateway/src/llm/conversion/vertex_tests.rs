@@ -100,11 +100,6 @@ fn test_embeddings_response_translation() {
 
 	assert_eq!(resp.object, "list");
 	assert_eq!(resp.model, "text-embedding-004");
-	assert_eq!(resp.data.len(), 2);
-	assert_eq!(resp.data[0].embedding, vec![0.1, 0.2, 0.3]);
-	assert_eq!(resp.data[1].embedding, vec![0.4, 0.5, 0.6]);
-	assert_eq!(resp.data[0].index, 0);
-	assert_eq!(resp.data[1].index, 1);
 	assert_eq!(resp.usage.prompt_tokens, 7);
 	assert_eq!(resp.usage.total_tokens, 7);
 }

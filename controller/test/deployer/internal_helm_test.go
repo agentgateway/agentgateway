@@ -141,6 +141,17 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 			InputFile: "agentgateway-istio",
 		},
 		{
+			Name:      "agentgateway with Istio additional trust domains",
+			InputFile: "agentgateway-istio-additional-trust-domains",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "ADDITIONAL_TRUST_DOMAINS",
+					"deployment should set ADDITIONAL_TRUST_DOMAINS env var")
+				assert.Contains(t, outputYaml, "extra.domain.com,another.domain.com",
+					"deployment should set the correct value for ADDITIONAL_TRUST_DOMAINS")
+			},
+		},
+		{
 			Name:      "agentgateway with logging format json",
 			InputFile: "agentgateway-logging-format",
 		},

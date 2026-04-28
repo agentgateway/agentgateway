@@ -1,0 +1,74 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/responses/parallel-tool-call.json
+info:
+  model: gpt-4o
+  max_output_tokens: 1024
+  input:
+    - type: message
+      role: user
+      content:
+        - type: input_text
+          text: How is the weather in Columbus and New York?
+    - type: function_call
+      call_id: call_1
+      name: get_weather
+      arguments: "{\"location\":\"Columbus, OH\"}"
+    - type: function_call
+      call_id: call_2
+      name: get_weather
+      arguments: "{\"location\":\"New York, NY\"}"
+    - type: function_call_output
+      call_id: call_1
+      output: "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+    - type: function_call_output
+      call_id: call_2
+      output: "{ \"temperature\": 22, \"condition\": \"Sunny\" }"
+---
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "How is the weather in Columbus and New York?"
+    },
+    {
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "type": "function",
+          "id": "call_1",
+          "function": {
+            "name": "get_weather",
+            "arguments": "{\"location\":\"Columbus, OH\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "type": "function",
+          "id": "call_2",
+          "function": {
+            "name": "get_weather",
+            "arguments": "{\"location\":\"New York, NY\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }",
+      "tool_call_id": "call_1"
+    },
+    {
+      "role": "tool",
+      "content": "{ \"temperature\": 22, \"condition\": \"Sunny\" }",
+      "tool_call_id": "call_2"
+    }
+  ],
+  "model": "gpt-4o",
+  "max_completion_tokens": 1024,
+  "stream": false
+}

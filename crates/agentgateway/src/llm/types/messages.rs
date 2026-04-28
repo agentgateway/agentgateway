@@ -394,7 +394,7 @@ impl ResponseType for Response {
 		if self.content.len() != choices.len() {
 			anyhow::bail!("webhook response message count mismatch");
 		}
-		for (m, wh) in self.content.iter_mut().zip(choices.into_iter()) {
+		for (m, wh) in self.content.iter_mut().zip(choices) {
 			m.text = Some(wh.message.content.to_string());
 		}
 		Ok(())
@@ -1039,7 +1039,7 @@ pub mod typed {
 			if self.content.len() != choices.len() {
 				anyhow::bail!("webhook response message count mismatch");
 			}
-			for (block, wh) in self.content.iter_mut().zip(choices.into_iter()) {
+			for (block, wh) in self.content.iter_mut().zip(choices) {
 				if let ContentBlock::Text(t) = block {
 					t.text = wh.message.content.to_string();
 				}

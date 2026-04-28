@@ -1,0 +1,95 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: be
+  namespace: default
+spec:
+  mcp:
+    targets:
+      - name: mcp-target
+        static:
+          host: mcp-app.default.svc.cluster.local
+          port: 8000
+          protocol: StreamableHTTP
+          path: override-sse
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: test-jwks
+  namespace: default
+spec:
+  static:
+    host: login.test.com
+    port: 443
+  policies:
+    tls: {}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: mcp-auth-missing-persisted-keyset
+  namespace: default
+spec:
+  targetRefs:
+    - name: be
+      kind: AgentgatewayBackend
+      group: agentgateway.dev
+  backend:
+    mcp:
+      authentication:
+        issuer: https://sts.windows.net/test-path/
+        jwks:
+          jwksPath: test-path/discovery/v2.0/keys
+          backendRef:
+            group: agentgateway.dev
+            kind: AgentgatewayBackend
+            name: test-jwks
+        audiences:
+          - api://test
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        mcpAuthentication:
+          audiences:
+          - api://test
+          issuer: https://sts.windows.net/test-path/
+          mode: STRICT
+          resourceMetadata: {}
+      key: default/mcp-auth-missing-persisted-keyset:mcp-authentication:default/be
+      name:
+        kind: AgentgatewayPolicy
+        name: mcp-auth-missing-persisted-keyset
+        namespace: default
+      target:
+        backend:
+          name: be
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: mcp-auth-missing-persisted-keyset
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: jwks keyset for "https://login.test.com:443/test-path/discovery/v2.0/keys"
+          isn't available (not yet fetched or fetch failed)
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

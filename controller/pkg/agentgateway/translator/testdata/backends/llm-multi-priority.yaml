@@ -55,10 +55,10 @@ output:
           - anthropic:
               model: claude-3-opus-20240229
             name: anthropic
-          - azureopenai:
+          - azure:
               apiVersion: 2024-02-15-preview
-              host: ai-gateway.openai.azure.com
               model: gpt-4o-mini
+              resourceName: ai-gateway
             name: azureopenai
         - providers:
           - gemini:
