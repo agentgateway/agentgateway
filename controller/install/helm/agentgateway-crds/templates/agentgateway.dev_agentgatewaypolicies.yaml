@@ -4702,6 +4702,8 @@ spec:
                         x-kubernetes-validations:
                         - message: at least one of the fields in [add] must be set
                           rule: '[has(self.add)].filter(x,x==true).size() >= 1'
+                    required:
+                    - attributes
                     type: object
                   networkAuthorization:
                     description: |-

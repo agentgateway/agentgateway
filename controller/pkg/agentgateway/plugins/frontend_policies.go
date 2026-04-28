@@ -509,20 +509,18 @@ func translateFrontendMetrics(policy *agentgateway.AgentgatewayPolicy, name stri
 	spec := &api.FrontendPolicySpec_Metrics{}
 	var errs []error
 
-	if a := metricsSpec.Attributes; a != nil {
-		fields := make([]*api.FrontendPolicySpec_Metrics_Field, 0, len(a.Add))
-		for _, add := range a.Add {
-			if !isCEL(add.Expression) {
-				errs = append(errs, fmt.Errorf("frontend metrics field %q is not a valid CEL expression: %s", add.Name, add.Expression))
-			}
-			fields = append(fields, &api.FrontendPolicySpec_Metrics_Field{
-				Name:       add.Name,
-				Expression: string(add.Expression),
-			})
+	fields := make([]*api.FrontendPolicySpec_Metrics_Field, 0, len(metricsSpec.Attributes.Add))
+	for _, add := range metricsSpec.Attributes.Add {
+		if !isCEL(add.Expression) {
+			errs = append(errs, fmt.Errorf("frontend metrics field %q is not a valid CEL expression: %s", add.Name, add.Expression))
 		}
-		spec.Fields = &api.FrontendPolicySpec_Metrics_Fields{
-			Add: fields,
-		}
+		fields = append(fields, &api.FrontendPolicySpec_Metrics_Field{
+			Name:       add.Name,
+			Expression: string(add.Expression),
+		})
+	}
+	spec.Fields = &api.FrontendPolicySpec_Metrics_Fields{
+		Add: fields,
 	}
 
 	metricsPolicy := &api.Policy{

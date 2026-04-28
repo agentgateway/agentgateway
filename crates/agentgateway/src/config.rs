@@ -411,22 +411,22 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 						.collect::<frozen_collections::FzHashSet<String>>()
 				})
 				.unwrap_or_default(),
-			metric_fields: Arc::new(
-				raw
-					.metrics
-					.and_then(|f| f.fields)
-					.map(|fields| {
-						Ok::<_, anyhow::Error>(MetricFields {
-							add: fields
+			metric_fields: raw
+				.metrics
+				.and_then(|f| f.fields)
+				.map(|fields| {
+					Ok::<_, anyhow::Error>(MetricFields {
+						add: Arc::new(
+							fields
 								.add
 								.iter()
 								.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
 								.collect::<Result<_, _>>()?,
-						})
+						),
 					})
-					.transpose()?
-					.unwrap_or_default(),
-			),
+				})
+				.transpose()?
+				.unwrap_or_default(),
 		},
 		logging: telemetry::log::Config {
 			filter: raw

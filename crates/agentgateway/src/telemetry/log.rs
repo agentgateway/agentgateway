@@ -94,7 +94,7 @@ impl<T: Debug> Debug for AsyncLog<T> {
 
 #[derive(serde::Serialize, Debug, Default, Clone)]
 pub struct MetricsConfig {
-	pub metric_fields: Arc<MetricFields>,
+	pub metric_fields: MetricFields,
 	pub excluded_metrics: FzHashSet<String>,
 }
 
@@ -118,7 +118,7 @@ pub struct LoggingFields {
 
 #[derive(serde::Serialize, Default, Clone, Debug)]
 pub struct MetricFields {
-	pub add: OrderedStringMap<Arc<cel::Expression>>,
+	pub add: Arc<OrderedStringMap<Arc<cel::Expression>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -249,14 +249,14 @@ pub struct CelLogging {
 	pub cel_context: cel::ContextBuilder,
 	pub filter: Option<Arc<cel::Expression>>,
 	pub fields: LoggingFields,
-	pub metric_fields: Arc<MetricFields>,
+	pub metric_fields: MetricFields,
 }
 
 pub struct CelLoggingExecutor<'a> {
 	pub executor: cel::Executor<'a>,
 	pub filter: &'a Option<Arc<cel::Expression>>,
 	pub fields: &'a LoggingFields,
-	pub metric_fields: &'a Arc<MetricFields>,
+	pub metric_fields: &'a MetricFields,
 }
 
 impl<'a> CelLoggingExecutor<'a> {
@@ -1614,7 +1614,7 @@ mod tests {
 			cel_context: crate::cel::ContextBuilder::new(),
 			filter: None,
 			fields: LoggingFields::default(),
-			metric_fields: Arc::new(MetricFields::default()),
+			metric_fields: MetricFields::default(),
 		};
 		let mut registry = Registry::default();
 		let metrics = Arc::new(Metrics::new(&mut registry, Default::default()));

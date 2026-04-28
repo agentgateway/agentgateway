@@ -889,9 +889,9 @@ impl HTTPProxy {
 		if let Some(mf) = &frontend_policies.metrics_fields
 			&& !mf.add.is_empty()
 		{
-			log.cel.metric_fields = Arc::new(crate::telemetry::log::MetricFields {
-				add: (*mf.add).clone(),
-			});
+			log.cel.metric_fields = crate::telemetry::log::MetricFields {
+				add: mf.add.clone(),
+			};
 		}
 
 		if let Some(alp) = frontend_policies.access_log_otlp.as_deref() {
