@@ -34,18 +34,18 @@ type backendEndpointState struct {
 	} `json:"endpoint"`
 	Info struct {
 		Health         *float64 `json:"health"`
-		RequestLatency *float64 `json:"request_latency"`
-		TotalRequests  *int64   `json:"total_requests"`
+		RequestLatency *float64 `json:"requestLatency"`
+		TotalRequests  *int64   `json:"totalRequests"`
 	} `json:"info"`
 }
 
 type backendRow struct {
-	Name      string  `json:"name" yaml:"name"`
-	Namespace string  `json:"namespace" yaml:"namespace"`
-	Endpoint  string  `json:"endpoint" yaml:"endpoint"`
-	Health    string  `json:"health" yaml:"health"`
-	Requests  int64   `json:"requests" yaml:"requests"`
-	LatencyMS float64 `json:"latencyMs" yaml:"latencyMs"`
+	Name      string
+	Namespace string
+	Endpoint  string
+	Health    string
+	Requests  int64
+	LatencyMS float64
 }
 
 func backendsCommand(common *commonFlags) flag.Command {

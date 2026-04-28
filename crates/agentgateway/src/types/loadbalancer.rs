@@ -575,6 +575,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 const ALPHA: f64 = 0.3;
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EndpointInfo {
 	/// health keeps track of the success rate for the endpoint.
 	health: Ewma,
