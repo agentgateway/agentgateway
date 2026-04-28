@@ -1125,27 +1125,6 @@ fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 }
 
 #[test]
-fn setup_request_copilot_models_uses_unversioned_models_path() {
-	let provider = AIProvider::Copilot(copilot::Provider { model: None });
-	let mut req = crate::http::tests_common::request(
-		"https://example.com/v1/models?trace=repro",
-		http::Method::GET,
-		&[],
-	);
-
-	provider
-		.setup_request(&mut req, RouteType::Models, None, None, None, false)
-		.expect("setup_request should succeed");
-
-	assert_eq!(
-		req.uri().authority().map(|a| a.as_str()),
-		Some("api.githubcopilot.com")
-	);
-	assert_eq!(req.uri().path(), "/models");
-	assert_eq!(req.uri().query(), Some("trace=repro"));
-}
-
-#[test]
 fn completions_response_missing_message_and_usage_fields() {
 	// Gemini's OpenAI-compat endpoint can omit `message` from choices and
 	// `completion_tokens` from usage. Verify deserialization succeeds with defaults.

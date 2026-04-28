@@ -1,0 +1,6 @@
+llm:
+  models:
+  - name: gpt-5.4
+    provider: copilot
+    params:
+      model: gpt-5.4

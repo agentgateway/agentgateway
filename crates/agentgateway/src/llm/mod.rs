@@ -863,14 +863,6 @@ impl AIProvider {
 			}
 		}
 
-		if matches!(self, AIProvider::Copilot(_))
-			&& req.supports_model()
-			&& let Some(model) = req.model()
-			&& let Some(stripped) = model.strip_prefix("copilot/")
-		{
-			*model = stripped.to_string();
-		}
-
 		let mut llm_info = req.to_llm_request(self.provider(), tokenize)?;
 		if let Some(log) = log
 			&& log.cel.cel_context.needs_llm_prompt()
