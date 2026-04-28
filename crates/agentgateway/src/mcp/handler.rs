@@ -543,12 +543,7 @@ impl Relay {
 			.map(|(name, con)| {
 				let notification = r.notification.clone();
 				let ctx = &ctx;
-				async move {
-					(
-						name,
-						con.generic_notification(notification, ctx).await,
-					)
-				}
+				async move { (name, con.generic_notification(notification, ctx).await) }
 			})
 			.collect();
 
