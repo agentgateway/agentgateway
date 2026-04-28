@@ -226,6 +226,20 @@ impl Session {
 			}) if req_id.is_some() => {
 				Err(mcp::Error::Authorization(req_id.unwrap(), resource_type, resource_name).into())
 			},
+			Err(UpstreamError::OpenAPIHttpError {
+				status,
+				body,
+				tool: _,
+			}) => {
+				let resp = ::http::Response::builder()
+					.status(status)
+					.header(::http::header::CONTENT_TYPE, "application/json")
+					.body(bytes::Bytes::from(body))
+					.map_err(|e| {
+						ProxyError::Processing(anyhow!("failed to build OpenAPI error response: {e}"))
+					})?;
+				Err(mcp::Error::UpstreamError(Box::new(http::SendDirectResponse(resp))).into())
+			},
 			// TODO: this is too broad. We have a big tangle of errors to untangle though
 			Err(e) => Err(mcp::Error::SendError(req_id, e.to_string()).into()),
 		}
@@ -772,4 +786,52 @@ fn get_client_info() -> ClientInfo {
 	client_info.client_info =
 		Implementation::new("agentgateway", BuildInfo::new().version.to_string());
 	client_info
+}
+
+#[cfg(test)]
+mod tests {
+	use ::http::StatusCode;
+	use rstest::rstest;
+
+	use super::*;
+	use crate::mcp;
+	use crate::mcp::upstream::UpstreamError;
+	use crate::proxy::ProxyError;
+
+	#[rstest]
+	#[case::not_found(StatusCode::NOT_FOUND)]
+	#[case::internal_server_error(StatusCode::INTERNAL_SERVER_ERROR)]
+	#[case::bad_request(StatusCode::BAD_REQUEST)]
+	#[tokio::test]
+	async fn test_handle_openapi_http_error(#[case] status: StatusCode) {
+		let err = UpstreamError::OpenAPIHttpError {
+			status,
+			body: r#"{"error":"upstream error"}"#.to_string(),
+			tool: "my_tool".to_string(),
+		};
+		let ProxyError::MCP(mcp::Error::UpstreamError(resp)) =
+			Session::handle_error(None, Err(err)).await.unwrap_err()
+		else {
+			panic!("impl err, this test needs to be reevaled");
+		};
+		assert_eq!(resp.status(), status);
+	}
+
+	#[rstest]
+	#[case::not_found(StatusCode::NOT_FOUND)]
+	#[case::internal_server_error(StatusCode::INTERNAL_SERVER_ERROR)]
+	#[tokio::test]
+	async fn test_handle_http_error_status(#[case] status: StatusCode) {
+		let base_resp = ::http::Response::builder()
+			.status(status)
+			.body(crate::http::Body::empty())
+			.unwrap();
+		let err = UpstreamError::Http(mcp::ClientError::Status(Box::new(base_resp)));
+		let ProxyError::MCP(mcp::Error::UpstreamError(resp)) =
+			Session::handle_error(None, Err(err)).await.unwrap_err()
+		else {
+			panic!("impl err, this test needs to be reevaled");
+		};
+		assert_eq!(resp.status(), status);
+	}
 }
