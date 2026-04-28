@@ -51,6 +51,7 @@ func Command() flag.Command {
 		},
 		Children: []flag.CommandBuilder{
 			func() flag.Command { return allCommand(common) },
+			func() flag.Command { return backendsCommand(common) },
 		},
 	}
 }
