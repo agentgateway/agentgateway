@@ -1,0 +1,165 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: gemma-route-no-header
+  namespace: default
+spec:
+  parentRefs:
+    - name: test-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: vllm-gemma
+          kind: InferencePool
+          group: inference.networking.k8s.io
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-gemma-endpoint-picker
+  namespace: default
+spec:
+  ports:
+    - name: grpc
+      port: 9002
+      targetPort: 9002
+  selector:
+    app: vllm-gemma
+---
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: vllm-gemma
+  namespace: default
+spec:
+  endpointPickerRef:
+    failureMode: FailClose
+    group: ""
+    kind: Service
+    name: vllm-gemma-endpoint-picker
+    port:
+      number: 9002
+  selector:
+    matchLabels:
+      app: vllm-gemma
+  targetPorts:
+    - number: 8080
+
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        inferenceRouting:
+          endpointPicker:
+            port: 9002
+            service:
+              hostname: vllm-gemma-endpoint-picker.default.svc.cluster.local
+              namespace: default
+          failureMode: FAIL_CLOSED
+      key: default/vllm-gemma:inference
+      name:
+        kind: InferencePool
+        name: vllm-gemma
+        namespace: default
+      target:
+        service:
+          hostname: vllm-gemma.default.inference.cluster.local
+          namespace: default
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendTls:
+          verification: INSECURE_ALL
+      key: default/vllm-gemma:inferencetls
+      name:
+        kind: InferencePool
+        name: vllm-gemma
+        namespace: default
+      target:
+        service:
+          hostname: vllm-gemma-endpoint-picker.default.svc.cluster.local
+          namespace: default
+          port: 9002
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: vllm-gemma.default.inference.cluster.local
+            namespace: default
+        weight: 1
+      key: default/gemma-route-no-header.00.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          pathPrefix: /
+      name:
+        kind: HTTPRoute
+        name: gemma-route-no-header
+        namespace: default
+status:
+- apiVersion: inference.networking.k8s.io/v1
+  kind: InferencePool
+  metadata:
+    name: vllm-gemma
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: InferencePool has been accepted by controller agentgateway.dev/agentgateway
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: All InferencePool references have been resolved
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: gemma-route-no-header
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default
