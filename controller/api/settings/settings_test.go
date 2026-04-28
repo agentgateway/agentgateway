@@ -109,7 +109,7 @@ func TestSettings(t *testing.T) {
 				EnableExperimentalGatewayAPIFeatures: false,
 				ProxyImageRegistry:                   "my-registry",
 				ProxyImageRepository:                 "my-repo",
-				ProxyImageTag:                        ptr.To("my-tag"),
+				ProxyImageTag:                        new("my-tag"),
 				GatewayClassParametersRefs: GatewayClassParametersRefs{
 					"kgateway": {
 						Name:      "custom-gwp",

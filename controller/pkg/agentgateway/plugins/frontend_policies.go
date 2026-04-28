@@ -138,7 +138,7 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 
 	var path *string
 	if tracing.Path != nil {
-		path = ptr.Of(*tracing.Path)
+		path = new(*tracing.Path)
 	}
 
 	var protocol api.FrontendPolicySpec_Tracing_Protocol
@@ -222,7 +222,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 
 		var path *string
 		if otlp.Path != nil {
-			path = ptr.Of(*otlp.Path)
+			path = new(*otlp.Path)
 		}
 
 		spec.OtlpAccessLog = &api.FrontendPolicySpec_Logging_OtlpAccessLog{
@@ -367,7 +367,7 @@ func translateFrontendNetworkAuthorization(policy *agentgateway.AgentgatewayPoli
 }
 
 func castUint32[T ~int32](ka *T) *uint32 {
-	return ptr.Of((uint32)(*ka))
+	return new((uint32)(*ka))
 }
 
 func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {

@@ -9,7 +9,6 @@ import (
 
 	"istio.io/istio/pkg/kube/krt"
 	istiolog "istio.io/istio/pkg/log"
-	"istio.io/istio/pkg/ptr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -213,12 +212,12 @@ func (c *ControllerBuilder) Build() (*syncer.Syncer, error) {
 	if defaultTag == nil {
 		// Else, the binary is built with an explicit version
 		if version.Version != "" {
-			defaultTag = ptr.Of("v" + version.Version)
+			defaultTag = new("v" + version.Version)
 		} else {
 			// Else, detect automatically based on the build.
 			// TODO: probably what we really want here is to have a file in the repo that has a floating version like v1.0.0-dev
 			// that is used here + for nightly builds.
-			defaultTag = ptr.Of(version.GitVersion)
+			defaultTag = new(version.GitVersion)
 		}
 	}
 	gwCfg := GatewayConfig{

@@ -122,7 +122,7 @@ func childAllowsParent(obj *gwv1.HTTPRoute, parentRef resolvedBinding) bool {
 		if NormalizeReference(ref.Group, ref.Kind, wellknown.GatewayGVK) != wellknown.HTTPRouteGVK {
 			return nil
 		}
-		return ptr.Of(types.NamespacedName{
+		return new(types.NamespacedName{
 			Namespace: defaultString(ref.Namespace, obj.Namespace),
 			Name:      string(ref.Name),
 		})
@@ -199,7 +199,7 @@ func buildHTTPRouteGroupBindings(
 				for _, binding := range extractHTTPRouteGroupRefs(rule, obj.Namespace) {
 					binding.Source = source
 					if parent.ParentGateway != (types.NamespacedName{}) {
-						binding.Gateway = ptr.Of(parent.ParentGateway)
+						binding.Gateway = new(parent.ParentGateway)
 					}
 					if parent.ServiceKey != nil {
 						binding.ServiceKey = parent.ServiceKey
@@ -300,7 +300,7 @@ func buildDelegatedHTTPRoutes(
 					continue
 				}
 				route.ListenerKey = ""
-				route.RouteGroupKey = ptr.Of(binding.RouteGroupKey())
+				route.RouteGroupKey = new(binding.RouteGroupKey())
 				route.Key = delegatedRouteKey(route.GetKey(), binding.RouteGroupKey())
 				if binding.ServiceKey != nil {
 					route.ServiceKey = &workloadapi.NamespacedHostname{
@@ -857,7 +857,7 @@ func createRouteCollectionGeneric[T controllers.Object, R comparable, ST any](
 		}
 
 		status := rm.BuildRouteStatusWithParentRefDefaulting(context.Background(), obj, inputs.ControllerName, true)
-		return ptr.Of(buildStatus(*status)), resources
+		return new(buildStatus(*status)), resources
 	}, krtopts.ToOptions(collectionName)...)
 }
 
@@ -999,7 +999,7 @@ func gatewayRouteAttachmentCollection[T controllers.Object](
 		parentRefs := extractParentReferenceInfo(ctx, inputs.RouteParents, obj)
 		return slices.MapFilter(FilteredReferences(parentRefs), func(e RouteParentReference) **plugins.RouteAttachment {
 			if e.ParentKey.Kind == wellknown.ListenerSetGVK.Kind {
-				return ptr.Of(&plugins.RouteAttachment{
+				return new(&plugins.RouteAttachment{
 					From:         from,
 					To:           e.ParentKey,
 					Gateway:      e.ParentGateway,
@@ -1009,7 +1009,7 @@ func gatewayRouteAttachmentCollection[T controllers.Object](
 			if e.ParentGateway.Name == "" {
 				return nil
 			}
-			return ptr.Of(&plugins.RouteAttachment{
+			return new(&plugins.RouteAttachment{
 				From: from,
 				To: utils.TypedNamespacedName{
 					Kind:           wellknown.GatewayGVK.Kind,

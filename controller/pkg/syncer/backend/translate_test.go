@@ -43,7 +43,7 @@ func TestBuildMCP(t *testing.T) {
 								Static: &agentgateway.McpTarget{
 									Host:     shortStringPtr("mcp-server.example.com"),
 									Port:     8080,
-									Path:     stringPtr("override-sse"),
+									Path:     new("override-sse"),
 									Protocol: ptr.Of(agentgateway.MCPProtocolSSE),
 								},
 							},
@@ -274,13 +274,13 @@ func TestBuildAIBackend(t *testing.T) {
 				Spec: agentgateway.AgentgatewayBackendSpec{
 					Policies: &agentgateway.BackendFull{
 						BackendSimple: agentgateway.BackendSimple{
-							Auth: &agentgateway.BackendAuth{InlineKey: stringPtr("sk-test-token")},
+							Auth: &agentgateway.BackendAuth{InlineKey: new("sk-test-token")},
 						},
 					},
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							OpenAI: &agentgateway.OpenAIConfig{
-								Model: stringPtr("gpt-4"),
+								Model: new("gpt-4"),
 							},
 						},
 					},
@@ -299,8 +299,8 @@ func TestBuildAIBackend(t *testing.T) {
 						LLM: &agentgateway.LLMProvider{
 							AzureOpenAI: &agentgateway.AzureOpenAIConfig{
 								Endpoint:       "endpoint-123.openai.azure.com",
-								DeploymentName: ptr.Of("my-deployment"),
-								ApiVersion:     ptr.Of("2024-02-15-preview"),
+								DeploymentName: new("my-deployment"),
+								ApiVersion:     new("2024-02-15-preview"),
 							},
 						},
 					},
@@ -320,9 +320,9 @@ func TestBuildAIBackend(t *testing.T) {
 							Azure: &agentgateway.AzureConfig{
 								ResourceName: "my-foundry-resource",
 								ResourceType: agentgateway.AzureResourceTypeFoundry,
-								Model:        ptr.Of("gpt-4o-mini"),
-								ApiVersion:   ptr.Of("2024-12-01-preview"),
-								ProjectName:  ptr.Of("my-project"),
+								Model:        new("gpt-4o-mini"),
+								ApiVersion:   new("2024-12-01-preview"),
+								ProjectName:  new("my-project"),
 							},
 						},
 					},
@@ -340,7 +340,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Anthropic: &agentgateway.AnthropicConfig{
-								Model: stringPtr("claude-3-sonnet"),
+								Model: new("claude-3-sonnet"),
 							},
 						},
 					},
@@ -358,7 +358,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Gemini: &agentgateway.GeminiConfig{
-								Model: stringPtr("gemini-pro"),
+								Model: new("gemini-pro"),
 							},
 						},
 					},
@@ -376,7 +376,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							VertexAI: &agentgateway.VertexAIConfig{
-								Model: stringPtr("gemini-pro"),
+								Model: new("gemini-pro"),
 							},
 						},
 					},
@@ -400,7 +400,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Bedrock: &agentgateway.BedrockConfig{
-								Model:  ptr.Of("anthropic.claude-3-haiku-20240307-v1:0"),
+								Model:  new("anthropic.claude-3-haiku-20240307-v1:0"),
 								Region: "eu-west-1",
 								Guardrail: &agentgateway.AWSGuardrailConfig{
 									GuardrailIdentifier: "test-guardrail",
@@ -437,7 +437,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							OpenAI: &agentgateway.OpenAIConfig{
-								Model: stringPtr("gpt-3.5-turbo"),
+								Model: new("gpt-3.5-turbo"),
 							},
 						},
 					},
@@ -465,12 +465,12 @@ func TestBuildAIBackend(t *testing.T) {
 										Name: "openai",
 										Policies: &agentgateway.BackendWithAI{
 											BackendSimple: agentgateway.BackendSimple{
-												Auth: &agentgateway.BackendAuth{InlineKey: stringPtr("first-token")},
+												Auth: &agentgateway.BackendAuth{InlineKey: new("first-token")},
 											},
 										},
 										LLMProvider: agentgateway.LLMProvider{
 											OpenAI: &agentgateway.OpenAIConfig{
-												Model: stringPtr("gpt-4"),
+												Model: new("gpt-4"),
 											},
 										},
 									},
@@ -478,12 +478,12 @@ func TestBuildAIBackend(t *testing.T) {
 										Name: "anthropic",
 										Policies: &agentgateway.BackendWithAI{
 											BackendSimple: agentgateway.BackendSimple{
-												Auth: &agentgateway.BackendAuth{InlineKey: stringPtr("second-token")},
+												Auth: &agentgateway.BackendAuth{InlineKey: new("second-token")},
 											},
 										},
 										LLMProvider: agentgateway.LLMProvider{
 											Anthropic: &agentgateway.AnthropicConfig{
-												Model: stringPtr("claude-3"),
+												Model: new("claude-3"),
 											},
 										},
 									},
@@ -510,12 +510,12 @@ func TestBuildAIBackend(t *testing.T) {
 										Name: "openai",
 										Policies: &agentgateway.BackendWithAI{
 											BackendSimple: agentgateway.BackendSimple{
-												Auth: &agentgateway.BackendAuth{InlineKey: stringPtr("openai-primary")},
+												Auth: &agentgateway.BackendAuth{InlineKey: new("openai-primary")},
 											},
 										},
 										LLMProvider: agentgateway.LLMProvider{
 											OpenAI: &agentgateway.OpenAIConfig{
-												Model: stringPtr("gpt-4"),
+												Model: new("gpt-4"),
 											},
 										},
 									},
@@ -523,12 +523,12 @@ func TestBuildAIBackend(t *testing.T) {
 										Name: "anthropic",
 										Policies: &agentgateway.BackendWithAI{
 											BackendSimple: agentgateway.BackendSimple{
-												Auth: &agentgateway.BackendAuth{InlineKey: stringPtr("anthropic-primary")},
+												Auth: &agentgateway.BackendAuth{InlineKey: new("anthropic-primary")},
 											},
 										},
 										LLMProvider: agentgateway.LLMProvider{
 											Anthropic: &agentgateway.AnthropicConfig{
-												Model: stringPtr("claude-3-opus"),
+												Model: new("claude-3-opus"),
 											},
 										},
 									},
@@ -540,12 +540,12 @@ func TestBuildAIBackend(t *testing.T) {
 										Name: "gemini",
 										Policies: &agentgateway.BackendWithAI{
 											BackendSimple: agentgateway.BackendSimple{
-												Auth: &agentgateway.BackendAuth{InlineKey: stringPtr("gemini-fallback")},
+												Auth: &agentgateway.BackendAuth{InlineKey: new("gemini-fallback")},
 											},
 										},
 										LLMProvider: agentgateway.LLMProvider{
 											Gemini: &agentgateway.GeminiConfig{
-												Model: stringPtr("gemini-pro"),
+												Model: new("gemini-pro"),
 											},
 										},
 									},
@@ -577,7 +577,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							OpenAI: &agentgateway.OpenAIConfig{
-								Model: stringPtr("gpt-4o-mini"),
+								Model: new("gpt-4o-mini"),
 							},
 						},
 					},
@@ -595,7 +595,7 @@ func TestBuildAIBackend(t *testing.T) {
 					Aws: &agentgateway.AwsBackend{
 						AgentCore: &agentgateway.AwsAgentCoreBackend{
 							AgentRuntimeArn: "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123",
-							Qualifier:       stringPtr("v1"),
+							Qualifier:       new("v1"),
 						},
 					},
 				},
@@ -647,8 +647,10 @@ func TestBuildAIBackend(t *testing.T) {
 }
 
 // Helper function to create a string pointer
+//
+//go:fix inline
 func stringPtr(s string) *string {
-	return &s
+	return new(s)
 }
 
 func shortStringPtr(s string) *agentgateway.ShortString {
@@ -712,7 +714,7 @@ func TestBuildStaticIr(t *testing.T) {
 				},
 				Spec: agentgateway.AgentgatewayBackendSpec{
 					Static: &agentgateway.StaticBackend{
-						UnixPath: ptr.Of("/shared/agent/agent.sock"),
+						UnixPath: new("/shared/agent/agent.sock"),
 					},
 				},
 			},
@@ -858,7 +860,7 @@ func createMockMCPServiceWithProtocol(namespace, serviceName, _ /* labels */, ap
 				{
 					Name:        "mcp",
 					Port:        8080,
-					AppProtocol: ptr.Of(appProtocol),
+					AppProtocol: new(appProtocol),
 				},
 			},
 		},
@@ -895,7 +897,7 @@ func createMockMCPServiceWithLegacyAnnotation(namespace, serviceName, labels, le
 				{
 					Name:        "mcp",
 					Port:        8080,
-					AppProtocol: ptr.Of("agentgateway.dev/mcp"),
+					AppProtocol: new("agentgateway.dev/mcp"),
 				},
 			},
 		},
@@ -933,7 +935,7 @@ func createMockMCPServiceWithBothAnnotations(namespace, serviceName, labels, new
 				{
 					Name:        "mcp",
 					Port:        8080,
-					AppProtocol: ptr.Of("agentgateway.dev/mcp"),
+					AppProtocol: new("agentgateway.dev/mcp"),
 				},
 			},
 		},
@@ -967,7 +969,7 @@ func createMockMCPService(namespace, serviceName, labels string) *corev1.Service
 				{
 					Name:        "mcp",
 					Port:        8080,
-					AppProtocol: ptr.Of("agentgateway.dev/mcp"),
+					AppProtocol: new("agentgateway.dev/mcp"),
 				},
 			},
 		},
@@ -991,7 +993,7 @@ func createMockMultipleNamespaceServices() []any {
 					{
 						Name:        "mcp",
 						Port:        8080,
-						AppProtocol: ptr.Of("agentgateway.dev/mcp"),
+						AppProtocol: new("agentgateway.dev/mcp"),
 					},
 				},
 			},
@@ -1009,7 +1011,7 @@ func createMockMultipleNamespaceServices() []any {
 					{
 						Name:        "mcp",
 						Port:        8080,
-						AppProtocol: ptr.Of("agentgateway.dev/mcp"),
+						AppProtocol: new("agentgateway.dev/mcp"),
 					},
 				},
 			},
@@ -1027,7 +1029,7 @@ func createMockMultipleNamespaceServices() []any {
 					{
 						Name:        "mcp",
 						Port:        8080,
-						AppProtocol: ptr.Of("agentgateway.dev/mcp"),
+						AppProtocol: new("agentgateway.dev/mcp"),
 					},
 				},
 			},

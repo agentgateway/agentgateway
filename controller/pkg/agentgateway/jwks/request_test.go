@@ -33,8 +33,8 @@ func TestResolveEndpoint(t *testing.T) {
 	backendRemote := remoteProvider(
 		"org-one/keys",
 		gwv1.BackendObjectReference{
-			Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-			Kind:  ptr.Of(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+			Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+			Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
 			Name:  gwv1.ObjectName("dummy-idp"),
 			Port:  ptr.Of(gwv1.PortNumber(8443)),
 		},
@@ -63,7 +63,7 @@ func TestResolveEndpoint(t *testing.T) {
 				attachedBackendPolicy(gwv1.Group(""), gwv1.Kind("Service"), "dummy-idp", &agentgateway.BackendTLS{
 					CACertificateRefs: []corev1.LocalObjectReference{{Name: "ca"}},
 					Sni:               ptr.Of(agentgateway.SNI("test.testns")),
-					AlpnProtocols:     ptr.Of([]agentgateway.TinyString{"test1", "test2"}),
+					AlpnProtocols:     new([]agentgateway.TinyString{"test1", "test2"}),
 				}),
 			},
 			remoteProvider: serviceRemote,
@@ -87,7 +87,7 @@ func TestResolveEndpoint(t *testing.T) {
 					&agentgateway.BackendTLS{
 						CACertificateRefs: []corev1.LocalObjectReference{{Name: "ca"}},
 						Sni:               ptr.Of(agentgateway.SNI("test.testns")),
-						AlpnProtocols:     ptr.Of([]agentgateway.TinyString{"test1", "test2"}),
+						AlpnProtocols:     new([]agentgateway.TinyString{"test1", "test2"}),
 					},
 				),
 			},

@@ -138,7 +138,7 @@ func PerGatewayCollection[T IntoProto[TT], TT proto.Message](collection krt.Coll
 		nc := krt.NewCollection(collection, func(ctx krt.HandlerContext, i T) *DiscoveryResource {
 			var forGateway *types.NamespacedName
 			if extract != nil {
-				forGateway = ptr.Of(extract(i))
+				forGateway = new(extract(i))
 			}
 			return &DiscoveryResource{
 				Resource: &discovery.Resource{

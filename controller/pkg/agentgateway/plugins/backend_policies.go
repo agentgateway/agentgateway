@@ -86,7 +86,7 @@ func TranslateInlineBackendPolicy(
 	}
 	res, err := translateBackendPolicyToAgw(ctx, dummy)
 	return slices.MapFilter(res, func(e *api.Policy) **api.BackendPolicySpec {
-		return ptr.Of(e.GetBackend())
+		return new(e.GetBackend())
 	}), err
 }
 
@@ -651,9 +651,9 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 			CacheMessages: aiSpec.PromptCaching.CacheMessages,
 			CacheTools:    aiSpec.PromptCaching.CacheTools,
 		}
-		translatedAIPolicy.PromptCaching.MinTokens = ptr.Of(uint32(aiSpec.PromptCaching.MinTokens)) //nolint:gosec // G115: MinTokens is validated by kubebuilder to be >= 0
+		translatedAIPolicy.PromptCaching.MinTokens = new(uint32(aiSpec.PromptCaching.MinTokens)) //nolint:gosec // G115: MinTokens is validated by kubebuilder to be >= 0
 		if aiSpec.PromptCaching.CacheMessageOffset > 0 {
-			translatedAIPolicy.PromptCaching.CacheMessageOffset = ptr.Of(uint32(aiSpec.PromptCaching.CacheMessageOffset)) //nolint:gosec // G115: CacheMessageOffset is validated by kubebuilder to be >= 0
+			translatedAIPolicy.PromptCaching.CacheMessageOffset = new(uint32(aiSpec.PromptCaching.CacheMessageOffset)) //nolint:gosec // G115: CacheMessageOffset is validated by kubebuilder to be >= 0
 		}
 	}
 
@@ -834,7 +834,7 @@ func buildAwsAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.AwsAuth, s
 		// Extract session token (optional)
 		if secret != nil {
 			if value, exists := kubeutils.GetSecretValue(secret, wellknown.SessionToken); exists {
-				sessionToken = ptr.Of(value)
+				sessionToken = new(value)
 			}
 		}
 	}

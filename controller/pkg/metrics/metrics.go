@@ -336,7 +336,7 @@ func SetRegistry(useBuiltinRegistry bool, r RegistererGatherer) {
 
 // isNil checks if the provided interface contains nil or a nil value.
 func isNil(arg any) bool {
-	if v := reflect.ValueOf(arg); !v.IsValid() || ((v.Kind() == reflect.Ptr ||
+	if v := reflect.ValueOf(arg); !v.IsValid() || ((v.Kind() == reflect.Pointer ||
 		v.Kind() == reflect.Interface ||
 		v.Kind() == reflect.Slice ||
 		v.Kind() == reflect.Map ||
