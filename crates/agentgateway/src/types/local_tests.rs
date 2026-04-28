@@ -196,6 +196,20 @@ mcp:
 }
 
 #[tokio::test]
+async fn test_local_mcp_target_name_wiring_rejects_underscore() {
+	let yaml = r#"
+mcp:
+  targets:
+  - name: "bad_name"
+    stdio:
+      cmd: echo
+"#;
+	normalize_test_yaml(yaml)
+		.await
+		.expect_err("MCP target name containing '_' should be rejected");
+}
+
+#[tokio::test]
 async fn test_aws_config() {
 	test_config_parsing("aws").await;
 }
