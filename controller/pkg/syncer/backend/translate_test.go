@@ -646,13 +646,6 @@ func TestBuildAIBackend(t *testing.T) {
 	}
 }
 
-// Helper function to create a string pointer
-//
-//go:fix inline
-func stringPtr(s string) *string {
-	return new(s)
-}
-
 func shortStringPtr(s string) *agentgateway.ShortString {
 	v := agentgateway.ShortString(s)
 	return &v

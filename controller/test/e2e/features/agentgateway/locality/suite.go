@@ -12,7 +12,6 @@ import (
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
-	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/test/util/retry"
 	"istio.io/istio/pkg/util/sets"
 	corev1 "k8s.io/api/core/v1"
@@ -114,13 +113,13 @@ func (s *testingSuite) resetService() {
 
 func (s *testingSuite) setTrafficDistribution(trafficDistribution string) {
 	s.updateService(func(svc *corev1.Service) {
-		svc.Spec.TrafficDistribution = ptr.Of(trafficDistribution)
+		svc.Spec.TrafficDistribution = new(trafficDistribution)
 	})
 }
 
 func (s *testingSuite) setInternalTrafficPolicy(policy corev1.ServiceInternalTrafficPolicy) {
 	s.updateService(func(svc *corev1.Service) {
-		svc.Spec.InternalTrafficPolicy = ptr.Of(policy)
+		svc.Spec.InternalTrafficPolicy = new(policy)
 	})
 }
 
