@@ -166,9 +166,9 @@ pub(crate) use pol_result_timed;
 #[allow(non_snake_case)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
-	// Relative time from start, in ns
-	eventStart: Option<u64>,
-	eventEnd: u64,
+	// Relative time from start, in us
+	event_start: Option<u64>,
+	event_end: u64,
 	severity: Severity,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	scope: Vec<String>,
@@ -430,9 +430,10 @@ impl DebugTracer {
 		severity: Severity,
 		msg: MessageType,
 	) {
+		// If the client is disconnected or full then we just drop the events.
 		let _ = self.sender.try_send(Message {
-			eventStart: start.map(|s| u64::try_from((s - self.start).as_micros()).unwrap_or(u64::MAX)),
-			eventEnd: u64::try_from((end - self.start).as_micros()).unwrap_or(u64::MAX),
+			event_start: start.map(|s| u64::try_from((s - self.start).as_micros()).unwrap_or(u64::MAX)),
+			event_end: u64::try_from((end - self.start).as_micros()).unwrap_or(u64::MAX),
 			severity,
 			scope: self.current_scope(),
 			message: msg,
@@ -540,14 +541,7 @@ impl DebugTracer {
 		status: Option<u16>,
 		error: Option<String>,
 	) {
-		self.send_with_timings(
-			start,
-			end,
-			MessageType::BackendCallResult {
-				status,
-				error,
-			},
-		)
+		self.send_with_timings(start, end, MessageType::BackendCallResult { status, error })
 	}
 }
 

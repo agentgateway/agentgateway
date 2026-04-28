@@ -201,7 +201,12 @@ pub struct DirectResponse {
 
 impl DirectResponse {
 	pub fn apply(&self) -> Result<Response, Error> {
-		pol_result!(DIRECT_RESPONSE_TRACE_KIND, Severity::Info, Apply, "applied direct response");
+		pol_result!(
+			DIRECT_RESPONSE_TRACE_KIND,
+			Severity::Info,
+			Apply,
+			"applied direct response"
+		);
 		response::Builder::new()
 			.status(self.status)
 			.body(http::Body::from(self.body.clone()))

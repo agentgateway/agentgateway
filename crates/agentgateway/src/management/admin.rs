@@ -276,8 +276,13 @@ async fn handle_server_shutdown(
 pub async fn handle_debug_trace() -> Response {
 	let rx = crate::proxy::dtrace::track();
 	let sse_stream = ReceiverStream::new(rx).map(|msg| {
-		let payload = serde_json::to_string(&msg)
-			.unwrap_or_else(|e| format!("{{\"type\":\"serialization_error\",\"error\":\"{e}\"}}"));
+		let payload = serde_json::to_string(&msg).unwrap_or_else(|e| {
+			serde_json::json!({
+				"type": "serialization_error",
+				"error": e.to_string(),
+			})
+			.to_string()
+		});
 		Ok::<Bytes, Infallible>(Bytes::from(format!("data: {payload}\n\n")))
 	});
 	::http::Response::builder()

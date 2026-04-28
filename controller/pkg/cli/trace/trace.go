@@ -476,8 +476,8 @@ func consumeTrace(body io.Reader, onEvent func(raw string, envelope traceEnvelop
 			}
 			continue
 		}
-		if strings.HasPrefix(line, "data: ") {
-			dataLines = append(dataLines, strings.TrimPrefix(line, "data: "))
+		if after, ok := strings.CutPrefix(line, "data: "); ok {
+			dataLines = append(dataLines, after)
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -728,17 +728,6 @@ func compactJSON(value any) string {
 	return string(raw)
 }
 
-func prettyJSON(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
-	}
-	var out bytes.Buffer
-	if err := json.Indent(&out, raw, "", "  "); err != nil {
-		return string(raw)
-	}
-	return out.String()
-}
-
 func diffSnapshots(previous, current json.RawMessage) string {
 	if len(current) == 0 {
 		return "No snapshot available yet."
@@ -902,6 +891,7 @@ func eventYAML(raw string) string {
 	return strings.TrimSpace(string(rendered))
 }
 
+// nolint: unparam
 func truncate(s string, limit int) string {
 	if len(s) <= limit {
 		return s
@@ -1096,6 +1086,7 @@ func traceRowDuration(row *traceRow) string {
 	if row == nil || row.Envelope.EventStart == nil || row.Envelope.EventEnd < *row.Envelope.EventStart {
 		return ""
 	}
+	// nolint: gosec // not security sensitive cast
 	return (time.Duration(row.Envelope.EventEnd-*row.Envelope.EventStart) * time.Microsecond).String()
 }
 
@@ -1149,15 +1140,4 @@ func (m *traceModel) renderDetails(tableRow int) {
 		m.details.SetText(highlightYAML(snapshotYAML(row.CurrentSnapshot)))
 		m.details.ScrollToBeginning()
 	}
-}
-
-func formatMicros(us uint64) string {
-	return fmt.Sprintf("%.3f", float64(us)/1000.0)
-}
-
-func formatDuration(start *uint64, end uint64) string {
-	if start == nil || end < *start {
-		return ""
-	}
-	return fmt.Sprintf("%.3f", float64(end-*start)/1000.0)
 }
