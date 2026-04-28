@@ -80,7 +80,7 @@ export function getPolicyDescription(key: string): string {
  * Get default value for a policy type.
  * Provides sensible defaults with required fields populated.
  */
-export function getDefaultPolicyValue(policyType: string): Record<string, unknown> {
+export function getDefaultPolicyValue(policyType: string): Record<string, unknown> | unknown[] {
   switch (policyType) {
     // Authorization policies require rules array
     case "authorization":
@@ -119,45 +119,32 @@ export function getDefaultPolicyValue(policyType: string): Record<string, unknow
     // ExtAuthz1 = "invalid" | { service: { name, port } } | { host: string } | { backend: string }
     case "extAuthz":
       return {
-        host: "",
+        host: "localhost:9001",
       };
 
     // ExtProc = { policies?, failureMode?, ... } & ExtProc1
     // ExtProc1 = "invalid" | { service: { name, port } } | { host: string } | { backend: string }
     case "extProc":
       return {
-        host: "",
+        host: "localhost:9001",
       };
 
     // Rate limiting
     case "localRateLimit":
-      return {
-        spec: {
-          fillInterval: "1s",
-          tokensPerFill: 100,
-        },
-      };
+      return [{ fillInterval: "1s", tokensPerFill: 100, maxTokens: 100 }] as any;
 
     case "remoteRateLimit":
-      return {
-        host: "",
-        spec: {
-          fillInterval: "1s",
-          tokensPerFill: 100,
-        },
-      };
+      return { domain: "", host: "localhost:9001", descriptors: []};
 
     // Backend TLS
     case "backendTLS":
-      return {
-        hostname: "",
-      };
+      return {};
 
     // Backend tunnel
     case "backendTunnel":
       return {
         proxy: {
-          host: "",
+          host: "localhost:9001",
         },
       };
 
@@ -166,6 +153,28 @@ export function getDefaultPolicyValue(policyType: string): Record<string, unknow
       return {
         passthrough: {},
       };
+
+    // Request mirror
+    case "requestMirror": 
+      return { 
+        backend: { 
+          host: "localhost:8080",
+        },
+        percentage: 100,
+      };
+ 
+    // Direct response
+    case "directResponse":
+      return { 
+        status: 200,
+        body: "",
+      };
+
+    // Retry
+    case "retry": 
+      return { 
+        codes: [503],
+      }
     
     // Most other policies can start empty or with minimal structure
     default:

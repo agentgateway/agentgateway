@@ -50,7 +50,6 @@ export const uiSchema: UiSchema = {
 export const defaultValues: Partial<LocalBind> = {
   port: 8080,
   tunnelProtocol: "direct",
-  listeners: [],
 };
 
 /**

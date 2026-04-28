@@ -190,6 +190,9 @@ const TreeCard = styled(Card)`
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 24px;
+    height: 24px;
+    align-self: center;
     color: var(--color-text-tertiary);
     transition: all 0.2s ease;
 
@@ -570,6 +573,10 @@ function buildListenerTitle(
       label: "Add Policy",
       icon: <PlusOutlined />,
       children: listenerPolicyMenuItems as MenuProps["items"],
+      onTitleClick: ({ domEvent }) => {
+        domEvent.preventDefault();
+        domEvent.stopPropagation();
+      },
     },
     { type: "divider" },
     {
@@ -862,6 +869,10 @@ function buildBackendTitle(
       label: "Add Policy",
       icon: <PlusOutlined />,
       children: backendPolicyMenuItems as MenuProps["items"],
+      onTitleClick: ({ domEvent }) => {
+        domEvent.preventDefault();
+        domEvent.stopPropagation();
+      },
     },
     { type: "divider" },
     {
@@ -1069,6 +1080,10 @@ function buildRouteTitle(
       label: "Add Policy",
       icon: <PlusOutlined />,
       children: routePolicyMenuItems,
+      onTitleClick: ({ domEvent }) => {
+        domEvent.preventDefault();
+        domEvent.stopPropagation();
+      },
     },
     { type: "divider" },
     {
@@ -1311,6 +1326,10 @@ function buildLLMItemTitle(
       label: "Add Policy",
       icon: <PlusOutlined />,
       children: policyMenuItems,
+      onTitleClick: ({ domEvent }) => {
+        domEvent.preventDefault();
+        domEvent.stopPropagation();
+      },
     },
     { type: "divider" },
     {
@@ -1403,6 +1422,10 @@ function buildMCPTargetTitle(
       icon: <PlusOutlined />,
       disabled: policySubmenu.length === 0,
       children: policySubmenu.length > 0 ? policySubmenu : undefined,
+      onTitleClick: ({ domEvent }) => {
+        domEvent.preventDefault();
+        domEvent.stopPropagation();
+      },
     },
     { type: "divider" },
     {
@@ -1491,6 +1514,10 @@ function buildMCPItemTitle(
       label: "Add Policy",
       icon: <PlusOutlined />,
       children: policyMenuItems,
+      onTitleClick: ({ domEvent }) => {
+        domEvent.preventDefault();
+        domEvent.stopPropagation();
+      },
     },
     { type: "divider" },
     {
@@ -2404,7 +2431,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
             : {};
 
         // Create a minimal policy config for the specific type
-        const newPolicyConfig = {};
+        const newPolicyConfig = getDefaultPolicyValue(policyType);
 
         // Update the route with the new policy type
         const updatedRoute = {
@@ -2564,7 +2591,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
   const handleAddListenerPolicy = useCallback(
     async (port: number, listenerIndex: number, policyType: string) => {
       try { 
-        await api.updateListenerPolicy(port, listenerIndex, policyType, getDefaultPolicyValue(policyType));
+        await api.updateListenerPolicy(port, listenerIndex, policyType, getDefaultPolicyValue(policyType) as Record<string, unknown>);
         await mutate();
         ensureExpanded(`bind-${port}`, `listener-${port}-${listenerIndex}`);
         navigate(`${basePath}/bind/${port}/listener/${listenerIndex}/policy/${policyType}?edit=true&creating=true`);
@@ -2586,7 +2613,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       policyType: string,
     ) => {
       try { 
-        await api.updateBackendPolicy(port, listenerIndex, routeIndex, backendIndex, isTcp, policyType, getDefaultPolicyValue(policyType));
+        await api.updateBackendPolicy(port, listenerIndex, routeIndex, backendIndex, isTcp, policyType, getDefaultPolicyValue(policyType) as Record<string, unknown>);
         await mutate();
         ensureExpanded(`bind-${port}`, `listener-${port}-${listenerIndex}`);
         navigate(`${basePath}/bind/${port}/listener/${listenerIndex}/${isTcp ? "tcproute" : "route"}/${routeIndex}/backend/${backendIndex}/policy/${policyType}?edit=true&creating=true`);
@@ -2718,7 +2745,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
   const handleAddMCPTargetPolicy = useCallback(
     async (targetIndex: number, policyType: string) => {
       try {
-        await api.updateMCPTargetPolicy(targetIndex, policyType, getDefaultPolicyValue(policyType));
+        await api.updateMCPTargetPolicy(targetIndex, policyType, getDefaultPolicyValue(policyType) as Record<string, unknown>);
         toast.success(`${getPolicyLabel(policyType)} policy added`);
         ensureExpanded("mcp", `mcp-target-${targetIndex}`);
         await mutate();
@@ -2972,6 +2999,11 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       ensureExpanded(...ancestors);
     }
   }, [selectedKeys, ensureExpanded]);
+
+  // re-expand all nodes when treeData changes, ie after a mutation
+  useEffect(() => { 
+    setExpandedKeys(getAllKeys(treeData));
+  }, [treeData, getAllKeys]);
 
   const handleExpandAll = useCallback(() => {
     setExpandedKeys(getAllKeys(treeData));

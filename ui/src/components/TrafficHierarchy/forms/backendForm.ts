@@ -7,7 +7,7 @@ import type { LocalRouteBackend } from "../../../config";
  */
 export const schema: RJSFSchema = {
   type: "object",
-  additionalProperties: true,
+  additionalProperties: false,
   required: ["backendType"],
   properties: {
     backendType: {
@@ -23,11 +23,6 @@ export const schema: RJSFSchema = {
       minimum: 0,
       default: 1,
       description: "Load balancing weight (default: 1)",
-    },
-    policies: {
-      type: "object",
-      description: "Optional backend-level policies",
-      additionalProperties: true,
     },
   },
   dependencies: {
@@ -153,7 +148,7 @@ export const schema: RJSFSchema = {
               type: "object",
               title: "Dynamic Routing Configuration",
               description: "Backend determined dynamically at runtime",
-              additionalProperties: true,
+              additionalProperties: false,
             },
           },
           required: ["dynamic"],
@@ -173,7 +168,128 @@ export const schema: RJSFSchema = {
                   description: "List of MCP server targets",
                   items: {
                     type: "object",
-                    additionalProperties: true,
+                    required: ["name", "connectionType"],
+                    properties: {
+                      name: {
+                        type: "string",
+                        title: "Target Name",
+                        description: "Unique name for this MCP target",
+                      },
+                      connectionType: {
+                        type: "string",
+                        title: "Connection Type",
+                        enum: ["sse", "mcp", "stdio", "openapi"],
+                        default: "sse",
+                        description: "Type of connection to the MCP server",
+                      },
+                    },
+                    dependencies: {
+                      connectionType: {
+                        oneOf: [
+                          {
+                            type: "object",
+                            additionalProperties: false,
+                            properties: { 
+                              name: { 
+                                type: "string",
+                                title: "Target Name",
+                                description: "Unique name for this MCP target",
+                              },
+                              connectionType: { const: "sse" },
+                              sse: { 
+                                type: "object",
+                                title: "SSE Connection Settings",
+                                required: ["host"],
+                                properties: { 
+                                  host: { type: "string", title: "Host" },
+                                  port: { type: "integer", title: "Port", minimum: 1, maximum: 65535 },
+                                  path: { type: "string", title: "Path", default: "/sse" },
+                                }
+                              }
+                            },
+                            required: ["name", "connectionType", "sse"],
+                          },
+                          {
+                            type: "object",
+                            additionalProperties: false,
+                            properties: {
+                              name: {
+                                type: "string",
+                                title: "Target Name",
+                                description: "Unique name for this MCP target",
+                              },
+                              connectionType: { const: "mcp" },
+                              mcp: {
+                                type: "object",
+                                title: "MCP Connection Settings",
+                                required: ["host"],
+                                properties: {
+                                  host: { type: "string", title: "Host" },
+                                  port: { type: "integer", title: "Port", minimum: 1, maximum: 65535 },
+                                  path: { type: "string", title: "Path" },
+                                },
+                              },
+                            },
+                            required: ["name", "connectionType", "mcp"],
+                          },
+                          {
+                            type: "object",
+                            additionalProperties: false,
+                            properties: {
+                              name: {
+                                type: "string",
+                                title: "Target Name",
+                                description: "Unique name for this MCP target",
+                              },
+                              connectionType: { const: "stdio" },
+                              stdio: {
+                                type: "object",
+                                title: "STDIO Connection Settings",
+                                required: ["cmd"],
+                                properties: {
+                                  cmd: { type: "string", title: "Command" },
+                                  args: {
+                                    type: "array",
+                                    title: "Arguments",
+                                    items: { type: "string" },
+                                  },
+                                  env: {
+                                    type: "object",
+                                    title: "Environment Variables",
+                                    additionalProperties: { type: "string" },
+                                  },
+                                },
+                              },
+                            },
+                            required: ["name", "connectionType", "stdio"],
+                          },
+                          {
+                            type: "object",
+                            additionalProperties: false,
+                            properties: {
+                              name: {
+                                type: "string",
+                                title: "Target Name",
+                                description: "Unique name for this MCP target",
+                              },
+                              connectionType: { const: "openapi" },
+                              openapi: {
+                                type: "object",
+                                title: "OpenAPI Connection Settings",
+                                required: ["host", "schema"],
+                                properties: {
+                                  host: { type: "string", title: "Host" },
+                                  port: { type: "integer", title: "Port", minimum: 1, maximum: 65535 },
+                                  path: { type: "string", title: "Path" },
+                                  schema: { type: "string", title: "OpenAPI Schema" },
+                                },
+                              },
+                            },
+                            required: ["name", "connectionType", "openapi"],
+                          },
+                        ],
+                      },
+                    },
                   },
                 },
                 statefulMode: {
@@ -245,20 +361,17 @@ export const schema: RJSFSchema = {
 export const uiSchema: UiSchema = {
   "ui:title": "",
   backendType: {
-    "ui:widget": "select",
-    "ui:help": "Service: Kubernetes service | Host: Direct hostname/IP | Dynamic: Runtime-determined | MCP: Model Context Protocol | AI: LLM provider",
+    "ui:widget": "hidden",
   },
   weight: {
     "ui:widget": "updown",
     "ui:help": "Higher weights receive more traffic. Default is 1.",
   },
-  policies: {
-    "ui:title": "",
-    "ui:help": "Optional: Backend-level policies for this destination",
-  },
   service: {
+    "ui:title": "",
     name: {
       "ui:help": "Namespaced service identifier",
+      "ui:title": "",
       namespace: {
         "ui:placeholder": "default",
         "ui:help": "Kubernetes namespace",
@@ -272,17 +385,59 @@ export const uiSchema: UiSchema = {
       "ui:placeholder": "8080",
     },
   },
+  dynamic: { 
+    "ui:title": "",
+  },
   host: {
     "ui:placeholder": "backend.example.com:8080 or 192.168.1.100:8080",
     "ui:help": "Hostname or IP address with optional port",
   },
-  mcp: { 
-    prefixMode: { 
-      "ui-widget": "select",
+  mcp: {
+    "ui:title": "",
+    prefixMode: {
+      "ui:widget": "select", // <- fix typo
       "ui:placeholder": "none",
-    }
+    },
+    targets: {
+      items: {
+        name: { "ui:placeholder": "e.g., my-mcp-server" },
+        connectionType: {
+          "ui:widget": "select",
+          "ui:help": "SSE and MCP are network-based, STDIO runs a local process",
+        },
+        sse: {
+          "ui:title": "",
+          host: { "ui:placeholder": "localhost" },
+          port: { "ui:placeholder": "8080" },
+          path: { "ui:placeholder": "/sse" },
+        },
+        mcp: {
+          "ui:title": "",
+          host: { "ui:placeholder": "localhost" },
+          port: { "ui:placeholder": "8080" },
+        },
+        stdio: {
+          "ui:title": "",
+          cmd: { "ui:placeholder": "/usr/local/bin/my-mcp-server" },
+          env: {
+            "ui:field": "keyValueMap",
+            "ui:keyPlaceholder": "ENV_VAR",
+            "ui:valuePlaceholder": "value",
+          },
+        },
+        openapi: {
+          "ui:title": "",
+          host: { "ui:placeholder": "api.example.com" },
+          schema: { "ui:placeholder": "/path/to/openapi.json" },
+        },
+      },
+    },
+  },
+  ai: { 
+    "ui:title": "",
   },
   tls: {
+    "ui:title": "",
     mode: {
       "ui:widget": "select",
     },
@@ -323,7 +478,7 @@ export function getDefaultBackendValue(backendType: string): Record<string, unkn
         weight: 1,
       };
     case "ai":
-      return { backendType: "ai", ai: { name: "default", provider: { openAI: {} } }, weight: 1 };
+      return { backendType: "ai", ai: { name: "default", provider: "openAI" }, weight: 1 };
     default:
       return { backendType: "service", ...defaultValues };
   }
@@ -372,8 +527,49 @@ export function transformForForm(data: unknown): unknown {
     result.backendType = "dynamic";
   } else if ("mcp" in backendData) {
     result.backendType = "mcp";
+
+    const mcpObj = backendData.mcp as Record<string, unknown> | undefined;
+    const targets = Array.isArray(mcpObj?.targets) ? mcpObj?.targets : [];
+    if (mcpObj && Array.isArray(targets)) {
+      result.mcp = {
+        ...mcpObj,
+        targets: targets.map((t) => {
+          if (!t || typeof t !== "object") return t;
+          const target = { ...(t as Record<string, unknown>) };
+          if ("sse" in target) target.connectionType = "sse";
+          else if ("mcp" in target) target.connectionType = "mcp";
+          else if ("stdio" in target) target.connectionType = "stdio";
+          else if ("openapi" in target) target.connectionType = "openapi";
+          else target.connectionType = "sse";
+          return target;
+        }),
+      };
+    }
   } else if ("ai" in backendData) {
     result.backendType = "ai";
+
+    // transform provider object to string value for form
+    const aiObj = backendData.ai as Record<string, unknown> | undefined;
+    if (aiObj?.provider && typeof aiObj.provider === "object") {
+      const providerObj = aiObj.provider as Record<string, unknown>;
+      const providerKey = Object.keys(providerObj)[0];
+      result.ai = {
+        ...aiObj,
+        provider: providerKey || "openAI",
+      };
+    }
+  }
+
+  const backendTls = (backendData as any)?.policies?.backendTLS;
+  if (backendTls && typeof backendTls === "object") {
+    const b = backendTls as Record<string, unknown>;
+    result.tls = {
+      mode: b.cert || b.key ? "MUTUAL" : "SIMPLE",
+      caCertificates: b.root ?? "",
+      clientCertificate: b.cert ?? "",
+      privateKey: b.key ?? "",
+      sni: b.hostname ?? "",
+    };
   }
 
   return result;
@@ -409,15 +605,70 @@ export function transformBeforeSubmit(data: unknown): unknown {
     result.service = service;
   } else if (backendType === "host" && host !== undefined && host !== null) {
     result.host = host;
-    if (tls !== undefined && tls !== null) {
-      result.tls = tls;
+    const tlsObj = tls as Record<string, unknown> | undefined;
+    const mode = typeof tlsObj?.mode === "string" ? tlsObj.mode : "DISABLED";
+    if (mode !== "DISABLED") {
+      const existingPolicies =
+        policies && typeof policies === "object" ? { ...(policies as Record<string, unknown>) } : {};
+      existingPolicies.backendTLS = {
+        root: tlsObj?.caCertificates || undefined,
+        cert: tlsObj?.clientCertificate || undefined,
+        key: tlsObj?.privateKey || undefined,
+        hostname: tlsObj?.sni || undefined,
+      };
+      result.policies = existingPolicies;
+    } else if (policies !== undefined && policies !== null) {
+      result.policies = policies;
     }
   } else if (backendType === "dynamic" && dynamic !== undefined && dynamic !== null) {
     result.dynamic = dynamic;
   } else if (backendType === "mcp" && mcp !== undefined && mcp !== null) {
-    result.mcp = mcp;
+    const mcpObj = mcp as Record<string, unknown>;
+    const targets = Array.isArray(mcpObj.targets) ? mcpObj.targets : [];
+    result.mcp = {
+      ...mcpObj,
+      targets: targets.map((t) => {
+        if (!t || typeof t !== "object") return t;
+        const { connectionType, sse, mcp, stdio, openapi, ...rest } = t as Record<string, unknown>;
+        const clean: Record<string, unknown> = { ...rest };
+        if (connectionType === "sse" && sse) clean.sse = sse;
+        else if (connectionType === "mcp" && mcp) clean.mcp = mcp;
+        else if (connectionType === "stdio" && stdio) clean.stdio = stdio;
+        else if (connectionType === "openapi" && openapi) clean.openapi = openapi;
+        return clean;
+      }),
+    };
   } else if (backendType === "ai" && ai !== undefined && ai !== null) {
-    result.ai = ai;
+    const aiObj = ai as Record<string, unknown>;
+    const validProviders = new Set([
+      "openAI",
+      "gemini",
+      "vertex",
+      "anthropic",
+      "bedrock",
+      "azureOpenAI",
+    ]);
+    const rawProvider = aiObj.provider;
+    let normalizedProvider: Record<string, unknown>;
+    if (typeof rawProvider === "string" && validProviders.has(rawProvider)) {
+      normalizedProvider = { [rawProvider]: {} };
+    } else if (
+      rawProvider &&
+      typeof rawProvider === "object" &&
+      !Array.isArray(rawProvider)
+    ) {
+      const providerObj = rawProvider as Record<string, unknown>;
+      const firstKey = Object.keys(providerObj)[0];
+      normalizedProvider = firstKey && validProviders.has(firstKey)
+        ? { [firstKey]: providerObj[firstKey] ?? {} }
+        : { openAI: {} };
+    } else {
+      normalizedProvider = { openAI: {} };
+    }
+    result.ai = {
+      ...aiObj,
+      provider: normalizedProvider,
+    };
   }
 
   // Add optional common fields

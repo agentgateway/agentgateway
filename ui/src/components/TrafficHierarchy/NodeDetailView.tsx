@@ -1,8 +1,7 @@
-import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import { DeleteOutlined } from "@ant-design/icons";
 import styled from "@emotion/styled";
 import Form from "@rjsf/antd";
-import type { MenuProps } from "antd";
-import { Breadcrumb, Button, Dropdown, Popconfirm, Space, Spin } from "antd";
+import { Breadcrumb, Button, Popconfirm, Space, Spin } from "antd";
 import { Edit2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
@@ -35,7 +34,7 @@ import type {
   RouteNode,
   useTrafficHierarchy,
 } from "./hooks/useTrafficHierarchy";
-import { getPolicyLabel } from "./policyTypes";
+import { getDefaultPolicyValue, getPolicyLabel } from "./policyTypes";
 import type { UrlParams } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -801,7 +800,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           route.policies && typeof route.policies === "object"
             ? route.policies
             : {};
-        const newPolicyConfig = {};
+        const newPolicyConfig = getDefaultPolicyValue(policyType);
 
         const updatedRoute = {
           ...route,
@@ -841,7 +840,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     // Initialize formData when selection changes
     if (sel) {
       if (sel.type === "bind") {
-        setFormData(sel.node.bind as unknown as Record<string, unknown>);
+        const { listeners: _listeners, ...bindData } = sel.node.bind as unknown as Record<string, unknown>;
+        setFormData(bindData);
       } else if (sel.type === "listener") {
         // Filter out routes and tcpRoutes - they're managed separately via the tree
         const { routes: _routes, tcpRoutes: _tcpRoutes, ...listenerData } = sel.node
@@ -853,7 +853,26 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           string,
           unknown
         >;
-        setFormData(routeData);
+        
+        const normalizedMatches = Array.isArray(routeData.matches) ? routeData.matches.map((match) => {
+          if (!match || typeof match !== "object") return match;
+          const m = match as Record<string, unknown>;
+          const p = m.path;
+          if (!p || typeof p !== "object") return match;
+          const pathObj = p as Record<string, unknown>;
+          if ("exact" in pathObj) {
+            return { ...m, path: { pathType: "exact", ...pathObj } };
+          }
+          if ("pathPrefix" in pathObj) {
+            return { ...m, path: { pathType: "pathPrefix", ...pathObj } };
+          }
+          if ("regex" in pathObj) {
+            return { ...m, path: { pathType: "regex", ...pathObj } };
+          }
+          return match;
+        })
+        : routeData.matches;
+  setFormData({ ...routeData, matches: normalizedMatches });
       } else if (sel.type === "backend") {
         // Transform backend data from API format to form format
         const form = forms.backend as any;
@@ -863,13 +882,34 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           : backendData;
         setFormData(transformedData as Record<string, unknown>);
       } else if (sel.type === "policy") {
-        setFormData(sel.node.policy as Record<string, unknown>);
-      } else if (sel.type === "listenerPolicy") { 
+        const raw = sel.node.policy as Record<string, unknown>;
+        const formConfig = getFormForPolicy(sel.node.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(raw) : raw;
+        setFormData(transformed as Record<string, unknown>);
+      } else if (sel.type === "listenerPolicy") {
         const raw = sel.listener.listener.policies as Record<string, unknown> ?? {};
-        setFormData((raw[sel.policyType] ?? {}) as Record<string, unknown>);
+        const policyData = raw[sel.policyType] ?? {};
+        const formConfig = getFormForPolicy(sel.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(policyData) : policyData;
+        setFormData(transformed as Record<string, unknown>);
       } else if (sel.type === "backendPolicy") {
         const raw = (sel.backend.backend as any)?.policies ?? {};
-        setFormData((raw[sel.policyType] ?? {}) as Record<string, unknown>);
+        const policyData = raw[sel.policyType] ?? {};
+        const formConfig = getFormForPolicy(sel.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(policyData) : policyData;
+        setFormData(transformed as Record<string, unknown>);
+      } else if (sel.type === "llmPolicy" || sel.type === "mcpPolicy") {
+        const policyData = sel.node.policy as Record<string, unknown>;
+        const formConfig = getFormForPolicy(sel.node.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(policyData) : policyData;
+        setFormData(transformed as Record<string, unknown>);
+      } else if (sel.type === "mcpTarget") {
+        const form = forms.mcpTarget as any;
+        const targetData = sel.node.target as Record<string, unknown>;
+        const transformedData = form?.transformForForm ? form.transformForForm(targetData) : targetData;
+        setFormData(transformedData as Record<string, unknown>);
+      } else if (sel.type === "mcpTargetPolicy") {
+        setFormData(sel.node.policy as Record<string, unknown>)
       } else if (sel.type === "model") {
         setFormData(sel.node.model as unknown as Record<string, unknown>);
       } else if (
@@ -902,7 +942,27 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           string,
           unknown
         >;
-        setFormData(routeData);
+        
+        const normalizedMatches = Array.isArray(routeData.matches)
+          ? routeData.matches.map((match) => {
+              if (!match || typeof match !== "object") return match;
+              const m = match as Record<string, unknown>;
+              const p = m.path;
+              if (!p || typeof p !== "object") return match;
+              const pathObj = p as Record<string, unknown>;
+              if ("exact" in pathObj) {
+                return { ...m, path: { pathType: "exact", ...pathObj } };
+              }
+              if ("pathPrefix" in pathObj) {
+                return { ...m, path: { pathType: "pathPrefix", ...pathObj } };
+              }
+              if ("regex" in pathObj) {
+                return { ...m, path: { pathType: "regex", ...pathObj } };
+              }
+              return match;
+            })
+          : routeData.matches;
+  setFormData({ ...routeData, matches: normalizedMatches });
       } else if (selected.type === "backend") {
         // Transform backend data from API format to form format
         const form = forms.backend as any;
@@ -912,15 +972,27 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           : backendData;
         setFormData(transformedData as Record<string, unknown>);
       } else if (selected.type === "policy") {
-        setFormData(selected.node.policy as Record<string, unknown>);
-      } else if (selected.type === "listenerPolicy") { 
+        const raw = selected.node.policy as Record<string, unknown>;
+        const formConfig = getFormForPolicy(selected.node.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(raw) : raw;
+        setFormData(transformed as Record<string, unknown>);
+      } else if (selected.type === "listenerPolicy") {
         const raw = selected.listener.listener.policies as Record<string, unknown> ?? {};
-        setFormData((raw[selected.policyType] ?? {}) as Record<string, unknown>);
+        const policyData = raw[selected.policyType] ?? {};
+        const formConfig = getFormForPolicy(selected.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(policyData) : policyData;
+        setFormData(transformed as Record<string, unknown>);
       } else if (selected.type === "backendPolicy") {
         const raw = (selected.backend.backend as any)?.policies ?? {};
-        setFormData((raw[selected.policyType] ?? {}) as Record<string, unknown>);
+        const policyData = raw[selected.policyType] ?? {};
+        const formConfig = getFormForPolicy(selected.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(policyData) : policyData;
+        setFormData(transformed as Record<string, unknown>);
       } else if (selected.type === "llmPolicy" || selected.type === "mcpPolicy") {
-        setFormData(selected.node.policy as Record<string, unknown>);
+        const policyData = selected.node.policy as Record<string, unknown>;
+        const formConfig = getFormForPolicy(selected.node.policyType) as any;
+        const transformed = formConfig?.transformForForm ? formConfig.transformForForm(policyData) : policyData;
+        setFormData(transformed as Record<string, unknown>);
       } else if (selected.type === "model") {
         setFormData(selected.node.model as unknown as Record<string, unknown>);
       } else if (selected.type === "mcpTarget") {
@@ -1004,7 +1076,17 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         if (form?.transformBeforeSubmit) {
           dataToSave = form.transformBeforeSubmit(fd) as Record<string, unknown>;
         }
-        await api.updateMCPTargetByIndex(selected.node.targetIndex, dataToSave);
+        
+        // Merge back policies filtered out by form
+        const targetWithPolicies = {
+          ...dataToSave,
+          policies: selected.node.policies.reduce((acc, p) => {
+            acc[p.policyType] = p.policy;
+            return acc;
+          }, {} as Record<string, unknown>),
+        };
+
+        await api.updateMCPTargetByIndex(selected.node.targetIndex, targetWithPolicies);
         toast.success("Target updated successfully");
         await mutate();
         navigate(`${basePath}/mcp/target/${selected.node.targetIndex}`);
@@ -1024,6 +1106,47 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         return;
       }
 
+      // Handle MCP config policy updates
+      if (selected.type === "mcpPolicy") { 
+        const form = getFormForPolicy(selected.node.policyType, "mcpPolicy") as any;
+        const dataToSave = form?.transformBeforeSubmit ? form.transformBeforeSubmit(fd) : fd;
+        if (!hierarchy.mcp) throw new Error("MCP config not found");
+        const currentPolicies = hierarchy.mcp.policies.reduce((acc, p) => { 
+          acc[p.policyType] = p.policy;
+          return acc;
+        }, {} as Record<string, unknown>);
+        await api.createOrUpdateMCP({
+          ...hierarchy.mcp.config,
+          targets: hierarchy.mcp.targets.map((t) => t.target),
+          policies: { ...currentPolicies, [selected.node.policyType]: dataToSave },
+        } as any);
+        toast.success(`${getPolicyLabel(selected.node.policyType)} policy updated`);
+        await mutate();
+        navigate(`${basePath}/mcp/policy/${selected.node.policyType}`);
+        return;
+      }
+
+      if (selected.type === "llmPolicy") {
+        const form = getFormForPolicy(selected.node.policyType, "llmPolicy") as any;
+        const dataToSave = form?.transformBeforeSubmit ? form.transformBeforeSubmit(fd) : fd;
+
+        // Update the specific policy in the LLM config
+        if (!hierarchy.llm) throw new Error("LLM config not found");
+        const currentConfig = { ...hierarchy.llm.config, models: hierarchy.llm.models.map((m) => m.model) };
+        const currentPolicies = hierarchy.llm.policies.reduce((acc, p) => {
+          acc[p.policyType] = p.policy;
+          return acc;
+        }, {} as Record<string, unknown>);
+        await api.createOrUpdateLLM({
+          ...currentConfig,
+          policies: { ...currentPolicies, [selected.node.policyType]: dataToSave },
+        } as any);
+        toast.success(`${getPolicyLabel(selected.node.policyType)} policy updated`);
+        await mutate();
+        navigate(`${basePath}/llm/policy/${selected.node.policyType}`);
+        return;
+      }
+
       const { port, li, ri, bi, isTcpRoute } = urlParams;
 
       // Guard: these types require a port
@@ -1032,17 +1155,20 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       }
 
       // Apply form-specific transformation if available
-      // Skip for types that don't have a corresponding form entry
+      const policyType = (
+        selected.type === "listenerPolicy" || selected.type === "backendPolicy"
+          ? selected.policyType
+          : (selected as any).node?.policyType
+      ) as string | undefined;
       const form = (
-        selected.type !== "llmPolicy" && 
-        selected.type !== "mcpPolicy" &&
-        selected.type !== "listenerPolicy" &&
-        selected.type !== "backendPolicy"
+        selected.type === "listenerPolicy" ||
+        selected.type === "backendPolicy" ||
+        selected.type === "policy"
       )
-        ? (forms[selected.type] as any)
-        : undefined;
+        ? (getFormForPolicy(policyType ?? "", "routePolicy") as any)
+        : (forms[selected.type] as any);
       let dataToSave = fd;
-      if (form?.transformBeforeSubmit) {
+      if (form?.transformBeforeSubmit) { 
         dataToSave = form.transformBeforeSubmit(fd) as Record<string, unknown>;
       }
 
@@ -1118,30 +1244,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
         await api.updateListenerPolicy(port, li!, selected.policyType, dataToSave);
       } else if (selected.type === "backendPolicy") {
         await api.updateBackendPolicy(port, li!, ri!, bi!, isTcpRoute ?? false, selected.policyType, dataToSave);
-       } else if (selected.type === "llmPolicy") {
-        // Update the specific policy in the LLM config
-        if (!hierarchy.llm) throw new Error("LLM config not found");
-        const currentConfig = { ...hierarchy.llm.config, models: hierarchy.llm.models.map((m) => m.model) };
-        const currentPolicies = hierarchy.llm.policies.reduce((acc, p) => {
-          acc[p.policyType] = p.policy;
-          return acc;
-        }, {} as Record<string, unknown>);
-        await api.createOrUpdateLLM({
-          ...currentConfig,
-          policies: { ...currentPolicies, [selected.node.policyType]: dataToSave },
-        } as any);
-      } else if (selected.type === "mcpPolicy") {
-        // Update the specific policy in the MCP config
-        if (!hierarchy.mcp) throw new Error("MCP config not found");
-        const currentPolicies = hierarchy.mcp.policies.reduce((acc, p) => {
-          acc[p.policyType] = p.policy;
-          return acc;
-        }, {} as Record<string, unknown>);
-        await api.createOrUpdateMCP({
-          ...hierarchy.mcp.config,
-          targets: hierarchy.mcp.targets.map((t) => t.target),
-          policies: { ...currentPolicies, [selected.node.policyType]: dataToSave },
-        } as any);
       }
 
       toast.success(
@@ -1336,12 +1438,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             {!isEditing && (
               <Space>
                 <Button
-                  icon={<PlusOutlined />}
-                  onClick={() => handleAddListener(node.bind.port)}
-                >
-                  Add Listener
-                </Button>
-                <Button
                   type="primary"
                   icon={<Edit2 size={14} />}
                   onClick={() => navigate(location.pathname + "?edit=true")}
@@ -1432,18 +1528,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             {!isEditing && (
               <Space>
                 <Button
-                  icon={<PlusOutlined />}
-                  onClick={() =>
-                    handleAddRoute(
-                      selected.bind.bind.port,
-                      node.listenerIndex,
-                      isTcp,
-                    )
-                  }
-                >
-                  {isTcp ? "Add TCP Route" : "Add Route"}
-                </Button>
-                <Button
                   type="primary"
                   icon={<Edit2 size={14} />}
                   onClick={() => navigate(location.pathname + "?edit=true")}
@@ -1523,48 +1607,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
       return null;
     }
 
-    // Check which policy types already exist
-    const existingPolicyTypes = new Set(node.policies.map((p) => p.policyType));
-    const hasCors = existingPolicyTypes.has("cors");
-    const hasRequestHeaderModifier = existingPolicyTypes.has(
-      "requestHeaderModifier",
-    );
-    const hasResponseHeaderModifier = existingPolicyTypes.has(
-      "responseHeaderModifier",
-    );
-
-    const policyMenuItems: MenuProps["items"] = [
-      {
-        key: "addCors",
-        label: hasCors ? "CORS policy already exists" : "Add CORS Policy",
-        icon: <PlusOutlined />,
-        disabled: hasCors,
-        onClick: () => !hasCors && handleAddPolicy(port, li, ri, isTcp, "cors"),
-      },
-      {
-        key: "addRequestHeaderModifier",
-        label: hasRequestHeaderModifier
-          ? "Request Header Modifier already exists"
-          : "Add Request Header Modifier",
-        icon: <PlusOutlined />,
-        disabled: hasRequestHeaderModifier,
-        onClick: () =>
-          !hasRequestHeaderModifier &&
-          handleAddPolicy(port, li, ri, isTcp, "requestHeaderModifier"),
-      },
-      {
-        key: "addResponseHeaderModifier",
-        label: hasResponseHeaderModifier
-          ? "Response Header Modifier already exists"
-          : "Add Response Header Modifier",
-        icon: <PlusOutlined />,
-        disabled: hasResponseHeaderModifier,
-        onClick: () =>
-          !hasResponseHeaderModifier &&
-          handleAddPolicy(port, li, ri, isTcp, "responseHeaderModifier"),
-      },
-    ];
-
     const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
     return (
       <Container>
@@ -1582,19 +1624,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             </TitleLeft>
             {!isEditing && (
               <Space>
-                <Button
-                  icon={<PlusOutlined />}
-                  onClick={() => handleAddBackend(port, li, ri, isTcp)}
-                >
-                  Add Backend
-                </Button>
-                <Dropdown
-                  menu={{ items: policyMenuItems }}
-                  trigger={["click"]}
-                  overlayStyle={{ maxHeight: "50vh", overflow: "auto" }}
-                >
-                  <Button icon={<PlusOutlined />}>Add Policy</Button>
-                </Dropdown>
                 <Button
                   type="primary"
                   icon={<Edit2 size={14} />}
@@ -1652,7 +1681,26 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             formData={formData}
             validator={validator}
             disabled={!isEditing || saving}
-            onChange={({ formData: fd }) => setFormData(fd)}
+            onChange={({ formData: fd }) => {
+              const routeData = (fd ?? {}) as Record<string, unknown>;
+              if (!Array.isArray(routeData.matches)) {
+                setFormData(routeData);
+                return;
+              }
+              const matches = routeData.matches.map((match) => {
+                if (!match || typeof match !== "object") return match;
+                const m = match as Record<string, unknown>;
+                if (!m.path || typeof m.path !== "object") return match;
+                const p = m.path as Record<string, unknown>;
+                const pathType = p.pathType;
+                let nextPath: Record<string, unknown> = { pathType };
+                if (pathType === "exact") nextPath.exact = p.exact;
+                else if (pathType === "regex") nextPath.regex = p.regex;
+                else nextPath.pathPrefix = p.pathPrefix;
+                return { ...m, path: nextPath };
+              });
+              setFormData({ ...routeData, matches });
+            }}            
             onSubmit={handleSubmit}
             onError={handleError}
             templates={formTemplates}
@@ -2157,7 +2205,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     const { node } = selected;
     const modelName = node.model.name || `Model ${node.modelIndex + 1}`;
     const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
-    const formConfig = getFormForPolicy("model");
+    const formConfig = forms.model;
 
     return (
       <Container>
@@ -2222,8 +2270,8 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
           <Form
             id="model-form"
             key={isEditing ? "editing" : "viewing"}
-            schema={forms.model.schema}
-            uiSchema={forms.model.uiSchema}
+            schema={formConfig.schema}
+            uiSchema={formConfig.uiSchema}
             formData={formData}
             validator={validator}
             disabled={!isEditing || saving}
@@ -2407,39 +2455,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             </TitleLeft>
             {!isEditing && (
               <Space>
-                {selected.type === "llm" && (
-                  <Button
-                    icon={<PlusOutlined />}
-                    onClick={async () => {
-                      try {
-                        const newModel = {
-                          name: `model-${(hierarchy.llm?.models.length ?? 0) + 1}`,
-                          provider: "openAI",
-                        };
-                        await api.createLLMModel(newModel);
-                        toast.success("Model created successfully");
-
-                        // Wait for config to refresh and get the updated data
-                        const freshConfig = await mutate();
-
-                        // Find the index of the newly created model from fresh data
-                        const llmConfig = freshConfig?.llm as any;
-                        const newIndex = llmConfig?.models
-                          ? llmConfig.models.length - 1
-                          : 0;
-                        navigate(
-                          `${basePath}/llm/model/${newIndex}?edit=true&creating=true`,
-                        );
-                      } catch (e: unknown) {
-                        toast.error(
-                          getErrorMessage(e, "Failed to create model"),
-                        );
-                      }
-                    }}
-                  >
-                    Add Model
-                  </Button>
-                )}
                 <Button
                   type="primary"
                   icon={<Edit2 size={14} />}

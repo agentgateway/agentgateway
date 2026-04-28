@@ -62,13 +62,17 @@ export function CollapsibleObjectFieldTemplate(
     return { requiredFields: req, optionalFields: opt };
   }, [properties, required]);
 
+  // Detect if array item - skip title rendering if so 
+  const id = (idSchema as any)?.$id || "";
+  const isArrayItem = /_(0|[1-9]\d*)$/.test(id);
+
   return (
     <HideLabelContext.Provider value={idsToHideLabel}>
       <div
         className="object-field-template"
         style={{ paddingLeft: `${leftPadding}px` }}
       >
-        {title && (
+        {title && !isArrayItem && (
           <Title level={5} style={{ marginBottom: 12, marginTop: 4 }}>
             {title}
           </Title>

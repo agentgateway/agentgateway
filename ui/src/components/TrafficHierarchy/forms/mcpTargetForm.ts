@@ -10,7 +10,7 @@ import type { RJSFSchema, UiSchema } from "@rjsf/utils";
 export const schema: RJSFSchema = {
   type: "object",
   required: ["name"],
-  additionalProperties: true,
+  additionalProperties: false,
   properties: {
     name: {
       type: "string",
@@ -166,6 +166,7 @@ export const uiSchema: UiSchema = {
     "ui:help": "SSE and MCP are network-based, STDIO runs a local process",
   },
   sse: {
+    "ui:title": "",
     host: { "ui:placeholder": "localhost" },
     port: { "ui:placeholder": "8080" },
     path: { "ui:placeholder": "/sse" },
@@ -197,7 +198,7 @@ export function transformForForm(data: unknown): unknown {
 
   const targetData = data as Record<string, unknown>;
   // Filter out policies - they're managed separately via the tree
-  const { policies: _policies, ...result } = targetData;
+  const { policies: _policies, port: _port, statefulMode: _statefulModel, prefixMode: _prefixMode, ...result } = targetData;
 
   // Determine connectionType based on which field is present
   if ("sse" in targetData) {
