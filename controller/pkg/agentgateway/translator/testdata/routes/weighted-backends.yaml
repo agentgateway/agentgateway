@@ -1,0 +1,96 @@
+# Weighted AgentgatewayBackend backendRefs for canary-style traffic splitting.
+# This is the pattern Argo Rollouts Gateway API plugin would manipulate:
+# it adjusts the weight values on each backendRef to shift traffic between
+# stable and canary backends during a progressive rollout.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: canary-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: test-gateway
+  hostnames:
+    - mcp.example.com
+  rules:
+    - backendRefs:
+        - name: stable-backend
+          kind: AgentgatewayBackend
+          group: agentgateway.dev
+          weight: 90
+        - name: canary-backend
+          kind: AgentgatewayBackend
+          group: agentgateway.dev
+          weight: 10
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: stable-backend
+  namespace: default
+spec:
+  static:
+    host: stable.example.com
+    port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: canary-backend
+  namespace: default
+spec:
+  static:
+    host: canary.example.com
+    port: 80
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          backend: default/stable-backend
+        weight: 90
+      - backend:
+          backend: default/canary-backend
+        weight: 10
+      hostnames:
+      - mcp.example.com
+      key: default/canary-route.00.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          pathPrefix: /
+      name:
+        kind: HTTPRoute
+        name: canary-route
+        namespace: default
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: canary-route
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default

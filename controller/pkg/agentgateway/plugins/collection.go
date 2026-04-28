@@ -49,21 +49,26 @@ type AgwCollections struct {
 	ServiceEntries  krt.Collection[*networkingclient.ServiceEntry]
 
 	// Gateway API resources
-	GatewayClasses     krt.Collection[*gwv1.GatewayClass]
-	Gateways           krt.Collection[*gwv1.Gateway]
-	HTTPRoutes         krt.Collection[*gwv1.HTTPRoute]
-	GRPCRoutes         krt.Collection[*gwv1.GRPCRoute]
-	TCPRoutes          krt.Collection[*gwv1a2.TCPRoute]
-	TLSRoutes          krt.Collection[*gwv1.TLSRoute]
-	ReferenceGrants    krt.Collection[*gwv1b1.ReferenceGrant]
-	BackendTLSPolicies krt.Collection[*gwv1.BackendTLSPolicy]
-	ListenerSets       krt.Collection[*gwv1.ListenerSet]
+	GatewayClasses          krt.Collection[*gwv1.GatewayClass]
+	Gateways                krt.Collection[*gwv1.Gateway]
+	GatewaysByNamespace     krt.Index[string, *gwv1.Gateway]
+	HTTPRoutes              krt.Collection[*gwv1.HTTPRoute]
+	HTTPRoutesByNamespace   krt.Index[string, *gwv1.HTTPRoute]
+	GRPCRoutes              krt.Collection[*gwv1.GRPCRoute]
+	GRPCRoutesByNamespace   krt.Index[string, *gwv1.GRPCRoute]
+	TCPRoutes               krt.Collection[*gwv1a2.TCPRoute]
+	TLSRoutes               krt.Collection[*gwv1.TLSRoute]
+	ReferenceGrants         krt.Collection[*gwv1b1.ReferenceGrant]
+	BackendTLSPolicies      krt.Collection[*gwv1.BackendTLSPolicy]
+	ListenerSets            krt.Collection[*gwv1.ListenerSet]
+	ListenerSetsByNamespace krt.Index[string, *gwv1.ListenerSet]
 
 	// Extended resources
 	InferencePools krt.Collection[*inf.InferencePool]
 
 	// agentgateway resources
 	Backends             krt.Collection[*agentgateway.AgentgatewayBackend]
+	BackendsByNamespace  krt.Index[string, *agentgateway.AgentgatewayBackend]
 	AgentgatewayPolicies krt.Collection[*agentgateway.AgentgatewayPolicy]
 
 	// ControllerName is the name of the Gateway controller.
@@ -193,6 +198,11 @@ func NewAgwCollections(
 func (c *AgwCollections) SetupIndexes() {
 	c.SecretsByNamespace = krt.NewNamespaceIndex(c.Secrets)
 	c.ServicesByNamespace = krt.NewNamespaceIndex(c.Services)
+	c.GatewaysByNamespace = krt.NewNamespaceIndex(c.Gateways)
+	c.HTTPRoutesByNamespace = krt.NewNamespaceIndex(c.HTTPRoutes)
+	c.GRPCRoutesByNamespace = krt.NewNamespaceIndex(c.GRPCRoutes)
+	c.ListenerSetsByNamespace = krt.NewNamespaceIndex(c.ListenerSets)
+	c.BackendsByNamespace = krt.NewNamespaceIndex(c.Backends)
 }
 
 func (c *AgwCollections) HasSynced() bool {
