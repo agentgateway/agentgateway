@@ -3006,7 +3006,14 @@ jwtValidationOptions:
 
 	#[test]
 	fn validate_mcp_target_name_rejects_reserved_delimiters() {
-		for name in ["bad+name", "+leading", "trailing+", "foo_bar", "_lead", "trail_"] {
+		for name in [
+			"bad+name",
+			"+leading",
+			"trailing+",
+			"foo_bar",
+			"_lead",
+			"trail_",
+		] {
 			validate_mcp_target_name(name).expect_err(&format!("expected {name:?} to be rejected"));
 		}
 	}
@@ -3014,7 +3021,16 @@ jwtValidationOptions:
 	#[test]
 	fn validate_mcp_target_name_rejects_invalid_section_name_shapes() {
 		for name in [
-			"", "Foo", "foo!", "-leading", "trailing-", ".leading", "trailing.", "a..b", "a/b", "a b",
+			"",
+			"Foo",
+			"foo!",
+			"-leading",
+			"trailing-",
+			".leading",
+			"trailing.",
+			"a..b",
+			"a/b",
+			"a b",
 		] {
 			validate_mcp_target_name(name).expect_err(&format!("expected {name:?} to be rejected"));
 		}
@@ -3027,9 +3043,6 @@ jwtValidationOptions:
 
 		let too_long = "a".repeat(MCP_TARGET_NAME_MAX_LEN + 1);
 		let err = validate_mcp_target_name(&too_long).expect_err("expected rejection");
-		assert!(
-			err.contains("exceeds max"),
-			"unexpected message: {err}"
-		);
+		assert!(err.contains("exceeds max"), "unexpected message: {err}");
 	}
 }

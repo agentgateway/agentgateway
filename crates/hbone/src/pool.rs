@@ -6,8 +6,6 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
 
 use anyhow::anyhow;
-use flurry;
-use pingora_pool;
 use rustls::pki_types::ServerName;
 use tokio::io;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -15,6 +13,7 @@ use tokio::net::TcpStream;
 use tokio::sync::{Mutex, watch};
 use tonic::async_trait;
 use tracing::{Instrument, debug, trace};
+use {flurry, pingora_pool};
 
 use super::{Config, Key};
 use crate::H2Stream;
