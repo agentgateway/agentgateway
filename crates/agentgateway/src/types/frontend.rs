@@ -172,6 +172,12 @@ pub struct Proxy {
 #[apply(schema!)]
 pub struct NetworkAuthorization(pub crate::http::authorization::RuleSet);
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct MetricsFieldsPolicy {
+	#[serde(default, skip_serializing_if = "OrderedStringMap::is_empty")]
+	pub add: Arc<OrderedStringMap<Arc<cel::Expression>>>,
+}
+
 #[apply(schema!)]
 pub struct LoggingPolicy {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
