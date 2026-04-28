@@ -5,6 +5,7 @@ Name|Version|License
 [retry-go/v4](https://github.com/avast/retry-go)|v4.7.0|MIT License
 [xds/go](https://github.com/cncf/xds)|v0.0.0-20260202195803-dba9d589def2|Apache License 2.0
 [go-control-plane/envoy](https://github.com/envoyproxy/go-control-plane)|v1.37.1-0.20260402053555-4e9843ddb8d0|Apache License 2.0
+[tcell/v2](https://github.com/gdamore/tcell)|v2.8.1|Apache License 2.0
 [ghodss/yaml](https://github.com/ghodss/yaml)|v1.0.1-0.20190212211648-25d852aebe32|MIT License
 [go-jose/v4](https://github.com/go-jose/go-jose)|v4.1.4|Apache License 2.0
 [go-logr/logr](https://github.com/go-logr/logr)|v1.4.3|Apache License 2.0
@@ -20,9 +21,11 @@ Name|Version|License
 [ginkgo/v2](https://github.com/onsi/ginkgo)|v2.28.1|MIT License
 [onsi/gomega](https://github.com/onsi/gomega)|v1.39.1|MIT License
 [openai-go/v3](https://github.com/openai/openai-go)|v3.29.0|Apache License 2.0
+[pmezard/go-difflib](https://github.com/pmezard/go-difflib)|v1.0.1-0.20181226105442-5d4384ee4fb2|BSD 3-clause "New" or "Revised" License
 [prometheus/client_golang](https://github.com/prometheus/client_golang)|v1.23.2|Apache License 2.0
 [prometheus/client_model](https://github.com/prometheus/client_model)|v0.6.2|Apache License 2.0
 [prometheus/common](https://github.com/prometheus/common)|v0.67.5|Apache License 2.0
+[rivo/tview](https://github.com/rivo/tview)|v0.42.0|MIT License
 [spf13/cobra](https://github.com/spf13/cobra)|v1.10.2|Apache License 2.0
 [spf13/pflag](https://github.com/spf13/pflag)|v1.0.10|BSD 3-clause "New" or "Revised" License
 [stretchr/testify](https://github.com/stretchr/testify)|v1.11.1|MIT License
@@ -43,10 +46,8 @@ Name|Version|License
 [k8s.io/api](https://k8s.io/api)|v0.35.3|Apache License 2.0
 [k8s.io/apiextensions-apiserver](https://k8s.io/apiextensions-apiserver)|v0.35.3|Apache License 2.0
 [k8s.io/apimachinery](https://k8s.io/apimachinery)|v0.35.3|Apache License 2.0
-[k8s.io/cli-runtime](https://k8s.io/cli-runtime)|v0.35.3|Apache License 2.0
 [k8s.io/client-go](https://k8s.io/client-go)|v0.35.3|Apache License 2.0
 [klog/v2](https://k8s.io/klog/v2)|v2.140.0|Apache License 2.0
-[k8s.io/kubectl](https://k8s.io/kubectl)|v0.35.3|Apache License 2.0
 [k8s.io/utils](https://k8s.io/utils)|v0.0.0-20260319190234-28399d86e0b5|Apache License 2.0
 [sigs.k8s.io/controller-runtime](https://sigs.k8s.io/controller-runtime)|v0.23.3|Apache License 2.0
 [sigs.k8s.io/controller-tools](https://sigs.k8s.io/controller-tools)|v0.20.1|Apache License 2.0

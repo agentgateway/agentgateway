@@ -201,6 +201,7 @@ impl RuleSets {
 		let rule_sets = &self.0;
 		let has_rules = rule_sets.iter().any(|r| r.has_rules());
 		// If there are no rule sets, everyone has access
+		#[allow(clippy::if_same_then_else)] // This is intentional to make things explicit.
 		let allowed = if !has_rules {
 			true
 		// If there are any DENY, deny
