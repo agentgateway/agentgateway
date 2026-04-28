@@ -1,6 +1,4 @@
 use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use ::http::HeaderValue;
 
@@ -8,30 +6,9 @@ use crate::http::Request;
 
 const TOKEN_ENV_VARS: &[&str] = &["GH_COPILOT_TOKEN", "COPILOT_GITHUB_TOKEN"];
 const DOMAIN: &str = "github.com";
-const TOKEN_URL: &str = "https://api.github.com/copilot_internal/v2/token";
-const TOKEN_REFRESH_SKEW_SECS: u64 = 300;
-const EXCHANGE_FAILURE_RETRY_SECS: u64 = 300;
-
-#[derive(Clone, Debug)]
-struct ApiToken {
-	source_token: String,
-	token: String,
-	expires_at_unix: u64,
-	refresh_at_unix: u64,
-}
-
-#[derive(serde::Deserialize)]
-struct TokenResponse {
-	token: String,
-	expires_at: u64,
-	#[serde(default)]
-	refresh_in: Option<u64>,
-}
-
-static API_TOKEN: OnceLock<Mutex<Option<ApiToken>>> = OnceLock::new();
 
 pub(super) async fn insert_headers(req: &mut Request) -> anyhow::Result<()> {
-	let token = load_api_token().await?;
+	let token = load_token()?;
 	let mut auth = HeaderValue::from_str(&format!("Bearer {token}"))?;
 	auth.set_sensitive(true);
 
@@ -63,110 +40,7 @@ pub(super) async fn insert_headers(req: &mut Request) -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn load_api_token() -> anyhow::Result<String> {
-	let source_token = load_source_token()?;
-	let now = now_unix();
-	let cache = API_TOKEN.get_or_init(|| Mutex::new(None));
-
-	if let Some(token) = cached_api_token(cache, &source_token, now, false) {
-		return Ok(token);
-	}
-
-	match fetch_api_token(&source_token, now).await {
-		Ok(token) => {
-			*cache.lock().expect("copilot token cache mutex poisoned") = Some(token.clone());
-			Ok(token.token)
-		},
-		Err(err) => {
-			if let Some(token) = cached_api_token(cache, &source_token, now, true) {
-				return Ok(token);
-			}
-
-			// Preserve support for callers that provide an already-exchanged Copilot token.
-			tracing::warn!(error = %err, "failed to exchange GitHub token for Copilot API token; using source token directly");
-			let token = fallback_api_token(source_token, now);
-			*cache.lock().expect("copilot token cache mutex poisoned") = Some(token.clone());
-			Ok(token.token)
-		},
-	}
-}
-
-fn cached_api_token(
-	cache: &Mutex<Option<ApiToken>>,
-	source_token: &str,
-	now: u64,
-	allow_until_expiry: bool,
-) -> Option<String> {
-	let guard = cache.lock().expect("copilot token cache mutex poisoned");
-	let cached = guard.as_ref()?;
-	if cached.source_token != source_token {
-		return None;
-	}
-	let usable_until = if allow_until_expiry {
-		cached.expires_at_unix
-	} else {
-		cached.refresh_at_unix
-	};
-	(now < usable_until).then(|| cached.token.clone())
-}
-
-async fn fetch_api_token(source_token: &str, now: u64) -> anyhow::Result<ApiToken> {
-	let response = reqwest::Client::new()
-		.get(TOKEN_URL)
-		.header(reqwest::header::ACCEPT, "application/json")
-		.bearer_auth(source_token)
-		.header(
-			"editor-version",
-			concat!("agentgateway/", env!("CARGO_PKG_VERSION")),
-		)
-		.header("x-github-api-version", "2025-10-01")
-		.header("x-initiator", "agent")
-		.header("x-interaction-type", "conversation-agent")
-		.header("openai-intent", "conversation-agent")
-		.send()
-		.await?;
-
-	if !response.status().is_success() {
-		anyhow::bail!(
-			"Copilot token exchange failed with status {}",
-			response.status()
-		);
-	}
-
-	let response: TokenResponse = serde_json::from_str(&response.text().await?)?;
-	Ok(ApiToken {
-		source_token: source_token.to_string(),
-		token: response.token,
-		expires_at_unix: response.expires_at,
-		refresh_at_unix: refresh_at_unix(now, response.expires_at, response.refresh_in),
-	})
-}
-
-fn fallback_api_token(source_token: String, now: u64) -> ApiToken {
-	let retry_at = now.saturating_add(EXCHANGE_FAILURE_RETRY_SECS);
-	ApiToken {
-		source_token: source_token.clone(),
-		token: source_token,
-		expires_at_unix: retry_at,
-		refresh_at_unix: retry_at,
-	}
-}
-
-fn refresh_at_unix(now: u64, expires_at: u64, refresh_in: Option<u64>) -> u64 {
-	let before_expiry = expires_at.saturating_sub(TOKEN_REFRESH_SKEW_SECS);
-	refresh_in
-		.map(|refresh_in| now.saturating_add(refresh_in).min(before_expiry))
-		.unwrap_or(before_expiry)
-}
-
-fn now_unix() -> u64 {
-	SystemTime::now()
-		.duration_since(UNIX_EPOCH)
-		.unwrap_or_default()
-		.as_secs()
-}
-
-fn load_source_token() -> anyhow::Result<String> {
+fn load_token() -> anyhow::Result<String> {
 	for key in TOKEN_ENV_VARS {
 		if let Ok(token) = std::env::var(key)
 			&& !token.trim().is_empty()
@@ -274,47 +148,5 @@ enterprise.example.com:
 			extract_yaml_oauth_token(contents, "github.com").as_deref(),
 			Some("copilot-token")
 		);
-	}
-
-	#[test]
-	fn refresh_at_prefers_refresh_in() {
-		assert_eq!(refresh_at_unix(1_000, 5_000, Some(600)), 1_600);
-	}
-
-	#[test]
-	fn refresh_at_uses_expiry_skew() {
-		assert_eq!(refresh_at_unix(1_000, 5_000, None), 4_700);
-		assert_eq!(refresh_at_unix(1_000, 5_000, Some(10_000)), 4_700);
-	}
-
-	#[test]
-	fn cached_api_token_refresh_and_expiry_windows() {
-		let cache = std::sync::Mutex::new(Some(ApiToken {
-			source_token: "source".to_string(),
-			token: "api".to_string(),
-			expires_at_unix: 2_000,
-			refresh_at_unix: 1_500,
-		}));
-
-		assert_eq!(
-			cached_api_token(&cache, "source", 1_400, false).as_deref(),
-			Some("api")
-		);
-		assert_eq!(cached_api_token(&cache, "source", 1_600, false), None);
-		assert_eq!(
-			cached_api_token(&cache, "source", 1_600, true).as_deref(),
-			Some("api")
-		);
-		assert_eq!(cached_api_token(&cache, "other-source", 1_400, true), None);
-	}
-
-	#[test]
-	fn fallback_api_token_uses_source_token_temporarily() {
-		let token = fallback_api_token("source".to_string(), 1_000);
-
-		assert_eq!(token.source_token, "source");
-		assert_eq!(token.token, "source");
-		assert_eq!(token.refresh_at_unix, 1_300);
-		assert_eq!(token.expires_at_unix, 1_300);
 	}
 }
