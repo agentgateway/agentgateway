@@ -407,8 +407,8 @@ impl Relay {
 			.upstreams
 			.iter_named()
 			.map(|(name, con)| {
-				let ctx = ctx.clone();
-				async move { (name, con.delete(&ctx).await) }
+				let ctx = &ctx;
+				async move { (name, con.delete(ctx).await) }
 			})
 			.collect();
 
@@ -441,8 +441,8 @@ impl Relay {
 			.upstreams
 			.iter_named()
 			.map(|(name, con)| {
-				let ctx = ctx.clone();
-				async move { (name, con.get_event_stream(&ctx).await) }
+				let ctx = &ctx;
+				async move { (name, con.get_event_stream(ctx).await) }
 			})
 			.collect();
 
@@ -498,8 +498,8 @@ impl Relay {
 			.iter_named()
 			.map(|(name, con)| {
 				let r = r.clone();
-				let ctx = ctx.clone();
-				async move { (name, con.generic_stream(r, &ctx).await) }
+				let ctx = &ctx;
+				async move { (name, con.generic_stream(r, ctx).await) }
 			})
 			.collect();
 
@@ -541,12 +541,12 @@ impl Relay {
 			.upstreams
 			.iter_named()
 			.map(|(name, con)| {
-				let r = r.clone();
-				let ctx = ctx.clone();
+				let notification = r.notification.clone();
+				let ctx = &ctx;
 				async move {
 					(
 						name,
-						con.generic_notification(r.notification.clone(), &ctx).await,
+						con.generic_notification(notification, ctx).await,
 					)
 				}
 			})
