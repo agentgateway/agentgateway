@@ -20,6 +20,7 @@ pub const DEFAULT_HOST: Strng = strng::literal!(DEFAULT_HOST_STR);
 pub fn path_suffix(route: RouteType) -> &'static str {
 	match route {
 		RouteType::Responses => "/responses",
+		RouteType::Embeddings => "/embeddings",
 		RouteType::Models => "/models",
 		_ => "/chat/completions",
 	}

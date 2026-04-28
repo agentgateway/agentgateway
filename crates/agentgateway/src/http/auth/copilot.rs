@@ -41,11 +41,13 @@ pub(super) async fn insert_headers(req: &mut Request) -> anyhow::Result<()> {
 }
 
 async fn load_token() -> anyhow::Result<String> {
+	// Do not cache file-backed tokens here. GitHub/Copilot tooling may rotate them
+	// independently, and direct-token auth should pick up those changes.
 	for key in TOKEN_ENV_VARS {
 		if let Ok(token) = std::env::var(key)
-			&& !token.trim().is_empty()
+			&& let Some(token) = nonempty_trimmed(token.as_str())
 		{
-			return Ok(token);
+			return Ok(token.to_string());
 		}
 	}
 
@@ -88,14 +90,33 @@ fn gh_config_paths() -> Vec<PathBuf> {
 fn config_dir() -> Option<PathBuf> {
 	std::env::var_os("XDG_CONFIG_HOME")
 		.map(PathBuf::from)
+		.or_else(platform_config_dir)
 		.or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
+}
+
+#[cfg(windows)]
+fn platform_config_dir() -> Option<PathBuf> {
+	std::env::var_os("APPDATA").map(PathBuf::from)
+}
+
+#[cfg(not(windows))]
+fn platform_config_dir() -> Option<PathBuf> {
+	None
+}
+
+fn nonempty_trimmed(value: &str) -> Option<&str> {
+	let value = value.trim();
+	(!value.is_empty()).then_some(value)
 }
 
 fn extract_json_oauth_token(contents: &str, domain: &str) -> Option<String> {
 	let value: serde_json::Value = serde_json::from_str(contents).ok()?;
 	value.as_object()?.iter().find_map(|(key, value)| {
 		if key.starts_with(domain) {
-			value["oauth_token"].as_str().map(ToOwned::to_owned)
+			value["oauth_token"]
+				.as_str()
+				.and_then(nonempty_trimmed)
+				.map(ToOwned::to_owned)
 		} else {
 			None
 		}
@@ -106,7 +127,10 @@ fn extract_yaml_oauth_token(contents: &str, domain: &str) -> Option<String> {
 	let value: serde_yaml::Value = serde_yaml::from_str(contents).ok()?;
 	value.as_mapping()?.iter().find_map(|(key, value)| {
 		if key.as_str().is_some_and(|key| key.starts_with(domain)) {
-			value["oauth_token"].as_str().map(ToOwned::to_owned)
+			value["oauth_token"]
+				.as_str()
+				.and_then(nonempty_trimmed)
+				.map(ToOwned::to_owned)
 		} else {
 			None
 		}
@@ -121,7 +145,7 @@ mod tests {
 	fn json_token_extraction() {
 		let contents = r#"{
 			"github.com": {
-				"oauth_token": "copilot-token"
+				"oauth_token": " copilot-token\n"
 			},
 			"enterprise.example.com": {
 				"oauth_token": "wrong-token"
@@ -138,7 +162,7 @@ mod tests {
 	fn yaml_token_extraction() {
 		let contents = r#"
 github.com:
-  oauth_token: copilot-token
+  oauth_token: " copilot-token\n"
   user: octocat
 enterprise.example.com:
   oauth_token: wrong-token

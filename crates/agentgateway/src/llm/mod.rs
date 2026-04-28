@@ -317,9 +317,8 @@ impl AIProvider {
 			AIProvider::OpenAI(_) => (Target::Hostname(openai::DEFAULT_HOST, 443), btls),
 			AIProvider::Copilot(_) => {
 				let bp = BackendPolicies {
-					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
 					backend_auth: Some(BackendAuth::Copilot),
-					..Default::default()
+					..btls.clone()
 				};
 				(Target::Hostname(copilot::DEFAULT_HOST, 443), bp)
 			},
