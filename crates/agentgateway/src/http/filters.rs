@@ -6,7 +6,10 @@ use crate::http::uri::Scheme;
 use crate::http::{
 	HeaderMap, HeaderName, HeaderValue, PolicyResponse, Request, Response, StatusCode, Uri,
 };
+use crate::proxy::ProxyResponse;
 use crate::proxy::dtrace::{Severity, pol_result};
+use crate::store::{BackendPolicyTrait, RequestPolicyTrait};
+use crate::telemetry::log::RequestLog;
 use crate::types::agent::{HostRedirect, PathMatch, PathRedirect, SimpleBackendReference};
 use crate::*;
 
@@ -74,6 +77,42 @@ impl HeaderModifier {
 	}
 }
 
+impl store::ResponsePolicyTrait for HeaderModifier {
+	async fn apply(
+		&self,
+		_log: &mut RequestLog,
+		resp: &mut Response,
+	) -> Result<PolicyResponse, ProxyResponse> {
+		self
+			.apply(resp.headers_mut())
+			.map_err(proxy::ProxyError::from)?;
+		Ok(PolicyResponse::default())
+	}
+}
+
+impl BackendPolicyTrait for HeaderModifier {
+	async fn apply(
+		&self,
+		_log: &mut Option<&mut RequestLog>,
+		req: &mut Request,
+	) -> Result<PolicyResponse, ProxyResponse> {
+		self.apply_request(req).map_err(proxy::ProxyError::from)?;
+		Ok(PolicyResponse::default())
+	}
+}
+
+impl RequestPolicyTrait for HeaderModifier {
+	async fn apply(
+		&self,
+		_client: &proxy::httpproxy::PolicyClient,
+		_log: &mut RequestLog,
+		req: &mut Request,
+	) -> Result<PolicyResponse, ProxyResponse> {
+		self.apply_request(req).map_err(proxy::ProxyError::from)?;
+		Ok(PolicyResponse::default())
+	}
+}
+
 #[apply(schema!)]
 pub struct RequestRedirect {
 	#[serde(
@@ -134,6 +173,20 @@ impl RequestRedirect {
 	}
 }
 
+impl crate::store::RequestPolicyTrait for RequestRedirect {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		req: &mut Request,
+	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
+		self
+			.apply(req)
+			.map_err(crate::proxy::ProxyError::from)
+			.map_err(Into::into)
+	}
+}
+
 #[apply(schema!)]
 pub struct UrlRewrite {
 	#[serde(skip_serializing_if = "is_default")]
@@ -190,6 +243,18 @@ impl UrlRewrite {
 	}
 }
 
+impl crate::store::RequestPolicyTrait for UrlRewrite {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		req: &mut Request,
+	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
+		self.apply(req).map_err(crate::proxy::ProxyError::from)?;
+		Ok(PolicyResponse::default())
+	}
+}
+
 #[apply(schema!)]
 pub struct DirectResponse {
 	#[serde(serialize_with = "serdes::serde_base64::serialize")]
@@ -211,6 +276,20 @@ impl DirectResponse {
 			.status(self.status)
 			.body(http::Body::from(self.body.clone()))
 			.map_err(Into::into)
+	}
+}
+
+impl crate::store::RequestPolicyTrait for DirectResponse {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		_req: &mut Request,
+	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
+		Ok(
+			PolicyResponse::default()
+				.with_response(self.apply().map_err(crate::proxy::ProxyError::from)?),
+		)
 	}
 }
 

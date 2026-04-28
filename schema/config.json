@@ -1324,13 +1324,12 @@
           "description": "Authenticate incoming requests by calling an external authorization server.",
           "anyOf": [
             {
-              "$ref": "#/$defs/ExtAuthz"
+              "$ref": "#/$defs/LocalExplicitOrConditional"
             },
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "extProc": {
           "description": "Extend agentgateway with an external processor",
@@ -3859,9 +3858,47 @@
         }
       ]
     },
-    "ExtAuthz": {
+    "LocalExplicitOrConditional": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LocalConditionalPolicies"
+        },
+        {
+          "$ref": "#/$defs/ExtAuthz"
+        }
+      ]
+    },
+    "LocalConditionalPolicies": {
       "type": "object",
       "properties": {
+        "conditional": {
+          "description": "conditional policy entries. An entry without a condition must be the final fallback.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalConditionalPolicy"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "conditional"
+      ]
+    },
+    "LocalConditionalPolicy": {
+      "type": "object",
+      "properties": {
+        "condition": {
+          "description": "condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "policies": {
           "description": "Policies to connect to the backend",
           "anyOf": [
@@ -3904,7 +3941,6 @@
           ]
         }
       },
-      "unevaluatedProperties": false,
       "oneOf": [
         {
           "type": "string",
@@ -4114,6 +4150,114 @@
         }
       },
       "additionalProperties": false
+    },
+    "ExtAuthz": {
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Policies to connect to the backend",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "protocol": {
+          "description": "The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.",
+          "$ref": "#/$defs/Protocol2",
+          "default": {
+            "grpc": {}
+          }
+        },
+        "failureMode": {
+          "description": "Behavior when the authorization service is unavailable or returns an error",
+          "$ref": "#/$defs/FailureMode2",
+          "default": "deny"
+        },
+        "includeRequestHeaders": {
+          "description": "Specific headers to include in the authorization request.\nIf unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeaderOrPseudo"
+          }
+        },
+        "includeRequestBody": {
+          "description": "Options for including the request body in the authorization request",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BodyOptions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "invalid"
+          ]
+        },
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ]
     },
     "ExtProc": {
       "type": "object",
@@ -5623,13 +5767,12 @@
           "description": "Authenticate incoming requests by calling an external authorization server.",
           "anyOf": [
             {
-              "$ref": "#/$defs/ExtAuthz"
+              "$ref": "#/$defs/LocalExplicitOrConditional"
             },
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "extProc": {
           "description": "Extend agentgateway with an external processor",
@@ -6890,13 +7033,12 @@
           "description": "Authenticate incoming requests by calling an external authorization server.",
           "anyOf": [
             {
-              "$ref": "#/$defs/ExtAuthz"
+              "$ref": "#/$defs/LocalExplicitOrConditional"
             },
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "extProc": {
           "description": "Extend agentgateway with an external processor",

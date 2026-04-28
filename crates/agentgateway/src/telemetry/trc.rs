@@ -16,7 +16,7 @@ pub use traceparent::TraceParent;
 
 use crate::cel;
 use crate::telemetry::log::{CelLoggingExecutor, LoggingFields, RequestLog};
-use crate::types::agent::{BackendPolicy, SimpleBackendReference, TracingConfig};
+use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, TracingConfig};
 
 #[derive(Clone, Debug)]
 pub struct Tracer {
@@ -268,7 +268,7 @@ impl PolicyGrpcSpanExporter {
 	fn new(
 		inputs: Arc<crate::ProxyInputs>,
 		target: Arc<SimpleBackendReference>,
-		policies: Vec<BackendPolicy>,
+		policies: Vec<BackendTrafficPolicy>,
 		runtime: tokio::runtime::Handle,
 	) -> Self {
 		use crate::http::ext_proc::GrpcReferenceChannel;
@@ -352,7 +352,7 @@ pub(crate) struct PolicyOtelHttpClient {
 	pub(crate) policy_client: crate::proxy::httpproxy::PolicyClient,
 	pub(crate) backend_ref: SimpleBackendReference,
 	pub(crate) runtime: tokio::runtime::Handle,
-	pub(crate) policies: Vec<BackendPolicy>,
+	pub(crate) policies: Vec<BackendTrafficPolicy>,
 }
 
 #[async_trait::async_trait]

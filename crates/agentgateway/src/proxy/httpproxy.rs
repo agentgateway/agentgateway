@@ -25,8 +25,8 @@ use crate::http::ext_proc::{ExtProcRequest, InferenceRoutingDestinationMode};
 use crate::http::filters::{AutoHostname, BackendRequestTimeout};
 use crate::http::transformation_cel::Transformation;
 use crate::http::{
-	Authority, HeaderName, HeaderValue, PolicyResponse, Request, Response, Scheme, StatusCode, Uri,
-	auth, filters, merge_in_headers, retry,
+	Authority, HeaderName, HeaderValue, Request, Response, Scheme, StatusCode, Uri, auth, filters,
+	merge_in_headers, retry,
 };
 use crate::llm::{InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType};
 use crate::proxy::tcpproxy::TCPProxy;
@@ -35,7 +35,7 @@ use crate::proxy::{
 };
 use crate::store::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
-	RoutePath,
+	ResponsePolicy, RoutePath,
 };
 use crate::telemetry::log;
 use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog, TraceSampler};
@@ -119,110 +119,99 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 }
 
 async fn apply_request_policies(
-	policies: &store::RoutePolicies,
-	client: PolicyClient,
-	log: &mut RequestLog,
+	pol: &store::RoutePolicies,
+	c: &PolicyClient,
+	l: &mut RequestLog,
 	req: &mut Request,
-	response_policies: &mut ResponsePolicies,
+	rp: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
 	// CORS must run before authentication, authorization and rate limiting so that:
 	// 1. Preflight OPTIONS requests short-circuit without requiring credentials
 	// 2. CORS response headers are queued even if the request is later rejected,
 	//    allowing browsers to read error responses instead of seeing a CORS error
-	if let Some(c) = &policies.cors {
-		c.apply(req)
-			.map_err(ProxyError::from)?
-			.apply(response_policies.headers())?;
-	}
+	pol
+		.cors
+		.apply_without_response("cors", c, l, req, rp.headers())
+		.await?;
 
-	if let Some(o) = &policies.oidc {
-		o.apply(Some(log), req, client.clone())
-			.await
-			.map_err(|e| ProxyResponse::from(ProxyError::OidcFailure(e)))?
-			.apply(response_policies.headers())?;
-	}
+	pol
+		.oidc
+		.apply_without_response("oidc", c, l, req, rp.headers())
+		.await?;
 	http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
 
-	if let Some(j) = &policies.jwt {
-		j.apply(&client, Some(log), req).await?;
-	}
-	if let Some(b) = &policies.basic_auth {
-		b.apply(req).await?;
-	}
-	if let Some(b) = &policies.api_key {
-		b.apply(req).await?;
-	}
+	pol
+		.jwt
+		.apply_without_response("jwt auth", c, l, req, rp.headers())
+		.await?;
+	pol
+		.basic_auth
+		.apply_without_response("basic auth", c, l, req, rp.headers())
+		.await?;
+	pol
+		.api_key
+		.apply_without_response("api key", c, l, req, rp.headers())
+		.await?;
 
-	if let Some(x) = &policies.ext_authz {
-		x.check(client.clone(), req)
-			.await?
-			.apply(response_policies.headers())?;
-		dtrace::snapshot!(Request, "ext authz", &req);
-	}
-	if let Some(j) = &policies.authorization {
+	pol
+		.ext_authz
+		.apply_without_response("ext authz", c, l, req, rp.headers())
+		.await?;
+	if let Some(j) = &pol.authorization {
 		j.apply(req)
 			.map_err(|_| ProxyResponse::from(ProxyError::AuthorizationFailed))?;
 	}
 
-	for lrl in &policies.local_rate_limit {
+	for lrl in &pol.local_rate_limit {
 		lrl.check_request()?;
 		dtrace::snapshot!(Request, "local rate limit", &req);
 	}
 
-	if let Some(rrl) = &policies.remote_rate_limit {
-		rrl
-			.check(client, req)
-			.await?
-			.apply(response_policies.headers())?;
+	if let Some(rrl) = &pol.remote_rate_limit {
+		rrl.check(c.clone(), req).await?.apply(rp.headers())?;
 		dtrace::snapshot!(Request, "remote rate limit", &req);
 	}
 
-	if let Some(x) = response_policies.ext_proc.as_mut() {
-		x.mutate_request(req)
-			.await?
-			.apply(response_policies.headers())?;
+	if let Some(x) = rp.ext_proc.as_mut() {
+		x.mutate_request(req).await?.apply(rp.headers())?;
 		dtrace::snapshot!(Request, "ext proc", &req);
 	}
 
-	if let Some(j) = &policies.transformation {
-		j.apply_request(req);
-		dtrace::snapshot!(Request, "transformation", &req);
-	}
+	rp.transformation = pol
+		.transformation
+		.apply("transformation", c, l, req, rp.headers())
+		.await?;
 
-	if let Some(csrf) = &policies.csrf {
-		csrf
-			.apply(req)
-			.map_err(|_| ProxyError::CsrfValidationFailed)?
-			.apply(response_policies.headers())?;
-		dtrace::snapshot!(Request, "csrf", &req);
-	}
-	if let Some(rhm) = &policies.request_header_modifier {
-		rhm.apply_request(req).map_err(ProxyError::from)?;
-		dtrace::snapshot!(Request, "request header modifier", &req);
-	}
+	pol
+		.csrf
+		.apply_without_response("csrf", c, l, req, rp.headers())
+		.await?;
+
+	// Insert route response header filter. This a response-only policy so we only insert it, no need
+	// to run it.
+	rp.route_response_header = pol.response_header_modifier.clone();
+	pol
+		.request_header_modifier
+		.apply_without_response("request header modifier", c, l, req, rp.headers())
+		.await?;
 
 	// Enable Auto Hostname rewrite by default. This may be disabled by a URL Rewrite, or explicitly
 	// setting hostname_rewrite = None
-	if policies
-		.hostname_rewrite
-		.unwrap_or(HostRedirectOverride::Auto)
-		== HostRedirectOverride::Auto
-	{
+	if pol.hostname_rewrite.unwrap_or(HostRedirectOverride::Auto) == HostRedirectOverride::Auto {
 		req.extensions_mut().insert(AutoHostname());
 	}
-	if let Some(r) = &policies.url_rewrite {
-		r.apply(req).map_err(ProxyError::from)?;
-	}
-	if let Some(rr) = &policies.request_redirect {
-		let pr = rr.apply(req).map_err(ProxyError::from)?;
-		pr.apply(response_policies.headers())?;
-		dtrace::snapshot!(Request, "request redirect", &req);
-	}
-	if let Some(dr) = &policies.direct_response {
-		PolicyResponse::default()
-			.with_response(dr.apply().map_err(ProxyError::from)?)
-			.apply(response_policies.headers())?;
-	}
+	pol
+		.url_rewrite
+		.apply_without_response("url rewrite", c, l, req, rp.headers())
+		.await?;
+	pol
+		.request_redirect
+		.apply_without_response("request redirect", c, l, req, rp.headers())
+		.await?;
+	pol
+		.direct_response
+		.apply_without_response("direct response", c, l, req, rp.headers())
+		.await?;
 
 	// Mirror, timeout, and retry are handled separately.
 
@@ -234,7 +223,7 @@ async fn apply_backend_policies(
 	backend_call: &BackendCall,
 	req: &mut Request,
 	log: &mut Option<&mut RequestLog>,
-	response_policies: &mut ResponsePolicies,
+	rp: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
 	let BackendPolicies {
 		backend_tls: _,
@@ -268,8 +257,7 @@ async fn apply_backend_policies(
 		// Applied elsewhere
 		health: _,
 	} = &backend_call.backend_policies;
-	response_policies.backend_response_header = response_header_modifier.clone();
-	response_policies.backend_transformation = transformation.clone();
+	rp.backend_response_header = response_header_modifier.as_response_policy();
 
 	let dh = backend::HTTP::default();
 	http
@@ -281,17 +269,17 @@ async fn apply_backend_policies(
 		auth::apply_backend_auth(&backend_info, auth, req).await?;
 		dtrace::snapshot!(Request, "backend auth", &req);
 	}
-	if let Some(j) = transformation {
-		j.apply_request(req);
-		dtrace::snapshot!(Request, "backend transformation", &req);
-	}
+	rp.backend_transformation = transformation
+		.apply("backend transformation", log, req, rp.headers())
+		.await?;
 	if let Some(rhm) = request_header_modifier {
 		rhm.apply_request(req).map_err(ProxyError::from)?;
 		dtrace::snapshot!(Request, "backend request header modifier", &req);
 	}
 	if let Some(rr) = request_redirect {
-		let pr = rr.apply(req).map_err(ProxyError::from)?;
-		pr.apply(response_policies.headers())?;
+		rr.apply(req)
+			.map_err(ProxyError::from)?
+			.apply(rp.headers())?;
 	}
 
 	if let Some(a2a) = a2a {
@@ -309,7 +297,7 @@ async fn apply_backend_policies(
 				l.backend_protocol = Some(cel::BackendProtocol::a2a);
 			});
 		}
-		response_policies.a2a_type = a2a_type;
+		rp.a2a_type = a2a_type;
 	}
 
 	Ok(())
@@ -318,48 +306,47 @@ async fn apply_backend_policies(
 async fn apply_gateway_policies(
 	policies: &GatewayPolicies,
 	client: PolicyClient,
-	log: &mut RequestLog,
+	l: &mut RequestLog,
 	req: &mut Request,
 	ext_proc: Option<&mut ExtProcRequest>,
 	response_headers: &mut HeaderMap,
 ) -> Result<(), ProxyResponse> {
-	if let Some(o) = &policies.oidc {
-		o.apply(Some(log), req, client.clone())
-			.await
-			.map_err(|e| ProxyResponse::from(ProxyError::OidcFailure(e)))?
-			.apply(response_headers)?;
-		http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
-	}
+	let rh = response_headers;
+	let c = &client;
+	policies
+		.oidc
+		.apply_without_response("gateway oidc", c, l, req, rh)
+		.await?;
+	http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
 
-	if let Some(j) = &policies.jwt {
-		j.apply(&client, Some(log), req).await?;
-		dtrace::snapshot!(Request, "gateway jwt", &req);
-	}
-	if let Some(b) = &policies.basic_auth {
-		b.apply(req).await?;
-		dtrace::snapshot!(Request, "gateway basic auth", &req);
-	}
-	if let Some(b) = &policies.api_key {
-		b.apply(req).await?;
-		dtrace::snapshot!(Request, "gateway api key", &req);
-	}
+	policies
+		.jwt
+		.apply_without_response("gateway jwt", c, l, req, rh)
+		.await?;
 
-	if let Some(x) = &policies.ext_authz {
-		x.check(client.clone(), req)
-			.await?
-			.apply(response_headers)?;
-		dtrace::snapshot!(Request, "gateway ext authz", &req);
-	}
+	policies
+		.basic_auth
+		.apply_without_response("gateway basic auth", c, l, req, rh)
+		.await?;
+	policies
+		.api_key
+		.apply_without_response("gateway api key", c, l, req, rh)
+		.await?;
+
+	policies
+		.ext_authz
+		.apply_without_response("gateway ext authz", c, l, req, rh)
+		.await?;
 
 	if let Some(x) = ext_proc {
-		x.mutate_request(req).await?.apply(response_headers)?;
+		x.mutate_request(req).await?.apply(rh)?;
 		dtrace::snapshot!(Request, "gateway ext proc", &req);
 	}
 
-	if let Some(j) = &policies.transformation {
-		j.apply_request(req);
-		dtrace::snapshot!(Request, "gateway transformation", &req);
-	}
+	policies
+		.transformation
+		.apply_without_response("gateway transformation", c, l, req, rh)
+		.await?;
 
 	Ok(())
 }
@@ -719,17 +706,15 @@ impl HTTPProxy {
 			.ext_proc
 			.take()
 			.map(|c| c.build(self.policy_client()));
-		response_policies.route_response_header = route_policies.response_header_modifier.clone();
-		// backend_response_header is set much later
+		// Others are set only when they have gotten to the appropriate phase of the request, so we simulate
+		// a middle-ware style approach where if the request side never runs, neithe does the response side.
 		response_policies.timeout = route_policies.timeout.clone();
-		response_policies.transformation = route_policies.transformation.clone();
-		response_policies.gateway_transformation = gateway_policies.transformation.clone();
 		response_policies.ext_proc = maybe_ext_proc;
 		response_policies.gateway_ext_proc = maybe_gateway_ext_proc;
 
 		apply_request_policies(
 			&route_policies,
-			self.policy_client(),
+			&self.policy_client(),
 			log,
 			&mut req,
 			response_policies,
@@ -1299,7 +1284,7 @@ fn get_backend_policies(
 	inputs: &ProxyInputs,
 	// Backend, and policies specifically inlined on this backend object
 	backend: &BackendWithPolicies,
-	inline_policies: &[BackendPolicy],
+	inline_policies: &[BackendTrafficPolicy],
 	path: Option<RoutePath>,
 ) -> BackendPolicies {
 	inputs.stores.read_binds().backend_policies(
@@ -2362,11 +2347,11 @@ pub struct ServiceCallOverride {
 #[derive(Debug, Default)]
 struct ResponsePolicies {
 	timeout: Option<http::timeout::Policy>,
-	route_response_header: Option<filters::HeaderModifier>,
-	backend_response_header: Option<filters::HeaderModifier>,
-	transformation: Option<Transformation>,
-	backend_transformation: Option<Transformation>,
-	gateway_transformation: Option<Transformation>,
+	route_response_header: ResponsePolicy<filters::HeaderModifier>,
+	backend_response_header: ResponsePolicy<filters::HeaderModifier>,
+	transformation: ResponsePolicy<Transformation>,
+	backend_transformation: ResponsePolicy<Transformation>,
+	gateway_transformation: ResponsePolicy<Transformation>,
 	response_headers: HeaderMap,
 	ext_proc: Option<ExtProcRequest>,
 	gateway_ext_proc: Option<ExtProcRequest>,
@@ -2381,51 +2366,51 @@ impl ResponsePolicies {
 	pub async fn apply(
 		&mut self,
 		resp: &mut Response,
-		log: &mut RequestLog,
+		l: &mut RequestLog,
 		is_upstream_response: bool,
 	) -> Result<(), ProxyResponse> {
-		dtrace::snapshot!(Response, "response policies", log, &resp);
+		let rh = &mut self.response_headers;
 
-		if let Some(rhm) = &self.route_response_header {
-			rhm.apply(resp.headers_mut()).map_err(ProxyError::from)?;
-			dtrace::snapshot!(Response, "response header modifier", log, &resp);
-		}
-		if let Some(rhm) = &self.backend_response_header {
-			rhm.apply(resp.headers_mut()).map_err(ProxyError::from)?;
-			dtrace::snapshot!(Response, "backend response header modifier", log, &resp);
-		}
-		if let Some(j) = &self.transformation {
-			j.apply_response(resp, log.request_snapshot.as_ref());
-			dtrace::snapshot!(Response, "transformation", log, &resp);
-		}
-		if let Some(j) = &self.backend_transformation {
-			j.apply_response(resp, log.request_snapshot.as_ref());
-			dtrace::snapshot!(Response, "backend transformation", log, &resp);
-		}
-		if let Some(j) = &self.gateway_transformation {
-			j.apply_response(resp, log.request_snapshot.as_ref());
-			dtrace::snapshot!(Response, "gateway transformation", log, &resp);
-		}
+		self
+			.route_response_header
+			.apply("response header modifier", l, resp, rh)
+			.await?;
+		self
+			.backend_response_header
+			.apply("backend response header modifier", l, resp, rh)
+			.await?;
+		self
+			.transformation
+			.apply("transformation", l, resp, rh)
+			.await?;
+		self
+			.backend_transformation
+			.apply("backend transformation", l, resp, rh)
+			.await?;
+		self
+			.gateway_transformation
+			.apply("gateway transformation", l, resp, rh)
+			.await?;
 
 		// ext_proc is only intended to run on responses from upstream
 		if is_upstream_response {
 			if let Some(x) = self.ext_proc.as_mut() {
-				x.mutate_response(resp, log.request_snapshot.as_ref())
+				x.mutate_response(resp, l.request_snapshot.as_ref())
 					.await?
 					.apply(&mut self.response_headers)?;
-				dtrace::snapshot!(Response, "ext proc", log, &resp);
+				dtrace::snapshot!(Response, "ext proc", l, &resp);
 			};
 			if let Some(x) = self.gateway_ext_proc.as_mut() {
-				x.mutate_response(resp, log.request_snapshot.as_ref())
+				x.mutate_response(resp, l.request_snapshot.as_ref())
 					.await?
 					.apply(&mut self.response_headers)?;
-				dtrace::snapshot!(Response, "gateway ext proc", log, &resp);
+				dtrace::snapshot!(Response, "gateway ext proc", l, &resp);
 			}
 		}
 
 		if !self.response_headers.is_empty() {
 			merge_in_headers(Some(self.response_headers.clone()), resp.headers_mut());
-			dtrace::snapshot!(Response, "response headers", log, &resp);
+			dtrace::snapshot!(Response, "response headers", l, &resp);
 		}
 
 		Ok(())
@@ -2456,7 +2441,7 @@ impl PolicyClient {
 		&self,
 		mut req: Request,
 		backend_ref: &SimpleBackendReference,
-		policies: &[BackendPolicy],
+		policies: &[BackendTrafficPolicy],
 	) -> Result<Response, ProxyError> {
 		let backend = resolve_simple_backend(backend_ref, self.inputs.as_ref())?;
 		trace!("resolved {:?} to {:?}", backend_ref, &backend);
@@ -2509,7 +2494,7 @@ impl PolicyClient {
 		&self,
 		req: Request,
 		backend: SimpleBackend,
-		policies: Vec<BackendPolicy>,
+		policies: Vec<BackendTrafficPolicy>,
 	) -> Result<Response, ProxyError> {
 		let backend = Backend::from(backend);
 		let pols = self

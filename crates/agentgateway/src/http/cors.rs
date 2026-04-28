@@ -285,6 +285,20 @@ impl Cors {
 	}
 }
 
+impl crate::store::RequestPolicyTrait for Cors {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		req: &mut Request,
+	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
+		self
+			.apply(req)
+			.map_err(crate::proxy::ProxyError::from)
+			.map_err(Into::into)
+	}
+}
+
 const HEADER_VALUE_TRUE: http::HeaderValue = HeaderValue::from_static("true");
 
 fn normalize_token_header_value(value: &http::HeaderValue) -> Option<http::HeaderValue> {

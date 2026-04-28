@@ -6,8 +6,8 @@ use secrecy::{ExposeSecret, SecretString};
 
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
-use crate::proxy::ProxyError;
 use crate::proxy::dtrace::{self, pol_result};
+use crate::proxy::{ProxyError, ProxyResponse};
 use crate::*;
 
 #[cfg(test)]
@@ -151,15 +151,22 @@ impl APIKeyAuthentication {
 			))
 		}
 	}
+}
 
-	pub async fn apply(&self, req: &mut Request) -> Result<(), ProxyError> {
-		let res = self.verify(req).await?;
+impl crate::store::RequestPolicyTrait for APIKeyAuthentication {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		req: &mut Request,
+	) -> Result<crate::http::PolicyResponse, ProxyResponse> {
+		let res = self.verify(req).await.map_err(ProxyResponse::from)?;
 		if let Some(claims) = res {
-			self.location.remove(req)?;
+			self.location.remove(req).map_err(ProxyResponse::from)?;
 			// Insert the claims into extensions so we can reference it later
 			req.extensions_mut().insert(claims);
 		}
-		Ok(())
+		Ok(crate::http::PolicyResponse::default())
 	}
 }
 

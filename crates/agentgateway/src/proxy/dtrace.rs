@@ -77,14 +77,17 @@ pub(crate) use pol_event;
 macro_rules! snapshot {
 	(Request, $kind:expr, $request:expr) => {{
 		$crate::proxy::dtrace::trace(|trace| {
-			trace.request_snapshot($kind, cel::Executor::new_request($request).debug_snapshot())
+			trace.request_snapshot(
+				$kind,
+				crate::cel::Executor::new_request($request).debug_snapshot(),
+			)
 		});
 	}};
 	(Response, $kind:expr, $log:expr, $resp:expr) => {{
 		$crate::proxy::dtrace::trace(|trace| {
 			trace.response_snapshot(
 				$kind,
-				cel::Executor::new_response($log.request_snapshot.as_ref(), $resp).debug_snapshot(),
+				crate::cel::Executor::new_response($log.request_snapshot.as_ref(), $resp).debug_snapshot(),
 			)
 		});
 	}};

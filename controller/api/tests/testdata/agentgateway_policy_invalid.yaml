@@ -193,6 +193,17 @@ spec:
       forwardBody:
         maxSize: 1024
 ---
+_err: 'backendRef: Required'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-extauth-no-backend
+spec:
+  traffic:
+    extAuth:
+      forwardBody:
+        maxSize: 1024
+---
 _err: 'exactly one of the fields in [requests tokens] must be set'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -260,6 +271,25 @@ spec:
         kind: Service
       failureMode: IgnoreErrors
       grpc: {}
+---
+_err: 'conditional entries without condition must be last'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-extauth-unconditional-not-last
+spec:
+  traffic:
+    extAuth:
+      conditional:
+        - policy:
+            backendRef:
+              name: auth-server
+              kind: Service
+        - condition: '"x-test" in request.headers'
+          policy:
+            backendRef:
+              name: auth-server
+              kind: Service
 ---
 _err: 'failureMode: Unsupported value'
 apiVersion: agentgateway.dev/v1alpha1

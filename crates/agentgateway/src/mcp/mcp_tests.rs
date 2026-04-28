@@ -21,7 +21,7 @@ use crate::test_helpers::proxymock::{
 	BIND_KEY, TestBind, basic_named_route, basic_route, setup_proxy_test, simple_bind,
 };
 use crate::test_helpers::ratelimitmock::{RateLimitMock, over_limit_response};
-use crate::types::agent::{BackendPolicy, FrontendPolicy, PolicyTarget, TargetedPolicy};
+use crate::types::agent::{BackendTrafficPolicy, FrontendPolicy, PolicyTarget, TargetedPolicy};
 use crate::*;
 
 #[tokio::test]
@@ -306,7 +306,7 @@ async fn stream_to_stream_single_tls() {
 		&mock,
 		true,
 		false,
-		vec![BackendPolicy::BackendAuth(BackendAuth::Key {
+		vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
 			value: SecretString::new("my-key".into()),
 			location: None,
 		})],
@@ -348,7 +348,7 @@ async fn authorization_denied_returns_unknown_tool_error() {
 		&mock,
 		true,
 		false,
-		vec![BackendPolicy::McpAuthorization(deny_all_policy)],
+		vec![BackendTrafficPolicy::McpAuthorization(deny_all_policy)],
 	)
 	.await;
 
@@ -411,7 +411,7 @@ async fn authorization_denied_returns_unknown_prompt_error() {
 		&mock,
 		true,
 		false,
-		vec![BackendPolicy::McpAuthorization(deny_all_policy)],
+		vec![BackendTrafficPolicy::McpAuthorization(deny_all_policy)],
 	)
 	.await;
 
@@ -466,7 +466,7 @@ async fn authorization_denied_returns_unknown_resource_error() {
 		&mock,
 		true,
 		false,
-		vec![BackendPolicy::McpAuthorization(deny_all_policy)],
+		vec![BackendTrafficPolicy::McpAuthorization(deny_all_policy)],
 	)
 	.await;
 
@@ -525,7 +525,7 @@ async fn authorization_deny_specific_tool_filters_only_that_tool() {
 		&mock,
 		true,
 		false,
-		vec![BackendPolicy::McpAuthorization(deny_echo_policy)],
+		vec![BackendTrafficPolicy::McpAuthorization(deny_echo_policy)],
 	)
 	.await;
 
@@ -596,7 +596,7 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 		&mock,
 		true,
 		false,
-		vec![BackendPolicy::McpAuthorization(deny_policy)],
+		vec![BackendTrafficPolicy::McpAuthorization(deny_policy)],
 	)
 	.await;
 
@@ -999,7 +999,7 @@ async fn setup_proxy_policies(
 	mock: &MockServer,
 	stateful: bool,
 	legacy_sse: bool,
-	policies: Vec<BackendPolicy>,
+	policies: Vec<BackendTrafficPolicy>,
 ) -> (TestBind, SocketAddr) {
 	let t = setup_proxy_test("{}")
 		.unwrap()

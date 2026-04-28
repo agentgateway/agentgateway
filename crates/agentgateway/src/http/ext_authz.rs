@@ -23,9 +23,9 @@ use crate::http::{
 };
 use crate::proxy::dtrace::{Severity, pol_event, pol_result_timed};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::proxy::{ProxyError, dtrace};
+use crate::proxy::{ProxyError, ProxyResponse, dtrace};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
-use crate::types::agent::{BackendPolicy, SimpleBackendReference};
+use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 use crate::*;
 
 const TRACE_POLICY_KIND: &str = "ext_auth";
@@ -134,7 +134,7 @@ pub struct ExtAuthz {
 		feature = "schema",
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
-	pub policies: Vec<BackendPolicy>,
+	pub policies: Vec<BackendTrafficPolicy>,
 	/// The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.
 	#[serde(default)]
 	pub protocol: Protocol,
@@ -148,32 +148,6 @@ pub struct ExtAuthz {
 	/// Options for including the request body in the authorization request
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub include_request_body: Option<BodyOptions>,
-}
-impl ExtAuthz {
-	pub fn expressions(&self) -> Box<dyn Iterator<Item = &Expression> + '_> {
-		match &self.protocol {
-			Protocol::Grpc {
-				metadata: Some(m), ..
-			} => Box::new(m.values().map(|v| v.as_ref())),
-			Protocol::Http {
-				redirect,
-				path,
-				add_request_headers,
-				// TODO: this runs on the response. We would ideally have a way to NOT consider the response
-				// attributes from this.
-				metadata: m,
-				..
-			} => Box::new(
-				add_request_headers
-					.values()
-					.map(|v| v.as_ref())
-					.chain(m.values().map(|v| v.as_ref()))
-					.chain(redirect.as_deref())
-					.chain(path.as_deref()),
-			),
-			_ => Box::new(std::iter::empty()),
-		}
-	}
 }
 
 impl ExtAuthz {
@@ -789,6 +763,46 @@ impl ExtAuthz {
 		let res = exec.eval(v)?;
 		let js = res.json().map_err(|_| cel::Error::JsonConvert)?;
 		Ok(js)
+	}
+}
+
+impl crate::store::RequestPolicyTrait for ExtAuthz {
+	async fn apply(
+		&self,
+		client: &PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		req: &mut Request,
+	) -> Result<PolicyResponse, ProxyResponse> {
+		self
+			.check(client.clone(), req)
+			.await
+			.map_err(ProxyResponse::from)
+	}
+
+	fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		let iter: Box<dyn Iterator<Item = &cel::Expression>> = match &self.protocol {
+			Protocol::Grpc {
+				metadata: Some(m), ..
+			} => Box::new(m.values().map(|v| v.as_ref())),
+			Protocol::Http {
+				redirect,
+				path,
+				add_request_headers,
+				// TODO: this runs on the response. We would ideally have a way to NOT consider the response
+				// attributes from this.
+				metadata: m,
+				..
+			} => Box::new(
+				add_request_headers
+					.values()
+					.map(|v| v.as_ref())
+					.chain(m.values().map(|v| v.as_ref()))
+					.chain(redirect.as_deref())
+					.chain(path.as_deref()),
+			),
+			_ => Box::new(std::iter::empty()),
+		};
+		iter
 	}
 }
 

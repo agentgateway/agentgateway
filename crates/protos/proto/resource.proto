@@ -125,6 +125,18 @@ message TCPRoute {
   repeated RouteBackend backends = 6;
 }
 
+message ConditionalPolicies {
+    repeated ConditionalPolicy policies = 1;
+}
+message ConditionalPolicy {
+  string condition = 1;
+  oneof kind {
+    // Currently only traffic is supported
+    TrafficPolicySpec traffic = 2;
+//    BackendPolicySpec backend = 3;
+//    FrontendPolicySpec frontend = 4;
+  }
+}
 message Policy {
   // Unique key for this policy
   string key = 1;
@@ -136,6 +148,7 @@ message Policy {
     TrafficPolicySpec traffic = 4;
     BackendPolicySpec backend = 5;
     FrontendPolicySpec frontend = 6;
+    ConditionalPolicies conditional = 7;
   }
 }
 message Backend {

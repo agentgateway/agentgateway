@@ -1,0 +1,95 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ext-auth-conditional
+  namespace: default
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    extAuth:
+      conditional:
+        - condition: "random() > .5"
+          policy:
+            backendRef:
+              name: extauthz
+              port: 1024
+            grpc: {}
+        - condition: "request.path == '/secure'"
+          policy:
+            backendRef:
+              name: extauthz
+              port: 1024
+            grpc: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extauthz
+  namespace: default
+spec:
+  ports:
+    - port: 1024
+---
+# Output
+output:
+- gateway:
+    Name: dummy
+    Namespace: default
+  resource:
+    policy:
+      conditional:
+        policies:
+        - condition: random() > .5
+          traffic:
+            extAuthz:
+              grpc: {}
+              target:
+                port: 1024
+                service:
+                  hostname: extauthz.default.svc.cluster.local
+                  namespace: default
+        - condition: request.path == '/secure'
+          traffic:
+            extAuthz:
+              grpc: {}
+              target:
+                port: 1024
+                service:
+                  hostname: extauthz.default.svc.cluster.local
+                  namespace: default
+      key: traffic/default/ext-auth-conditional:extauth:default/dummy
+      name:
+        kind: AgentgatewayPolicy
+        name: ext-auth-conditional
+        namespace: default
+      target:
+        gateway:
+          name: dummy
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: ext-auth-conditional
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: agentgateway.dev
+        name: StatusSummary
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is not attached: Gateway default/dummy not found'
+        reason: Pending
+        status: "False"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

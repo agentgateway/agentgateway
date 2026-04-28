@@ -1236,7 +1236,7 @@ impl PolicyGrpcLogExporter {
 	fn new(
 		inputs: Arc<crate::ProxyInputs>,
 		target: Arc<crate::types::agent::SimpleBackendReference>,
-		policies: Vec<crate::types::agent::BackendPolicy>,
+		policies: Vec<crate::types::agent::BackendTrafficPolicy>,
 		runtime: tokio::runtime::Handle,
 	) -> Self {
 		use crate::http::ext_proc::GrpcReferenceChannel;
@@ -1327,7 +1327,7 @@ impl OtelAccessLogger {
 	pub fn new(
 		policy_client: crate::proxy::httpproxy::PolicyClient,
 		backend_ref: crate::types::agent::SimpleBackendReference,
-		policies: Vec<crate::types::agent::BackendPolicy>,
+		policies: Vec<crate::types::agent::BackendTrafficPolicy>,
 		protocol: crate::types::agent::TracingProtocol,
 		path: String,
 	) -> anyhow::Result<Self> {

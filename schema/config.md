@@ -1225,6 +1225,129 @@
 |`binds[].listeners[].routes[].policies.apiKey.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.apiKey.location.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].service`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].service.name`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].service.name.namespace`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].service.name.hostname`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].service.port`|integer||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies`|object|Policies to connect to the backend|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http.version`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.grpc`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.http`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.http.path`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].failureMode.denyWithStatus`|integer||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody`|object|Options for including the request body in the authorization request|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].routes[].policies.extAuthz.service`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.service.name`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.service.name.namespace`|string||
@@ -4537,6 +4660,129 @@
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
+|`binds[].listeners[].policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`binds[].listeners[].policies.extAuthz.conditional[].service`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].service.name`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].service.name.namespace`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].service.name.hostname`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].service.port`|integer||
+|`binds[].listeners[].policies.extAuthz.conditional[].host`|string|Hostname or IP address|
+|`binds[].listeners[].policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies`|object|Policies to connect to the backend|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request.add`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request.set`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request.body`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request.metadata`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.add`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.set`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.body`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.metadata`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.cert`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.key`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.root`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.hostname`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.http.version`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.keepalives`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.grpc`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.http`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.http.path`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`binds[].listeners[].policies.extAuthz.conditional[].failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`binds[].listeners[].policies.extAuthz.conditional[].failureMode.denyWithStatus`|integer||
+|`binds[].listeners[].policies.extAuthz.conditional[].includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody`|object|Options for including the request body in the authorization request|
+|`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].policies.extAuthz.service`|object||
 |`binds[].listeners[].policies.extAuthz.service.name`|object||
 |`binds[].listeners[].policies.extAuthz.service.name.namespace`|string||
@@ -6211,6 +6457,129 @@
 |`policies[].policy.apiKey.location.cookie`|object||
 |`policies[].policy.apiKey.location.cookie.name`|string||
 |`policies[].policy.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
+|`policies[].policy.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`policies[].policy.extAuthz.conditional[].service`|object||
+|`policies[].policy.extAuthz.conditional[].service.name`|object||
+|`policies[].policy.extAuthz.conditional[].service.name.namespace`|string||
+|`policies[].policy.extAuthz.conditional[].service.name.hostname`|string||
+|`policies[].policy.extAuthz.conditional[].service.port`|integer||
+|`policies[].policy.extAuthz.conditional[].host`|string|Hostname or IP address|
+|`policies[].policy.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`policies[].policy.extAuthz.conditional[].policies`|object|Policies to connect to the backend|
+|`policies[].policy.extAuthz.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`policies[].policy.extAuthz.conditional[].policies.requestHeaderModifier.add`|object||
+|`policies[].policy.extAuthz.conditional[].policies.requestHeaderModifier.set`|object||
+|`policies[].policy.extAuthz.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`policies[].policy.extAuthz.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`policies[].policy.extAuthz.conditional[].policies.transformations.request`|object||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.request.add`|object||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.request.set`|object||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.request.remove`|[]string||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.request.body`|string||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.request.metadata`|object||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.response`|object||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.response.add`|object||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.response.set`|object||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.response.remove`|[]string||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.response.body`|string||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.response.metadata`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.cert`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.key`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.root`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.hostname`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.insecure`|boolean||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.alpn`|[]string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.value`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.header`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object||
+|`policies[].policy.extAuthz.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`policies[].policy.extAuthz.conditional[].policies.http.version`|string||
+|`policies[].policy.extAuthz.conditional[].policies.http.requestTimeout`|string||
+|`policies[].policy.extAuthz.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`policies[].policy.extAuthz.conditional[].policies.tcp.keepalives`|object||
+|`policies[].policy.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`policies[].policy.extAuthz.conditional[].policies.tcp.keepalives.time`|string||
+|`policies[].policy.extAuthz.conditional[].policies.tcp.keepalives.interval`|string||
+|`policies[].policy.extAuthz.conditional[].policies.tcp.keepalives.retries`|integer||
+|`policies[].policy.extAuthz.conditional[].policies.tcp.connectTimeout`|object||
+|`policies[].policy.extAuthz.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`policies[].policy.extAuthz.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.service`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extAuthz.conditional[].protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`policies[].policy.extAuthz.conditional[].protocol.grpc`|object||
+|`policies[].policy.extAuthz.conditional[].protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`policies[].policy.extAuthz.conditional[].protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`policies[].policy.extAuthz.conditional[].protocol.http`|object||
+|`policies[].policy.extAuthz.conditional[].protocol.http.path`|string||
+|`policies[].policy.extAuthz.conditional[].protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`policies[].policy.extAuthz.conditional[].protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`policies[].policy.extAuthz.conditional[].protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`policies[].policy.extAuthz.conditional[].protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`policies[].policy.extAuthz.conditional[].failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`policies[].policy.extAuthz.conditional[].failureMode.denyWithStatus`|integer||
+|`policies[].policy.extAuthz.conditional[].includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`policies[].policy.extAuthz.conditional[].includeRequestBody`|object|Options for including the request body in the authorization request|
+|`policies[].policy.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`policies[].policy.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`policies[].policy.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`policies[].policy.extAuthz.service`|object||
 |`policies[].policy.extAuthz.service.name`|object||
 |`policies[].policy.extAuthz.service.name.namespace`|string||
@@ -10567,6 +10936,129 @@
 |`routeGroups[].routes[].policies.apiKey.location.cookie`|object||
 |`routeGroups[].routes[].policies.apiKey.location.cookie.name`|string||
 |`routeGroups[].routes[].policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
+|`routeGroups[].routes[].policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].service`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].service.name`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].service.name.namespace`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].service.name.hostname`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].service.port`|integer||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies`|object|Policies to connect to the backend|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier.add`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier.set`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request.add`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request.set`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request.body`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request.metadata`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.add`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.set`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.body`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.metadata`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.cert`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.key`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.root`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.hostname`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.insecure`|boolean||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.alpn`|[]string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http.version`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.time`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.interval`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.retries`|integer||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.connectTimeout`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.grpc`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.http`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.http.path`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].failureMode.denyWithStatus`|integer||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody`|object|Options for including the request body in the authorization request|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`routeGroups[].routes[].policies.extAuthz.service`|object||
 |`routeGroups[].routes[].policies.extAuthz.service.name`|object||
 |`routeGroups[].routes[].policies.extAuthz.service.name.namespace`|string||
@@ -14667,6 +15159,129 @@
 |`llm.policies.jwtAuth.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`llm.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`llm.policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
+|`llm.policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`llm.policies.extAuthz.conditional[].service`|object||
+|`llm.policies.extAuthz.conditional[].service.name`|object||
+|`llm.policies.extAuthz.conditional[].service.name.namespace`|string||
+|`llm.policies.extAuthz.conditional[].service.name.hostname`|string||
+|`llm.policies.extAuthz.conditional[].service.port`|integer||
+|`llm.policies.extAuthz.conditional[].host`|string|Hostname or IP address|
+|`llm.policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`llm.policies.extAuthz.conditional[].policies`|object|Policies to connect to the backend|
+|`llm.policies.extAuthz.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`llm.policies.extAuthz.conditional[].policies.requestHeaderModifier.add`|object||
+|`llm.policies.extAuthz.conditional[].policies.requestHeaderModifier.set`|object||
+|`llm.policies.extAuthz.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`llm.policies.extAuthz.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`llm.policies.extAuthz.conditional[].policies.transformations.request`|object||
+|`llm.policies.extAuthz.conditional[].policies.transformations.request.add`|object||
+|`llm.policies.extAuthz.conditional[].policies.transformations.request.set`|object||
+|`llm.policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string||
+|`llm.policies.extAuthz.conditional[].policies.transformations.request.body`|string||
+|`llm.policies.extAuthz.conditional[].policies.transformations.request.metadata`|object||
+|`llm.policies.extAuthz.conditional[].policies.transformations.response`|object||
+|`llm.policies.extAuthz.conditional[].policies.transformations.response.add`|object||
+|`llm.policies.extAuthz.conditional[].policies.transformations.response.set`|object||
+|`llm.policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string||
+|`llm.policies.extAuthz.conditional[].policies.transformations.response.body`|string||
+|`llm.policies.extAuthz.conditional[].policies.transformations.response.metadata`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.cert`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.key`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.root`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.hostname`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.insecure`|boolean||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.alpn`|[]string||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.value`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.header`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.aws`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object||
+|`llm.policies.extAuthz.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`llm.policies.extAuthz.conditional[].policies.http.version`|string||
+|`llm.policies.extAuthz.conditional[].policies.http.requestTimeout`|string||
+|`llm.policies.extAuthz.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`llm.policies.extAuthz.conditional[].policies.tcp.keepalives`|object||
+|`llm.policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`llm.policies.extAuthz.conditional[].policies.tcp.keepalives.time`|string||
+|`llm.policies.extAuthz.conditional[].policies.tcp.keepalives.interval`|string||
+|`llm.policies.extAuthz.conditional[].policies.tcp.keepalives.retries`|integer||
+|`llm.policies.extAuthz.conditional[].policies.tcp.connectTimeout`|object||
+|`llm.policies.extAuthz.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`llm.policies.extAuthz.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extAuthz.conditional[].protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`llm.policies.extAuthz.conditional[].protocol.grpc`|object||
+|`llm.policies.extAuthz.conditional[].protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`llm.policies.extAuthz.conditional[].protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`llm.policies.extAuthz.conditional[].protocol.http`|object||
+|`llm.policies.extAuthz.conditional[].protocol.http.path`|string||
+|`llm.policies.extAuthz.conditional[].protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`llm.policies.extAuthz.conditional[].protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`llm.policies.extAuthz.conditional[].protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`llm.policies.extAuthz.conditional[].protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`llm.policies.extAuthz.conditional[].failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`llm.policies.extAuthz.conditional[].failureMode.denyWithStatus`|integer||
+|`llm.policies.extAuthz.conditional[].includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`llm.policies.extAuthz.conditional[].includeRequestBody`|object|Options for including the request body in the authorization request|
+|`llm.policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`llm.policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`llm.policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`llm.policies.extAuthz.service`|object||
 |`llm.policies.extAuthz.service.name`|object||
 |`llm.policies.extAuthz.service.name.namespace`|string||
@@ -16190,6 +16805,129 @@
 |`mcp.policies.apiKey.location.cookie`|object||
 |`mcp.policies.apiKey.location.cookie.name`|string||
 |`mcp.policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
+|`mcp.policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`mcp.policies.extAuthz.conditional[].service`|object||
+|`mcp.policies.extAuthz.conditional[].service.name`|object||
+|`mcp.policies.extAuthz.conditional[].service.name.namespace`|string||
+|`mcp.policies.extAuthz.conditional[].service.name.hostname`|string||
+|`mcp.policies.extAuthz.conditional[].service.port`|integer||
+|`mcp.policies.extAuthz.conditional[].host`|string|Hostname or IP address|
+|`mcp.policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`mcp.policies.extAuthz.conditional[].policies`|object|Policies to connect to the backend|
+|`mcp.policies.extAuthz.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`mcp.policies.extAuthz.conditional[].policies.requestHeaderModifier.add`|object||
+|`mcp.policies.extAuthz.conditional[].policies.requestHeaderModifier.set`|object||
+|`mcp.policies.extAuthz.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`mcp.policies.extAuthz.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`mcp.policies.extAuthz.conditional[].policies.transformations.request`|object||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.request.add`|object||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.request.set`|object||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.request.body`|string||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.request.metadata`|object||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.response`|object||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.response.add`|object||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.response.set`|object||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.response.body`|string||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.response.metadata`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.cert`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.key`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.root`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.hostname`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.insecure`|boolean||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.alpn`|[]string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.value`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.header`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object||
+|`mcp.policies.extAuthz.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`mcp.policies.extAuthz.conditional[].policies.http.version`|string||
+|`mcp.policies.extAuthz.conditional[].policies.http.requestTimeout`|string||
+|`mcp.policies.extAuthz.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`mcp.policies.extAuthz.conditional[].policies.tcp.keepalives`|object||
+|`mcp.policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`mcp.policies.extAuthz.conditional[].policies.tcp.keepalives.time`|string||
+|`mcp.policies.extAuthz.conditional[].policies.tcp.keepalives.interval`|string||
+|`mcp.policies.extAuthz.conditional[].policies.tcp.keepalives.retries`|integer||
+|`mcp.policies.extAuthz.conditional[].policies.tcp.connectTimeout`|object||
+|`mcp.policies.extAuthz.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`mcp.policies.extAuthz.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extAuthz.conditional[].protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`mcp.policies.extAuthz.conditional[].protocol.grpc`|object||
+|`mcp.policies.extAuthz.conditional[].protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`mcp.policies.extAuthz.conditional[].protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`mcp.policies.extAuthz.conditional[].protocol.http`|object||
+|`mcp.policies.extAuthz.conditional[].protocol.http.path`|string||
+|`mcp.policies.extAuthz.conditional[].protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`mcp.policies.extAuthz.conditional[].protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`mcp.policies.extAuthz.conditional[].protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`mcp.policies.extAuthz.conditional[].protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`mcp.policies.extAuthz.conditional[].failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`mcp.policies.extAuthz.conditional[].failureMode.denyWithStatus`|integer||
+|`mcp.policies.extAuthz.conditional[].includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`mcp.policies.extAuthz.conditional[].includeRequestBody`|object|Options for including the request body in the authorization request|
+|`mcp.policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`mcp.policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`mcp.policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`mcp.policies.extAuthz.service`|object||
 |`mcp.policies.extAuthz.service.name`|object||
 |`mcp.policies.extAuthz.service.name.namespace`|string||

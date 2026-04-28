@@ -109,8 +109,7 @@ async fn test_query_parameter_credentials() {
 		.body(axum::body::Body::empty())
 		.unwrap();
 
-	auth
-		.apply(&mut req)
+	let _ = crate::test_helpers::test_policy(&auth, &mut req)
 		.await
 		.expect("basic auth should validate");
 	assert_eq!(req.uri().to_string(), "http://example.com/?keep=yes");

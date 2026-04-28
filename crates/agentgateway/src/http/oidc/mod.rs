@@ -196,7 +196,7 @@ struct CallbackQuery {
 impl OidcPolicy {
 	pub async fn apply(
 		&self,
-		log: Option<&mut RequestLog>,
+		log: &mut RequestLog,
 		req: &mut Request,
 		client: PolicyClient,
 	) -> Result<PolicyResponse, Error> {
@@ -217,9 +217,7 @@ impl OidcPolicy {
 							.id_token_validator
 							.validate_claims(browser_session.raw_id_token.expose_secret())
 					{
-						if let Some(Value::String(sub)) = claims.inner.get("sub")
-							&& let Some(log) = log
-						{
+						if let Some(Value::String(sub)) = claims.inner.get("sub") {
 							log.jwt_sub = Some(sub.clone());
 						}
 						req.extensions_mut().insert(claims);
@@ -274,6 +272,20 @@ impl OidcPolicy {
 		)
 		.await?;
 		Ok(Some(response))
+	}
+}
+
+impl crate::store::RequestPolicyTrait for OidcPolicy {
+	async fn apply(
+		&self,
+		client: &PolicyClient,
+		log: &mut RequestLog,
+		req: &mut Request,
+	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
+		self
+			.apply(log, req, client.clone())
+			.await
+			.map_err(|e| crate::proxy::ProxyResponse::from(crate::proxy::ProxyError::OidcFailure(e)))
 	}
 }
 

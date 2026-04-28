@@ -8,7 +8,7 @@ use crate::http::jwt::Claims;
 use crate::llm::RequestType;
 use crate::llm::policy::{AnalyzeTextConfig, AzureContentSafety, DetectJailbreakConfig};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::{BackendPolicy, ResourceName, SimpleBackend, Target};
+use crate::types::agent::{BackendTrafficPolicy, ResourceName, SimpleBackend, Target};
 
 // ---------------------------------------------------------------------------
 // Analyze Text types
@@ -190,10 +190,10 @@ fn resolve_host(root: &AzureContentSafety) -> agent_core::strng::Strng {
 }
 
 /// Build the common set of backend policies from the root config.
-fn build_policies(root: &AzureContentSafety) -> Vec<BackendPolicy> {
+fn build_policies(root: &AzureContentSafety) -> Vec<BackendTrafficPolicy> {
 	let mut pols = vec![
-		BackendPolicy::BackendTLS(crate::http::backendtls::SYSTEM_TRUST.clone()),
-		BackendPolicy::BackendAuth(BackendAuth::Azure(root.cached_azure_auth.clone())),
+		BackendTrafficPolicy::BackendTLS(crate::http::backendtls::SYSTEM_TRUST.clone()),
+		BackendTrafficPolicy::BackendAuth(BackendAuth::Azure(root.cached_azure_auth.clone())),
 	];
 	pols.extend(root.policies.iter().cloned());
 	pols

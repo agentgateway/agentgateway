@@ -31,6 +31,7 @@ use crate::http::{
 	timeout,
 };
 use crate::mcp::{FailureMode, McpAuthorization};
+use crate::store::RequestPolicy;
 use crate::telemetry::log::OrderedStringMap;
 use crate::transport::tls;
 use crate::types::discovery::{NamespacedHostname, Service};
@@ -904,7 +905,7 @@ pub struct TCPRouteBackendReference {
 	pub backend: SimpleBackendReference,
 	// Inline policies ("filters") of the route backend
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub inline_policies: Vec<BackendPolicy>,
+	pub inline_policies: Vec<BackendTrafficPolicy>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -915,7 +916,7 @@ pub struct TCPRouteBackend {
 	pub backend: SimpleBackendWithPolicies,
 	// Inline policies ("filters") of the route backend
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub inline_policies: Vec<BackendPolicy>,
+	pub inline_policies: Vec<BackendTrafficPolicy>,
 }
 
 #[apply(schema!)]
@@ -1058,7 +1059,7 @@ pub struct RouteBackendReference {
 	pub target: RouteBackendTarget,
 	// Inline policies ("filters") of the route backend
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub inline_policies: Vec<BackendPolicy>,
+	pub inline_policies: Vec<BackendTrafficPolicy>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1069,7 +1070,7 @@ pub struct RouteBackend {
 	pub backend: BackendWithPolicies,
 	// Inline policies ("filters") of the route backend
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub inline_policies: Vec<BackendPolicy>,
+	pub inline_policies: Vec<BackendTrafficPolicy>,
 }
 
 #[allow(unused)]
@@ -1083,7 +1084,7 @@ pub struct BackendWithPolicies {
 	pub backend: Backend,
 
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub inline_policies: Vec<BackendPolicy>,
+	pub inline_policies: Vec<BackendTrafficPolicy>,
 }
 
 impl From<SimpleBackendWithPolicies> for BackendWithPolicies {
@@ -1196,7 +1197,7 @@ pub struct SimpleBackendWithPolicies {
 	pub backend: SimpleBackend,
 
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub inline_policies: Vec<BackendPolicy>,
+	pub inline_policies: Vec<BackendTrafficPolicy>,
 }
 
 impl From<SimpleBackend> for SimpleBackendWithPolicies {
@@ -1986,7 +1987,7 @@ pub struct TracingConfig {
 		feature = "schema",
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
-	pub policies: Vec<BackendPolicy>,
+	pub policies: Vec<BackendTrafficPolicy>,
 	/// Span attributes to add, keyed by attribute name.
 	#[serde(default)]
 	pub attributes: OrderedStringMap<Arc<cel::Expression>>,
@@ -2109,8 +2110,8 @@ impl serde::Serialize for AccessLogPolicy {
 	}
 }
 
-impl From<BackendPolicy> for PolicyType {
-	fn from(value: BackendPolicy) -> Self {
+impl From<BackendTrafficPolicy> for PolicyType {
+	fn from(value: BackendTrafficPolicy) -> Self {
 		Self::Backend(value)
 	}
 }
@@ -2154,7 +2155,7 @@ pub struct PhasedTrafficPolicy {
 pub enum PolicyType {
 	Frontend(FrontendPolicy),
 	Traffic(PhasedTrafficPolicy),
-	Backend(BackendPolicy),
+	Backend(BackendTrafficPolicy),
 }
 
 impl PolicyType {
@@ -2170,7 +2171,7 @@ impl PolicyType {
 			_ => None,
 		}
 	}
-	pub fn as_backend(&self) -> Option<&BackendPolicy> {
+	pub fn as_backend(&self) -> Option<&BackendTrafficPolicy> {
 		match self {
 			PolicyType::Backend(t) => Some(t),
 			_ => None,
@@ -2289,29 +2290,29 @@ pub enum TrafficPolicy {
 	Authorization(Authorization),
 	LocalRateLimit(Vec<crate::http::localratelimit::RateLimit>),
 	RemoteRateLimit(remoteratelimit::RemoteRateLimit),
-	ExtAuthz(ext_authz::ExtAuthz),
+	ExtAuthz(RequestPolicy<ext_authz::ExtAuthz>),
 	ExtProc(ext_proc::ExtProc),
-	JwtAuth(JwtAuthentication),
-	Oidc(crate::http::oidc::OidcPolicy),
-	BasicAuth(crate::http::basicauth::BasicAuthentication),
-	APIKey(crate::http::apikey::APIKeyAuthentication),
-	Transformation(crate::http::transformation_cel::Transformation),
-	Csrf(crate::http::csrf::Csrf),
+	JwtAuth(RequestPolicy<JwtAuthentication>),
+	Oidc(RequestPolicy<crate::http::oidc::OidcPolicy>),
+	BasicAuth(RequestPolicy<crate::http::basicauth::BasicAuthentication>),
+	APIKey(RequestPolicy<crate::http::apikey::APIKeyAuthentication>),
+	Transformation(RequestPolicy<crate::http::transformation_cel::Transformation>),
+	Csrf(RequestPolicy<crate::http::csrf::Csrf>),
 
-	RequestHeaderModifier(filters::HeaderModifier),
-	ResponseHeaderModifier(filters::HeaderModifier),
-	RequestRedirect(filters::RequestRedirect),
-	UrlRewrite(filters::UrlRewrite),
+	RequestHeaderModifier(RequestPolicy<filters::HeaderModifier>),
+	ResponseHeaderModifier(Arc<filters::HeaderModifier>),
+	RequestRedirect(RequestPolicy<filters::RequestRedirect>),
+	UrlRewrite(RequestPolicy<filters::UrlRewrite>),
 	HostRewrite(agent::HostRedirectOverride),
 	RequestMirror(Vec<filters::RequestMirror>),
-	DirectResponse(filters::DirectResponse),
+	DirectResponse(RequestPolicy<filters::DirectResponse>),
 	#[serde(rename = "cors")]
-	CORS(http::cors::Cors),
+	CORS(RequestPolicy<http::cors::Cors>),
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub enum BackendPolicy {
+pub enum BackendTrafficPolicy {
 	McpAuthorization(McpAuthorization),
 	McpAuthentication(McpAuthentication),
 	A2a(A2aPolicy),
@@ -2327,11 +2328,11 @@ pub enum BackendPolicy {
 	#[serde(rename = "ai")]
 	AI(Arc<llm::Policy>),
 	SessionPersistence(http::sessionpersistence::Policy),
-	Transformation(crate::http::transformation_cel::Transformation),
+	Transformation(Arc<crate::http::transformation_cel::Transformation>),
 	Health(health::Policy),
 
 	RequestHeaderModifier(filters::HeaderModifier),
-	ResponseHeaderModifier(filters::HeaderModifier),
+	ResponseHeaderModifier(Arc<filters::HeaderModifier>),
 	RequestRedirect(filters::RequestRedirect),
 	RequestMirror(Vec<filters::RequestMirror>),
 }
@@ -2392,16 +2393,16 @@ pub struct JwtAuthentication {
 	pub mcp: Option<McpAuthentication>,
 }
 
-impl JwtAuthentication {
-	pub async fn apply(
+impl store::RequestPolicyTrait for JwtAuthentication {
+	async fn apply(
 		&self,
 		client: &crate::proxy::httpproxy::PolicyClient,
-		log: Option<&mut crate::telemetry::log::RequestLog>,
+		log: &mut crate::telemetry::log::RequestLog,
 		req: &mut crate::http::Request,
-	) -> Result<(), crate::proxy::ProxyResponse> {
+	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
 		if let Some(auth) = &self.mcp {
 			if !crate::mcp::auth::is_well_known_endpoint(req.uri().path()) {
-				self.jwt.apply(log, req).await.map_err(|e| {
+				self.jwt.apply(Some(log), req).await.map_err(|e| {
 					crate::proxy::ProxyResponse::from(crate::mcp::auth::create_auth_required_response(
 						crate::proxy::ProxyError::JwtAuthenticationFailure(e),
 						req,
@@ -2413,16 +2414,16 @@ impl JwtAuthentication {
 			if let Some(resp) = crate::mcp::auth::handle_mcp_request(req, auth, client).await? {
 				return Err(crate::proxy::ProxyResponse::DirectResponse(Box::new(resp)));
 			}
-			return Ok(());
+			return Ok(crate::http::PolicyResponse::default());
 		}
 
 		self
 			.jwt
-			.apply(log, req)
+			.apply(Some(log), req)
 			.await
 			.map_err(crate::proxy::ProxyError::JwtAuthenticationFailure)
 			.map_err(crate::proxy::ProxyResponse::from)?;
-		Ok(())
+		Ok(crate::http::PolicyResponse::default())
 	}
 }
 

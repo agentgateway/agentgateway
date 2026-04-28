@@ -4,8 +4,8 @@ use macro_rules_attribute::apply;
 
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
-use crate::proxy::ProxyError;
 use crate::proxy::dtrace::{self};
+use crate::proxy::{ProxyError, ProxyResponse};
 use crate::*;
 
 #[cfg(test)]
@@ -84,17 +84,6 @@ impl BasicAuthentication {
 		}
 	}
 
-	/// Apply basic authentication to a request
-	pub async fn apply(&self, req: &mut Request) -> Result<(), ProxyError> {
-		let res = self.verify(req).await?;
-		if let Some(claims) = res {
-			self.authorization_location.remove(req)?;
-			// Insert the claims into extensions so we can reference it later
-			req.extensions_mut().insert(claims);
-		}
-		Ok(())
-	}
-
 	async fn verify(&self, req: &mut Request) -> Result<Option<Claims>, ProxyError> {
 		let Some(encoded_credentials) = self.authorization_location.extract(req) else {
 			// In strict mode, we require credentials
@@ -154,6 +143,26 @@ impl BasicAuthentication {
 			);
 			Err(invalid_credentials())
 		}
+	}
+}
+
+impl crate::store::RequestPolicyTrait for BasicAuthentication {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		req: &mut Request,
+	) -> Result<crate::http::PolicyResponse, ProxyResponse> {
+		let res = self.verify(req).await.map_err(ProxyResponse::from)?;
+		if let Some(claims) = res {
+			self
+				.authorization_location
+				.remove(req)
+				.map_err(ProxyResponse::from)?;
+			// Insert the claims into extensions so we can reference it later
+			req.extensions_mut().insert(claims);
+		}
+		Ok(crate::http::PolicyResponse::default())
 	}
 }
 

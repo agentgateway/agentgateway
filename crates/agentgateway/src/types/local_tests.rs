@@ -267,6 +267,90 @@ binds:
 }
 
 #[tokio::test]
+async fn test_local_ext_authz_conditional_policy() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        extAuthz:
+          conditional:
+          - condition: request.path == "/admin"
+            host: 127.0.0.1:9000
+          - host: 127.0.0.1:9001
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	let normalized = normalize_test_yaml(input).await.unwrap();
+	let route = &normalized.listener_routes[0].1[0];
+	let Some(TrafficPolicy::ExtAuthz(ext_authz)) = route
+		.inline_policies
+		.iter()
+		.find(|policy| matches!(policy, TrafficPolicy::ExtAuthz(_)))
+	else {
+		panic!("expected extAuthz policy");
+	};
+	let entries = ext_authz.iter().collect::<Vec<_>>();
+	assert_eq!(entries.len(), 2);
+	assert_eq!(
+		entries[0].condition.as_ref().unwrap().original_expression,
+		"request.path == \"/admin\""
+	);
+	assert!(entries[1].condition.is_none());
+}
+
+#[tokio::test]
+async fn test_local_ext_authz_conditional_fallback_must_be_last() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        extAuthz:
+          conditional:
+          - host: 127.0.0.1:9000
+          - condition: request.path == "/admin"
+            host: 127.0.0.1:9001
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	let err = normalize_test_yaml(input).await.unwrap_err();
+	assert!(
+		err
+			.to_string()
+			.contains("conditional policy entries without condition must be last"),
+		"unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
+async fn test_local_ext_authz_conditional_reports_field_errors() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        extAuthz:
+          conditional:
+          - condition: 1
+            host: 127.0.0.1:9000
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	let err = normalize_test_yaml(input).await.unwrap_err();
+	assert!(
+		err.to_string().contains("invalid type: integer `1`"),
+		"unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
 async fn test_inference_routing_rejects_failure_mode() {
 	let input = r#"
 binds:

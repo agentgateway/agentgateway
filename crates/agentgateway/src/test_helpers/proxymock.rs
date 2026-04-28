@@ -34,10 +34,10 @@ use crate::store::Stores;
 use crate::transport::stream::{Socket, TCPConnectionInfo};
 use crate::transport::tls;
 use crate::types::agent::{
-	Backend, BackendPolicy, BackendReference, BackendTarget, BackendWithPolicies, Bind, BindKey,
-	BindProtocol, Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget, McpTargetSpec,
-	PathMatch, PolicyPhase, PolicyTarget, ResourceName, Route, RouteBackendReference, RouteMatch,
-	RouteName, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	Backend, BackendReference, BackendTarget, BackendTrafficPolicy, BackendWithPolicies, Bind,
+	BindKey, BindProtocol, Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget,
+	McpTargetSpec, PathMatch, PolicyPhase, PolicyTarget, ResourceName, Route, RouteBackendReference,
+	RouteMatch, RouteName, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
 	TCPRouteBackendReference, Target, TargetedPolicy,
 };
 use crate::types::local;
@@ -525,7 +525,7 @@ impl TestBind {
 		b: SocketAddr,
 		stateful: bool,
 		legacy_sse: bool,
-		policies: Vec<BackendPolicy>,
+		policies: Vec<BackendTrafficPolicy>,
 	) -> Self {
 		let opb = Backend::Opaque(
 			ResourceName::new(strng::format!("basic-{}", b), "".into()),

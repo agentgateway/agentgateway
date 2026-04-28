@@ -11,7 +11,9 @@ use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction}
 use crate::llm::{AIError, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
-use crate::types::agent::{BackendPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference};
+use crate::types::agent::{
+	BackendTrafficPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference,
+};
 use crate::*;
 
 pub mod webhook;
@@ -1238,7 +1240,7 @@ pub struct Moderation {
 		feature = "schema",
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
-	pub policies: Vec<BackendPolicy>,
+	pub policies: Vec<BackendTrafficPolicy>,
 }
 
 /// Configuration for AWS Bedrock Guardrails integration.
@@ -1260,7 +1262,7 @@ pub struct BedrockGuardrails {
 		feature = "schema",
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
-	pub policies: Vec<BackendPolicy>,
+	pub policies: Vec<BackendTrafficPolicy>,
 }
 
 /// Configuration for Google Cloud Model Armor integration.
@@ -1283,7 +1285,7 @@ pub struct GoogleModelArmor {
 		feature = "schema",
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
-	pub policies: Vec<BackendPolicy>,
+	pub policies: Vec<BackendTrafficPolicy>,
 }
 
 /// Configuration for Azure Content Safety integration.
@@ -1305,7 +1307,7 @@ pub struct AzureContentSafety {
 		feature = "schema",
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
-	pub policies: Vec<BackendPolicy>,
+	pub policies: Vec<BackendTrafficPolicy>,
 	/// Cached implicit Azure auth credential, shared across requests.
 	#[serde(skip)]
 	#[cfg_attr(feature = "schema", schemars(skip))]

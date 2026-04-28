@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"sigs.k8s.io/controller-tools/pkg/crd"
+	"sigs.k8s.io/controller-tools/pkg/deepcopy"
+	"sigs.k8s.io/controller-tools/pkg/genall"
 	"sigs.k8s.io/controller-tools/pkg/loader"
 	"sigs.k8s.io/controller-tools/pkg/markers"
 )
@@ -30,6 +33,19 @@ func newTestParser(t *testing.T, rootPath string) ([]*loader.Package, *crd.Parse
 	parser.NeedPackage(roots[0])
 
 	return roots, parser
+}
+
+func TestEmbeddedGenerics(t *testing.T) {
+	var objectGenerator genall.Generator = deepcopy.Generator{}
+	rt, err := genall.Generators{&objectGenerator}.ForRoots(
+		"github.com/agentgateway/agentgateway/controller/hack/crdgen/testdata/embeddedgeneric",
+		"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared",
+	)
+	require.NoError(t, err)
+
+	var errors bytes.Buffer
+	rt.ErrorWriter = &errors
+	require.False(t, rt.Run(), errors.String())
 }
 
 func TestAllJSONFieldNamesForTypeIncludesImportedInlineFields(t *testing.T) {
@@ -135,6 +151,41 @@ func TestOverrideXValidationErrorsWithoutExactSingleMatch(t *testing.T) {
 		})
 		require.EqualError(t, err, "OverrideXValidation matched 2 rules for messageContains \"phase PreRouting only\", expected exactly 1")
 	})
+}
+
+func TestApplyConditionalPolicyUsesVisibleSchemaFields(t *testing.T) {
+	schema := &apiextensionsv1.JSONSchemaProps{
+		Properties: map[string]apiextensionsv1.JSONSchemaProps{
+			"backendRef":  {},
+			"conditional": {},
+			"failureMode": {},
+		},
+	}
+
+	err := applyConditionalPolicy(schema, sortedPropertyNames(schema), ConditionalPolicy{
+		Fields: []string{"backendRef"},
+	})
+	require.NoError(t, err)
+	require.Len(t, schema.XValidations, 2)
+	require.Equal(t, "has(self.conditional) ? [has(self.backendRef),has(self.failureMode)].filter(x,x==true).size() == 0 : true", schema.XValidations[0].Rule)
+	require.Equal(t, "conditional cannot be set with any other field", schema.XValidations[0].Message)
+	require.Equal(t, "has(self.conditional) ? true : has(self.backendRef)", schema.XValidations[1].Rule)
+	require.Equal(t, "backendRef: Required value", schema.XValidations[1].Message)
+}
+
+func TestApplyConditionalPolicyAllowsZeroRequiredFields(t *testing.T) {
+	schema := &apiextensionsv1.JSONSchemaProps{
+		Properties: map[string]apiextensionsv1.JSONSchemaProps{
+			"conditional": {},
+			"optional":    {},
+		},
+	}
+
+	err := applyConditionalPolicy(schema, sortedPropertyNames(schema), ConditionalPolicy{})
+	require.NoError(t, err)
+	require.Len(t, schema.XValidations, 1)
+	require.Equal(t, "has(self.conditional) ? [has(self.optional)].filter(x,x==true).size() == 0 : true", schema.XValidations[0].Rule)
+	require.Equal(t, "conditional cannot be set with any other field", schema.XValidations[0].Message)
 }
 
 func TestApplyIfThenOnlyFieldsUsesVisibleSchemaFields(t *testing.T) {

@@ -1221,13 +1221,13 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 
 	use crate::http::auth::{AwsAuth, BackendAuth};
 	use crate::store::BindStore;
-	use crate::types::agent::BackendPolicy;
+	use crate::types::agent::BackendTrafficPolicy;
 
 	let guardrails = BedrockGuardrails {
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-east-1"),
-		policies: vec![BackendPolicy::BackendAuth(BackendAuth::Aws(
+		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Aws(
 			AwsAuth::ExplicitConfig {
 				access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()),
 				secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
@@ -1287,13 +1287,13 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 
 	use crate::http::auth::BackendAuth;
 	use crate::store::BindStore;
-	use crate::types::agent::BackendPolicy;
+	use crate::types::agent::BackendTrafficPolicy;
 
 	let model_armor = GoogleModelArmor {
 		template_id: strng::new("test-template"),
 		project_id: strng::new("test-project"),
 		location: Some(strng::new("us-central1")),
-		policies: vec![BackendPolicy::BackendAuth(BackendAuth::Key {
+		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
 			value: SecretString::new("user-provided-api-key".into()),
 			location: None,
 		})],

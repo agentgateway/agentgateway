@@ -1,6 +1,8 @@
 package agentgateway
 
 import (
+	"iter"
+
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -639,7 +641,7 @@ type Traffic struct {
 	// extAuth specifies the external authentication configuration for the policy.
 	// This controls what external server to send requests to for authentication.
 	// +optional
-	ExtAuth *ExtAuth `json:"extAuth,omitempty"`
+	ExtAuth *ExtAuthOrConditional `json:"extAuth,omitempty"`
 
 	// rateLimit specifies the rate limiting configuration for the policy.
 	// This controls the rate at which requests are allowed to be processed.
@@ -1434,13 +1436,66 @@ type ExtProc struct {
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 }
 
-// +kubebuilder:validation:ExactlyOneOf=grpc;http
+// +k8s:deepcopy-gen=false
+type ConditionalPolicyEntry[T any] struct {
+	Condition shared.CELExpression
+	Policy    T
+}
+
+// +k8s:deepcopy-gen=false
+type ConditionalPolicy[T any] interface {
+	ConditionalPolicy() (*T, iter.Seq[ConditionalPolicyEntry[T]])
+}
+
+type ExtAuthConditional struct {
+	// `condition` must evaluate to true for this policy to execute.
+	// +optional
+	Condition shared.CELExpression `json:"condition,omitempty"`
+	// `policy` definition.
+	// +required
+	// +kubebuilder:validation:XValidation:rule="has(self.backendRef)",message="backendRef is required2"
+	Policy ExtAuth `json:"policy"`
+}
+
+// +kubebuilder:validation:ConditionalPolicy:fields=backendRef
+type ExtAuthOrConditional struct {
+	// +optional
+	ExtAuth `json:",inline"`
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +kubebuilder:validation:XValidation:message="conditional entries without condition must be last",rule="self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e, !has(e.condition)) || !has(self[size(self) - 1].condition))"
+	Conditional []ExtAuthConditional `json:"conditional,omitempty"`
+}
+
+func (e *ExtAuthOrConditional) ConditionalPolicy() (*ExtAuth, iter.Seq[ConditionalPolicyEntry[ExtAuth]]) {
+	seq := mapseq(e.Conditional, func(e ExtAuthConditional) ConditionalPolicyEntry[ExtAuth] {
+		return ConditionalPolicyEntry[ExtAuth]{
+			Condition: e.Condition,
+			Policy:    e.Policy,
+		}
+	})
+	if len(e.Conditional) > 0 {
+		return nil, seq
+	}
+	return &e.ExtAuth, seq
+}
+
+// mapseq runs f() over all elements in s and returns the result
+func mapseq[E any, O any](s []E, f func(E) O) iter.Seq[O] {
+	return func(yield func(O) bool) {
+		for _, e := range s {
+			yield(f(e))
+		}
+	}
+}
+
 type ExtAuth struct {
 	// `backendRef` references the External Authorization server to reach.
 	//
 	// Supported types: `Service` and `Backend`.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	// +optional // This is actually required, but making it required breaks Conditional
+	BackendRef gwv1.BackendObjectReference `json:"backendRef,omitempty"`
 
 	// FailureMode controls behavior when the external authorization service is
 	// unavailable or returns an error. "FailOpen" allows the request to continue.

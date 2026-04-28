@@ -5,7 +5,11 @@ use agent_core::prelude::Strng;
 use serde_with::{DeserializeAs, SerializeAs, serde_as};
 
 use crate::cel::{Expression, RequestSnapshot};
-use crate::http::{HeaderOrPseudo, HeaderOrPseudoValue, RequestOrResponse};
+use crate::http::{
+	HeaderOrPseudo, HeaderOrPseudoValue, PolicyResponse, Request, RequestOrResponse, Response,
+};
+use crate::proxy::ProxyResponse;
+use crate::telemetry::log::RequestLog;
 use crate::{cel, *};
 
 #[derive(Default)]
@@ -143,23 +147,6 @@ impl Transformation {
 pub struct Transformation {
 	request: Arc<TransformerConfig>,
 	response: Arc<TransformerConfig>,
-}
-
-impl Transformation {
-	pub fn expressions(&self) -> impl Iterator<Item = &Expression> {
-		self
-			.request
-			.add
-			.iter()
-			.map(|v| &v.1)
-			.chain(self.request.set.iter().map(|v| &v.1))
-			.chain(self.request.body.as_ref())
-			.chain(self.request.metadata.iter().map(|v| &v.1))
-			.chain(self.response.add.iter().map(|v| &v.1))
-			.chain(self.response.set.iter().map(|v| &v.1))
-			.chain(self.response.body.as_ref())
-			.chain(self.response.metadata.iter().map(|v| &v.1))
-	}
 }
 
 #[serde_as]
@@ -324,6 +311,55 @@ impl Transformation {
 		ext
 			.get_mut::<TransformationMetadata>()
 			.expect("we just put this there!")
+	}
+}
+
+impl crate::store::RequestPolicyTrait for Transformation {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		req: &mut crate::http::Request,
+	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
+		self.apply_request(req);
+		Ok(crate::http::PolicyResponse::default())
+	}
+
+	fn expressions(&self) -> impl Iterator<Item = &Expression> {
+		self
+			.request
+			.add
+			.iter()
+			.map(|v| &v.1)
+			.chain(self.request.set.iter().map(|v| &v.1))
+			.chain(self.request.body.as_ref())
+			.chain(self.request.metadata.iter().map(|v| &v.1))
+			.chain(self.response.add.iter().map(|v| &v.1))
+			.chain(self.response.set.iter().map(|v| &v.1))
+			.chain(self.response.body.as_ref())
+			.chain(self.response.metadata.iter().map(|v| &v.1))
+	}
+}
+
+impl store::BackendPolicyTrait for Transformation {
+	async fn apply(
+		&self,
+		_log: &mut Option<&mut RequestLog>,
+		req: &mut Request,
+	) -> Result<PolicyResponse, ProxyResponse> {
+		self.apply_request(req);
+		Ok(crate::http::PolicyResponse::default())
+	}
+}
+
+impl store::ResponsePolicyTrait for Transformation {
+	async fn apply(
+		&self,
+		log: &mut RequestLog,
+		resp: &mut Response,
+	) -> Result<PolicyResponse, ProxyResponse> {
+		self.apply_response(resp, log.request_snapshot.as_ref());
+		Ok(crate::http::PolicyResponse::default())
 	}
 }
 

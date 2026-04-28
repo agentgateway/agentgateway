@@ -8,7 +8,7 @@ use crate::llm::RequestType;
 use crate::llm::bedrock::AwsRegion;
 use crate::llm::policy::BedrockGuardrails;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::{BackendPolicy, ResourceName, SimpleBackend, Target};
+use crate::types::agent::{BackendTrafficPolicy, ResourceName, SimpleBackend, Target};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -113,12 +113,12 @@ impl ApplyGuardrailResponse {
 impl BedrockGuardrails {
 	/// User-provided policies come first so they take precedence during resolution
 	/// then system TLS and implicit AWS auth are appended as fallbacks.
-	pub(crate) fn build_request_policies(&self) -> Vec<BackendPolicy> {
-		let mut pols: Vec<BackendPolicy> = self.policies.to_vec();
-		pols.push(BackendPolicy::BackendTLS(
+	pub(crate) fn build_request_policies(&self) -> Vec<BackendTrafficPolicy> {
+		let mut pols: Vec<BackendTrafficPolicy> = self.policies.to_vec();
+		pols.push(BackendTrafficPolicy::BackendTLS(
 			crate::http::backendtls::SYSTEM_TRUST.clone(),
 		));
-		pols.push(BackendPolicy::BackendAuth(BackendAuth::Aws(
+		pols.push(BackendTrafficPolicy::BackendAuth(BackendAuth::Aws(
 			AwsAuth::Implicit {},
 		)));
 		pols

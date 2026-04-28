@@ -24,7 +24,7 @@ use crate::http::{HeaderName, PolicyResponse, envoy_proto_common};
 use crate::proxy::ProxyError;
 use crate::proxy::dtrace::{self, pol_result};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::{BackendPolicy, SimpleBackendReference};
+use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 use crate::{http, *};
 
 /// The namespace key used for ext_proc attributes in ProcessingRequest.attributes
@@ -213,7 +213,7 @@ pub struct ExtProc {
 		feature = "schema",
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
-	pub policies: Vec<BackendPolicy>,
+	pub policies: Vec<BackendTrafficPolicy>,
 	/// Behavior when the ext_proc service is unavailable or returns an error
 	#[serde(default)]
 	pub failure_mode: FailureMode,
@@ -334,7 +334,7 @@ impl ExtProcInstance {
 
 	fn new(
 		client: PolicyClient,
-		policies: Vec<BackendPolicy>,
+		policies: Vec<BackendTrafficPolicy>,
 		target: Arc<SimpleBackendReference>,
 		failure_mode: FailureMode,
 		metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
@@ -1006,7 +1006,7 @@ pub(crate) fn extract_dynamic_metadata(
 pub struct GrpcReferenceChannel {
 	pub target: Arc<SimpleBackendReference>,
 	pub client: PolicyClient,
-	pub policies: Arc<Vec<BackendPolicy>>,
+	pub policies: Arc<Vec<BackendTrafficPolicy>>,
 }
 
 impl tower::Service<::http::Request<tonic::body::Body>> for GrpcReferenceChannel {

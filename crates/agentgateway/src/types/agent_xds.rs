@@ -29,6 +29,7 @@ use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{HeaderOrPseudo, Scheme, auth, authorization, health};
 use crate::mcp::{FailureMode, McpAuthorization};
+use crate::store::RequestPolicy;
 use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::ProtoError;
@@ -1342,17 +1343,17 @@ fn transformation_from_proto(
 fn backend_policy_from_proto(
 	spec: &proto::agent::BackendPolicySpec,
 	diagnostics: &mut Diagnostics,
-) -> Result<BackendPolicy, ProtoError> {
+) -> Result<BackendTrafficPolicy, ProtoError> {
 	use crate::types::proto::agent::backend_policy_spec as bps;
 	Ok(match &spec.kind {
-		Some(bps::Kind::A2a(_)) => BackendPolicy::A2a(A2aPolicy {}),
+		Some(bps::Kind::A2a(_)) => BackendTrafficPolicy::A2a(A2aPolicy {}),
 		Some(bps::Kind::InferenceRouting(ir)) => {
 			let failure_mode = match bps::inference_routing::FailureMode::try_from(ir.failure_mode)? {
 				bps::inference_routing::FailureMode::Unknown
 				| bps::inference_routing::FailureMode::FailClosed => http::ext_proc::FailureMode::FailClosed,
 				bps::inference_routing::FailureMode::FailOpen => http::ext_proc::FailureMode::FailOpen,
 			};
-			BackendPolicy::InferenceRouting(http::ext_proc::InferenceRouting {
+			BackendTrafficPolicy::InferenceRouting(http::ext_proc::InferenceRouting {
 				target: Arc::new(resolve_simple_reference(ir.endpoint_picker.as_ref())),
 				destination_mode: http::ext_proc::InferenceRoutingDestinationMode::Validated,
 				failure_mode,
@@ -1360,7 +1361,7 @@ fn backend_policy_from_proto(
 		},
 		Some(bps::Kind::BackendHttp(bhttp)) => {
 			let ver = bps::backend_http::HttpVersion::try_from(bhttp.version)?;
-			BackendPolicy::HTTP(backend::HTTP {
+			BackendTrafficPolicy::HTTP(backend::HTTP {
 				version: match ver {
 					HttpVersion::Unspecified => None,
 					HttpVersion::Http1 => Some(::http::Version::HTTP_11),
@@ -1369,7 +1370,7 @@ fn backend_policy_from_proto(
 				request_timeout: bhttp.request_timeout.map(convert_duration),
 			})
 		},
-		Some(bps::Kind::BackendTcp(btcp)) => BackendPolicy::TCP(backend::TCP {
+		Some(bps::Kind::BackendTcp(btcp)) => BackendTrafficPolicy::TCP(backend::TCP {
 			connect_timeout: btcp
 				.connect_timeout
 				.map(convert_duration)
@@ -1380,7 +1381,7 @@ fn backend_policy_from_proto(
 				.map(types::agent::KeepaliveConfig::from)
 				.unwrap_or_default(),
 		}),
-		Some(bps::Kind::BackendTunnel(bt)) => BackendPolicy::Tunnel(backend::Tunnel {
+		Some(bps::Kind::BackendTunnel(bt)) => BackendTrafficPolicy::Tunnel(backend::Tunnel {
 			proxy: Arc::new(resolve_simple_reference(bt.proxy.as_ref())),
 		}),
 		Some(bps::Kind::BackendTls(btls)) => {
@@ -1405,25 +1406,25 @@ fn backend_policy_from_proto(
 			}
 			.try_into()
 			.map_err(|e| ProtoError::Generic(e.to_string()))?;
-			BackendPolicy::BackendTLS(tls)
+			BackendTrafficPolicy::BackendTLS(tls)
 		},
 		Some(bps::Kind::Auth(auth)) => {
-			BackendPolicy::BackendAuth(backend_auth_from_proto(auth.clone(), diagnostics)?)
+			BackendTrafficPolicy::BackendAuth(backend_auth_from_proto(auth.clone(), diagnostics)?)
 		},
 		Some(bps::Kind::McpAuthorization(rbac)) => {
-			BackendPolicy::McpAuthorization(mcp_authorization_from_proto(rbac, diagnostics))
+			BackendTrafficPolicy::McpAuthorization(mcp_authorization_from_proto(rbac, diagnostics))
 		},
 		Some(bps::Kind::McpAuthentication(ma)) => {
-			BackendPolicy::McpAuthentication(mcp_authentication_from_proto(ma, diagnostics)?)
+			BackendTrafficPolicy::McpAuthentication(mcp_authentication_from_proto(ma, diagnostics)?)
 		},
 		Some(bps::Kind::Ai(ai)) => {
-			BackendPolicy::AI(Arc::new(convert_backend_ai_policy(ai, diagnostics)?))
+			BackendTrafficPolicy::AI(Arc::new(convert_backend_ai_policy(ai, diagnostics)?))
 		},
 		Some(bps::Kind::Transformation(tp)) => {
-			BackendPolicy::Transformation(transformation_from_proto(tp, diagnostics)?)
+			BackendTrafficPolicy::Transformation(Arc::new(transformation_from_proto(tp, diagnostics)?))
 		},
 		Some(bps::Kind::RequestHeaderModifier(rhm)) => {
-			BackendPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
+			BackendTrafficPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
 				add: rhm
 					.add
 					.iter()
@@ -1438,7 +1439,7 @@ fn backend_policy_from_proto(
 			})
 		},
 		Some(bps::Kind::ResponseHeaderModifier(rhm)) => {
-			BackendPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
+			BackendTrafficPolicy::ResponseHeaderModifier(Arc::new(http::filters::HeaderModifier {
 				add: rhm
 					.add
 					.iter()
@@ -1450,10 +1451,10 @@ fn backend_policy_from_proto(
 					.map(|h| (strng::new(&h.name), strng::new(&h.value)))
 					.collect(),
 				remove: rhm.remove.iter().map(strng::new).collect(),
-			})
+			}))
 		},
 		Some(bps::Kind::RequestRedirect(rr)) => {
-			BackendPolicy::RequestRedirect(http::filters::RequestRedirect {
+			BackendTrafficPolicy::RequestRedirect(http::filters::RequestRedirect {
 				scheme: default_as_none(rr.scheme.as_str())
 					.map(Scheme::try_from)
 					.transpose()?,
@@ -1486,9 +1487,9 @@ fn backend_policy_from_proto(
 					percentage: m.percentage / 100.0,
 				})
 				.collect::<Vec<_>>();
-			BackendPolicy::RequestMirror(mirrors)
+			BackendTrafficPolicy::RequestMirror(mirrors)
 		},
-		Some(bps::Kind::Health(h)) => BackendPolicy::Health(convert_health(h, diagnostics)),
+		Some(bps::Kind::Health(h)) => BackendTrafficPolicy::Health(convert_health(h, diagnostics)),
 		None => return Err(ProtoError::MissingRequiredField),
 	})
 }
@@ -1668,7 +1669,7 @@ fn traffic_policy_from_proto(
 						.collect::<Result<_, _>>()?,
 				},
 			};
-			TrafficPolicy::ExtAuthz(http::ext_authz::ExtAuthz {
+			TrafficPolicy::ExtAuthz(RequestPolicy::single(http::ext_authz::ExtAuthz {
 				protocol,
 				target: Arc::new(target),
 				// Not supported inline from xDS
@@ -1690,7 +1691,7 @@ fn traffic_policy_from_proto(
 					)
 					.collect(),
 				include_request_body,
-			})
+			}))
 		},
 		Some(tps::Kind::Authorization(rbac)) => {
 			TrafficPolicy::Authorization(authorization_from_proto(rbac, diagnostics))
@@ -1772,11 +1773,14 @@ fn traffic_policy_from_proto(
 				},
 				None => None,
 			};
-			TrafficPolicy::JwtAuth(JwtAuthentication { jwt: jwt_auth, mcp })
+			TrafficPolicy::JwtAuth(RequestPolicy::single(JwtAuthentication {
+				jwt: jwt_auth,
+				mcp,
+			}))
 		},
-		Some(tps::Kind::Transformation(tp)) => {
-			TrafficPolicy::Transformation(transformation_from_proto(tp, diagnostics)?)
-		},
+		Some(tps::Kind::Transformation(tp)) => TrafficPolicy::Transformation(RequestPolicy::single(
+			transformation_from_proto(tp, diagnostics)?,
+		)),
 		Some(tps::Kind::RemoteRateLimit(rrl)) => {
 			let descriptors = rrl
 				.descriptors
@@ -1838,7 +1842,9 @@ fn traffic_policy_from_proto(
 		Some(tps::Kind::Csrf(csrf_spec)) => {
 			let additional_origins: std::collections::HashSet<String> =
 				csrf_spec.additional_origins.iter().cloned().collect();
-			TrafficPolicy::Csrf(crate::http::csrf::Csrf::new(additional_origins))
+			TrafficPolicy::Csrf(RequestPolicy::single(crate::http::csrf::Csrf::new(
+				additional_origins,
+			)))
 		},
 		Some(tps::Kind::ExtProc(ep)) => {
 			let target = resolve_simple_reference(ep.target.as_ref());
@@ -1913,7 +1919,7 @@ fn traffic_policy_from_proto(
 			})
 		},
 		Some(tps::Kind::RequestHeaderModifier(rhm)) => {
-			TrafficPolicy::RequestHeaderModifier(http::filters::HeaderModifier {
+			TrafficPolicy::RequestHeaderModifier(RequestPolicy::single(http::filters::HeaderModifier {
 				add: rhm
 					.add
 					.iter()
@@ -1925,10 +1931,10 @@ fn traffic_policy_from_proto(
 					.map(|h| (strng::new(&h.name), strng::new(&h.value)))
 					.collect(),
 				remove: rhm.remove.iter().map(strng::new).collect(),
-			})
+			}))
 		},
 		Some(tps::Kind::ResponseHeaderModifier(rhm)) => {
-			TrafficPolicy::ResponseHeaderModifier(http::filters::HeaderModifier {
+			TrafficPolicy::ResponseHeaderModifier(Arc::new(http::filters::HeaderModifier {
 				add: rhm
 					.add
 					.iter()
@@ -1940,10 +1946,10 @@ fn traffic_policy_from_proto(
 					.map(|h| (strng::new(&h.name), strng::new(&h.value)))
 					.collect(),
 				remove: rhm.remove.iter().map(strng::new).collect(),
-			})
+			}))
 		},
 		Some(tps::Kind::RequestRedirect(rr)) => {
-			TrafficPolicy::RequestRedirect(http::filters::RequestRedirect {
+			TrafficPolicy::RequestRedirect(RequestPolicy::single(http::filters::RequestRedirect {
 				scheme: default_as_none(rr.scheme.as_str())
 					.map(Scheme::try_from)
 					.transpose()?,
@@ -1965,7 +1971,7 @@ fn traffic_policy_from_proto(
 				status: default_as_none(rr.status)
 					.map(|i| StatusCode::from_u16(i as u16))
 					.transpose()?,
-			})
+			}))
 		},
 		Some(tps::Kind::UrlRewrite(ur)) => {
 			let authority = if ur.host.is_empty() {
@@ -1980,7 +1986,10 @@ fn traffic_policy_from_proto(
 				},
 				None => None,
 			};
-			TrafficPolicy::UrlRewrite(http::filters::UrlRewrite { authority, path })
+			TrafficPolicy::UrlRewrite(RequestPolicy::single(http::filters::UrlRewrite {
+				authority,
+				path,
+			}))
 		},
 		Some(tps::Kind::RequestMirror(m)) => {
 			let mirrors = m
@@ -1994,12 +2003,12 @@ fn traffic_policy_from_proto(
 			TrafficPolicy::RequestMirror(mirrors)
 		},
 		Some(tps::Kind::DirectResponse(dr)) => {
-			TrafficPolicy::DirectResponse(http::filters::DirectResponse {
+			TrafficPolicy::DirectResponse(RequestPolicy::single(http::filters::DirectResponse {
 				body: bytes::Bytes::copy_from_slice(&dr.body),
 				status: StatusCode::from_u16(dr.status as u16)?,
-			})
+			}))
 		},
-		Some(tps::Kind::Cors(c)) => TrafficPolicy::CORS(
+		Some(tps::Kind::Cors(c)) => TrafficPolicy::CORS(RequestPolicy::single(
 			http::cors::Cors::try_from(http::cors::CorsSerde {
 				allow_credentials: c.allow_credentials,
 				allow_headers: c.allow_headers.clone(),
@@ -2009,7 +2018,7 @@ fn traffic_policy_from_proto(
 				max_age: c.max_age.as_ref().map(|d| (*d).try_into()).transpose()?,
 			})
 			.map_err(|e| ProtoError::Generic(e.to_string()))?,
-		),
+		)),
 		Some(tps::Kind::BasicAuth(ba)) => {
 			let mode = match tps::basic_authentication::Mode::try_from(ba.mode)
 				.map_err(|_| ProtoError::EnumParse("invalid Basic Auth mode".to_string()))?
@@ -2017,14 +2026,16 @@ fn traffic_policy_from_proto(
 				tps::basic_authentication::Mode::Strict => http::basicauth::Mode::Strict,
 				tps::basic_authentication::Mode::Optional => http::basicauth::Mode::Optional,
 			};
-			TrafficPolicy::BasicAuth(http::basicauth::BasicAuthentication::new(
-				&ba.htpasswd_content,
-				ba.realm.clone(),
-				mode,
-				authorization_location(
-					ba.authorization_location.as_ref(),
-					http::auth::AuthorizationLocation::basic_header(),
-				)?,
+			TrafficPolicy::BasicAuth(RequestPolicy::single(
+				http::basicauth::BasicAuthentication::new(
+					&ba.htpasswd_content,
+					ba.realm.clone(),
+					mode,
+					authorization_location(
+						ba.authorization_location.as_ref(),
+						http::auth::AuthorizationLocation::basic_header(),
+					)?,
+				),
 			))
 		},
 		Some(tps::Kind::ApiKeyAuth(ba)) => {
@@ -2047,13 +2058,15 @@ fn traffic_policy_from_proto(
 					Ok::<_, ProtoError>((http::apikey::APIKey::new(u.key.clone()), meta))
 				})
 				.collect::<Result<Vec<_>, _>>()?;
-			TrafficPolicy::APIKey(http::apikey::APIKeyAuthentication::new(
-				keys,
-				mode,
-				authorization_location(
-					ba.authorization_location.as_ref(),
-					http::auth::AuthorizationLocation::bearer_header(),
-				)?,
+			TrafficPolicy::APIKey(RequestPolicy::single(
+				http::apikey::APIKeyAuthentication::new(
+					keys,
+					mode,
+					authorization_location(
+						ba.authorization_location.as_ref(),
+						http::auth::AuthorizationLocation::bearer_header(),
+					)?,
+				),
 			))
 		},
 		Some(tps::Kind::HostRewrite(hr)) => {
@@ -2491,6 +2504,7 @@ pub(crate) fn targeted_policy_from_proto(
 		Some(pol::Kind::Frontend(spec)) => {
 			PolicyType::Frontend(frontend_policy_from_proto(spec, diagnostics)?)
 		},
+		Some(pol::Kind::Conditional(cond)) => conditional_policy_from_proto(cond, diagnostics)?,
 		None => return Err(ProtoError::MissingRequiredField),
 	};
 
@@ -2500,6 +2514,135 @@ pub(crate) fn targeted_policy_from_proto(
 		target,
 		policy,
 	})
+}
+
+fn conditional_policy_from_proto(
+	cond: &proto::agent::ConditionalPolicies,
+	diagnostics: &mut Diagnostics,
+) -> Result<PolicyType, ProtoError> {
+	use crate::types::proto::agent::conditional_policy as cp;
+
+	let mut traffic = Vec::new();
+	let mut expected_shape: Option<(&'static str, PolicyPhase)> = None;
+	for policy in &cond.policies {
+		let Some(kind) = &policy.kind else {
+			return Err(ProtoError::MissingRequiredField);
+		};
+		match kind {
+			cp::Kind::Traffic(spec) => {
+				let traffic_policy = phased_traffic_policy_from_proto(spec, diagnostics)?;
+				let policy_kind = traffic_policy_kind_name(&traffic_policy.policy);
+				let policy_phase = traffic_policy.phase;
+				if let Some((expected_kind, expected_phase)) = expected_shape {
+					if expected_kind != policy_kind {
+						return Err(ProtoError::Generic(format!(
+							"conditional policies must all have the same traffic policy kind; found {policy_kind}, expected {expected_kind}",
+						)));
+					}
+					if expected_phase != policy_phase {
+						return Err(ProtoError::Generic(format!(
+							"conditional policies must all have the same traffic policy phase; found {policy_phase:?}, expected {expected_phase:?}",
+						)));
+					}
+				} else {
+					expected_shape = Some((policy_kind, policy_phase));
+				}
+				let condition = permissive_cel_expression_arc(
+					diagnostics,
+					"policy.conditional.condition",
+					&policy.condition,
+				);
+				traffic.push((condition, traffic_policy));
+			},
+		}
+	}
+
+	if traffic.is_empty() {
+		return Err(ProtoError::MissingRequiredField);
+	}
+	let Some((_, phase)) = expected_shape else {
+		return Err(ProtoError::MissingRequiredField);
+	};
+	Ok(PolicyType::Traffic(PhasedTrafficPolicy {
+		phase,
+		policy: conditional_traffic_policy_to_policy(traffic)?,
+	}))
+}
+
+fn conditional_traffic_policy_to_policy(
+	policies: Vec<(Arc<cel::Expression>, PhasedTrafficPolicy)>,
+) -> Result<TrafficPolicy, ProtoError> {
+	macro_rules! build {
+		($variant:ident) => {{
+			let mut inners = Vec::with_capacity(policies.len());
+			for (condition, policy) in policies {
+				let TrafficPolicy::$variant(request_policy) = policy.policy else {
+					return Err(ProtoError::Generic(
+						"conditional policies must all have the same traffic policy kind".to_string(),
+					));
+				};
+				inners.extend(
+					request_policy
+						.into_policy_inners()
+						.into_iter()
+						.map(|mut inner| {
+							inner.condition = Some(condition.clone());
+							inner
+						}),
+				);
+			}
+			Ok(TrafficPolicy::$variant(RequestPolicy::from_policy_inners(
+				inners,
+			)))
+		}};
+	}
+
+	// We can just check the type of the first one because we verified before they are all the same
+	match &policies[0].1.policy {
+		TrafficPolicy::ExtAuthz(_) => build!(ExtAuthz),
+		TrafficPolicy::JwtAuth(_) => build!(JwtAuth),
+		TrafficPolicy::Oidc(_) => build!(Oidc),
+		TrafficPolicy::BasicAuth(_) => build!(BasicAuth),
+		TrafficPolicy::APIKey(_) => build!(APIKey),
+		TrafficPolicy::Transformation(_) => build!(Transformation),
+		TrafficPolicy::Csrf(_) => build!(Csrf),
+		TrafficPolicy::RequestHeaderModifier(_) => build!(RequestHeaderModifier),
+		TrafficPolicy::RequestRedirect(_) => build!(RequestRedirect),
+		TrafficPolicy::UrlRewrite(_) => build!(UrlRewrite),
+		TrafficPolicy::DirectResponse(_) => build!(DirectResponse),
+		TrafficPolicy::CORS(_) => build!(CORS),
+		other => Err(ProtoError::Generic(format!(
+			"conditional traffic policy kind {} is not supported",
+			traffic_policy_kind_name(other)
+		))),
+	}
+}
+
+fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
+	match policy {
+		TrafficPolicy::Timeout(_) => "timeout",
+		TrafficPolicy::Retry(_) => "retry",
+		TrafficPolicy::AI(_) => "ai",
+		TrafficPolicy::Authorization(_) => "authorization",
+		TrafficPolicy::LocalRateLimit(_) => "localRateLimit",
+		TrafficPolicy::RemoteRateLimit(_) => "remoteRateLimit",
+		TrafficPolicy::ExtAuthz(_) => "extAuthz",
+		TrafficPolicy::ExtProc(_) => "extProc",
+		TrafficPolicy::JwtAuth(_) => "jwt",
+		TrafficPolicy::Oidc(_) => "oidc",
+		TrafficPolicy::BasicAuth(_) => "basicAuth",
+		TrafficPolicy::APIKey(_) => "apiKey",
+		TrafficPolicy::Transformation(_) => "transformation",
+		TrafficPolicy::Csrf(_) => "csrf",
+		TrafficPolicy::RequestHeaderModifier(_) => "requestHeaderModifier",
+		TrafficPolicy::ResponseHeaderModifier(_) => "responseHeaderModifier",
+		TrafficPolicy::RequestRedirect(_) => "requestRedirect",
+		TrafficPolicy::UrlRewrite(_) => "urlRewrite",
+		TrafficPolicy::HostRewrite(_) => "hostRewrite",
+		TrafficPolicy::RequestMirror(_) => "requestMirror",
+		TrafficPolicy::DirectResponse(_) => "directResponse",
+		TrafficPolicy::CORS(_) => "cors",
+	}
 }
 
 impl From<&proto::agent::ResourceName> for ResourceName {
@@ -2730,7 +2873,109 @@ mod tests {
 	use serde_json::json;
 
 	use super::*;
+	use crate::store::RequestPolicyTrait;
 	use crate::types::proto::agent::backend_policy_spec::Ai;
+
+	fn test_policy_target() -> proto::agent::PolicyTarget {
+		proto::agent::PolicyTarget {
+			kind: Some(proto::agent::policy_target::Kind::Route(
+				proto::agent::policy_target::RouteTarget {
+					name: "route".to_string(),
+					namespace: "default".to_string(),
+					route_rule: None,
+					kind: "HTTPRoute".to_string(),
+				},
+			)),
+		}
+	}
+
+	fn conditional_traffic_policy(
+		condition: &str,
+		kind: proto::agent::traffic_policy_spec::Kind,
+	) -> proto::agent::ConditionalPolicy {
+		proto::agent::ConditionalPolicy {
+			condition: condition.to_string(),
+			kind: Some(proto::agent::conditional_policy::Kind::Traffic(
+				proto::agent::TrafficPolicySpec {
+					phase: proto::agent::traffic_policy_spec::PolicyPhase::Route as i32,
+					kind: Some(kind),
+				},
+			)),
+		}
+	}
+
+	#[test]
+	fn test_targeted_policy_from_proto_conditional_traffic_same_kind() -> Result<(), ProtoError> {
+		let policy = proto::agent::Policy {
+			key: "policy".to_string(),
+			name: None,
+			target: Some(test_policy_target()),
+			kind: Some(proto::agent::policy::Kind::Conditional(
+				proto::agent::ConditionalPolicies {
+					policies: vec![
+						conditional_traffic_policy(
+							"request.path == '/a'",
+							proto::agent::traffic_policy_spec::Kind::RequestHeaderModifier(
+								proto::agent::HeaderModifier::default(),
+							),
+						),
+						conditional_traffic_policy(
+							"request.path == '/b'",
+							proto::agent::traffic_policy_spec::Kind::RequestHeaderModifier(
+								proto::agent::HeaderModifier::default(),
+							),
+						),
+					],
+				},
+			)),
+		};
+
+		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default())?;
+		let PolicyType::Traffic(PhasedTrafficPolicy {
+			policy: TrafficPolicy::RequestHeaderModifier(policies),
+			..
+		}) = policy.policy
+		else {
+			panic!("expected conditional request header modifier policy");
+		};
+		assert_eq!(policies.iter().count(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn test_targeted_policy_from_proto_rejects_mixed_conditional_traffic_kinds() {
+		let policy = proto::agent::Policy {
+			key: "policy".to_string(),
+			name: None,
+			target: Some(test_policy_target()),
+			kind: Some(proto::agent::policy::Kind::Conditional(
+				proto::agent::ConditionalPolicies {
+					policies: vec![
+						conditional_traffic_policy(
+							"request.path == '/a'",
+							proto::agent::traffic_policy_spec::Kind::RequestHeaderModifier(
+								proto::agent::HeaderModifier::default(),
+							),
+						),
+						conditional_traffic_policy(
+							"request.path == '/b'",
+							proto::agent::traffic_policy_spec::Kind::RequestRedirect(
+								proto::agent::RequestRedirect::default(),
+							),
+						),
+					],
+				},
+			)),
+		};
+
+		let err = targeted_policy_from_proto(&policy, &mut Diagnostics::default())
+			.expect_err("mixed conditional traffic kinds should be rejected");
+		assert!(
+			err
+				.to_string()
+				.contains("must all have the same traffic policy kind")
+		);
+	}
 
 	#[test]
 	fn test_policy_spec_to_csrf_policy() -> Result<(), ProtoError> {
@@ -2813,7 +3058,7 @@ mod tests {
 
 		let policy = backend_policy_from_proto(&spec, &mut Diagnostics::default())?;
 
-		if let BackendPolicy::AI(ai_policy) = policy {
+		if let BackendTrafficPolicy::AI(ai_policy) = policy {
 			let defaults = ai_policy.defaults.as_ref().expect("defaults should be set");
 			let overrides = ai_policy
 				.overrides
@@ -2900,7 +3145,7 @@ mod tests {
 		};
 
 		let policy = backend_policy_from_proto(&spec, &mut Diagnostics::default())?;
-		let BackendPolicy::Transformation(transformation) = policy else {
+		let BackendTrafficPolicy::Transformation(transformation) = policy else {
 			panic!("Expected Transformation policy variant");
 		};
 		assert_eq!(transformation.expressions().count(), 2);

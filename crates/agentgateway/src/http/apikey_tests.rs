@@ -15,7 +15,9 @@ async fn test_apikey_query_parameter_extracts_and_strips() {
 		.body(axum::body::Body::empty())
 		.unwrap();
 
-	auth.apply(&mut req).await.expect("api key should validate");
+	let _ = crate::test_helpers::test_policy(&auth, &mut req)
+		.await
+		.expect("api key should validate");
 
 	assert_eq!(req.uri().to_string(), "http://example.com/data?keep=yes");
 	assert!(req.extensions().get::<Claims>().is_some());
@@ -37,7 +39,9 @@ async fn test_apikey_cookie_extracts_and_strips() {
 		.body(axum::body::Body::empty())
 		.unwrap();
 
-	auth.apply(&mut req).await.expect("api key should validate");
+	let _ = crate::test_helpers::test_policy(&auth, &mut req)
+		.await
+		.expect("api key should validate");
 
 	assert_eq!(
 		req.headers().get("cookie").unwrap().to_str().unwrap(),
