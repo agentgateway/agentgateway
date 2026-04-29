@@ -2055,7 +2055,7 @@ async fn assert_llm(io: Client<MemoryConnector, Body>, body: &[u8], want: Value)
 	let _ = res.into_body().collect().await.unwrap();
 	let log = agent_core::telemetry::testing::eventually_find(&[
 		("scope", "request"),
-		("http.path", &format!("/{r}")),
+		("url.path", &format!("/{r}")),
 	])
 	.await
 	.unwrap();
