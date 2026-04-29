@@ -17,4 +17,19 @@ To learn how to access and use agentgateway, please visit the official documenta
 To uninstall the agentgateway deployment:
 
   helm uninstall {{ .Release.Name }} --namespace {{ .Release.Namespace }}
+{{- if .Values.monitoring.enabled }}
+
+Monitoring is enabled. Two ServiceMonitor resources have been created
+to let Prometheus scrape the controller and proxy metrics endpoints.
+{{- if .Values.monitoring.grafanaDashboard.enabled }}
+A Grafana dashboard ConfigMap labelled '{{ .Values.monitoring.grafanaDashboard.label.key }}: {{ .Values.monitoring.grafanaDashboard.label.value }}'
+has also been created for automatic Grafana sidecar discovery.
+{{- end }}
+{{- else }}
+
+Monitoring is disabled. To enable Prometheus ServiceMonitors and the
+Grafana dashboard, upgrade with:
+
+  helm upgrade {{ .Release.Name }} <chart> --set monitoring.enabled=true
+{{- end }}
 

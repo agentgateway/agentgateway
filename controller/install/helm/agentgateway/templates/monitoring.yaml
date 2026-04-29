@@ -1,0 +1,306 @@
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "agentgateway.fullname" . }}-proxy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentgateway.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitor.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.monitoring.proxy.selectorName }}
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: {{ .Values.monitoring.serviceMonitor.interval }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "agentgateway.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentgateway.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitor.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "agentgateway.name" . }}
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: {{ .Values.monitoring.serviceMonitor.interval }}
+{{- if .Values.monitoring.grafanaDashboard.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentgateway.fullname" . }}-dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentgateway.labels" . | nindent 4 }}
+    {{ .Values.monitoring.grafanaDashboard.label.key }}: {{ .Values.monitoring.grafanaDashboard.label.value | quote }}
+data:
+  agentgateway.json: |
+    {
+      "title": "AgentGateway",
+      "uid": "agentgateway",
+      "schemaVersion": 38,
+      "version": 1,
+      "refresh": "30s",
+      "time": { "from": "now-1h", "to": "now" },
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": {},
+            "hide": 0,
+            "label": "Datasource"
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "row",
+          "title": "Overview",
+          "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+          "collapsed": false
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Build Info",
+          "gridPos": { "x": 0, "y": 1, "w": 4, "h": 3 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value_and_name", "colorMode": "none" },
+          "fieldConfig": { "defaults": { "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } } },
+          "targets": [
+            {
+              "expr": "agentgateway_build_info",
+              "legendFormat": "v{{"{{"}}tag{{"}}"}}",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Request Rate",
+          "gridPos": { "x": 4, "y": 1, "w": 5, "h": 3 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(agentgateway_requests_total[5m]))",
+              "legendFormat": "req/s"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Error Rate",
+          "gridPos": { "x": 9, "y": 1, "w": 5, "h": 3 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 0.01 },
+                  { "color": "red", "value": 0.05 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(agentgateway_requests_total{status!~\"2..\"}[5m])) / sum(rate(agentgateway_requests_total[5m]))",
+              "legendFormat": "error %"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "stat",
+          "title": "P99 Latency",
+          "gridPos": { "x": 14, "y": 1, "w": 5, "h": 3 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 1 },
+                  { "color": "red", "value": 5 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum by(le) (rate(agentgateway_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "p99"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "row",
+          "title": "Traffic",
+          "gridPos": { "x": 0, "y": 4, "w": 24, "h": 1 },
+          "collapsed": false
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "Requests/s per route",
+          "gridPos": { "x": 0, "y": 5, "w": 12, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "reqps" } },
+          "targets": [
+            {
+              "expr": "sum by(route) (rate(agentgateway_requests_total[5m]))",
+              "legendFormat": "{{"{{"}}route{{"}}"}}"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "type": "timeseries",
+          "title": "Requests/s per HTTP status",
+          "gridPos": { "x": 12, "y": 5, "w": 12, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "reqps" } },
+          "targets": [
+            {
+              "expr": "sum by(status) (rate(agentgateway_requests_total[5m]))",
+              "legendFormat": "HTTP {{"{{"}}status{{"}}"}}"
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "type": "timeseries",
+          "title": "Requests/s per protocol (http vs llm)",
+          "gridPos": { "x": 0, "y": 13, "w": 12, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "reqps" } },
+          "targets": [
+            {
+              "expr": "sum by(protocol) (rate(agentgateway_requests_total[5m]))",
+              "legendFormat": "{{"{{"}}protocol{{"}}"}}"
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "type": "timeseries",
+          "title": "Response bytes/s per backend",
+          "gridPos": { "x": 12, "y": 13, "w": 12, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "Bps" } },
+          "targets": [
+            {
+              "expr": "sum by(backend) (rate(agentgateway_response_bytes_total[5m]))",
+              "legendFormat": "{{"{{"}}backend{{"}}"}}"
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "type": "row",
+          "title": "Latency",
+          "gridPos": { "x": 0, "y": 21, "w": 24, "h": 1 },
+          "collapsed": false
+        },
+        {
+          "id": 12,
+          "type": "timeseries",
+          "title": "Latency P50 / P95 / P99",
+          "gridPos": { "x": 0, "y": 22, "w": 24, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "s" } },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by(le) (rate(agentgateway_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "p50"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by(le) (rate(agentgateway_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "p95"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by(le) (rate(agentgateway_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "p99"
+            }
+          ]
+        },
+        {
+          "id": 13,
+          "type": "row",
+          "title": "Connections & Runtime",
+          "gridPos": { "x": 0, "y": 30, "w": 24, "h": 1 },
+          "collapsed": false
+        },
+        {
+          "id": 14,
+          "type": "timeseries",
+          "title": "Downstream Connections per Second",
+          "gridPos": { "x": 0, "y": 31, "w": 12, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "connps" } },
+          "targets": [
+            {
+              "expr": "sum by(bind) (rate(agentgateway_downstream_connections_total[5m]))",
+              "legendFormat": "{{"{{"}}bind{{"}}"}}"
+            }
+          ]
+        },
+        {
+          "id": 15,
+          "type": "timeseries",
+          "title": "Runtime Tokio",
+          "gridPos": { "x": 12, "y": 31, "w": 12, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short" } },
+          "targets": [
+            {
+              "expr": "agentgateway_tokio_num_workers",
+              "legendFormat": "workers"
+            },
+            {
+              "expr": "agentgateway_tokio_num_alive_tasks",
+              "legendFormat": "alive tasks"
+            },
+            {
+              "expr": "agentgateway_tokio_global_queue_depth",
+              "legendFormat": "queue depth"
+            }
+          ]
+        }
+      ]
+    }
+{{- end }}
+{{- end }}

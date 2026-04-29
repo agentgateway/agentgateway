@@ -217,3 +217,28 @@ discoveryNamespaceSelectors: []
 #        namespace: kgateway-system
 gatewayClassParametersRefs: {}
 
+# -- Configure Prometheus and Grafana monitoring resources.
+monitoring:
+  # -- Create monitoring resources (ServiceMonitors and Grafana dashboard ConfigMap).
+  # Requires the Prometheus Operator CRDs to be installed in the cluster.
+  enabled: false
+
+  serviceMonitor:
+    # -- Scrape interval for both ServiceMonitors.
+    interval: 15s
+    # -- Additional labels to add to both ServiceMonitor resources (e.g. release: prometheus).
+    extraLabels: {}
+
+  proxy:
+    # -- Selector label value used to find the proxy Service.
+    # The proxy is external to this chart; override if it carries a different app.kubernetes.io/name.
+    selectorName: agentgateway-proxy
+
+  grafanaDashboard:
+    # -- Create the Grafana dashboard ConfigMap.
+    enabled: true
+    # -- Label key/value that the Grafana sidecar uses to discover dashboards.
+    label:
+      key: grafana_dashboard
+      value: "1"
+

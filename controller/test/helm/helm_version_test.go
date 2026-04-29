@@ -282,6 +282,41 @@ func TestHelmChartTemplate(t *testing.T) {
 `,
 			expectedError: "controller.extraEnv.BAD_ENV must set either value or valueFrom",
 		},
+		{
+			name: "monitoring-enabled",
+			valuesYAML: `monitoring:
+  enabled: true
+  serviceMonitor:
+    interval: 30s
+    extraLabels:
+      release: prometheus
+  proxy:
+    selectorName: my-proxy
+  grafanaDashboard:
+    enabled: true
+    label:
+      key: grafana_dashboard
+      value: "1"
+`,
+		},
+		{
+			name: "monitoring-enabled-no-dashboard",
+			valuesYAML: `monitoring:
+  enabled: true
+  grafanaDashboard:
+    enabled: false
+`,
+		},
+		{
+			name: "monitoring-custom-proxy-selector",
+			valuesYAML: `monitoring:
+  enabled: true
+  proxy:
+    selectorName: agentgateway-data-plane
+  grafanaDashboard:
+    enabled: false
+`,
+		},
 	}
 
 	for _, chart := range charts {
