@@ -36,7 +36,7 @@ Now we can open the [Jaeger UI](http://localhost:16686/search) and search for ou
 We can also see the metrics (typically, Prometheus would scrape these):
 
 ```
-$ curl localhost:15020/metrics -s | grep -v '#'
+$ curl -H 'Accept: application/openmetrics-text' localhost:15020/metrics -s | grep -v '#'
 tool_calls_total{server="everything",name="echo"} 1
 tool_calls_total{server="everything",name="add"} 1
 list_calls_total{resource_type="tool"} 3
@@ -45,3 +45,19 @@ agentgateway_requests_total{gateway="bind/3000",method="POST",status="202"} 4
 agentgateway_requests_total{gateway="bind/3000",method="GET",status="200"} 1
 agentgateway_requests_total{gateway="bind/3000",method="DELETE",status="202"} 2
 ```
+
+## Metrics Formats
+
+The metrics can be retrived in either OpenMetrics text format or protobuf, controlled via the `Accept` header on the request. Specifying multiple formats with a quality parameter will cause the gateway to choose the best match of highest quality (standard accept header behaviour).
+
+If you use protobuf, the returned data is of `io.prometheus.client.MetricsSet`, not customisable via the `proto=<type>` accept header parameter. Ideally, this should be deserialised using the offical [OpenMetrics protobuf definition](https://github.com/prometheus/OpenMetrics/blob/main/proto/openmetrics_data_model.proto).
+
+For text format use one of:
+* `Accept: text/plain`
+* `Accept: application/openmetrics-text`
+
+For Protobuf use one of:
+* `Accept: application/vnd.google.protobuf`
+* `Accept: application/protobuf`
+* `Accept: application/x-protobuf`
+

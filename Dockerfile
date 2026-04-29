@@ -61,6 +61,9 @@ COPY crates ./crates
 COPY tools ./tools
 COPY --from=node /app/out ./ui/out
 
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
+    protobuf-compiler \
+    libprotobuf-dev
 RUN \
     --mount=type=cache,id=cargo,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
