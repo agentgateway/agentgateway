@@ -10,12 +10,15 @@ path = "src/lib.rs"
 
 [features]
 default = []
-jemalloc = ["dep:tikv-jemallocator", "dep:jemalloc_pprof"]
+glibc = []
+jemalloc = ["pprof-alloc/allocator-jemalloc", "dep:tikv-jemallocator", "dep:jemalloc_pprof"]
+mimalloc = ["pprof-alloc/allocator-mimalloc", "dep:mimalloc"]
 ui = []
 schema = ["schemars"]
 internal_benches = ["divan"]
 
 [dependencies]
+pprof-alloc.workspace = true
 agent-core.workspace = true
 agent-celx.workspace = true
 agent-hbone.workspace = true
@@ -126,6 +129,7 @@ sse-stream.workspace = true
 thiserror.workspace = true
 tiktoken-rs.workspace = true
 tikv-jemallocator = { workspace = true, optional = true }
+mimalloc = { workspace = true, optional = true }
 tokio-rustls.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true

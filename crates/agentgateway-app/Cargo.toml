@@ -11,17 +11,23 @@ path = "src/main.rs"
 bench = false
 
 [features]
-default = []
+# Jemalloc has been found to have the highest throughput and best ability to return memory to the system
+# This comes at the small cost of a few mb memory overhead relative to others (most notable in an empty setup).
+default = ["jemalloc"]
+glibc = ["agentgateway/glibc"]
 jemalloc = ["dep:tikv-jemallocator", "agentgateway/jemalloc"]
+mimalloc = ["dep:mimalloc", "agentgateway/mimalloc"]
 schema = ["agentgateway/schema"]
 
 [dependencies]
+pprof-alloc.workspace = true
 agent-core.workspace = true
 agentgateway.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 fs-err = { workspace = true, features = ["tokio"] }
 libc.workspace = true
+mimalloc = { workspace = true, optional = true }
 tokio.workspace = true
 tracing.workspace = true
 tikv-jemallocator = {workspace = true, optional = true}

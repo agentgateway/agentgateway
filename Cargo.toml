@@ -131,6 +131,7 @@ phonenumber = "0.3"
 pin-project-lite = "0.2"
 pingora-pool = "0.8"
 ppp = "2.3"
+pprof-alloc = "0.1"
 pprof = { version = "0.15", features = [
     "protobuf",
     "protobuf-codec",
@@ -153,6 +154,7 @@ reqwest = { version = "0.13", default-features = false, features = [
     "rustls",
 ] }
 rstest = "0.26"
+mimalloc = { version = "0.1", features = ["v3", "no_thp"] }
 rustc_version = "0.4"
 rustls = { version = "0.23", default-features = false, features = ["tls12", "aws_lc_rs"] }
 rustls-native-certs = "0.8"
@@ -243,6 +245,10 @@ heck = "0.5"
 macro_rules_attribute = "0.2"
 
 # Release optimized but without as many dependencies, suitable for incremental development
+[profile.quick-release-debug]
+inherits = "quick-release"
+debug = true
+
 [profile.quick-release]
 inherits = "release"
 codegen-units = 16
