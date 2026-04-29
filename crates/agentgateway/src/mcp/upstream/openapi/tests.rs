@@ -460,7 +460,7 @@ async fn test_call_tool_upstream_internal_error() {
 			.to_string()
 			.contains("failed with status 500 Internal Server Error"),
 		"error was {}",
-		err.to_string()
+		err
 	);
 	assert!(err.to_string().contains(&error_response.to_string()));
 }
