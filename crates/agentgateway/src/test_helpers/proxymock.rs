@@ -990,6 +990,8 @@ pub fn setup_proxy_test_with_config(config: crate::Config) -> TestBind {
 		ca: None,
 
 		mcp_state: mcp::App::new(stores.clone(), encoder),
+		usage_store: Arc::new(crate::telemetry::usage_store::UsageStore::new()),
+		pricing: Arc::new(crate::telemetry::usage_store::PricingConfig::default()),
 	});
 	TestBind {
 		pi,

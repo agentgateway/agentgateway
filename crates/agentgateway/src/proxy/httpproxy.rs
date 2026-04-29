@@ -477,12 +477,14 @@ impl HTTPProxy {
 		req
 			.extensions_mut()
 			.insert(RequestTime(start.as_datetime()));
-		let log = RequestLog::new(
+		let log = RequestLog::new_with_usage(
 			log::CelLogging::new(
 				self.inputs.cfg.logging.clone(),
 				self.inputs.cfg.metrics.clone(),
 			),
 			self.inputs.metrics.clone(),
+			self.inputs.usage_store.clone(),
+			self.inputs.pricing.clone(),
 			start,
 			tcp.clone(),
 		);

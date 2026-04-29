@@ -93,6 +93,12 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	// Run the XDS state manager in the current tokio worker pool.
 	tokio::spawn(state_mgr.run());
 
+	let usage_store = Arc::new(match &config.usage_store_path {
+		Some(path) => crate::telemetry::usage_store::UsageStore::with_persistence(path.clone()),
+		None => crate::telemetry::usage_store::UsageStore::new(),
+	});
+	let pricing = Arc::new(config.pricing.clone());
+
 	#[allow(unused_mut)]
 	let mut admin_server = crate::management::admin::Service::new(
 		config.clone(),
@@ -100,6 +106,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		shutdown.trigger(),
 		drain_rx.clone(),
 		data_plane_handle.clone(),
+		usage_store.clone(),
 	)
 	.await
 	.context("admin server starts")?;
@@ -116,6 +123,8 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		ca,
 
 		mcp_state: mcp::App::new(stores.clone(), config.session_encoder.clone()),
+		usage_store: usage_store.clone(),
+		pricing: pricing.clone(),
 	};
 
 	let gw = proxy::Gateway::new(Arc::new(pi), drain_rx.clone());

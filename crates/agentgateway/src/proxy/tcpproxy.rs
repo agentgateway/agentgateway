@@ -835,6 +835,8 @@ mod tests {
 			upstream: client,
 			ca: None,
 			mcp_state: crate::mcp::App::new(stores, encoder),
+			usage_store: Arc::new(crate::telemetry::usage_store::UsageStore::new()),
+			pricing: Arc::new(crate::telemetry::usage_store::PricingConfig::default()),
 		})
 	}
 

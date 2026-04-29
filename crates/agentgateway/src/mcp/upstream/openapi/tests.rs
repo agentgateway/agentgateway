@@ -52,6 +52,8 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		ca: None,
 
 		mcp_state: mcp::router::App::new(stores.clone(), encoder),
+		usage_store: Arc::new(crate::telemetry::usage_store::UsageStore::new()),
+		pricing: Arc::new(crate::telemetry::usage_store::PricingConfig::default()),
 	});
 
 	let client = PolicyClient { inputs: pi.clone() };

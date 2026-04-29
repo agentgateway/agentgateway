@@ -11,6 +11,7 @@ use agent_core::drain::DrainWatcher;
 use agent_core::version::BuildInfo;
 use agent_core::{signal, telemetry};
 use bytes::Bytes;
+use chrono::DateTime;
 use hyper::Request;
 use hyper::body::Incoming;
 use hyper::header::{CONTENT_TYPE, HeaderValue};
@@ -57,6 +58,7 @@ struct State {
 	config_dump_handlers: Vec<Arc<dyn ConfigDumpHandler>>,
 	admin_fallback: Option<Arc<dyn AdminFallback>>,
 	dataplane_handle: Handle,
+	usage_store: Arc<crate::telemetry::usage_store::UsageStore>,
 }
 
 pub struct Service {
@@ -98,6 +100,7 @@ impl Service {
 		shutdown_trigger: signal::ShutdownTrigger,
 		drain_rx: DrainWatcher,
 		dataplane_handle: Handle,
+		usage_store: Arc<crate::telemetry::usage_store::UsageStore>,
 	) -> anyhow::Result<Self> {
 		Server::<State>::bind(
 			"admin",
@@ -110,6 +113,7 @@ impl Service {
 				config_dump_handlers: vec![],
 				admin_fallback: None,
 				dataplane_handle,
+				usage_store,
 			},
 		)
 		.await
@@ -156,16 +160,17 @@ impl Service {
 					)
 					.await
 				},
-				"/logging" => Ok(handle_logging(req).await),
-				_ => {
-					if let Some(h) = &state.admin_fallback {
-						Ok(h.handle(req).await)
-					} else if req.uri().path() == "/" {
-						Ok(handle_dashboard(req).await)
-					} else {
-						Ok(empty_response(hyper::StatusCode::NOT_FOUND))
-					}
-				},
+			"/logging" => Ok(handle_logging(req).await),
+			"/usage" => Ok(handle_usage(req, &state.usage_store).await),
+			_ => {
+				if let Some(h) = &state.admin_fallback {
+					Ok(h.handle(req).await)
+				} else if req.uri().path() == "/" {
+					Ok(handle_dashboard(req).await)
+				} else {
+					Ok(empty_response(hyper::StatusCode::NOT_FOUND))
+				}
+			},
 			}
 		})
 	}
@@ -184,6 +189,7 @@ async fn handle_dashboard(_req: Request<Incoming>) -> Response {
 		("quitquitquit", "shut down the server"),
 		("config_dump", "dump the current agentgateway configuration"),
 		("logging", "query/changing logging levels"),
+		("usage", "per-user token usage and cost report. Supports ?user=, ?model=, ?since= (Unix timestamp)"),
 	];
 
 	let mut api_rows = String::new();
@@ -207,6 +213,50 @@ async fn handle_dashboard(_req: Request<Incoming>) -> Response {
 	);
 
 	response
+}
+
+async fn handle_usage(
+	req: Request<Incoming>,
+	store: &crate::telemetry::usage_store::UsageStore,
+) -> Response {
+	// Parse optional query parameters: ?user=<id>&model=<name>&since=<unix_ts>
+	let qp: HashMap<String, String> = req
+		.uri()
+		.query()
+		.map(|v| {
+			url::form_urlencoded::parse(v.as_bytes())
+				.into_owned()
+				.collect()
+		})
+		.unwrap_or_default();
+
+	let user = qp.get("user").map(String::as_str);
+	let model = qp.get("model").map(String::as_str);
+	let since = qp.get("since").and_then(|s| {
+		s.parse::<i64>().ok().and_then(|ts| {
+			DateTime::from_timestamp(ts, 0)
+		})
+	});
+
+	let records = store.query(user, model, since);
+
+	match serde_json::to_string(&records) {
+		Ok(body) => {
+			let mut resp = plaintext_response(hyper::StatusCode::OK, body);
+			resp.headers_mut().insert(
+				CONTENT_TYPE,
+				HeaderValue::from_static("application/json"),
+			);
+			resp
+		},
+		Err(e) => {
+			warn!("failed to serialize usage records: {}", e);
+			plaintext_response(
+				hyper::StatusCode::INTERNAL_SERVER_ERROR,
+				"failed to serialize usage records".to_string(),
+			)
+		},
+	}
 }
 
 #[cfg(target_os = "linux")]

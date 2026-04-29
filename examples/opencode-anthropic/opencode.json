@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "anthropic": {
+      "name": "Anthropic (via agentgateway)",
+      "options": {
+        "baseURL": "http://localhost:3000/v1",
+        "apiKey": "placeholder"
+      }
+    }
+  },
+  "model": "anthropic/claude-sonnet-4-6"
+}
