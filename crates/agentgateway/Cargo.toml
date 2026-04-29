@@ -73,7 +73,6 @@ include_dir.workspace = true
 indexmap = { workspace = true }
 ipnet.workspace = true
 itertools.workspace = true
-jemalloc_pprof = { workspace = true, optional = true }
 jsonwebtoken.workspace = true
 lazy_static.workspace = true
 macro_rules_attribute.workspace = true
@@ -128,7 +127,6 @@ socket2.workspace = true
 sse-stream.workspace = true
 thiserror.workspace = true
 tiktoken-rs.workspace = true
-tikv-jemallocator = { workspace = true, optional = true }
 mimalloc = { workspace = true, optional = true }
 tokio-rustls.workspace = true
 tokio-stream.workspace = true
@@ -160,6 +158,8 @@ which.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 tokio = { workspace = true, features = ["taskdump"] }
+tikv-jemallocator = { workspace = true, optional = true }
+jemalloc_pprof = { workspace = true, optional = true }
 
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 tokio = { workspace = true }
