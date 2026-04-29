@@ -911,8 +911,12 @@ impl Handler {
 
 		// Read response body
 		let status = response.status();
-		// Check if the request was successful
-		if status.is_success() {
+		
+		// per https://modelcontextprotocol.io/specification/2025-11-25/server/tools 
+		// Clients MAY provide protocol errors to language models which are mainly caught up higher.
+		// However we contend that server errors on the tool call should also count as protocol
+		// Everything else should be treated as a success from an http perspective and wrapped in the json-rpc format.
+		if !status.is_server_error() {
 			let lim = crate::http::response_buffer_limit(&response);
 			let content_encoding = response.headers().typed_get::<headers::ContentEncoding>();
 			let body_bytes = crate::http::compression::to_bytes_with_decompression(
@@ -923,14 +927,17 @@ impl Handler {
 			.await
 			.map_err(|e| UpstreamError::OpenAPIError(e.into()))?
 			.1;
-
-			// Wrap responses that are not structuredContent compliant in object
-			Ok(json!({ "data":
-				match serde_json::from_slice::<serde_json::Value>(&body_bytes).map_err(|e| UpstreamError::OpenAPIError(e.into()))? {
-					Value::Object(obj) => return Ok(Value::Object(obj)),
-					Value::Null => return Ok(Value::Null),
-					data => data,
-			}}))
+			match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+				Ok(Value::Object(obj)) => Ok(Value::Object(obj)),
+				Ok(Value::Null) => Ok(Value::Null),
+				Ok(data) => Ok(json!({ "data": data })),
+				Err(_) => {
+					// We should probably record a metric here as this means despite requesting json we got back non-json
+					// This would be fine if it was a 5XX but its not so we help a little.
+					// There is a consideration that we could put is_error in here based on the status but dont know if that makes sense for now
+					Ok(json!({ "code": status.as_u16(), "message": String::from_utf8_lossy(&body_bytes) }))
+				},
+			}
 		} else {
 			let lim = crate::http::response_buffer_limit(&response);
 			let body = String::from_utf8(

@@ -579,26 +579,32 @@ async fn test_call_tool_with_compressed_response() {
 async fn test_call_tool_response_wrapping() {
 	let (server, handler) = setup().await;
 
-	let test_cases = [
-		(false, Value::Null),
+	// (wrapped, raw_body_bytes, expected_parsed_value)
+	let test_cases: &[(bool, &[u8], Value)] = &[
+		(false, b"null", Value::Null),
 		(
 			false,
+			br#"{"id":"123","name":"Test User","email":"test@example.com"}"#,
 			json!({ "id": "123", "name": "Test User", "email": "test@example.com" }),
 		),
 		(
 			true,
+			br#"[{"id":1,"name":"1"},{"id":2,"name":"2"},{"id":3,"name":"3"}]"#,
 			json!([ { "id": 1, "name": "1" }, { "id": 2, "name": "2" }, { "id": 3, "name": "3" }]),
 		),
-		(true, json!("plain text response")),
-		(true, json!(42)),
-		(true, json!(true)),
+		(false, b"plain text response", json!({"code": 200, "message": "plain text response"})),
+		(true, b"42", json!(42)),
+		(true, b"true", json!(true)),
 	];
 
-	for (i, (wrapped, response)) in test_cases.iter().enumerate() {
+	for (i, (wrapped, body, response)) in test_cases.iter().enumerate() {
 		let user_id = format!("{}", i);
 		Mock::given(method("GET"))
 			.and(path(format!("/users/{}", user_id)))
-			.respond_with(ResponseTemplate::new(200).set_body_json(response))
+			.respond_with(
+				ResponseTemplate::new(200)
+					.set_body_bytes(body.to_vec()),
+			)
 			.expect(1)
 			.mount(&server)
 			.await;
@@ -611,7 +617,8 @@ async fn test_call_tool_response_wrapping() {
 				&IncomingRequestContext::empty(),
 			)
 			.await;
-		assert!(result.is_ok());
+
+		assert!(result.is_ok(), "result {:?}", result);
 
 		// Spec requires an object https://modelcontextprotocol.io/specification/2025-06-18/schema#calltoolresult
 		let expected = if *wrapped {
@@ -622,6 +629,7 @@ async fn test_call_tool_response_wrapping() {
 		assert_eq!(result.unwrap(), expected);
 	}
 }
+
 #[tokio::test]
 async fn test_normalize_url_path_empty_prefix() {
 	// Test the fix for double slash issue when prefix is empty (host/port config)
@@ -1516,3 +1524,4 @@ async fn test_openapi_from_url() {
 		}
 	}
 }
+
