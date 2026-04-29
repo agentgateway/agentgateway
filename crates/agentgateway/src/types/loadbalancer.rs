@@ -1,13 +1,14 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::future::pending;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
 
 use arc_swap::ArcSwap;
+use futures_util::SinkExt;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rand::RngExt;
 use serde::ser::SerializeSeq;
-use tokio::sync::mpsc;
 use tokio::time::sleep_until;
 
 use crate::types::discovery::{
@@ -50,7 +51,8 @@ impl<T> Default for EndpointGroup<T> {
 #[derive(Debug, Clone)]
 pub struct EndpointSet<T> {
 	buckets: Vec<Atomic<EndpointGroup<T>>>,
-	tx_eviction: mpsc::Sender<EvictionEvent>,
+	tx_eviction: futures::channel::mpsc::Sender<EvictionEvent>,
+	eviction_worker: Arc<EvictionWorkerState<T>>,
 
 	// Updates to `buckets` are atomically swapped to make reads fast, but every writer does
 	// load→modify→store, which races when two writers touch the same bucket concurrently.
@@ -261,6 +263,24 @@ pub enum EvictionEvent {
 #[derive(Debug)]
 struct UnevictEntry(Instant, EndpointKey, Option<f64>);
 
+struct EvictionWorkerState<T> {
+	buckets: Vec<Atomic<EndpointGroup<T>>>,
+	action_mutex: Arc<Mutex<()>>,
+	eviction_events: Mutex<Option<futures::channel::mpsc::Receiver<EvictionEvent>>>,
+	started: AtomicBool,
+}
+
+impl<T> std::fmt::Debug for EvictionWorkerState<T> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("EvictionWorkerState")
+			.finish_non_exhaustive()
+	}
+}
+
+trait EvictionStarter: std::fmt::Debug + Send + Sync {
+	fn start(&self);
+}
+
 impl PartialEq for UnevictEntry {
 	fn eq(&self, other: &Self) -> bool {
 		self.0 == other.0 && self.1 == other.1
@@ -276,6 +296,32 @@ impl Ord for UnevictEntry {
 	fn cmp(&self, other: &Self) -> Ordering {
 		// Reverse so earliest instant is "greater" and gets popped first from BinaryHeap (max-heap).
 		other.0.cmp(&self.0).then_with(|| self.1.cmp(&other.1))
+	}
+}
+
+impl<T: Clone + Sync + Send + 'static> EvictionStarter for EvictionWorkerState<T> {
+	fn start(&self) {
+		if self
+			.started
+			.compare_exchange(false, true, AtomicOrdering::AcqRel, AtomicOrdering::Acquire)
+			.is_err()
+		{
+			return;
+		}
+
+		let Some(eviction_events) = self
+			.eviction_events
+			.lock()
+			.expect("eviction worker receiver mutex poisoned")
+			.take()
+		else {
+			return;
+		};
+		EndpointSet::<T>::worker(
+			eviction_events,
+			self.buckets.clone(),
+			self.action_mutex.clone(),
+		);
 	}
 }
 
@@ -309,18 +355,24 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		Self::new_with_buckets((0..priority_levels).map(|_| Default::default()).collect())
 	}
 	fn new_with_buckets(buckets: Vec<Atomic<EndpointGroup<T>>>) -> Self {
-		let (tx_eviction, rx_eviction) = mpsc::channel(10);
+		let (tx_eviction, rx_eviction) = futures::channel::mpsc::channel(1);
 		let action_mutex = Arc::new(Mutex::new(()));
-		Self::worker(rx_eviction, buckets.clone(), action_mutex.clone());
+		let eviction_worker = Arc::new(EvictionWorkerState {
+			buckets: buckets.clone(),
+			action_mutex: action_mutex.clone(),
+			eviction_events: Mutex::new(Some(rx_eviction)),
+			started: AtomicBool::new(false),
+		});
 		Self {
 			buckets,
 			tx_eviction,
+			eviction_worker,
 			action_mutex,
 		}
 	}
 
 	pub fn start_request(&self, key: Strng, info: &Arc<EndpointInfo>) -> ActiveHandle {
-		info.start_request(key, self.tx_eviction.clone())
+		info.start_request(key, self.tx_eviction.clone(), self.eviction_worker.clone())
 	}
 
 	fn find_bucket(&self, key: &EndpointKey) -> Option<Arc<EndpointGroup<T>>> {
@@ -483,7 +535,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		}
 	}
 	fn worker(
-		mut eviction_events: mpsc::Receiver<EvictionEvent>,
+		mut eviction_events: futures::channel::mpsc::Receiver<EvictionEvent>,
 		buckets: Vec<Atomic<EndpointGroup<T>>>,
 		action_mutex: Arc<Mutex<()>>,
 	) {
@@ -512,11 +564,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 				bucket.store(Arc::new(eps));
 			};
 			let handle_recv_evict = |uneviction_heap: &mut BinaryHeap<UnevictEntry>,
-			                         o: Option<EvictionEvent>| {
-				let Some(item) = o else {
-					return;
-				};
-
+			                         item: EvictionEvent| {
 				let EvictionEvent::Evict {
 					key,
 					until,
@@ -538,9 +586,9 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 			loop {
 				let evict_at = uneviction_heap.peek().map(|e| e.0);
 				tokio::select! {
-					true = maybe_sleep_until(evict_at) => handle_eviction(&mut uneviction_heap),
+					_ = maybe_sleep_until(evict_at) => handle_eviction(&mut uneviction_heap),
 					item = eviction_events.recv() => {
-						if item.is_none() { return };
+						let Ok(item) = item else { return };
 						handle_recv_evict(&mut uneviction_heap, item)
 					}
 				}
@@ -557,7 +605,8 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 				.evicted_until
 				.compare_and_swap(&None::<Arc<_>>, Some(Arc::new(time)));
 			if prev.is_none() {
-				let tx = self.tx_eviction.clone();
+				self.eviction_worker.start();
+				let mut tx = self.tx_eviction.clone();
 				tokio::spawn(async move {
 					let _ = tx
 						.send(EvictionEvent::Evict {
@@ -630,16 +679,18 @@ impl EndpointInfo {
 			self.request_latency.load() * (1.0 + self.pending_requests.countf() * 0.1);
 		self.health.load() / (1.0 + latency_penalty)
 	}
-	pub fn start_request(
+	fn start_request(
 		self: &Arc<Self>,
 		key: Strng,
-		tx_sender: mpsc::Sender<EvictionEvent>,
+		tx_sender: futures::channel::mpsc::Sender<EvictionEvent>,
+		eviction_starter: Arc<dyn EvictionStarter>,
 	) -> ActiveHandle {
 		self.total_requests.fetch_add(1, AtomicOrdering::Relaxed);
 		ActiveHandle {
 			info: self.clone(),
 			key,
 			tx: tx_sender,
+			eviction_starter,
 			counter: self.pending_requests.0.clone(),
 		}
 	}
@@ -688,7 +739,8 @@ impl Serialize for ActiveCounter {
 pub struct ActiveHandle {
 	info: Arc<EndpointInfo>,
 	key: Strng,
-	tx: mpsc::Sender<EvictionEvent>,
+	tx: futures::channel::mpsc::Sender<EvictionEvent>,
+	eviction_starter: Arc<dyn EvictionStarter>,
 	#[allow(dead_code)]
 	counter: Arc<()>,
 }
@@ -737,7 +789,8 @@ impl ActiveHandle {
 				.evicted_until
 				.compare_and_swap(&None::<Arc<_>>, Some(Arc::new(time)));
 			if prev.is_none() {
-				let tx = self.tx.clone();
+				self.eviction_starter.start();
+				let mut tx = self.tx.clone();
 				let key = self.key.clone();
 				tokio::spawn(async move {
 					let _ = tx
@@ -767,15 +820,11 @@ impl ActiveCounter {
 	}
 }
 
-// tokio::select evaluates each pattern before checking the (optional) associated condition. Work
-// around that by returning false to fail the pattern match when sleep is not viable.
-async fn maybe_sleep_until(till: Option<Instant>) -> bool {
-	match till {
-		Some(till) => {
-			sleep_until(till.into()).await;
-			true
-		},
-		None => false,
+async fn maybe_sleep_until(till: Option<Instant>) {
+	if let Some(till) = till {
+		sleep_until(till.into()).await;
+	} else {
+		pending::<()>().await;
 	}
 }
 
