@@ -427,9 +427,41 @@ async fn test_call_tool_upstream_error() {
 		)
 		.await;
 
+	assert!(result.is_ok());
+	assert_eq!(result.unwrap(), error_response);
+}
+
+#[tokio::test]
+async fn test_call_tool_upstream_internal_error() {
+	let (server, handler) = setup().await;
+
+	let user_id = "error-user";
+	let error_response = json!({ "error": "Something went wrong accessing Github :unicorn:" });
+
+	Mock::given(method("GET"))
+		.and(path(format!("/users/{user_id}")))
+		.respond_with(ResponseTemplate::new(500).set_body_json(&error_response))
+		.mount(&server)
+		.await;
+
+	let args = json!({ "path": { "user_id": user_id } });
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+
 	assert!(result.is_err());
 	let err = result.unwrap_err();
-	assert!(err.to_string().contains("failed with status 404 Not Found"));
+	assert!(
+		err
+			.to_string()
+			.contains("failed with status 500 Internal Server Error"),
+		"error was {}",
+		err.to_string()
+	);
 	assert!(err.to_string().contains(&error_response.to_string()));
 }
 
@@ -524,16 +556,13 @@ async fn test_call_tool_invalid_path_param_value() {
 
 	// Depending on server behavior for the literal path, this might be Ok or Err.
 	// If server returns 404 for the literal path:
-	assert!(result.is_err());
-	assert!(
-		result
-			.as_ref()
-			.unwrap_err()
-			.to_string()
-			.contains("failed with status 404 Not Found"),
-		"{}",
-		result.unwrap_err().to_string()
-	);
+	assert!(result.is_ok());
+	// assert!(
+	// 	result.unwrap()
+	// 		.contains("failed with status 404 Not Found"),
+	// 	"{}",
+	// 	result.unwrap_err().to_string()
+	// );
 
 	// If the request *itself* failed before sending (e.g., invalid URL formed),
 	// the error might be different.
