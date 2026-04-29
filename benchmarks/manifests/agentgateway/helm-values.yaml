@@ -1,0 +1,19 @@
+# Helm values for agentgateway deployment in the benchmark environment.
+# Image and tag are passed via --set in install.sh to keep them easily overridable.
+# This file only carries non-image settings.
+
+controller:
+  logLevel: info
+  replicaCount: 1
+
+proxy:
+  image:
+    repository: agentgateway
+
+# Enable the controller to watch InferencePool CRDs and generate
+# ext_proc routing policies for the data plane.
+inferenceExtension:
+  enabled: true
+
+# Empty selector means the controller discovers resources in all namespaces.
+discoveryNamespaceSelectors: []
