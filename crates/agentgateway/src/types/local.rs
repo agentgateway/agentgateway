@@ -1841,6 +1841,7 @@ json(request.body).model
 				add: vec![],
 				remove: vec![],
 				body: None,
+				variables: vec![],
 			}),
 			response: None,
 		},

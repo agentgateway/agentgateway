@@ -1,7 +1,7 @@
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::cel::{ContextBuilder, Executor};
+use crate::cel::{CelVariableSpec, ContextBuilder, Executor, VariableBindings, VariableSet};
 use crate::proxy::ProxyError;
 use crate::proxy::dtrace::{
 	self, AuthorizationResult as TraceAuthorizationResult, AuthorizationRuleMode,
@@ -19,7 +19,8 @@ impl HTTPAuthorizationSet {
 	pub fn apply(&self, req: &http::Request) -> anyhow::Result<()> {
 		tracing::debug!(info=?http::DebugExtensions(req), "Checking HTTP request");
 		let exec = cel::Executor::new_request(req);
-		let allowed = self.0.validate(&exec);
+		let bindings = self.0.variable_bindings();
+		let allowed = self.0.validate(&exec, Some(&bindings));
 		if !allowed {
 			anyhow::bail!("HTTP authorization denied");
 		}
@@ -41,7 +42,8 @@ impl NetworkAuthorizationSet {
 
 	pub fn apply(&self, source: &crate::cel::SourceContext) -> Result<(), ProxyError> {
 		let exec = Executor::new_source(source);
-		let allowed = self.0.validate(&exec);
+		let bindings = self.0.variable_bindings();
+		let allowed = self.0.validate(&exec, Some(&bindings));
 		if !allowed {
 			Err(ProxyError::AuthorizationFailed)
 		} else {
@@ -54,7 +56,7 @@ impl NetworkAuthorizationSet {
 	}
 
 	pub fn merge_rule_set(&mut self, rule_set: RuleSet) {
-		self.0.0.push(rule_set);
+		self.0.push(rule_set);
 	}
 }
 
@@ -76,6 +78,9 @@ impl RuleSet {
 		for rule in &self.rules.require {
 			cel.register_expression(rule.as_ref());
 		}
+		for (_, expr) in self.rules.variables.all() {
+			cel.register_expression(expr.as_ref());
+		}
 	}
 }
 
@@ -84,6 +89,7 @@ pub struct PolicySet {
 	allow: Vec<Arc<cel::Expression>>,
 	deny: Vec<Arc<cel::Expression>>,
 	require: Vec<Arc<cel::Expression>>,
+	variables: VariableSet,
 }
 
 #[derive(Clone, Debug)]
@@ -108,6 +114,7 @@ enum RuleTypeSerde {
 	Allow(String),
 	Deny(String),
 	Require(String),
+	Variable(CelVariableSpec),
 }
 
 impl PolicySet {
@@ -116,10 +123,20 @@ impl PolicySet {
 		deny: Vec<Arc<cel::Expression>>,
 		require: Vec<Arc<cel::Expression>>,
 	) -> Self {
+		Self::with_variables(allow, deny, require, VariableSet::default())
+	}
+
+	pub fn with_variables(
+		allow: Vec<Arc<cel::Expression>>,
+		deny: Vec<Arc<cel::Expression>>,
+		require: Vec<Arc<cel::Expression>>,
+		variables: VariableSet,
+	) -> Self {
 		Self {
 			allow,
 			deny,
 			require,
+			variables,
 		}
 	}
 }
@@ -127,7 +144,8 @@ impl PolicySet {
 pub fn se_policies<S: Serializer>(t: &PolicySet, serializer: S) -> Result<S::Ok, S::Error> {
 	let len = usize::from(!t.allow.is_empty())
 		+ usize::from(!t.deny.is_empty())
-		+ usize::from(!t.require.is_empty());
+		+ usize::from(!t.require.is_empty())
+		+ usize::from(!t.variables.is_empty());
 	let mut m = serializer.serialize_map(Some(len))?;
 	if !t.allow.is_empty() {
 		m.serialize_entry("allow", &t.allow)?;
@@ -137,6 +155,29 @@ pub fn se_policies<S: Serializer>(t: &PolicySet, serializer: S) -> Result<S::Ok,
 	}
 	if !t.require.is_empty() {
 		m.serialize_entry("require", &t.require)?;
+	}
+	if !t.variables.is_empty() {
+		let serializable: Vec<CelVariableSpec> = t
+			.variables
+			.namespaced
+			.iter()
+			.map(|(name, expr)| CelVariableSpec {
+				name: name.clone(),
+				expression: expr.original_expression.clone(),
+				alias: false,
+			})
+			.chain(
+				t.variables
+					.aliased
+					.iter()
+					.map(|(name, expr)| CelVariableSpec {
+						name: name.clone(),
+						expression: expr.original_expression.clone(),
+						alias: true,
+					}),
+			)
+			.collect();
+		m.serialize_entry("variables", &serializable)?;
 	}
 	m.end()
 }
@@ -150,6 +191,7 @@ where
 		allow: vec![],
 		deny: vec![],
 		require: vec![],
+		variables: VariableSet::default(),
 	};
 	for r in raw {
 		match r {
@@ -175,43 +217,92 @@ where
 					.map(Arc::new)
 					.map_err(|e| serde::de::Error::custom(e.to_string()))?,
 			),
+			RuleSerde::Object {
+				rule:
+					RuleTypeSerde::Variable(CelVariableSpec {
+						name,
+						expression,
+						alias,
+					}),
+			} => {
+				let expr = cel::Expression::new_strict(&expression)
+					.map(Arc::new)
+					.map_err(|e| serde::de::Error::custom(e.to_string()))?;
+				res.variables.push(name, expr, alias);
+			},
 		};
 	}
 	Ok(res)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", from = "Vec<RuleSet>", into = "Vec<RuleSet>")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-pub struct RuleSets(Vec<RuleSet>);
+pub struct RuleSets {
+	sets: Vec<RuleSet>,
+	/// Flattened variable defs across `sets`. Built once at construction so
+	/// per-request paths only borrow.
+	variables: VariableSet,
+}
 
 impl From<Vec<RuleSet>> for RuleSets {
 	fn from(value: Vec<RuleSet>) -> Self {
-		Self(value)
+		let mut variables = VariableSet::default();
+		for rs in &value {
+			variables.extend_from(&rs.rules.variables);
+		}
+		Self {
+			sets: value,
+			variables,
+		}
+	}
+}
+
+impl From<RuleSets> for Vec<RuleSet> {
+	fn from(rs: RuleSets) -> Self {
+		rs.sets
 	}
 }
 
 impl RuleSets {
 	pub fn register(&self, ctx: &mut ContextBuilder) {
-		for rule_set in &self.0 {
+		for rule_set in &self.sets {
 			rule_set.register(ctx);
 		}
 	}
-	pub fn validate(&self, exec: &Executor) -> bool {
-		let rule_sets = &self.0;
+
+	/// A zero-allocation `VariableBindings` borrowing the precomputed variable
+	/// definitions on this `RuleSets`. Cheap to call per request.
+	pub fn variable_bindings(&self) -> VariableBindings<'_> {
+		self.variables.bindings()
+	}
+
+	pub fn push(&mut self, rule_set: RuleSet) {
+		self.variables.extend_from(&rule_set.rules.variables);
+		self.sets.push(rule_set);
+	}
+	pub fn validate<'a>(
+		&'a self,
+		exec: &'a Executor<'a>,
+		bindings: Option<&'a VariableBindings<'a>>,
+	) -> bool {
+		let rule_sets = &self.sets;
 		let has_rules = rule_sets.iter().any(|r| r.has_rules());
 		// If there are no rule sets, everyone has access
 		#[allow(clippy::if_same_then_else)] // This is intentional to make things explicit.
 		let allowed = if !has_rules {
 			true
 		// If there are any DENY, deny
-		} else if rule_sets.iter().any(|r| r.denies(exec)) {
+		} else if rule_sets.iter().any(|r| r.denies(exec, bindings)) {
 			false
 		// All REQUIRE policies must match when present.
-		} else if rule_sets.iter().any(|r| !r.all_requires_match(exec)) {
+		} else if rule_sets
+			.iter()
+			.any(|r| !r.all_requires_match(exec, bindings))
+		{
 			false
 		// If there are any ALLOW, allow
-		} else if rule_sets.iter().any(|r| r.allows(exec)) {
+		} else if rule_sets.iter().any(|r| r.allows(exec, bindings)) {
 			true
 		} else {
 			// If only deny rules exist (no allow rules), default to allow (denylist semantics).
@@ -227,21 +318,21 @@ impl RuleSets {
 				for rule in &rule_set.rules.allow {
 					rules.push(AuthorizationRuleResult {
 						name: rule.original_expression.clone(),
-						matched: exec.eval_bool(rule.as_ref()),
+						matched: exec.eval_bool_with_vars(rule.as_ref(), bindings),
 						mode: AuthorizationRuleMode::Allow,
 					});
 				}
 				for rule in &rule_set.rules.deny {
 					rules.push(AuthorizationRuleResult {
 						name: rule.original_expression.clone(),
-						matched: exec.eval_bool(rule.as_ref()),
+						matched: exec.eval_bool_with_vars(rule.as_ref(), bindings),
 						mode: AuthorizationRuleMode::Deny,
 					});
 				}
 				for rule in &rule_set.rules.require {
 					rules.push(AuthorizationRuleResult {
 						name: rule.original_expression.clone(),
-						matched: exec.eval_bool(rule.as_ref()),
+						matched: exec.eval_bool_with_vars(rule.as_ref(), bindings),
 						mode: AuthorizationRuleMode::Require,
 					});
 				}
@@ -261,7 +352,7 @@ impl RuleSets {
 	}
 
 	pub fn is_empty(&self) -> bool {
-		self.0.is_empty()
+		self.sets.is_empty()
 	}
 }
 
@@ -280,7 +371,11 @@ impl RuleSet {
 	pub fn has_require_rules(&self) -> bool {
 		!self.rules.require.is_empty()
 	}
-	pub fn denies(&self, exec: &cel::Executor) -> bool {
+	pub fn denies<'a>(
+		&'a self,
+		exec: &'a cel::Executor<'a>,
+		bindings: Option<&'a VariableBindings<'a>>,
+	) -> bool {
 		if self.rules.deny.is_empty() {
 			false
 		} else {
@@ -288,11 +383,15 @@ impl RuleSet {
 				.rules
 				.deny
 				.iter()
-				.any(|rule| exec.eval_bool(rule.as_ref()))
+				.any(|rule| exec.eval_bool_with_vars(rule.as_ref(), bindings))
 		}
 	}
 
-	pub fn allows(&self, exec: &cel::Executor) -> bool {
+	pub fn allows<'a>(
+		&'a self,
+		exec: &'a cel::Executor<'a>,
+		bindings: Option<&'a VariableBindings<'a>>,
+	) -> bool {
 		if self.rules.allow.is_empty() {
 			false
 		} else {
@@ -300,16 +399,20 @@ impl RuleSet {
 				.rules
 				.allow
 				.iter()
-				.any(|rule| exec.eval_bool(rule.as_ref()))
+				.any(|rule| exec.eval_bool_with_vars(rule.as_ref(), bindings))
 		}
 	}
 
-	pub fn all_requires_match(&self, exec: &cel::Executor) -> bool {
+	pub fn all_requires_match<'a>(
+		&'a self,
+		exec: &'a cel::Executor<'a>,
+		bindings: Option<&'a VariableBindings<'a>>,
+	) -> bool {
 		self
 			.rules
 			.require
 			.iter()
-			.all(|rule| exec.eval_bool(rule.as_ref()))
+			.all(|rule| exec.eval_bool_with_vars(rule.as_ref(), bindings))
 	}
 }
 

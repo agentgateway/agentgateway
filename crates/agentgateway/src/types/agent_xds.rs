@@ -1208,8 +1208,23 @@ fn authorization_from_proto(
 		));
 	}
 
+	let mut variables = crate::cel::VariableSet::default();
+	for v in &rbac.variables {
+		let expr = permissive_cel_expression_arc(
+			diagnostics,
+			"traffic.authorization.variables",
+			&v.expression,
+		);
+		variables.push(v.name.clone(), expr, v.alias);
+	}
+
 	// Create PolicySet using the same pattern as in de_policies function
-	let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
+	let policy_set = authorization::PolicySet::with_variables(
+		allow_exprs,
+		deny_exprs,
+		require_exprs,
+		variables,
+	);
 	Authorization(authorization::RuleSet::new(policy_set))
 }
 
@@ -1225,6 +1240,7 @@ fn transformation_from_proto(
 		let mut remove = Vec::new();
 		let mut body = None;
 		let mut metadata = Vec::new();
+		let mut variables = Vec::new();
 
 		if let Some(t) = t {
 			for h in &t.add {
@@ -1242,6 +1258,13 @@ fn transformation_from_proto(
 			for (k, v) in &t.metadata {
 				metadata.push((k.clone().into(), v.clone().into()));
 			}
+			for v in &t.variables {
+				variables.push(crate::cel::CelVariableSpec {
+					name: v.name.clone(),
+					expression: v.expression.clone(),
+					alias: v.alias,
+				});
+			}
 		}
 
 		LocalTransform {
@@ -1250,6 +1273,7 @@ fn transformation_from_proto(
 			remove,
 			body,
 			metadata,
+			variables,
 		}
 	}
 

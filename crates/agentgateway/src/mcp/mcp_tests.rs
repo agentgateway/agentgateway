@@ -513,13 +513,9 @@ async fn authorization_deny_specific_tool_filters_only_that_tool() {
 	let mock = mock_streamable_http_server(true).await;
 
 	// Create a deny policy that only denies the "echo" tool
-	let deny_echo_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
-		vec![],
-		vec![Arc::new(
+	let deny_echo_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(vec![], vec![Arc::new(
 			cel::Expression::new_strict(r#"mcp.tool.name == "echo""#).unwrap(),
-		)],
-		vec![],
-	)));
+		)], vec![])));
 
 	let (_bind, io) = setup_proxy_policies(
 		&mock,
@@ -581,16 +577,12 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 	let mock = mock_streamable_http_server(true).await;
 
 	// Deny "echo" only when request header x-agent-name == "agent-one"
-	let deny_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
-		vec![],
-		vec![Arc::new(
+	let deny_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(vec![], vec![Arc::new(
 			cel::Expression::new_strict(
 				r#"mcp.tool.name == "echo" && request.headers["x-agent-name"] == "agent-one""#,
 			)
 			.unwrap(),
-		)],
-		vec![],
-	)));
+		)], vec![])));
 
 	let (_bind, io) = setup_proxy_policies(
 		&mock,

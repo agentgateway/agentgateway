@@ -70,6 +70,168 @@ pub struct Executor<'a> {
 	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
 }
 
+/// CelVariableSpec is the wire/config form of a single CEL variable
+/// definition. Used by any subsystem that exposes user-defined variables
+/// (authorization, transformation, …) to keep parsing and serialization
+/// behavior uniform.
+#[apply(schema!)]
+pub struct CelVariableSpec {
+	pub name: String,
+	pub expression: String,
+	#[serde(default)]
+	pub alias: bool,
+}
+
+/// VariableSet groups CEL variable definitions by how they are exposed in
+/// rule expressions. Designed to be reusable beyond authorization: any
+/// subsystem that wants user-defined CEL variables can store one of these
+/// and call `bindings()` per evaluation to get a stack-only resolver wrapper.
+///
+/// - `namespaced` — accessible only as `vars.<name>`.
+/// - `aliased` — accessible bare as `<name>`. Built-in identifiers (`jwt`,
+///   `request`, …) take precedence so an alias cannot silently shadow them.
+///
+/// A given variable lives in exactly one slot.
+#[derive(Clone, Debug, Default)]
+pub struct VariableSet {
+	pub namespaced: Vec<(String, Arc<Expression>)>,
+	pub aliased: Vec<(String, Arc<Expression>)>,
+}
+
+impl VariableSet {
+	pub fn new(
+		namespaced: Vec<(String, Arc<Expression>)>,
+		aliased: Vec<(String, Arc<Expression>)>,
+	) -> Self {
+		Self {
+			namespaced,
+			aliased,
+		}
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.namespaced.is_empty() && self.aliased.is_empty()
+	}
+
+	/// Push a single definition into the appropriate slot based on `alias`.
+	pub fn push(&mut self, name: String, expr: Arc<Expression>, alias: bool) {
+		if alias {
+			self.aliased.push((name, expr));
+		} else {
+			self.namespaced.push((name, expr));
+		}
+	}
+
+	/// Append every definition from `other` into `self`.
+	pub fn extend_from(&mut self, other: &VariableSet) {
+		self.namespaced.extend(other.namespaced.iter().cloned());
+		self.aliased.extend(other.aliased.iter().cloned());
+	}
+
+	/// A zero-allocation `VariableBindings` borrowing this set's definitions
+	/// plus a stack-only cycle guard. Cheap to call per evaluation.
+	pub fn bindings(&self) -> VariableBindings<'_> {
+		VariableBindings::new(&self.namespaced, &self.aliased)
+	}
+
+	/// Iterator over every (name, expression) pair across both slots.
+	/// Useful for things like attribute registration.
+	pub fn all(&self) -> impl Iterator<Item = &(String, Arc<Expression>)> {
+		self.namespaced.iter().chain(self.aliased.iter())
+	}
+}
+
+/// VariableBindings is a per-evaluation wrapper that borrows a `VariableSet`.
+/// Each variable is exposed under exactly one name — either `vars.<name>`
+/// (default, namespaced) or bare `<name>` (alias form). The two forms look
+/// up disjoint slices.
+///
+/// Lookups recursively call back into the same resolver so that
+/// `vars.claims = jwt` returns the same borrowed reference the bare `jwt`
+/// identifier would — zero-copy through to the underlying claims map.
+///
+/// Variables may NOT reference other variables: a single `evaluating` flag
+/// short-circuits any nested `vars.<name>` / alias reference encountered
+/// during a variable body's evaluation. Variable bodies can still freely
+/// reference all built-ins (`jwt`, `request`, …).
+///
+/// We deliberately do not cache evaluated values: a `Value<'a>` cache makes
+/// the type invariant in `'a` and breaks the executor's covariance. Variables
+/// that are identifier passthroughs are essentially free to re-evaluate;
+/// complex expressions pay per reference.
+#[derive(Debug)]
+pub struct VariableBindings<'r> {
+	namespaced: &'r [(String, Arc<Expression>)],
+	aliased: &'r [(String, Arc<Expression>)],
+	/// `true` while a variable body is being evaluated. Any further variable
+	/// reference encountered during that evaluation returns `None`. This
+	/// flatly forbids variables-referencing-variables — simpler than tracking
+	/// per-name in-flight state, and variable bodies can still freely
+	/// reference all built-ins (`jwt`, `request`, `source`, …).
+	evaluating: std::cell::Cell<bool>,
+}
+
+impl<'r> VariableBindings<'r> {
+	fn new(
+		namespaced: &'r [(String, Arc<Expression>)],
+		aliased: &'r [(String, Arc<Expression>)],
+	) -> Self {
+		Self {
+			namespaced,
+			aliased,
+			evaluating: std::cell::Cell::new(false),
+		}
+	}
+	
+	fn lookup_namespaced<'a, R: cel::context::VariableResolver<'a>>(
+		&self,
+		name: &str,
+		resolver: &R,
+	) -> Option<cel::Value<'a>>
+	where
+		'r: 'a,
+	{
+		self.lookup_in(self.namespaced, name, resolver)
+	}
+
+	fn lookup_alias<'a, R: cel::context::VariableResolver<'a>>(
+		&self,
+		name: &str,
+		resolver: &R,
+	) -> Option<cel::Value<'a>>
+	where
+		'r: 'a,
+	{
+		self.lookup_in(self.aliased, name, resolver)
+	}
+
+	fn lookup_in<'a, R: cel::context::VariableResolver<'a>>(
+		&self,
+		defs: &'r [(String, Arc<Expression>)],
+		name: &str,
+		resolver: &R,
+	) -> Option<cel::Value<'a>>
+	where
+		'r: 'a,
+	{
+		if self.evaluating.get() {
+			// Already inside another variable's body — disallow var-refs-var.
+			return None;
+		}
+		let expr = defs
+			.iter()
+			.find_map(|(k, expr)| (k.as_str() == name).then_some(expr))?;
+		self.evaluating.set(true);
+		let result = cel::Value::resolve(
+			expr.expression.expression(),
+			ROOT_CONTEXT.as_ref(),
+			resolver,
+		);
+		self.evaluating.set(false);
+		result.ok()
+	}
+}
+
 fn is_extension_or_direct_none<T: Send + Sync + 'static>(e: &ExtensionOrDirect<T>) -> bool {
 	e.deref().is_none()
 }
@@ -268,14 +430,23 @@ pub enum BackendProtocol {
 	llm,
 }
 
-struct ExecutorResolver<'a> {
-	executor: &'a Executor<'a>,
+struct ExecutorResolver<'r, 'a> {
+	executor: &'r Executor<'a>,
+	/// Lazy CEL variables exposed under the `vars` namespace. When the resolver
+	/// sees `vars.<name>` it looks up the named expression here, evaluates it
+	/// against itself (recursing through this same resolver), and caches the
+	/// resulting `Value<'a>`. The cached values may borrow from the executor's
+	/// input data, so exposing e.g. `jwt` as a variable is zero-copy.
+	bindings: Option<&'r VariableBindings<'r>>,
 }
 
 static DUMP: Lazy<Expression> =
 	Lazy::new(|| Expression::new_strict("variables()").expect("failed to compile"));
 
-impl ExecutorResolver<'_> {
+impl<'r, 'a> ExecutorResolver<'r, 'a>
+where
+	'r: 'a,
+{
 	pub fn slow_debug(&self) -> serde_json::Value {
 		let expr = &DUMP;
 		let cel_value = Value::resolve(expr.expression.expression(), ROOT_CONTEXT.as_ref(), self)
@@ -289,9 +460,18 @@ impl ExecutorResolver<'_> {
 	}
 }
 
-impl<'a> VariableResolver<'a> for ExecutorResolver<'a> {
+impl<'r, 'a> VariableResolver<'a> for ExecutorResolver<'r, 'a>
+where
+	'r: 'a,
+{
 	fn resolve(&self, variable: &str) -> Option<Value<'a>> {
-		self.executor.field(variable)
+		// Built-ins win over user-defined aliases: try the executor first, fall
+		// back to alias-form bindings only. Namespaced bindings (`vars.<name>`)
+		// are resolved via `resolve_member` instead.
+		if let Some(v) = self.executor.field(variable) {
+			return Some(v);
+		}
+		self.bindings.and_then(|b| b.lookup_alias(variable, self))
 	}
 	// A bit annoying, but a nice speed up for us
 	fn resolve_member(&self, expr: &str, member: &str) -> Option<Value<'a>> {
@@ -302,6 +482,9 @@ impl<'a> VariableResolver<'a> for ExecutorResolver<'a> {
 				.response
 				.as_ref()
 				.and_then(|r| r.field(member)),
+			"vars" => self
+				.bindings
+				.and_then(|b| b.lookup_namespaced(member, self)),
 			_ => None,
 		}
 	}
@@ -452,12 +635,25 @@ impl<'a> Executor<'a> {
 		this
 	}
 	pub fn debug_snapshot(&'a self) -> serde_json::Value {
-		let resolver = ExecutorResolver { executor: self };
+		let resolver = ExecutorResolver {
+			executor: self,
+			bindings: None,
+		};
 		resolver.slow_debug()
 	}
 
-	pub fn eval(&'a self, expr: &'a Expression) -> Result<Value<'a>, Error> {
-		let resolver = ExecutorResolver { executor: self };
+	/// eval_with_vars evaluates `expr` against `exec` with optional CEL variable
+	/// bindings exposed under the `vars` namespace. Bindings are resolved lazily
+	/// and memoized; cached values may borrow zero-copy from `exec`.
+	pub fn eval_with_vars(
+		&'a self,
+		expr: &'a Expression,
+		bindings: Option<&'a VariableBindings<'a>>,
+	) -> Result<Value<'a>, Error> {
+		let resolver = ExecutorResolver {
+			executor: self,
+			bindings,
+		};
 		let start = dtrace::timed_start();
 		let res = Value::resolve(
 			expr.expression.expression(),
@@ -468,7 +664,6 @@ impl<'a> Executor<'a> {
 			t.cel_eval(
 				start,
 				Instant::now(),
-				// TODO: include the source policy of the expression
 				&expr.original_expression,
 				resolver.slow_debug(),
 				res
@@ -490,9 +685,14 @@ impl<'a> Executor<'a> {
 			},
 		}
 	}
-	pub fn eval_bool(&self, expr: &Expression) -> bool {
+
+	pub fn eval_bool_with_vars(
+		&self,
+		expr: &'a Expression,
+		bindings: Option<&'a VariableBindings<'a>>,
+	) -> bool {
 		self
-			.eval(expr)
+			.eval_with_vars(expr, bindings)
 			.map(|v| match v.as_bool() {
 				Ok(b) => b,
 				Err(e) => {
@@ -505,6 +705,13 @@ impl<'a> Executor<'a> {
 				},
 			})
 			.unwrap_or_default()
+	}
+
+	pub fn eval(&'a self, expr: &'a Expression) -> Result<Value<'a>, Error> {
+		self.eval_with_vars(expr, None)
+	}
+	pub fn eval_bool(&'a self, expr: &'a Expression) -> bool {
+		self.eval_bool_with_vars(expr, None)
 	}
 
 	/// eval_rng evaluates a float (0.0-1.0) or a bool and evaluates to a bool. If a float is returned,

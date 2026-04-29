@@ -93,6 +93,63 @@ fn test_transformation_host_header_lifts_to_authority() {
 }
 
 #[test]
+fn test_transformation_namespaced_variable() {
+	// `vars.greeting` is reused by two header expressions.
+	let mut req = ::http::Request::builder()
+		.method("GET")
+		.uri("https://www.rust-lang.org/")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let c = super::LocalTransformationConfig {
+		request: Some(super::LocalTransform {
+			set: vec![
+				(strng::new("x-greeting"), strng::new("vars.greeting")),
+				(
+					strng::new("x-greeting-upper"),
+					strng::new("vars.greeting + \"!\""),
+				),
+			],
+			variables: vec![cel::CelVariableSpec {
+				name: "greeting".into(),
+				expression: r#""hello " + request.method"#.into(),
+				alias: false,
+			}],
+			..Default::default()
+		}),
+		response: None,
+	};
+	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	xfm.apply_request(&mut req);
+	assert_eq!(req.headers().get("x-greeting").unwrap(), "hello GET");
+	assert_eq!(req.headers().get("x-greeting-upper").unwrap(), "hello GET!");
+}
+
+#[test]
+fn test_transformation_alias_variable() {
+	// `alias=true` exposes the var bare; `vars.<name>` form should not match.
+	let mut req = ::http::Request::builder()
+		.method("POST")
+		.uri("https://www.rust-lang.org/")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let c = super::LocalTransformationConfig {
+		request: Some(super::LocalTransform {
+			set: vec![(strng::new("x-method"), strng::new("aliased_method"))],
+			variables: vec![cel::CelVariableSpec {
+				name: "aliased_method".into(),
+				expression: "request.method".into(),
+				alias: true,
+			}],
+			..Default::default()
+		}),
+		response: None,
+	};
+	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	xfm.apply_request(&mut req);
+	assert_eq!(req.headers().get("x-method").unwrap(), "POST");
+}
+
+#[test]
 fn test_transformation_metadata() {
 	let mut req = ::http::Request::builder()
 		.method("GET")

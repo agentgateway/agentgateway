@@ -671,6 +671,15 @@ message JWTValidationOptions {
   repeated string required_claims = 1;
 }
 
+message CelVariable {
+  string name = 1;
+  string expression = 2;
+  // When false (default), the variable is accessible only as `vars.<name>`.
+  // When true, it is accessible bare as `<name>` (alias form). The two forms
+  // are mutually exclusive: a variable is exposed under exactly one name.
+  bool alias = 3;
+}
+
 message TrafficPolicySpec {
   message RemoteRateLimit {
     string domain = 1;
@@ -746,6 +755,7 @@ message TrafficPolicySpec {
     repeated string allow = 1;
     repeated string deny = 2;
     repeated string require = 3;
+    repeated CelVariable variables = 4;
   }
   message JWTProvider {
     // JWT issuer that must match the 'iss' claim
@@ -839,6 +849,10 @@ message TrafficPolicySpec {
       repeated string remove = 3;
       BodyTransformation body = 4;
       map<string, string> metadata = 5;
+      // CEL variables visible to every expression in this Transform.
+      // See CelVariable for the namespaced (`vars.<name>`) vs alias (`<name>`)
+      // exposure rules.
+      repeated CelVariable variables = 6;
     }
     Transform request = 1;
     Transform response = 2;

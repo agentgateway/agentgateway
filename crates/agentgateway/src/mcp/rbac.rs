@@ -38,7 +38,8 @@ impl McpAuthorizationSet {
 		tracing::debug!("Checking RBAC for resource: {:?}", res);
 		let mcp = crate::mcp::MCPInfo::from(res);
 		let exec = crate::cel::Executor::new_mcp_request(&cel.0, &mcp);
-		self.0.validate(&exec)
+		let bindings = self.0.variable_bindings();
+		self.0.validate(&exec, Some(&bindings))
 	}
 
 	pub fn register(&self, cel: &mut ContextBuilder) {

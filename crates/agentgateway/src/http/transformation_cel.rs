@@ -4,7 +4,7 @@ use ::http::{HeaderName, header};
 use agent_core::prelude::Strng;
 use serde_with::{DeserializeAs, SerializeAs, serde_as};
 
-use crate::cel::{Expression, RequestSnapshot};
+use crate::cel::{CelVariableSpec, Expression, RequestSnapshot, VariableBindings, VariableSet};
 use crate::http::{HeaderOrPseudo, HeaderOrPseudoValue, RequestOrResponse};
 use crate::{cel, *};
 
@@ -33,6 +33,8 @@ pub struct LocalTransform {
 	#[serde(default)]
 	#[serde_as(as = "serde_with::Map<_, _>")]
 	pub metadata: Vec<(Strng, Strng)>,
+	#[serde(default)]
+	pub variables: Vec<CelVariableSpec>,
 }
 
 #[apply(schema!)]
@@ -95,12 +97,18 @@ impl TransformerConfig {
 			.into_iter()
 			.map(|(k, v)| Ok::<_, anyhow::Error>((k, compile(v.as_str(), strict, warnings)?)))
 			.collect::<Result<_, _>>()?;
+		let mut variables = VariableSet::default();
+		for v in req.variables {
+			let expr = Arc::new(compile(&v.expression, strict, warnings)?);
+			variables.push(v.name, expr, v.alias);
+		}
 		Ok(TransformerConfig {
 			set,
 			add,
 			remove,
 			body,
 			metadata,
+			variables,
 		})
 	}
 }
@@ -155,10 +163,12 @@ impl Transformation {
 			.chain(self.request.set.iter().map(|v| &v.1))
 			.chain(self.request.body.as_ref())
 			.chain(self.request.metadata.iter().map(|v| &v.1))
+			.chain(self.request.variables.all().map(|(_, e)| e.as_ref()))
 			.chain(self.response.add.iter().map(|v| &v.1))
 			.chain(self.response.set.iter().map(|v| &v.1))
 			.chain(self.response.body.as_ref())
 			.chain(self.response.metadata.iter().map(|v| &v.1))
+			.chain(self.response.variables.all().map(|(_, e)| e.as_ref()))
 	}
 }
 
@@ -176,6 +186,8 @@ pub struct TransformerConfig {
 	pub body: Option<cel::Expression>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub metadata: Vec<(Strng, cel::Expression)>,
+	#[serde(skip)]
+	pub variables: VariableSet,
 }
 
 pub struct SerAsStr;
@@ -208,16 +220,17 @@ fn eval_body(
 	r: &RequestOrResponse,
 	expr: &Expression,
 	request: Option<&cel::RequestSnapshot>,
+	bindings: Option<&VariableBindings>,
 ) -> anyhow::Result<Bytes> {
 	match r {
 		RequestOrResponse::Request(r) => {
 			let exec = cel::Executor::new_request(r);
-			let v = exec.eval(expr)?;
+			let v = exec.eval_with_vars(expr, bindings)?;
 			cel::value_as_byte_or_json(v)
 		},
 		RequestOrResponse::Response(r) => {
 			let exec = cel::Executor::new_response(request, r);
-			let v = exec.eval(expr)?;
+			let v = exec.eval_with_vars(expr, bindings)?;
 			cel::value_as_byte_or_json(v)
 		},
 	}
@@ -227,19 +240,18 @@ fn eval_metadata(
 	r: &RequestOrResponse,
 	expr: &Expression,
 	request: Option<&cel::RequestSnapshot>,
+	bindings: Option<&VariableBindings>,
 ) -> anyhow::Result<serde_json::Value> {
 	match r {
 		RequestOrResponse::Request(r) => {
 			let exec = cel::Executor::new_request(r);
-			exec
-				.eval(expr)
+			exec.eval_with_vars(expr, bindings)
 				.and_then(|v| v.json().map_err(|e| cel::Error::Variable(e.to_string())))
 				.map_err(anyhow::Error::from)
 		},
 		RequestOrResponse::Response(r) => {
 			let exec = cel::Executor::new_response(request, r);
-			exec
-				.eval(expr)
+			exec.eval_with_vars(expr, bindings)
 				.and_then(|v| v.json().map_err(|e| cel::Error::Variable(e.to_string())))
 				.map_err(anyhow::Error::from)
 		},
@@ -264,16 +276,17 @@ impl Transformation {
 		expr: &'a cel::Expression,
 		k: &HeaderOrPseudo,
 		request: Option<&'a RequestSnapshot>,
+		bindings: Option<&'a VariableBindings>,
 	) -> Option<HeaderOrPseudoValue> {
 		match r {
 			RequestOrResponse::Request(r) => {
 				let exec = cel::Executor::new_request(r);
-				let v = exec.eval(expr).ok();
+				let v = exec.eval_with_vars(expr, bindings).ok();
 				HeaderOrPseudoValue::from_cel_result(k, v)
 			},
 			RequestOrResponse::Response(r) => {
 				let exec = cel::Executor::new_response(request, r);
-				let v = exec.eval(expr).ok();
+				let v = exec.eval_with_vars(expr, bindings).ok();
 				HeaderOrPseudoValue::from_cel_result(k, v)
 			},
 		}
@@ -284,20 +297,22 @@ impl Transformation {
 		cfg: &TransformerConfig,
 		request: Option<&'a RequestSnapshot>,
 	) {
+		let bindings = cfg.variables.bindings();
+		let bindings = (!cfg.variables.is_empty()).then_some(&bindings);
 		if !cfg.metadata.is_empty() {
 			for (name, expr) in &cfg.metadata {
-				if let Ok(v) = eval_metadata(&r, expr, request) {
+				if let Ok(v) = eval_metadata(&r, expr, request, bindings) {
 					let metadata = Self::get_meta(&mut r);
 					metadata.0.insert(name.to_string(), v);
 				}
 			}
 		}
 		for (k, v) in &cfg.add {
-			let val = Self::exec_header(&r, v, k, request);
+			let val = Self::exec_header(&r, v, k, request, bindings);
 			r.apply_header(k, val, http::HeaderMutationAction::AppendIfExistsOrAdd);
 		}
 		for (k, v) in &cfg.set {
-			let val = Self::exec_header(&r, v, k, request);
+			let val = Self::exec_header(&r, v, k, request, bindings);
 			r.apply_header(k, val, http::HeaderMutationAction::OverwriteIfExistsOrAdd);
 		}
 		for k in &cfg.remove {
@@ -305,7 +320,7 @@ impl Transformation {
 		}
 		if let Some(b) = &cfg.body {
 			// If it fails, set an empty body
-			let b = eval_body(&r, b, request).unwrap_or_default();
+			let b = eval_body(&r, b, request, bindings).unwrap_or_default();
 			*r.body() = http::Body::from(b);
 			r.headers().remove(&header::CONTENT_LENGTH);
 		}
