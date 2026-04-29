@@ -11,14 +11,13 @@ path = "src/lib.rs"
 [features]
 default = []
 glibc = []
-jemalloc = ["pprof-alloc/allocator-jemalloc", "dep:tikv-jemallocator", "dep:jemalloc_pprof"]
+jemalloc = ["dep:tikv-jemallocator", "dep:jemalloc_pprof"]
 mimalloc = ["pprof-alloc/allocator-mimalloc", "dep:mimalloc"]
 ui = []
 schema = ["schemars"]
 internal_benches = ["divan"]
 
 [dependencies]
-pprof-alloc.workspace = true
 agent-core.workspace = true
 agent-celx.workspace = true
 agent-hbone.workspace = true
@@ -157,11 +156,13 @@ pprof.workspace = true
 which.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
+pprof-alloc = { workspace = true, features = ["allocator-jemalloc"] }
 tokio = { workspace = true, features = ["taskdump"] }
 tikv-jemallocator = { workspace = true, optional = true }
 jemalloc_pprof = { workspace = true, optional = true }
 
 [target.'cfg(not(target_os = "linux"))'.dependencies]
+pprof-alloc.workspace = true
 tokio = { workspace = true }
 
 [dev-dependencies]
