@@ -911,8 +911,8 @@ impl Handler {
 
 		// Read response body
 		let status = response.status();
-		
-		// per https://modelcontextprotocol.io/specification/2025-11-25/server/tools 
+
+		// per https://modelcontextprotocol.io/specification/2025-11-25/server/tools
 		// Clients MAY provide protocol errors to language models which are mainly caught up higher.
 		// However we contend that server errors on the tool call should also count as protocol
 		// Everything else should be treated as a success from an http perspective and wrapped in the json-rpc format.

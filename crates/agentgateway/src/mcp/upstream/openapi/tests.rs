@@ -592,7 +592,11 @@ async fn test_call_tool_response_wrapping() {
 			br#"[{"id":1,"name":"1"},{"id":2,"name":"2"},{"id":3,"name":"3"}]"#,
 			json!([ { "id": 1, "name": "1" }, { "id": 2, "name": "2" }, { "id": 3, "name": "3" }]),
 		),
-		(false, b"plain text response", json!({"code": 200, "message": "plain text response"})),
+		(
+			false,
+			b"plain text response",
+			json!({"code": 200, "message": "plain text response"}),
+		),
 		(true, b"42", json!(42)),
 		(true, b"true", json!(true)),
 	];
@@ -601,10 +605,7 @@ async fn test_call_tool_response_wrapping() {
 		let user_id = format!("{}", i);
 		Mock::given(method("GET"))
 			.and(path(format!("/users/{}", user_id)))
-			.respond_with(
-				ResponseTemplate::new(200)
-					.set_body_bytes(body.to_vec()),
-			)
+			.respond_with(ResponseTemplate::new(200).set_body_bytes(body.to_vec()))
 			.expect(1)
 			.mount(&server)
 			.await;
@@ -1524,4 +1525,3 @@ async fn test_openapi_from_url() {
 		}
 	}
 }
-
