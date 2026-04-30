@@ -2511,13 +2511,14 @@
               "type": "object",
               "properties": {
                 "location": {
-                  "$ref": "#/$defs/AuthorizationLocation",
-                  "default": {
-                    "header": {
-                      "name": "authorization",
-                      "prefix": "Bearer "
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AuthorizationLocation"
+                    },
+                    {
+                      "type": "null"
                     }
-                  }
+                  ]
                 }
               },
               "additionalProperties": false
@@ -2538,13 +2539,14 @@
                   "$ref": "#/$defs/FileOrInline"
                 },
                 "location": {
-                  "$ref": "#/$defs/AuthorizationLocation",
-                  "default": {
-                    "header": {
-                      "name": "authorization",
-                      "prefix": "Bearer "
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AuthorizationLocation"
+                    },
+                    {
+                      "type": "null"
                     }
-                  }
+                  ]
                 }
               },
               "additionalProperties": false,
