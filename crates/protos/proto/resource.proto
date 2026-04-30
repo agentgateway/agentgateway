@@ -286,6 +286,7 @@ message BackendAuthPolicy {
     Gcp gcp = 3;
     Aws aws = 4;
     Azure azure = 5;
+    TokenExchange token_exchange = 6;
   }
 }
 
@@ -1639,4 +1640,15 @@ message BackendReference {
 
 message Alpn {
   repeated string protocols = 1;
+}
+
+// RFC 8693 OAuth 2.0 Token Exchange.
+message TokenExchange {
+  string token_endpoint = 1;
+  // Optional RFC 8693 request parameters; sent only when non-empty.
+  string audience = 2;
+  string scope = 3;
+  string resource = 4;
+  string requested_token_type = 5;
+  string client_id = 6;
 }

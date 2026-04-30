@@ -255,6 +255,13 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -420,6 +427,13 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -526,6 +540,13 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -632,6 +653,13 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -736,6 +764,13 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -877,6 +912,13 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -983,6 +1025,13 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -1087,6 +1136,13 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -1212,6 +1268,13 @@
 |`binds[].listeners[].routes[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.localRateLimit`|object|Local rate limits for incoming requests.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -1315,6 +1378,13 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -1433,6 +1503,13 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -1625,6 +1702,13 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -1755,6 +1839,13 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -1888,6 +1979,13 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2009,6 +2107,13 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2201,6 +2306,13 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2317,6 +2429,13 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2464,6 +2583,13 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2595,6 +2721,13 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2732,6 +2865,13 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2877,6 +3017,13 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2983,6 +3130,13 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3089,6 +3243,13 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3193,6 +3354,13 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3334,6 +3502,13 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3440,6 +3615,13 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3544,6 +3726,13 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3714,6 +3903,13 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3845,6 +4041,13 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3982,6 +4185,13 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4127,6 +4337,13 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4233,6 +4450,13 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4339,6 +4563,13 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4443,6 +4674,13 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4584,6 +4822,13 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4690,6 +4935,13 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4794,6 +5046,13 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4935,6 +5194,13 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5066,6 +5332,13 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5203,6 +5476,13 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5348,6 +5628,13 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5454,6 +5741,13 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5560,6 +5854,13 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5664,6 +5965,13 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5805,6 +6113,13 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5911,6 +6226,13 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -6015,6 +6337,13 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -6252,6 +6581,13 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -6382,6 +6718,13 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -6515,6 +6858,13 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -6636,6 +6986,13 @@
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.tokenExchange`|object||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -6866,6 +7223,13 @@
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.tokenExchange`|object||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`frontendPolicies.accessLog.otlp.policies.http`|object|HTTP protocol settings for this backend.|
 |`frontendPolicies.accessLog.otlp.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`frontendPolicies.accessLog.otlp.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -6982,6 +7346,13 @@
 |`frontendPolicies.logging.otlp.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`frontendPolicies.logging.otlp.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`frontendPolicies.logging.otlp.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.tokenExchange`|object||
+|`frontendPolicies.logging.otlp.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`frontendPolicies.logging.otlp.policies.http`|object|HTTP protocol settings for this backend.|
 |`frontendPolicies.logging.otlp.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`frontendPolicies.logging.otlp.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7094,6 +7465,13 @@
 |`frontendPolicies.tracing.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`frontendPolicies.tracing.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`frontendPolicies.tracing.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`frontendPolicies.tracing.policies.backendAuth.tokenExchange`|object||
+|`frontendPolicies.tracing.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`frontendPolicies.tracing.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`frontendPolicies.tracing.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`frontendPolicies.tracing.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`frontendPolicies.tracing.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`frontendPolicies.tracing.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`frontendPolicies.tracing.policies.http`|object|HTTP protocol settings for this backend.|
 |`frontendPolicies.tracing.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`frontendPolicies.tracing.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7301,6 +7679,13 @@
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7466,6 +7851,13 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange`|object||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7572,6 +7964,13 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7678,6 +8077,13 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7782,6 +8188,13 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7923,6 +8336,13 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8029,6 +8449,13 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8133,6 +8560,13 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8258,6 +8692,13 @@
 |`policies[].policy.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.backendAuth.tokenExchange`|object||
+|`policies[].policy.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`policies[].policy.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`policies[].policy.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`policies[].policy.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`policies[].policy.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.localRateLimit`|object|Local rate limits for incoming requests.|
 |`policies[].policy.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -8361,6 +8802,13 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8479,6 +8927,13 @@
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.tokenExchange`|object||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8671,6 +9126,13 @@
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.tokenExchange`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8801,6 +9263,13 @@
 |`policies[].policy.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.extAuthz.policies.backendAuth.tokenExchange`|object||
+|`policies[].policy.extAuthz.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`policies[].policy.extAuthz.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`policies[].policy.extAuthz.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`policies[].policy.extAuthz.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`policies[].policy.extAuthz.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.extAuthz.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8934,6 +9403,13 @@
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.tokenExchange`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9055,6 +9531,13 @@
 |`policies[].policy.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.extProc.policies.backendAuth.tokenExchange`|object||
+|`policies[].policy.extProc.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`policies[].policy.extProc.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`policies[].policy.extProc.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`policies[].policy.extProc.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`policies[].policy.extProc.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.extProc.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9242,6 +9725,13 @@
 |`backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].mcp.targets[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].mcp.targets[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].mcp.targets[].policies.backendAuth.tokenExchange`|object||
+|`backends[].mcp.targets[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].mcp.targets[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].mcp.targets[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].mcp.targets[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].mcp.targets[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].mcp.targets[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].mcp.targets[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].mcp.targets[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].mcp.targets[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9358,6 +9848,13 @@
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9505,6 +10002,13 @@
 |`backends[].ai.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9636,6 +10140,13 @@
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9773,6 +10284,13 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9918,6 +10436,13 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10024,6 +10549,13 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10130,6 +10662,13 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10234,6 +10773,13 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10375,6 +10921,13 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10481,6 +11034,13 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10585,6 +11145,13 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10755,6 +11322,13 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10886,6 +11460,13 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11023,6 +11604,13 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11168,6 +11756,13 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11274,6 +11869,13 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11380,6 +11982,13 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11484,6 +12093,13 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11625,6 +12241,13 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11731,6 +12354,13 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11835,6 +12465,13 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11974,6 +12611,13 @@
 |`backends[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.backendAuth.tokenExchange`|object||
+|`backends[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12105,6 +12749,13 @@
 |`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.extAuthz.policies.backendAuth.tokenExchange`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].policies.extAuthz.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].policies.extAuthz.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].policies.extAuthz.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].policies.extAuthz.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.extAuthz.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12242,6 +12893,13 @@
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12387,6 +13045,13 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange`|object||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12493,6 +13158,13 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12599,6 +13271,13 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12703,6 +13382,13 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12844,6 +13530,13 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12950,6 +13643,13 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -13054,6 +13754,13 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -13280,6 +13987,13 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -13445,6 +14159,13 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -13551,6 +14272,13 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -13657,6 +14385,13 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -13761,6 +14496,13 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -13902,6 +14644,13 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -14008,6 +14757,13 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -14112,6 +14868,13 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -14237,6 +15000,13 @@
 |`routeGroups[].routes[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.localRateLimit`|object|Local rate limits for incoming requests.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -14340,6 +15110,13 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -14458,6 +15235,13 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -14650,6 +15434,13 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -14780,6 +15571,13 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -14913,6 +15711,13 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -15034,6 +15839,13 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -15226,6 +16038,13 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -15342,6 +16161,13 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -15489,6 +16315,13 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -15620,6 +16453,13 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -15757,6 +16597,13 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -15902,6 +16749,13 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16008,6 +16862,13 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16114,6 +16975,13 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16218,6 +17086,13 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16359,6 +17234,13 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16465,6 +17347,13 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16569,6 +17458,13 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16739,6 +17635,13 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16870,6 +17773,13 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17007,6 +17917,13 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17152,6 +18069,13 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17258,6 +18182,13 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17364,6 +18295,13 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17468,6 +18406,13 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17609,6 +18554,13 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17715,6 +18667,13 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17819,6 +18778,13 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17960,6 +18926,13 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18091,6 +19064,13 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18228,6 +19208,13 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18373,6 +19360,13 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18479,6 +19473,13 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18585,6 +19586,13 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18689,6 +19697,13 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18830,6 +19845,13 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18936,6 +19958,13 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -19040,6 +20069,13 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -19220,6 +20256,13 @@
 |`llm.models[].auth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].auth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].auth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].auth.tokenExchange`|object||
+|`llm.models[].auth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.models[].auth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.models[].auth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.models[].auth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.models[].auth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].auth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].health`|object|health configures outlier detection for this model backend.|
 |`llm.models[].health.unhealthyExpression`|string|CEL expression where `true` marks the backend response as unhealthy.<br>When unset, any 5xx response or connection failure is treated as unhealthy.|
 |`llm.models[].health.eviction`|object|Settings for temporarily removing unhealthy backends.|
@@ -19341,6 +20384,13 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.tokenExchange`|object||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -19447,6 +20497,13 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -19553,6 +20610,13 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -19657,6 +20721,13 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -19798,6 +20869,13 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -19904,6 +20982,13 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -20008,6 +21093,13 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -20194,6 +21286,13 @@
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.tokenExchange`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -20324,6 +21423,13 @@
 |`llm.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.extAuthz.policies.backendAuth.tokenExchange`|object||
+|`llm.policies.extAuthz.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.policies.extAuthz.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.policies.extAuthz.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.policies.extAuthz.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.policies.extAuthz.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.extAuthz.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -20457,6 +21563,13 @@
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.tokenExchange`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -20578,6 +21691,13 @@
 |`llm.policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.extProc.policies.backendAuth.tokenExchange`|object||
+|`llm.policies.extProc.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.policies.extProc.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.policies.extProc.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.policies.extProc.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.policies.extProc.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.extProc.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -20780,6 +21900,13 @@
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.tokenExchange`|object||
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -20886,6 +22013,13 @@
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -20992,6 +22126,13 @@
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -21096,6 +22237,13 @@
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -21237,6 +22385,13 @@
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -21343,6 +22498,13 @@
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -21447,6 +22609,13 @@
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -21577,6 +22746,13 @@
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.tokenExchange`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -21714,6 +22890,13 @@
 |`mcp.targets[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.targets[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.targets[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.targets[].policies.backendAuth.tokenExchange`|object||
+|`mcp.targets[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.targets[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.targets[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.targets[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.targets[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.targets[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.targets[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.targets[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.targets[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -21830,6 +23013,13 @@
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22011,6 +23201,13 @@
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange`|object||
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22176,6 +23373,13 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange`|object||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22282,6 +23486,13 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22388,6 +23599,13 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22492,6 +23710,13 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22633,6 +23858,13 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange`|object||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22739,6 +23971,13 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange`|object||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22843,6 +24082,13 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22968,6 +24214,13 @@
 |`mcp.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.backendAuth.tokenExchange`|object||
+|`mcp.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.localRateLimit`|object|Local rate limits for incoming requests.|
 |`mcp.policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -23071,6 +24324,13 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -23189,6 +24449,13 @@
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.tokenExchange`|object||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -23381,6 +24648,13 @@
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.tokenExchange`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -23511,6 +24785,13 @@
 |`mcp.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.extAuthz.policies.backendAuth.tokenExchange`|object||
+|`mcp.policies.extAuthz.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.policies.extAuthz.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.policies.extAuthz.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.policies.extAuthz.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.policies.extAuthz.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.extAuthz.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -23644,6 +24925,13 @@
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.tokenExchange`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -23765,6 +25053,13 @@
 |`mcp.policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.extProc.policies.backendAuth.tokenExchange`|object||
+|`mcp.policies.extProc.policies.backendAuth.tokenExchange.tokenEndpoint`|string|RFC 8693 token endpoint URL.|
+|`mcp.policies.extProc.policies.backendAuth.tokenExchange.audience`|string|`audience` parameter naming the target service at the authorization server.|
+|`mcp.policies.extProc.policies.backendAuth.tokenExchange.scope`|string|Space-delimited `scope` parameter for the requested token.|
+|`mcp.policies.extProc.policies.backendAuth.tokenExchange.resource`|string|`resource` parameter with the target service URI.|
+|`mcp.policies.extProc.policies.backendAuth.tokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.extProc.policies.backendAuth.tokenExchange.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
