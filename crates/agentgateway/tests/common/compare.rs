@@ -75,7 +75,11 @@ binds:
 		temp_dirs.push(temp);
 		info!("starting agent...");
 		let task = tokio::task::spawn(async {
-			let config = agentgateway::config::parse_config("{}".to_string(), Some(config)).unwrap();
+			let config = agentgateway::config::parse_config(
+				"{}".to_string(),
+				Some(agentgateway::ConfigSource::File(config)),
+			)
+			.unwrap();
 			agentgateway::app::run(Arc::new(config))
 				.await
 				.unwrap()

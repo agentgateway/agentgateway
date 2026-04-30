@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use agentgateway::ConfigSource;
 use clap::{Args as ClapArgs, Parser, Subcommand};
 
 mod commands;
@@ -139,14 +140,34 @@ pub fn run() -> anyhow::Result<()> {
 
 pub(crate) fn read_config_contents(
 	config: &ConfigArgs,
-) -> anyhow::Result<(String, Option<PathBuf>)> {
+) -> anyhow::Result<(String, Option<ConfigSource>)> {
 	match (&config.config, &config.file) {
 		(Some(_), Some(_)) => anyhow::bail!("only one of --config or --file"),
-		(Some(config), None) => Ok((config.clone(), None)),
+		(Some(config), None) => Ok((
+			config.clone(),
+			Some(ConfigSource::Static(config.clone().into())),
+		)),
 		(None, Some(file)) => {
+			let file = if file == std::path::Path::new("-") {
+				&PathBuf::from("/dev/stdin")
+			} else {
+				file
+			};
+
 			let contents = fs_err::read_to_string(file)?;
-			Ok((contents, Some(file.clone())))
+			let source = if is_read_once_path(file) {
+				ConfigSource::Static(contents.clone().into())
+			} else {
+				ConfigSource::File(file.clone())
+			};
+			Ok((contents, Some(source)))
 		},
 		(None, None) => Ok(("{}".to_string(), None)),
 	}
+}
+
+fn is_read_once_path(path: &std::path::Path) -> bool {
+	path == std::path::Path::new("/dev/stdin")
+		|| path.starts_with("/dev/fd")
+		|| path.starts_with("/proc/self/fd")
 }
