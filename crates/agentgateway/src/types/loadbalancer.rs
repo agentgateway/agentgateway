@@ -63,6 +63,12 @@ pub struct EndpointSet<T> {
 fn contains_target_port(ep: &Endpoint, wanted_target: u16) -> bool {
 	ep.port.values().any(|tp| *tp == wanted_target)
 }
+struct Candidate {
+	endpoint: Arc<Endpoint>,
+	info: Arc<EndpointInfo>,
+	workload: Arc<Workload>,
+}
+
 impl EndpointSet<Endpoint> {
 	pub fn insert(&self, ep: Endpoint, dest_workload: &Workload, ranker: &LocalityRanker) {
 		let bucket = match ranker.bucket_for(dest_workload) {
@@ -84,86 +90,122 @@ impl EndpointSet<Endpoint> {
 			return None;
 		};
 
-		let viable = |endpoint: &Arc<Endpoint>| -> Option<Arc<Workload>> {
-			let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
-				debug!("failed to fetch workload for {}", endpoint.workload_uid);
-				return None;
-			};
-			if target_port == 0 && !endpoint.port.contains_key(&svc_port) {
-				trace!(
-					"filter endpoint {}, no service port {}",
-					endpoint.workload_uid, svc_port
-				);
-				return None;
-			}
-			Some(wl)
+		let c = match override_dest {
+			Some(o) => self.select_override(workloads, o)?,
+			None => self
+				.select_p2c(workloads, svc, svc_port, target_port)
+				.or_else(|| self.select_fallback(workloads, svc_port, target_port))?,
 		};
 
-		let selected = if let Some(o) = override_dest {
-			// Explicit destination bypasses bucketing and health — search every endpoint
-			// (active + rejected) so an evicted-but-explicitly-targeted backend is still reachable.
-			self.all_endpoints().find_map(|(ep, info)| {
-				let Some(wl) = workloads.find_uid(&ep.workload_uid) else {
-					debug!("failed to fetch workload for {}", ep.workload_uid);
-					return None;
-				};
-				if !wl.workload_ips.contains(&o.ip()) {
-					return None;
-				}
-				if !contains_target_port(&ep, o.port()) {
-					return None;
-				}
-				Some((ep, info, wl))
-			})
-		} else {
-			// best_bucket() picks the first non-empty bucket (best locality tier).
-			let iter = svc.endpoints.iter();
-			let index = iter.index();
-			if index.is_empty() {
-				return None;
-			}
-			// Do not use `rand::seq::index::sample` so we can pick the same element twice
-			// This avoids starvation where the worst endpoint gets 0 traffic
-			let mut rng = rand::rng();
-			let a = rng.random_range(0..index.len());
-			let b = rng.random_range(0..index.len());
-			let best = [a, b]
-				.into_iter()
-				.filter_map(|idx| {
-					let (_, EndpointWithInfo { endpoint, info }) =
-						index.get_index(idx).expect("index already checked");
-					let wl = viable(endpoint)?;
-					Some((endpoint.clone(), info.clone(), wl))
-				})
-				.max_by(|(_, a, _), (_, b, _)| a.score().total_cmp(&b.score()));
-
-			best.or_else(|| {
-				// Slow fallback: scan buckets in locality order, returning the first bucket
-				// that yields any match. Per-bucket: prefer active, fall back to rejected
-				// when active is empty (mirrors the fast path's `index()` semantics).
-				self.buckets.iter().find_map(|bucket| {
-					let group = bucket.load_full();
-					let map = if !group.active.is_empty() {
-						&group.active
-					} else {
-						&group.rejected
-					};
-					map
-						.iter()
-						.filter_map(|(_, ewi)| {
-							let wl = viable(&ewi.endpoint)?;
-							Some((ewi.endpoint.clone(), ewi.info.clone(), wl))
-						})
-						.max_by(|(_, a, _), (_, b, _)| a.score().total_cmp(&b.score()))
-				})
-			})
-		};
-		let (ep, ep_info, wl) = selected?;
 		let handle = svc
 			.endpoints
-			.start_request(ep.workload_uid.clone(), &ep_info);
-		Some((ep, handle, wl))
+			.start_request(c.endpoint.workload_uid.clone(), &c.info);
+		Some((c.endpoint, handle, c.workload))
 	}
+
+	/// Explicit destination bypasses bucketing and health — search every endpoint
+	/// (active + rejected) so an evicted-but-explicitly-targeted backend is still reachable.
+	fn select_override(&self, workloads: &store::WorkloadStore, o: SocketAddr) -> Option<Candidate> {
+		self.find_endpoint(|ep, info| {
+			if !contains_target_port(ep, o.port()) {
+				return None;
+			}
+			let Some(wl) = workloads.find_uid(&ep.workload_uid) else {
+				debug!("failed to fetch workload for {}", ep.workload_uid);
+				return None;
+			};
+			if !wl.workload_ips.contains(&o.ip()) {
+				return None;
+			}
+			Some(Candidate {
+				endpoint: ep.clone(),
+				info: info.clone(),
+				workload: wl,
+			})
+		})
+	}
+
+	/// P2C: pick two random endpoints from the best non-empty bucket, return the
+	/// higher-scored one. Sampling with replacement (vs `rand::seq::index::sample`)
+	/// keeps the worst endpoint reachable instead of starving it of traffic.
+	fn select_p2c(
+		&self,
+		workloads: &store::WorkloadStore,
+		svc: &Service,
+		svc_port: u16,
+		target_port: u16,
+	) -> Option<Candidate> {
+		let iter = svc.endpoints.iter();
+		let index = iter.index();
+		if index.is_empty() {
+			return None;
+		}
+		let mut rng = rand::rng();
+		let a = rng.random_range(0..index.len());
+		let b = rng.random_range(0..index.len());
+		[a, b]
+			.into_iter()
+			.filter_map(|idx| {
+				let (_, ewi) = index.get_index(idx).expect("index already checked");
+				let wl = viable(workloads, target_port, svc_port, &ewi.endpoint)?;
+				Some(Candidate {
+					endpoint: ewi.endpoint.clone(),
+					info: ewi.info.clone(),
+					workload: wl,
+				})
+			})
+			.max_by(|a, b| a.info.score().total_cmp(&b.info.score()))
+	}
+
+	/// Slow fallback when P2C finds nothing viable: scan buckets in locality order
+	/// and take the best-scored match in the first bucket that yields any.
+	/// Per-bucket: prefer active, fall back to rejected when active is empty.
+	fn select_fallback(
+		&self,
+		workloads: &store::WorkloadStore,
+		svc_port: u16,
+		target_port: u16,
+	) -> Option<Candidate> {
+		self.buckets.iter().find_map(|bucket| {
+			let group = bucket.load_full();
+			let map = if !group.active.is_empty() {
+				&group.active
+			} else {
+				&group.rejected
+			};
+			map
+				.iter()
+				.filter_map(|(_, ewi)| {
+					let wl = viable(workloads, target_port, svc_port, &ewi.endpoint)?;
+					Some(Candidate {
+						endpoint: ewi.endpoint.clone(),
+						info: ewi.info.clone(),
+						workload: wl,
+					})
+				})
+				.max_by(|a, b| a.info.score().total_cmp(&b.info.score()))
+		})
+	}
+}
+
+fn viable(
+	workloads: &store::WorkloadStore,
+	target_port: u16,
+	svc_port: u16,
+	endpoint: &Arc<Endpoint>,
+) -> Option<Arc<Workload>> {
+	let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
+		debug!("failed to fetch workload for {}", endpoint.workload_uid);
+		return None;
+	};
+	if target_port == 0 && !endpoint.port.contains_key(&svc_port) {
+		trace!(
+			"filter endpoint {}, no service port {}",
+			endpoint.workload_uid, svc_port
+		);
+		return None;
+	}
+	Some(wl)
 }
 
 /// Computes an endpoint's locality bucket from a service's `routing_preferences`.
@@ -437,19 +479,36 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		ActiveEndpointsIter(self.best_bucket())
 	}
 
-	/// Iterate every endpoint across all buckets. Active endpoints from all buckets
-	/// are yielded before any rejected endpoint, e.g.:
+	/// Visit every endpoint, returning the first `Some` produced by `f`. Active
+	/// endpoints from all buckets are visited before any rejected endpoint, e.g.:
 	///   active in bucket 0
 	///   active in bucket 1
 	///   rejected in bucket 0
 	///   rejected in bucket 1
-	pub fn all_endpoints(&self) -> AllEndpointsIter<'_, T> {
-		AllEndpointsIter {
-			buckets: &self.buckets,
-			bucket_idx: 0,
-			current: None,
-			in_rejected: false,
+	///
+	/// Each bucket is loaded separately, not as one atomic snapshot. If another
+	/// thread moves or evicts an endpoint mid-iteration, we may see it twice or
+	/// not at all — safe for "pick one and stop", unsafe for counting.
+	pub fn find_endpoint<F, R>(&self, mut f: F) -> Option<R>
+	where
+		F: FnMut(&Arc<T>, &Arc<EndpointInfo>) -> Option<R>,
+	{
+		for active_phase in [true, false] {
+			for bucket in self.buckets.iter() {
+				let group = bucket.load_full();
+				let map = if active_phase {
+					&group.active
+				} else {
+					&group.rejected
+				};
+				for (_, ewi) in map {
+					if let Some(r) = f(&ewi.endpoint, &ewi.info) {
+						return Some(r);
+					}
+				}
+			}
 		}
+		None
 	}
 
 	pub fn insert_key(&self, key: EndpointKey, ep: T, bucket: usize) {
@@ -595,7 +654,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 			}
 		});
 	}
-	pub async fn evict(&mut self, key: EndpointKey, time: Instant) {
+	pub fn evict(&self, key: EndpointKey, time: Instant) {
 		let Some(bucket) = self.find_bucket(&key) else {
 			return;
 		};
@@ -843,53 +902,6 @@ where
 			seq.serialize_element(&b.load_full())?;
 		}
 		seq.end()
-	}
-}
-
-/// Non-allocating iterator over every endpoint across all buckets. Yields all active
-/// endpoints first (across every bucket), then all rejected.
-///
-/// Snapshot is per-bucket-per-phase, not whole-set: a concurrent rebucket or eviction
-/// can be partially observed across loads. Callers that scan-then-discard (e.g. selection)
-/// are unaffected; do not use for invariants that span buckets.
-pub struct AllEndpointsIter<'a, T> {
-	buckets: &'a [Atomic<EndpointGroup<T>>],
-	bucket_idx: usize,
-	current: Option<(Arc<EndpointGroup<T>>, usize)>,
-	in_rejected: bool,
-}
-
-impl<T> Iterator for AllEndpointsIter<'_, T> {
-	type Item = (Arc<T>, Arc<EndpointInfo>);
-
-	fn next(&mut self) -> Option<Self::Item> {
-		loop {
-			if let Some((group, idx)) = &mut self.current {
-				let map = if self.in_rejected {
-					&group.rejected
-				} else {
-					&group.active
-				};
-				if let Some((_, ewi)) = map.get_index(*idx) {
-					*idx += 1;
-					return Some((ewi.endpoint.clone(), ewi.info.clone()));
-				}
-				self.current = None;
-			}
-			if self.bucket_idx < self.buckets.len() {
-				let bucket = &self.buckets[self.bucket_idx];
-				self.bucket_idx += 1;
-				self.current = Some((bucket.load_full(), 0));
-				continue;
-			}
-			// Active phase exhausted across all buckets — restart for rejected phase.
-			if !self.in_rejected {
-				self.in_rejected = true;
-				self.bucket_idx = 0;
-				continue;
-			}
-			return None;
-		}
 	}
 }
 
@@ -1187,7 +1199,12 @@ mod tests {
 	}
 
 	fn collect_values(eps: &EndpointSet<&'static str>) -> Vec<&'static str> {
-		eps.all_endpoints().map(|(ep, _)| *ep).collect()
+		let mut out = Vec::new();
+		eps.find_endpoint(|ep, _| -> Option<()> {
+			out.push(**ep);
+			None
+		});
+		out
 	}
 
 	#[tokio::test]
