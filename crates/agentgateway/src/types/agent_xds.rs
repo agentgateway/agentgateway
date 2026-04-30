@@ -25,7 +25,7 @@ use itertools::Itertools;
 use llm::{AIBackend, AIProvider, NamedAIProvider};
 
 use super::agent::*;
-use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
+use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth, OAuthTokenExchangeAuth};
 use crate::http::buffer::BufferBody;
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{HeaderOrPseudo, Scheme, auth, authorization, health};
@@ -1079,6 +1079,23 @@ fn backend_auth_from_proto(
 				None => return Err(ProtoError::MissingRequiredField),
 			};
 			BackendAuth::Azure(azure_auth)
+		},
+		Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(t)) => {
+			let opt = |s: String| (!s.is_empty()).then_some(s);
+			let endpoint = Arc::new(resolve_simple_reference(t.token_endpoint.as_ref()));
+			let client_auth = t
+				.client_auth
+				.and_then(|c| opt(c.client_id))
+				.map(auth::OAuthClientAuth::new);
+			BackendAuth::OAuthTokenExchange(OAuthTokenExchangeAuth::new(
+				endpoint,
+				t.token_endpoint_path,
+				t.audiences,
+				t.scopes,
+				t.resources,
+				opt(t.requested_token_type),
+				client_auth,
+			))
 		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})
