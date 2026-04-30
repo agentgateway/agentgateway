@@ -47,14 +47,13 @@ pub enum BackendAuth {
 	Copilot,
 }
 
-/// Records the auth location that was applied to a request by [`apply_backend_auth`],
-/// and whether the location was explicitly configured by the user (vs. defaulted).
+/// Records whether the backend auth location was explicitly configured by the user
+/// (vs. defaulted).
 ///
 /// Downstream providers (e.g. Anthropic) inspect this to decide whether to rewrite
 /// auth headers.
 #[derive(Clone, Debug)]
 pub struct AppliedBackendAuthLocation {
-	pub location: AuthorizationLocation,
 	pub explicit: bool,
 }
 
@@ -71,8 +70,8 @@ pub fn apply_tunnel_auth(auth: &BackendAuth) -> Result<HeaderValue, ProxyError> 
 			value: key,
 			location,
 		} => {
-			let resolved = location.as_ref().cloned().unwrap_or_default();
-			match &resolved {
+			let resolved = location.as_ref().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
+			match resolved {
 				AuthorizationLocation::Header { name: _, prefix } => {
 					let value = key.expose_secret();
 					let value = match prefix {
@@ -102,7 +101,7 @@ pub async fn apply_backend_auth(
 	match auth {
 		BackendAuth::Passthrough { location } => {
 			let explicit = location.is_some();
-			let resolved = location.as_ref().cloned().unwrap_or_default();
+			let resolved = location.as_ref().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
 			// They should have a JWT policy defined. That will strip the token. Here we add it back
 			// TODO: should we also support API key, etc?
 			if let Some(token) = req
@@ -112,22 +111,20 @@ pub async fn apply_backend_auth(
 			{
 				resolved.insert(req, &token)?;
 			}
-			req.extensions_mut().insert(AppliedBackendAuthLocation {
-				location: resolved,
-				explicit,
-			});
+			req
+				.extensions_mut()
+				.insert(AppliedBackendAuthLocation { explicit });
 		},
 		BackendAuth::Key {
 			value: key,
 			location,
 		} => {
 			let explicit = location.is_some();
-			let resolved = location.as_ref().cloned().unwrap_or_default();
+			let resolved = location.as_ref().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
 			resolved.insert(req, key.expose_secret())?;
-			req.extensions_mut().insert(AppliedBackendAuthLocation {
-				location: resolved,
-				explicit,
-			});
+			req
+				.extensions_mut()
+				.insert(AppliedBackendAuthLocation { explicit });
 		},
 		BackendAuth::Gcp(g) => {
 			gcp::insert_token(g, &backend_info.call_target, req.headers_mut())
@@ -201,8 +198,11 @@ impl Default for AuthorizationLocation {
 	}
 }
 
+pub static DEFAULT_AUTHORIZATION_LOCATION: AuthorizationLocation =
+	AuthorizationLocation::bearer_header();
+
 impl AuthorizationLocation {
-	pub fn bearer_header() -> Self {
+	pub const fn bearer_header() -> Self {
 		Self::Header {
 			name: http::header::AUTHORIZATION,
 			prefix: Some(strng::literal!("Bearer ")),

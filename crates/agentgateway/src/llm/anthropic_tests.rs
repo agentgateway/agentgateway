@@ -1,5 +1,5 @@
 use super::OAUTH_TOKEN_PREFIX;
-use crate::http::auth::{AppliedBackendAuthLocation, AuthorizationLocation};
+use crate::http::auth::AppliedBackendAuthLocation;
 use crate::llm::AIProvider;
 
 // ── set_required_fields integration tests ───────────────────────────────────
@@ -25,10 +25,9 @@ fn make_bearer_request_with_api_key(token: &str, api_key: &str) -> crate::http::
 
 fn make_bearer_request_with_explicit_auth(token: &str) -> crate::http::Request {
 	let mut req = make_bearer_request(token);
-	req.extensions_mut().insert(AppliedBackendAuthLocation {
-		location: AuthorizationLocation::bearer_header(),
-		explicit: true,
-	});
+	req
+		.extensions_mut()
+		.insert(AppliedBackendAuthLocation { explicit: true });
 	req
 }
 
@@ -121,10 +120,9 @@ fn set_required_fields_default_auth_still_rewrites() {
 	let mut req = make_bearer_request("sk-ant-api01234567890abcdef");
 
 	// Simulate default (non-explicit) auth location
-	req.extensions_mut().insert(AppliedBackendAuthLocation {
-		location: AuthorizationLocation::bearer_header(),
-		explicit: false,
-	});
+	req
+		.extensions_mut()
+		.insert(AppliedBackendAuthLocation { explicit: false });
 
 	provider.set_required_fields(&mut req).unwrap();
 
@@ -140,25 +138,20 @@ fn set_required_fields_default_auth_still_rewrites() {
 }
 
 #[test]
-fn set_required_fields_explicit_x_api_key_preserved() {
-	// If user explicitly configures a non-Authorization header (e.g. x-api-key directly),
-	// Anthropic setup should still rewrite Authorization to x-api-key as normal,
-	// since the explicit location is not Authorization.
+fn set_required_fields_explicit_non_authorization_location_preserved() {
+	// If user explicitly configures any location, even a non-Authorization header,
+	// Anthropic provider should not rewrite Authorization (explicit always wins).
 	let provider = AIProvider::Anthropic(super::Provider { model: None });
 	let mut req = make_bearer_request("sk-ant-api01234567890abcdef");
 
-	req.extensions_mut().insert(AppliedBackendAuthLocation {
-		location: AuthorizationLocation::Header {
-			name: ::http::header::HeaderName::from_static("x-api-key"),
-			prefix: None,
-		},
-		explicit: true,
-	});
+	req
+		.extensions_mut()
+		.insert(AppliedBackendAuthLocation { explicit: true });
 
 	provider.set_required_fields(&mut req).unwrap();
 
-	// Even though the location was explicit, it's not Authorization, so normal rewrite applies.
-	assert!(!req.headers().contains_key(::http::header::AUTHORIZATION));
-	assert!(req.headers().contains_key("x-api-key"));
+	// Explicit auth location means no rewrite — Authorization is kept.
+	assert!(req.headers().contains_key(::http::header::AUTHORIZATION));
+	assert!(!req.headers().contains_key("x-api-key"));
 	assert!(req.headers().contains_key("anthropic-version"));
 }
