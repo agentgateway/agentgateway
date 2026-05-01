@@ -4859,7 +4859,7 @@
 |`policies[].name`|object||
 |`policies[].name.name`|string||
 |`policies[].name.namespace`|string||
-|`policies[].target`|object|Exactly one of gateway, route, or backend may be set.|
+|`policies[].target`|object|Exactly one of gateway, route, backend, or listenerSet may be set.|
 |`policies[].target.gateway`|object||
 |`policies[].target.gateway.gatewayName`|string||
 |`policies[].target.gateway.gatewayNamespace`|string||
