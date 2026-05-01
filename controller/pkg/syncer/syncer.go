@@ -159,7 +159,7 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	gatewayInitialStatus, gateways := s.buildGatewayCollection(gatewayClasses, listenerSets, refGrants, krtopts)
 
 	// Build Agw resources for gateway
-	agwResources, routeAttachments, ancestorCollection := s.buildAgwResources(gateways, refGrants, krtopts)
+	agwResources, routeAttachments, ancestorCollection := s.buildAgwResources(gateways, listenerSets, refGrants, krtopts)
 
 	gatewayFinalStatus := s.buildFinalGatewayStatus(gatewayInitialStatus, routeAttachments, krtopts)
 	status.RegisterStatus(s.statusCollections, gatewayFinalStatus, translator.GetStatus)
@@ -399,7 +399,12 @@ func (s *Syncer) buildListenerSetCollection(
 		}, krtopts.ToOptions("ListenerSets")...)
 }
 
-func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayListener], refGrants translator.ReferenceGrants, krtopts krtutil.KrtOptions) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], plugins.ReferenceIndex) {
+func (s *Syncer) buildAgwResources(
+	gateways krt.Collection[*translator.GatewayListener],
+	listenerSets krt.Collection[translator.ListenerSet],
+	refGrants translator.ReferenceGrants,
+	krtopts krtutil.KrtOptions,
+) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], plugins.ReferenceIndex) {
 	// filter gateway collections to only include gateways which use a built-in gateway class
 	// (resources for additional gateway classes should be created by the downstream providing them)
 	filteredGateways := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
@@ -505,6 +510,31 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	})
 	ancestorCollection := ancestorsIndex.AsCollection(append(krtopts.ToOptions("AncestorBackend"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 
+	// Build a per-ListenerSet → parent-Gateway attachment index.
+	// Each entry maps the ListenerSet identity to its parent Gateway so that
+	// LookupGatewaysForTarget can route ListenerSet-targeted policies to the
+	// correct xDS snapshot.
+	lsAttachCollection := krt.NewManyCollection(listenerSets,
+		func(ctx krt.HandlerContext, ls translator.ListenerSet) []*plugins.RouteAttachment {
+			if !ls.Valid {
+				return nil
+			}
+			lsKey := utils.TypedNamespacedName{
+				Kind:           wellknown.ListenerSetGVK.Kind,
+				NamespacedName: ls.Parent,
+			}
+			return []*plugins.RouteAttachment{{
+				From:         lsKey,
+				To:           lsKey,
+				Gateway:      ls.GatewayParent,
+				ListenerName: ls.Name,
+			}}
+		}, krtopts.ToOptions("ListenerSetGatewayAttachments")...)
+	lsAttachIdx := krt.NewIndex(lsAttachCollection, "ls-to-gateway",
+		func(o *plugins.RouteAttachment) []utils.TypedNamespacedName {
+			return []utils.TypedNamespacedName{o.To}
+		}).AsCollection(append(krtopts.ToOptions("ListenerSetGatewayIdx"), utils.TypedNamespacedNameIndexCollectionFunc)...)
+
 	referenceIndex := plugins.BuildReferenceIndex(ancestorCollection, routeAttachmentsIndex, referenceTypes)
 
 	// Phase 1: Collect policy references (e.g. ext_proc backendRefs) BEFORE building
@@ -518,6 +548,7 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	})
 	policyReferencesIndexCollection := policyReferencesIndex.AsCollection(append(krtopts.ToOptions("PolicyReferencesIndex"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 	referenceIndex = referenceIndex.WithPolicyAttachments(policyReferencesIndexCollection)
+	referenceIndex = referenceIndex.WithListenerSetIndex(lsAttachIdx)
 
 	// Phase 2: Build policies with the fully-populated reference index.
 	agwPolicies, policyStatuses := BuildPolicies(s.agwPlugins, referenceIndex, krtopts)
@@ -538,9 +569,19 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 
 // buildListenerFromGateway creates a listener resource from a gateway
 func (s *Syncer) buildListenerFromGateway(obj *translator.GatewayListener) *agwir.AgwResource {
+	var listenerName *api.ListenerName
+	if obj.ParentObject.Kind == wellknown.ListenerSetGVK.Kind {
+		listenerName = utils.ListenerNameWithSet(
+			obj.ParentGateway.Namespace, obj.ParentGateway.Name,
+			string(obj.ParentInfo.SectionName),
+			obj.ParentObject.Namespace, obj.ParentObject.Name,
+		)
+	} else {
+		listenerName = utils.ListenerName(obj.ParentGateway.Namespace, obj.ParentGateway.Name, string(obj.ParentInfo.SectionName))
+	}
 	l := &api.Listener{
 		Key:      obj.ResourceName(),
-		Name:     utils.ListenerName(obj.ParentGateway.Namespace, obj.ParentGateway.Name, string(obj.ParentInfo.SectionName)),
+		Name:     listenerName,
 		BindKey:  fmt.Sprint(obj.ParentInfo.Port) + "/" + obj.ParentGateway.Namespace + "/" + obj.ParentGateway.Name,
 		Hostname: obj.ParentInfo.OriginalHostname,
 	}
