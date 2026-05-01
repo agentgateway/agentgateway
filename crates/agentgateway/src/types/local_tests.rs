@@ -425,23 +425,39 @@ config:
 #[case::http_scheme("http://tracing.example.com:4318", "http", "tracing.example.com:4318")]
 #[case::grpc_scheme("grpc://tracing.example.com:4317", "grpc", "tracing.example.com:4317")]
 #[case::no_scheme("tracing.example.com:4317", "grpc", "tracing.example.com:4317")]
-fn test_deprecated_tracing_endpoint_schemes(#[case] endpoint: &str, #[case] protocol: &str, #[case] expected: &str) {
-	let input = format!("config:\n  tracing:\n    otlpEndpoint: {endpoint}\n    otlpProtocol: {protocol}\n");
+fn test_deprecated_tracing_endpoint_schemes(
+	#[case] endpoint: &str,
+	#[case] protocol: &str,
+	#[case] expected: &str,
+) {
+	let input =
+		format!("config:\n  tracing:\n    otlpEndpoint: {endpoint}\n    otlpProtocol: {protocol}\n");
 	let out = super::migrate_deprecated_local_config(&input).unwrap();
 	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
 	let tracing = v.get("frontendPolicies").unwrap().get("tracing").unwrap();
 	assert_eq!(tracing.get("inlineBackend").unwrap(), expected);
 }
 
-
 #[rstest::rstest]
 #[case::unrecognized_scheme("nateisgreat://tracing.example.com:4317")]
 fn test_deprecated_tracing_endpoint_unrecognized_scheme_error(#[case] endpoint: &str) {
-	let input = format!("config:\n  tracing:\n    otlpEndpoint: {endpoint}\n    otlpProtocol: grpc\n");
-	let err = super::migrate_deprecated_local_config(&input).unwrap_err().to_string();
-	assert!(err.contains("tracing"), "error message should mention 'tracing': {err}");
-	assert!(err.contains("failed"), "error message should mention 'failed': {err}");
-	assert!(err.contains(endpoint), "error message should include the invalid endpoint: {err}");
+	let input =
+		format!("config:\n  tracing:\n    otlpEndpoint: {endpoint}\n    otlpProtocol: grpc\n");
+	let err = super::migrate_deprecated_local_config(&input)
+		.unwrap_err()
+		.to_string();
+	assert!(
+		err.contains("tracing"),
+		"error message should mention 'tracing': {err}"
+	);
+	assert!(
+		err.contains("failed"),
+		"error message should mention 'failed': {err}"
+	);
+	assert!(
+		err.contains(endpoint),
+		"error message should include the invalid endpoint: {err}"
+	);
 }
 
 #[tokio::test]
