@@ -262,6 +262,19 @@ func TestHelmChartTemplate(t *testing.T) {
 `,
 		},
 		{
+			name: "extra-volumes",
+			valuesYAML: `controller:
+  extraVolumeMounts:
+    - name: plugin-cache
+      mountPath: /var/lib/agentgateway/plugins
+      readOnly: true
+  extraVolumes:
+    - name: plugin-cache
+      secret:
+        secretName: agentgateway-plugin-cache
+`,
+		},
+		{
 			name: "extra-env-invalid-value-and-valuefrom",
 			valuesYAML: `controller:
   extraEnv:
