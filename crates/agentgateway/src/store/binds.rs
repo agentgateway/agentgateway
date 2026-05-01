@@ -2508,7 +2508,11 @@ mod tests {
 		let targeted = TargetedPolicy {
 			key: policy_key.clone(),
 			name: None,
-			target: PolicyTarget::ListenerSet(ListenerSetTarget { name: strng::new("my-ls"), namespace: strng::new("default"), section: None }),
+			target: PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: None,
+			}),
 			policy: agent::PolicyType::Frontend(create_access_log_policy("ls_remove")),
 		};
 		store
@@ -2516,7 +2520,11 @@ mod tests {
 			.insert(policy_key.clone(), Arc::new(targeted));
 		store
 			.policies_by_target
-			.entry(PolicyTarget::ListenerSet(ListenerSetTarget { name: strng::new("my-ls"), namespace: strng::new("default"), section: None }))
+			.entry(PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: None,
+			}))
 			.or_default()
 			.insert(policy_key);
 
@@ -2525,7 +2533,10 @@ mod tests {
 			gateway_name: strng::new("gw"),
 			gateway_namespace: strng::new("ns"),
 			listener_name: strng::new("listener"),
-			listener_set: Some(ResourceName::new(strng::new("my-ls"), strng::new("default"))),
+			listener_set: Some(ResourceName::new(
+				strng::new("my-ls"),
+				strng::new("default"),
+			)),
 		};
 
 		let pols = store.listener_frontend_policies(&listener, None, None);
@@ -2555,7 +2566,9 @@ mod tests {
 			}),
 			policy: agent::PolicyType::Frontend(create_access_log_policy("section_remove")),
 		};
-		store.policies_by_key.insert(policy_key.clone(), Arc::new(targeted));
+		store
+			.policies_by_key
+			.insert(policy_key.clone(), Arc::new(targeted));
 		store
 			.policies_by_target
 			.entry(PolicyTarget::ListenerSet(ListenerSetTarget {
@@ -2571,11 +2584,17 @@ mod tests {
 			gateway_name: strng::new("gw"),
 			gateway_namespace: strng::new("ns"),
 			listener_name: strng::new("listener-a"),
-			listener_set: Some(ResourceName::new(strng::new("my-ls"), strng::new("default"))),
+			listener_set: Some(ResourceName::new(
+				strng::new("my-ls"),
+				strng::new("default"),
+			)),
 		};
 		let pols_a = store.listener_frontend_policies(&listener_a, None, None);
 		assert!(
-			pols_a.access_log.as_ref().map_or(false, |p| p.remove.contains("section_remove")),
+			pols_a
+				.access_log
+				.as_ref()
+				.map_or(false, |p| p.remove.contains("section_remove")),
 			"section-targeted policy should apply to the named listener"
 		);
 
@@ -2584,7 +2603,10 @@ mod tests {
 			gateway_name: strng::new("gw"),
 			gateway_namespace: strng::new("ns"),
 			listener_name: strng::new("listener-b"),
-			listener_set: Some(ResourceName::new(strng::new("my-ls"), strng::new("default"))),
+			listener_set: Some(ResourceName::new(
+				strng::new("my-ls"),
+				strng::new("default"),
+			)),
 		};
 		let pols_b = store.listener_frontend_policies(&listener_b, None, None);
 		assert!(

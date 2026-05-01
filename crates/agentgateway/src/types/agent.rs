@@ -614,19 +614,25 @@ impl ListenerName {
 		}
 	}
 	pub fn as_listenerset_target_ref(&self) -> Option<PolicyTargetRef<'_>> {
-		self.listener_set.as_ref().map(|ls| PolicyTargetRef::ListenerSet {
-			name: ls.name.as_ref(),
-			namespace: ls.namespace.as_ref(),
-			section: None,
-		})
+		self
+			.listener_set
+			.as_ref()
+			.map(|ls| PolicyTargetRef::ListenerSet {
+				name: ls.name.as_ref(),
+				namespace: ls.namespace.as_ref(),
+				section: None,
+			})
 	}
 
 	pub fn as_listenerset_listener_target_ref(&self) -> Option<PolicyTargetRef<'_>> {
-		self.listener_set.as_ref().map(|ls| PolicyTargetRef::ListenerSet {
-			name: ls.name.as_ref(),
-			namespace: ls.namespace.as_ref(),
-			section: Some(self.listener_name.as_ref()),
-		})
+		self
+			.listener_set
+			.as_ref()
+			.map(|ls| PolicyTargetRef::ListenerSet {
+				name: ls.name.as_ref(),
+				namespace: ls.namespace.as_ref(),
+				section: Some(self.listener_name.as_ref()),
+			})
 	}
 }
 
