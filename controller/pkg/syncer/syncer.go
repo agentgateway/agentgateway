@@ -524,10 +524,11 @@ func (s *Syncer) buildAgwResources(
 				NamespacedName: ls.Parent,
 			}
 			return []*plugins.RouteAttachment{{
-				From:         lsKey,
-				To:           lsKey,
-				Gateway:      ls.GatewayParent,
-				ListenerName: ls.Name,
+				From:    lsKey,
+				To:      lsKey,
+				Gateway: ls.GatewayParent,
+				// ListenerName omitted: this index only needs ListenerSet→Gateway;
+				// omitting it lets krt deduplicate the N per-listener entries to one.
 			}}
 		}, krtopts.ToOptions("ListenerSetGatewayAttachments")...)
 	listenerSetAttachmentsIdx := krt.NewIndex(listenerSetAttachments, "ls-to-gateway",
