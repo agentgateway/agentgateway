@@ -157,8 +157,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 					}
 				}
 				key := ns + "/" + string(name)
-				svc := ptr.Flatten(krt.FetchOne(krtctx, agw.Services, krt.FilterKey(key)))
-				if svc == nil {
+				if !ResourceExists(krtctx, agw.Services, key) {
 					return nil, &BackendReferenceError{
 						Reason:  BackendReferenceErrorReasonBackendNotFound,
 						Message: fmt.Sprintf("unable to find the Service %v", key),
@@ -181,8 +180,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 				}, nil
 			case wellknown.AgentgatewayBackendGVK.GroupKind():
 				key := ns + "/" + string(name)
-				be := ptr.Flatten(krt.FetchOne(krtctx, agw.Backends, krt.FilterKey(key)))
-				if be == nil {
+				if !ResourceExists(krtctx, agw.Backends, key) {
 					return nil, &BackendReferenceError{
 						Reason:  BackendReferenceErrorReasonBackendNotFound,
 						Message: fmt.Sprintf("unable to find the Backend %v", key),
@@ -261,8 +259,7 @@ func DefaultRouteBackend(krtctx krt.HandlerContext, agw *AgwCollections, default
 			}}
 		ref.Port = uint32(*port) //nolint:gosec // G115: validated 1-65535
 		key := ns + "/" + string(name)
-		svc := ptr.Flatten(krt.FetchOne(krtctx, agw.Services, krt.FilterKey(key)))
-		if svc == nil {
+		if !ResourceExists(krtctx, agw.Services, key) {
 			return ref, &BackendReferenceError{
 				Reason:  BackendReferenceErrorReasonBackendNotFound,
 				Message: fmt.Sprintf("backend(%s) not found", kubeutils.GetServiceHostname(string(name), ns)),
@@ -272,8 +269,7 @@ func DefaultRouteBackend(krtctx krt.HandlerContext, agw *AgwCollections, default
 		key := ns + "/" + string(name)
 		ref.Kind = &api.BackendReference_Backend{Backend: key}
 		// Populate resp now, so even if the service doesn't exist we can return a better error (Service not found vs invalid)
-		be := ptr.Flatten(krt.FetchOne(krtctx, agw.Backends, krt.FilterKey(key)))
-		if be == nil {
+		if !ResourceExists(krtctx, agw.Backends, key) {
 			return ref, &BackendReferenceError{
 				Reason:  BackendReferenceErrorReasonBackendNotFound,
 				Message: fmt.Sprintf("Backend not found: %s", key),
