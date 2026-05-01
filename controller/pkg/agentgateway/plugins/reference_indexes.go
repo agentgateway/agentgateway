@@ -353,7 +353,7 @@ type ReferenceIndex struct {
 	// Route --> Gateway
 	attachments krt.IndexCollection[utils.TypedNamespacedName, *RouteAttachment]
 	// ListenerSet --> Gateway
-	listenerSetAttachmentsIndex krt.IndexCollection[utils.TypedNamespacedName, *RouteAttachment]
+	listenerSetAttachments krt.IndexCollection[utils.TypedNamespacedName, *RouteAttachment]
 	// Gateway --> Gateway: trivial, no collection needed
 
 	explicitReferences ReferenceTypes
@@ -371,11 +371,11 @@ func (p ReferenceIndex) LookupGatewaysForTarget(ctx krt.HandlerContext, object u
 		}
 		return gateways
 	case wellknown.ListenerSetGVK.Kind:
-		if p.listenerSetAttachmentsIndex == nil {
+		if p.listenerSetAttachments == nil {
 			return sets.New[types.NamespacedName]()
 		}
 		gateways := sets.New[types.NamespacedName]()
-		for _, attachment := range krtutil.FetchIndexObjects(ctx, p.listenerSetAttachmentsIndex, object) {
+		for _, attachment := range krtutil.FetchIndexObjects(ctx, p.listenerSetAttachments, object) {
 			gateways.Insert(attachment.Gateway)
 		}
 		return gateways
@@ -427,8 +427,8 @@ func (p ReferenceIndex) WithPolicyAttachments(references krt.IndexCollection[uti
 	return p
 }
 
-func (p ReferenceIndex) WithListenerSetAttachmentsIndex(references krt.IndexCollection[utils.TypedNamespacedName, *RouteAttachment]) ReferenceIndex {
-	p.listenerSetAttachmentsIndex = references
+func (p ReferenceIndex) WithListenerSetAttachments(references krt.IndexCollection[utils.TypedNamespacedName, *RouteAttachment]) ReferenceIndex {
+	p.listenerSetAttachments = references
 	return p
 }
 

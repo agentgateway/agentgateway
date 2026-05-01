@@ -530,7 +530,7 @@ func (s *Syncer) buildAgwResources(
 				ListenerName: ls.Name,
 			}}
 		}, krtopts.ToOptions("ListenerSetGatewayAttachments")...)
-	listenerSetAttachmentsIndex := krt.NewIndex(listenerSetAttachments, "ls-to-gateway",
+	listenerSetAttachmentsIdx := krt.NewIndex(listenerSetAttachments, "ls-to-gateway",
 		func(o *plugins.RouteAttachment) []utils.TypedNamespacedName {
 			return []utils.TypedNamespacedName{o.To}
 		}).AsCollection(append(krtopts.ToOptions("ListenerSetGatewayIdx"), utils.TypedNamespacedNameIndexCollectionFunc)...)
@@ -548,7 +548,7 @@ func (s *Syncer) buildAgwResources(
 	})
 	policyReferencesIndexCollection := policyReferencesIndex.AsCollection(append(krtopts.ToOptions("PolicyReferencesIndex"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 	referenceIndex = referenceIndex.WithPolicyAttachments(policyReferencesIndexCollection)
-	referenceIndex = referenceIndex.WithListenerSetAttachmentsIndex(listenerSetAttachmentsIndex)
+	referenceIndex = referenceIndex.WithListenerSetAttachments(listenerSetAttachmentsIdx)
 
 	// Phase 2: Build policies with the fully-populated reference index.
 	agwPolicies, policyStatuses := BuildPolicies(s.agwPlugins, referenceIndex, krtopts)
