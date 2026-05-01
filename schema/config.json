@@ -6243,6 +6243,18 @@
             "backend"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "listenerSet": {
+              "$ref": "#/$defs/ListenerSetTarget"
+            }
+          },
+          "required": [
+            "listenerSet"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -6378,6 +6390,28 @@
           ],
           "additionalProperties": false
         }
+      ]
+    },
+    "ListenerSetTarget": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "namespace"
       ]
     },
     "PolicyPhase": {
