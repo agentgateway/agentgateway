@@ -79,6 +79,28 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 				return []*api.PolicyTarget{{
 					Kind: utils.RouteTarget(namespace, string(name), wellknown.GRPCRouteGVK.Kind, sectionName),
 				}}, ResourceExists(krtctx, agw.GRPCRoutes, key)
+			case wellknown.ListenerSetGVK.GroupKind():
+				ls := ptr.Flatten(krt.FetchOne(krtctx, agw.ListenerSets, krt.FilterKey(key)))
+				if ls == nil {
+					return nil, false
+				}
+				parentNs := string(ptr.OrDefault(ls.Spec.ParentRef.Namespace, gwv1.Namespace(ls.Namespace)))
+				parentName := string(ls.Spec.ParentRef.Name)
+				if sectionName != nil {
+					// Caller named a specific listener within the set.
+					return []*api.PolicyTarget{{
+						Kind: utils.GatewayTarget(parentNs, parentName, sectionName),
+					}}, true
+				}
+				// Fan out: one GatewayTarget per listener in the set.
+				var targets []*api.PolicyTarget
+				for _, l := range ls.Spec.Listeners {
+					ln := l.Name // copy to avoid loop-variable aliasing
+					targets = append(targets, &api.PolicyTarget{
+						Kind: utils.GatewayTarget(parentNs, parentName, &ln),
+					})
+				}
+				return targets, true
 			case wellknown.AgentgatewayBackendGVK.GroupKind():
 				return []*api.PolicyTarget{{
 					Kind: utils.BackendTarget(namespace, string(name), sectionName),
@@ -119,7 +141,26 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 				}
 			case wellknown.ListenerSetGVK.GroupKind():
 				for _, ls := range krt.Fetch(krtctx, agw.ListenerSets, krt.FilterLabel(selector.MatchLabels), krt.FilterIndex(agw.ListenerSetsByNamespace, policyNamespace)) {
-					targets = append(targets, ResolvedPolicySelectorTarget{Name: gwv1.ObjectName(ls.Name), Namespace: ls.Namespace})
+					parentNs := string(ptr.OrDefault(ls.Spec.ParentRef.Namespace, gwv1.Namespace(ls.Namespace)))
+					parentName := string(ls.Spec.ParentRef.Name)
+					var policyTargets []*api.PolicyTarget
+					if sectionName != nil {
+						policyTargets = []*api.PolicyTarget{{
+							Kind: utils.GatewayTarget(parentNs, parentName, sectionName),
+						}}
+					} else {
+						for _, l := range ls.Spec.Listeners {
+							ln := l.Name
+							policyTargets = append(policyTargets, &api.PolicyTarget{
+								Kind: utils.GatewayTarget(parentNs, parentName, &ln),
+							})
+						}
+					}
+					targets = append(targets, ResolvedPolicySelectorTarget{
+						Name:          gwv1.ObjectName(ls.Name),
+						Namespace:     ls.Namespace,
+						PolicyTargets: policyTargets,
+					})
 				}
 			case wellknown.AgentgatewayBackendGVK.GroupKind():
 				for _, backend := range krt.Fetch(krtctx, agw.Backends, krt.FilterLabel(selector.MatchLabels), krt.FilterIndex(agw.BackendsByNamespace, policyNamespace)) {
@@ -345,8 +386,9 @@ type ReferenceIndex struct {
 	PolicyAttachments krt.IndexCollection[utils.TypedNamespacedName, *PolicyAttachment]
 	// Route --> Gateway
 	attachments krt.IndexCollection[utils.TypedNamespacedName, *RouteAttachment]
+	// ListenerSet --> Gateway
+	listenerSetAttachments krt.IndexCollection[utils.TypedNamespacedName, *RouteAttachment]
 	// Gateway --> Gateway: trivial, no collection needed
-	// ListenerSet --> Gateway: NOT present; ListenerSet attachment not implemented (but really should be!) in AgentgatewayPolicy anyways
 
 	explicitReferences ReferenceTypes
 }
@@ -356,6 +398,15 @@ func (p ReferenceIndex) LookupGatewaysForTarget(ctx krt.HandlerContext, object u
 	case wellknown.GatewayGVK.Kind:
 		// Trivial case
 		return sets.New(object.NamespacedName)
+	case wellknown.ListenerSetGVK.Kind:
+		if p.listenerSetAttachments == nil {
+			return sets.New[types.NamespacedName]()
+		}
+		gateways := sets.New[types.NamespacedName]()
+		for _, attachment := range krtutil.FetchIndexObjects(ctx, p.listenerSetAttachments, object) {
+			gateways.Insert(attachment.Gateway)
+		}
+		return gateways
 	case wellknown.HTTPRouteGVK.Kind, wellknown.GRPCRouteGVK.Kind, wellknown.TCPRouteGVK.Kind, wellknown.TLSRouteGVK.Kind:
 		gateways := sets.New[types.NamespacedName]()
 		for _, ancestor := range krtutil.FetchIndexObjects(ctx, p.attachments, object) {
@@ -407,6 +458,11 @@ func (p ReferenceIndex) LookupGatewaysForPolicyTarget(ctx krt.HandlerContext, ob
 
 func (p ReferenceIndex) WithPolicyAttachments(references krt.IndexCollection[utils.TypedNamespacedName, *PolicyAttachment]) ReferenceIndex {
 	p.PolicyAttachments = references
+	return p
+}
+
+func (p ReferenceIndex) WithListenerSetAttachments(lsa krt.IndexCollection[utils.TypedNamespacedName, *RouteAttachment]) ReferenceIndex {
+	p.listenerSetAttachments = lsa
 	return p
 }
 
