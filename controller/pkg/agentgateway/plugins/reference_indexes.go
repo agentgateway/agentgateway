@@ -87,6 +87,10 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 				return []*api.PolicyTarget{{
 					Kind: utils.ServiceTarget(namespace, string(name), sectionName),
 				}}, ResourceExists(krtctx, agw.Services, key)
+			case wellknown.ListenerSetGVK.GroupKind():
+				return []*api.PolicyTarget{{
+					Kind: utils.ListenerSetTarget(namespace, string(name)),
+				}}, ResourceExists(krtctx, agw.ListenerSets, key)
 			}
 			return nil, false
 		},
@@ -119,7 +123,10 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 				}
 			case wellknown.ListenerSetGVK.GroupKind():
 				for _, ls := range krt.Fetch(krtctx, agw.ListenerSets, krt.FilterLabel(selector.MatchLabels), krt.FilterIndex(agw.ListenerSetsByNamespace, policyNamespace)) {
-					targets = append(targets, ResolvedPolicySelectorTarget{Name: gwv1.ObjectName(ls.Name), Namespace: ls.Namespace})
+					policyTargets := []*api.PolicyTarget{{
+						Kind: utils.ListenerSetTarget(ls.Namespace, ls.Name),
+					}}
+					targets = append(targets, ResolvedPolicySelectorTarget{Name: gwv1.ObjectName(ls.Name), Namespace: ls.Namespace, PolicyTargets: policyTargets})
 				}
 			case wellknown.AgentgatewayBackendGVK.GroupKind():
 				for _, backend := range krt.Fetch(krtctx, agw.Backends, krt.FilterLabel(selector.MatchLabels), krt.FilterIndex(agw.BackendsByNamespace, policyNamespace)) {
@@ -345,8 +352,9 @@ type ReferenceIndex struct {
 	PolicyAttachments krt.IndexCollection[utils.TypedNamespacedName, *PolicyAttachment]
 	// Route --> Gateway
 	attachments krt.IndexCollection[utils.TypedNamespacedName, *RouteAttachment]
+	// ListenerSet --> Gateway
+	listenerSetIndex krt.IndexCollection[utils.TypedNamespacedName, *RouteAttachment]
 	// Gateway --> Gateway: trivial, no collection needed
-	// ListenerSet --> Gateway: NOT present; ListenerSet attachment not implemented (but really should be!) in AgentgatewayPolicy anyways
 
 	explicitReferences ReferenceTypes
 }
@@ -360,6 +368,12 @@ func (p ReferenceIndex) LookupGatewaysForTarget(ctx krt.HandlerContext, object u
 		gateways := sets.New[types.NamespacedName]()
 		for _, ancestor := range krtutil.FetchIndexObjects(ctx, p.attachments, object) {
 			gateways.Insert(ancestor.Gateway)
+		}
+		return gateways
+	case wellknown.ListenerSetGVK.Kind:
+		gateways := sets.New[types.NamespacedName]()
+		for _, attachment := range krtutil.FetchIndexObjects(ctx, p.listenerSetIndex, object) {
+			gateways.Insert(attachment.Gateway)
 		}
 		return gateways
 	default:
@@ -407,6 +421,11 @@ func (p ReferenceIndex) LookupGatewaysForPolicyTarget(ctx krt.HandlerContext, ob
 
 func (p ReferenceIndex) WithPolicyAttachments(references krt.IndexCollection[utils.TypedNamespacedName, *PolicyAttachment]) ReferenceIndex {
 	p.PolicyAttachments = references
+	return p
+}
+
+func (p ReferenceIndex) WithListenerSetIndex(references krt.IndexCollection[utils.TypedNamespacedName, *RouteAttachment]) ReferenceIndex {
+	p.listenerSetIndex = references
 	return p
 }
 
