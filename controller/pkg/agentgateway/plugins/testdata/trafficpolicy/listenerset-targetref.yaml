@@ -1,0 +1,46 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: listenerset-gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  allowedListeners:
+    namespaces:
+      from: All
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: my-listenerset
+  namespace: default
+spec:
+  parentRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: listenerset-gw
+  listeners:
+  - name: extra
+    protocol: HTTP
+    port: 9090
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ls-targetref-policy
+  namespace: default
+spec:
+  targetRefs:
+  - kind: ListenerSet
+    group: gateway.networking.k8s.io
+    name: my-listenerset
+  traffic:
+    timeouts:
+      request: 15s
