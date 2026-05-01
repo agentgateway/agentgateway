@@ -89,7 +89,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 				}}, ResourceExists(krtctx, agw.Services, key)
 			case wellknown.ListenerSetGVK.GroupKind():
 				return []*api.PolicyTarget{{
-					Kind: utils.ListenerSetTarget(namespace, string(name)),
+					Kind: utils.ListenerSetTarget(namespace, string(name), sectionName),
 				}}, ResourceExists(krtctx, agw.ListenerSets, key)
 			}
 			return nil, false
@@ -124,7 +124,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 			case wellknown.ListenerSetGVK.GroupKind():
 				for _, ls := range krt.Fetch(krtctx, agw.ListenerSets, krt.FilterLabel(selector.MatchLabels), krt.FilterIndex(agw.ListenerSetsByNamespace, policyNamespace)) {
 					policyTargets := []*api.PolicyTarget{{
-						Kind: utils.ListenerSetTarget(ls.Namespace, ls.Name),
+						Kind: utils.ListenerSetTarget(ls.Namespace, ls.Name, sectionName),
 					}}
 					targets = append(targets, ResolvedPolicySelectorTarget{Name: gwv1.ObjectName(ls.Name), Namespace: ls.Namespace, PolicyTargets: policyTargets})
 				}

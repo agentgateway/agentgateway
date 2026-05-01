@@ -154,11 +154,17 @@ func GatewayTarget[T ~string](namespace, name string, listener *T) *api.PolicyTa
 	}
 }
 
-func ListenerSetTarget(namespace, name string) *api.PolicyTarget_ListenerSet {
+func ListenerSetTarget[T ~string](namespace, name string, section *T) *api.PolicyTarget_ListenerSet {
+	var s *string
+	if section != nil {
+		s = new(string)
+		*s = string(*section)
+	}
 	return &api.PolicyTarget_ListenerSet{
 		ListenerSet: &api.PolicyTarget_ListenerSetTarget{
 			Name:      name,
 			Namespace: namespace,
+			Section:   s,
 		},
 	}
 }

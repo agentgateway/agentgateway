@@ -2374,10 +2374,13 @@ fn policy_target_from_proto(t: &proto::agent::PolicyTarget) -> Result<PolicyTarg
 			namespace: strng::new(&s.namespace),
 			port: s.port.map(|p| p as u16),
 		})),
-		Some(tgt::Kind::ListenerSet(ls)) => Ok(PolicyTarget::ListenerSet(ResourceName {
-			name: strng::new(&ls.name),
-			namespace: strng::new(&ls.namespace),
-		})),
+		Some(tgt::Kind::ListenerSet(ls)) => Ok(PolicyTarget::ListenerSet {
+			resource: ResourceName {
+				name: strng::new(&ls.name),
+				namespace: strng::new(&ls.namespace),
+			},
+			section: ls.section.as_deref().map(strng::new),
+		}),
 		None => Err(ProtoError::MissingRequiredField),
 	}
 }

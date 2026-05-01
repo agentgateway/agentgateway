@@ -617,6 +617,15 @@ impl ListenerName {
 		self.listener_set.as_ref().map(|ls| PolicyTargetRef::ListenerSet {
 			name: ls.name.as_ref(),
 			namespace: ls.namespace.as_ref(),
+			section: None,
+		})
+	}
+
+	pub fn as_listenerset_listener_target_ref(&self) -> Option<PolicyTargetRef<'_>> {
+		self.listener_set.as_ref().map(|ls| PolicyTargetRef::ListenerSet {
+			name: ls.name.as_ref(),
+			namespace: ls.namespace.as_ref(),
+			section: Some(self.listener_name.as_ref()),
 		})
 	}
 }
@@ -2091,7 +2100,7 @@ pub enum PolicyTarget {
 	Gateway(ListenerTarget),
 	Route(RouteTarget),
 	Backend(BackendTarget),
-	ListenerSet(ResourceName),
+	ListenerSet { resource: ResourceName, section: Option<Strng> },
 }
 
 impl PolicyTarget {
@@ -2127,6 +2136,7 @@ pub enum PolicyTargetRef<'a> {
 	ListenerSet {
 		name: &'a str,
 		namespace: &'a str,
+		section: Option<&'a str>,
 	},
 }
 
@@ -2146,9 +2156,10 @@ impl<'a> From<&'a PolicyTarget> for PolicyTargetRef<'a> {
 				kind: v.kind.as_deref(),
 			},
 			PolicyTarget::Backend(v) => PolicyTargetRef::Backend(v.into()),
-			PolicyTarget::ListenerSet(v) => PolicyTargetRef::ListenerSet {
+			PolicyTarget::ListenerSet { resource: v, section } => PolicyTargetRef::ListenerSet {
 				name: v.name.as_ref(),
 				namespace: v.namespace.as_ref(),
+				section: section.as_deref(),
 			},
 		}
 	}

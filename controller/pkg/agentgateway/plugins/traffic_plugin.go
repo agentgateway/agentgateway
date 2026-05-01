@@ -1473,7 +1473,11 @@ func attachmentName(target *api.PolicyTarget) string {
 		}
 		return b
 	case *api.PolicyTarget_ListenerSet:
-		return ":" + v.ListenerSet.Namespace + "/" + v.ListenerSet.Name
+		b := ":" + v.ListenerSet.Namespace + "/" + v.ListenerSet.Name
+		if v.ListenerSet.Section != nil {
+			b += "/" + *v.ListenerSet.Section
+		}
+		return b
 	default:
 		panic(fmt.Sprintf("unknown target kind %T", target))
 	}

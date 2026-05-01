@@ -1097,6 +1097,9 @@ impl Store {
 		let listener_set = name
 			.as_listenerset_target_ref()
 			.and_then(|r| self.policies_by_target.get(&r));
+		let listener_set_section = name
+			.as_listenerset_listener_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
 		let svc = service.and_then(|s| self.policies_by_target.get(&s));
 		let gateway_port = port.and_then(|port| {
 			self.policies_by_target.get(&PolicyTargetRef::Gateway {
@@ -1111,6 +1114,7 @@ impl Store {
 			.copied()
 			.flatten()
 			.chain(listener.iter().copied().flatten())
+			.chain(listener_set_section.iter().copied().flatten())
 			.chain(listener_set.iter().copied().flatten())
 			.chain(gateway_port.iter().copied().flatten())
 			.chain(gateway.iter().copied().flatten())
@@ -2496,7 +2500,7 @@ mod tests {
 		let targeted = TargetedPolicy {
 			key: policy_key.clone(),
 			name: None,
-			target: PolicyTarget::ListenerSet(ls_resource.clone()),
+			target: PolicyTarget::ListenerSet { resource: ls_resource.clone(), section: None },
 			policy: agent::PolicyType::Frontend(create_access_log_policy("ls_remove")),
 		};
 		store
@@ -2504,7 +2508,7 @@ mod tests {
 			.insert(policy_key.clone(), Arc::new(targeted));
 		store
 			.policies_by_target
-			.entry(PolicyTarget::ListenerSet(ls_resource))
+			.entry(PolicyTarget::ListenerSet { resource: ls_resource, section: None })
 			.or_default()
 			.insert(policy_key);
 
@@ -2524,6 +2528,59 @@ mod tests {
 		assert!(
 			access_log.remove.contains("ls_remove"),
 			"ListenerSet-targeted policy should be found via listener_frontend_policies"
+		);
+	}
+
+	#[test]
+	fn listenerset_section_targeted_policy_applies_only_to_named_listener() {
+		let mut store = Store::default();
+
+		let policy_key: PolicyKey = strng::new("ls-section-policy");
+		let ls_resource = ResourceName::new(strng::new("my-ls"), strng::new("default"));
+		// Policy targets ListenerSet/my-ls with sectionName: listener-a
+		let targeted = TargetedPolicy {
+			key: policy_key.clone(),
+			name: None,
+			target: PolicyTarget::ListenerSet {
+				resource: ls_resource.clone(),
+				section: Some(strng::new("listener-a")),
+			},
+			policy: agent::PolicyType::Frontend(create_access_log_policy("section_remove")),
+		};
+		store.policies_by_key.insert(policy_key.clone(), Arc::new(targeted));
+		store
+			.policies_by_target
+			.entry(PolicyTarget::ListenerSet {
+				resource: ls_resource,
+				section: Some(strng::new("listener-a")),
+			})
+			.or_default()
+			.insert(policy_key);
+
+		// listener-a: should match
+		let listener_a = ListenerName {
+			gateway_name: strng::new("gw"),
+			gateway_namespace: strng::new("ns"),
+			listener_name: strng::new("listener-a"),
+			listener_set: Some(ResourceName::new(strng::new("my-ls"), strng::new("default"))),
+		};
+		let pols_a = store.listener_frontend_policies(&listener_a, None, None);
+		assert!(
+			pols_a.access_log.as_ref().map_or(false, |p| p.remove.contains("section_remove")),
+			"section-targeted policy should apply to the named listener"
+		);
+
+		// listener-b: should NOT match
+		let listener_b = ListenerName {
+			gateway_name: strng::new("gw"),
+			gateway_namespace: strng::new("ns"),
+			listener_name: strng::new("listener-b"),
+			listener_set: Some(ResourceName::new(strng::new("my-ls"), strng::new("default"))),
+		};
+		let pols_b = store.listener_frontend_policies(&listener_b, None, None);
+		assert!(
+			pols_b.access_log.is_none(),
+			"section-targeted policy should NOT apply to a different listener in the same set"
 		);
 	}
 }

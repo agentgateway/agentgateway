@@ -480,6 +480,7 @@ message PolicyTarget {
   message ListenerSetTarget {
     string name = 1;
     string namespace = 2;
+    optional string section = 3;
   }
   oneof kind {
     GatewayTarget gateway = 1;

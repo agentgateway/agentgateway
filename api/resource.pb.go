@@ -7291,6 +7291,7 @@ type PolicyTarget_ListenerSetTarget struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Namespace     string                 `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Section       *string                `protobuf:"bytes,3,opt,name=section,proto3,oneof" json:"section,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7335,6 +7336,13 @@ func (x *PolicyTarget_ListenerSetTarget) GetName() string {
 func (x *PolicyTarget_ListenerSetTarget) GetNamespace() string {
 	if x != nil {
 		return x.Namespace
+	}
+	return ""
+}
+
+func (x *PolicyTarget_ListenerSetTarget) GetSection() string {
+	if x != nil && x.Section != nil {
+		return *x.Section
 	}
 	return ""
 }
@@ -12592,7 +12600,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x0froute_group_key\x18\x06 \x01(\tH\x00R\rrouteGroupKey\x88\x01\x01\x12\x16\n" +
 	"\x06weight\x18\x02 \x01(\x05R\x06weight\x12W\n" +
 	"\x10backend_policies\x18\x05 \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0fbackendPoliciesB\x12\n" +
-	"\x10_route_group_keyJ\x04\b\x04\x10\x05\"\xfb\a\n" +
+	"\x10_route_group_keyJ\x04\b\x04\x10\x05\"\xa6\b\n" +
 	"\fPolicyTarget\x12Q\n" +
 	"\agateway\x18\x01 \x01(\v25.agentgateway.dev.resource.PolicyTarget.GatewayTargetH\x00R\agateway\x12K\n" +
 	"\x05route\x18\x02 \x01(\v23.agentgateway.dev.resource.PolicyTarget.RouteTargetH\x00R\x05route\x12Q\n" +
@@ -12623,10 +12631,13 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"route_rule\x18\x03 \x01(\tH\x00R\trouteRule\x88\x01\x01\x12\x12\n" +
 	"\x04kind\x18\x04 \x01(\tR\x04kindB\r\n" +
-	"\v_route_rule\x1aE\n" +
+	"\v_route_rule\x1ap\n" +
 	"\x11ListenerSetTarget\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
-	"\tnamespace\x18\x02 \x01(\tR\tnamespaceB\x06\n" +
+	"\tnamespace\x18\x02 \x01(\tR\tnamespace\x12\x1d\n" +
+	"\asection\x18\x03 \x01(\tH\x00R\asection\x88\x01\x01B\n" +
+	"\n" +
+	"\b_sectionB\x06\n" +
 	"\x04kind\"\xa2\x01\n" +
 	"\x0fKeepaliveConfig\x12-\n" +
 	"\x04time\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\x04time\x125\n" +
@@ -13954,6 +13965,7 @@ func file_resource_proto_init() {
 	file_resource_proto_msgTypes[66].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[67].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[68].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[69].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[70].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[71].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[74].OneofWrappers = []any{}
