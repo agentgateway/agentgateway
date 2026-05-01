@@ -69,6 +69,20 @@ func ListenerName(namespace, name string, listener string) *api.ListenerName {
 	}
 }
 
+// ListenerNameWithSet creates a ListenerName for a listener contributed by a ListenerSet.
+// The listener_set field allows the data plane to match ListenerSet-targeted policies.
+func ListenerNameWithSet(gwNamespace, gwName, listenerName, lsNamespace, lsName string) *api.ListenerName {
+	return &api.ListenerName{
+		GatewayNamespace: gwNamespace,
+		GatewayName:      gwName,
+		ListenerName:     listenerName,
+		ListenerSet: &api.ResourceName{
+			Name:      lsName,
+			Namespace: lsNamespace,
+		},
+	}
+}
+
 func RouteName[T ~string](kind string, namespace, name string, routeRule *T) *api.RouteName {
 	var ls *string
 	if routeRule != nil {
@@ -136,6 +150,15 @@ func GatewayTarget[T ~string](namespace, name string, listener *T) *api.PolicyTa
 			Name:      name,
 			Namespace: namespace,
 			Listener:  ls,
+		},
+	}
+}
+
+func ListenerSetTarget(namespace, name string) *api.PolicyTarget_ListenerSet {
+	return &api.PolicyTarget_ListenerSet{
+		ListenerSet: &api.PolicyTarget_ListenerSetTarget{
+			Name:      name,
+			Namespace: namespace,
 		},
 	}
 }
