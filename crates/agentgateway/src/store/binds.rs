@@ -2504,7 +2504,6 @@ mod tests {
 
 		// Insert a policy targeting a ListenerSet
 		let policy_key: PolicyKey = strng::new("ls-policy");
-		let ls_resource = ResourceName::new(strng::new("my-ls"), strng::new("default"));
 		let targeted = TargetedPolicy {
 			key: policy_key.clone(),
 			name: None,
@@ -2594,7 +2593,7 @@ mod tests {
 			pols_a
 				.access_log
 				.as_ref()
-				.map_or(false, |p| p.remove.contains("section_remove")),
+				.is_some_and(|p| p.remove.contains("section_remove")),
 			"section-targeted policy should apply to the named listener"
 		);
 
