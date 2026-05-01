@@ -47,3 +47,50 @@ spec:
   traffic:
     timeouts:
       request: 30s
+
+---
+# Output
+output:
+- gateway:
+    Name: selector-gw
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/ls-selector-policy:timeout:default/selector-gw
+      name:
+        kind: AgentgatewayPolicy
+        name: ls-selector-policy
+        namespace: default
+      target:
+        gateway:
+          name: selector-gw
+          namespace: default
+      traffic:
+        timeout:
+          request: 30s
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: ls-selector-policy
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: selector-gw
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
