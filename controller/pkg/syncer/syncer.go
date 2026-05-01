@@ -514,7 +514,7 @@ func (s *Syncer) buildAgwResources(
 	// Each entry maps the ListenerSet identity to its parent Gateway so that
 	// LookupGatewaysForTarget can route ListenerSet-targeted policies to the
 	// correct xDS snapshot.
-	lsAttachCollection := krt.NewManyCollection(listenerSets,
+	listenerSetAttachments := krt.NewManyCollection(listenerSets,
 		func(ctx krt.HandlerContext, ls translator.ListenerSet) []*plugins.RouteAttachment {
 			if !ls.Valid {
 				return nil
@@ -530,7 +530,7 @@ func (s *Syncer) buildAgwResources(
 				ListenerName: ls.Name,
 			}}
 		}, krtopts.ToOptions("ListenerSetGatewayAttachments")...)
-	lsAttachIdx := krt.NewIndex(lsAttachCollection, "ls-to-gateway",
+	listenerSetAttachmentsIndex := krt.NewIndex(listenerSetAttachments, "ls-to-gateway",
 		func(o *plugins.RouteAttachment) []utils.TypedNamespacedName {
 			return []utils.TypedNamespacedName{o.To}
 		}).AsCollection(append(krtopts.ToOptions("ListenerSetGatewayIdx"), utils.TypedNamespacedNameIndexCollectionFunc)...)
@@ -548,7 +548,7 @@ func (s *Syncer) buildAgwResources(
 	})
 	policyReferencesIndexCollection := policyReferencesIndex.AsCollection(append(krtopts.ToOptions("PolicyReferencesIndex"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 	referenceIndex = referenceIndex.WithPolicyAttachments(policyReferencesIndexCollection)
-	referenceIndex = referenceIndex.WithListenerSetIndex(lsAttachIdx)
+	referenceIndex = referenceIndex.WithListenerSetAttachmentsIndex(listenerSetAttachmentsIndex)
 
 	// Phase 2: Build policies with the fully-populated reference index.
 	agwPolicies, policyStatuses := BuildPolicies(s.agwPlugins, referenceIndex, krtopts)

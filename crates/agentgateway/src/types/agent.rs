@@ -2096,11 +2096,20 @@ pub type RouteTarget = RouteName;
 
 #[apply(schema!)]
 #[derive(Hash, Eq, PartialEq)]
+pub struct ListenerSetTarget {
+	pub name: Strng,
+	pub namespace: Strng,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub section: Option<Strng>,
+}
+
+#[apply(schema!)]
+#[derive(Hash, Eq, PartialEq)]
 pub enum PolicyTarget {
 	Gateway(ListenerTarget),
 	Route(RouteTarget),
 	Backend(BackendTarget),
-	ListenerSet { resource: ResourceName, section: Option<Strng> },
+	ListenerSet(ListenerSetTarget),
 }
 
 impl PolicyTarget {
@@ -2156,10 +2165,10 @@ impl<'a> From<&'a PolicyTarget> for PolicyTargetRef<'a> {
 				kind: v.kind.as_deref(),
 			},
 			PolicyTarget::Backend(v) => PolicyTargetRef::Backend(v.into()),
-			PolicyTarget::ListenerSet { resource: v, section } => PolicyTargetRef::ListenerSet {
+			PolicyTarget::ListenerSet(v) => PolicyTargetRef::ListenerSet {
 				name: v.name.as_ref(),
 				namespace: v.namespace.as_ref(),
-				section: section.as_deref(),
+				section: v.section.as_deref(),
 			},
 		}
 	}

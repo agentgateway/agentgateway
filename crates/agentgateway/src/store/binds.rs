@@ -1752,7 +1752,7 @@ mod tests {
 	use super::*;
 	use crate::telemetry::log::OrderedStringMap;
 	use crate::types::agent::{
-		BackendTarget, BindProtocol, ListenerProtocol, ListenerSet, PolicyType, ResourceName,
+		BackendTarget, BindProtocol, ListenerSetTarget, ListenerProtocol, ListenerSet, PolicyType,
 		TunnelProtocol,
 	};
 	use crate::types::frontend::LoggingPolicy;
@@ -2500,7 +2500,7 @@ mod tests {
 		let targeted = TargetedPolicy {
 			key: policy_key.clone(),
 			name: None,
-			target: PolicyTarget::ListenerSet { resource: ls_resource.clone(), section: None },
+			target: PolicyTarget::ListenerSet(ListenerSetTarget { name: strng::new("my-ls"), namespace: strng::new("default"), section: None }),
 			policy: agent::PolicyType::Frontend(create_access_log_policy("ls_remove")),
 		};
 		store
@@ -2508,7 +2508,7 @@ mod tests {
 			.insert(policy_key.clone(), Arc::new(targeted));
 		store
 			.policies_by_target
-			.entry(PolicyTarget::ListenerSet { resource: ls_resource, section: None })
+			.entry(PolicyTarget::ListenerSet(ListenerSetTarget { name: strng::new("my-ls"), namespace: strng::new("default"), section: None }))
 			.or_default()
 			.insert(policy_key);
 
@@ -2536,24 +2536,25 @@ mod tests {
 		let mut store = Store::default();
 
 		let policy_key: PolicyKey = strng::new("ls-section-policy");
-		let ls_resource = ResourceName::new(strng::new("my-ls"), strng::new("default"));
 		// Policy targets ListenerSet/my-ls with sectionName: listener-a
 		let targeted = TargetedPolicy {
 			key: policy_key.clone(),
 			name: None,
-			target: PolicyTarget::ListenerSet {
-				resource: ls_resource.clone(),
+			target: PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
 				section: Some(strng::new("listener-a")),
-			},
+			}),
 			policy: agent::PolicyType::Frontend(create_access_log_policy("section_remove")),
 		};
 		store.policies_by_key.insert(policy_key.clone(), Arc::new(targeted));
 		store
 			.policies_by_target
-			.entry(PolicyTarget::ListenerSet {
-				resource: ls_resource,
+			.entry(PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
 				section: Some(strng::new("listener-a")),
-			})
+			}))
 			.or_default()
 			.insert(policy_key);
 
