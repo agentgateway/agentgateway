@@ -1012,6 +1012,73 @@ fn test_parse_openapi_schema_ignores_path_level_cookie_parameters() {
 	assert!(path_properties.contains_key("workspace_gid"));
 }
 
+#[test]
+fn test_parse_openapi_schema_preserves_recursive_body_refs_with_defs() {
+	let raw = r##"{
+		"openapi": "3.0.0",
+		"info": {"title": "Recursive Body", "version": "1.0.0"},
+		"paths": {
+			"/nodes": {
+				"post": {
+					"operationId": "createNode",
+					"requestBody": {
+						"required": true,
+						"content": {
+							"application/json": {
+								"schema": {"$ref": "#/components/schemas/Node"}
+							}
+						}
+					},
+					"responses": {
+						"200": {"description": "ok"}
+					}
+				}
+			}
+		},
+		"components": {
+			"schemas": {
+				"Node": {
+					"type": "object",
+					"properties": {
+						"id": {"type": "string"},
+						"children": {
+							"type": "array",
+							"items": {"$ref": "#/components/schemas/Node"}
+						}
+					}
+				}
+			}
+		}
+	}"##;
+	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	let tools = super::parse_openapi_schema(&open_api).expect("recursive schema should parse");
+
+	let schema = tool_schema_for(&tools, "createNode");
+	let body_schema = nested_schema(schema, "body");
+	let body_properties = body_schema
+		.get("properties")
+		.and_then(serde_json::Value::as_object)
+		.expect("body schema should include properties");
+	let children_items_ref = body_properties
+		.get("children")
+		.and_then(|children| children.get("items"))
+		.and_then(|items| items.get("$ref"))
+		.and_then(serde_json::Value::as_str);
+	assert_eq!(children_items_ref, Some("#/$defs/Node"));
+
+	let defs_node_items_ref = body_schema
+		.get("$defs")
+		.and_then(serde_json::Value::as_object)
+		.and_then(|defs| defs.get("Node"))
+		.and_then(|node| node.get("properties"))
+		.and_then(serde_json::Value::as_object)
+		.and_then(|properties| properties.get("children"))
+		.and_then(|children| children.get("items"))
+		.and_then(|items| items.get("$ref"))
+		.and_then(serde_json::Value::as_str);
+	assert_eq!(defs_node_items_ref, Some("#/$defs/Node"));
+}
+
 #[rstest]
 #[case::empty_string(json!({"verbose": ""}), vec![("verbose", "")])]
 #[case::string_value(json!({"verbose": "true"}), vec![("verbose", "true")])]
