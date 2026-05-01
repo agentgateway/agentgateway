@@ -371,6 +371,9 @@ func (p ReferenceIndex) LookupGatewaysForTarget(ctx krt.HandlerContext, object u
 		}
 		return gateways
 	case wellknown.ListenerSetGVK.Kind:
+		if p.listenerSetIndex == nil {
+			return sets.New[types.NamespacedName]()
+		}
 		gateways := sets.New[types.NamespacedName]()
 		for _, attachment := range krtutil.FetchIndexObjects(ctx, p.listenerSetIndex, object) {
 			gateways.Insert(attachment.Gateway)
