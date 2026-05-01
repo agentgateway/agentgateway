@@ -477,11 +477,16 @@ message PolicyTarget {
     optional string route_rule = 3;
     string kind = 4;
   }
+  message ListenerSetTarget {
+    string name = 1;
+    string namespace = 2;
+  }
   oneof kind {
     GatewayTarget gateway = 1;
     RouteTarget route = 2;
     BackendTarget backend = 3;
     ServiceTarget service = 4;
+    ListenerSetTarget listener_set = 5;
   }
 }
 
