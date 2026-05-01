@@ -60,26 +60,12 @@ func InternalBackendKey(backendNamespace, backendName, targetName string) string
 	return name
 }
 
-func ListenerName(namespace, name string, listener string) *api.ListenerName {
+func ListenerName(namespace, name, listener string, listenerSet *api.ResourceName) *api.ListenerName {
 	return &api.ListenerName{
 		GatewayName:      name,
 		GatewayNamespace: namespace,
 		ListenerName:     listener,
-		ListenerSet:      nil,
-	}
-}
-
-// ListenerNameWithSet creates a ListenerName for a listener contributed by a ListenerSet.
-// The listener_set field allows the data plane to match ListenerSet-targeted policies.
-func ListenerNameWithSet(gwNamespace, gwName, listenerName, lsNamespace, lsName string) *api.ListenerName {
-	return &api.ListenerName{
-		GatewayNamespace: gwNamespace,
-		GatewayName:      gwName,
-		ListenerName:     listenerName,
-		ListenerSet: &api.ResourceName{
-			Name:      lsName,
-			Namespace: lsNamespace,
-		},
+		ListenerSet:      listenerSet,
 	}
 }
 

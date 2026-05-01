@@ -570,16 +570,11 @@ func (s *Syncer) buildAgwResources(
 
 // buildListenerFromGateway creates a listener resource from a gateway
 func (s *Syncer) buildListenerFromGateway(obj *translator.GatewayListener) *agwir.AgwResource {
-	var listenerName *api.ListenerName
+	var ls *api.ResourceName
 	if obj.ParentObject.Kind == wellknown.ListenerSetGVK.Kind {
-		listenerName = utils.ListenerNameWithSet(
-			obj.ParentGateway.Namespace, obj.ParentGateway.Name,
-			string(obj.ParentInfo.SectionName),
-			obj.ParentObject.Namespace, obj.ParentObject.Name,
-		)
-	} else {
-		listenerName = utils.ListenerName(obj.ParentGateway.Namespace, obj.ParentGateway.Name, string(obj.ParentInfo.SectionName))
+		ls = &api.ResourceName{Name: obj.ParentObject.Name, Namespace: obj.ParentObject.Namespace}
 	}
+	listenerName := utils.ListenerName(obj.ParentGateway.Namespace, obj.ParentGateway.Name, string(obj.ParentInfo.SectionName), ls)
 	l := &api.Listener{
 		Key:      obj.ResourceName(),
 		Name:     listenerName,
