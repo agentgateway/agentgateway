@@ -3,6 +3,7 @@ module github.com/agentgateway/agentgateway/tools
 go 1.25.7
 
 tool (
+	github.com/agentgateway/agentgateway/tools/cmd/oss_compliance
 	github.com/bufbuild/buf/cmd/buf
 	github.com/golang/mock/mockgen
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
