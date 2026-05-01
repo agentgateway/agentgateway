@@ -23,6 +23,7 @@ use rustls_pki_types::pem::{PemObject, SectionKind};
 use serde::{Serialize, Serializer};
 use serde_json::Value;
 
+use crate::control::caclient::CaClient;
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::RuleSet;
 use crate::http::{
@@ -146,6 +147,7 @@ impl frontend::TLS {
 
 #[derive(Debug, Clone)]
 pub struct ServerTLSConfig {
+	source: ServerTlsCertificateSource,
 	/// Cached base config (built from `inputs` using defaults). Kept for fast path when no overrides
 	/// are requested.
 	base_config: Option<Arc<ServerConfig>>,
@@ -155,10 +157,17 @@ pub struct ServerTLSConfig {
 	insecure_fallback_verifier: Option<Arc<dyn ClientCertVerifier>>,
 	per_profile_config: Arc<RwLock<HashMap<ServerTlsProfileKey, Arc<ServerConfig>>>>,
 }
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+enum ServerTlsCertificateSource {
+	Static,
+	IstioWorkload { mtls: bool, default_alpns: Alpns },
+}
+
 impl Eq for ServerTLSConfig {}
 impl PartialEq for ServerTLSConfig {
 	fn eq(&self, other: &Self) -> bool {
-		self.inputs == other.inputs
+		self.source == other.source && self.inputs == other.inputs
 	}
 }
 
@@ -174,6 +183,7 @@ pub enum TLSVersion {
 impl ServerTLSConfig {
 	pub fn new(config: Arc<ServerConfig>) -> Self {
 		Self {
+			source: ServerTlsCertificateSource::Static,
 			base_config: Some(config),
 			inputs: None,
 			insecure_fallback_verifier: None,
@@ -232,6 +242,7 @@ impl ServerTLSConfig {
 			groups.unwrap_or(&[]),
 		)?;
 		Ok(Self {
+			source: ServerTlsCertificateSource::Static,
 			base_config: Some(Arc::new(base)),
 			inputs: Some(inputs),
 			insecure_fallback_verifier,
@@ -242,15 +253,47 @@ impl ServerTLSConfig {
 	/// new_invalid returns a ServerTLSConfig that always rejects connections
 	pub fn new_invalid() -> Self {
 		Self {
+			source: ServerTlsCertificateSource::Static,
 			base_config: None,
 			inputs: None,
 			insecure_fallback_verifier: None,
 			per_profile_config: Arc::new(Default::default()),
 		}
 	}
+
+	pub fn istio_workload(mtls: bool, default_alpns: Alpns) -> Self {
+		Self {
+			source: ServerTlsCertificateSource::IstioWorkload {
+				mtls,
+				default_alpns,
+			},
+			base_config: None,
+			inputs: None,
+			insecure_fallback_verifier: None,
+			per_profile_config: Arc::new(Default::default()),
+		}
+	}
+
 	/// config_for returns the appropriate config for the requested ALPN
 	/// If none is return, it means the certificates were invalid.
-	pub fn config_for(&self, tls: Option<&frontend::TLS>) -> anyhow::Result<Arc<ServerConfig>> {
+	pub async fn config_for(
+		&self,
+		tls: Option<&frontend::TLS>,
+		ca: Option<&Arc<CaClient>>,
+	) -> anyhow::Result<Arc<ServerConfig>> {
+		if let ServerTlsCertificateSource::IstioWorkload {
+			mtls,
+			default_alpns,
+		} = &self.source
+		{
+			let ca = ca.ok_or_else(|| anyhow!("CA is required for Istio workload TLS"))?;
+			let alpns = tls
+				.and_then(|t| t.alpn.clone())
+				.unwrap_or_else(|| default_alpns.clone());
+			let cert = ca.get_identity().await?;
+			return Ok(Arc::new(cert.server_config(alpns, *mtls)?));
+		}
+
 		let inputs = match self.inputs.as_ref() {
 			Some(i) => Arc::clone(i),
 			None => {
@@ -304,6 +347,12 @@ impl ServerTLSConfig {
 	}
 
 	pub fn allow_insecure_mtls(&self) -> bool {
+		if matches!(
+			self.source,
+			ServerTlsCertificateSource::IstioWorkload { mtls: true, .. }
+		) {
+			return false;
+		}
 		self
 			.inputs
 			.as_ref()
@@ -311,6 +360,12 @@ impl ServerTLSConfig {
 	}
 
 	pub fn include_src_identity_for_connection(&self, conn: &rustls::ServerConnection) -> bool {
+		if matches!(
+			self.source,
+			ServerTlsCertificateSource::IstioWorkload { mtls: true, .. }
+		) {
+			return true;
+		}
 		if !self.allow_insecure_mtls() {
 			return true;
 		}
@@ -474,13 +529,17 @@ pub enum ListenerProtocol {
 }
 
 impl ListenerProtocol {
-	pub fn tls(
+	pub async fn tls(
 		&self,
 		tls: Option<&frontend::TLS>,
+		ca: Option<&Arc<CaClient>>,
 	) -> Option<anyhow::Result<Arc<rustls::ServerConfig>>> {
 		match self {
-			ListenerProtocol::HTTPS(t) => Some(t.config_for(tls)),
-			ListenerProtocol::TLS(t) => t.as_ref().map(|t| t.config_for(tls)),
+			ListenerProtocol::HTTPS(t) => Some(t.config_for(tls, ca).await),
+			ListenerProtocol::TLS(t) => match t.as_ref() {
+				Some(t) => Some(t.config_for(tls, ca).await),
+				None => None,
+			},
 			_ => None,
 		}
 	}

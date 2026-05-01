@@ -154,6 +154,11 @@ message Backend {
 }
 
 message TLSConfig {
+  enum CertificateSource {
+    INLINE = 0;
+    ISTIO_WORKLOAD = 1;
+  }
+
   enum TLSVersion {
     TLS_VERSION_UNSPECIFIED = 0;
 
@@ -214,6 +219,7 @@ message TLSConfig {
   // Key exchange groups allowed for negotiating TLS.
   // If empty, defaults are used.
   repeated KeyExchangeGroup key_exchange_groups = 8;
+  CertificateSource certificate_source = 9;
 }
 
 enum Protocol {

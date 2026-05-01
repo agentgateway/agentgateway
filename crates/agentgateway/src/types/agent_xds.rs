@@ -243,6 +243,16 @@ fn server_tls_config_from_proto(
 		convert_tls_key_exchange_groups(&value.key_exchange_groups, diagnostics);
 
 	let mtls_mode = proto::agent::tls_config::MtlsMode::try_from(value.mtls_mode).unwrap_or_default();
+	let certificate_source =
+		proto::agent::tls_config::CertificateSource::try_from(value.certificate_source)
+			.unwrap_or_default();
+
+	if certificate_source == proto::agent::tls_config::CertificateSource::IstioWorkload {
+		return ServerTLSConfig::istio_workload(
+			mtls_mode == proto::agent::tls_config::MtlsMode::Strict,
+			default_alpns,
+		);
+	}
 
 	match ServerTLSConfig::from_pem_with_profile(
 		value.cert.clone(),
