@@ -512,6 +512,15 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	// Use NewManyCollection (TransformationMulti) so the element type is *plugins.RouteAttachment,
 	// matching the IndexCollection[..., *RouteAttachment] expected by WithListenerSetAttachments.
 	lsAttachmentsSrc := krt.NewManyCollection(s.agwCollections.ListenerSets, func(_ krt.HandlerContext, ls *gwv1.ListenerSet) []*plugins.RouteAttachment {
+		p := ls.Spec.ParentRef
+		// Only process ListenerSets whose ParentRef resolves to a Gateway.
+		// This mirrors the filter in translator.ListenerSetBuilder.
+		if translator.NormalizeReference(p.Group, p.Kind, wellknown.GatewayGVK) != wellknown.GatewayGVK {
+			return nil
+		}
+		if p.Name == "" {
+			return nil
+		}
 		parentNs := string(ptr.OrDefault(ls.Spec.ParentRef.Namespace, gwv1.Namespace(ls.Namespace)))
 		gw := types.NamespacedName{Namespace: parentNs, Name: string(ls.Spec.ParentRef.Name)}
 		return []*plugins.RouteAttachment{{

@@ -86,7 +86,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 				}
 				parentNs := string(ptr.OrDefault(ls.Spec.ParentRef.Namespace, gwv1.Namespace(ls.Namespace)))
 				parentName := string(ls.Spec.ParentRef.Name)
-				if sectionName != nil {
+				if sectionName != nil && *sectionName != "" {
 					// Caller named a specific listener within the set.
 					return []*api.PolicyTarget{{
 						Kind: utils.GatewayTarget(parentNs, parentName, sectionName),
@@ -144,7 +144,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 					parentNs := string(ptr.OrDefault(ls.Spec.ParentRef.Namespace, gwv1.Namespace(ls.Namespace)))
 					parentName := string(ls.Spec.ParentRef.Name)
 					var policyTargets []*api.PolicyTarget
-					if sectionName != nil {
+					if sectionName != nil && *sectionName != "" {
 						policyTargets = []*api.PolicyTarget{{
 							Kind: utils.GatewayTarget(parentNs, parentName, sectionName),
 						}}
