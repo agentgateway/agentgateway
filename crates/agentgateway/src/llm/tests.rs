@@ -691,6 +691,108 @@ async fn test_passthrough() {
 	);
 }
 
+#[tokio::test]
+async fn openai_provider_normalizes_max_tokens_before_forwarding() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.openai.com", 443)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "gpt-5.4",
+				"max_tokens": 1024,
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success(forwarded, llm_request) = provider
+		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("OpenAI completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert!(forwarded_json.get("max_tokens").is_none());
+	assert_eq!(forwarded_json["max_completion_tokens"], json!(1024));
+	assert_eq!(llm_request.params.max_tokens, Some(1024));
+}
+
+#[tokio::test]
+async fn openai_provider_preserves_max_tokens_for_non_gpt_models() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("localhost", 11434)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "llama3.1",
+				"max_tokens": 1024,
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success(forwarded, llm_request) = provider
+		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("OpenAI-compatible completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(forwarded_json["max_tokens"], json!(1024));
+	assert!(forwarded_json.get("max_completion_tokens").is_none());
+	assert_eq!(llm_request.params.max_tokens, Some(1024));
+}
+
+#[test]
+fn openai_token_limit_normalization_keeps_explicit_max_completion_tokens() {
+	let mut request: types::completions::Request = serde_json::from_value(json!({
+		"model": "gpt-5.4",
+		"max_tokens": 1024,
+		"max_completion_tokens": 2048,
+		"messages": [{"role": "user", "content": "hello"}]
+	}))
+	.expect("valid completions request");
+
+	request.normalize_openai_token_limit();
+
+	assert_eq!(request.max_tokens, None);
+	assert_eq!(request.max_completion_tokens, Some(2048));
+}
+
 #[test]
 fn test_adaptive_thinking_without_effort_maps_to_high_reasoning_effort() {
 	let request: types::messages::Request = serde_json::from_value(json!({

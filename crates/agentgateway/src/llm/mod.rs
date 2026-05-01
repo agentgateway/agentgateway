@@ -592,6 +592,9 @@ impl AIProvider {
 				rest: Default::default(),
 			});
 		}
+		if matches!(self, AIProvider::OpenAI(_)) {
+			req.normalize_openai_token_limit();
+		}
 		self
 			.process_request(
 				backend_info,
