@@ -507,6 +507,26 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 
 	referenceIndex := plugins.BuildReferenceIndex(ancestorCollection, routeAttachmentsIndex, referenceTypes)
 
+	lsAttachments := krt.NewManyCollection(s.agwCollections.ListenerSets, func(_ krt.HandlerContext, ls *gwv1.ListenerSet) []*plugins.RouteAttachment {
+		parentNs := string(ptr.OrDefault(ls.Spec.ParentRef.Namespace, gwv1.Namespace(ls.Namespace)))
+		gw := types.NamespacedName{Namespace: parentNs, Name: string(ls.Spec.ParentRef.Name)}
+		return []*plugins.RouteAttachment{{
+			From: utils.TypedNamespacedName{
+				Kind:           wellknown.ListenerSetGVK.Kind,
+				NamespacedName: types.NamespacedName{Namespace: ls.GetNamespace(), Name: ls.GetName()},
+			},
+			To: utils.TypedNamespacedName{
+				Kind:           wellknown.GatewayGVK.Kind,
+				NamespacedName: gw,
+			},
+			Gateway: gw,
+		}}
+	}, krtopts.ToOptions("ListenerSetAttachmentsSource")...)
+	lsAttachmentsIdx := krt.NewIndex(lsAttachments, "ls-from", func(o *plugins.RouteAttachment) []utils.TypedNamespacedName {
+		return []utils.TypedNamespacedName{o.From}
+	}).AsCollection(append(krtopts.ToOptions("ListenerSetAttachments"), utils.TypedNamespacedNameIndexCollectionFunc)...)
+	referenceIndex = referenceIndex.WithListenerSetAttachments(lsAttachmentsIdx)
+
 	// Phase 1: Collect policy references (e.g. ext_proc backendRefs) BEFORE building
 	// policies. This ensures BackendTLSPolicy can look up gateways for backends that
 	// are only reachable via PolicyAttachments (like ext_proc processor Services).
