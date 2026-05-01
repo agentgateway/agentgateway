@@ -613,6 +613,12 @@ impl ListenerName {
 			port: None,
 		}
 	}
+	pub fn as_listenerset_target_ref(&self) -> Option<PolicyTargetRef<'_>> {
+		self.listener_set.as_ref().map(|ls| PolicyTargetRef::ListenerSet {
+			name: ls.name.as_ref(),
+			namespace: ls.namespace.as_ref(),
+		})
+	}
 }
 
 impl From<ListenerName> for ListenerTarget {
@@ -2085,6 +2091,7 @@ pub enum PolicyTarget {
 	Gateway(ListenerTarget),
 	Route(RouteTarget),
 	Backend(BackendTarget),
+	ListenerSet(ResourceName),
 }
 
 impl PolicyTarget {
@@ -2117,6 +2124,10 @@ pub enum PolicyTargetRef<'a> {
 		kind: Option<&'a str>,
 	},
 	Backend(BackendTargetRef<'a>),
+	ListenerSet {
+		name: &'a str,
+		namespace: &'a str,
+	},
 }
 
 impl<'a> From<&'a PolicyTarget> for PolicyTargetRef<'a> {
@@ -2135,6 +2146,10 @@ impl<'a> From<&'a PolicyTarget> for PolicyTargetRef<'a> {
 				kind: v.kind.as_deref(),
 			},
 			PolicyTarget::Backend(v) => PolicyTargetRef::Backend(v.into()),
+			PolicyTarget::ListenerSet(v) => PolicyTargetRef::ListenerSet {
+				name: v.name.as_ref(),
+				namespace: v.namespace.as_ref(),
+			},
 		}
 	}
 }
