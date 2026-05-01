@@ -1760,8 +1760,8 @@ mod tests {
 	use super::*;
 	use crate::telemetry::log::OrderedStringMap;
 	use crate::types::agent::{
-		BackendTarget, BindProtocol, ListenerSetTarget, ListenerProtocol, ListenerSet, PolicyType,
-		TunnelProtocol,
+		BackendTarget, BindProtocol, ListenerProtocol, ListenerSet, ListenerSetTarget, PolicyType,
+		ResourceName, TunnelProtocol,
 	};
 	use crate::types::frontend::LoggingPolicy;
 
