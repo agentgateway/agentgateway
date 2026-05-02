@@ -1124,6 +1124,102 @@ fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 	assert_eq!(req.uri().query(), Some("trace=repro"));
 }
 
+fn llm_request_for_path(request_model: &str) -> LLMRequest {
+	LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Messages,
+		request_model: request_model.into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+	}
+}
+
+fn assert_prefixed_host_override_path(
+	provider: AIProvider,
+	request_model: &str,
+	expected_path: &str,
+	expected_query: Option<&str>,
+) {
+	let llm_request = llm_request_for_path(request_model);
+	let mut req = crate::http::tests_common::request(
+		"https://proxy.example.com/v1/messages?trace=repro",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Messages,
+			Some(&llm_request),
+			None,
+			Some("/proxy/"),
+			true,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), expected_path);
+	assert_eq!(req.uri().query(), expected_query);
+}
+
+#[test]
+fn setup_request_gemini_applies_path_prefix_with_host_override() {
+	assert_prefixed_host_override_path(
+		AIProvider::Gemini(gemini::Provider { model: None }),
+		"gemini-2.5-pro",
+		"/proxy/v1beta/openai/chat/completions",
+		Some("trace=repro"),
+	);
+}
+
+#[test]
+fn setup_request_vertex_applies_path_prefix_with_host_override() {
+	assert_prefixed_host_override_path(
+		AIProvider::Vertex(vertex::Provider {
+			model: None,
+			region: Some(strng::new("us-central1")),
+			project_id: strng::new("example-project"),
+		}),
+		"gemini-2.5-pro",
+		"/proxy/v1/projects/example-project/locations/us-central1/endpoints/openapi/chat/completions",
+		Some("trace=repro"),
+	);
+}
+
+#[test]
+fn setup_request_bedrock_applies_path_prefix_with_host_override() {
+	assert_prefixed_host_override_path(
+		AIProvider::Bedrock(bedrock::Provider {
+			model: None,
+			region: strng::new("us-east-1"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+		}),
+		"anthropic.claude-3-5-sonnet-20241022-v2:0",
+		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
+		Some("trace=repro"),
+	);
+}
+
+#[test]
+fn setup_request_azure_applies_path_prefix_with_host_override() {
+	assert_prefixed_host_override_path(
+		AIProvider::Azure(azure::Provider {
+			model: None,
+			resource_name: strng::new("example"),
+			resource_type: azure::AzureResourceType::OpenAI,
+			api_version: Some(strng::new("2024-02-15-preview")),
+			project_name: None,
+			cached_cred: Default::default(),
+		}),
+		"gpt-4.1",
+		"/proxy/openai/deployments/gpt-4.1/chat/completions",
+		Some("api-version=2024-02-15-preview&trace=repro"),
+	);
+}
+
 #[test]
 fn completions_response_missing_message_and_usage_fields() {
 	// Gemini's OpenAI-compat endpoint can omit `message` from choices and

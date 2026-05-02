@@ -380,14 +380,22 @@ impl AIProvider {
 	fn set_path_and_query(uri: &mut http::uri::Parts, path: &str) -> anyhow::Result<()> {
 		let query = uri.path_and_query.as_ref().and_then(|p| p.query());
 		if let Some(query) = query {
+			let separator = if path.contains('?') { "&" } else { "?" };
 			uri.path_and_query = Some(PathAndQuery::from_maybe_shared(format!(
-				"{}?{}",
-				path, query
+				"{}{}{}",
+				path, separator, query
 			))?);
 		} else {
 			uri.path_and_query = Some(PathAndQuery::try_from(path)?);
 		};
 		Ok(())
+	}
+
+	fn with_path_prefix(path: &str, path_prefix: Option<&str>) -> String {
+		match path_prefix {
+			Some(prefix) => format!("{}{}", prefix.trim_end_matches('/'), path),
+			None => path.to_string(),
+		}
 	}
 
 	pub fn set_default_path(
@@ -402,11 +410,7 @@ impl AIProvider {
 			return Ok(());
 		}
 
-		let supports_path_prefix = matches!(
-			self,
-			AIProvider::OpenAI(_) | AIProvider::Anthropic(_) | AIProvider::Copilot(_)
-		);
-		if has_host_override && !(supports_path_prefix && path_prefix.is_some()) {
+		if has_host_override && path_prefix.is_none() {
 			return Ok(());
 		}
 
@@ -453,7 +457,8 @@ impl AIProvider {
 			}),
 			AIProvider::Gemini(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
-					Self::set_path_and_query(uri, gemini::path(route_type))?;
+					let path = Self::with_path_prefix(gemini::path(route_type), path_prefix);
+					Self::set_path_and_query(uri, &path)?;
 					Ok(())
 				})?;
 				Ok(())
@@ -464,7 +469,8 @@ impl AIProvider {
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
 						let path = provider.get_path_for_model(route_type, request_model, streaming);
-						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+						let path = Self::with_path_prefix(&path, path_prefix);
+						Self::set_path_and_query(uri, &path)?;
 						Ok(())
 					})?;
 					Ok(())
@@ -475,7 +481,8 @@ impl AIProvider {
 					if let Some(l) = llm_request {
 						let path =
 							provider.get_path_for_route(route_type, l.streaming, l.request_model.as_str());
-						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+						let path = Self::with_path_prefix(&path, path_prefix);
+						Self::set_path_and_query(uri, &path)?;
 					}
 					Ok(())
 				})?;
@@ -485,7 +492,8 @@ impl AIProvider {
 				http::modify_uri(req, |uri| {
 					if let Some(l) = llm_request {
 						let path = provider.get_path_for_model(route_type, l.request_model.as_str());
-						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+						let path = Self::with_path_prefix(&path, path_prefix);
+						Self::set_path_and_query(uri, &path)?;
 					}
 					Ok(())
 				})?;
