@@ -10,13 +10,15 @@
 #
 # Child team1/svc1:
 #   - Route /anything/team1/foo to team1/svc1
-#   - No parentRefs (implicit delegation): attaches to BOTH parents
+#   - No parentRefs (implicit delegation): attaches to BOTH parents.
 #
 # Child team2/svc2:
 #   - Route /anything/team2/foo to team2/svc2
-#   - Explicit parent infra/parent1 only
-#   - Request via parent2.com/anything/team2/foo must fail because
-#     svc2 did not opt-in to parent2.
+#   - Explicit parent infra/parent1.
+#   - The explicit parentRef scopes which parent's status reflects the
+#     attachment, but the child is reachable at request time through any
+#     parent that targets the same gateway and references the shared
+#     team2/* route-group.
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
