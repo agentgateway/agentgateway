@@ -467,6 +467,21 @@ impl RemoteRateLimit {
 	}
 }
 
+impl crate::store::RequestPolicyTrait for RemoteRateLimit {
+	async fn apply(
+		&self,
+		client: &PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		req: &mut Request,
+	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
+		Ok(self.check(client.clone(), req).await?)
+	}
+
+	fn expressions(&self) -> impl Iterator<Item = &Expression> {
+		RemoteRateLimit::expressions(self)
+	}
+}
+
 fn process_headers(hm: &mut HeaderMap, headers: Vec<proto::HeaderValue>) {
 	for h in headers {
 		let _ = envoy_proto_common::apply_header_value(hm, &h);

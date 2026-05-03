@@ -31,6 +31,7 @@ use crate::http::tests_common::*;
 use crate::http::{Body, Response};
 use crate::llm::{AIProvider, openai};
 use crate::proxy::request_builder::RequestBuilder;
+use crate::test_helpers::extauthmock;
 use crate::test_helpers::oteltracemock;
 use crate::test_helpers::proxymock::*;
 use crate::types::agent::{
@@ -1650,6 +1651,87 @@ async fn header_manipulation() {
 	assert_eq!(
 		body.headers.get("x-backend-xfm-req").unwrap().as_bytes(),
 		b"backend-xfm-req"
+	);
+}
+
+#[tokio::test]
+async fn gateway_ext_authz_response_headers_are_preserved() {
+	struct AddResponseHeader;
+
+	#[async_trait::async_trait]
+	impl extauthmock::Handler for AddResponseHeader {
+		async fn check(
+			&mut self,
+			_request: &crate::http::ext_authz::proto::CheckRequest,
+		) -> Result<crate::http::ext_authz::proto::CheckResponse, tonic::Status> {
+			use crate::http::ext_authz::proto::check_response::HttpResponse;
+			use crate::http::ext_authz::proto::{HeaderValue, HeaderValueOption, OkHttpResponse};
+
+			extauthmock::allow_response(Some(HttpResponse::OkResponse(OkHttpResponse {
+				headers: vec![],
+				headers_to_remove: vec![],
+				response_headers_to_add: vec![HeaderValueOption {
+					header: Some(HeaderValue {
+						key: "x-gateway-authz-response".to_string(),
+						value: "allowed".to_string(),
+						raw_value: vec![],
+					}),
+					append: Some(false),
+					append_action: 0,
+				}],
+				query_parameters_to_set: vec![],
+				query_parameters_to_remove: vec![],
+				..Default::default()
+			})))
+		}
+	}
+
+	let (mock, mut bind, io) = basic_setup().await;
+	let authz = extauthmock::ExtAuthMock::new(|| AddResponseHeader)
+		.spawn()
+		.await;
+	bind
+		.attach_gateway_policy(json!({
+			"extAuthz": {
+				"host": authz.address,
+			},
+		}))
+		.await;
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("x-gateway-authz-response"), "allowed");
+	assert_eq!(read_body(res.into_body()).await.method, Method::GET);
+	drop(mock);
+}
+
+#[tokio::test]
+async fn gateway_transformation_response_headers_are_applied() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_gateway_policy(json!({
+			"transformations": {
+				"request": {
+					"set": {
+						"x-gateway-xfm-req": "'gateway-request'",
+					},
+				},
+				"response": {
+					"add": {
+						"x-gateway-xfm-resp": "'gateway-response'",
+					},
+				},
+			},
+		}))
+		.await;
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("x-gateway-xfm-resp"), "gateway-response");
+	let body = read_body(res.into_body()).await;
+	assert_eq!(
+		body.headers.get("x-gateway-xfm-req").unwrap().as_bytes(),
+		b"gateway-request"
 	);
 }
 

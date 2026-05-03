@@ -266,6 +266,21 @@ impl ExtProc {
 	}
 }
 
+impl crate::store::RequestPolicyTrait for ExtProc {
+	async fn apply(
+		&self,
+		_client: &PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		_req: &mut http::Request,
+	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
+		panic!("ExtProc must be selected and built into ExtProcRequest; do not apply ExtProc directly")
+	}
+
+	fn expressions(&self) -> impl Iterator<Item = &Expression> {
+		ExtProc::expressions(self)
+	}
+}
+
 #[derive(Debug)]
 pub struct ExtProcRequest {
 	ext_proc: Option<ExtProcInstance>,

@@ -2853,13 +2853,15 @@ pub(crate) async fn split_policies(
 		route_policies.push(TrafficPolicy::ExtAuthz(p.into_request_policy()?))
 	}
 	if let Some(p) = ext_proc {
-		route_policies.push(TrafficPolicy::ExtProc(p))
+		route_policies.push(TrafficPolicy::ExtProc(RequestPolicy::single(p)))
 	}
 	if !local_rate_limit.is_empty() {
-		route_policies.push(TrafficPolicy::LocalRateLimit(local_rate_limit))
+		route_policies.push(TrafficPolicy::LocalRateLimit(RequestPolicy::single(
+			local_rate_limit,
+		)))
 	}
 	if let Some(p) = remote_rate_limit {
-		route_policies.push(TrafficPolicy::RemoteRateLimit(p))
+		route_policies.push(TrafficPolicy::RemoteRateLimit(RequestPolicy::single(p)))
 	}
 
 	// Traffic policies

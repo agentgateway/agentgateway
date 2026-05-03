@@ -157,21 +157,29 @@ async fn apply_request_policies(
 		.ext_authz
 		.apply_without_response("ext authz", c, l, req, rp.headers())
 		.await?;
-	if let Some(j) = &pol.authorization {
-		j.apply(req)
-			.map_err(|_| ProxyResponse::from(ProxyError::AuthorizationFailed))?;
-	}
 
-	for lrl in &pol.local_rate_limit {
-		lrl.check_request()?;
-		dtrace::snapshot!(Request, "local rate limit", &req);
-	}
+	pol
+		.authorization
+		.apply_without_response("authorization", c, l, req, rp.headers())
+		.await?;
 
-	if let Some(rrl) = &pol.remote_rate_limit {
-		rrl.check(c.clone(), req).await?.apply(rp.headers())?;
-		dtrace::snapshot!(Request, "remote rate limit", &req);
-	}
+	rp.llm_request_policies.local_rate_limit = pol
+		.local_rate_limit
+		.apply_selected("local rate limit", c, l, req, rp.headers())
+		.await?;
 
+	rp.llm_request_policies.remote_rate_limit = pol
+		.remote_rate_limit
+		.apply_selected("remote rate limit", c, l, req, rp.headers())
+		.await?;
+
+	// ExtProc uses RequestPolicy for conditional selection and CEL registration only.
+	// The selected config is built into per-request state, which must be retained for
+	// the response mutation phase instead of applying ExtProc directly.
+	rp.ext_proc = pol
+		.ext_proc
+		.select("ext proc", req)
+		.map(|p| p.build(c.clone()));
 	if let Some(x) = rp.ext_proc.as_mut() {
 		x.mutate_request(req).await?.apply(rp.headers())?;
 		dtrace::snapshot!(Request, "ext proc", &req);
@@ -308,44 +316,58 @@ async fn apply_gateway_policies(
 	client: PolicyClient,
 	l: &mut RequestLog,
 	req: &mut Request,
-	ext_proc: Option<&mut ExtProcRequest>,
-	response_headers: &mut HeaderMap,
+	response_policies: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
-	let rh = response_headers;
 	let c = &client;
 	policies
 		.oidc
-		.apply_without_response("gateway oidc", c, l, req, rh)
+		.apply_without_response("gateway oidc", c, l, req, response_policies.headers())
 		.await?;
 	http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
 
 	policies
 		.jwt
-		.apply_without_response("gateway jwt", c, l, req, rh)
+		.apply_without_response("gateway jwt", c, l, req, response_policies.headers())
 		.await?;
 
 	policies
 		.basic_auth
-		.apply_without_response("gateway basic auth", c, l, req, rh)
+		.apply_without_response("gateway basic auth", c, l, req, response_policies.headers())
 		.await?;
 	policies
 		.api_key
-		.apply_without_response("gateway api key", c, l, req, rh)
+		.apply_without_response("gateway api key", c, l, req, response_policies.headers())
 		.await?;
 
 	policies
 		.ext_authz
-		.apply_without_response("gateway ext authz", c, l, req, rh)
+		.apply_without_response("gateway ext authz", c, l, req, response_policies.headers())
 		.await?;
 
-	if let Some(x) = ext_proc {
-		x.mutate_request(req).await?.apply(rh)?;
+	// ExtProc uses RequestPolicy for conditional selection and CEL registration only.
+	// The selected config is built into per-request state, which must be retained for
+	// the response mutation phase instead of applying ExtProc directly.
+	let mut ext_proc = policies
+		.ext_proc
+		.select("gateway ext proc", req)
+		.map(|p| p.build(client.clone()));
+	if let Some(x) = ext_proc.as_mut() {
+		x.mutate_request(req)
+			.await?
+			.apply(response_policies.headers())?;
 		dtrace::snapshot!(Request, "gateway ext proc", &req);
 	}
+	response_policies.gateway_ext_proc = ext_proc;
 
-	policies
+	response_policies.gateway_transformation = policies
 		.transformation
-		.apply_without_response("gateway transformation", c, l, req, rh)
+		.apply(
+			"gateway transformation",
+			c,
+			l,
+			req,
+			response_policies.headers(),
+		)
 		.await?;
 
 	Ok(())
@@ -358,7 +380,15 @@ async fn apply_llm_request_policies(
 	llm_req: &LLMRequest,
 	response_headers: &mut HeaderMap,
 ) -> Result<store::LLMResponsePolicies, ProxyResponse> {
-	for lrl in &policies.local_rate_limit {
+	let local_rate_limit = policies
+		.local_rate_limit
+		.as_deref()
+		.into_iter()
+		.flatten()
+		.filter(|rate_limit| rate_limit.spec.limit_type == http::localratelimit::RateLimitType::Tokens)
+		.cloned()
+		.collect::<Vec<_>>();
+	for lrl in &local_rate_limit {
 		lrl.check_llm_request(llm_req)?;
 	}
 	let (rl_resp, response) = if let Some(rrl) = &policies.remote_rate_limit {
@@ -373,7 +403,7 @@ async fn apply_llm_request_policies(
 	};
 	rl_resp.apply(response_headers)?;
 	Ok(store::LLMResponsePolicies {
-		local_rate_limit: policies.local_rate_limit.clone(),
+		local_rate_limit,
 		remote_rate_limit: response,
 		prompt_guard: policies
 			.llm
@@ -619,7 +649,7 @@ impl HTTPProxy {
 		log.bind_name = Some(bind_name.clone());
 		log.listener_name = Some(selected_listener.name.clone());
 
-		let mut gateway_policies = inputs
+		let gateway_policies = inputs
 			.stores
 			.read_binds()
 			.gateway_policies(&selected_listener.name);
@@ -628,18 +658,12 @@ impl HTTPProxy {
 		// (for logging, etc) and also after we register the expressions since new fields may be available.
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
-		let mut response_headers = HeaderMap::new();
-		let mut maybe_gateway_ext_proc = gateway_policies
-			.ext_proc
-			.take()
-			.map(|c| c.build(self.policy_client()));
 		apply_gateway_policies(
 			&gateway_policies,
 			self.policy_client(),
 			log,
 			&mut req,
-			maybe_gateway_ext_proc.as_mut(),
-			&mut response_headers,
+			response_policies,
 		)
 		.await
 		.snapshot_on_err(log, &mut req)?;
@@ -693,7 +717,7 @@ impl HTTPProxy {
 			.map(|route| route.inline_policies.as_slice())
 			.collect::<Vec<_>>();
 
-		let mut route_policies = inputs
+		let route_policies = inputs
 			.stores
 			.read_binds()
 			.route_policies(&route_path, &route_inline_policies);
@@ -702,15 +726,9 @@ impl HTTPProxy {
 		log.retry_backoff = route_policies.retry.as_ref().and_then(|r| r.backoff);
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
-		let maybe_ext_proc = route_policies
-			.ext_proc
-			.take()
-			.map(|c| c.build(self.policy_client()));
 		// Others are set only when they have gotten to the appropriate phase of the request, so we simulate
-		// a middle-ware style approach where if the request side never runs, neithe does the response side.
+		// a middleware-style approach where if the request side never runs, neither does the response side.
 		response_policies.timeout = route_policies.timeout.clone();
-		response_policies.ext_proc = maybe_ext_proc;
-		response_policies.gateway_ext_proc = maybe_gateway_ext_proc;
 
 		apply_request_policies(
 			&route_policies,
@@ -775,7 +793,14 @@ impl HTTPProxy {
 
 		const MAX_BUFFERED_BYTES: usize = 64 * 1024;
 		let retries = route_policies.retry.clone();
-		let late_route_policies: Arc<LLMRequestPolicies> = Arc::new(route_policies.into());
+
+		// LLM token rate limiting reuses the rate-limit policy selected above in the normal
+		// request-policy flow. Conditional rate-limit expressions are evaluated only once there;
+		// the LLM path must not re-run conditions against the provider-specific rewritten request.
+		let mut llm_request_policies = std::mem::take(&mut response_policies.llm_request_policies);
+		llm_request_policies.llm = route_policies.llm.clone();
+		let llm_request_policies = Arc::new(llm_request_policies);
+
 		// attempts is the total number of attempts, not the retries
 		let attempts = retries.as_ref().map(|r| r.attempts.get() + 1).unwrap_or(1);
 		let retry_backoff = retries.as_ref().and_then(|r| r.backoff);
@@ -803,7 +828,7 @@ impl HTTPProxy {
 					.attempt_upstream(
 						log,
 						&mut req_upgrade,
-						late_route_policies,
+						llm_request_policies,
 						&selected_backend,
 						backend_policies,
 						response_policies,
@@ -839,7 +864,7 @@ impl HTTPProxy {
 				.attempt_upstream(
 					log,
 					&mut req_upgrade,
-					late_route_policies.clone(),
+					llm_request_policies.clone(),
 					&selected_backend,
 					backend_policies.clone(),
 					response_policies,
@@ -2355,6 +2380,9 @@ struct ResponsePolicies {
 	response_headers: HeaderMap,
 	ext_proc: Option<ExtProcRequest>,
 	gateway_ext_proc: Option<ExtProcRequest>,
+	// Populated by the standard request-policy flow after conditional rate-limit policies are
+	// evaluated. The later LLM path uses these selected policies and does not re-evaluate conditions.
+	llm_request_policies: LLMRequestPolicies,
 	a2a_type: a2a::RequestType,
 }
 

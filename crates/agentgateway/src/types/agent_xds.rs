@@ -1576,11 +1576,15 @@ fn traffic_policy_from_proto(
 					tps::local_rate_limit::Type::Token => http::localratelimit::RateLimitType::Tokens,
 				},
 			};
-			TrafficPolicy::LocalRateLimit(vec![
+			// Yes, its single with a vec, because we originally supported multiple rate limit policies before
+			// we added the generic multiple support.
+			// If we end up adding "Multiple and execute all" to RequestPolicy, we could translate to that;
+			// until this, this is a single policy with multiple rules.
+			TrafficPolicy::LocalRateLimit(RequestPolicy::single(vec![
 				spec
 					.try_into()
 					.map_err(|e| ProtoError::Generic(format!("invalid rate limit: {e}")))?,
-			])
+			]))
 		},
 		Some(tps::Kind::ExtAuthz(ea)) => {
 			use proto::agent::traffic_policy_spec::external_auth;
@@ -1830,14 +1834,16 @@ fn traffic_policy_from_proto(
 				// Default to FailClosed (proto default is FAIL_CLOSED = 0)
 				_ => http::remoteratelimit::FailureMode::FailClosed,
 			};
-			TrafficPolicy::RemoteRateLimit(http::remoteratelimit::RemoteRateLimit {
-				domain: rrl.domain.clone(),
-				target: Arc::new(target),
-				// Not supported inline from xDS
-				policies: Vec::new(),
-				descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
-				failure_mode,
-			})
+			TrafficPolicy::RemoteRateLimit(RequestPolicy::single(
+				http::remoteratelimit::RemoteRateLimit {
+					domain: rrl.domain.clone(),
+					target: Arc::new(target),
+					// Not supported inline from xDS
+					policies: Vec::new(),
+					descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
+					failure_mode,
+				},
+			))
 		},
 		Some(tps::Kind::Csrf(csrf_spec)) => {
 			let additional_origins: std::collections::HashSet<String> =
@@ -1873,7 +1879,7 @@ fn traffic_policy_from_proto(
 					)
 				}
 			}
-			TrafficPolicy::ExtProc(http::ext_proc::ExtProc {
+			TrafficPolicy::ExtProc(RequestPolicy::single(http::ext_proc::ExtProc {
 				target: Arc::new(target),
 				// Not supported inline from xDS
 				policies: Vec::new(),
@@ -1916,7 +1922,7 @@ fn traffic_policy_from_proto(
 							}),
 					)
 				},
-			})
+			}))
 		},
 		Some(tps::Kind::RequestHeaderModifier(rhm)) => {
 			TrafficPolicy::RequestHeaderModifier(RequestPolicy::single(http::filters::HeaderModifier {
@@ -2600,6 +2606,9 @@ fn conditional_traffic_policy_to_policy(
 	// We can just check the type of the first one because we verified before they are all the same
 	match &policies[0].1.policy {
 		TrafficPolicy::ExtAuthz(_) => build!(ExtAuthz),
+		TrafficPolicy::ExtProc(_) => build!(ExtProc),
+		TrafficPolicy::LocalRateLimit(_) => build!(LocalRateLimit),
+		TrafficPolicy::RemoteRateLimit(_) => build!(RemoteRateLimit),
 		TrafficPolicy::JwtAuth(_) => build!(JwtAuth),
 		TrafficPolicy::Oidc(_) => build!(Oidc),
 		TrafficPolicy::BasicAuth(_) => build!(BasicAuth),
@@ -2937,6 +2946,47 @@ mod tests {
 		}) = policy.policy
 		else {
 			panic!("expected conditional request header modifier policy");
+		};
+		assert_eq!(policies.iter().count(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn test_targeted_policy_from_proto_conditional_rate_limit() -> Result<(), ProtoError> {
+		let local_rate_limit = || {
+			proto::agent::traffic_policy_spec::Kind::LocalRateLimit(
+				proto::agent::traffic_policy_spec::LocalRateLimit {
+					max_tokens: 10,
+					tokens_per_fill: 10,
+					fill_interval: Some(prost_types::Duration {
+						seconds: 1,
+						nanos: 0,
+					}),
+					r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Token as i32,
+				},
+			)
+		};
+		let policy = proto::agent::Policy {
+			key: "policy".to_string(),
+			name: None,
+			target: Some(test_policy_target()),
+			kind: Some(proto::agent::policy::Kind::Conditional(
+				proto::agent::ConditionalPolicies {
+					policies: vec![
+						conditional_traffic_policy("request.path == '/a'", local_rate_limit()),
+						conditional_traffic_policy("request.path == '/b'", local_rate_limit()),
+					],
+				},
+			)),
+		};
+
+		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default())?;
+		let PolicyType::Traffic(PhasedTrafficPolicy {
+			policy: TrafficPolicy::LocalRateLimit(policies),
+			..
+		}) = policy.policy
+		else {
+			panic!("expected conditional local rate limit policy");
 		};
 		assert_eq!(policies.iter().count(), 2);
 		Ok(())

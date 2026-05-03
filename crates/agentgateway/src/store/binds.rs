@@ -275,22 +275,25 @@ impl BackendPolicies {
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RoutePolicies {
-	#[serde(skip_serializing_if = "Vec::is_empty")]
-	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
-	pub remote_rate_limit: Option<remoteratelimit::RemoteRateLimit>,
-	pub authorization: Option<http::authorization::HTTPAuthorizationSet>,
+	pub local_rate_limit: RequestPolicy<Vec<http::localratelimit::RateLimit>>,
+	pub remote_rate_limit: RequestPolicy<remoteratelimit::RemoteRateLimit>,
+	pub authorization: RequestPolicy<HTTPAuthorizationSet>,
 	pub jwt: RequestPolicy<JwtAuthentication>,
 	pub oidc: RequestPolicy<oidc::OidcPolicy>,
 	pub basic_auth: RequestPolicy<http::basicauth::BasicAuthentication>,
 	pub api_key: RequestPolicy<http::apikey::APIKeyAuthentication>,
 	pub ext_authz: RequestPolicy<ext_authz::ExtAuthz>,
-	pub ext_proc: Option<ext_proc::ExtProc>,
+	pub ext_proc: RequestPolicy<ext_proc::ExtProc>,
 	pub transformation: RequestPolicy<http::transformation_cel::Transformation>,
-	pub llm: Option<Arc<llm::Policy>>,
 	pub csrf: RequestPolicy<http::csrf::Csrf>,
+	pub direct_response: RequestPolicy<filters::DirectResponse>,
 
+	pub llm: Option<Arc<llm::Policy>>,
+
+	// These both are not typical "policies" that are just applied; do not wrap in RequestPolicy
 	pub timeout: Option<timeout::Policy>,
 	pub retry: Option<retry::Policy>,
+
 	pub request_header_modifier: RequestPolicy<filters::HeaderModifier>,
 	pub response_header_modifier: ResponsePolicy<filters::HeaderModifier>,
 	pub request_redirect: RequestPolicy<filters::RequestRedirect>,
@@ -298,13 +301,12 @@ pub struct RoutePolicies {
 	pub hostname_rewrite: Option<agent::HostRedirectOverride>,
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub request_mirror: Vec<filters::RequestMirror>,
-	pub direct_response: RequestPolicy<filters::DirectResponse>,
 	pub cors: RequestPolicy<http::cors::Cors>,
 }
 
 #[derive(Debug, Default)]
 pub struct GatewayPolicies {
-	pub ext_proc: Option<ext_proc::ExtProc>,
+	pub ext_proc: RequestPolicy<ext_proc::ExtProc>,
 	pub oidc: RequestPolicy<oidc::OidcPolicy>,
 	pub jwt: RequestPolicy<JwtAuthentication>,
 	pub ext_authz: RequestPolicy<ext_authz::ExtAuthz>,
@@ -318,53 +320,24 @@ impl GatewayPolicies {
 		// TODO: make a self.expressions iterator
 		self.transformation.register_expressions(ctx);
 		self.ext_authz.register_expressions(ctx);
-		if let Some(extproc) = &self.ext_proc {
-			for expr in extproc.expressions() {
-				ctx.register_expression(expr);
-			}
-		}
+		self.ext_proc.register_expressions(ctx);
 	}
 }
 
 impl RoutePolicies {
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
+		self.authorization.register_expressions(ctx);
+		self.remote_rate_limit.register_expressions(ctx);
 		self.transformation.register_expressions(ctx);
 		self.ext_authz.register_expressions(ctx);
-		if let Some(rrl) = &self.remote_rate_limit {
-			for expr in rrl.expressions() {
-				ctx.register_expression(expr)
-			}
-		};
-		if let Some(rrl) = &self.authorization {
-			rrl.register(ctx)
-		};
-		if let Some(extproc) = &self.ext_proc {
-			for expr in extproc.expressions() {
-				ctx.register_expression(expr);
-			}
-		}
-	}
-}
-
-impl From<RoutePolicies> for LLMRequestPolicies {
-	fn from(value: RoutePolicies) -> Self {
-		LLMRequestPolicies {
-			remote_rate_limit: value.remote_rate_limit.clone(),
-			local_rate_limit: value
-				.local_rate_limit
-				.iter()
-				.filter(|r| r.spec.limit_type == http::localratelimit::RateLimitType::Tokens)
-				.cloned()
-				.collect(),
-			llm: value.llm.clone(),
-		}
+		self.ext_proc.register_expressions(ctx);
 	}
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct LLMRequestPolicies {
-	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
-	pub remote_rate_limit: Option<http::remoteratelimit::RemoteRateLimit>,
+	pub local_rate_limit: Option<Arc<Vec<http::localratelimit::RateLimit>>>,
+	pub remote_rate_limit: Option<Arc<http::remoteratelimit::RemoteRateLimit>>,
 	pub llm: Option<Arc<llm::Policy>>,
 }
 
@@ -695,33 +668,31 @@ impl Store {
 		for rule in rules {
 			match rule {
 				TrafficPolicy::LocalRateLimit(p) => {
-					if pol.local_rate_limit.is_empty() {
-						pol.local_rate_limit = p.clone();
-					}
+					pol.local_rate_limit.set_if_unset(p);
 				},
 				TrafficPolicy::ExtAuthz(p) => {
-					pol.ext_authz.set_policy_if_unset(p);
+					pol.ext_authz.set_if_unset(p);
 				},
 				TrafficPolicy::ExtProc(p) => {
-					pol.ext_proc.get_or_insert_with(|| p.clone());
+					pol.ext_proc.set_if_unset(p);
 				},
 				TrafficPolicy::RemoteRateLimit(p) => {
-					pol.remote_rate_limit.get_or_insert_with(|| p.clone());
+					pol.remote_rate_limit.set_if_unset(p);
 				},
 				TrafficPolicy::JwtAuth(p) => {
-					pol.jwt.set_policy_if_unset(p);
+					pol.jwt.set_if_unset(p);
 				},
 				TrafficPolicy::Oidc(p) => {
-					pol.oidc.set_policy_if_unset(p);
+					pol.oidc.set_if_unset(p);
 				},
 				TrafficPolicy::BasicAuth(p) => {
-					pol.basic_auth.set_policy_if_unset(p);
+					pol.basic_auth.set_if_unset(p);
 				},
 				TrafficPolicy::APIKey(p) => {
-					pol.api_key.set_policy_if_unset(p);
+					pol.api_key.set_if_unset(p);
 				},
 				TrafficPolicy::Transformation(p) => {
-					pol.transformation.set_policy_if_unset(p);
+					pol.transformation.set_if_unset(p);
 				},
 				TrafficPolicy::Authorization(p) => {
 					// Authorization policies merge, unlike others
@@ -731,7 +702,7 @@ impl Store {
 					pol.llm.get_or_insert_with(|| p.clone());
 				},
 				TrafficPolicy::Csrf(p) => {
-					pol.csrf.set_policy_if_unset(p);
+					pol.csrf.set_if_unset(p);
 				},
 
 				TrafficPolicy::Timeout(p) => {
@@ -741,16 +712,16 @@ impl Store {
 					pol.retry.get_or_insert_with(|| p.clone());
 				},
 				TrafficPolicy::RequestHeaderModifier(p) => {
-					pol.request_header_modifier.set_policy_if_unset(p);
+					pol.request_header_modifier.set_if_unset(p);
 				},
 				TrafficPolicy::ResponseHeaderModifier(p) => {
 					pol.response_header_modifier.set_if_unset(p);
 				},
 				TrafficPolicy::RequestRedirect(p) => {
-					pol.request_redirect.set_policy_if_unset(p);
+					pol.request_redirect.set_if_unset(p);
 				},
 				TrafficPolicy::UrlRewrite(p) => {
-					pol.url_rewrite.set_policy_if_unset(p);
+					pol.url_rewrite.set_if_unset(p);
 				},
 				TrafficPolicy::HostRewrite(p) => {
 					pol.hostname_rewrite.get_or_insert(*p);
@@ -761,15 +732,15 @@ impl Store {
 					}
 				},
 				TrafficPolicy::DirectResponse(p) => {
-					pol.direct_response.set_policy_if_unset(p);
+					pol.direct_response.set_if_unset(p);
 				},
 				TrafficPolicy::CORS(p) => {
-					pol.cors.set_policy_if_unset(p);
+					pol.cors.set_if_unset(p);
 				},
 			}
 		}
 		if !authz.is_empty() {
-			pol.authorization = Some(HTTPAuthorizationSet::new(authz.into()));
+			pol.authorization = RequestPolicy::single(HTTPAuthorizationSet::new(authz.into()));
 		}
 		dtrace::trace(|t| {
 			let s = serde_json::to_value(&pol).unwrap_or_default();
@@ -802,25 +773,25 @@ impl Store {
 		for rule in rules {
 			match rule {
 				TrafficPolicy::Oidc(p) => {
-					pol.oidc.set_policy_if_unset(p);
+					pol.oidc.set_if_unset(p);
 				},
 				TrafficPolicy::JwtAuth(p) => {
-					pol.jwt.set_policy_if_unset(p);
+					pol.jwt.set_if_unset(p);
 				},
 				TrafficPolicy::BasicAuth(p) => {
-					pol.basic_auth.set_policy_if_unset(p);
+					pol.basic_auth.set_if_unset(p);
 				},
 				TrafficPolicy::APIKey(p) => {
-					pol.api_key.set_policy_if_unset(p);
+					pol.api_key.set_if_unset(p);
 				},
 				TrafficPolicy::ExtAuthz(p) => {
-					pol.ext_authz.set_policy_if_unset(p);
+					pol.ext_authz.set_if_unset(p);
 				},
 				TrafficPolicy::ExtProc(p) => {
-					pol.ext_proc.get_or_insert_with(|| p.clone());
+					pol.ext_proc.set_if_unset(p);
 				},
 				TrafficPolicy::Transformation(p) => {
-					pol.transformation.set_policy_if_unset(p);
+					pol.transformation.set_if_unset(p);
 				},
 				other => {
 					warn!("unexpected gateway policy: {:?}", other);

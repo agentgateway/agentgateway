@@ -64,14 +64,18 @@ pub trait BackendPolicyTrait: Send + Sync + 'static {
 /// RequestPolicy is a wrapper around a request policy implementation to handle common construction
 /// and usage around conditional policies, etc.
 /// This is cheaply clone-able.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub enum RequestPolicy<T> {
-	#[default]
 	Empty,
 	Single(PolicyWithCondition<T>),
 	/// Multiple policies are run in order, and the first one that matches is used.
 	/// In the future, we *may* support running all matches instead of the first.
 	Multiple(Vec<PolicyWithCondition<T>>),
+}
+impl<T> Default for RequestPolicy<T> {
+	fn default() -> RequestPolicy<T> {
+		Self::Empty
+	}
 }
 
 impl<T> Clone for RequestPolicy<T> {
@@ -163,6 +167,7 @@ impl<T: RequestPolicyTrait> RequestPolicy<T> {
 		}
 		.iter()
 	}
+
 	pub(crate) fn register_expressions(&self, ctx: &mut ContextBuilder) {
 		for p in self.iter() {
 			if let Some(c) = p.condition.as_ref() {
@@ -174,25 +179,38 @@ impl<T: RequestPolicyTrait> RequestPolicy<T> {
 		}
 	}
 
-	pub fn set_if_unset(&mut self, pol: &Arc<T>) {
-		match self {
-			RequestPolicy::Empty => {
-				*self = RequestPolicy::Single(PolicyWithCondition {
-					pol: pol.clone(),
-					condition: None,
-				})
-			},
-			RequestPolicy::Single(_) => {},
-			RequestPolicy::Multiple(_) => {},
+	/// Selects the first matching policy without applying it.
+	///
+	/// This is for policies whose selected config must be turned into separate per-request state
+	/// before it can run. ExtProc uses this to select an `ExtProc`, build an `ExtProcRequest`,
+	/// and keep that request state for the response phase.
+	pub fn select(&self, name: &'static str, req: &crate::http::Request) -> Option<Arc<T>> {
+		for pol in self.iter() {
+			if let Some(cond) = &pol.condition {
+				let exec = crate::cel::Executor::new_request(req);
+				if !exec.eval_bool(cond.as_ref()) {
+					dtrace::pol_result!(
+						name,
+						dtrace::Info,
+						Skip,
+						"condition not met, skipping policy"
+					);
+					continue;
+				};
+			};
+			return Some(pol.pol.clone());
 		}
+		None
 	}
 
-	pub fn set_policy_if_unset(&mut self, policy: &RequestPolicy<T>) {
+	pub fn set_if_unset(&mut self, policy: &RequestPolicy<T>) {
 		if matches!(self, RequestPolicy::Empty) {
 			*self = policy.clone();
 		}
 	}
 
+	/// apply_without_response runs the request policy for policy types that do NOT implement response
+	/// policies.
 	pub async fn apply_without_response(
 		&self,
 		name: &'static str,
@@ -206,6 +224,20 @@ impl<T: RequestPolicyTrait> RequestPolicy<T> {
 			.await
 			.map(|_| ())
 	}
+
+	pub async fn apply_selected(
+		&self,
+		name: &'static str,
+		client: &PolicyClient,
+		log: &mut RequestLog,
+		req: &mut crate::http::Request,
+		response_headers: &mut HeaderMap,
+	) -> Result<Option<Arc<T>>, proxy::ProxyResponse> {
+		self
+			.apply_internal(name, client, log, req, response_headers)
+			.await
+	}
+
 	async fn apply_internal(
 		&self,
 		name: &'static str,
@@ -233,6 +265,7 @@ impl<T: RequestPolicyTrait> RequestPolicy<T> {
 				.await?
 				.apply(response_headers);
 			dtrace::snapshot!(Request, name, &req);
+			// Return the policy, for response handling.
 			// Conditions are ignored; we already evaluated them on the request side
 			// We do not allow response-side conditions
 			return res.map(|_| Some(pol.pol.to_owned()));
@@ -242,6 +275,7 @@ impl<T: RequestPolicyTrait> RequestPolicy<T> {
 }
 
 impl<T: RequestPolicyTrait + ResponsePolicyTrait> RequestPolicy<T> {
+	/// Apply applies request policies and returns back the RespnsePolicy to run the response side.
 	pub async fn apply(
 		&self,
 		name: &'static str,
