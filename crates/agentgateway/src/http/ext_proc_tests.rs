@@ -240,6 +240,83 @@ async fn dynamic_metadata() {
 	assert_eq!(body.as_ref(), b"");
 }
 
+#[derive(Debug, Default)]
+struct DynamicMetadataResponseExtProc {}
+
+#[async_trait::async_trait]
+impl Handler for DynamicMetadataResponseExtProc {
+	async fn handle_response_headers(
+		&mut self,
+		_headers: &HttpHeaders,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		use prost_wkt_types::Value;
+		use prost_wkt_types::value::Kind;
+
+		use crate::test_helpers::extprocmock::response_header_response_with_dynamic_metadata;
+
+		let metadata = prost_wkt_types::Struct {
+			fields: std::collections::HashMap::from([(
+				"resp_key".to_string(),
+				Value {
+					kind: Some(Kind::StringValue("resp_value".to_string())),
+				},
+			)]),
+		};
+		let _ = sender
+			.send(response_header_response_with_dynamic_metadata(
+				None, metadata,
+			))
+			.await;
+		Ok(())
+	}
+}
+
+/// verify response-phase dynamic_metadata is handled without errors.
+/// The metadata is extracted into response extensions and captured in ResponseSnapshot.extproc
+/// for use in logging CEL expressions. Response transformations run before ext_proc and
+/// therefore cannot observe response-phase metadata.
+#[tokio::test]
+async fn response_phase_dynamic_metadata() {
+	let mock = body_mock(b"").await;
+	let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
+		mock,
+		ext_proc::FailureMode::FailClosed,
+		ExtProcMock::new(DynamicMetadataResponseExtProc::default),
+		"{}",
+	)
+	.await;
+	let res = send_request(io, Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+}
+
+/// verify snapshot_response captures ExtProcDynamicMetadata from response extensions.
+#[test]
+fn snapshot_response_captures_extproc_metadata() {
+	use crate::cel::snapshot_response;
+
+	let mut resp = ::http::Response::builder()
+		.status(200)
+		.body(crate::http::Body::empty())
+		.unwrap();
+
+	let metadata = ExtProcDynamicMetadata(
+		[("resp_key".to_string(), serde_json::json!("resp_value"))]
+			.into_iter()
+			.collect(),
+	);
+	resp.extensions_mut().insert(metadata);
+
+	let snapshot = snapshot_response(&mut resp);
+	let extproc = snapshot
+		.extproc
+		.expect("snapshot_response should extract ExtProcDynamicMetadata from response extensions");
+	assert_eq!(
+		extproc.0.get("resp_key"),
+		Some(&serde_json::json!("resp_value"))
+	);
+}
+
 pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
 	mock: MockServer,
 	failure_mode: ext_proc::FailureMode,

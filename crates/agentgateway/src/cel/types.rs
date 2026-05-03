@@ -362,6 +362,9 @@ impl<'a> Executor<'a> {
 	}
 	fn set_response_snapshot(&mut self, resp: &'a ResponseSnapshot) {
 		self.response = Some(resp.into());
+		if resp.extproc.is_some() {
+			self.extproc = ExtensionOrDirect::Direct(resp.extproc.as_ref());
+		}
 	}
 	pub fn new_empty() -> Self {
 		Default::default()
@@ -568,6 +571,7 @@ pub fn snapshot_response(resp: &mut crate::http::Response) -> ResponseSnapshot {
 		headers: resp.headers().clone(),
 		body: resp.extensions_mut().remove::<BufferedBody>(),
 		recorded_body: resp.extensions_mut().remove::<RecordedBodyHandle>(),
+		extproc: resp.extensions_mut().remove::<ExtProcDynamicMetadata>(),
 	}
 }
 
@@ -656,6 +660,7 @@ pub struct ResponseSnapshot {
 	pub headers: http::HeaderMap,
 	pub body: Option<BufferedBody>,
 	pub recorded_body: Option<RecordedBodyHandle>,
+	pub extproc: Option<ExtProcDynamicMetadata>,
 }
 
 #[derive(Debug, Clone, Serialize, cel::DynamicType)]

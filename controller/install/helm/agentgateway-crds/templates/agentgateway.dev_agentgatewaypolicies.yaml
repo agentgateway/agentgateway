@@ -6152,6 +6152,41 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
+                      metadataContext:
+                        additionalProperties:
+                          additionalProperties:
+                            description: CELExpression represents a Common Expression
+                              Language (CEL) expression.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
+                          type: object
+                        description: |-
+                          `metadataContext` maps filter namespaces to attribute maps of CEL expressions.
+                          Maps to the `metadata_context.filter_metadata` field in ProcessingRequest.
+                        type: object
+                      requestAttributes:
+                        additionalProperties:
+                          description: CELExpression represents a Common Expression
+                            Language (CEL) expression.
+                          maxLength: 16384
+                          minLength: 1
+                          type: string
+                        description: |-
+                          `requestAttributes` maps attribute keys to CEL expressions evaluated against the request.
+                          Maps to the `attributes` field in the ext_proc ProcessingRequest for request-phase messages.
+                        type: object
+                      responseAttributes:
+                        additionalProperties:
+                          description: CELExpression represents a Common Expression
+                            Language (CEL) expression.
+                          maxLength: 16384
+                          minLength: 1
+                          type: string
+                        description: |-
+                          `responseAttributes` maps attribute keys to CEL expressions evaluated against the response.
+                          Maps to the `attributes` field in the ext_proc ProcessingRequest for response-phase messages.
+                        type: object
                     required:
                     - backendRef
                     type: object

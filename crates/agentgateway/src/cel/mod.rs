@@ -174,7 +174,7 @@ impl ContextBuilder {
 		&self,
 		res: &mut crate::http::Response,
 	) -> Option<ResponseSnapshot> {
-		if self.any_has(Attributes::Response) {
+		if self.any_has(Attributes::Response) || self.any_has(Attributes::Extproc) {
 			Some(types::snapshot_response(res))
 		} else {
 			None

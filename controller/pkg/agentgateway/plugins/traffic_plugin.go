@@ -980,16 +980,39 @@ func processExtProcPolicy(
 	basePolicyName string,
 	policy types.NamespacedName,
 ) (*api.Policy, error) {
-	var backendErr error
+	var errs []error
 	be, err := buildBackendRef(ctx, extProc.BackendRef, policy.Namespace)
 	if err != nil {
-		backendErr = fmt.Errorf("failed to build extProc: %v", err)
+		errs = append(errs, fmt.Errorf("failed to build extProc: %v", err))
 	}
 
 	spec := &api.TrafficPolicySpec_ExtProc{
 		Target: be,
 		// always use FAIL_CLOSED to prevent silent data loss when ExtProc is unavailable.
 		FailureMode: api.TrafficPolicySpec_ExtProc_FAIL_CLOSED,
+	}
+
+	if len(extProc.RequestAttributes) > 0 {
+		spec.RequestAttributes = castCELMap(extProc.RequestAttributes, func(k string, e shared.CELExpression) {
+			errs = append(errs, fmt.Errorf("extProc requestAttributes %q is not valid CEL: %s", k, e))
+		})
+	}
+
+	if len(extProc.ResponseAttributes) > 0 {
+		spec.ResponseAttributes = castCELMap(extProc.ResponseAttributes, func(k string, e shared.CELExpression) {
+			errs = append(errs, fmt.Errorf("extProc responseAttributes %q is not valid CEL: %s", k, e))
+		})
+	}
+
+	if len(extProc.MetadataContext) > 0 {
+		spec.MetadataContext = make(map[string]*api.TrafficPolicySpec_ExtProc_NamespacedMetadataContext, len(extProc.MetadataContext))
+		for ns, innerMap := range extProc.MetadataContext {
+			spec.MetadataContext[ns] = &api.TrafficPolicySpec_ExtProc_NamespacedMetadataContext{
+				Context: castCELMap(innerMap, func(k string, e shared.CELExpression) {
+					errs = append(errs, fmt.Errorf("extProc metadataContext[%s].%q is not valid CEL: %s", ns, k, e))
+				}),
+			}
+		}
 	}
 
 	extprocPolicy := &api.Policy{
@@ -1009,7 +1032,7 @@ func processExtProcPolicy(
 		"policy", basePolicyName,
 		"agentgateway_policy", extprocPolicy.Name)
 
-	return extprocPolicy, backendErr
+	return extprocPolicy, errors.Join(errs...)
 }
 
 func phase(policyPhase *agentgateway.PolicyPhase) api.TrafficPolicySpec_PolicyPhase {

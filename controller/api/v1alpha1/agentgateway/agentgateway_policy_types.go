@@ -1406,6 +1406,21 @@ type ExtProc struct {
 	// Supported types: `Service` and `Backend`.
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// `requestAttributes` maps attribute keys to CEL expressions evaluated against the request.
+	// Maps to the `attributes` field in the ext_proc ProcessingRequest for request-phase messages.
+	// +optional
+	RequestAttributes map[string]shared.CELExpression `json:"requestAttributes,omitempty"`
+
+	// `responseAttributes` maps attribute keys to CEL expressions evaluated against the response.
+	// Maps to the `attributes` field in the ext_proc ProcessingRequest for response-phase messages.
+	// +optional
+	ResponseAttributes map[string]shared.CELExpression `json:"responseAttributes,omitempty"`
+
+	// `metadataContext` maps filter namespaces to attribute maps of CEL expressions.
+	// Maps to the `metadata_context.filter_metadata` field in ProcessingRequest.
+	// +optional
+	MetadataContext map[string]map[string]shared.CELExpression `json:"metadataContext,omitempty"`
 }
 
 // +kubebuilder:validation:ExactlyOneOf=grpc;http
