@@ -10,6 +10,21 @@ use crate::proxy::dtrace;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
 
+pub trait HasExpressions: Send + Sync + 'static {
+	/// Returns a list of expressions that are used in this policy.
+	/// Any expressions used in the policy MUST be included here or they will be ignored.
+	/// Policies that are also response policies MUST include the response-side expressions as well.
+	fn expressions(&self) -> impl Iterator<Item = &Expression> {
+		std::iter::empty()
+	}
+}
+
+impl<T: RequestPolicyTrait> HasExpressions for T {
+	fn expressions(&self) -> impl Iterator<Item = &Expression> {
+		RequestPolicyTrait::expressions(self)
+	}
+}
+
 /// Request policies are policies that run on the request side. These will run exactly once per request,
 /// and are not repeated on retries.
 /// Policies that need to do response-time processing will additionally be called on the response phase
@@ -117,7 +132,7 @@ impl<T: Serialize> Serialize for RequestPolicy<T> {
 	}
 }
 
-impl<T: RequestPolicyTrait> RequestPolicy<T> {
+impl<T> RequestPolicy<T> {
 	pub fn single(pol: T) -> Self {
 		RequestPolicy::Single(PolicyWithCondition {
 			pol: Arc::new(pol),
@@ -168,17 +183,6 @@ impl<T: RequestPolicyTrait> RequestPolicy<T> {
 		.iter()
 	}
 
-	pub(crate) fn register_expressions(&self, ctx: &mut ContextBuilder) {
-		for p in self.iter() {
-			if let Some(c) = p.condition.as_ref() {
-				ctx.register_expression(c)
-			}
-			for expr in p.pol.expressions() {
-				ctx.register_expression(expr)
-			}
-		}
-	}
-
 	/// Selects the first matching policy without applying it.
 	///
 	/// This is for policies whose selected config must be turned into separate per-request state
@@ -208,7 +212,22 @@ impl<T: RequestPolicyTrait> RequestPolicy<T> {
 			*self = policy.clone();
 		}
 	}
+}
 
+impl<T: HasExpressions> RequestPolicy<T> {
+	pub(crate) fn register_expressions(&self, ctx: &mut ContextBuilder) {
+		for p in self.iter() {
+			if let Some(c) = p.condition.as_ref() {
+				ctx.register_expression(c)
+			}
+			for expr in p.pol.expressions() {
+				ctx.register_expression(expr)
+			}
+		}
+	}
+}
+
+impl<T: RequestPolicyTrait> RequestPolicy<T> {
 	/// apply_without_response runs the request policy for policy types that do NOT implement response
 	/// policies.
 	pub async fn apply_without_response(
@@ -225,6 +244,7 @@ impl<T: RequestPolicyTrait> RequestPolicy<T> {
 			.map(|_| ())
 	}
 
+	/// apply_selected runs the request policy and returns the policy that was run.
 	pub async fn apply_selected(
 		&self,
 		name: &'static str,

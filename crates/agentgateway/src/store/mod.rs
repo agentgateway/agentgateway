@@ -20,7 +20,7 @@ pub use discovery::{
 };
 pub use policy::{
 	BackendPolicy, BackendPolicyTrait, RequestPolicy, RequestPolicyTrait, ResponsePolicy,
-	ResponsePolicyTrait,
+	ResponsePolicyTrait, HasExpressions,
 };
 
 use crate::store;
