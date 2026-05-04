@@ -3369,6 +3369,8 @@ func (x *Key) GetAuthorizationLocation() *AuthorizationLocation {
 // GCP-specific backend authentication.
 type Gcp struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
+	// ADC-compatible Google credential JSON. If unset, ambient credentials are used.
+	Credential *string `protobuf:"bytes,3,opt,name=credential,proto3,oneof" json:"credential,omitempty"`
 	// Types that are valid to be assigned to TokenType:
 	//
 	//	*Gcp_AccessToken_
@@ -3406,6 +3408,13 @@ func (x *Gcp) ProtoReflect() protoreflect.Message {
 // Deprecated: Use Gcp.ProtoReflect.Descriptor instead.
 func (*Gcp) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *Gcp) GetCredential() string {
+	if x != nil && x.Credential != nil {
+		return *x.Credential
+	}
+	return ""
 }
 
 func (x *Gcp) GetTokenType() isGcp_TokenType {
@@ -12485,8 +12494,11 @@ const file_resource_proto_rawDesc = "" +
 	"\x16authorization_location\x18\x01 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\"\x86\x01\n" +
 	"\x03Key\x12\x16\n" +
 	"\x06secret\x18\x01 \x01(\tR\x06secret\x12g\n" +
-	"\x16authorization_location\x18\x02 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\"\xf1\x01\n" +
-	"\x03Gcp\x12O\n" +
+	"\x16authorization_location\x18\x02 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\"\xa5\x02\n" +
+	"\x03Gcp\x12#\n" +
+	"\n" +
+	"credential\x18\x03 \x01(\tH\x01R\n" +
+	"credential\x88\x01\x01\x12O\n" +
 	"\faccess_token\x18\x01 \x01(\v2*.agentgateway.dev.resource.Gcp.AccessTokenH\x00R\vaccessToken\x12C\n" +
 	"\bid_token\x18\x02 \x01(\v2&.agentgateway.dev.resource.Gcp.IdTokenH\x00R\aidToken\x1a\r\n" +
 	"\vAccessToken\x1a7\n" +
@@ -12494,7 +12506,8 @@ const file_resource_proto_rawDesc = "" +
 	"\baudience\x18\x01 \x01(\tH\x00R\baudience\x88\x01\x01B\v\n" +
 	"\t_audienceB\f\n" +
 	"\n" +
-	"token_type\"\xac\x01\n" +
+	"token_typeB\r\n" +
+	"\v_credential\"\xac\x01\n" +
 	"\x03Aws\x12W\n" +
 	"\x0fexplicit_config\x18\x01 \x01(\v2,.agentgateway.dev.resource.AwsExplicitConfigH\x00R\x0eexplicitConfig\x12D\n" +
 	"\bimplicit\x18\x02 \x01(\v2&.agentgateway.dev.resource.AwsImplicitH\x00R\bimplicitB\x06\n" +
