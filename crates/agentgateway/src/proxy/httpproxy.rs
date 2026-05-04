@@ -1890,6 +1890,7 @@ pub fn build_service_call(
 			http_version_override,
 			transport_override: None,
 			network_gateway: None,
+			waypoint: None,
 			backend_policies,
 		});
 	}
@@ -1956,15 +1957,16 @@ pub fn build_service_call(
 
 	// Check if the service has ingress_use_waypoint set and a waypoint configured.
 	// When set, route traffic through the waypoint instead of directly to the workload.
-	let waypoint = if svc.ingress_use_waypoint {
+	// Skip if this gateway IS the waypoint for the service, to prevent forwarding loops.
+	let waypoint = if svc.ingress_use_waypoint && !is_self_the_waypoint(inputs, svc) {
 		if let Some(wp) = &svc.waypoint {
+			let discovery = inputs.stores.read_discovery();
 			let wp_ip = match &wp.destination {
 				types::discovery::gatewayaddress::Destination::Address(net_addr) => {
 					Some(net_addr.address)
 				},
 				types::discovery::gatewayaddress::Destination::Hostname(nh) => {
 					// Resolve hostname-based waypoint via service discovery
-					let discovery = inputs.stores.read_discovery();
 					discovery
 						.services
 						.get_by_namespaced_host(&NamespacedHostname {
@@ -1981,8 +1983,30 @@ pub fn build_service_call(
 						})
 				},
 			};
-			match wp_ip {
-				Some(ip) => {
+			// Resolve the waypoint's own SPIFFE identity for mTLS verification.
+			let waypoint_info = wp_ip.and_then(|ip| {
+				let net_addr = types::discovery::NetworkAddress {
+					network: inputs.cfg.network.clone(),
+					address: ip,
+				};
+				let identity = if let Some(wp_wl) = discovery.workloads.find_address(&net_addr) {
+					// waypoint_ip is a pod IP — use the workload identity directly
+					Some(wp_wl.identity())
+				} else if let Some(wp_svc) = discovery.services.get_by_vip(&net_addr) {
+					// waypoint_ip is a service VIP — get identity from a backing workload
+					wp_svc.endpoints.iter().iter().find_map(|(ep, _)| {
+						discovery
+							.workloads
+							.find_uid(&ep.workload_uid)
+							.map(|wl| wl.identity())
+					})
+				} else {
+					None
+				};
+				identity.map(|id| (ip, id))
+			});
+			match waypoint_info {
+				Some((ip, identity)) => {
 					let wp_port = if wp.hbone_mtls_port > 0 {
 						wp.hbone_mtls_port
 					} else {
@@ -1996,13 +2020,13 @@ pub fn build_service_call(
 					);
 					Some(WaypointTarget {
 						address: SocketAddr::new(ip, wp_port),
-						identities: workload_and_service_sans(&wl, svc),
+						identities: vec![identity],
 					})
 				},
 				None => {
 					tracing::warn!(
 						service = %svc.hostname,
-						"ingress_use_waypoint set but waypoint address could not be resolved"
+						"ingress_use_waypoint set but waypoint could not be resolved"
 					);
 					None
 				},
@@ -2095,6 +2119,33 @@ fn workload_and_service_sans(wl: &Workload, svc: &Service) -> Vec<Identity> {
 	ids
 }
 
+/// Returns true if this gateway instance is the waypoint for the given service.
+/// Used to prevent waypoints from forwarding ingress_use_waypoint traffic back to themselves.
+fn is_self_the_waypoint(inputs: &ProxyInputs, svc: &Service) -> bool {
+	let Some(self_id) = inputs.cfg.self_addr.as_ref() else {
+		return false;
+	};
+	let Some(wp) = svc.waypoint.as_ref() else {
+		return false;
+	};
+	match &wp.destination {
+		types::discovery::gatewayaddress::Destination::Hostname(nh) => self_id.matches_hostname(nh),
+		types::discovery::gatewayaddress::Destination::Address(addr) => {
+			let stores = inputs.stores.clone();
+			self_id.matches_address(addr, |ns, hostname| {
+				stores
+					.read_discovery()
+					.services
+					.get_by_namespaced_host(&NamespacedHostname {
+						namespace: ns.clone(),
+						hostname: hostname.clone(),
+					})
+					.map(|s| s.vips.clone())
+			})
+		},
+	}
+}
+
 fn resolved_workload_target_hostname<'a>(
 	workload_hostname: &'a str,
 	request_host: Option<&'a str>,
@@ -2181,6 +2232,7 @@ mod tests {
 			waypoint: None,
 			load_balancer: None,
 			ip_families: None,
+			ingress_use_waypoint: false,
 		}
 	}
 

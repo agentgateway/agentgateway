@@ -2670,7 +2670,7 @@ async fn ingress_use_waypoint_sets_waypoint_target() {
 		&t.pi,
 		Default::default(),
 		&mut None,
-		None,
+		Default::default(),
 		&svc,
 		&80,
 		None,
@@ -2730,7 +2730,7 @@ async fn ingress_use_waypoint_false_no_waypoint() {
 		&t.pi,
 		Default::default(),
 		&mut None,
-		None,
+		Default::default(),
 		&svc,
 		&80,
 		None,
@@ -2794,10 +2794,23 @@ async fn ingress_use_waypoint_ip_based_waypoint() {
 			std::collections::HashMap::from([(80, mock.address().port())]),
 		)]),
 	};
+	// Waypoint workload at the IP-based waypoint address, so its SPIFFE identity
+	// can be resolved for mTLS verification.
+	let wp_wl = LocalWorkload {
+		workload: Workload {
+			uid: strng::literal!("test-waypoint-wl-uid"),
+			name: strng::literal!("test-waypoint-wl"),
+			namespace: strng::literal!("default"),
+			service_account: strng::literal!("waypoint"),
+			workload_ips: vec![waypoint_ip],
+			..Default::default()
+		},
+		services: Default::default(),
+	};
 	t.pi
 		.stores
 		.discovery
-		.sync_local(vec![svc], vec![wl], Default::default())
+		.sync_local(vec![svc], vec![wl, wp_wl], Default::default())
 		.unwrap();
 
 	let svc = t
@@ -2815,7 +2828,7 @@ async fn ingress_use_waypoint_ip_based_waypoint() {
 		&t.pi,
 		Default::default(),
 		&mut None,
-		None,
+		Default::default(),
 		&svc,
 		&80,
 		None,
@@ -2886,7 +2899,7 @@ async fn ingress_use_waypoint_no_waypoint_field_no_routing() {
 		&t.pi,
 		Default::default(),
 		&mut None,
-		None,
+		Default::default(),
 		&svc,
 		&80,
 		None,
@@ -2927,7 +2940,7 @@ async fn ingress_use_waypoint_build_transport_falls_back_without_ca() {
 		&t.pi,
 		Default::default(),
 		&mut None,
-		None,
+		Default::default(),
 		&svc,
 		&80,
 		None,

@@ -537,11 +537,27 @@ impl TestBind {
 				std::collections::HashMap::from([(80, backend_addr.port())]),
 			)]),
 		};
+		// Waypoint workload backing the waypoint service VIP, so its SPIFFE identity
+		// can be resolved for mTLS verification.
+		let wp_wl = LocalWorkload {
+			workload: Workload {
+				uid: strng::literal!("test-waypoint-wl-uid"),
+				name: strng::literal!("test-waypoint-wl"),
+				namespace: strng::literal!("default"),
+				service_account: strng::literal!("waypoint"),
+				workload_ips: vec![waypoint_addr.ip()],
+				..Default::default()
+			},
+			services: std::collections::HashMap::from([(
+				"default/waypoint.default.svc.cluster.local".to_string(),
+				std::collections::HashMap::from([(15008, 15008)]),
+			)]),
+		};
 		self
 			.pi
 			.stores
 			.discovery
-			.sync_local(vec![wp_svc, svc], vec![wl], Default::default())
+			.sync_local(vec![wp_svc, svc], vec![wl, wp_wl], Default::default())
 			.unwrap();
 		self
 	}
