@@ -640,6 +640,8 @@ type Traffic struct {
 
 	// extAuth specifies the external authentication configuration for the policy.
 	// This controls what external server to send requests to for authentication.
+	//
+	// An extAuth policy can be conditionally set by nesting configuration under the `conditional` field.
 	// +optional
 	ExtAuth *ExtAuthOrConditional `json:"extAuth,omitempty"`
 
@@ -1461,9 +1463,13 @@ type ExtAuthConditional struct {
 type ExtAuthOrConditional struct {
 	// +optional
 	ExtAuth `json:",inline"`
+	// `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level extAuth fields.
+	// The first matching policy will be executed.
+	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
+	// in case no conditions are met.
 	// +optional
 	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=64
+	// +kubebuilder:validation:MaxItems=16
 	// +kubebuilder:validation:XValidation:message="conditional entries without condition must be last",rule="self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e, !has(e.condition)) || !has(self[size(self) - 1].condition))"
 	Conditional []ExtAuthConditional `json:"conditional,omitempty"`
 }

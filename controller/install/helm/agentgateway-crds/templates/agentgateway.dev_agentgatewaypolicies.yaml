@@ -6050,6 +6050,8 @@ spec:
                     description: |-
                       extAuth specifies the external authentication configuration for the policy.
                       This controls what external server to send requests to for authentication.
+
+                      An extAuth policy can be conditionally set by nesting configuration under the `conditional` field.
                     properties:
                       backendRef:
                         description: |-
@@ -6125,6 +6127,11 @@ spec:
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
                       conditional:
+                        description: |-
+                          `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level extAuth fields.
+                          The first matching policy will be executed.
+                          A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
+                          in case no conditions are met.
                         items:
                           properties:
                             condition:
@@ -6347,7 +6354,7 @@ spec:
                           required:
                           - policy
                           type: object
-                        maxItems: 64
+                        maxItems: 16
                         minItems: 1
                         type: array
                         x-kubernetes-validations:
