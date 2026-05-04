@@ -2692,10 +2692,9 @@ async fn ingress_use_waypoint_sets_waypoint_target() {
 		"waypoint port should be the hbone_mtls_port"
 	);
 
-	// Target must be the service hostname, not a workload IP
-	assert_matches!(backend_call.target, Target::Hostname(ref host, port) => {
-		assert_eq!(host.as_str(), "my-svc.default.svc.cluster.local");
-		assert_eq!(port, 80);
+	// Target must be the service VIP (used as the HBONE CONNECT authority for the waypoint)
+	assert_matches!(backend_call.target, Target::Address(addr) => {
+		assert_eq!(addr.to_string(), "10.0.0.1:80");
 	});
 }
 

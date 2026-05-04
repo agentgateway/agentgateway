@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -2005,8 +2005,18 @@ pub fn build_service_call(
 				};
 				identity.map(|id| (ip, id))
 			});
-			match waypoint_info {
-				Some((ip, identity)) => {
+			// Resolve the destination service's VIP for use as the HBONE CONNECT authority.
+			// The agentgateway waypoint inbound handler looks up services by VIP, so a
+			// hostname authority is not supported.
+			let service_vip = svc
+				.vips
+				.iter()
+				.find(|v| v.network == inputs.cfg.network)
+				.or_else(|| svc.vips.first())
+				.map(|v| v.address);
+			drop(discovery);
+			match (waypoint_info, service_vip) {
+				(Some((ip, identity)), Some(vip)) => {
 					let wp_port = if wp.hbone_mtls_port > 0 {
 						wp.hbone_mtls_port
 					} else {
@@ -2016,14 +2026,16 @@ pub fn build_service_call(
 						service = %svc.hostname,
 						waypoint = %ip,
 						waypoint_port = %wp_port,
+						service_vip = %vip,
 						"ingress_use_waypoint: routing through waypoint"
 					);
 					Some(WaypointTarget {
 						address: SocketAddr::new(ip, wp_port),
+						service_vip: vip,
 						identities: vec![identity],
 					})
 				},
-				None => {
+				_ => {
 					tracing::warn!(
 						service = %svc.hostname,
 						"ingress_use_waypoint set but waypoint could not be resolved"
@@ -2038,12 +2050,13 @@ pub fn build_service_call(
 		None
 	};
 
-	// For double HBONE, use hostname-based target so the gateway can resolve it
-	// For waypoint routing, also use hostname-based target so the waypoint can identify the service
-	let target = if waypoint.is_some() {
-		// Use service hostname as the target: the HBONE CONNECT URI authority
-		// will contain the service hostname so the waypoint can route correctly.
-		Target::Hostname(svc.hostname.clone(), port)
+	// For waypoint routing, use the service VIP as the target. The HBONE CONNECT URI
+	// authority must be IP:port so the agentgateway waypoint inbound handler can
+	// look up the destination service by VIP.
+	// For double HBONE (without waypoint), use a hostname-based target so the gateway
+	// can resolve it.
+	let target = if let Some(wp) = &waypoint {
+		Target::Address(SocketAddr::new(wp.service_vip, port))
 	} else if network_gateway.is_some() {
 		tracing::debug!(
 			hostname=%svc.hostname,
@@ -2497,6 +2510,11 @@ pub struct BackendCall {
 pub struct WaypointTarget {
 	/// The socket address of the waypoint (IP:hbone_port).
 	pub address: SocketAddr,
+	/// Service VIP used as the HBONE CONNECT authority so the waypoint can
+	/// identify the destination service. The agentgateway waypoint inbound
+	/// handler looks up the service by VIP, so a hostname authority is not
+	/// supported.
+	pub service_vip: IpAddr,
 	/// Identities for mTLS verification (service SANs).
 	pub identities: Vec<Identity>,
 }
