@@ -22,6 +22,7 @@ use crate::http::ext_proc::proto::{
 };
 use crate::http::{HeaderName, PolicyResponse, envoy_proto_common};
 use crate::proxy::ProxyError;
+use crate::proxy::dtrace::{self, pol_result};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{BackendPolicy, SimpleBackendReference};
 use crate::{http, *};
@@ -32,6 +33,8 @@ const EXTPROC_ATTRIBUTES_NAMESPACE: &str = "envoy.filters.http.ext_proc";
 #[cfg(test)]
 #[path = "ext_proc_tests.rs"]
 mod tests;
+
+const TRACE_POLICY_KIND: &str = "ext_proc";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -279,7 +282,14 @@ impl ExtProcRequest {
 		let r = std::mem::take(req);
 		let (new_req, pr) = ext_proc.mutate_request(r).await?;
 		*req = new_req;
-		Ok(pr.unwrap_or_default())
+		let pr = pr.unwrap_or_default();
+		pol_result!(
+			dtrace::Info,
+			Apply,
+			"ext_proc request ({})",
+			dtrace::policy_response_details(&pr)
+		);
+		Ok(pr)
 	}
 
 	pub async fn mutate_response(
@@ -293,7 +303,14 @@ impl ExtProcRequest {
 		let r = std::mem::take(resp);
 		let (new_resp, pr) = ext_proc.mutate_response(r, request, None).await?;
 		*resp = new_resp;
-		Ok(pr.unwrap_or_default())
+		let pr = pr.unwrap_or_default();
+		pol_result!(
+			dtrace::Info,
+			Apply,
+			"ext_proc response ({})",
+			dtrace::policy_response_details(&pr)
+		);
+		Ok(pr)
 	}
 }
 

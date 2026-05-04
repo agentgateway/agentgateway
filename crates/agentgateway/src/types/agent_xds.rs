@@ -639,17 +639,11 @@ fn backend_auth_from_proto(
 	use proto::agent::{azure_explicit_config, gcp};
 	Ok(match s.kind {
 		Some(proto::agent::backend_auth_policy::Kind::Passthrough(p)) => BackendAuth::Passthrough {
-			location: authorization_location(
-				p.authorization_location.as_ref(),
-				http::auth::AuthorizationLocation::bearer_header(),
-			)?,
+			location: optional_authorization_location(p.authorization_location.as_ref())?,
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Key(k)) => BackendAuth::Key {
 			value: k.secret.into(),
-			location: authorization_location(
-				k.authorization_location.as_ref(),
-				http::auth::AuthorizationLocation::bearer_header(),
-			)?,
+			location: optional_authorization_location(k.authorization_location.as_ref())?,
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Gcp(g)) => BackendAuth::Gcp(match g.token_type {
 			None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
@@ -892,7 +886,10 @@ impl Route {
 		Ok((
 			r,
 			strng::new(&s.listener_key),
-			s.route_group_key.as_ref().map(strng::new),
+			s.route_group_key
+				.as_ref()
+				.filter(|k| !k.is_empty())
+				.map(strng::new),
 		))
 	}
 }
@@ -2014,6 +2011,34 @@ fn authorization_location(
 	}
 }
 
+/// Like [`authorization_location`], but returns `None` when the proto field is absent,
+/// preserving the distinction between "not set" (default) and "explicitly configured".
+fn optional_authorization_location(
+	location: Option<&proto::agent::AuthorizationLocation>,
+) -> Result<Option<http::auth::AuthorizationLocation>, ProtoError> {
+	use proto::agent::authorization_location::Kind;
+
+	let Some(location) = location else {
+		return Ok(None);
+	};
+
+	match location.kind.as_ref() {
+		Some(Kind::Header(header)) => Ok(Some(http::auth::AuthorizationLocation::Header {
+			name: header.name.parse()?,
+			prefix: header.prefix.clone().map(Into::into),
+		})),
+		Some(Kind::QueryParameter(query)) => {
+			Ok(Some(http::auth::AuthorizationLocation::QueryParameter {
+				name: query.name.clone().into(),
+			}))
+		},
+		Some(Kind::Cookie(cookie)) => Ok(Some(http::auth::AuthorizationLocation::Cookie {
+			name: cookie.name.clone().into(),
+		})),
+		None => Ok(None),
+	}
+}
+
 fn frontend_policy_from_proto(
 	spec: &proto::agent::FrontendPolicySpec,
 	diagnostics: &mut Diagnostics,
@@ -2202,6 +2227,28 @@ fn frontend_policy_from_proto(
 				tracer: once_cell::sync::OnceCell::new(),
 			}))
 		},
+		Some(fps::Kind::Metrics(m)) => {
+			let add = m
+				.fields
+				.as_ref()
+				.map(|f| {
+					f.add
+						.iter()
+						.map(|field| {
+							let expr = permissive_cel_expression_arc(
+								diagnostics,
+								format!("frontend.metrics.fields.add.{}", field.name),
+								&field.expression,
+							);
+							Ok::<_, ProtoError>((field.name.clone(), expr))
+						})
+						.collect::<Result<Vec<_>, _>>()
+						.map(OrderedStringMap::from_iter)
+				})
+				.transpose()?
+				.unwrap_or_default();
+			FrontendPolicy::Metrics(frontend::MetricsFieldsPolicy { add: Arc::new(add) })
+		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})
 }
@@ -2326,6 +2373,11 @@ fn policy_target_from_proto(t: &proto::agent::PolicyTarget) -> Result<PolicyTarg
 			hostname: strng::new(&s.hostname),
 			namespace: strng::new(&s.namespace),
 			port: s.port.map(|p| p as u16),
+		})),
+		Some(tgt::Kind::ListenerSet(ls)) => Ok(PolicyTarget::ListenerSet(ListenerSetTarget {
+			name: strng::new(&ls.name),
+			namespace: strng::new(&ls.namespace),
+			section: ls.section.as_deref().map(strng::new),
 		})),
 		None => Err(ProtoError::MissingRequiredField),
 	}
@@ -2890,6 +2942,57 @@ mod tests {
 			panic!("Expected AIProvider::Vertex");
 		};
 		assert_eq!(vertex.region.as_deref(), Some("us-central1"));
+		Ok(())
+	}
+
+	#[test]
+	fn test_frontend_policy_spec_metrics() -> Result<(), ProtoError> {
+		use crate::types::proto::agent::frontend_policy_spec as fps;
+
+		let spec = proto::agent::FrontendPolicySpec {
+			kind: Some(fps::Kind::Metrics(fps::Metrics {
+				fields: Some(fps::metrics::Fields {
+					add: vec![
+						fps::metrics::Field {
+							name: "team".to_string(),
+							expression: "jwt.team".to_string(),
+						},
+						fps::metrics::Field {
+							name: "org".to_string(),
+							expression: r#"request.headers["x-org-id"]"#.to_string(),
+						},
+					],
+				}),
+			})),
+		};
+
+		let mut diag = Diagnostics::default();
+		let policy = frontend_policy_from_proto(&spec, &mut diag)?;
+		let FrontendPolicy::Metrics(metrics) = policy else {
+			panic!("Expected Metrics policy variant, got: {policy:?}");
+		};
+
+		assert_eq!(metrics.add.len(), 2);
+		assert!(metrics.add.contains_key("team"), "expected team field");
+		assert!(metrics.add.contains_key("org"), "expected org field");
+		Ok(())
+	}
+
+	#[test]
+	fn test_frontend_policy_spec_metrics_empty_fields() -> Result<(), ProtoError> {
+		use crate::types::proto::agent::frontend_policy_spec as fps;
+
+		let spec = proto::agent::FrontendPolicySpec {
+			kind: Some(fps::Kind::Metrics(fps::Metrics { fields: None })),
+		};
+
+		let mut diag = Diagnostics::default();
+		let policy = frontend_policy_from_proto(&spec, &mut diag)?;
+		let FrontendPolicy::Metrics(metrics) = policy else {
+			panic!("Expected Metrics policy variant, got: {policy:?}");
+		};
+
+		assert_eq!(metrics.add.len(), 0);
 		Ok(())
 	}
 }

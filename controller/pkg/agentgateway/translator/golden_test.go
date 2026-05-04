@@ -7,7 +7,6 @@ import (
 
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -136,10 +135,10 @@ func setupDummyAncestorMapping(ctx plugins.PolicyCtx) []*gwv1.HTTPRoute {
 					BackendRefs: []gwv1.HTTPBackendRef{{
 						BackendRef: gwv1.BackendRef{
 							BackendObjectReference: gwv1.BackendObjectReference{
-								Group:     ptr.Of(gwv1.Group(backend.GetObjectKind().GroupVersionKind().Group)),
-								Kind:      ptr.Of(gwv1.Kind(backend.GetObjectKind().GroupVersionKind().Kind)),
+								Group:     new(gwv1.Group(backend.GetObjectKind().GroupVersionKind().Group)),
+								Kind:      new(gwv1.Kind(backend.GetObjectKind().GroupVersionKind().Kind)),
 								Name:      gwv1.ObjectName(backend.GetName()),
-								Namespace: ptr.Of(gwv1.Namespace(backend.GetNamespace())),
+								Namespace: new(gwv1.Namespace(backend.GetNamespace())),
 								Port:      nil,
 							},
 						},

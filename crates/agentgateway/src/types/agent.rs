@@ -12,8 +12,10 @@ use hashbrown::Equivalent;
 use heck::ToSnakeCase;
 use itertools::Itertools;
 use macro_rules_attribute::apply;
+use once_cell::sync::Lazy;
 use openapiv3::OpenAPI;
 use prometheus_client::encoding::EncodeLabelValue;
+use regex::Regex;
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::server::danger::ClientCertVerifier;
@@ -610,6 +612,27 @@ impl ListenerName {
 			listener_name: Some(self.listener_name.as_ref()),
 			port: None,
 		}
+	}
+	pub fn as_listenerset_target_ref(&self) -> Option<PolicyTargetRef<'_>> {
+		self
+			.listener_set
+			.as_ref()
+			.map(|ls| PolicyTargetRef::ListenerSet {
+				name: ls.name.as_ref(),
+				namespace: ls.namespace.as_ref(),
+				section: None,
+			})
+	}
+
+	pub fn as_listenerset_listener_target_ref(&self) -> Option<PolicyTargetRef<'_>> {
+		self
+			.listener_set
+			.as_ref()
+			.map(|ls| PolicyTargetRef::ListenerSet {
+				name: ls.name.as_ref(),
+				namespace: ls.namespace.as_ref(),
+				section: Some(self.listener_name.as_ref()),
+			})
 	}
 }
 
@@ -1305,12 +1328,26 @@ pub struct McpTarget {
 
 pub type McpTargetName = Strng;
 
-/// Reject MCP target names that collide with the resource-multiplexing
-/// delimiter. `+` is used as the separator in `{target}+{scheme}://...`
+// Gateway API SectionName: https://gateway-api.sigs.k8s.io/reference/spec/#sectionname
+const MCP_TARGET_NAME_MAX_LEN: usize = 253;
+
+static MCP_TARGET_NAME_RE: Lazy<Regex> = Lazy::new(|| {
+	Regex::new(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$").unwrap()
+});
+
 pub fn validate_mcp_target_name(name: &str) -> Result<(), String> {
-	if name.contains('+') {
+	if name.is_empty() {
+		return Err("invalid MCP target name: must not be empty".to_string());
+	}
+	if name.len() > MCP_TARGET_NAME_MAX_LEN {
 		return Err(format!(
-			"invalid MCP target name {name:?}: '+' is reserved for resource multiplexing and cannot appear in a target name"
+			"invalid MCP target name {name:?}: length {} exceeds max {MCP_TARGET_NAME_MAX_LEN}",
+			name.len()
+		));
+	}
+	if !MCP_TARGET_NAME_RE.is_match(name) {
+		return Err(format!(
+			"invalid MCP target name {name:?}: must match Gateway API SectionName pattern (lowercase letters, digits, '-' and '.'; '+' and '_' are reserved MCP delimiters)"
 		));
 	}
 	Ok(())
@@ -2065,10 +2102,20 @@ pub type RouteTarget = RouteName;
 
 #[apply(schema!)]
 #[derive(Hash, Eq, PartialEq)]
+pub struct ListenerSetTarget {
+	pub name: Strng,
+	pub namespace: Strng,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub section: Option<Strng>,
+}
+
+#[apply(schema!)]
+#[derive(Hash, Eq, PartialEq)]
 pub enum PolicyTarget {
 	Gateway(ListenerTarget),
 	Route(RouteTarget),
 	Backend(BackendTarget),
+	ListenerSet(ListenerSetTarget),
 }
 
 impl PolicyTarget {
@@ -2101,6 +2148,11 @@ pub enum PolicyTargetRef<'a> {
 		kind: Option<&'a str>,
 	},
 	Backend(BackendTargetRef<'a>),
+	ListenerSet {
+		name: &'a str,
+		namespace: &'a str,
+		section: Option<&'a str>,
+	},
 }
 
 impl<'a> From<&'a PolicyTarget> for PolicyTargetRef<'a> {
@@ -2119,6 +2171,11 @@ impl<'a> From<&'a PolicyTarget> for PolicyTargetRef<'a> {
 				kind: v.kind.as_deref(),
 			},
 			PolicyTarget::Backend(v) => PolicyTargetRef::Backend(v.into()),
+			PolicyTarget::ListenerSet(v) => PolicyTargetRef::ListenerSet {
+				name: v.name.as_ref(),
+				namespace: v.namespace.as_ref(),
+				section: v.section.as_deref(),
+			},
 		}
 	}
 }
@@ -2133,6 +2190,7 @@ pub enum FrontendPolicy {
 	Proxy(frontend::Proxy),
 	AccessLog(frontend::LoggingPolicy),
 	Tracing(Arc<TracingPolicy>),
+	Metrics(frontend::MetricsFieldsPolicy),
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -2969,8 +3027,18 @@ jwtValidationOptions:
 	}
 
 	#[test]
-	fn validate_mcp_target_name_accepts_normal_names() {
-		for name in ["time", "everything", "my-target", "svc.ns", ""] {
+	fn validate_mcp_target_name_accepts_section_name_compliant() {
+		for name in [
+			"time",
+			"everything",
+			"my-target",
+			"svc.ns",
+			"a",
+			"a1",
+			"123",
+			"a-b.c-d",
+			"a.b.c",
+		] {
 			assert!(
 				validate_mcp_target_name(name).is_ok(),
 				"expected {name:?} to be accepted"
@@ -2979,18 +3047,44 @@ jwtValidationOptions:
 	}
 
 	#[test]
-	fn validate_mcp_target_name_rejects_plus() {
-		for name in ["bad+name", "+leading", "trailing+", "a+b+c"] {
-			let err =
-				validate_mcp_target_name(name).expect_err(&format!("expected {name:?} to be rejected"));
-			assert!(
-				err.contains("'+' is reserved"),
-				"unexpected message for {name:?}: {err}"
-			);
-			assert!(
-				err.contains(name),
-				"error should name the offending input {name:?}: {err}"
-			);
+	fn validate_mcp_target_name_rejects_reserved_delimiters() {
+		for name in [
+			"bad+name",
+			"+leading",
+			"trailing+",
+			"foo_bar",
+			"_lead",
+			"trail_",
+		] {
+			validate_mcp_target_name(name).expect_err(&format!("expected {name:?} to be rejected"));
 		}
+	}
+
+	#[test]
+	fn validate_mcp_target_name_rejects_invalid_section_name_shapes() {
+		for name in [
+			"",
+			"Foo",
+			"foo!",
+			"-leading",
+			"trailing-",
+			".leading",
+			"trailing.",
+			"a..b",
+			"a/b",
+			"a b",
+		] {
+			validate_mcp_target_name(name).expect_err(&format!("expected {name:?} to be rejected"));
+		}
+	}
+
+	#[test]
+	fn validate_mcp_target_name_enforces_max_length() {
+		let ok = "a".repeat(MCP_TARGET_NAME_MAX_LEN);
+		assert!(validate_mcp_target_name(&ok).is_ok());
+
+		let too_long = "a".repeat(MCP_TARGET_NAME_MAX_LEN + 1);
+		let err = validate_mcp_target_name(&too_long).expect_err("expected rejection");
+		assert!(err.contains("exceeds max"), "unexpected message: {err}");
 	}
 }

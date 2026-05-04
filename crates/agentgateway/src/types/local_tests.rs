@@ -196,6 +196,20 @@ mcp:
 }
 
 #[tokio::test]
+async fn test_local_mcp_target_name_wiring_rejects_underscore() {
+	let yaml = r#"
+mcp:
+  targets:
+  - name: "bad_name"
+    stdio:
+      cmd: echo
+"#;
+	normalize_test_yaml(yaml)
+		.await
+		.expect_err("MCP target name containing '_' should be rejected");
+}
+
+#[tokio::test]
 async fn test_aws_config() {
 	test_config_parsing("aws").await;
 }
@@ -404,6 +418,46 @@ config:
 		"otlp.default.svc.cluster.local:4317"
 	);
 	assert_eq!(tracing.get("protocol").unwrap(), "http");
+}
+
+#[rstest::rstest]
+#[case::https_scheme("https://tracing.example.com:4318", "http", "tracing.example.com:4318")]
+#[case::http_scheme("http://tracing.example.com:4318", "http", "tracing.example.com:4318")]
+#[case::grpc_scheme("grpc://tracing.example.com:4317", "grpc", "tracing.example.com:4317")]
+#[case::no_scheme("tracing.example.com:4317", "grpc", "tracing.example.com:4317")]
+fn test_deprecated_tracing_endpoint_schemes(
+	#[case] endpoint: &str,
+	#[case] protocol: &str,
+	#[case] expected: &str,
+) {
+	let input =
+		format!("config:\n  tracing:\n    otlpEndpoint: {endpoint}\n    otlpProtocol: {protocol}\n");
+	let out = super::migrate_deprecated_local_config(&input).unwrap();
+	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	let tracing = v.get("frontendPolicies").unwrap().get("tracing").unwrap();
+	assert_eq!(tracing.get("inlineBackend").unwrap(), expected);
+}
+
+#[rstest::rstest]
+#[case::unrecognized_scheme("nateisgreat://tracing.example.com:4317")]
+fn test_deprecated_tracing_endpoint_unrecognized_scheme_error(#[case] endpoint: &str) {
+	let input =
+		format!("config:\n  tracing:\n    otlpEndpoint: {endpoint}\n    otlpProtocol: grpc\n");
+	let err = super::migrate_deprecated_local_config(&input)
+		.unwrap_err()
+		.to_string();
+	assert!(
+		err.contains("tracing"),
+		"error message should mention 'tracing': {err}"
+	);
+	assert!(
+		err.contains("failed"),
+		"error message should mention 'failed': {err}"
+	);
+	assert!(
+		err.contains(endpoint),
+		"error message should include the invalid endpoint: {err}"
+	);
 }
 
 #[tokio::test]

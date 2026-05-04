@@ -21,6 +21,7 @@ const (
 	frontendProxyPolicySuffix   = ":frontend-proxy"
 	frontendLoggingPolicySuffix = ":frontend-logging"
 	frontendTracingPolicySuffix = ":frontend-tracing"
+	frontendMetricsPolicySuffix = ":frontend-metrics"
 )
 
 func translateFrontendPolicyToAgw(
@@ -74,6 +75,10 @@ func translateFrontendPolicyToAgw(
 
 	if s := frontend.Tracing; s != nil {
 		appendPolicy("tracing")(translateFrontendTracing(policyCtx, policy, policyName))
+	}
+
+	if s := frontend.Metrics; s != nil {
+		appendPolicy("metrics")(translateFrontendMetrics(policy, policyName))
 	}
 
 	return agwPolicies, errors.Join(errs...)
@@ -133,7 +138,7 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 
 	var path *string
 	if tracing.Path != nil {
-		path = ptr.Of(*tracing.Path)
+		path = new(*tracing.Path)
 	}
 
 	var protocol api.FrontendPolicySpec_Tracing_Protocol
@@ -217,7 +222,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 
 		var path *string
 		if otlp.Path != nil {
-			path = ptr.Of(*otlp.Path)
+			path = new(*otlp.Path)
 		}
 
 		spec.OtlpAccessLog = &api.FrontendPolicySpec_Logging_OtlpAccessLog{
@@ -362,7 +367,7 @@ func translateFrontendNetworkAuthorization(policy *agentgateway.AgentgatewayPoli
 }
 
 func castUint32[T ~int32](ka *T) *uint32 {
-	return ptr.Of((uint32)(*ka))
+	return new((uint32)(*ka))
 }
 
 func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
@@ -497,4 +502,42 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 		"agentgateway_policy", httpPolicy.Name)
 
 	return httpPolicy
+}
+
+func translateFrontendMetrics(policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
+	metricsSpec := policy.Spec.Frontend.Metrics
+	spec := &api.FrontendPolicySpec_Metrics{}
+	var errs []error
+
+	fields := make([]*api.FrontendPolicySpec_Metrics_Field, 0, len(metricsSpec.Attributes.Add))
+	for _, add := range metricsSpec.Attributes.Add {
+		if !isCEL(add.Expression) {
+			errs = append(errs, fmt.Errorf("frontend metrics field %q is not a valid CEL expression: %s", add.Name, add.Expression))
+		}
+		fields = append(fields, &api.FrontendPolicySpec_Metrics_Field{
+			Name:       add.Name,
+			Expression: string(add.Expression),
+		})
+	}
+	spec.Fields = &api.FrontendPolicySpec_Metrics_Fields{
+		Add: fields,
+	}
+
+	metricsPolicy := &api.Policy{
+		Key:  name + frontendMetricsPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Frontend{
+			Frontend: &api.FrontendPolicySpec{
+				Kind: &api.FrontendPolicySpec_Metrics_{
+					Metrics: spec,
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated metrics policy",
+		"policy", policy.Name,
+		"agentgateway_policy", metricsPolicy.Name)
+
+	return metricsPolicy, errors.Join(errs...)
 }

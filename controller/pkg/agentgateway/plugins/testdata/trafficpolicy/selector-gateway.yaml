@@ -1,0 +1,123 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: labeled-gw1
+  namespace: default
+  labels:
+    env: staging
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: labeled-gw2
+  namespace: default
+  labels:
+    env: staging
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetSelectors:
+  - kind: Gateway
+    group: gateway.networking.k8s.io
+    matchLabels:
+      env: staging
+  traffic:
+    timeouts:
+      request: 30s
+
+---
+# Output
+output:
+- gateway:
+    Name: labeled-gw1
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/agw:timeout:default/labeled-gw1
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        gateway:
+          name: labeled-gw1
+          namespace: default
+      traffic:
+        timeout:
+          request: 30s
+- gateway:
+    Name: labeled-gw2
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/agw:timeout:default/labeled-gw2
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        gateway:
+          name: labeled-gw2
+          namespace: default
+      traffic:
+        timeout:
+          request: 30s
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: labeled-gw1
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: labeled-gw2
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

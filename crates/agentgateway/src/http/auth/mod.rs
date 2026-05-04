@@ -1,5 +1,6 @@
 pub mod aws;
 pub mod azure;
+mod copilot;
 pub mod gcp;
 
 use std::borrow::Cow;
@@ -23,8 +24,8 @@ use crate::*;
 #[apply(schema!)]
 pub enum BackendAuth {
 	Passthrough {
-		#[serde(default)]
-		location: AuthorizationLocation,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		location: Option<AuthorizationLocation>,
 	},
 	Key {
 		#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
@@ -33,8 +34,8 @@ pub enum BackendAuth {
 			deserialize_with = "deser_key_from_file"
 		)]
 		value: SecretString,
-		#[serde(default)]
-		location: AuthorizationLocation,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		location: Option<AuthorizationLocation>,
 	},
 	#[serde(rename = "gcp")]
 	Gcp(gcp::GcpAuth),
@@ -42,6 +43,18 @@ pub enum BackendAuth {
 	Aws(aws::AwsAuth),
 	#[serde(rename = "azure")]
 	Azure(azure::AzureAuth),
+	#[serde(rename = "copilot")]
+	Copilot,
+}
+
+/// Records whether the backend auth location was explicitly configured by the user
+/// (vs. defaulted).
+///
+/// Downstream providers (e.g. Anthropic) inspect this to decide whether to rewrite
+/// auth headers.
+#[derive(Clone, Debug)]
+pub struct AppliedBackendAuthLocation {
+	pub explicit: bool,
 }
 
 #[derive(Clone)]
@@ -56,21 +69,24 @@ pub fn apply_tunnel_auth(auth: &BackendAuth) -> Result<HeaderValue, ProxyError> 
 		BackendAuth::Key {
 			value: key,
 			location,
-		} => match location {
-			AuthorizationLocation::Header { name: _, prefix } => {
-				let value = key.expose_secret();
-				let value = match prefix {
-					Some(prefix) => Cow::Owned(format!("{prefix}{value}")),
-					None => Cow::Borrowed(value),
-				};
-				let mut header_value =
-					HeaderValue::from_str(&value).map_err(|e| ProxyError::Processing(e.into()))?;
-				header_value.set_sensitive(true);
-				Ok(header_value)
-			},
-			_ => Err(ProcessingString(
-				"only header auth is supported in tunnel".to_string(),
-			)),
+		} => {
+			let resolved = location.as_ref().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
+			match resolved {
+				AuthorizationLocation::Header { name: _, prefix } => {
+					let value = key.expose_secret();
+					let value = match prefix {
+						Some(prefix) => Cow::Owned(format!("{prefix}{value}")),
+						None => Cow::Borrowed(value),
+					};
+					let mut header_value =
+						HeaderValue::from_str(&value).map_err(|e| ProxyError::Processing(e.into()))?;
+					header_value.set_sensitive(true);
+					Ok(header_value)
+				},
+				_ => Err(ProcessingString(
+					"only header auth is supported in tunnel".to_string(),
+				)),
+			}
 		},
 		_ => Err(ProcessingString(
 			"only key auth is supported in tunnel".to_string(),
@@ -84,6 +100,8 @@ pub async fn apply_backend_auth(
 ) -> Result<(), ProxyError> {
 	match auth {
 		BackendAuth::Passthrough { location } => {
+			let explicit = location.is_some();
+			let resolved = location.as_ref().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
 			// They should have a JWT policy defined. That will strip the token. Here we add it back
 			// TODO: should we also support API key, etc?
 			if let Some(token) = req
@@ -91,13 +109,23 @@ pub async fn apply_backend_auth(
 				.get::<Claims>()
 				.map(|claim| claim.jwt.expose_secret().to_string())
 			{
-				location.insert(req, &token)?;
+				resolved.insert(req, &token)?;
 			}
+			req
+				.extensions_mut()
+				.insert(AppliedBackendAuthLocation { explicit });
 		},
 		BackendAuth::Key {
 			value: key,
 			location,
-		} => location.insert(req, key.expose_secret())?,
+		} => {
+			let explicit = location.is_some();
+			let resolved = location.as_ref().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
+			resolved.insert(req, key.expose_secret())?;
+			req
+				.extensions_mut()
+				.insert(AppliedBackendAuthLocation { explicit });
+		},
 		BackendAuth::Gcp(g) => {
 			gcp::insert_token(g, &backend_info.call_target, req.headers_mut())
 				.await
@@ -115,6 +143,11 @@ pub async fn apply_backend_auth(
 			.await
 			.map_err(ProxyError::BackendAuthenticationFailed)?;
 			req.headers_mut().insert(http::header::AUTHORIZATION, token);
+		},
+		BackendAuth::Copilot => {
+			copilot::insert_headers(req)
+				.await
+				.map_err(ProxyError::BackendAuthenticationFailed)?;
 		},
 	}
 	Ok(())
@@ -137,6 +170,7 @@ pub async fn apply_late_backend_auth(
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 		},
 		BackendAuth::Azure(_) => {},
+		BackendAuth::Copilot => {},
 	};
 	Ok(())
 }
@@ -164,8 +198,11 @@ impl Default for AuthorizationLocation {
 	}
 }
 
+pub static DEFAULT_AUTHORIZATION_LOCATION: AuthorizationLocation =
+	AuthorizationLocation::bearer_header();
+
 impl AuthorizationLocation {
-	pub fn bearer_header() -> Self {
+	pub const fn bearer_header() -> Self {
 		Self::Header {
 			name: http::header::AUTHORIZATION,
 			prefix: Some(strng::literal!("Bearer ")),

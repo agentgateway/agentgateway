@@ -13,7 +13,6 @@ import (
 	istioxds "istio.io/istio/pilot/pkg/xds"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/test"
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/workloadapi"
@@ -109,7 +108,7 @@ func (f Fake) ConnectDeltaADS() *istioxds.DeltaAdsTest {
 
 var (
 	testWorkload1 = syncer.Address{
-		Workload: ptr.Of(syncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl1"}})),
+		Workload: new(syncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl1"}})),
 	}
 )
 
@@ -132,7 +131,7 @@ func TestXDSUpdate(t *testing.T) {
 	ads.RequestResponseAck(nil)
 
 	wl1Updated := syncer.Address{
-		Workload: ptr.Of(syncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl1", ClusterId: "cluster1"}})),
+		Workload: new(syncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl1", ClusterId: "cluster1"}})),
 	}
 	s.Addresses.UpdateObject(wl1Updated)
 	resp := ads.ExpectResponse()
@@ -154,7 +153,7 @@ func TestXDSDisconnect(t *testing.T) {
 		ads.Cleanup()
 
 		wl2 := syncer.Address{
-			Workload: ptr.Of(syncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl2", ClusterId: "cluster1"}})),
+			Workload: new(syncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "wl2", ClusterId: "cluster1"}})),
 		}
 		s.Addresses.DeleteObject("wl1")
 		s.Addresses.UpdateObject(wl2)

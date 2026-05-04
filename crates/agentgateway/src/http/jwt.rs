@@ -11,12 +11,15 @@ use serde_json::{Map, Value};
 use crate::client::Client;
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
+use crate::proxy::dtrace::{self};
 use crate::telemetry::log::RequestLog;
 use crate::*;
 
 #[cfg(test)]
 #[path = "jwt_tests.rs"]
 mod tests;
+
+const TRACE_POLICY_KIND: &str = "jwt";
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum TokenError {
@@ -420,19 +423,41 @@ impl Jwt {
 		let Some(token) = self.location.extract(req) else {
 			// In strict mode, we require a token
 			if self.mode == Mode::Strict {
+				dtrace::pol_result!(
+					dtrace::Error,
+					Apply,
+					"rejected request because JWT is required but missing"
+				);
 				return Err(TokenError::Missing);
 			}
 			// Otherwise with no, don't attempt to authenticate.
+			dtrace::pol_result!(
+				dtrace::Info,
+				Skip,
+				"request has no bearer token and JWT mode is not strict"
+			);
 			return Ok(());
 		};
 		let claims = match self.validate_claims(&token) {
 			Ok(claims) => claims,
 			Err(e) if self.mode == Mode::Permissive => {
-				debug!("token verification failed ({e}), continue due to permissive mode");
+				dtrace::pol_result!(
+					dtrace::Warn,
+					Skip,
+					"token verification failed ({e}), continue due to permissive mode"
+				);
 				return Ok(());
 			},
-			Err(e) => return Err(e),
+			Err(e) => {
+				dtrace::pol_result!(
+					dtrace::Severity::Error,
+					Apply,
+					"rejected request because JWT validation failed: {e}"
+				);
+				return Err(e);
+			},
 		};
+
 		if let Some(serde_json::Value::String(sub)) = claims.inner.get("sub")
 			&& let Some(log) = log
 		{
@@ -444,6 +469,12 @@ impl Jwt {
 			.remove(req)
 			.map_err(|e| TokenError::CredentialRemoval(e.to_string()))?;
 		// Insert the claims into extensions so we can reference it later
+		dtrace::pol_result!(
+			dtrace::Severity::Info,
+			Apply,
+			"authenticated request with JWT claims {}",
+			serde_json::to_string(&claims).unwrap_or_else(|_| "invalid claims".to_string())
+		);
 		req.extensions_mut().insert(claims);
 		Ok(())
 	}

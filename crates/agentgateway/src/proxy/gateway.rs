@@ -22,7 +22,7 @@ use tokio::task::{AbortHandle, JoinSet};
 use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, event, info, info_span, warn};
 
-use crate::proxy::{ProxyError, WaypointService};
+use crate::proxy::{ProxyError, WaypointService, dtrace};
 use crate::store::{BindEvent, BindListeners, FrontendPolices};
 use crate::telemetry::metrics::TCPLabels;
 use crate::transport::BufferLimit;
@@ -281,7 +281,7 @@ impl Gateway {
 				let start = Instant::now();
 				let mut force_shutdown = force_shutdown.clone();
 				let name = name.clone();
-				tokio::spawn(async move {
+				tokio::spawn(dtrace::DebugTracer::maybe_scope(async move {
 					debug!(bind=?name, "connection started");
 					tokio::select! {
 						// We took too long; shutdown now.
@@ -291,7 +291,7 @@ impl Gateway {
 						_ = Self::handle_tunnel(name.clone(), bind_protocol, tunnel_protocol, stream, pi, drain) => {}
 					}
 					debug!(bind=?name, dur=?start.elapsed(), "connection completed");
-				});
+				}));
 			};
 			let wait = drain_watch.wait_for_drain();
 			tokio::pin!(wait);

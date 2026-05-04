@@ -369,7 +369,10 @@
       "type": "object",
       "properties": {
         "otlpEndpoint": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "headers": {
           "type": "object",
@@ -422,10 +425,7 @@
           ]
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "otlpEndpoint"
-      ]
+      "additionalProperties": false
     },
     "Protocol": {
       "type": "string",
@@ -2499,19 +2499,26 @@
     "BackendAuth": {
       "oneOf": [
         {
+          "type": "string",
+          "enum": [
+            "copilot"
+          ]
+        },
+        {
           "type": "object",
           "properties": {
             "passthrough": {
               "type": "object",
               "properties": {
                 "location": {
-                  "$ref": "#/$defs/AuthorizationLocation",
-                  "default": {
-                    "header": {
-                      "name": "authorization",
-                      "prefix": "Bearer "
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AuthorizationLocation"
+                    },
+                    {
+                      "type": "null"
                     }
-                  }
+                  ]
                 }
               },
               "additionalProperties": false
@@ -2532,13 +2539,14 @@
                   "$ref": "#/$defs/FileOrInline"
                 },
                 "location": {
-                  "$ref": "#/$defs/AuthorizationLocation",
-                  "default": {
-                    "header": {
-                      "name": "authorization",
-                      "prefix": "Bearer "
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AuthorizationLocation"
+                    },
+                    {
+                      "type": "null"
                     }
-                  }
+                  ]
                 }
               },
               "additionalProperties": false,
@@ -4879,6 +4887,18 @@
             "azure"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "copilot": {
+              "$ref": "#/$defs/Provider7"
+            }
+          },
+          "required": [
+            "copilot"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -5021,6 +5041,18 @@
           "const": "foundry"
         }
       ]
+    },
+    "Provider7": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "LocalBackendPolicies": {
       "type": "object",
@@ -6211,6 +6243,18 @@
             "backend"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "listenerSet": {
+              "$ref": "#/$defs/ListenerSetTarget"
+            }
+          },
+          "required": [
+            "listenerSet"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -6346,6 +6390,28 @@
           ],
           "additionalProperties": false
         }
+      ]
+    },
+    "ListenerSetTarget": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "namespace"
       ]
     },
     "PolicyPhase": {
@@ -6717,7 +6783,8 @@
         "vertex",
         "anthropic",
         "bedrock",
-        "azure"
+        "azure",
+        "copilot"
       ]
     },
     "LLMRouteMatch": {

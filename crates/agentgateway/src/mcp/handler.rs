@@ -403,8 +403,19 @@ impl Relay {
 		&self,
 		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
-		for (name, con) in self.upstreams.iter_named() {
-			match con.delete(&ctx).await {
+		let futs: Vec<_> = self
+			.upstreams
+			.iter_named()
+			.map(|(name, con)| {
+				let ctx = &ctx;
+				async move { (name, con.delete(ctx).await) }
+			})
+			.collect();
+
+		let fut_results = futures::future::join_all(futs).await;
+
+		for (name, result) in fut_results {
+			match result {
 				Ok(_) => {},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
@@ -425,8 +436,20 @@ impl Relay {
 		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
 		let mut streams = Vec::new();
-		for (name, con) in self.upstreams.iter_named() {
-			match con.get_event_stream(&ctx).await {
+
+		let futs: Vec<_> = self
+			.upstreams
+			.iter_named()
+			.map(|(name, con)| {
+				let ctx = &ctx;
+				async move { (name, con.get_event_stream(ctx).await) }
+			})
+			.collect();
+
+		let fut_results = futures::future::join_all(futs).await;
+
+		for (name, result) in fut_results {
+			match result {
 				Ok(s) => streams.push((name, s)),
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
@@ -460,6 +483,7 @@ impl Relay {
 		let ms = mergestream::MergeStream::new_without_merge(streams, self.upstreams.failure_mode);
 		messages_to_response(RequestId::Number(0), ms, None)
 	}
+
 	pub async fn send_fanout(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
@@ -468,8 +492,21 @@ impl Relay {
 	) -> Result<Response, UpstreamError> {
 		let id = r.id.clone();
 		let mut streams = Vec::new();
-		for (name, con) in self.upstreams.iter_named() {
-			match con.generic_stream(r.clone(), &ctx).await {
+
+		let futs: Vec<_> = self
+			.upstreams
+			.iter_named()
+			.map(|(name, con)| {
+				let r = r.clone();
+				let ctx = &ctx;
+				async move { (name, con.generic_stream(r, ctx).await) }
+			})
+			.collect();
+
+		let fut_results = futures::future::join_all(futs).await;
+
+		for (name, result) in fut_results {
+			match result {
 				Ok(s) => streams.push((name, s)),
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
@@ -500,8 +537,20 @@ impl Relay {
 		r: JsonRpcNotification<ClientNotification>,
 		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
-		for (name, con) in self.upstreams.iter_named() {
-			match con.generic_notification(r.notification.clone(), &ctx).await {
+		let futs: Vec<_> = self
+			.upstreams
+			.iter_named()
+			.map(|(name, con)| {
+				let notification = r.notification.clone();
+				let ctx = &ctx;
+				async move { (name, con.generic_notification(notification, ctx).await) }
+			})
+			.collect();
+
+		let fut_results = futures::future::join_all(futs).await;
+
+		for (name, result) in fut_results {
+			match result {
 				Ok(_) => {},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {

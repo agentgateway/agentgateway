@@ -154,17 +154,27 @@ spec:
                   fieldPath: metadata.namespace
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- if .Values.controller.xds.tls.enabled }}
+          {{- if or .Values.controller.xds.tls.enabled .Values.controller.extraVolumeMounts }}
           volumeMounts:
+            {{- if .Values.controller.xds.tls.enabled }}
             - name: xds-tls
               mountPath: /etc/xds-tls
               readOnly: true
+            {{- end }}
+            {{- with .Values.controller.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
-      {{- if .Values.controller.xds.tls.enabled }}
+      {{- if or .Values.controller.xds.tls.enabled .Values.controller.extraVolumes }}
       volumes:
+        {{- if .Values.controller.xds.tls.enabled }}
         - name: xds-tls
           secret:
             secretName: agentgateway-xds-cert
+        {{- end }}
+        {{- with .Values.controller.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

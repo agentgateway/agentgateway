@@ -41,9 +41,9 @@ func TestAgentgatewayParametersApplier_ApplyToHelmValues_Image(t *testing.T) {
 		Spec: agentgateway.AgentgatewayParametersSpec{
 			AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
 				Image: &agentgateway.Image{
-					Registry:   ptr.To("custom.registry.io"),
-					Repository: ptr.To("custom/agentgateway"),
-					Tag:        ptr.To("v1.0.0"),
+					Registry:   new("custom.registry.io"),
+					Repository: new("custom/agentgateway"),
+					Tag:        new("v1.0.0"),
 				},
 			},
 		},

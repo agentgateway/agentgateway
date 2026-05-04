@@ -79,6 +79,56 @@ func TestRemoveKeysetClearsCacheEvenWithoutRequest(t *testing.T) {
 	assert.False(t, ok, "cache should be cleared even when request was not tracked")
 }
 
+func TestRetireKeysetKeepsCacheThenSweptOnSuccessfulFetch(t *testing.T) {
+	ctx := t.Context()
+	oldSource := testSourceWithURL("https://test/old-jwks")
+	newSource := testSourceWithURL("https://test/new-jwks")
+
+	f := NewFetcher(NewCache())
+	assert.NoError(t, f.AddOrUpdateKeyset(oldSource))
+	seedJwksCacheForTest(f.cache, oldSource.RequestKey, oldSource.Target.URL)
+
+	// Retire removes from requests/schedule but keeps cache.
+	f.RetireKeyset(oldSource.RequestKey)
+
+	f.mu.Lock()
+	_, inRequests := f.requests[oldSource.RequestKey]
+	schedLen := f.schedule.Len()
+	f.mu.Unlock()
+	assert.False(t, inRequests, "retired key should be removed from requests")
+	assert.Equal(t, 0, schedLen, "retired key should be removed from schedule")
+	_, inCache := f.cache.GetJwks(oldSource.RequestKey)
+	assert.True(t, inCache, "retired key should remain in cache")
+
+	// A successful fetch of a new key sweeps the retired entry.
+	expectedJwks := jose.JSONWebKeySet{}
+	assert.NoError(t, json.Unmarshal([]byte(sampleJWKS), &expectedJwks))
+	f.defaultJwksClient = stubJwksClient{
+		t:           t,
+		expectedReq: newSource.Target,
+		result:      expectedJwks,
+	}
+	assert.NoError(t, f.AddOrUpdateKeyset(newSource))
+
+	updates := f.SubscribeToUpdates()
+	go f.maybeFetchJwks(ctx)
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case update := <-updates:
+			assert.True(c, update.Contains(newSource.RequestKey), "new key should be in updates")
+			assert.True(c, update.Contains(oldSource.RequestKey), "swept old key should be in updates")
+		default:
+			assert.Fail(c, "no updates yet")
+		}
+	}, testEventuallyTimeout, testEventuallyPoll)
+
+	_, inCache = f.cache.GetJwks(oldSource.RequestKey)
+	assert.False(t, inCache, "retired key should be swept after successful fetch")
+	_, inCache = f.cache.GetJwks(newSource.RequestKey)
+	assert.True(t, inCache, "new key should be in cache")
+}
+
 func TestAddOrUpdateKeysetReplacesExistingScheduleEntry(t *testing.T) {
 	f := NewFetcher(NewCache())
 	source := testSource()

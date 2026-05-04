@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/suite"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -122,8 +121,8 @@ func (s *tsuite) assertPolicyStatus(inCondition metav1.Condition) {
 
 		expectedAncestorRefs := []gwv1.ParentReference{
 			{
-				Group: (*gwv1.Group)(ptr.To("gateway.networking.k8s.io")),
-				Kind:  (*gwv1.Kind)(ptr.To("Gateway")),
+				Group: (*gwv1.Group)(new("gateway.networking.k8s.io")),
+				Kind:  (*gwv1.Kind)(new("Gateway")),
 				Name:  gwv1.ObjectName("gateway"),
 			},
 		}

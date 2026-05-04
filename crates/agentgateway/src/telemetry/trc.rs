@@ -692,7 +692,7 @@ mod tests {
 			cel_context: crate::cel::ContextBuilder::new(),
 			filter: None,
 			fields: LoggingFields::default(),
-			metric_fields: Arc::new(MetricFields::default()),
+			metric_fields: MetricFields::default(),
 		};
 		let mut registry = Registry::default();
 		let metrics = Arc::new(Metrics::new(&mut registry, Default::default()));

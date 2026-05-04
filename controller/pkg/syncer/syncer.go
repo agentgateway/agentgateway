@@ -8,9 +8,10 @@ import (
 
 	securityclient "istio.io/client-go/pkg/apis/security/v1"
 	"istio.io/istio/pilot/pkg/model"
-	"istio.io/istio/pilot/pkg/serviceregistry/kube/controller/ambient"
+	"istio.io/istio/pilot/pkg/serviceregistry/ambient"
 	"istio.io/istio/pkg/cluster"
 	"istio.io/istio/pkg/config/mesh"
+	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
@@ -158,7 +159,7 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	gatewayInitialStatus, gateways := s.buildGatewayCollection(gatewayClasses, listenerSets, refGrants, krtopts)
 
 	// Build Agw resources for gateway
-	agwResources, routeAttachments, ancestorCollection := s.buildAgwResources(gateways, refGrants, krtopts)
+	agwResources, routeAttachments, ancestorCollection := s.buildAgwResources(gateways, listenerSets, refGrants, krtopts)
 
 	gatewayFinalStatus := s.buildFinalGatewayStatus(gatewayInitialStatus, routeAttachments, krtopts)
 	status.RegisterStatus(s.statusCollections, gatewayFinalStatus, translator.GetStatus)
@@ -398,7 +399,12 @@ func (s *Syncer) buildListenerSetCollection(
 		}, krtopts.ToOptions("ListenerSets")...)
 }
 
-func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayListener], refGrants translator.ReferenceGrants, krtopts krtutil.KrtOptions) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], plugins.ReferenceIndex) {
+func (s *Syncer) buildAgwResources(
+	gateways krt.Collection[*translator.GatewayListener],
+	listenerSets krt.Collection[translator.ListenerSet],
+	refGrants translator.ReferenceGrants,
+	krtopts krtutil.KrtOptions,
+) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], plugins.ReferenceIndex) {
 	// filter gateway collections to only include gateways which use a built-in gateway class
 	// (resources for additional gateway classes should be created by the downstream providing them)
 	filteredGateways := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
@@ -417,6 +423,7 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 		port, _ := strconv.Atoi(object.Key)
 		uniq := sets.New[types.NamespacedName]()
 		protocol := api.Bind_Protocol(0)
+		var tunnelProtocol = api.Bind_DIRECT
 		for _, gw := range object.Objects {
 			uniq.Insert(types.NamespacedName{
 				Namespace: gw.ParentGateway.Namespace,
@@ -425,14 +432,18 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 			// TODO: better handle conflicts of protocols. For now, we arbitrarily treat TLS > plain
 			if gw.Conflict == "" {
 				protocol = max(protocol, s.getBindProtocol(gw))
+				if tp := s.getTunnelProtocol(gw); tp != api.Bind_DIRECT {
+					tunnelProtocol = tp
+				}
 			}
 		}
 		return slices.Map(uniq.UnsortedList(), func(e types.NamespacedName) agwir.AgwResource {
 			bind := translator.AgwBind{
 				Bind: &api.Bind{
-					Key:      object.Key + "/" + e.String(),
-					Port:     uint32(port), //nolint:gosec // G115: port is always in valid port range
-					Protocol: protocol,
+					Key:            object.Key + "/" + e.String(),
+					Port:           uint32(port), //nolint:gosec // G115: port is always in valid port range
+					Protocol:       protocol,
+					TunnelProtocol: tunnelProtocol,
 				},
 			}
 			return translator.ToResourceForGateway(e, bind)
@@ -499,6 +510,32 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	})
 	ancestorCollection := ancestorsIndex.AsCollection(append(krtopts.ToOptions("AncestorBackend"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 
+	// Build a per-ListenerSet → parent-Gateway attachment index.
+	// Each entry maps the ListenerSet identity to its parent Gateway so that
+	// LookupGatewaysForTarget can route ListenerSet-targeted policies to the
+	// correct xDS snapshot.
+	listenerSetAttachments := krt.NewManyCollection(listenerSets,
+		func(ctx krt.HandlerContext, ls translator.ListenerSet) []*plugins.RouteAttachment {
+			if !ls.Valid {
+				return nil
+			}
+			lsKey := utils.TypedNamespacedName{
+				Kind:           wellknown.ListenerSetGVK.Kind,
+				NamespacedName: ls.Parent,
+			}
+			return []*plugins.RouteAttachment{{
+				From:    lsKey,
+				To:      lsKey,
+				Gateway: ls.GatewayParent,
+				// ListenerName omitted: this index only needs ListenerSet→Gateway;
+				// omitting it lets krt deduplicate the N per-listener entries to one.
+			}}
+		}, krtopts.ToOptions("ListenerSetGatewayAttachments")...)
+	listenerSetAttachmentsIdx := krt.NewIndex(listenerSetAttachments, "ls-to-gateway",
+		func(o *plugins.RouteAttachment) []utils.TypedNamespacedName {
+			return []utils.TypedNamespacedName{o.To}
+		}).AsCollection(append(krtopts.ToOptions("ListenerSetGatewayIdx"), utils.TypedNamespacedNameIndexCollectionFunc)...)
+
 	referenceIndex := plugins.BuildReferenceIndex(ancestorCollection, routeAttachmentsIndex, referenceTypes)
 
 	// Phase 1: Collect policy references (e.g. ext_proc backendRefs) BEFORE building
@@ -512,6 +549,7 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 	})
 	policyReferencesIndexCollection := policyReferencesIndex.AsCollection(append(krtopts.ToOptions("PolicyReferencesIndex"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 	referenceIndex = referenceIndex.WithPolicyAttachments(policyReferencesIndexCollection)
+	referenceIndex = referenceIndex.WithListenerSetAttachments(listenerSetAttachmentsIdx)
 
 	// Phase 2: Build policies with the fully-populated reference index.
 	agwPolicies, policyStatuses := BuildPolicies(s.agwPlugins, referenceIndex, krtopts)
@@ -532,9 +570,14 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 
 // buildListenerFromGateway creates a listener resource from a gateway
 func (s *Syncer) buildListenerFromGateway(obj *translator.GatewayListener) *agwir.AgwResource {
+	var ls *api.ResourceName
+	if obj.ParentObject.Kind == wellknown.ListenerSetGVK.Kind {
+		ls = &api.ResourceName{Name: obj.ParentObject.Name, Namespace: obj.ParentObject.Namespace}
+	}
+	listenerName := utils.ListenerName(obj.ParentGateway.Namespace, obj.ParentGateway.Name, string(obj.ParentInfo.SectionName), ls)
 	l := &api.Listener{
 		Key:      obj.ResourceName(),
-		Name:     utils.ListenerName(obj.ParentGateway.Namespace, obj.ParentGateway.Name, string(obj.ParentInfo.SectionName)),
+		Name:     listenerName,
 		BindKey:  fmt.Sprint(obj.ParentInfo.Port) + "/" + obj.ParentGateway.Namespace + "/" + obj.ParentGateway.Name,
 		Hostname: obj.ParentInfo.OriginalHostname,
 	}
@@ -548,7 +591,7 @@ func (s *Syncer) buildListenerFromGateway(obj *translator.GatewayListener) *agwi
 	l.Protocol = protocol
 	l.Tls = tlsConfig
 
-	return ptr.Of(translator.ToResourceForGateway(types.NamespacedName{
+	return new(translator.ToResourceForGateway(types.NamespacedName{
 		Namespace: obj.ParentGateway.Namespace,
 		Name:      obj.ParentGateway.Name,
 	}, translator.AgwListener{l}))
@@ -593,6 +636,8 @@ func (s *Syncer) getProtocolAndTLSConfig(obj *translator.GatewayListener) (api.P
 		return api.Protocol_TLS, tlsConfig, true
 	case gwv1.TCPProtocolType:
 		return api.Protocol_TCP, nil, true
+	case gwv1.ProtocolType(protocol.HBONE):
+		return api.Protocol_HBONE, nil, true
 	default:
 		return api.Protocol_HTTP, nil, false // Unsupported protocol
 	}
@@ -609,8 +654,25 @@ func (s *Syncer) getBindProtocol(obj *translator.GatewayListener) api.Bind_Proto
 		return api.Bind_TLS
 	case gwv1.TCPProtocolType:
 		return api.Bind_TCP
+	case gwv1.ProtocolType(protocol.HBONE):
+		// The bind protocol is not used for HBONE_GATEWAY in the data plane;
+		// the actual inner protocol is determined at runtime from the other
+		// listeners on the same port. Return HTTP as a placeholder.
+		return api.Bind_HTTP
 	default:
 		return api.Bind_HTTP
+	}
+}
+
+// getTunnelProtocol maps a Gateway listener protocol to its tunnel protocol.
+// HBONE listeners use HBONE_GATEWAY mode: the proxy terminates inbound HBONE
+// and routes CONNECT requests to local binds.
+func (s *Syncer) getTunnelProtocol(obj *translator.GatewayListener) api.Bind_TunnelProtocol {
+	switch obj.ParentInfo.Protocol {
+	case gwv1.ProtocolType(protocol.HBONE):
+		return api.Bind_HBONE_GATEWAY
+	default:
+		return api.Bind_DIRECT
 	}
 }
 

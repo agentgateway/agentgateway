@@ -123,6 +123,10 @@ controller:
   #         name: agentgateway-secrets
   #         key: apiToken
   extraEnv: {}
+  # -- Add extra volume mounts to the controller container.
+  extraVolumeMounts: []
+  # -- Add extra volumes to the controller pod.
+  extraVolumes: []
   # -- Configure TLS settings for the xDS gRPC servers.
   xds:
     tls:

@@ -176,6 +176,10 @@ spec:
             - name: TRUST_DOMAIN
               value: {{ $gateway.istio.trustDomain | default "cluster.local" | quote }}
             {{- end }}
+            {{- if and (not (hasKey $userEnvNames "ADDITIONAL_TRUST_DOMAINS")) (hasKey $gateway "istio") $gateway.istio.additionalTrustDomains }}
+            - name: ADDITIONAL_TRUST_DOMAINS
+              value: {{ $gateway.istio.additionalTrustDomains | join "," | quote }}
+            {{- end }}
           {{- /* User-specified env vars */}}
           {{- with $gateway.env }}
             {{- toYaml . | nindent 12 }}

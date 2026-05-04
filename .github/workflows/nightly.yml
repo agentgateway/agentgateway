@@ -6,6 +6,7 @@ on:
   workflow_dispatch: {}
 
 permissions:
+  actions: read
   contents: write
   packages: write
   id-token: write
@@ -16,26 +17,58 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       has_commits: ${{ steps.check.outputs.has_commits }}
+      previous_sha: ${{ steps.previous.outputs.previous_sha }}
+      previous_run_id: ${{ steps.previous.outputs.previous_run_id }}
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Check for commits in the last 24 hours
+      - name: Find previous successful nightly run
+        id: previous
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREVIOUS_RUN_ID=$(gh api "repos/${{ github.repository }}/actions/workflows/nightly.yml/runs?status=completed&conclusion=success&per_page=1" --jq '.workflow_runs[0].id // empty')
+          PREVIOUS_SHA=$(gh api "repos/${{ github.repository }}/actions/workflows/nightly.yml/runs?status=completed&conclusion=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty')
+
+          echo "previous_run_id=${PREVIOUS_RUN_ID}" >> "$GITHUB_OUTPUT"
+          echo "previous_sha=${PREVIOUS_SHA}" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$PREVIOUS_SHA" ]; then
+            echo "Previous nightly run: ${PREVIOUS_RUN_ID} (${PREVIOUS_SHA})"
+          else
+            echo "No previous successful nightly run found"
+          fi
+
+      - name: Check for commits since the last nightly build
         id: check
         run: |
-          LAST_COMMIT=$(git log -1 --format="%ct")
-          NOW=$(date +%s)
-          DIFF=$((NOW - LAST_COMMIT))
-          # 86400 = seconds in one day
-          if [ "$DIFF" -lt 86400 ]; then
-            echo "has_commits=true" >> $GITHUB_OUTPUT
-            echo "Recent commit found (${DIFF}s ago)"
+          CURRENT_SHA=$(git rev-parse HEAD)
+          PREVIOUS_SHA="${{ steps.previous.outputs.previous_sha }}"
+
+          if [ -n "$PREVIOUS_SHA" ]; then
+            if [ "$CURRENT_SHA" != "$PREVIOUS_SHA" ]; then
+              echo "has_commits=true" >> "$GITHUB_OUTPUT"
+              echo "New commits found since previous nightly (${PREVIOUS_SHA}..${CURRENT_SHA})"
+            else
+              echo "has_commits=false" >> "$GITHUB_OUTPUT"
+              echo "HEAD matches the previous nightly build (${CURRENT_SHA}), skipping nightly release"
+            fi
           else
-            echo "has_commits=false" >> $GITHUB_OUTPUT
-            echo "No recent commits (last commit was ${DIFF}s ago), skipping nightly release"
+            LAST_COMMIT=$(git log -1 --format="%ct")
+            NOW=$(date +%s)
+            DIFF=$((NOW - LAST_COMMIT))
+            # 86400 = seconds in one day
+            if [ "$DIFF" -lt 86400 ]; then
+              echo "has_commits=true" >> "$GITHUB_OUTPUT"
+              echo "No prior nightly found; recent commit detected (${DIFF}s ago)"
+            else
+              echo "has_commits=false" >> "$GITHUB_OUTPUT"
+              echo "No prior nightly found and no recent commits (last commit was ${DIFF}s ago), skipping nightly release"
+            fi
           fi
 
       - name: Compute nightly version
@@ -45,8 +78,68 @@ jobs:
           echo "version=0.0.0-alpha.${SHORT_SHA}" >> $GITHUB_OUTPUT
           echo "Nightly version: 0.0.0-alpha.${SHORT_SHA}"
 
-  release:
+  changelog:
     needs: prepare
+    if: ${{ needs.prepare.outputs.has_commits == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Generate nightly changelog
+        env:
+          PREVIOUS_SHA: ${{ needs.prepare.outputs.previous_sha }}
+          PREVIOUS_RUN_ID: ${{ needs.prepare.outputs.previous_run_id }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          if [ -n "$PREVIOUS_SHA" ]; then
+            COMPARE_URL="https://github.com/${{ github.repository }}/compare/${PREVIOUS_SHA}...${{ github.sha }}"
+            RANGE="${PREVIOUS_SHA}..HEAD"
+            INTRO="Changes since the previous successful nightly run ([#${PREVIOUS_RUN_ID}](https://github.com/${{ github.repository }}/actions/runs/${PREVIOUS_RUN_ID}))."
+          else
+            COMPARE_URL=""
+            RANGE=""
+            INTRO="No previous successful nightly run was found. Showing the most recent commits included in this build."
+          fi
+
+          {
+            echo "# Nightly changelog"
+            echo
+            echo "Version: \`${VERSION}\`"
+            echo
+            echo "${INTRO}"
+            echo
+            if [ -n "$COMPARE_URL" ]; then
+              echo "Compare: ${COMPARE_URL}"
+              echo
+            fi
+
+            if [ -n "$RANGE" ]; then
+              if git rev-list --count "$RANGE" | grep -q '^[1-9][0-9]*$'; then
+                git log --format='- `%h` %s (%an)' "$RANGE"
+              else
+                echo "- No commits since the previous nightly; this run rebuilt the same HEAD."
+              fi
+            else
+              git log -20 --format='- `%h` %s (%an)'
+            fi
+          } > nightly-changelog.md
+
+          cat nightly-changelog.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload nightly changelog
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: nightly-changelog
+          path: nightly-changelog.md
+          if-no-files-found: error
+
+  release:
+    needs:
+      - prepare
+      - changelog
     if: ${{ needs.prepare.outputs.has_commits == 'true' || github.event_name == 'workflow_dispatch' }}
     uses: ./.github/workflows/release.yml
     with:

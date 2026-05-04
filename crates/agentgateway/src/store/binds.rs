@@ -18,6 +18,7 @@ use crate::http::ext_proc::InferenceRouting;
 use crate::http::{ext_authz, ext_proc, filters, health, oidc, remoteratelimit, retry, timeout};
 use crate::llm::policy::ResponseGuard;
 use crate::mcp::McpAuthorizationSet;
+use crate::proxy::dtrace;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendPolicy, BackendTargetRef, BackendWithPolicies, Bind,
@@ -126,6 +127,7 @@ pub struct FrontendPolices {
 	pub access_log: Option<frontend::LoggingPolicy>,
 	pub tracing: Option<Arc<crate::types::agent::TracingPolicy>>,
 	pub access_log_otlp: Option<Arc<crate::types::agent::AccessLogPolicy>>,
+	pub metrics_fields: Option<frontend::MetricsFieldsPolicy>,
 }
 
 impl FrontendPolices {
@@ -159,24 +161,31 @@ impl FrontendPolices {
 			FrontendPolicy::Tracing(p) => {
 				self.tracing.get_or_insert_with(|| p.clone());
 			},
+			FrontendPolicy::Metrics(p) => {
+				self.metrics_fields.get_or_insert_with(|| p.clone());
+			},
 		}
 	}
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
-		let Some(frontend::LoggingPolicy {
+		if let Some(frontend::LoggingPolicy {
 			filter,
 			add: fields_add,
 			remove: _,
 			otlp: _,
 			access_log_policy: _,
 		}) = &self.access_log
-		else {
-			return;
-		};
-		if let Some(f) = filter {
-			ctx.register_log_expression(f)
+		{
+			if let Some(f) = filter {
+				ctx.register_log_expression(f)
+			}
+			for (_, v) in fields_add.iter() {
+				ctx.register_log_expression(v)
+			}
 		}
-		for (_, v) in fields_add.iter() {
-			ctx.register_log_expression(v)
+		if let Some(mf) = &self.metrics_fields {
+			for (_, v) in mf.add.iter() {
+				ctx.register_log_expression(v)
+			}
 		}
 	}
 }
@@ -265,8 +274,11 @@ impl BackendPolicies {
 	}
 }
 
-#[derive(Debug, Default)]
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RoutePolicies {
+	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
 	pub remote_rate_limit: Option<remoteratelimit::RemoteRateLimit>,
 	pub authorization: Option<http::authorization::HTTPAuthorizationSet>,
@@ -287,6 +299,7 @@ pub struct RoutePolicies {
 	pub request_redirect: Option<filters::RequestRedirect>,
 	pub url_rewrite: Option<filters::UrlRewrite>,
 	pub hostname_rewrite: Option<agent::HostRedirectOverride>,
+	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub request_mirror: Vec<filters::RequestMirror>,
 	pub direct_response: Option<filters::DirectResponse>,
 	pub cors: Option<http::cors::Cors>,
@@ -780,6 +793,10 @@ impl Store {
 		if !authz.is_empty() {
 			pol.authorization = Some(HTTPAuthorizationSet::new(authz.into()));
 		}
+		dtrace::trace(|t| {
+			let s = serde_json::to_value(&pol).unwrap_or_default();
+			t.selected_policies(s)
+		});
 
 		pol
 	}
@@ -787,10 +804,18 @@ impl Store {
 	pub fn gateway_policies(&self, name: &ListenerName) -> GatewayPolicies {
 		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
 		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
+		let listener_set = name
+			.as_listenerset_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
+		let listener_set_section = name
+			.as_listenerset_listener_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
 		let rules = listener
 			.iter()
 			.copied()
 			.flatten()
+			.chain(listener_set_section.iter().copied().flatten())
+			.chain(listener_set.iter().copied().flatten())
 			.chain(gateway.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
 			.filter_map(|p| p.policy.as_traffic_gateway_phase());
@@ -1077,6 +1102,12 @@ impl Store {
 	) -> FrontendPolices {
 		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
 		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
+		let listener_set = name
+			.as_listenerset_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
+		let listener_set_section = name
+			.as_listenerset_listener_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
 		let svc = service.and_then(|s| self.policies_by_target.get(&s));
 		let gateway_port = port.and_then(|port| {
 			self.policies_by_target.get(&PolicyTargetRef::Gateway {
@@ -1091,6 +1122,8 @@ impl Store {
 			.copied()
 			.flatten()
 			.chain(listener.iter().copied().flatten())
+			.chain(listener_set_section.iter().copied().flatten())
+			.chain(listener_set.iter().copied().flatten())
 			.chain(gateway_port.iter().copied().flatten())
 			.chain(gateway.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
@@ -1416,10 +1449,11 @@ impl Store {
 		diagnostics: &mut Diagnostics,
 	) -> anyhow::Result<()> {
 		let (route, listener_name, rgk) = Route::from_xds(&raw, diagnostics)?;
-		if let Some(sk) = route.service_key.clone() {
-			self.insert_service_route(route, sk);
-		} else if let Some(rgk) = rgk {
+		if let Some(rgk) = rgk {
+			// use group over service key here, the leaf route has a service key for policy
 			self.insert_route_into_group(route, rgk);
+		} else if let Some(sk) = route.service_key.clone() {
+			self.insert_service_route(route, sk);
 		} else {
 			self.insert_route(route, listener_name);
 		}
@@ -1726,7 +1760,8 @@ mod tests {
 	use super::*;
 	use crate::telemetry::log::OrderedStringMap;
 	use crate::types::agent::{
-		BackendTarget, BindProtocol, ListenerProtocol, ListenerSet, PolicyType, TunnelProtocol,
+		BackendTarget, BindProtocol, ListenerProtocol, ListenerSet, ListenerSetTarget, PolicyType,
+		ResourceName, TunnelProtocol,
 	};
 	use crate::types::frontend::LoggingPolicy;
 
@@ -1853,6 +1888,103 @@ mod tests {
 				.routes
 				.as_ref()
 				.is_some_and(|routes| routes.contains(&strng::literal!("route")))
+		);
+	}
+
+	#[test]
+	fn delegated_child_dispatches_to_group_and_inherits_service_policies() {
+		use crate::types::proto::agent::RouteName as XdsRouteName;
+		use crate::types::proto::workload::NamespacedHostname as XdsNamespacedHostname;
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(true))));
+		let listener = listener();
+		let svc = NamespacedHostname {
+			namespace: strng::literal!("ns"),
+			hostname: strng::literal!("svc-a.ns.svc.cluster.local"),
+		};
+		let rgk: RouteGroupKey = strng::literal!("ns/svc-a-children");
+
+		// Service-targeted timeout policy on svc-a. Service targets are stored
+		// as Backend(Service { ... }) — the same view NamespacedHostname uses
+		// in as_policy_target_ref().
+		let svc_policy_key: PolicyKey = strng::literal!("svc-a-timeout");
+		let svc_policy_target = PolicyTarget::Backend(BackendTarget::Service {
+			hostname: svc.hostname.clone(),
+			namespace: svc.namespace.clone(),
+			port: None,
+		});
+		let svc_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(7)),
+			backend_request_timeout: None,
+		};
+
+		let xds_route = XdsRoute {
+			key: "child-route".to_string(),
+			listener_key: String::new(),
+			service_key: Some(XdsNamespacedHostname {
+				namespace: svc.namespace.to_string(),
+				hostname: svc.hostname.to_string(),
+			}),
+			route_group_key: Some(rgk.to_string()),
+			name: Some(XdsRouteName {
+				kind: "HTTPRoute".to_string(),
+				name: "child".to_string(),
+				namespace: "ns".to_string(),
+				rule_name: None,
+			}),
+			hostnames: vec![],
+			matches: vec![],
+			backends: vec![],
+			traffic_policies: vec![],
+		};
+
+		{
+			let mut store = updater.write();
+			store.policies_by_key.insert(
+				svc_policy_key.clone(),
+				Arc::new(TargetedPolicy {
+					key: svc_policy_key.clone(),
+					name: None,
+					target: svc_policy_target.clone(),
+					policy: TrafficPolicy::Timeout(svc_timeout.clone()).into(),
+				}),
+			);
+			store
+				.policies_by_target
+				.entry(svc_policy_target)
+				.or_default()
+				.insert(svc_policy_key);
+			store
+				.insert_xds_route(xds_route, &mut Diagnostics::default())
+				.expect("insert_xds_route should succeed");
+		}
+
+		let store = updater.read();
+
+		let group = store
+			.lookup_route_group(&rgk)
+			.expect("route should be in the route group");
+		let in_group = group
+			.iter()
+			.find(|r| r.key == strng::literal!("child-route"))
+			.expect("delegated child should be in the group");
+		assert!(
+			store.get_service_routes(&svc).is_none(),
+			"route with route_group_key must not also live in service-keyed routes",
+		);
+
+		let pols = store.route_policies(
+			&RoutePath {
+				listener: &listener,
+				service: in_group.service_key.as_ref(),
+				routes: vec![&in_group.name],
+			},
+			&[],
+		);
+		assert_eq!(
+			pols.timeout,
+			Some(svc_timeout),
+			"Service-targeted policy on svc-a must apply when traffic reaches the delegated child",
 		);
 	}
 
@@ -2363,6 +2495,122 @@ mod tests {
 			modifier.set[0],
 			(strng::new("x-foo"), strng::new("bar3")),
 			"Section attached policy (bar3) should win over backend attached policy (bar)"
+		);
+	}
+
+	#[test]
+	fn listenerset_targeted_policy_is_found_via_listener_frontend_policies() {
+		let mut store = Store::default();
+
+		// Insert a policy targeting a ListenerSet
+		let policy_key: PolicyKey = strng::new("ls-policy");
+		let targeted = TargetedPolicy {
+			key: policy_key.clone(),
+			name: None,
+			target: PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: None,
+			}),
+			policy: agent::PolicyType::Frontend(create_access_log_policy("ls_remove")),
+		};
+		store
+			.policies_by_key
+			.insert(policy_key.clone(), Arc::new(targeted));
+		store
+			.policies_by_target
+			.entry(PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: None,
+			}))
+			.or_default()
+			.insert(policy_key);
+
+		// Create a ListenerName that belongs to the ListenerSet
+		let listener = ListenerName {
+			gateway_name: strng::new("gw"),
+			gateway_namespace: strng::new("ns"),
+			listener_name: strng::new("listener"),
+			listener_set: Some(ResourceName::new(
+				strng::new("my-ls"),
+				strng::new("default"),
+			)),
+		};
+
+		let pols = store.listener_frontend_policies(&listener, None, None);
+		let access_log = pols
+			.access_log
+			.as_ref()
+			.expect("expected access log policy from ListenerSet target");
+		assert!(
+			access_log.remove.contains("ls_remove"),
+			"ListenerSet-targeted policy should be found via listener_frontend_policies"
+		);
+	}
+
+	#[test]
+	fn listenerset_section_targeted_policy_applies_only_to_named_listener() {
+		let mut store = Store::default();
+
+		let policy_key: PolicyKey = strng::new("ls-section-policy");
+		// Policy targets ListenerSet/my-ls with sectionName: listener-a
+		let targeted = TargetedPolicy {
+			key: policy_key.clone(),
+			name: None,
+			target: PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: Some(strng::new("listener-a")),
+			}),
+			policy: agent::PolicyType::Frontend(create_access_log_policy("section_remove")),
+		};
+		store
+			.policies_by_key
+			.insert(policy_key.clone(), Arc::new(targeted));
+		store
+			.policies_by_target
+			.entry(PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: Some(strng::new("listener-a")),
+			}))
+			.or_default()
+			.insert(policy_key);
+
+		// listener-a: should match
+		let listener_a = ListenerName {
+			gateway_name: strng::new("gw"),
+			gateway_namespace: strng::new("ns"),
+			listener_name: strng::new("listener-a"),
+			listener_set: Some(ResourceName::new(
+				strng::new("my-ls"),
+				strng::new("default"),
+			)),
+		};
+		let pols_a = store.listener_frontend_policies(&listener_a, None, None);
+		assert!(
+			pols_a
+				.access_log
+				.as_ref()
+				.is_some_and(|p| p.remove.contains("section_remove")),
+			"section-targeted policy should apply to the named listener"
+		);
+
+		// listener-b: should NOT match
+		let listener_b = ListenerName {
+			gateway_name: strng::new("gw"),
+			gateway_namespace: strng::new("ns"),
+			listener_name: strng::new("listener-b"),
+			listener_set: Some(ResourceName::new(
+				strng::new("my-ls"),
+				strng::new("default"),
+			)),
+		};
+		let pols_b = store.listener_frontend_policies(&listener_b, None, None);
+		assert!(
+			pols_b.access_log.is_none(),
+			"section-targeted policy should NOT apply to a different listener in the same set"
 		);
 	}
 }

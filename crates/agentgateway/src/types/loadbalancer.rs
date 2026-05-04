@@ -1,13 +1,14 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::future::pending;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
 
 use arc_swap::ArcSwap;
+use futures_util::SinkExt;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rand::RngExt;
 use serde::ser::SerializeSeq;
-use tokio::sync::mpsc;
 use tokio::time::sleep_until;
 
 use crate::types::discovery::{
@@ -50,7 +51,8 @@ impl<T> Default for EndpointGroup<T> {
 #[derive(Debug, Clone)]
 pub struct EndpointSet<T> {
 	buckets: Vec<Atomic<EndpointGroup<T>>>,
-	tx_eviction: mpsc::Sender<EvictionEvent>,
+	tx_eviction: futures::channel::mpsc::Sender<EvictionEvent>,
+	eviction_worker: Arc<EvictionWorkerState<T>>,
 
 	// Updates to `buckets` are atomically swapped to make reads fast, but every writer does
 	// load→modify→store, which races when two writers touch the same bucket concurrently.
@@ -61,6 +63,12 @@ pub struct EndpointSet<T> {
 fn contains_target_port(ep: &Endpoint, wanted_target: u16) -> bool {
 	ep.port.values().any(|tp| *tp == wanted_target)
 }
+struct Candidate {
+	endpoint: Arc<Endpoint>,
+	info: Arc<EndpointInfo>,
+	workload: Arc<Workload>,
+}
+
 impl EndpointSet<Endpoint> {
 	pub fn insert(&self, ep: Endpoint, dest_workload: &Workload, ranker: &LocalityRanker) {
 		let bucket = match ranker.bucket_for(dest_workload) {
@@ -82,86 +90,122 @@ impl EndpointSet<Endpoint> {
 			return None;
 		};
 
-		let viable = |endpoint: &Arc<Endpoint>| -> Option<Arc<Workload>> {
-			let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
-				debug!("failed to fetch workload for {}", endpoint.workload_uid);
-				return None;
-			};
-			if target_port == 0 && !endpoint.port.contains_key(&svc_port) {
-				trace!(
-					"filter endpoint {}, no service port {}",
-					endpoint.workload_uid, svc_port
-				);
-				return None;
-			}
-			Some(wl)
+		let c = match override_dest {
+			Some(o) => self.select_override(workloads, o)?,
+			None => self
+				.select_p2c(workloads, svc, svc_port, target_port)
+				.or_else(|| self.select_fallback(workloads, svc_port, target_port))?,
 		};
 
-		let selected = if let Some(o) = override_dest {
-			// Explicit destination bypasses bucketing and health — search every endpoint
-			// (active + rejected) so an evicted-but-explicitly-targeted backend is still reachable.
-			self.all_endpoints().find_map(|(ep, info)| {
-				let Some(wl) = workloads.find_uid(&ep.workload_uid) else {
-					debug!("failed to fetch workload for {}", ep.workload_uid);
-					return None;
-				};
-				if !wl.workload_ips.contains(&o.ip()) {
-					return None;
-				}
-				if !contains_target_port(&ep, o.port()) {
-					return None;
-				}
-				Some((ep, info, wl))
-			})
-		} else {
-			// best_bucket() picks the first non-empty bucket (best locality tier).
-			let iter = svc.endpoints.iter();
-			let index = iter.index();
-			if index.is_empty() {
-				return None;
-			}
-			// Do not use `rand::seq::index::sample` so we can pick the same element twice
-			// This avoids starvation where the worst endpoint gets 0 traffic
-			let mut rng = rand::rng();
-			let a = rng.random_range(0..index.len());
-			let b = rng.random_range(0..index.len());
-			let best = [a, b]
-				.into_iter()
-				.filter_map(|idx| {
-					let (_, EndpointWithInfo { endpoint, info }) =
-						index.get_index(idx).expect("index already checked");
-					let wl = viable(endpoint)?;
-					Some((endpoint.clone(), info.clone(), wl))
-				})
-				.max_by(|(_, a, _), (_, b, _)| a.score().total_cmp(&b.score()));
-
-			best.or_else(|| {
-				// Slow fallback: scan buckets in locality order, returning the first bucket
-				// that yields any match. Per-bucket: prefer active, fall back to rejected
-				// when active is empty (mirrors the fast path's `index()` semantics).
-				self.buckets.iter().find_map(|bucket| {
-					let group = bucket.load_full();
-					let map = if !group.active.is_empty() {
-						&group.active
-					} else {
-						&group.rejected
-					};
-					map
-						.iter()
-						.filter_map(|(_, ewi)| {
-							let wl = viable(&ewi.endpoint)?;
-							Some((ewi.endpoint.clone(), ewi.info.clone(), wl))
-						})
-						.max_by(|(_, a, _), (_, b, _)| a.score().total_cmp(&b.score()))
-				})
-			})
-		};
-		let (ep, ep_info, wl) = selected?;
 		let handle = svc
 			.endpoints
-			.start_request(ep.workload_uid.clone(), &ep_info);
-		Some((ep, handle, wl))
+			.start_request(c.endpoint.workload_uid.clone(), &c.info);
+		Some((c.endpoint, handle, c.workload))
 	}
+
+	/// Explicit destination bypasses bucketing and health — search every endpoint
+	/// (active + rejected) so an evicted-but-explicitly-targeted backend is still reachable.
+	fn select_override(&self, workloads: &store::WorkloadStore, o: SocketAddr) -> Option<Candidate> {
+		self.find_endpoint(|ep, info| {
+			if !contains_target_port(ep, o.port()) {
+				return None;
+			}
+			let Some(wl) = workloads.find_uid(&ep.workload_uid) else {
+				debug!("failed to fetch workload for {}", ep.workload_uid);
+				return None;
+			};
+			if !wl.workload_ips.contains(&o.ip()) {
+				return None;
+			}
+			Some(Candidate {
+				endpoint: ep.clone(),
+				info: info.clone(),
+				workload: wl,
+			})
+		})
+	}
+
+	/// P2C: pick two random endpoints from the best non-empty bucket, return the
+	/// higher-scored one. Sampling with replacement (vs `rand::seq::index::sample`)
+	/// keeps the worst endpoint reachable instead of starving it of traffic.
+	fn select_p2c(
+		&self,
+		workloads: &store::WorkloadStore,
+		svc: &Service,
+		svc_port: u16,
+		target_port: u16,
+	) -> Option<Candidate> {
+		let iter = svc.endpoints.iter();
+		let index = iter.index();
+		if index.is_empty() {
+			return None;
+		}
+		let mut rng = rand::rng();
+		let a = rng.random_range(0..index.len());
+		let b = rng.random_range(0..index.len());
+		[a, b]
+			.into_iter()
+			.filter_map(|idx| {
+				let (_, ewi) = index.get_index(idx).expect("index already checked");
+				let wl = viable(workloads, target_port, svc_port, &ewi.endpoint)?;
+				Some(Candidate {
+					endpoint: ewi.endpoint.clone(),
+					info: ewi.info.clone(),
+					workload: wl,
+				})
+			})
+			.max_by(|a, b| a.info.score().total_cmp(&b.info.score()))
+	}
+
+	/// Slow fallback when P2C finds nothing viable: scan buckets in locality order
+	/// and take the best-scored match in the first bucket that yields any.
+	/// Per-bucket: prefer active, fall back to rejected when active is empty.
+	fn select_fallback(
+		&self,
+		workloads: &store::WorkloadStore,
+		svc_port: u16,
+		target_port: u16,
+	) -> Option<Candidate> {
+		self.buckets.iter().find_map(|bucket| {
+			let group = bucket.load_full();
+			let map = if !group.active.is_empty() {
+				&group.active
+			} else {
+				&group.rejected
+			};
+			map
+				.iter()
+				.filter_map(|(_, ewi)| {
+					let wl = viable(workloads, target_port, svc_port, &ewi.endpoint)?;
+					Some(Candidate {
+						endpoint: ewi.endpoint.clone(),
+						info: ewi.info.clone(),
+						workload: wl,
+					})
+				})
+				.max_by(|a, b| a.info.score().total_cmp(&b.info.score()))
+		})
+	}
+}
+
+fn viable(
+	workloads: &store::WorkloadStore,
+	target_port: u16,
+	svc_port: u16,
+	endpoint: &Arc<Endpoint>,
+) -> Option<Arc<Workload>> {
+	let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
+		debug!("failed to fetch workload for {}", endpoint.workload_uid);
+		return None;
+	};
+	if target_port == 0 && !endpoint.port.contains_key(&svc_port) {
+		trace!(
+			"filter endpoint {}, no service port {}",
+			endpoint.workload_uid, svc_port
+		);
+		return None;
+	}
+	Some(wl)
 }
 
 /// Computes an endpoint's locality bucket from a service's `routing_preferences`.
@@ -261,6 +305,24 @@ pub enum EvictionEvent {
 #[derive(Debug)]
 struct UnevictEntry(Instant, EndpointKey, Option<f64>);
 
+struct EvictionWorkerState<T> {
+	buckets: Vec<Atomic<EndpointGroup<T>>>,
+	action_mutex: Arc<Mutex<()>>,
+	eviction_events: Mutex<Option<futures::channel::mpsc::Receiver<EvictionEvent>>>,
+	started: AtomicBool,
+}
+
+impl<T> std::fmt::Debug for EvictionWorkerState<T> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("EvictionWorkerState")
+			.finish_non_exhaustive()
+	}
+}
+
+trait EvictionStarter: std::fmt::Debug + Send + Sync {
+	fn start(&self);
+}
+
 impl PartialEq for UnevictEntry {
 	fn eq(&self, other: &Self) -> bool {
 		self.0 == other.0 && self.1 == other.1
@@ -276,6 +338,32 @@ impl Ord for UnevictEntry {
 	fn cmp(&self, other: &Self) -> Ordering {
 		// Reverse so earliest instant is "greater" and gets popped first from BinaryHeap (max-heap).
 		other.0.cmp(&self.0).then_with(|| self.1.cmp(&other.1))
+	}
+}
+
+impl<T: Clone + Sync + Send + 'static> EvictionStarter for EvictionWorkerState<T> {
+	fn start(&self) {
+		if self
+			.started
+			.compare_exchange(false, true, AtomicOrdering::AcqRel, AtomicOrdering::Acquire)
+			.is_err()
+		{
+			return;
+		}
+
+		let Some(eviction_events) = self
+			.eviction_events
+			.lock()
+			.expect("eviction worker receiver mutex poisoned")
+			.take()
+		else {
+			return;
+		};
+		EndpointSet::<T>::worker(
+			eviction_events,
+			self.buckets.clone(),
+			self.action_mutex.clone(),
+		);
 	}
 }
 
@@ -309,18 +397,24 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		Self::new_with_buckets((0..priority_levels).map(|_| Default::default()).collect())
 	}
 	fn new_with_buckets(buckets: Vec<Atomic<EndpointGroup<T>>>) -> Self {
-		let (tx_eviction, rx_eviction) = mpsc::channel(10);
+		let (tx_eviction, rx_eviction) = futures::channel::mpsc::channel(1);
 		let action_mutex = Arc::new(Mutex::new(()));
-		Self::worker(rx_eviction, buckets.clone(), action_mutex.clone());
+		let eviction_worker = Arc::new(EvictionWorkerState {
+			buckets: buckets.clone(),
+			action_mutex: action_mutex.clone(),
+			eviction_events: Mutex::new(Some(rx_eviction)),
+			started: AtomicBool::new(false),
+		});
 		Self {
 			buckets,
 			tx_eviction,
+			eviction_worker,
 			action_mutex,
 		}
 	}
 
 	pub fn start_request(&self, key: Strng, info: &Arc<EndpointInfo>) -> ActiveHandle {
-		info.start_request(key, self.tx_eviction.clone())
+		info.start_request(key, self.tx_eviction.clone(), self.eviction_worker.clone())
 	}
 
 	fn find_bucket(&self, key: &EndpointKey) -> Option<Arc<EndpointGroup<T>>> {
@@ -385,19 +479,36 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		ActiveEndpointsIter(self.best_bucket())
 	}
 
-	/// Iterate every endpoint across all buckets. Active endpoints from all buckets
-	/// are yielded before any rejected endpoint, e.g.:
+	/// Visit every endpoint, returning the first `Some` produced by `f`. Active
+	/// endpoints from all buckets are visited before any rejected endpoint, e.g.:
 	///   active in bucket 0
 	///   active in bucket 1
 	///   rejected in bucket 0
 	///   rejected in bucket 1
-	pub fn all_endpoints(&self) -> AllEndpointsIter<'_, T> {
-		AllEndpointsIter {
-			buckets: &self.buckets,
-			bucket_idx: 0,
-			current: None,
-			in_rejected: false,
+	///
+	/// Each bucket is loaded separately, not as one atomic snapshot. If another
+	/// thread moves or evicts an endpoint mid-iteration, we may see it twice or
+	/// not at all — safe for "pick one and stop", unsafe for counting.
+	pub fn find_endpoint<F, R>(&self, mut f: F) -> Option<R>
+	where
+		F: FnMut(&Arc<T>, &Arc<EndpointInfo>) -> Option<R>,
+	{
+		for active_phase in [true, false] {
+			for bucket in self.buckets.iter() {
+				let group = bucket.load_full();
+				let map = if active_phase {
+					&group.active
+				} else {
+					&group.rejected
+				};
+				for (_, ewi) in map {
+					if let Some(r) = f(&ewi.endpoint, &ewi.info) {
+						return Some(r);
+					}
+				}
+			}
 		}
+		None
 	}
 
 	pub fn insert_key(&self, key: EndpointKey, ep: T, bucket: usize) {
@@ -483,7 +594,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		}
 	}
 	fn worker(
-		mut eviction_events: mpsc::Receiver<EvictionEvent>,
+		mut eviction_events: futures::channel::mpsc::Receiver<EvictionEvent>,
 		buckets: Vec<Atomic<EndpointGroup<T>>>,
 		action_mutex: Arc<Mutex<()>>,
 	) {
@@ -512,11 +623,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 				bucket.store(Arc::new(eps));
 			};
 			let handle_recv_evict = |uneviction_heap: &mut BinaryHeap<UnevictEntry>,
-			                         o: Option<EvictionEvent>| {
-				let Some(item) = o else {
-					return;
-				};
-
+			                         item: EvictionEvent| {
 				let EvictionEvent::Evict {
 					key,
 					until,
@@ -538,16 +645,16 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 			loop {
 				let evict_at = uneviction_heap.peek().map(|e| e.0);
 				tokio::select! {
-					true = maybe_sleep_until(evict_at) => handle_eviction(&mut uneviction_heap),
+					_ = maybe_sleep_until(evict_at) => handle_eviction(&mut uneviction_heap),
 					item = eviction_events.recv() => {
-						if item.is_none() { return };
+						let Ok(item) = item else { return };
 						handle_recv_evict(&mut uneviction_heap, item)
 					}
 				}
 			}
 		});
 	}
-	pub async fn evict(&mut self, key: EndpointKey, time: Instant) {
+	pub fn evict(&self, key: EndpointKey, time: Instant) {
 		let Some(bucket) = self.find_bucket(&key) else {
 			return;
 		};
@@ -557,7 +664,8 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 				.evicted_until
 				.compare_and_swap(&None::<Arc<_>>, Some(Arc::new(time)));
 			if prev.is_none() {
-				let tx = self.tx_eviction.clone();
+				self.eviction_worker.start();
+				let mut tx = self.tx_eviction.clone();
 				tokio::spawn(async move {
 					let _ = tx
 						.send(EvictionEvent::Evict {
@@ -575,6 +683,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 const ALPHA: f64 = 0.3;
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EndpointInfo {
 	/// health keeps track of the success rate for the endpoint.
 	health: Ewma,
@@ -630,16 +739,18 @@ impl EndpointInfo {
 			self.request_latency.load() * (1.0 + self.pending_requests.countf() * 0.1);
 		self.health.load() / (1.0 + latency_penalty)
 	}
-	pub fn start_request(
+	fn start_request(
 		self: &Arc<Self>,
 		key: Strng,
-		tx_sender: mpsc::Sender<EvictionEvent>,
+		tx_sender: futures::channel::mpsc::Sender<EvictionEvent>,
+		eviction_starter: Arc<dyn EvictionStarter>,
 	) -> ActiveHandle {
 		self.total_requests.fetch_add(1, AtomicOrdering::Relaxed);
 		ActiveHandle {
 			info: self.clone(),
 			key,
 			tx: tx_sender,
+			eviction_starter,
 			counter: self.pending_requests.0.clone(),
 		}
 	}
@@ -688,7 +799,8 @@ impl Serialize for ActiveCounter {
 pub struct ActiveHandle {
 	info: Arc<EndpointInfo>,
 	key: Strng,
-	tx: mpsc::Sender<EvictionEvent>,
+	tx: futures::channel::mpsc::Sender<EvictionEvent>,
+	eviction_starter: Arc<dyn EvictionStarter>,
 	#[allow(dead_code)]
 	counter: Arc<()>,
 }
@@ -737,7 +849,8 @@ impl ActiveHandle {
 				.evicted_until
 				.compare_and_swap(&None::<Arc<_>>, Some(Arc::new(time)));
 			if prev.is_none() {
-				let tx = self.tx.clone();
+				self.eviction_starter.start();
+				let mut tx = self.tx.clone();
 				let key = self.key.clone();
 				tokio::spawn(async move {
 					let _ = tx
@@ -767,15 +880,11 @@ impl ActiveCounter {
 	}
 }
 
-// tokio::select evaluates each pattern before checking the (optional) associated condition. Work
-// around that by returning false to fail the pattern match when sleep is not viable.
-async fn maybe_sleep_until(till: Option<Instant>) -> bool {
-	match till {
-		Some(till) => {
-			sleep_until(till.into()).await;
-			true
-		},
-		None => false,
+async fn maybe_sleep_until(till: Option<Instant>) {
+	if let Some(till) = till {
+		sleep_until(till.into()).await;
+	} else {
+		pending::<()>().await;
 	}
 }
 
@@ -793,53 +902,6 @@ where
 			seq.serialize_element(&b.load_full())?;
 		}
 		seq.end()
-	}
-}
-
-/// Non-allocating iterator over every endpoint across all buckets. Yields all active
-/// endpoints first (across every bucket), then all rejected.
-///
-/// Snapshot is per-bucket-per-phase, not whole-set: a concurrent rebucket or eviction
-/// can be partially observed across loads. Callers that scan-then-discard (e.g. selection)
-/// are unaffected; do not use for invariants that span buckets.
-pub struct AllEndpointsIter<'a, T> {
-	buckets: &'a [Atomic<EndpointGroup<T>>],
-	bucket_idx: usize,
-	current: Option<(Arc<EndpointGroup<T>>, usize)>,
-	in_rejected: bool,
-}
-
-impl<T> Iterator for AllEndpointsIter<'_, T> {
-	type Item = (Arc<T>, Arc<EndpointInfo>);
-
-	fn next(&mut self) -> Option<Self::Item> {
-		loop {
-			if let Some((group, idx)) = &mut self.current {
-				let map = if self.in_rejected {
-					&group.rejected
-				} else {
-					&group.active
-				};
-				if let Some((_, ewi)) = map.get_index(*idx) {
-					*idx += 1;
-					return Some((ewi.endpoint.clone(), ewi.info.clone()));
-				}
-				self.current = None;
-			}
-			if self.bucket_idx < self.buckets.len() {
-				let bucket = &self.buckets[self.bucket_idx];
-				self.bucket_idx += 1;
-				self.current = Some((bucket.load_full(), 0));
-				continue;
-			}
-			// Active phase exhausted across all buckets — restart for rejected phase.
-			if !self.in_rejected {
-				self.in_rejected = true;
-				self.bucket_idx = 0;
-				continue;
-			}
-			return None;
-		}
 	}
 }
 
@@ -1137,7 +1199,12 @@ mod tests {
 	}
 
 	fn collect_values(eps: &EndpointSet<&'static str>) -> Vec<&'static str> {
-		eps.all_endpoints().map(|(ep, _)| *ep).collect()
+		let mut out = Vec::new();
+		eps.find_endpoint(|ep, _| -> Option<()> {
+			out.push(**ep);
+			None
+		});
+		out
 	}
 
 	#[tokio::test]

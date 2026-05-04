@@ -8,10 +8,9 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"istio.io/istio/pkg/kube"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/flag"
+	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
 )
 
 const (
@@ -52,6 +51,7 @@ func Command() flag.Command {
 		},
 		Children: []flag.CommandBuilder{
 			func() flag.Command { return allCommand(common) },
+			func() flag.Command { return backendsCommand(common) },
 		},
 	}
 }
@@ -94,22 +94,22 @@ func loadConfigDumpSource(ctx context.Context, common *commonFlags, args []strin
 		}, nil
 	}
 
-	namespace, err := loadNamespace(common.namespace)
+	namespace, err := kubeutil.LoadNamespace(common.namespace)
 	if err != nil {
 		return nil, err
 	}
 
-	kubeClient, err := newCLIClient()
+	kubeClient, err := kubeutil.NewCLIClient()
 	if err != nil {
 		return nil, err
 	}
 
-	resourceName, err := resolveResourceName(ctx, kubeClient, namespace, args)
+	resourceName, err := kubeutil.ResolveResourceName(ctx, kubeClient, namespace, args)
 	if err != nil {
 		return nil, err
 	}
 
-	podName, podNamespace, err := resolvePodForResource(kubeClient, resourceName, namespace)
+	podName, podNamespace, err := kubeutil.ResolvePodForResource(kubeClient, resourceName, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -125,36 +125,6 @@ func loadConfigDumpSource(ctx context.Context, common *commonFlags, args []strin
 		PodName:      podName,
 		ConfigDump:   configDump,
 	}, nil
-}
-
-func loadNamespace(namespaceOverride string) (string, error) {
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	if kubeconfig := flag.Kubeconfig(); kubeconfig != "" {
-		loadingRules.ExplicitPath = kubeconfig
-	}
-
-	configLoader := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &clientcmd.ConfigOverrides{})
-	namespace, _, err := configLoader.Namespace()
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve namespace from kubeconfig: %w", err)
-	}
-	if namespaceOverride != "" {
-		namespace = namespaceOverride
-	}
-
-	return namespace, nil
-}
-
-func newCLIClient() (kube.CLIClient, error) {
-	restConfig, err := kube.DefaultRestConfig(flag.Kubeconfig(), "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to build Kubernetes client config: %w", err)
-	}
-
-	restConfig.QPS = 50
-	restConfig.Burst = 100
-
-	return kube.NewCLIClient(kube.NewClientConfigForRestConfig(restConfig))
 }
 
 func readFile(filename string) ([]byte, error) {

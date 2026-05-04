@@ -235,18 +235,14 @@ backends:
                       - backendAuth:
                           key:
                             value: "<redacted>"
-                            location:
-                              header:
-                                name: authorization
-                                prefix: "Bearer "
                   info:
                     health: 1
-                    request_latency: 0
-                    pending_requests: 0
-                    total_requests: 0
-                    consecutive_failures: 0
-                    times_ejected: 0
-                    evicted_until: ~
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
               rejected: {}
     inlinePolicies:
       - backendTLS: ~
@@ -284,18 +280,14 @@ backends:
                       - backendAuth:
                           key:
                             value: "<redacted>"
-                            location:
-                              header:
-                                name: authorization
-                                prefix: "Bearer "
                   info:
                     health: 1
-                    request_latency: 0
-                    pending_requests: 0
-                    total_requests: 0
-                    consecutive_failures: 0
-                    times_ejected: 0
-                    evicted_until: ~
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
               rejected: {}
     inlinePolicies:
       - requestHeaderModifier:
@@ -324,12 +316,12 @@ backends:
                     tokenize: false
                   info:
                     health: 1
-                    request_latency: 0
-                    pending_requests: 0
-                    total_requests: 0
-                    consecutive_failures: 0
-                    times_ejected: 0
-                    evicted_until: ~
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
               rejected: {}
     inlinePolicies:
       - requestHeaderModifier:
@@ -354,12 +346,12 @@ backends:
                     tokenize: false
                   info:
                     health: 1
-                    request_latency: 0
-                    pending_requests: 0
-                    total_requests: 0
-                    consecutive_failures: 0
-                    times_ejected: 0
-                    evicted_until: ~
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
               rejected: {}
     inlinePolicies:
       - requestHeaderModifier:

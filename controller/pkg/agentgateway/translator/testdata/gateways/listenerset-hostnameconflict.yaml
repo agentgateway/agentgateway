@@ -183,6 +183,9 @@ output:
         gatewayName: gateway-with-listenerset-hostname-conflict
         gatewayNamespace: gateway-conformance-infra
         listenerName: hostname-conflict-with-gateway-listener
+        listenerSet:
+          name: listenerset-with-hostname-conflict-with-gateway-1
+          namespace: gateway-conformance-infra
       protocol: HTTP
 - gateway:
     Name: gateway-with-listenerset-hostname-conflict
@@ -196,6 +199,9 @@ output:
         gatewayName: gateway-with-listenerset-hostname-conflict
         gatewayNamespace: gateway-conformance-infra
         listenerName: hostname-conflict-with-listener-set-listener
+        listenerSet:
+          name: listenerset-with-hostname-conflict-with-gateway-1
+          namespace: gateway-conformance-infra
       protocol: HTTP
 - gateway:
     Name: gateway-with-listenerset-hostname-conflict
@@ -209,6 +215,9 @@ output:
         gatewayName: gateway-with-listenerset-hostname-conflict
         gatewayNamespace: gateway-conformance-infra
         listenerName: listener-set-1-listener
+        listenerSet:
+          name: listenerset-with-hostname-conflict-with-gateway-1
+          namespace: gateway-conformance-infra
       protocol: HTTP
 - gateway:
     Name: gateway-with-listenerset-hostname-conflict
@@ -222,6 +231,9 @@ output:
         gatewayName: gateway-with-listenerset-hostname-conflict
         gatewayNamespace: gateway-conformance-infra
         listenerName: hostname-conflict-with-gateway-listener
+        listenerSet:
+          name: listenerset-with-hostname-conflict-with-gateway-2
+          namespace: gateway-conformance-infra
       protocol: HTTP
 - gateway:
     Name: gateway-with-listenerset-hostname-conflict
@@ -235,6 +247,9 @@ output:
         gatewayName: gateway-with-listenerset-hostname-conflict
         gatewayNamespace: gateway-conformance-infra
         listenerName: hostname-conflict-with-listener-set-listener
+        listenerSet:
+          name: listenerset-with-hostname-conflict-with-listener-set-1
+          namespace: gateway-conformance-infra
       protocol: HTTP
 - gateway:
     Name: gateway-with-listenerset-hostname-conflict
@@ -248,6 +263,9 @@ output:
         gatewayName: gateway-with-listenerset-hostname-conflict
         gatewayNamespace: gateway-conformance-infra
         listenerName: listener-set-2-listener
+        listenerSet:
+          name: listenerset-with-hostname-conflict-with-listener-set-1
+          namespace: gateway-conformance-infra
       protocol: HTTP
 - gateway:
     Name: gateway-with-listenerset-hostname-conflict
@@ -261,6 +279,9 @@ output:
         gatewayName: gateway-with-listenerset-hostname-conflict
         gatewayNamespace: gateway-conformance-infra
         listenerName: hostname-conflict-with-listener-set-listener
+        listenerSet:
+          name: listenerset-with-hostname-conflict-with-listener-set-2
+          namespace: gateway-conformance-infra
       protocol: HTTP
 status:
 - apiVersion: gateway.networking.k8s.io/v1

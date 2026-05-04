@@ -589,7 +589,7 @@ func buildAgwHTTPDestination(
 			}
 			res = append(res, &api.RouteBackend{
 				Weight:        weight,
-				RouteGroupKey: ptr.Of(utils.InternalRouteGroupKey(backendNs, string(fwd.Name))),
+				RouteGroupKey: new(utils.InternalRouteGroupKey(backendNs, string(fwd.Name))),
 			})
 			continue
 		}

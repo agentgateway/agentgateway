@@ -34,11 +34,11 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 		.build()
 		.unwrap()
 		.block_on(async move {
-			let (contents, filename) = read_config_contents(&config)?;
+			let (contents, local_config_source) = read_config_contents(&config)?;
 			if validate_only {
-				return validate(contents, filename).await;
+				return validate(contents, local_config_source).await;
 			}
-			let mut config = agentgateway::config::parse_config(contents, filename)?;
+			let mut config = agentgateway::config::parse_config(contents, local_config_source)?;
 			// Capture the admin/runtime handle to ensure some background tasks (e.g., OTLP exporters created from dataplane
 			// policy initialization) run on the admin runtime rather than the dataplane runtime.
 			config.admin_runtime_handle = Some(tokio::runtime::Handle::current());
@@ -70,8 +70,11 @@ fn copy_binary(copy_self: PathBuf) -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn validate(contents: String, filename: Option<PathBuf>) -> anyhow::Result<()> {
-	let config = agentgateway::config::parse_config(contents, filename)?;
+async fn validate(
+	contents: String,
+	local_config_source: Option<agentgateway::ConfigSource>,
+) -> anyhow::Result<()> {
+	let config = agentgateway::config::parse_config(contents, local_config_source)?;
 	let client = client::Client::new(&config.dns, None, BackendConfig::default(), None);
 	if let Some(cfg) = config.xds.local_config.as_ref() {
 		let cs = cfg.read_to_string().await?;

@@ -10,7 +10,9 @@ path = "src/lib.rs"
 
 [features]
 default = []
+glibc = []
 jemalloc = ["dep:tikv-jemallocator", "dep:jemalloc_pprof"]
+mimalloc = ["pprof-alloc/allocator-mimalloc", "dep:mimalloc"]
 ui = []
 schema = ["schemars"]
 internal_benches = ["divan"]
@@ -70,7 +72,6 @@ include_dir.workspace = true
 indexmap = { workspace = true }
 ipnet.workspace = true
 itertools.workspace = true
-jemalloc_pprof = { workspace = true, optional = true }
 jsonwebtoken.workspace = true
 lazy_static.workspace = true
 macro_rules_attribute.workspace = true
@@ -125,7 +126,7 @@ socket2.workspace = true
 sse-stream.workspace = true
 thiserror.workspace = true
 tiktoken-rs.workspace = true
-tikv-jemallocator = { workspace = true, optional = true }
+mimalloc = { workspace = true, optional = true }
 tokio-rustls.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
@@ -155,9 +156,13 @@ pprof.workspace = true
 which.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
+pprof-alloc = { workspace = true, features = ["allocator-jemalloc"] }
 tokio = { workspace = true, features = ["taskdump"] }
+tikv-jemallocator = { workspace = true, optional = true }
+jemalloc_pprof = { workspace = true, optional = true }
 
 [target.'cfg(not(target_os = "linux"))'.dependencies]
+pprof-alloc.workspace = true
 tokio = { workspace = true }
 
 [dev-dependencies]

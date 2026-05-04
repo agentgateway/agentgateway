@@ -7,7 +7,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
@@ -282,11 +281,11 @@ func (r *RouteReport) parentRefs() []gwv1.ParentReference {
 	for key := range r.Parents {
 		var ns *gwv1.Namespace
 		if key.Namespace != "" {
-			ns = ptr.To(gwv1.Namespace(key.Namespace))
+			ns = new(gwv1.Namespace(key.Namespace))
 		}
 		parentRef := gwv1.ParentReference{
-			Group:     ptr.To(gwv1.Group(key.Group)),
-			Kind:      ptr.To(gwv1.Kind(key.Kind)),
+			Group:     new(gwv1.Group(key.Group)),
+			Kind:      new(gwv1.Kind(key.Kind)),
 			Name:      gwv1.ObjectName(key.Name),
 			Namespace: ns,
 		}

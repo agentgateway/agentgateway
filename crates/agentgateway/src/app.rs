@@ -49,6 +49,8 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let sub_registry = metrics::sub_registry(&mut registry);
 	let xds_metrics = agent_xds::Metrics::new(sub_registry);
 	agent_core::metrics::TokioCollector::register(sub_registry, &data_plane_handle);
+	pprof_alloc::stats::cgroups::PrometheusCollector::register(sub_registry);
+	pprof_alloc::stats::smaps::PrometheusCollector::register(sub_registry);
 
 	// TODO: use for XDS
 	let control_client = client::Client::new(&config.dns, None, config.backend.clone(), None);

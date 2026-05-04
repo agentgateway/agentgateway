@@ -5,6 +5,7 @@ use macro_rules_attribute::apply;
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
 use crate::proxy::ProxyError;
+use crate::proxy::dtrace::{self};
 use crate::*;
 
 #[cfg(test)]
@@ -63,6 +64,8 @@ fn default_realm() -> String {
 	"Restricted".to_string()
 }
 
+const TRACE_POLICY_KIND: &str = "basic_auth";
+
 impl BasicAuthentication {
 	/// Create a new BasicAuthentication from a file path
 	pub fn new(
@@ -96,11 +99,21 @@ impl BasicAuthentication {
 		let Some(encoded_credentials) = self.authorization_location.extract(req) else {
 			// In strict mode, we require credentials
 			if self.mode == Mode::Strict {
+				dtrace::pol_result!(
+					dtrace::Error,
+					Apply,
+					"rejected request because basic auth credentials are required but missing"
+				);
 				return Err(ProxyError::BasicAuthenticationFailure(Error::Missing {
 					realm: self.realm.clone().unwrap_or_else(default_realm),
 				}));
 			}
 			// Otherwise without credentials, don't attempt to authenticate
+			dtrace::pol_result!(
+				dtrace::Info,
+				Skip,
+				"request has no basic auth credentials and auth mode is optional"
+			);
 			return Ok(None);
 		};
 
@@ -125,10 +138,20 @@ impl BasicAuthentication {
 
 		if valid {
 			// Authentication successful
+			dtrace::pol_result!(
+				dtrace::Info,
+				Apply,
+				"authenticated request as basic auth user {username}"
+			);
 			Ok(Some(Claims {
 				username: username.into(),
 			}))
 		} else {
+			dtrace::pol_result!(
+				dtrace::Error,
+				Apply,
+				"rejected request because basic auth credentials are invalid"
+			);
 			Err(invalid_credentials())
 		}
 	}

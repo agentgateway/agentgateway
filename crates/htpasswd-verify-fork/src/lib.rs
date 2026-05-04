@@ -135,28 +135,28 @@ crypt_test:bGVh02xkuGli2";
 	#[test]
 	fn unix_crypt_verify_htpasswd() {
 		let htpasswd = Htpasswd::new(DATA);
-		assert_eq!(htpasswd.check("crypt_test", "password"), true);
+		assert!(htpasswd.check("crypt_test", "password"));
 	}
 
 	#[test]
 	fn sha1_verify_htpasswd() {
 		let htpasswd = Htpasswd::new(DATA);
-		assert_eq!(htpasswd.check("sha1_test", "password"), true);
+		assert!(htpasswd.check("sha1_test", "password"));
 	}
 
 	#[test]
 	fn bcrypt_verify_htpasswd() {
 		let htpasswd = Htpasswd::new(DATA);
-		assert_eq!(htpasswd.check("bcrypt_test", "password"), true);
+		assert!(htpasswd.check("bcrypt_test", "password"));
 	}
 
 	#[test]
 	fn md5_verify_htpasswd() {
 		let htpasswd = Htpasswd::new(DATA);
-		assert_eq!(htpasswd.check("user", "password"), true);
-		assert_eq!(htpasswd.check("user", "passwort"), false);
-		assert_eq!(htpasswd.check("user2", "zaq1@WSX"), true);
-		assert_eq!(htpasswd.check("user2", "ZAQ1@WSX"), false);
+		assert!(htpasswd.check("user", "password"));
+		assert!(!htpasswd.check("user", "passwort"));
+		assert!(htpasswd.check("user2", "zaq1@WSX"));
+		assert!(!htpasswd.check("user2", "ZAQ1@WSX"));
 	}
 
 	#[test]
@@ -183,7 +183,7 @@ crypt_test:bGVh02xkuGli2";
 	#[test]
 	fn user_not_found() {
 		let htpasswd = Htpasswd::new(DATA);
-		assert_eq!(htpasswd.check("user_does_not_exist", "password"), false);
+		assert!(!htpasswd.check("user_does_not_exist", "password"));
 	}
 
 	#[test]

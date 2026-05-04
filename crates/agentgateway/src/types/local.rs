@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ::http::Uri;
 use agent_core::prelude::Strng;
-use anyhow::{Error, anyhow, bail};
+use anyhow::{Context, Error, anyhow, bail};
 use bytes::Bytes;
 use frozen_collections::Len;
 use itertools::Itertools;
@@ -22,7 +22,9 @@ use crate::http::{
 	HeaderName, HeaderOrPseudo, filters, health, retry, timeout, transformation_cel,
 };
 use crate::llm::policy::PromptGuard;
-use crate::llm::{AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider, anthropic, openai};
+use crate::llm::{
+	AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider, anthropic, copilot, openai,
+};
 use crate::mcp::{FailureMode, McpAuthorization};
 use crate::store::LocalWorkload;
 use crate::types::agent::{
@@ -210,13 +212,17 @@ fn merge_deprecated_frontend_policies(
 			Vec::new()
 		};
 		if let Some(ep) = endpoint {
-			// Strip the scheme (http:// or https://) from the endpoint URL to get host:port
+			// Strip the scheme (http://, https://), or grpc://) from the endpoint URL to get host:port
 			let host_port = ep
 				.strip_prefix("http://")
 				.or_else(|| ep.strip_prefix("https://"))
+				.or_else(|| ep.strip_prefix("grpc://"))
 				.unwrap_or(&ep);
 			frontend_policies.tracing = Some(TracingConfig {
-				provider_backend: SimpleBackendReference::InlineBackend(Target::try_from(host_port)?),
+				provider_backend: SimpleBackendReference::InlineBackend(
+					Target::try_from(host_port)
+						.with_context(|| format!("failed parsing tracing endpoint: {}", ep))?,
+				),
 				policies,
 				attributes: Arc::unwrap_or_clone(fields.add),
 				resources: Default::default(), // Not supported in the old config
@@ -1148,7 +1154,7 @@ where
 			BackendAuthCompat::Full(auth) => auth,
 			BackendAuthCompat::PlainKey { key } => BackendAuth::Key {
 				value: key,
-				location: crate::http::auth::AuthorizationLocation::default(),
+				location: None,
 			},
 		})
 	})
@@ -1919,6 +1925,7 @@ json(request.body).model
 		let provider = match &model_config.provider {
 			LocalModelAIProvider::Anthropic => AIProvider::Anthropic(anthropic::Provider { model }),
 			LocalModelAIProvider::OpenAI => AIProvider::OpenAI(openai::Provider { model }),
+			LocalModelAIProvider::Copilot => AIProvider::Copilot(copilot::Provider { model }),
 			LocalModelAIProvider::Gemini => AIProvider::Gemini(crate::llm::gemini::Provider { model }),
 			LocalModelAIProvider::Vertex => AIProvider::Vertex(crate::llm::vertex::Provider {
 				model,
@@ -1951,7 +1958,7 @@ json(request.body).model
 		if let Some(key) = p.api_key.as_ref() {
 			let backend_auth = BackendAuth::Key {
 				value: key.0.clone(),
-				location: crate::http::auth::AuthorizationLocation::default(),
+				location: None,
 			};
 			pols.push(BackendPolicy::BackendAuth(backend_auth));
 		}

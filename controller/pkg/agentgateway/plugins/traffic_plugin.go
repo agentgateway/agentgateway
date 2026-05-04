@@ -142,18 +142,15 @@ func TranslateAgentgatewayPolicy(
 	baseTranslatedPolicies, baseErr := TranslatePolicyToAgw(pctx, policy)
 	baseConds := PolicyConditionMap(baseErr, len(baseTranslatedPolicies) > 0)
 	controller := gwv1.GatewayController(agw.ControllerName)
-	for _, target := range policy.Spec.TargetRefs {
-		gk := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
 
-		policyTargets, targetExists := references.PolicyTarget(ctx, policy.Namespace, target.Name, gk, target.SectionName)
+	processTarget := func(name gwv1.ObjectName, targetNamespace string, gk schema.GroupKind, policyTargets []*api.PolicyTarget, targetExists bool) {
 		if len(policyTargets) == 0 {
-			// This should be impossible, verified by CEL validation
-			logger.Warn("unsupported target kind", "kind", target.Kind, "policy", policy.Name)
-			continue
+			logger.Warn("unsupported target kind", "kind", gk.Kind, "policy", policy.Name)
+			return
 		}
 
 		targetObject := utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: string(target.Name)},
+			NamespacedName: types.NamespacedName{Namespace: targetNamespace, Name: string(name)},
 			Kind:           gk.Kind,
 		}
 
@@ -169,21 +166,21 @@ func TranslateAgentgatewayPolicy(
 				for _, translatedPolicy := range translatedPolicies {
 					for _, gatewayTarget := range gatewayTargets {
 						agwPolicies = append(agwPolicies, AgwPolicy{
-							Gateway: ptr.Of(gatewayTarget),
+							Gateway: new(gatewayTarget),
 							Policy:  translatedPolicy,
 						})
 					}
 				}
 			}
 
-			ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(policy.Namespace, targetObject, gatewayTargets, targetExists)
+			ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(targetNamespace, targetObject, gatewayTargets, targetExists)
 			if attachmentErr != "" {
 				attachmentErrors = append(attachmentErrors, attachmentErr)
 			}
 
 			for _, ar := range ancestorRefs {
 				// A policy should report at most one status per Gateway parent, even if multiple
-				// targetRefs resolve to the same Gateway.
+				// targetRefs/targetSelectors resolve to the same Gateway.
 				if slices.IndexFunc(ancestors, func(existing gwv1.PolicyAncestorStatus) bool {
 					return existing.ControllerName == controller && ParentRefEquals(existing.AncestorRef, ar)
 				}) != -1 {
@@ -194,10 +191,47 @@ func TranslateAgentgatewayPolicy(
 		}
 	}
 
+	type targetKey struct {
+		Group       string
+		Kind        string
+		Name        string
+		Namespace   string
+		SectionName string
+	}
+	seen := make(map[targetKey]struct{})
+	tryProcessTarget := func(gk schema.GroupKind, name gwv1.ObjectName, sectionName *gwv1.SectionName, targetNamespace string) {
+		section := ""
+		if sectionName != nil {
+			section = string(*sectionName)
+		}
+		key := targetKey{Group: gk.Group, Kind: gk.Kind, Name: string(name), Namespace: targetNamespace, SectionName: section}
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		policyTargets, targetExists := references.PolicyTarget(ctx, targetNamespace, name, gk, sectionName)
+		processTarget(name, targetNamespace, gk, policyTargets, targetExists)
+	}
+
+	for _, target := range policy.Spec.TargetRefs {
+		gk := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
+		tryProcessTarget(gk, target.Name, target.SectionName, policy.Namespace)
+	}
+	for _, selector := range policy.Spec.TargetSelectors {
+		gk := schema.GroupKind{Group: string(selector.Group), Kind: string(selector.Kind)}
+		targets := references.PolicyTargetsBySelector(ctx, policy.Namespace, selector)
+		if len(targets) == 0 {
+			attachmentErrors = append(attachmentErrors, fmt.Sprintf("Policy is not attached: no %s matching selector found in namespace %s", gk.Kind, policy.Namespace))
+		}
+		for _, target := range targets {
+			processTarget(target.Name, target.Namespace, gk, target.PolicyTargets, true)
+		}
+	}
+
 	if len(attachmentErrors) > 0 {
 		logger.Warn("failed to resolve one or more ancestor refs", "errors", attachmentErrors)
 		ancestors = append(ancestors, SetAncestorStatus(gwv1.ParentReference{
-			Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayPolicyGVK.Group)),
+			Group: new(gwv1.Group(wellknown.AgentgatewayPolicyGVK.Group)),
 			Name:  "StatusSummary",
 		}, existingStatus, policy.Generation, attachmentErrorConditionMap(baseConds, attachmentErrors), controller))
 	}
@@ -285,9 +319,9 @@ func resolvePolicyAncestorRefs(
 	for _, gatewayTarget := range gatewayTargets {
 		refs = append(refs, gwv1.ParentReference{
 			Name:      gwv1.ObjectName(gatewayTarget.Name),
-			Namespace: ptr.Of(gwv1.Namespace(gatewayTarget.Namespace)),
-			Group:     ptr.Of(gwv1.Group(wellknown.GatewayGVK.Group)),
-			Kind:      ptr.Of(gwv1.Kind(wellknown.GatewayGVK.Kind)),
+			Namespace: new(gwv1.Namespace(gatewayTarget.Namespace)),
+			Group:     new(gwv1.Group(wellknown.GatewayGVK.Group)),
+			Kind:      new(gwv1.Kind(wellknown.GatewayGVK.Kind)),
 		})
 	}
 	slices.SortStableFunc(refs, func(a, b gwv1.ParentReference) int {
@@ -1029,7 +1063,7 @@ func castCELPtr(item *shared.CELExpression, invalid func(shared.CELExpression)) 
 	if item == nil {
 		return nil
 	}
-	res := ptr.Of(string(*item))
+	res := new(string(*item))
 	if !isCEL(*item) {
 		invalid(*item)
 	}
@@ -1438,6 +1472,12 @@ func attachmentName(target *api.PolicyTarget) string {
 			b += "/" + strconv.Itoa(int(*v.Service.Port))
 		}
 		return b
+	case *api.PolicyTarget_ListenerSet:
+		b := ":" + v.ListenerSet.Namespace + "/" + v.ListenerSet.Name
+		if v.ListenerSet.Section != nil {
+			b += "/" + *v.ListenerSet.Section
+		}
+		return b
 	default:
 		panic(fmt.Sprintf("unknown target kind %T", target))
 	}
@@ -1482,17 +1522,36 @@ func BackendReferencesFromPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 		Kind:           wellknown.AgentgatewayPolicyGVK.Kind,
 	}
 
-	existingTargets := make([]utils.TypedNamespacedName, 0, len(s.TargetRefs))
+	seenTargets := make(map[utils.TypedNamespacedName]struct{})
+	var existingTargets []utils.TypedNamespacedName
+	addTarget := func(tnn utils.TypedNamespacedName) {
+		if _, ok := seenTargets[tnn]; ok {
+			return
+		}
+		seenTargets[tnn] = struct{}{}
+		existingTargets = append(existingTargets, tnn)
+	}
 	for _, tgt := range s.TargetRefs {
 		gk := schema.GroupKind{Group: string(tgt.Group), Kind: string(tgt.Kind)}
 		policyTarget, targetExists := references.PolicyTarget(ctx, policy.Namespace, tgt.Name, gk, tgt.SectionName)
 		if policyTarget == nil || !targetExists {
 			continue
 		}
-		existingTargets = append(existingTargets, utils.TypedNamespacedName{
+		addTarget(utils.TypedNamespacedName{
 			NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: string(tgt.Name)},
 			Kind:           string(tgt.Kind),
 		})
+	}
+	for _, selector := range s.TargetSelectors {
+		for _, target := range references.PolicyTargetsBySelector(ctx, policy.Namespace, selector) {
+			if len(target.PolicyTargets) == 0 {
+				continue
+			}
+			addTarget(utils.TypedNamespacedName{
+				NamespacedName: types.NamespacedName{Namespace: target.Namespace, Name: string(target.Name)},
+				Kind:           string(selector.Kind),
+			})
+		}
 	}
 	if len(existingTargets) == 0 {
 		return nil

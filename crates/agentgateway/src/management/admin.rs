@@ -1,6 +1,7 @@
 // Originally derived from https://github.com/istio/ztunnel (Apache 2.0 licensed)
 
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -9,11 +10,14 @@ use std::time::Duration;
 use agent_core::drain::DrainWatcher;
 use agent_core::version::BuildInfo;
 use agent_core::{signal, telemetry};
+use bytes::Bytes;
 use hyper::Request;
 use hyper::body::Incoming;
 use hyper::header::{CONTENT_TYPE, HeaderValue};
 use tokio::runtime::Handle;
 use tokio::time;
+use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::{info, warn};
 use tracing_subscriber::filter;
 
@@ -129,8 +133,8 @@ impl Service {
 			match req.uri().path() {
 				#[cfg(target_os = "linux")]
 				"/debug/pprof/profile" => handle_pprof(req).await,
-				#[cfg(target_os = "linux")]
-				"/debug/pprof/heap" => handle_jemalloc_pprof_heapgen(req).await,
+				"/debug/pprof/heap" => handle_heap_pprof().await,
+				"/memory" => handle_memory().await,
 				"/quitquitquit" => Ok(
 					handle_server_shutdown(
 						state.shutdown_trigger.clone(),
@@ -140,6 +144,7 @@ impl Service {
 					.await,
 				),
 				"/debug/tasks" => handle_tokio_tasks(req, &state.dataplane_handle).await,
+				"/debug/trace" => Ok(handle_debug_trace().await),
 				"/config_dump" => {
 					handle_config_dump(
 						&state.config_dump_handlers,
@@ -174,8 +179,9 @@ async fn handle_dashboard(_req: Request<Incoming>) -> Response {
 		),
 		(
 			"debug/pprof/heap",
-			"collect heap profiling data (if supported, requires jmalloc)",
+			"collect heap profiling data (if supported)",
 		),
+		("memory", "dump allocator and process memory statistics"),
 		("quitquitquit", "shut down the server"),
 		("config_dump", "dump the current agentgateway configuration"),
 		("logging", "query/changing logging levels"),
@@ -266,6 +272,26 @@ async fn handle_server_shutdown(
 		},
 		_ => empty_response(hyper::StatusCode::METHOD_NOT_ALLOWED),
 	}
+}
+
+pub async fn handle_debug_trace() -> Response {
+	let rx = crate::proxy::dtrace::track();
+	let sse_stream = ReceiverStream::new(rx).map(|msg| {
+		let payload = serde_json::to_string(&msg).unwrap_or_else(|e| {
+			serde_json::json!({
+				"type": "serialization_error",
+				"error": e.to_string(),
+			})
+			.to_string()
+		});
+		Ok::<Bytes, Infallible>(Bytes::from(format!("data: {payload}\n\n")))
+	});
+	::http::Response::builder()
+		.status(hyper::StatusCode::OK)
+		.header("Content-Type", "text/event-stream")
+		.header("Cache-Control", "no-cache")
+		.body(crate::http::Body::from_stream(sse_stream))
+		.expect("builder with known status code should not fail")
 }
 
 #[cfg(target_os = "linux")]
@@ -444,26 +470,8 @@ fn change_log_level(reset: bool, level: &str) -> Response {
 	}
 }
 
-#[cfg(all(feature = "jemalloc", target_os = "linux"))]
-async fn handle_jemalloc_pprof_heapgen(_req: Request<Incoming>) -> anyhow::Result<Response> {
-	let Some(prof_ctrl) = jemalloc_pprof::PROF_CTL.as_ref() else {
-		return Ok(
-			::http::Response::builder()
-				.status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-				.body("jemalloc profiling is not enabled".into())
-				.expect("builder with known status code should not fail"),
-		);
-	};
-	let mut prof_ctl = prof_ctrl.lock().await;
-	if !prof_ctl.activated() {
-		return Ok(
-			::http::Response::builder()
-				.status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-				.body("jemalloc not enabled".into())
-				.expect("builder with known status code should not fail"),
-		);
-	}
-	let pprof = prof_ctl.dump_pprof()?;
+pub async fn handle_heap_pprof() -> anyhow::Result<Response> {
+	let pprof = pprof_alloc::generate_pprof()?;
 	Ok(
 		::http::Response::builder()
 			.status(hyper::StatusCode::OK)
@@ -472,12 +480,14 @@ async fn handle_jemalloc_pprof_heapgen(_req: Request<Incoming>) -> anyhow::Resul
 	)
 }
 
-#[cfg(all(not(feature = "jemalloc"), target_os = "linux"))]
-async fn handle_jemalloc_pprof_heapgen(_req: Request<Incoming>) -> anyhow::Result<Response> {
+pub async fn handle_memory() -> anyhow::Result<Response> {
+	let snap = pprof_alloc::snapshot();
+	let body = serde_json::to_string_pretty(&snap)?;
 	Ok(
 		::http::Response::builder()
-			.status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-			.body("jemalloc not enabled".into())
+			.status(hyper::StatusCode::OK)
+			.header(hyper::header::CONTENT_TYPE, "application/json")
+			.body(body.into())
 			.expect("builder with known status code should not fail"),
 	)
 }
