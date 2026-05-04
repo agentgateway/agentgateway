@@ -936,7 +936,7 @@ func processConditional[T any](
 		}
 		base.Traffic.Phase = phase(policyPhase)
 		c := &api.ConditionalPolicy{
-			Kind:      &api.ConditionalPolicy_Traffic{Traffic: base.Traffic},
+			Kind: &api.ConditionalPolicy_Traffic{Traffic: base.Traffic},
 		}
 		if cond.Condition != "" {
 			c.Condition = ptr.Of(string(cond.Condition))
@@ -964,9 +964,15 @@ func processExtAuthPolicy(
 	policy types.NamespacedName,
 ) (*api.Policy_Traffic, error) {
 	var errs []error
-	be, err := buildBackendRef(ctx, extAuth.BackendRef, policy.Namespace)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("failed to build extAuth: %v", err))
+	var be *api.BackendReference
+	if extAuth.BackendRef == nil {
+		errs = append(errs, fmt.Errorf("failed to build extAuth: backendRef is required"))
+	} else {
+		var err error
+		be, err = buildBackendRef(ctx, *extAuth.BackendRef, policy.Namespace)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to build extAuth: %v", err))
+		}
 	}
 
 	spec := &api.TrafficPolicySpec_ExternalAuth{
@@ -1646,10 +1652,12 @@ func referencedBackendsFromPolicy(policy *agentgateway.AgentgatewayPolicy) []uti
 		if s.Traffic.ExtAuth != nil {
 			if len(s.Traffic.ExtAuth.Conditional) > 0 {
 				for _, conditional := range s.Traffic.ExtAuth.Conditional {
-					app(conditional.Policy.BackendRef)
+					if conditional.Policy.BackendRef != nil {
+						app(*conditional.Policy.BackendRef)
+					}
 				}
-			} else {
-				app(s.Traffic.ExtAuth.BackendRef)
+			} else if s.Traffic.ExtAuth.BackendRef != nil {
+				app(*s.Traffic.ExtAuth.BackendRef)
 			}
 		}
 		if s.Traffic.ExtProc != nil {

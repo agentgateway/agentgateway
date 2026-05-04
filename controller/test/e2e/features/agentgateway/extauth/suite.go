@@ -45,6 +45,11 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 				insecureRouteManifest,
 			},
 		},
+		"TestConditionalExtAuthPolicy": {
+			Manifests: []string{
+				conditionalRouteManifest,
+			},
+		},
 		"TestExtAuthPolicyMissingBackendRef": {
 			Manifests: []string{
 				securedRouteMissingRefManifest,
@@ -173,6 +178,69 @@ func (s *testingSuite) TestRouteTargetedExtAuthPolicy() {
 			}
 
 			// Test the request
+			common.BaseGateway.Send(
+				s.T(),
+				&testmatchers.HttpResponse{
+					StatusCode: tc.expectedStatus,
+					Body:       gomega.ContainSubstring(tc.expectedUpstreamBodyContents),
+				},
+				opts...)
+		})
+	}
+}
+
+// TestConditionalExtAuthPolicy tests conditional route level extauth, including the fallback entry.
+func (s *testingSuite) TestConditionalExtAuthPolicy() {
+	testCases := []struct {
+		name                         string
+		headers                      map[string]string
+		path                         string
+		expectedStatus               int
+		expectedUpstreamBodyContents string
+	}{
+		{
+			name: "request allowed by matching conditional policy",
+			headers: map[string]string{
+				"x-ext-authz": "allow",
+			},
+			path:                         "/secure",
+			expectedStatus:               http.StatusOK,
+			expectedUpstreamBodyContents: "X-Ext-Authz-Check-Result",
+		},
+		{
+			name:           "request denied by matching conditional policy",
+			headers:        map[string]string{},
+			path:           "/secure",
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			name: "request allowed by fallback conditional policy",
+			headers: map[string]string{
+				"x-ext-authz": "allow",
+			},
+			path:                         "/fallback",
+			expectedStatus:               http.StatusOK,
+			expectedUpstreamBodyContents: "X-Ext-Authz-Check-Result",
+		},
+		{
+			name:           "request denied by fallback conditional policy",
+			headers:        map[string]string{},
+			path:           "/fallback",
+			expectedStatus: http.StatusForbidden,
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			opts := []curl.Option{
+				curl.WithHostHeader("conditionalextauth.com"),
+				curl.WithPath(tc.path),
+			}
+
+			for k, v := range tc.headers {
+				opts = append(opts, curl.WithHeader(k, v))
+			}
+
 			common.BaseGateway.Send(
 				s.T(),
 				&testmatchers.HttpResponse{

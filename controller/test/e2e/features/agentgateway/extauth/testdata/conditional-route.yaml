@@ -1,0 +1,39 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-example-conditional
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+    - name: gateway
+  hostnames:
+    - "conditionalextauth.com"
+  rules:
+    - backendRefs:
+        - name: backend
+          port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: conditional-route-policy
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: route-example-conditional
+  traffic:
+    extAuth:
+      conditional:
+      - condition: request.path == "/secure"
+        policy:
+          grpc: {}
+          backendRef:
+            name: ext-authz
+            port: 4444
+      - policy:
+          grpc: {}
+          backendRef:
+            name: ext-authz
+            port: 4444

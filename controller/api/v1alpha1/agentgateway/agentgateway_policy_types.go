@@ -1495,7 +1495,7 @@ type ExtAuth struct {
 	//
 	// Supported types: `Service` and `Backend`.
 	// +optional // This is actually required, but making it required breaks Conditional
-	BackendRef gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
 
 	// FailureMode controls behavior when the external authorization service is
 	// unavailable or returns an error. "FailOpen" allows the request to continue.

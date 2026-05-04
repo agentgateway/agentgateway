@@ -13,6 +13,7 @@ var (
 	simpleServiceManifest          = getTestFile("service.yaml")
 	securedGatewayPolicyManifest   = getTestFile("secured-gateway-policy.yaml")
 	securedRouteManifest           = getTestFile("secured-route.yaml")
+	conditionalRouteManifest       = getTestFile("conditional-route.yaml")
 	insecureRouteManifest          = getTestFile("insecure-route.yaml")
 	securedRouteMissingRefManifest = getTestFile("secured-route-missing-ref.yaml")
 )
