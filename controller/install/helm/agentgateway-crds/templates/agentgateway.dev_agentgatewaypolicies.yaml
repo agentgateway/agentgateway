@@ -634,6 +634,18 @@ spec:
                                               - All
                                               - Hostname
                                               type: string
+                                            keyExchangeGroups:
+                                              description: |-
+                                                keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                                For example: `X25519_MLKEM768,X25519`.
+                                              items:
+                                                enum:
+                                                - X25519
+                                                - P-256
+                                                - P-384
+                                                - X25519_MLKEM768
+                                                type: string
+                                              type: array
                                             mtlsCertificateRef:
                                               description: |-
                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -1158,6 +1170,18 @@ spec:
                                               - All
                                               - Hostname
                                               type: string
+                                            keyExchangeGroups:
+                                              description: |-
+                                                keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                                For example: `X25519_MLKEM768,X25519`.
+                                              items:
+                                                enum:
+                                                - X25519
+                                                - P-256
+                                                - P-384
+                                                - X25519_MLKEM768
+                                                type: string
+                                              type: array
                                             mtlsCertificateRef:
                                               description: |-
                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -1679,6 +1703,18 @@ spec:
                                               - All
                                               - Hostname
                                               type: string
+                                            keyExchangeGroups:
+                                              description: |-
+                                                keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                                For example: `X25519_MLKEM768,X25519`.
+                                              items:
+                                                enum:
+                                                - X25519
+                                                - P-256
+                                                - P-384
+                                                - X25519_MLKEM768
+                                                type: string
+                                              type: array
                                             mtlsCertificateRef:
                                               description: |-
                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -2417,6 +2453,18 @@ spec:
                                               - All
                                               - Hostname
                                               type: string
+                                            keyExchangeGroups:
+                                              description: |-
+                                                keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                                For example: `X25519_MLKEM768,X25519`.
+                                              items:
+                                                enum:
+                                                - X25519
+                                                - P-256
+                                                - P-384
+                                                - X25519_MLKEM768
+                                                type: string
+                                              type: array
                                             mtlsCertificateRef:
                                               description: |-
                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -2941,6 +2989,18 @@ spec:
                                               - All
                                               - Hostname
                                               type: string
+                                            keyExchangeGroups:
+                                              description: |-
+                                                keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                                For example: `X25519_MLKEM768,X25519`.
+                                              items:
+                                                enum:
+                                                - X25519
+                                                - P-256
+                                                - P-384
+                                                - X25519_MLKEM768
+                                                type: string
+                                              type: array
                                             mtlsCertificateRef:
                                               description: |-
                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -4007,6 +4067,18 @@ spec:
                         - All
                         - Hostname
                         type: string
+                      keyExchangeGroups:
+                        description: |-
+                          keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                          For example: `X25519_MLKEM768,X25519`.
+                        items:
+                          enum:
+                          - X25519
+                          - P-256
+                          - P-384
+                          - X25519_MLKEM768
+                          type: string
+                        type: array
                       mtlsCertificateRef:
                         description: |-
                           `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -4870,6 +4942,18 @@ spec:
                           rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                         - message: handshakeTimeout must be at least 100ms
                           rule: duration(self) >= duration('100ms')
+                      keyExchangeGroups:
+                        description: |-
+                          keyExchangeGroups configures the ordered list of key exchange groups for a TLS listener.
+                          For example: `X25519_MLKEM768,X25519`.
+                        items:
+                          enum:
+                          - X25519
+                          - P-256
+                          - P-384
+                          - X25519_MLKEM768
+                          type: string
+                        type: array
                       maxProtocolVersion:
                         description: MaxTLSVersion configures the maximum TLS version
                           to support.
@@ -4887,9 +4971,9 @@ spec:
                     type: object
                     x-kubernetes-validations:
                     - message: at least one of the fields in [alpnProtocols cipherSuites
-                        handshakeTimeout maxProtocolVersion minProtocolVersion] must
-                        be set
-                      rule: '[has(self.alpnProtocols),has(self.cipherSuites),has(self.handshakeTimeout),has(self.maxProtocolVersion),has(self.minProtocolVersion)].filter(x,x==true).size()
+                        handshakeTimeout keyExchangeGroups maxProtocolVersion minProtocolVersion]
+                        must be set
+                      rule: '[has(self.alpnProtocols),has(self.cipherSuites),has(self.handshakeTimeout),has(self.keyExchangeGroups),has(self.maxProtocolVersion),has(self.minProtocolVersion)].filter(x,x==true).size()
                         >= 1'
                   tracing:
                     description: '`tracing` contains various settings for the OpenTelemetry

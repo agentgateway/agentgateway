@@ -7,7 +7,7 @@ use std::sync::Arc;
 use agent_core::strng;
 use agent_core::strng::Strng;
 use futures_util::TryFutureExt;
-use rustls::crypto::CryptoProvider;
+use rustls::crypto::{CryptoProvider, SupportedKxGroup};
 use rustls::server::ParsedCertificate;
 use rustls::{ServerConfig, SupportedCipherSuite};
 use rustls_pki_types::{CertificateDer, InvalidDnsNameError, ServerName};
@@ -45,6 +45,13 @@ pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+];
+
+pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[KeyExchangeGroup] = &[
+	KeyExchangeGroup::X25519,
+	KeyExchangeGroup::P256,
+	KeyExchangeGroup::P384,
+	KeyExchangeGroup::X25519_MLKEM768,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -136,25 +143,91 @@ impl CipherSuite {
 	}
 }
 
-pub fn provider() -> Arc<CryptoProvider> {
-	Arc::new(CryptoProvider {
-		// Restrict negotiation to our allowlist.
-		cipher_suites: DEFAULT_CIPHER_SUITES.to_vec(),
-		..rustls::crypto::aws_lc_rs::default_provider()
-	})
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[allow(non_camel_case_types)]
+pub enum KeyExchangeGroup {
+	X25519,
+	#[serde(rename = "P-256")]
+	P256,
+	#[serde(rename = "P-384")]
+	P384,
+	X25519_MLKEM768,
 }
 
-pub fn provider_with_cipher_suites(
-	cipher_suites: &[CipherSuite],
-) -> anyhow::Result<Arc<CryptoProvider>> {
-	let mut out = Vec::with_capacity(cipher_suites.len());
-	for suite in cipher_suites {
-		out.push(suite.to_supported_cipher_suite());
+impl KeyExchangeGroup {
+	pub const fn as_str_name(&self) -> &'static str {
+		match self {
+			KeyExchangeGroup::X25519 => "X25519",
+			KeyExchangeGroup::P256 => "P-256",
+			KeyExchangeGroup::P384 => "P-384",
+			KeyExchangeGroup::X25519_MLKEM768 => "X25519_MLKEM768",
+		}
 	}
-	Ok(Arc::new(CryptoProvider {
-		cipher_suites: out,
-		..rustls::crypto::aws_lc_rs::default_provider()
-	}))
+
+	pub const fn to_supported_kx_group(&self) -> &'static dyn SupportedKxGroup {
+		match self {
+			KeyExchangeGroup::X25519 => rustls::crypto::aws_lc_rs::kx_group::X25519,
+			KeyExchangeGroup::P256 => rustls::crypto::aws_lc_rs::kx_group::SECP256R1,
+			KeyExchangeGroup::P384 => rustls::crypto::aws_lc_rs::kx_group::SECP384R1,
+			KeyExchangeGroup::X25519_MLKEM768 => rustls::crypto::aws_lc_rs::kx_group::X25519MLKEM768,
+		}
+	}
+}
+
+pub fn provider() -> Arc<CryptoProvider> {
+	provider_with_options(&[], &[])
+}
+
+pub fn provider_with_options(
+	cipher_suites: &[CipherSuite],
+	key_exchange_groups: &[KeyExchangeGroup],
+) -> Arc<CryptoProvider> {
+	let cipher_suites = if cipher_suites.is_empty() {
+		DEFAULT_CIPHER_SUITES.to_vec()
+	} else {
+		let mut out = Vec::with_capacity(cipher_suites.len());
+		for suite in cipher_suites {
+			out.push(suite.to_supported_cipher_suite());
+		}
+		out
+	};
+
+	let key_exchange_groups = if key_exchange_groups.is_empty() {
+		DEFAULT_KEY_EXCHANGE_GROUPS.to_vec()
+	} else {
+		key_exchange_groups.to_vec()
+	};
+
+	let mut provider = rustls::crypto::aws_lc_rs::default_provider();
+	// Restrict negotiation to our allowlist.
+	provider.cipher_suites = cipher_suites;
+	provider.kx_groups = key_exchange_groups
+		.iter()
+		.map(KeyExchangeGroup::to_supported_kx_group)
+		.collect();
+	Arc::new(provider)
+}
+
+pub fn provider_with_cipher_suites(cipher_suites: &[CipherSuite]) -> Arc<CryptoProvider> {
+	provider_with_options(cipher_suites, &[])
+}
+
+#[cfg(test)]
+mod tests {
+	use rustls::NamedGroup;
+
+	use super::*;
+
+	#[test]
+	fn provider_can_configure_key_exchange_groups() {
+		let classical = provider_with_options(&[], &[]);
+		assert_eq!(classical.kx_groups[0].name(), NamedGroup::X25519);
+		assert_eq!(classical.kx_groups.len(), 4);
+
+		let post_quantum = provider_with_options(&[], &[KeyExchangeGroup::X25519_MLKEM768]);
+		assert_eq!(post_quantum.kx_groups[0].name(), NamedGroup::X25519MLKEM768);
+	}
 }
 
 // pub fn provider() -> Arc<CryptoProvider> {

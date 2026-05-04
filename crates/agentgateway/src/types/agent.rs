@@ -82,6 +82,10 @@ struct ServerTlsInputs {
 	allow_insecure_mtls: bool,
 	// Default ALPNs configured at creation time.
 	default_alpns: Alpns,
+	// Default cipher suites configured at creation time.
+	default_cipher_suites: Vec<crate::transport::tls::CipherSuite>,
+	// Default key exchange groups configured at creation time.
+	default_key_exchange_groups: Vec<crate::transport::tls::KeyExchangeGroup>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -91,6 +95,7 @@ struct ServerTlsProfileKey {
 	max_version: Option<TLSVersion>,
 	// Order-sensitive: we intentionally preserve user-provided cipher suite ordering.
 	cipher_suites: Vec<crate::transport::tls::CipherSuite>,
+	key_exchange_groups: Vec<crate::transport::tls::KeyExchangeGroup>,
 }
 
 impl frontend::TLS {
@@ -105,19 +110,36 @@ impl frontend::TLS {
 		self.alpn.is_none()
 			&& self.min_version.is_none()
 			&& self.max_version.is_none()
+			&& self
+				.key_exchange_groups
+				.as_deref()
+				.is_none_or(|groups| groups.is_empty())
 			&& no_cipher_suite_override
 	}
 
-	fn server_tls_profile_key(&self, default_alpns: &Alpns) -> ServerTlsProfileKey {
-		let alpns = self.alpn.clone().unwrap_or_else(|| default_alpns.clone());
+	fn server_tls_profile_key(&self, inputs: &ServerTlsInputs) -> ServerTlsProfileKey {
+		let alpns = self
+			.alpn
+			.clone()
+			.unwrap_or_else(|| inputs.default_alpns.clone());
 		let min_version = self.min_version.map(Into::into);
 		let max_version = self.max_version.map(Into::into);
-		let cipher_suites = self.cipher_suites.clone().unwrap_or_default();
+		let cipher_suites = self
+			.cipher_suites
+			.clone()
+			.filter(|suites| !suites.is_empty())
+			.unwrap_or_else(|| inputs.default_cipher_suites.clone());
+		let key_exchange_groups = self
+			.key_exchange_groups
+			.clone()
+			.filter(|groups| !groups.is_empty())
+			.unwrap_or_else(|| inputs.default_key_exchange_groups.clone());
 		ServerTlsProfileKey {
 			alpns,
 			min_version,
 			max_version,
 			cipher_suites,
+			key_exchange_groups,
 		}
 	}
 }
@@ -173,6 +195,7 @@ impl ServerTLSConfig {
 			None,
 			None,
 			None,
+			None,
 			false,
 		)
 	}
@@ -186,6 +209,7 @@ impl ServerTLSConfig {
 		min_version: Option<TLSVersion>,
 		max_version: Option<TLSVersion>,
 		cipher_suites: Option<Vec<crate::transport::tls::CipherSuite>>,
+		key_exchange_groups: Option<Vec<crate::transport::tls::KeyExchangeGroup>>,
 		allow_insecure_mtls: bool,
 	) -> anyhow::Result<Self> {
 		let inputs = Arc::new(ServerTlsInputs {
@@ -194,14 +218,18 @@ impl ServerTLSConfig {
 			root_pem,
 			allow_insecure_mtls,
 			default_alpns,
+			default_cipher_suites: cipher_suites.clone().unwrap_or_default(),
+			default_key_exchange_groups: key_exchange_groups.clone().unwrap_or_default(),
 		});
 		let suites = cipher_suites.as_deref().filter(|s| !s.is_empty());
+		let groups = key_exchange_groups.as_deref().filter(|g| !g.is_empty());
 		let (base, insecure_fallback_verifier) = Self::build_server_config(
 			&inputs,
 			None,
 			min_version,
 			max_version,
 			suites.unwrap_or(&[]),
+			groups.unwrap_or(&[]),
 		)?;
 		Ok(Self {
 			base_config: Some(Arc::new(base)),
@@ -241,12 +269,13 @@ impl ServerTLSConfig {
 		}
 
 		let key = match tls {
-			Some(tls) => tls.server_tls_profile_key(&inputs.default_alpns),
+			Some(tls) => tls.server_tls_profile_key(&inputs),
 			None => ServerTlsProfileKey {
 				alpns: inputs.default_alpns.clone(),
 				min_version: None,
 				max_version: None,
-				cipher_suites: vec![],
+				cipher_suites: inputs.default_cipher_suites.clone(),
+				key_exchange_groups: inputs.default_key_exchange_groups.clone(),
 			},
 		};
 
@@ -267,6 +296,7 @@ impl ServerTLSConfig {
 			key.min_version,
 			key.max_version,
 			&key.cipher_suites,
+			&key.key_exchange_groups,
 		)?;
 		let base = Arc::new(base);
 		writer.insert(key.clone(), Arc::clone(&base));
@@ -312,12 +342,9 @@ impl ServerTLSConfig {
 		min_version: Option<TLSVersion>,
 		max_version: Option<TLSVersion>,
 		cipher_suites: &[crate::transport::tls::CipherSuite],
+		key_exchange_groups: &[crate::transport::tls::KeyExchangeGroup],
 	) -> anyhow::Result<(ServerConfig, Option<Arc<dyn ClientCertVerifier>>)> {
-		let provider = if cipher_suites.is_empty() {
-			crate::transport::tls::provider()
-		} else {
-			crate::transport::tls::provider_with_cipher_suites(cipher_suites)?
-		};
+		let provider = crate::transport::tls::provider_with_options(cipher_suites, key_exchange_groups);
 
 		let versions = tls_versions_for_range(min_version, max_version)?;
 		let scb = ServerConfig::builder_with_provider(provider.clone())
@@ -2603,6 +2630,49 @@ mod tests {
 			hostnames: hostnames.into_iter().map(strng::new).collect(),
 			backends: vec![],
 		}
+	}
+
+	#[test]
+	fn frontend_tls_profile_preserves_listener_tls_defaults() {
+		use crate::transport::tls::{CipherSuite, KeyExchangeGroup};
+
+		let inputs = ServerTlsInputs {
+			cert_pem: vec![],
+			key_pem: vec![],
+			root_pem: None,
+			allow_insecure_mtls: false,
+			default_alpns: vec![b"h2".to_vec()],
+			default_cipher_suites: vec![CipherSuite::TLS_AES_128_GCM_SHA256],
+			default_key_exchange_groups: vec![KeyExchangeGroup::P384],
+		};
+
+		let tls = frontend::TLS {
+			alpn: Some(vec![b"http/1.1".to_vec()]),
+			..Default::default()
+		};
+		let key = tls.server_tls_profile_key(&inputs);
+		assert_eq!(key.cipher_suites, inputs.default_cipher_suites);
+		assert_eq!(key.key_exchange_groups, inputs.default_key_exchange_groups);
+
+		let tls = frontend::TLS {
+			alpn: Some(vec![b"http/1.1".to_vec()]),
+			cipher_suites: Some(vec![]),
+			key_exchange_groups: Some(vec![]),
+			..Default::default()
+		};
+		let key = tls.server_tls_profile_key(&inputs);
+		assert_eq!(key.cipher_suites, inputs.default_cipher_suites);
+		assert_eq!(key.key_exchange_groups, inputs.default_key_exchange_groups);
+
+		let tls = frontend::TLS {
+			alpn: Some(vec![b"http/1.1".to_vec()]),
+			cipher_suites: Some(vec![CipherSuite::TLS_AES_256_GCM_SHA384]),
+			key_exchange_groups: Some(vec![KeyExchangeGroup::X25519]),
+			..Default::default()
+		};
+		let key = tls.server_tls_profile_key(&inputs);
+		assert_eq!(key.cipher_suites, vec![CipherSuite::TLS_AES_256_GCM_SHA384]);
+		assert_eq!(key.key_exchange_groups, vec![KeyExchangeGroup::X25519]);
 	}
 
 	#[test]

@@ -812,6 +812,16 @@
               "type": "null"
             }
           ]
+        },
+        "keyExchangeGroups": {
+          "description": "Key exchange groups allowed for negotiating TLS.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false,
@@ -2492,9 +2502,29 @@
             "type": "string"
           },
           "default": null
+        },
+        "keyExchangeGroups": {
+          "description": "Key exchange groups allowed for negotiating TLS.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/KeyExchangeGroup"
+          },
+          "default": null
         }
       },
       "additionalProperties": false
+    },
+    "KeyExchangeGroup": {
+      "type": "string",
+      "enum": [
+        "X25519",
+        "P-256",
+        "P-384",
+        "X25519_MLKEM768"
+      ]
     },
     "BackendAuth": {
       "oneOf": [
@@ -5845,6 +5875,16 @@
           ]
         },
         "cipherSuites": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "keyExchangeGroups": {
+          "description": "Key exchange groups allowed for negotiating TLS.",
           "type": [
             "array",
             "null"

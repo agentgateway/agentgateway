@@ -23,6 +23,7 @@ pub static INSECURE_TRUST: Lazy<BackendTLS> = Lazy::new(|| {
 		insecure_host: false,
 		alpn: None,
 		subject_alt_names: None,
+		key_exchange_groups: None,
 	}
 	.try_into()
 	.unwrap()
@@ -140,6 +141,9 @@ pub struct LocalBackendTLS {
 	alpn: Option<Vec<String>>,
 	#[serde(default)]
 	pub subject_alt_names: Option<Vec<String>>,
+	/// Key exchange groups allowed for negotiating TLS.
+	#[serde(default)]
+	key_exchange_groups: Option<Vec<tls::KeyExchangeGroup>>,
 }
 
 #[derive(Default, Debug)]
@@ -153,6 +157,7 @@ pub struct ResolvedBackendTLS {
 	pub insecure_host: bool,
 	pub alpn: Option<Vec<String>>,
 	pub subject_alt_names: Option<Vec<String>>,
+	pub key_exchange_groups: Option<Vec<tls::KeyExchangeGroup>>,
 }
 
 impl ResolvedBackendTLS {
@@ -169,7 +174,11 @@ impl ResolvedBackendTLS {
 		}
 
 		let roots = Arc::new(roots);
-		let ccb = ClientConfig::builder_with_provider(transport::tls::provider())
+		let provider = transport::tls::provider_with_options(
+			&[],
+			self.key_exchange_groups.as_deref().unwrap_or_default(),
+		);
+		let ccb = ClientConfig::builder_with_provider(provider.clone())
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
 			.expect("server config must be valid")
 			.with_root_certificates(roots.clone());
@@ -183,11 +192,8 @@ impl ResolvedBackendTLS {
 			_ => ccb.with_no_client_auth(),
 		};
 		if self.insecure_host {
-			let inner = rustls::client::WebPkiServerVerifier::builder_with_provider(
-				roots,
-				transport::tls::provider(),
-			)
-			.build()?;
+			let inner =
+				rustls::client::WebPkiServerVerifier::builder_with_provider(roots, provider).build()?;
 			let verifier = Arc::new(tls::insecure::NoServerNameVerification::new(inner));
 			cc.dangerous().set_certificate_verifier(verifier);
 		} else if self.insecure {
@@ -227,6 +233,7 @@ impl LocalBackendTLS {
 			insecure_host: self.insecure_host,
 			alpn: self.alpn,
 			subject_alt_names: self.subject_alt_names,
+			key_exchange_groups: self.key_exchange_groups,
 		}
 		.try_into()
 	}

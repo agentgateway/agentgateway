@@ -104,6 +104,10 @@ pub struct TLS {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub cipher_suites: Option<Vec<crate::transport::tls::CipherSuite>>,
+	/// Key exchange groups allowed for negotiating TLS.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub key_exchange_groups: Option<Vec<crate::transport::tls::KeyExchangeGroup>>,
 }
 
 impl Default for TLS {
@@ -114,6 +118,7 @@ impl Default for TLS {
 			min_version: None,
 			max_version: None,
 			cipher_suites: None,
+			key_exchange_groups: None,
 		}
 	}
 }

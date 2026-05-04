@@ -329,6 +329,7 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 	if tls.AlpnProtocols != nil {
 		p.Alpn = &api.Alpn{Protocols: *tls.AlpnProtocols}
 	}
+	p.KeyExchangeGroups = convertTLSKeyExchangeGroups(tls.KeyExchangeGroups)
 
 	tlsPolicy := &api.Policy{
 		Key:  policy.Namespace + "/" + policy.Name + tlsPolicySuffix,

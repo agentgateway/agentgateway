@@ -347,6 +347,11 @@ type BackendTLS struct {
 	// +kubebuilder:validation:MaxItems=16
 	// +optional
 	AlpnProtocols *[]TinyString `json:"alpnProtocols,omitempty"`
+
+	// keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+	// For example: `X25519_MLKEM768,X25519`.
+	// +optional
+	KeyExchangeGroups []KeyExchangeGroup `json:"keyExchangeGroups,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -517,6 +522,11 @@ type FrontendTLS struct {
 	// +optional
 	CipherSuites []CipherSuite `json:"cipherSuites,omitempty"`
 
+	// keyExchangeGroups configures the ordered list of key exchange groups for a TLS listener.
+	// For example: `X25519_MLKEM768,X25519`.
+	// +optional
+	KeyExchangeGroups []KeyExchangeGroup `json:"keyExchangeGroups,omitempty"`
+
 	// TODO: mirror the tuneables on BackendTLS
 }
 
@@ -546,6 +556,16 @@ const (
 	CipherSuiteTLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384       CipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
 	CipherSuiteTLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256       CipherSuite = "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
 	CipherSuiteTLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 CipherSuite = "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
+)
+
+// +kubebuilder:validation:Enum=X25519;P-256;P-384;X25519_MLKEM768
+type KeyExchangeGroup string
+
+const (
+	KeyExchangeGroupX25519         KeyExchangeGroup = "X25519"
+	KeyExchangeGroupP256           KeyExchangeGroup = "P-256"
+	KeyExchangeGroupP384           KeyExchangeGroup = "P-384"
+	KeyExchangeGroupX25519MLKEM768 KeyExchangeGroup = "X25519_MLKEM768"
 )
 
 // +kubebuilder:validation:AtLeastOneFieldSet

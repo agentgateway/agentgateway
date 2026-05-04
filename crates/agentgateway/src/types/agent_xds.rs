@@ -129,6 +129,39 @@ fn convert_tls_cipher_suites(
 	if out.is_empty() { None } else { Some(out) }
 }
 
+fn convert_tls_key_exchange_groups(
+	raw_groups: &[i32],
+	diagnostics: &mut Diagnostics,
+) -> Option<Vec<crate::transport::tls::KeyExchangeGroup>> {
+	if raw_groups.is_empty() {
+		return None;
+	}
+
+	let mut out = Vec::with_capacity(raw_groups.len());
+	for &raw in raw_groups {
+		if raw == 0 {
+			// KEY_EXCHANGE_GROUP_UNSPECIFIED
+			continue;
+		}
+		match proto::agent::tls_config::KeyExchangeGroup::try_from(raw) {
+			Ok(group) => match crate::transport::tls::KeyExchangeGroup::try_from(group) {
+				Ok(group) => out.push(group),
+				Err(e) => {
+					diagnostics.add_warning(format!(
+						"unknown/unsupported TLS key exchange group {raw}: {e}"
+					));
+				},
+			},
+			Err(e) => {
+				diagnostics.add_warning(format!(
+					"unknown TLS key exchange group enum value {raw}: {e}"
+				));
+			},
+		}
+	}
+	if out.is_empty() { None } else { Some(out) }
+}
+
 impl TryFrom<proto::agent::tls_config::CipherSuite> for crate::transport::tls::CipherSuite {
 	type Error = anyhow::Error;
 
@@ -165,6 +198,25 @@ impl TryFrom<proto::agent::tls_config::CipherSuite> for crate::transport::tls::C
 	}
 }
 
+impl TryFrom<proto::agent::tls_config::KeyExchangeGroup>
+	for crate::transport::tls::KeyExchangeGroup
+{
+	type Error = anyhow::Error;
+
+	fn try_from(value: proto::agent::tls_config::KeyExchangeGroup) -> Result<Self, Self::Error> {
+		use crate::transport::tls::KeyExchangeGroup as Kx;
+		match value {
+			proto::agent::tls_config::KeyExchangeGroup::Unspecified => Err(anyhow::anyhow!(
+				"unsupported key exchange group: KEY_EXCHANGE_GROUP_UNSPECIFIED"
+			)),
+			proto::agent::tls_config::KeyExchangeGroup::X25519 => Ok(Kx::X25519),
+			proto::agent::tls_config::KeyExchangeGroup::P256 => Ok(Kx::P256),
+			proto::agent::tls_config::KeyExchangeGroup::P384 => Ok(Kx::P384),
+			proto::agent::tls_config::KeyExchangeGroup::X25519Mlkem768 => Ok(Kx::X25519_MLKEM768),
+		}
+	}
+}
+
 fn server_tls_config_from_proto(
 	value: &proto::agent::TlsConfig,
 	diagnostics: &mut Diagnostics,
@@ -187,6 +239,8 @@ fn server_tls_config_from_proto(
 	let min_version = map_tls_version(value.min_version);
 	let max_version = map_tls_version(value.max_version);
 	let cipher_suites = convert_tls_cipher_suites(&value.cipher_suites, diagnostics);
+	let key_exchange_groups =
+		convert_tls_key_exchange_groups(&value.key_exchange_groups, diagnostics);
 
 	let mtls_mode = proto::agent::tls_config::MtlsMode::try_from(value.mtls_mode).unwrap_or_default();
 
@@ -198,6 +252,7 @@ fn server_tls_config_from_proto(
 		min_version,
 		max_version,
 		cipher_suites,
+		key_exchange_groups,
 		mtls_mode == proto::agent::tls_config::MtlsMode::AllowInsecureFallback,
 	) {
 		Ok(sc) => sc,
@@ -1317,6 +1372,10 @@ fn backend_policy_from_proto(
 				} else {
 					Some(btls.verify_subject_alt_names.clone())
 				},
+				key_exchange_groups: convert_tls_key_exchange_groups(
+					&btls.key_exchange_groups,
+					diagnostics,
+				),
 			}
 			.try_into()
 			.map_err(|e| ProtoError::Generic(e.to_string()))?;
@@ -2086,6 +2145,7 @@ fn frontend_policy_from_proto(
 			min_version: map_tls_version(t.min_version),
 			max_version: map_tls_version(t.max_version),
 			cipher_suites: convert_tls_cipher_suites(&t.cipher_suites, diagnostics),
+			key_exchange_groups: convert_tls_key_exchange_groups(&t.key_exchange_groups, diagnostics),
 		}),
 		Some(fps::Kind::Tcp(t)) => FrontendPolicy::TCP(frontend::TCP {
 			keepalives: t

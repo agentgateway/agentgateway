@@ -147,6 +147,7 @@ fn https_bind() -> Bind {
 					cipher_suites: None,
 					min_tls_version: None,
 					max_tls_version: None,
+					key_exchange_groups: None,
 				}
 				.try_into()
 				.unwrap(),
@@ -174,6 +175,7 @@ async fn serve_https_http1_connection(
 		insecure_host: true,
 		alpn: None,
 		subject_alt_names: None,
+		key_exchange_groups: None,
 	}
 	.try_into()
 	.unwrap();
@@ -2106,6 +2108,7 @@ fn setup_dfp_https() -> (TestBind, Client<MemoryConnector, Body>) {
 					cipher_suites: None,
 					min_tls_version: None,
 					max_tls_version: None,
+					key_exchange_groups: None,
 				}
 				.try_into()
 				.unwrap(),
@@ -2399,6 +2402,7 @@ async fn auto_protocol_mixed_listeners() {
 						cipher_suites: None,
 						min_tls_version: None,
 						max_tls_version: None,
+						key_exchange_groups: None,
 					}
 					.try_into()
 					.unwrap(),

@@ -479,6 +479,10 @@ pub struct LocalTLSServerConfig {
 		alias = "maxTlsVersion"
 	)]
 	pub max_tls_version: Option<frontend::TLSVersion>,
+	/// Key exchange groups allowed for negotiating TLS.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub key_exchange_groups: Option<Vec<crate::transport::tls::KeyExchangeGroup>>,
 }
 
 #[apply(schema_de!)]
@@ -2874,6 +2878,7 @@ impl TryInto<ServerTLSConfig> for LocalTLSServerConfig {
 			self.min_tls_version.map(Into::into),
 			self.max_tls_version.map(Into::into),
 			self.cipher_suites,
+			self.key_exchange_groups,
 			false,
 		)
 	}

@@ -193,6 +193,16 @@ message TLSConfig {
     TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 = 9;
   }
 
+  // Key exchange groups supported by agentgateway.
+  // Keep in sync with `crates/agentgateway/src/transport/tls.rs` (`DEFAULT_KEY_EXCHANGE_GROUPS`).
+  enum KeyExchangeGroup {
+    KEY_EXCHANGE_GROUP_UNSPECIFIED = 0;
+    X25519 = 1;
+    P256 = 2;
+    P384 = 3;
+    X25519_MLKEM768 = 4;
+  }
+
   bytes cert = 1;
   bytes private_key = 2;
   // Root to verify client certificates. If not set, mTLS will not be used
@@ -201,6 +211,9 @@ message TLSConfig {
   optional TLSVersion min_version = 5;
   optional TLSVersion max_version = 6;
   MTLSMode mtls_mode = 7;
+  // Key exchange groups allowed for negotiating TLS.
+  // If empty, defaults are used.
+  repeated KeyExchangeGroup key_exchange_groups = 8;
 }
 
 enum Protocol {
@@ -531,6 +544,9 @@ message FrontendPolicySpec {
     // If unset, defaults are used.
     optional TLSConfig.TLSVersion min_version = 4;
     optional TLSConfig.TLSVersion max_version = 5;
+    // Key exchange groups allowed for negotiating TLS.
+    // If empty, defaults are used.
+    repeated TLSConfig.KeyExchangeGroup key_exchange_groups = 6;
 
     // TODO: allow setting mTLS things as well
   }
@@ -1175,6 +1191,9 @@ message BackendPolicySpec {
     // Set but empty: send none
     // Set with values: send those values
     Alpn alpn = 7;
+    // Key exchange groups allowed for negotiating TLS.
+    // If empty, defaults are used.
+    repeated TLSConfig.KeyExchangeGroup key_exchange_groups = 8;
   }
   message BackendHTTP {
     enum HttpVersion {

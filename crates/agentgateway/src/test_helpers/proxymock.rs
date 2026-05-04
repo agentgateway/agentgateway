@@ -822,6 +822,7 @@ impl TestBind {
 			insecure_host: true,
 			alpn: None,
 			subject_alt_names: None,
+			key_exchange_groups: None,
 		}
 		.try_into()
 		.unwrap();
