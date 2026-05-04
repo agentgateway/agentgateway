@@ -12,9 +12,8 @@ To view the resources created by this chart:
 
 To learn how to access and use agentgateway, please visit the official documentation:
 
-  https://kgateway.dev/docs/
+  https://agentgateway.dev/docs/kubernetes/latest/
 
 To uninstall the agentgateway deployment:
 
   helm uninstall {{ .Release.Name }} --namespace {{ .Release.Namespace }}
-
