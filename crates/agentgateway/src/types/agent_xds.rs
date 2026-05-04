@@ -2553,11 +2553,9 @@ fn conditional_policy_from_proto(
 				} else {
 					expected_shape = Some((policy_kind, policy_phase));
 				}
-				let condition = permissive_cel_expression_arc(
-					diagnostics,
-					"policy.conditional.condition",
-					&policy.condition,
-				);
+				let condition = policy.condition.as_deref().map(|condition| {
+					permissive_cel_expression_arc(diagnostics, "policy.conditional.condition", condition)
+				});
 				traffic.push((condition, traffic_policy));
 			},
 		}
@@ -2576,7 +2574,7 @@ fn conditional_policy_from_proto(
 }
 
 fn conditional_traffic_policy_to_policy(
-	policies: Vec<(Arc<cel::Expression>, PhasedTrafficPolicy)>,
+	policies: Vec<(Option<Arc<cel::Expression>>, PhasedTrafficPolicy)>,
 ) -> Result<TrafficPolicy, ProtoError> {
 	macro_rules! build {
 		($variant:ident) => {{
@@ -2592,7 +2590,7 @@ fn conditional_traffic_policy_to_policy(
 						.into_policy_inners()
 						.into_iter()
 						.map(|mut inner| {
-							inner.condition = Some(condition.clone());
+							inner.condition = condition.clone();
 							inner
 						}),
 				);
@@ -2903,7 +2901,21 @@ mod tests {
 		kind: proto::agent::traffic_policy_spec::Kind,
 	) -> proto::agent::ConditionalPolicy {
 		proto::agent::ConditionalPolicy {
-			condition: condition.to_string(),
+			condition: Some(condition.to_string()),
+			kind: Some(proto::agent::conditional_policy::Kind::Traffic(
+				proto::agent::TrafficPolicySpec {
+					phase: proto::agent::traffic_policy_spec::PolicyPhase::Route as i32,
+					kind: Some(kind),
+				},
+			)),
+		}
+	}
+
+	fn fallback_conditional_traffic_policy(
+		kind: proto::agent::traffic_policy_spec::Kind,
+	) -> proto::agent::ConditionalPolicy {
+		proto::agent::ConditionalPolicy {
+			condition: None,
 			kind: Some(proto::agent::conditional_policy::Kind::Traffic(
 				proto::agent::TrafficPolicySpec {
 					phase: proto::agent::traffic_policy_spec::PolicyPhase::Route as i32,
@@ -2948,6 +2960,87 @@ mod tests {
 			panic!("expected conditional request header modifier policy");
 		};
 		assert_eq!(policies.iter().count(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn test_targeted_policy_from_proto_conditional_empty_condition_is_fallback()
+	-> Result<(), ProtoError> {
+		let policy = proto::agent::Policy {
+			key: "policy".to_string(),
+			name: None,
+			target: Some(test_policy_target()),
+			kind: Some(proto::agent::policy::Kind::Conditional(
+				proto::agent::ConditionalPolicies {
+					policies: vec![
+						conditional_traffic_policy(
+							"request.path == '/a'",
+							proto::agent::traffic_policy_spec::Kind::RequestHeaderModifier(
+								proto::agent::HeaderModifier::default(),
+							),
+						),
+						fallback_conditional_traffic_policy(
+							proto::agent::traffic_policy_spec::Kind::RequestHeaderModifier(
+								proto::agent::HeaderModifier::default(),
+							),
+						),
+					],
+				},
+			)),
+		};
+
+		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default())?;
+		let PolicyType::Traffic(PhasedTrafficPolicy {
+			policy: TrafficPolicy::RequestHeaderModifier(policies),
+			..
+		}) = policy.policy
+		else {
+			panic!("expected conditional request header modifier policy");
+		};
+		let entries = policies.iter().collect::<Vec<_>>();
+		assert_eq!(entries.len(), 2);
+		assert!(entries[0].condition.is_some());
+		assert!(entries[1].condition.is_none());
+		Ok(())
+	}
+
+	#[test]
+	fn test_targeted_policy_from_proto_conditional_invalid_condition_never_matches()
+	-> Result<(), ProtoError> {
+		let policy = proto::agent::Policy {
+			key: "policy".to_string(),
+			name: None,
+			target: Some(test_policy_target()),
+			kind: Some(proto::agent::policy::Kind::Conditional(
+				proto::agent::ConditionalPolicies {
+					policies: vec![conditional_traffic_policy(
+						"request.path ==",
+						proto::agent::traffic_policy_spec::Kind::RequestHeaderModifier(
+							proto::agent::HeaderModifier::default(),
+						),
+					)],
+				},
+			)),
+		};
+
+		let mut diagnostics = Diagnostics::default();
+		let policy = targeted_policy_from_proto(&policy, &mut diagnostics)?;
+		let PolicyType::Traffic(PhasedTrafficPolicy {
+			policy: TrafficPolicy::RequestHeaderModifier(policies),
+			..
+		}) = policy.policy
+		else {
+			panic!("expected conditional request header modifier policy");
+		};
+		let entries = policies.iter().collect::<Vec<_>>();
+		assert_eq!(entries.len(), 1);
+		let condition = entries[0]
+			.condition
+			.as_ref()
+			.expect("non-empty invalid condition should remain conditional");
+		assert_eq!(condition.original_expression, "request.path ==");
+		assert!(!crate::cel::Executor::new_empty().eval_bool(condition));
+		assert_eq!(diagnostics.into_warnings().len(), 1);
 		Ok(())
 	}
 

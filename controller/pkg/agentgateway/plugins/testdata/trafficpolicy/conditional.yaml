@@ -23,6 +23,11 @@ spec:
               name: extauthz
               port: 1024
             grpc: {}
+        - policy:
+            backendRef:
+              name: extauthz
+              port: 1024
+            grpc: {}
 ---
 apiVersion: v1
 kind: Service
@@ -53,6 +58,14 @@ output:
                   namespace: default
         - condition: request.path == '/secure'
           traffic:
+            extAuthz:
+              grpc: {}
+              target:
+                port: 1024
+                service:
+                  hostname: extauthz.default.svc.cluster.local
+                  namespace: default
+        - traffic:
             extAuthz:
               grpc: {}
               target:

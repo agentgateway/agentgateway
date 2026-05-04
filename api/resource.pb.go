@@ -2709,7 +2709,7 @@ func (x *ConditionalPolicies) GetPolicies() []*ConditionalPolicy {
 
 type ConditionalPolicy struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
-	Condition string                 `protobuf:"bytes,1,opt,name=condition,proto3" json:"condition,omitempty"`
+	Condition *string                `protobuf:"bytes,1,opt,name=condition,proto3,oneof" json:"condition,omitempty"`
 	// Types that are valid to be assigned to Kind:
 	//
 	//	*ConditionalPolicy_Traffic
@@ -2749,8 +2749,8 @@ func (*ConditionalPolicy) Descriptor() ([]byte, []int) {
 }
 
 func (x *ConditionalPolicy) GetCondition() string {
-	if x != nil {
-		return x.Condition
+	if x != nil && x.Condition != nil {
+		return *x.Condition
 	}
 	return ""
 }
@@ -12692,11 +12692,13 @@ const file_resource_proto_rawDesc = "" +
 	"\thostnames\x18\x05 \x03(\tR\thostnames\x12C\n" +
 	"\bbackends\x18\x06 \x03(\v2'.agentgateway.dev.resource.RouteBackendR\bbackends\"_\n" +
 	"\x13ConditionalPolicies\x12H\n" +
-	"\bpolicies\x18\x01 \x03(\v2,.agentgateway.dev.resource.ConditionalPolicyR\bpolicies\"\x83\x01\n" +
-	"\x11ConditionalPolicy\x12\x1c\n" +
-	"\tcondition\x18\x01 \x01(\tR\tcondition\x12H\n" +
+	"\bpolicies\x18\x01 \x03(\v2,.agentgateway.dev.resource.ConditionalPolicyR\bpolicies\"\x96\x01\n" +
+	"\x11ConditionalPolicy\x12!\n" +
+	"\tcondition\x18\x01 \x01(\tH\x01R\tcondition\x88\x01\x01\x12H\n" +
 	"\atraffic\x18\x02 \x01(\v2,.agentgateway.dev.resource.TrafficPolicySpecH\x00R\atrafficB\x06\n" +
-	"\x04kind\"\xda\x03\n" +
+	"\x04kindB\f\n" +
+	"\n" +
+	"_condition\"\xda\x03\n" +
 	"\x06Policy\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12@\n" +
 	"\x04name\x18\x02 \x01(\v2,.agentgateway.dev.resource.TypedResourceNameR\x04name\x12?\n" +

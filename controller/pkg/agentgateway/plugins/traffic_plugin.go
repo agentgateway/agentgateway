@@ -936,8 +936,10 @@ func processConditional[T any](
 		}
 		base.Traffic.Phase = phase(policyPhase)
 		c := &api.ConditionalPolicy{
-			Condition: string(cond.Condition),
 			Kind:      &api.ConditionalPolicy_Traffic{Traffic: base.Traffic},
+		}
+		if cond.Condition != "" {
+			c.Condition = ptr.Of(string(cond.Condition))
 		}
 		conditionals.Policies = append(conditionals.Policies, c)
 	}

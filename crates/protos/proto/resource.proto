@@ -129,7 +129,7 @@ message ConditionalPolicies {
     repeated ConditionalPolicy policies = 1;
 }
 message ConditionalPolicy {
-  string condition = 1;
+  optional string condition = 1;
   oneof kind {
     // Currently only traffic is supported
     TrafficPolicySpec traffic = 2;
