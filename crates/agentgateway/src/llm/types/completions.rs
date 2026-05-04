@@ -48,6 +48,25 @@ pub struct Request {
 	pub rest: serde_json::Value,
 }
 
+impl Request {
+	pub fn normalize_openai_token_limit(&mut self) {
+		if !self.requires_openai_max_completion_tokens() {
+			return;
+		}
+		if self.max_completion_tokens.is_none() {
+			self.max_completion_tokens = self.max_tokens;
+		}
+		self.max_tokens = None;
+	}
+
+	fn requires_openai_max_completion_tokens(&self) -> bool {
+		self
+			.model
+			.as_deref()
+			.is_some_and(|model| model.starts_with("gpt-"))
+	}
+}
+
 /// Options for streaming response. Only set this when you set `stream: true`.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StreamOptions {
