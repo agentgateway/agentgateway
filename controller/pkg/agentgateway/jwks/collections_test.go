@@ -13,7 +13,7 @@ import (
 
 func TestCollapseJwksSourcesUsesLowestTTL(t *testing.T) {
 	target := remotehttp.FetchTarget{URL: "https://issuer.example/jwks"}
-	shared := CollapseJwksSources(krt.IndexObject[remotehttp.FetchKey, JwksSource]{
+	shared := collapseJwksSources(krt.IndexObject[remotehttp.FetchKey, JwksSource]{
 		Key: target.Key(),
 		Objects: []JwksSource{
 			{
@@ -37,7 +37,7 @@ func TestCollapseJwksSourcesUsesLowestTTL(t *testing.T) {
 }
 
 func TestCollapseJwksSourcesReturnsNilForEmptyGroup(t *testing.T) {
-	shared := CollapseJwksSources(krt.IndexObject[remotehttp.FetchKey, JwksSource]{})
+	shared := collapseJwksSources(krt.IndexObject[remotehttp.FetchKey, JwksSource]{})
 
 	assert.Nil(t, shared)
 }
@@ -49,7 +49,7 @@ func TestCollapseJwksSourcesUsesSortedOwnerForTargetAndTLSConfig(t *testing.T) {
 	earlierTLS := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: "issuer-a.example"}
 	laterTLS := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: "issuer-b.example"}
 
-	shared := CollapseJwksSources(krt.IndexObject[remotehttp.FetchKey, JwksSource]{
+	shared := collapseJwksSources(krt.IndexObject[remotehttp.FetchKey, JwksSource]{
 		Key: requestKey,
 		Objects: []JwksSource{
 			{

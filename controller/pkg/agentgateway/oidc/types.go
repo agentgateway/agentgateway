@@ -1,60 +1,67 @@
-// Package oidc implements a controller-side OIDC discovery + JWKS pre-fetch
-// mechanism that mirrors the controller/pkg/agentgateway/jwks package.
-// The controller performs OpenID Connect discovery and JWKS pre-fetch so the
-// dataplane never calls .well-known/openid-configuration or jwks_uri directly.
+// Package oidc derives controller-side OIDC discovery requests from
+// AgentgatewayPolicy and adapts resolved provider metadata into xDS.
 package oidc
 
 import (
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/hex"
 	"reflect"
 	"time"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotecache"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 )
 
-// DiscoveredProvider holds the result of a successful OIDC discovery fetch.
-// It includes both the discovery document metadata and the pre-fetched JWKS
-// so the dataplane never needs to call either endpoint.
+const (
+	oidcRequestKeyDomain = "oidc-discovery"
+)
+
+// OidcOwnerID is the OIDC-flavored alias for remotecache.OwnerID; identical
+// layout, package-local name for readability at OIDC call sites.
+type OidcOwnerID = remotecache.OwnerID
+
+// DiscoveredProvider holds the metadata from a successful OIDC discovery fetch,
+// including the JWKS key material fetched from the discovery document's jwks_uri.
 type DiscoveredProvider struct {
-	// RequestKey is the canonical key identifying this provider in the store.
 	RequestKey remotehttp.FetchKey `json:"requestKey"`
-	// IssuerURL is the discovered issuer URL (validated against user-configured).
-	IssuerURL string `json:"issuerURL"`
-	// AuthorizationEndpoint is the IdP authorization endpoint.
-	AuthorizationEndpoint string `json:"authorizationEndpoint"`
-	// TokenEndpoint is the IdP token endpoint.
-	TokenEndpoint string `json:"tokenEndpoint"`
-	// JwksURI is the IdP JWKS endpoint (fetched and inlined as JwksJSON).
-	JwksURI string `json:"jwksURI"`
-	// JwksJSON is the pre-fetched JWKS JSON blob.
-	JwksJSON string `json:"jwksJSON"`
-	// TokenEndpointAuthMethodsSupported lists the auth methods the IdP advertises.
-	TokenEndpointAuthMethodsSupported []string `json:"tokenEndpointAuthMethodsSupported,omitempty"`
-	// FetchedAt is when the discovery was last successfully fetched.
-	FetchedAt time.Time `json:"fetchedAt"`
+	// IssuerURL is the IdP-reported issuer, validated byte-exact against the user-configured issuer.
+	IssuerURL                         string    `json:"issuerURL"`
+	AuthorizationEndpoint             string    `json:"authorizationEndpoint"`
+	TokenEndpoint                     string    `json:"tokenEndpoint"`
+	JwksURI                           string    `json:"jwksURI"`
+	JwksInline                        string    `json:"jwksInline"`
+	TokenEndpointAuthMethodsSupported []string  `json:"tokenEndpointAuthMethodsSupported,omitempty"`
+	FetchedAt                         time.Time `json:"fetchedAt"`
 }
 
-// OwnerKey identifies the owner of an OIDC discovery request.
-type OwnerKey = OidcOwnerID
+func (p DiscoveredProvider) RemoteRequestKey() remotehttp.FetchKey {
+	return p.RequestKey
+}
+
+func (p DiscoveredProvider) RemoteFetchedAt() time.Time {
+	return p.FetchedAt
+}
 
 // OidcSource is a per-owner OIDC discovery request before KRT collapses
 // equivalent sources onto a shared request key.
 type OidcSource struct {
-	OwnerKey       OwnerKey
+	OwnerKey       OidcOwnerID
 	RequestKey     remotehttp.FetchKey
 	ExpectedIssuer string
 	Target         remotehttp.FetchTarget
-	// +noKrtEquals
-	TLSConfig *tls.Config
-	// +noKrtEquals
-	ProxyTLSConfig *tls.Config
 	TTL            time.Duration
 }
 
 func (s OidcSource) ResourceName() string {
 	return s.OwnerKey.String()
+}
+
+func (s OidcSource) RemoteRequestKey() remotehttp.FetchKey {
+	return s.RequestKey
+}
+
+func (s OidcSource) RemoteTTL() time.Duration {
+	return s.TTL
 }
 
 func (s OidcSource) Equals(other OidcSource) bool {
@@ -72,15 +79,19 @@ type SharedOidcRequest struct {
 	RequestKey     remotehttp.FetchKey
 	ExpectedIssuer string
 	Target         remotehttp.FetchTarget
-	// +noKrtEquals
-	TLSConfig *tls.Config
-	// +noKrtEquals
-	ProxyTLSConfig *tls.Config
 	TTL            time.Duration
 }
 
 func (r SharedOidcRequest) ResourceName() string {
 	return string(r.RequestKey)
+}
+
+func (r SharedOidcRequest) RemoteRequestKey() remotehttp.FetchKey {
+	return r.RequestKey
+}
+
+func (r SharedOidcRequest) RemoteTTL() time.Duration {
+	return r.TTL
 }
 
 func (r SharedOidcRequest) Equals(other SharedOidcRequest) bool {
@@ -90,18 +101,8 @@ func (r SharedOidcRequest) Equals(other SharedOidcRequest) bool {
 		r.TTL == other.TTL
 }
 
-// OidcSource returns the canonical runtime request consumed by the Fetcher.
-func (r SharedOidcRequest) OidcSource() OidcSource {
-	return OidcSource{
-		RequestKey:     r.RequestKey,
-		ExpectedIssuer: r.ExpectedIssuer,
-		Target:         r.Target,
-		TLSConfig:      r.TLSConfig,
-		ProxyTLSConfig: r.ProxyTLSConfig,
-		TTL:            r.TTL,
-	}
-}
-
+// oidcRequestKey hashes target + issuer so two policies with the same
+// discovery URL but different expected issuers stay distinct.
 func oidcRequestKey(target remotehttp.FetchTarget, expectedIssuer string) remotehttp.FetchKey {
 	hash := sha256.New()
 	writeHashPart := func(value string) {
@@ -109,6 +110,7 @@ func oidcRequestKey(target remotehttp.FetchTarget, expectedIssuer string) remote
 		_, _ = hash.Write([]byte{0})
 	}
 
+	writeHashPart(oidcRequestKeyDomain)
 	writeHashPart(target.Key().String())
 	writeHashPart(expectedIssuer)
 

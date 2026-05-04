@@ -28,7 +28,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
-	"github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
+	agentgatewaybackend "github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/namespaces"
 	"github.com/agentgateway/agentgateway/controller/pkg/version"

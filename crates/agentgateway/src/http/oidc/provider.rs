@@ -78,7 +78,7 @@ pub(crate) async fn exchange_code_with_timeout(
 			form.push(("client_id", client_config.client_id.clone()));
 			form.push(("client_secret", client_secret.expose_secret().to_string()));
 		},
-		ClientCredentials::None => {
+		ClientCredentials::Public => {
 			form.push(("client_id", client_config.client_id.clone()));
 		},
 	}

@@ -7,10 +7,8 @@ pub enum TokenEndpointAuth {
 	#[default]
 	ClientSecretBasic,
 	ClientSecretPost,
-	/// Public-client mode: no client authentication at the token endpoint
-	/// (RFC 6749 §2.3.1 / OIDC Core §9 "none"). PKCE still protects the
-	/// authorization code; see `crates/agentgateway/src/http/oidc/callback.rs`.
-	None,
+	#[serde(rename = "none")]
+	Public,
 }
 
 impl TokenEndpointAuth {
@@ -18,14 +16,8 @@ impl TokenEndpointAuth {
 		match self {
 			Self::ClientSecretBasic => "clientSecretBasic",
 			Self::ClientSecretPost => "clientSecretPost",
-			Self::None => "none",
+			Self::Public => "none",
 		}
-	}
-
-	/// True when the method expects a `client_secret`. `None` is the only
-	/// public-client method.
-	pub fn requires_client_secret(self) -> bool {
-		matches!(self, Self::ClientSecretBasic | Self::ClientSecretPost)
 	}
 }
 
@@ -63,7 +55,7 @@ pub(crate) fn authorization_server_metadata_url(issuer: &str) -> String {
 /// that explicitly instead of silently dropping the secret requirement.
 pub(crate) fn parse_token_endpoint_auth_methods(
 	methods: Option<Vec<String>>,
-	has_client_secret: bool,
+	client_secret: Option<&secrecy::SecretString>,
 ) -> Result<TokenEndpointAuth, String> {
 	// Per OIDC Discovery §4.2 and RFC 8414 §2, the spec-defined default when
 	// `token_endpoint_auth_methods_supported` is omitted is `client_secret_basic`.
@@ -71,7 +63,7 @@ pub(crate) fn parse_token_endpoint_auth_methods(
 	// advertised — otherwise we surface a clear error below instead of
 	// silently programming an unauthenticated token request the IdP will reject.
 	let methods = methods.unwrap_or_else(|| vec!["client_secret_basic".into()]);
-	if has_client_secret {
+	if client_secret.is_some() {
 		if methods.iter().any(|method| method == "client_secret_basic") {
 			Ok(TokenEndpointAuth::ClientSecretBasic)
 		} else if methods.iter().any(|method| method == "client_secret_post") {
@@ -85,7 +77,7 @@ pub(crate) fn parse_token_endpoint_auth_methods(
 			)
 		}
 	} else if methods.iter().any(|method| method == "none") {
-		Ok(TokenEndpointAuth::None)
+		Ok(TokenEndpointAuth::Public)
 	} else {
 		Err(
 			"OIDC client has no clientSecret but the IdP does not advertise the 'none' auth method; \
@@ -97,9 +89,15 @@ pub(crate) fn parse_token_endpoint_auth_methods(
 
 #[cfg(test)]
 mod tests {
+	use secrecy::SecretString;
+
 	use super::{
 		TokenEndpointAuth, authorization_server_metadata_url, parse_token_endpoint_auth_methods,
 	};
+
+	fn secret() -> SecretString {
+		SecretString::new("client-secret".into())
+	}
 
 	#[test]
 	fn authorization_server_metadata_url_supports_path_based_issuers() {
@@ -111,13 +109,14 @@ mod tests {
 
 	#[test]
 	fn parse_token_endpoint_auth_methods_prefers_basic() {
+		let s = secret();
 		let method = parse_token_endpoint_auth_methods(
 			Some(vec![
 				"private_key_jwt".into(),
 				"client_secret_post".into(),
 				"client_secret_basic".into(),
 			]),
-			true,
+			Some(&s),
 		)
 		.expect("supported auth method");
 
@@ -126,8 +125,11 @@ mod tests {
 
 	#[test]
 	fn parse_token_endpoint_auth_methods_rejects_missing_supported_values() {
-		let err =
-			parse_token_endpoint_auth_methods(Some(vec!["private_key_jwt".into(), "none".into()]), true);
+		let s = secret();
+		let err = parse_token_endpoint_auth_methods(
+			Some(vec!["private_key_jwt".into(), "none".into()]),
+			Some(&s),
+		);
 
 		assert!(
 			err.unwrap_err().contains("does not advertise"),
@@ -138,10 +140,10 @@ mod tests {
 	#[test]
 	fn parse_token_endpoint_auth_methods_selects_none_for_public_client() {
 		let method =
-			parse_token_endpoint_auth_methods(Some(vec!["none".into(), "private_key_jwt".into()]), false)
+			parse_token_endpoint_auth_methods(Some(vec!["none".into(), "private_key_jwt".into()]), None)
 				.expect("public-client mode");
 
-		assert_eq!(method, TokenEndpointAuth::None);
+		assert_eq!(method, TokenEndpointAuth::Public);
 	}
 
 	#[test]
@@ -151,7 +153,7 @@ mod tests {
 				"client_secret_basic".into(),
 				"client_secret_post".into(),
 			]),
-			false,
+			None,
 		);
 
 		assert!(
@@ -168,11 +170,12 @@ mod tests {
 		// `token_endpoint_auth_methods_supported` implies `client_secret_basic`.
 		// Confidential clients get `basic`; public clients get a clear error
 		// directing them to configure the IdP accordingly.
+		let s = secret();
 		assert_eq!(
-			parse_token_endpoint_auth_methods(None, true).expect("confidential default"),
+			parse_token_endpoint_auth_methods(None, Some(&s)).expect("confidential default"),
 			TokenEndpointAuth::ClientSecretBasic,
 		);
-		let err = parse_token_endpoint_auth_methods(None, false)
+		let err = parse_token_endpoint_auth_methods(None, None)
 			.expect_err("secretless client cannot assume `none` from a missing advertised list");
 		assert!(
 			err.contains("does not advertise the 'none' auth method"),

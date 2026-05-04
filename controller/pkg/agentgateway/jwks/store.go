@@ -1,133 +1,48 @@
 package jwks
 
 import (
-	"context"
-	"fmt"
-
-	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/util/sets"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotecache"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/common"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 )
 
-var logger = logging.New("jwks_store")
-
 const DefaultJwksStorePrefix = "jwks-store"
 const RunnableName = "jwks-store"
 
+var storeLogger = logging.New("jwks_store")
+
 // Store bridges KRT-derived shared JWKS requests to the runtime that fetches,
 // persists, and serves keysets to translation.
-//
-// For JWT auth, JWKS is the persisted last-known-good boundary for explicit
-// remote key fetches.
 type Store struct {
-	storePrefix      string
-	jwksCache        *JwksCache
-	jwksFetcher      *Fetcher
-	persistedKeysets *persistedKeysetReader
-	requests         krt.Collection[SharedJwksRequest]
-	ready            chan struct{}
+	*remotecache.Store[SharedJwksRequest, Keyset]
+	cache *JwksCache
 }
 
-func NewStore(requests krt.Collection[SharedJwksRequest], persistedKeysets *PersistedEntries, storePrefix string) *Store {
-	logger.Info("creating jwks store")
-
-	jwksCache := NewCache()
-	return &Store{
-		storePrefix:      storePrefix,
-		jwksCache:        jwksCache,
-		requests:         requests,
-		jwksFetcher:      NewFetcher(jwksCache),
-		persistedKeysets: newPersistedKeysetReader(persistedKeysets),
-		ready:            make(chan struct{}),
-	}
-}
-
-func (s *Store) Start(ctx context.Context) error {
-	logger.Info("starting jwks store")
-
-	if s.persistedKeysets == nil {
-		return fmt.Errorf("jwks persisted keyset reader is not configured")
-	}
-
-	storedJwks, err := s.persistedKeysets.LoadPersistedKeysets(ctx)
-	if err != nil {
-		logger.Error("error loading jwks store from a ConfigMap", "error", err)
-	}
-	if err := s.jwksCache.LoadJwksFromStores(storedJwks); err != nil {
-		logger.Error("error loading jwks store state", "error", err)
-	}
-
-	registration := s.requests.Register(func(event krt.Event[SharedJwksRequest]) {
-		switch event.Event {
-		case controllers.EventAdd, controllers.EventUpdate:
-			if event.New == nil {
-				return
-			}
-			if event.Event == controllers.EventUpdate && event.Old != nil && event.Old.RequestKey != event.New.RequestKey {
-				// Retire the old keyset: stop fetching it but keep the cache
-				// entry so JWT validation continues working until the next
-				// successful fetch sweeps the orphaned entry.
-				logger.Debug("retiring stale keyset after request key change", "old_request_key", event.Old.RequestKey, "new_request_key", event.New.RequestKey)
-				s.jwksFetcher.RetireKeyset(event.Old.RequestKey)
-			}
-
-			request := event.New.JwksSource()
-			logger.Debug("updating keyset", "request_key", request.RequestKey, "config_map", JwksConfigMapName(s.storePrefix, request.RequestKey))
-			if err := s.jwksFetcher.AddOrUpdateKeyset(request); err != nil {
-				logger.Error("error adding/updating a jwks keyset", "error", err, "request_key", request.RequestKey, "uri", request.Target.URL)
-			}
-		case controllers.EventDelete:
-			if event.Old == nil {
-				return
-			}
-
-			logger.Debug("deleting keyset", "request_key", event.Old.RequestKey, "config_map", JwksConfigMapName(s.storePrefix, event.Old.RequestKey))
-			s.jwksFetcher.RemoveKeyset(event.Old.RequestKey)
-		}
+func NewStore(requests krt.Collection[SharedJwksRequest], persistedEntries *PersistedEntries, storePrefix string) *Store {
+	cache := NewCache()
+	innerStore := remotecache.NewStore(remotecache.StoreOptions[SharedJwksRequest, Keyset]{
+		Fetcher:                  NewFetcher(cache),
+		Requests:                 requests,
+		Logger:                   storeLogger,
+		Hydrator:                 persistedEntries,
+		RetireOnRequestKeyChange: true,
 	})
-	defer registration.UnregisterHandler()
 
-	go s.jwksFetcher.Run(ctx)
-
-	if !registration.WaitUntilSynced(ctx.Done()) {
-		return nil
+	return &Store{
+		Store: innerStore,
+		cache: cache,
 	}
-
-	s.jwksFetcher.SweepOrphans()
-
-	close(s.ready)
-
-	<-ctx.Done()
-	return nil
-}
-
-func (s *Store) HasSynced() bool {
-	select {
-	case <-s.ready:
-		return true
-	default:
-		return false
-	}
-}
-
-func (s *Store) SubscribeToUpdates() <-chan sets.Set[remotehttp.FetchKey] {
-	return s.jwksFetcher.SubscribeToUpdates()
 }
 
 func (s *Store) JwksByRequestKey(requestKey remotehttp.FetchKey) (Keyset, bool) {
-	return s.jwksCache.GetJwks(requestKey)
+	return s.cache.Get(requestKey)
 }
 
-func (r *Store) NeedLeaderElection() bool {
-	return true
+func (s *Store) RunnableName() string {
+	return RunnableName
 }
 
 var _ common.NamedRunnable = &Store{}
-
-func (r *Store) RunnableName() string {
-	return RunnableName
-}

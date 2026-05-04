@@ -3716,7 +3716,7 @@
           "type": "string"
         },
         "clientSecret": {
-          "description": "OAuth2 client secret used for token exchange. Omit for a public\nclient; in that case PKCE alone protects the authorization code\nexchange and the IdP must advertise `none` as a supported token-\nendpoint auth method (or this gateway must explicitly select it via\n`token_endpoint_auth`).",
+          "description": "OAuth2 client secret used for token exchange. Omit for a public\nclient (`tokenEndpointAuth: none`).",
           "type": [
             "string",
             "null"
@@ -3743,19 +3743,11 @@
       ]
     },
     "TokenEndpointAuth": {
-      "oneOf": [
-        {
-          "type": "string",
-          "enum": [
-            "clientSecretBasic",
-            "clientSecretPost"
-          ]
-        },
-        {
-          "description": "Public-client mode: no client authentication at the token endpoint\n(RFC 6749 §2.3.1 / OIDC Core §9 \"none\"). PKCE still protects the\nauthorization code; see `crates/agentgateway/src/http/oidc/callback.rs`.",
-          "type": "string",
-          "const": "none"
-        }
+      "type": "string",
+      "enum": [
+        "clientSecretBasic",
+        "clientSecretPost",
+        "none"
       ]
     },
     "LocalBasicAuth": {

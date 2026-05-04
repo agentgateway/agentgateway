@@ -1,100 +1,83 @@
 package oidc
 
 import (
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"istio.io/istio/pkg/kube/krt"
-	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
+	"github.com/stretchr/testify/require"
 )
 
-func TestResolveOidcEndpointUsesBackendResolverWhenConfigured(t *testing.T) {
-	backendName := gwv1.ObjectName("oidc-backend")
-
-	target, err := resolveOidcEndpoint(nil, remotehttpResolverFunc(func(input remotehttp.ResolveInput) (*remotehttp.ResolvedTarget, error) {
-		assert.Equal(t, "policy-a", input.ParentName)
-		assert.Equal(t, "default", input.DefaultNamespace)
-		assert.Equal(t, gwv1.BackendObjectReference{Name: backendName}, input.BackendRef)
-		assert.Equal(t, ".well-known/openid-configuration", input.Path)
-
-		return &remotehttp.ResolvedTarget{
-			Key: remotehttp.FetchTarget{URL: "https://resolved.example/.well-known/openid-configuration"}.Key(),
-			Target: remotehttp.FetchTarget{
-				URL: "https://resolved.example/.well-known/openid-configuration",
-			},
-		}, nil
-	}), RemoteOidcOwner{
-		ID:               OidcOwnerID{Namespace: "default", Name: "policy-a", Path: "spec.traffic.oidc"},
-		DefaultNamespace: "default",
-		Config: agentgateway.OIDC{
-			IssuerURL: "https://issuer.example",
-			Backend:   &gwv1.BackendObjectReference{Name: backendName},
+func TestOidcDiscoveryURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		issuer    string
+		want      string
+		wantError string
+	}{
+		{
+			name:   "https issuer without trailing slash",
+			issuer: "https://idp.example",
+			want:   "https://idp.example/.well-known/openid-configuration",
 		},
-	})
-
-	assert.NoError(t, err)
-	assert.Equal(t, "https://resolved.example/.well-known/openid-configuration", target.Target.URL)
-}
-
-func TestResolveOidcEndpointUsesIssuerPathWithBackendResolver(t *testing.T) {
-	backendName := gwv1.ObjectName("oidc-backend")
-
-	_, err := resolveOidcEndpoint(nil, remotehttpResolverFunc(func(input remotehttp.ResolveInput) (*remotehttp.ResolvedTarget, error) {
-		assert.Equal(t, "tenant-a/.well-known/openid-configuration", input.Path)
-		return &remotehttp.ResolvedTarget{}, nil
-	}), RemoteOidcOwner{
-		ID:               OidcOwnerID{Namespace: "default", Name: "policy-a", Path: "spec.traffic.oidc"},
-		DefaultNamespace: "default",
-		Config: agentgateway.OIDC{
-			IssuerURL: "https://issuer.example/tenant-a",
-			Backend:   &gwv1.BackendObjectReference{Name: backendName},
+		{
+			name:   "https issuer with trailing slash",
+			issuer: "https://idp.example/",
+			want:   "https://idp.example/.well-known/openid-configuration",
 		},
-	})
-
-	assert.NoError(t, err)
-}
-
-func TestResolveOidcEndpointBuildsDirectURLWithoutBackend(t *testing.T) {
-	target, err := resolveOidcEndpoint(nil, remotehttpResolverFunc(func(input remotehttp.ResolveInput) (*remotehttp.ResolvedTarget, error) {
-		t.Fatalf("unexpected backend resolver call: %#v", input)
-		return nil, nil
-	}), RemoteOidcOwner{
-		ID:               OidcOwnerID{Namespace: "default", Name: "policy-a", Path: "spec.traffic.oidc"},
-		DefaultNamespace: "default",
-		Config: agentgateway.OIDC{
-			IssuerURL: "https://issuer.example/tenant-a",
+		{
+			name:   "https issuer with path",
+			issuer: "https://idp.example/realms/main",
+			want:   "https://idp.example/realms/main/.well-known/openid-configuration",
 		},
-	})
+		{
+			name:   "https issuer with path and trailing slash",
+			issuer: "https://idp.example/realms/main/",
+			want:   "https://idp.example/realms/main/.well-known/openid-configuration",
+		},
+		{
+			name:   "http issuer allowed (scheme validated by CRD CEL)",
+			issuer: "http://idp.example",
+			want:   "http://idp.example/.well-known/openid-configuration",
+		},
+		{
+			name:      "rejects empty host",
+			issuer:    "https:///realms/main",
+			wantError: "must be absolute with a host",
+		},
+		{
+			name:      "rejects query string",
+			issuer:    "https://idp.example/?realm=main",
+			wantError: "no query or fragment",
+		},
+		{
+			name:      "rejects fragment",
+			issuer:    "https://idp.example/#main",
+			wantError: "no query or fragment",
+		},
+		{
+			name:      "rejects unparseable",
+			issuer:    "https://[invalid",
+			wantError: "invalid issuer URL",
+		},
+	}
 
-	assert.NoError(t, err)
-	assert.Equal(t, "https://issuer.example/tenant-a/.well-known/openid-configuration", target.Target.URL)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := OidcDiscoveryURL(tc.issuer)
+			if tc.wantError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.wantError)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
 }
 
-// OIDC Discovery §3 / §4.3 mandate byte-for-byte equality between the
-// configured issuer and the discovery document's `issuer` claim. A trailing
-// slash must round-trip through ResolveOwner unchanged for IdPs that issue
-// trailing-slash issuers.
-func TestResolveOwnerPreservesTrailingSlashInExpectedIssuer(t *testing.T) {
-	resolver := NewResolver(remotehttpResolverFunc(func(input remotehttp.ResolveInput) (*remotehttp.ResolvedTarget, error) {
-		t.Fatalf("unexpected backend resolver call: %#v", input)
-		return nil, nil
-	}))
-
-	resolved, err := resolver.ResolveOwner(nil, RemoteOidcOwner{
-		ID:               OidcOwnerID{Namespace: "default", Name: "policy-a", Path: "spec.traffic.oidc"},
-		DefaultNamespace: "default",
-		Config:           agentgateway.OIDC{IssuerURL: "https://issuer.example/"},
-	})
-
-	assert.NoError(t, err)
-	assert.Equal(t, "https://issuer.example/", resolved.ExpectedIssuer)
-}
-
-type remotehttpResolverFunc func(input remotehttp.ResolveInput) (*remotehttp.ResolvedTarget, error)
-
-func (f remotehttpResolverFunc) Resolve(_ krt.HandlerContext, input remotehttp.ResolveInput) (*remotehttp.ResolvedTarget, error) {
-	return f(input)
+func TestOidcDiscoveryURLAlwaysAppendsWellKnown(t *testing.T) {
+	got, err := OidcDiscoveryURL("https://idp.example/realms/main")
+	require.NoError(t, err)
+	require.True(t, strings.HasSuffix(got, "/.well-known/openid-configuration"),
+		"discovery URL should always end with the well-known path: got %q", got)
 }

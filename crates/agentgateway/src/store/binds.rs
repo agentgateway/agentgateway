@@ -27,7 +27,7 @@ use crate::types::agent::{
 	McpAuthentication, PolicyKey, PolicyTarget, Route, RouteGroupKey, RouteKey, RouteName, RouteSet,
 	TCPRoute, TCPRouteSet, TargetedPolicy, TrafficPolicy,
 };
-use crate::types::agent_xds::Diagnostics;
+use crate::types::agent_xds::{Diagnostics, targeted_policy_from_proto};
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
@@ -102,10 +102,9 @@ pub struct Store {
 	listener_change_tx: watch::Sender<u64>,
 	listener_change_rx: watch::Receiver<u64>,
 
-	/// Cookie-crypto encoder applied to xDS-delivered OIDC policies at
-	/// Store ingestion. Set once at startup from the gateway runtime config;
-	/// when absent, OIDC policies arriving via xDS are rejected.
-	oidc_cookie_encoder: Option<crate::http::sessionpersistence::Encoder>,
+	/// Cookie-crypto encoder applied to xDS-delivered OIDC policies at Store ingestion.
+	/// It is present only when the gateway session encoder is backed by AES key material.
+	oidc_cookie_encoder: Option<crate::http::oidc::OidcCookieEncoder>,
 
 	tx: tokio::sync::mpsc::UnboundedSender<BindEvent>,
 	rx: Option<tokio::sync::mpsc::UnboundedReceiver<BindEvent>>,
@@ -531,10 +530,21 @@ impl Store {
 	}
 
 	/// Install the ambient cookie-crypto encoder used to compile xDS OIDC
-	/// policies into runtime [`crate::http::oidc::OidcPolicy`] values. Must be
-	/// called before xDS ingestion begins on a gateway that may receive OIDC
-	/// policies; xDS proto-decode rejects OIDC policies until it is set.
-	pub fn set_oidc_cookie_encoder(&mut self, encoder: crate::http::sessionpersistence::Encoder) {
+	/// policies into runtime [`crate::http::oidc::OidcPolicy`] values.
+	///
+	/// Must be called exactly once, during gateway construction, before xDS
+	/// ingestion begins. Calling it after the first OIDC policy has been
+	/// ingested would silently rotate the encoder for subsequently-translated
+	/// policies while leaving already-cached `OidcPolicy` values bound to the
+	/// previous encoder — a footgun the `debug_assert!` traps in tests.
+	///
+	/// Until this is called, the xDS proto-decode rejects OIDC policies with
+	/// `SESSION_KEY is not configured on this gateway`.
+	pub(crate) fn set_oidc_cookie_encoder(&mut self, encoder: crate::http::oidc::OidcCookieEncoder) {
+		debug_assert!(
+			self.oidc_cookie_encoder.is_none(),
+			"OIDC cookie encoder already installed; set_oidc_cookie_encoder must be called once",
+		);
 		self.oidc_cookie_encoder = Some(encoder);
 	}
 
@@ -1485,11 +1495,7 @@ impl Store {
 		raw: XdsPolicy,
 		diagnostics: &mut Diagnostics,
 	) -> anyhow::Result<()> {
-		let policy = crate::types::agent_xds::targeted_policy_from_proto(
-			&raw,
-			diagnostics,
-			self.oidc_cookie_encoder.as_ref(),
-		)?;
+		let policy = targeted_policy_from_proto(&raw, diagnostics, self.oidc_cookie_encoder.as_ref())?;
 		self.insert_policy(policy);
 		Ok(())
 	}
@@ -2618,6 +2624,58 @@ mod tests {
 		assert!(
 			pols_b.access_log.is_none(),
 			"section-targeted policy should NOT apply to a different listener in the same set"
+		);
+	}
+
+	#[test]
+	fn test_oidc_policy_rejected_without_session_key() {
+		use crate::types::proto::agent;
+
+		let mut store = Store::default();
+
+		let xds_policy = XdsPolicy {
+			key: "test-oidc".to_string(),
+			name: Some(agent::TypedResourceName {
+				name: "test-oidc".to_string(),
+				namespace: "default".to_string(),
+				kind: "Policy".to_string(),
+			}),
+			target: Some(agent::PolicyTarget {
+				kind: Some(agent::policy_target::Kind::Route(
+					agent::policy_target::RouteTarget {
+						name: "test-route".to_string(),
+						namespace: "default".to_string(),
+						..Default::default()
+					},
+				)),
+			}),
+			kind: Some(agent::policy::Kind::Traffic(agent::TrafficPolicySpec {
+				kind: Some(agent::traffic_policy_spec::Kind::Oidc(
+					agent::traffic_policy_spec::Oidc {
+						policy_id: "route/test-route".to_string(),
+						issuer: "https://example.com".to_string(),
+						authorization_endpoint: "https://example.com/auth".to_string(),
+						token_endpoint: "https://example.com/token".to_string(),
+						token_endpoint_auth: agent::traffic_policy_spec::oidc::TokenEndpointAuth::None.into(),
+						client_id: "client".to_string(),
+						client_secret: String::new(),
+						redirect_uri: "https://example.com/callback".to_string(),
+
+						jwks_inline: "{\"keys\":[]}".to_string(),
+						scopes: vec![],
+					},
+				)),
+				phase: agent::traffic_policy_spec::PolicyPhase::Route.into(),
+			})),
+		};
+
+		let mut diagnostics = Diagnostics::default();
+		let res = store.insert_xds_policy(xds_policy, &mut diagnostics);
+		let err = res.expect_err("OIDC policy should be rejected without session key");
+		let msg = err.to_string();
+		assert!(
+			msg.contains("xDS OIDC") && msg.contains("SESSION_KEY"),
+			"Error message should mention both 'xDS OIDC' and 'SESSION_KEY', got: {msg}"
 		);
 	}
 }

@@ -21,6 +21,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	agentoidc "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/oidc"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotecache"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 	"github.com/agentgateway/agentgateway/controller/test/e2e"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/common"
@@ -174,7 +175,7 @@ func (s *testingSuite) eventuallyAssertProviderConfigCached() {
 			s.Ctx,
 			&cms,
 			ctrlclient.InNamespace(systemNamespace),
-			ctrlclient.MatchingLabels(agentoidc.OidcStoreConfigMapLabel(agentoidc.DefaultStorePrefix)),
+			ctrlclient.MatchingLabels(remotecache.ConfigMapLabels(agentoidc.DefaultStorePrefix)),
 		); err != nil {
 			return err
 		}
@@ -186,7 +187,7 @@ func (s *testingSuite) eventuallyAssertProviderConfigCached() {
 			if provider.IssuerURL == issuerURL &&
 				provider.AuthorizationEndpoint != "" &&
 				provider.TokenEndpoint != "" &&
-				provider.JwksJSON != "" {
+				provider.JwksInline != "" {
 				return nil
 			}
 		}

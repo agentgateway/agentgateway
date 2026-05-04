@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotecache"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 )
 
@@ -50,7 +51,7 @@ func TestLookupFailsClosedWhenKeysetIsMissing(t *testing.T) {
 		}},
 	)
 	lookupImpl := lookupIndex.(*lookup)
-	lookupImpl.cache.persisted.entries.WaitUntilSynced(stop)
+	lookupImpl.persisted.Collection().WaitUntilSynced(stop)
 
 	_, err := lookupIndex.InlineForOwner(krt.TestingDummyContext{}, RemoteJwksOwner{})
 
@@ -67,9 +68,9 @@ func TestLookupReturnsPersistedKeyset(t *testing.T) {
 	}
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      JwksConfigMapName(DefaultJwksStorePrefix, target.Key()),
+			Name:      remotecache.ConfigMapName(DefaultJwksStorePrefix, target.Key()),
 			Namespace: "agentgateway-system",
-			Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
+			Labels:    remotecache.ConfigMapLabels(DefaultJwksStorePrefix),
 		},
 	}
 	assert.NoError(t, SetJwksInConfigMap(cm, keyset))
@@ -89,7 +90,7 @@ func TestLookupReturnsPersistedKeyset(t *testing.T) {
 		}},
 	)
 	lookupImpl := lookupIndex.(*lookup)
-	lookupImpl.cache.persisted.entries.WaitUntilSynced(stop)
+	lookupImpl.persisted.Collection().WaitUntilSynced(stop)
 
 	inline, err := lookupIndex.InlineForOwner(krt.TestingDummyContext{}, RemoteJwksOwner{})
 
@@ -109,7 +110,7 @@ func TestLookupRequiresCanonicalPersistedKeysetName(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "jwks-store-legacy-name",
 			Namespace: "agentgateway-system",
-			Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
+			Labels:    remotecache.ConfigMapLabels(DefaultJwksStorePrefix),
 		},
 	}
 	assert.NoError(t, SetJwksInConfigMap(cm, keyset))
@@ -129,7 +130,7 @@ func TestLookupRequiresCanonicalPersistedKeysetName(t *testing.T) {
 		}},
 	)
 	lookupImpl := lookupIndex.(*lookup)
-	lookupImpl.cache.persisted.entries.WaitUntilSynced(stop)
+	lookupImpl.persisted.Collection().WaitUntilSynced(stop)
 
 	_, err := lookupIndex.InlineForOwner(krt.TestingDummyContext{}, RemoteJwksOwner{})
 
@@ -161,7 +162,7 @@ func TestLookupFailsWhenPersistedCacheIsNotConfigured(t *testing.T) {
 				Target: target,
 			},
 		}},
-		cache: nil,
+		persisted: nil,
 	}
 
 	_, err := lookupIndex.InlineForOwner(krt.TestingDummyContext{}, RemoteJwksOwner{})

@@ -32,7 +32,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
@@ -64,7 +63,6 @@ type gatewayReconciler struct {
 	secretClient     kclient.Client[*corev1.Secret]
 
 	controllerExtension pluginsdk.GatewayControllerExtension
-	agwCollections      *agwplugins.AgwCollections
 
 	queue controllers.Queue
 }
@@ -82,7 +80,6 @@ func NewGatewayReconciler(
 		scheme:              cfg.Mgr.GetScheme(),
 		agwControllerName:   cfg.AgwControllerName,
 		controllerExtension: controllerExtension,
-		agwCollections:      cfg.AgwCollections,
 
 		gwClient:         kclient.NewFilteredDelayed[*gwv1.Gateway](cfg.Client, gvr.KubernetesGateway, filter),
 		gwClassClient:    kclient.NewFilteredDelayed[*gwv1.GatewayClass](cfg.Client, gvr.GatewayClass, filter),
@@ -202,18 +199,6 @@ func NewGatewayReconciler(
 		r.agwParamClient.AddEventHandler(agwParamEventHandler)
 	}
 
-	// Reconcile a Gateway when its OIDC-attachment status changes — i.e. when a
-	// new OIDC-bearing AgentgatewayPolicy attaches (directly or via a child
-	// route/ListenerSet), or an existing one detaches. The krt collection
-	// resolves attachment from `spec.targetRefs`, so we don't need a separate
-	// AgentgatewayPolicy informer to compute this.
-	cfg.AgwCollections.GatewaysRequiringOIDC.Register(func(o krt.Event[agwplugins.OIDCRequiredGateway]) {
-		gw := o.Latest()
-		ref := types.NamespacedName{Namespace: gw.Namespace, Name: gw.Name}
-		logger.Debug("explicitly reconciling Gateway due to OIDC attachment change", "ref", ref)
-		r.queue.Add(ref)
-	})
-
 	// Add a handler to reconcile the parent Gateway when child objects (Deployment, Service, etc.)
 	parentHandler := controllers.ObjectHandler(controllers.EnqueueForParentHandler(r.queue, gvk.KubernetesGateway))
 	r.deploymentClient.AddEventHandler(parentHandler)
@@ -260,12 +245,6 @@ func (r *gatewayReconciler) Start(ctx context.Context) error {
 		r.svcClient.HasSynced,
 		r.configMapClient.HasSynced,
 		r.secretClient.HasSynced,
-		// Gate the first reconcile on the agentgateway krt collections being
-		// synced. The deployer reads `GatewaysRequiringOIDC.GetKey(...)` to
-		// decide whether to mint the managed OIDC cookie Secret; rendering
-		// before that collection is synced would deploy a Pod without the
-		// secret and force a re-reconcile to heal.
-		r.agwCollections.HasSynced,
 	}
 	// Add GatewayParameters cache sync handlers (includes both gwParamClient and agwParamClient)
 	hasSynced = append(hasSynced, r.gwParams.GetCacheSyncHandlers()...)

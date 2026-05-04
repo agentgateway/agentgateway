@@ -113,6 +113,29 @@ impl BrowserSession {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(transparent)]
+pub(crate) struct OidcCookieEncoder(sessionpersistence::Encoder);
+
+impl OidcCookieEncoder {
+	pub(crate) fn from_session_encoder(encoder: &sessionpersistence::Encoder) -> Result<Self, Error> {
+		match encoder {
+			sessionpersistence::Encoder::Aes(_) => Ok(Self(encoder.clone())),
+			sessionpersistence::Encoder::Base64(_) => Err(Error::Config(
+				"SESSION_KEY is required when oidc is configured".into(),
+			)),
+		}
+	}
+
+	fn encrypt(&self, plaintext: &str) -> Result<String, sessionpersistence::Error> {
+		self.0.encrypt(plaintext)
+	}
+
+	fn decrypt(&self, encoded: &str) -> Result<Vec<u8>, sessionpersistence::Error> {
+		self.0.decrypt(encoded)
+	}
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionConfig {
 	pub cookie_name: String,
@@ -123,7 +146,7 @@ pub struct SessionConfig {
 	pub ttl: Duration,
 	#[serde(with = "crate::serdes::serde_dur")]
 	pub transaction_ttl: Duration,
-	pub encoder: sessionpersistence::Encoder,
+	pub(crate) encoder: OidcCookieEncoder,
 }
 
 impl SessionConfig {

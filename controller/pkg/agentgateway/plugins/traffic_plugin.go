@@ -367,13 +367,29 @@ func ClonePoliciesForTarget(base []*api.Policy, policyTarget *api.PolicyTarget) 
 		return nil
 	}
 	out := make([]*api.Policy, 0, len(base))
+	attachment := attachmentName(policyTarget)
 	for _, p := range base {
-		clone := protomarshal.ShallowClone(p)
-		clone.Key += attachmentName(policyTarget)
+		// OIDC carries a nested policy_id that must track the cloned effective
+		// key, so a shallow clone would alias it across attachments.
+		var clone *api.Policy
+		if p.GetTraffic().GetOidc() != nil {
+			clone = protomarshal.Clone(p)
+		} else {
+			clone = protomarshal.ShallowClone(p)
+		}
+		clone.Key += attachment
 		clone.Target = policyTarget
+		syncOIDCPolicyIDWithPolicyKey(clone)
 		out = append(out, clone)
 	}
 	return out
+}
+
+func syncOIDCPolicyIDWithPolicyKey(p *api.Policy) {
+	if p.GetTraffic().GetOidc() == nil {
+		return
+	}
+	p.GetTraffic().GetOidc().PolicyId = oidcPolicyIDForPolicyKey(p.Key)
 }
 
 func translateTrafficPolicyToAgw(
@@ -483,7 +499,7 @@ func translateTrafficPolicyToAgw(
 	}
 
 	if traffic.OIDC != nil {
-		appendPolicy("oidc")(processOIDCPolicy(ctx, traffic.OIDC, traffic.Phase, basePolicyName, policyName, ctx.OidcLookup))
+		appendPolicy("oidc")(processOIDCPolicy(ctx, traffic.OIDC, policyName, policyName.String(), ctx.OidcLookup))
 	}
 
 	if traffic.APIKeyAuthentication != nil {

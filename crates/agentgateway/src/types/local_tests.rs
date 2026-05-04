@@ -28,12 +28,10 @@ fn test_client() -> client::Client {
 
 fn test_config() -> crate::Config {
 	let mut config = crate::config::parse_config("{}".to_string(), None).unwrap();
-	config.oidc_cookie_encoder = Some(
-		crate::http::sessionpersistence::Encoder::aes(
-			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-		)
-		.expect("aes encoder"),
-	);
+	config.session_encoder = crate::http::sessionpersistence::Encoder::aes(
+		"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+	)
+	.expect("aes encoder");
 	config
 }
 

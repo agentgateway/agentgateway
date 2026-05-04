@@ -7148,83 +7148,15 @@ spec:
                   oidc:
                     description: |-
                       `oidc` performs OpenID Connect authentication for inbound requests.
-                      When set, the gateway acts as an OIDC Relying Party: it fetches the
-                      discovery document from `<issuerURL>/.well-known/openid-configuration`,
-                      validates identity tokens, and manages the redirect flow.
+                      When set, the gateway acts as an OIDC Relying Party: it validates identity
+                      tokens and manages the redirect flow. The controller manages discovery
+                      and JWKS fetching on behalf of the gateway. Requires `SESSION_KEY` on
+                      the gateway pod (auto-mounted by the deployer).
                     properties:
-                      backend:
-                        description: Backend optionally identifies the backend used
-                          to reach the IdP. When unset, direct egress is used.
-                        properties:
-                          group:
-                            default: ""
-                            description: |-
-                              Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                              When unspecified or empty string, core API group is inferred.
-                            maxLength: 253
-                            pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                            type: string
-                          kind:
-                            default: Service
-                            description: |-
-                              Kind is the Kubernetes resource kind of the referent. For example
-                              "Service".
-
-                              Defaults to "Service" when not specified.
-
-                              ExternalName services can refer to CNAME DNS records that may live
-                              outside of the cluster and as such are difficult to reason about in
-                              terms of conformance. They also may not be safe to forward to (see
-                              CVE-2021-25740 for more information). Implementations SHOULD NOT
-                              support ExternalName Services.
-
-                              Support: Core (Services with a type other than ExternalName)
-
-                              Support: Implementation-specific (Services with type ExternalName)
-                            maxLength: 63
-                            minLength: 1
-                            pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                            type: string
-                          name:
-                            description: Name is the name of the referent.
-                            maxLength: 253
-                            minLength: 1
-                            type: string
-                          namespace:
-                            description: |-
-                              Namespace is the namespace of the backend. When unspecified, the local
-                              namespace is inferred.
-
-                              Note that when a namespace different than the local namespace is specified,
-                              a ReferenceGrant object is required in the referent namespace to allow that
-                              namespace's owner to accept the reference. See the ReferenceGrant
-                              documentation for details.
-
-                              Support: Core
-                            maxLength: 63
-                            minLength: 1
-                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                            type: string
-                          port:
-                            description: |-
-                              Port specifies the destination port number to use for this resource.
-                              Port is required when the referent is a Kubernetes Service. In this
-                              case, the port number is the service port number, not the target port.
-                              For other resources, destination port might be derived from the referent
-                              resource or this field.
-                            format: int32
-                            maximum: 65535
-                            minimum: 1
-                            type: integer
-                        required:
-                        - name
-                        type: object
-                        x-kubernetes-validations:
-                        - message: Must have port for Service reference
-                          rule: '(size(self.group) == 0 && self.kind == ''Service'')
-                            ? has(self.port) : true'
                       clientID:
                         description: ClientID is the OIDC client identifier.
+                        maxLength: 256
+                        minLength: 1
                         type: string
                       clientSecret:
                         description: |-
@@ -7245,29 +7177,42 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       issuerURL:
-                        description: IssuerURL is the OIDC issuer URL; the controller
-                          fetches <IssuerURL>/.well-known/openid-configuration.
-                        pattern: ^https?://.+
+                        description: |-
+                          IssuerURL is the OIDC issuer URL. It must be an absolute HTTPS URL with
+                          no query or fragment. The configured value is preserved exactly for
+                          discovery-document issuer matching, including any trailing slash.
+                        maxLength: 512
+                        minLength: 1
+                        pattern: ^https://[^/?#]+(/[^?#]*)?$
                         type: string
                       redirectURI:
-                        description: RedirectURI is the callback URL registered with
-                          the IdP.
-                        pattern: ^https?://.+
+                        description: |-
+                          RedirectURI is the callback URL registered with the IdP. Absolute
+                          http(s) URL, no query or fragment. The `http` scheme is permitted only
+                          because some IdPs allow it for `localhost` development; production
+                          deployments must use `https` and most IdPs reject `http` redirect
+                          registrations outright.
+                        maxLength: 2048
+                        minLength: 1
+                        pattern: ^https?://[^?#\s]+$
                         type: string
                       refreshInterval:
                         default: 1h
-                        description: RefreshInterval controls how often the controller
-                          re-fetches the discovery document and JWKS.
+                        description: |-
+                          RefreshInterval governs both the discovery-document refresh and the
+                          JWKS refresh derived from it.
                         type: string
                         x-kubernetes-validations:
                         - message: refreshInterval must be at least 5m.
                           rule: duration(self) >= duration('5m')
                       scopes:
-                        default:
-                        - openid
-                        description: Scopes to request from the IdP. Defaults to ["openid"].
+                        description: Scopes to request from the IdP. The `openid`
+                          scope is always included.
                         items:
+                          maxLength: 256
+                          minLength: 1
                           type: string
+                        maxItems: 64
                         type: array
                       tokenEndpointAuthMethod:
                         description: |-
@@ -7290,6 +7235,11 @@ spec:
                         a clientSecret
                       rule: 'has(self.tokenEndpointAuthMethod) && self.tokenEndpointAuthMethod
                         == ''None'' ? !has(self.clientSecret) : true'
+                    - message: tokenEndpointAuthMethod ClientSecretBasic or ClientSecretPost
+                        requires a clientSecret
+                      rule: 'has(self.tokenEndpointAuthMethod) && self.tokenEndpointAuthMethod
+                        in [''ClientSecretBasic'', ''ClientSecretPost''] ? has(self.clientSecret)
+                        : true'
                   phase:
                     description: |-
                       The phase to apply the traffic policy to. If the phase is `PreRouting`,
@@ -7871,10 +7821,11 @@ spec:
                         >= 1'
                 type: object
                 x-kubernetes-validations:
+                - message: oidc and jwtAuthentication are mutually exclusive
+                  rule: '!(has(self.oidc) && has(self.jwtAuthentication))'
                 - message: phase PreRouting only supports extAuth, transformation,
-                    extProc, jwtAuthentication, basicAuthentication, apiKeyAuthentication,
-                    and oidc
-                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.authorization),has(self.cors),has(self.csrf),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
+                    extProc, jwtAuthentication, basicAuthentication, and apiKeyAuthentication
+                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.authorization),has(self.cors),has(self.csrf),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.oidc),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
                     == 0 : true'
             type: object
             x-kubernetes-validations:
@@ -7923,17 +7874,6 @@ spec:
               rule: 'has(self.targetSelectors) && has(self.traffic) && has(self.traffic.phase)
                 && self.traffic.phase == ''PreRouting'' ? self.targetSelectors.all(t,
                 t.kind in [''Gateway'', ''ListenerSet'']) : true'
-            - message: traffic.oidc and traffic.jwtAuthentication are mutually exclusive
-              rule: 'has(self.traffic) && has(self.traffic.oidc) ? !has(self.traffic.jwtAuthentication)
-                : true'
-            - message: traffic.oidc may only target a Gateway, ListenerSet, or Route
-              rule: 'has(self.traffic) && has(self.traffic.oidc) && has(self.targetRefs)
-                ? self.targetRefs.all(t, t.kind in [''Gateway'', ''ListenerSet'',
-                ''HTTPRoute'', ''GRPCRoute'']) : true'
-            - message: traffic.oidc may only target a Gateway, ListenerSet, or Route
-              rule: 'has(self.traffic) && has(self.traffic.oidc) && has(self.targetSelectors)
-                ? self.targetSelectors.all(t, t.kind in [''Gateway'', ''ListenerSet'',
-                ''HTTPRoute'', ''GRPCRoute'']) : true'
             - message: exactly one of the fields in [targetRefs targetSelectors] must
                 be set
               rule: '[has(self.targetRefs),has(self.targetSelectors)].filter(x,x==true).size()

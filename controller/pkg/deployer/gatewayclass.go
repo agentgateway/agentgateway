@@ -7,8 +7,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	"sigs.k8s.io/gateway-api/pkg/features"
-
-	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 )
 
 // GatewayClassInfo describes the desired configuration for a GatewayClass.
@@ -49,20 +47,13 @@ func GetCommonExemptFeatures() sets.Set[features.Feature] {
 	return exemptFeatures
 }
 
-// getSupportedFeatures builds a sorted list of supported features, composing
-// Gateway API's `features.AllFeatures` (minus exempt) with the agentgateway-
-// specific extras advertised by this controller.
+// getSupportedFeatures builds a sorted list of supported features, excluding the provided exempt features.
 func getSupportedFeatures(exemptFeatures sets.Set[features.Feature]) []gwv1.SupportedFeature {
 	var allSupportedFeatures []gwv1.SupportedFeature
 	for _, feature := range features.AllFeatures.UnsortedList() {
 		if exemptFeatures.Has(feature) {
 			continue
 		}
-		allSupportedFeatures = append(allSupportedFeatures, gwv1.SupportedFeature{
-			Name: gwv1.FeatureName(feature.Name),
-		})
-	}
-	for _, feature := range agwplugins.AgentgatewaySupportedFeatures {
 		allSupportedFeatures = append(allSupportedFeatures, gwv1.SupportedFeature{
 			Name: gwv1.FeatureName(feature.Name),
 		})

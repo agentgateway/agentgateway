@@ -2545,11 +2545,6 @@ func (in *OIDC) DeepCopyInto(out *OIDC) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.Backend != nil {
-		in, out := &in.Backend, &out.Backend
-		*out = new(apisv1.BackendObjectReference)
-		(*in).DeepCopyInto(*out)
-	}
 	if in.RefreshInterval != nil {
 		in, out := &in.RefreshInterval, &out.RefreshInterval
 		*out = new(v1.Duration)

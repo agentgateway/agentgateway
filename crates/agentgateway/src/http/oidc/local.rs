@@ -5,8 +5,9 @@ use macro_rules_attribute::apply;
 use secrecy::SecretString;
 
 use super::{
-	ClientConfig, ClientCredentials, CookieSecureMode, Error, OidcPolicy, PolicyId, Provider,
-	ProviderEndpoint, RedirectUri, SameSiteMode, SessionConfig, dedupe_scopes, session,
+	ClientConfig, ClientCredentials, CookieSecureMode, Error, OidcCookieEncoder, OidcPolicy,
+	PolicyId, Provider, ProviderEndpoint, RedirectUri, SameSiteMode, SessionConfig, normalize_scopes,
+	session,
 };
 use crate::client::Client;
 use crate::http::oauth::{
@@ -25,59 +26,49 @@ struct OidcDiscoveryDocument {
 	token_endpoint_auth_methods_supported: Option<Vec<String>>,
 }
 
-pub(super) struct PreparedOidcProvider {
-	pub(super) issuer: String,
-	pub(super) authorization_endpoint: ProviderEndpoint,
-	pub(super) token_endpoint: ProviderEndpoint,
-	pub(super) token_endpoint_auth: TokenEndpointAuth,
-	pub(super) id_token_jwks: JwkSet,
-}
-
-pub(super) struct PreparedOidcPolicy {
-	pub(super) provider: PreparedOidcProvider,
-	pub(super) client_id: String,
-	pub(super) client_secret: Option<SecretString>,
-	pub(super) redirect_uri: RedirectUri,
-	pub(super) scopes: Vec<String>,
-}
-
-/// Compile a fully-resolved OIDC policy delivered over xDS into a runtime
-/// [`OidcPolicy`]. Mirrors the JWT path: proto-decode hands us all provider
-/// metadata + JWKS already resolved, and we only need the gateway-runtime
-/// cookie encoder to finalize the session config.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn compile_oidc_policy_from_xds(
+pub(crate) struct PreparedOidcPolicy {
 	policy_id: PolicyId,
 	issuer: String,
 	authorization_endpoint: ProviderEndpoint,
 	token_endpoint: ProviderEndpoint,
-	token_endpoint_auth: TokenEndpointAuth,
-	jwks_inline: &str,
+	id_token_jwks: JwkSet,
 	client_id: String,
-	client_secret: Option<SecretString>,
+	credentials: ClientCredentials,
 	redirect_uri: RedirectUri,
 	scopes: Vec<String>,
-	oidc_cookie_encoder: &crate::http::sessionpersistence::Encoder,
-) -> Result<OidcPolicy, Error> {
+}
+
+/// Decode a fully-resolved OIDC policy delivered over xDS into typed config.
+/// Mirrors the JWT path: the controller has already resolved provider metadata
+/// and JWKS, while runtime cookie crypto is applied later at store ingestion.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn resolve_oidc_policy_from_xds(
+	policy_id: PolicyId,
+	issuer: String,
+	authorization_endpoint: ProviderEndpoint,
+	token_endpoint: ProviderEndpoint,
+	jwks_inline: &str,
+	client_id: String,
+	credentials: ClientCredentials,
+	redirect_uri: RedirectUri,
+	scopes: Vec<String>,
+) -> Result<PreparedOidcPolicy, Error> {
 	let id_token_jwks: JwkSet = serde_json::from_str(jwks_inline).map_err(|e| {
 		Error::Config(format!(
 			"failed to parse inline oidc jwks delivered by xds: {e}"
 		))
 	})?;
-	PreparedOidcPolicy {
-		provider: PreparedOidcProvider {
-			issuer,
-			authorization_endpoint,
-			token_endpoint,
-			token_endpoint_auth,
-			id_token_jwks,
-		},
+	Ok(PreparedOidcPolicy {
+		policy_id,
+		issuer,
+		authorization_endpoint,
+		token_endpoint,
+		id_token_jwks,
 		client_id,
-		client_secret,
+		credentials,
 		redirect_uri,
 		scopes,
-	}
-	.compile(policy_id, oidc_cookie_encoder)
+	})
 }
 
 /// Browser-based OIDC authentication policy.
@@ -120,10 +111,7 @@ pub struct LocalOidcConfig {
 	pub client_id: String,
 
 	/// OAuth2 client secret used for token exchange. Omit for a public
-	/// client; in that case PKCE alone protects the authorization code
-	/// exchange and the IdP must advertise `none` as a supported token-
-	/// endpoint auth method (or this gateway must explicitly select it via
-	/// `token_endpoint_auth`).
+	/// client (`tokenEndpointAuth: none`).
 	#[serde(
 		default,
 		skip_serializing_if = "Option::is_none",
@@ -150,20 +138,27 @@ struct DiscoveredProviderMetadata {
 	jwks: FileInlineOrRemote,
 }
 
+struct ResolvedProvider {
+	authorization_endpoint: ProviderEndpoint,
+	token_endpoint: ProviderEndpoint,
+	id_token_jwks: JwkSet,
+	token_endpoint_auth: TokenEndpointAuth,
+}
+
 impl LocalOidcConfig {
 	pub(crate) async fn compile(
 		self,
 		client: Client,
 		policy_id: PolicyId,
-		oidc_cookie_encoder: &crate::http::sessionpersistence::Encoder,
+		oidc_cookie_encoder: &OidcCookieEncoder,
 	) -> Result<OidcPolicy, Error> {
 		self
-			.resolve(client)
+			.resolve(client, policy_id)
 			.await?
-			.compile(policy_id, oidc_cookie_encoder)
+			.compile(oidc_cookie_encoder)
 	}
 
-	async fn resolve(self, client: Client) -> Result<PreparedOidcPolicy, Error> {
+	async fn resolve(self, client: Client, policy_id: PolicyId) -> Result<PreparedOidcPolicy, Error> {
 		let LocalOidcConfig {
 			issuer,
 			discovery,
@@ -185,7 +180,7 @@ impl LocalOidcConfig {
 				"tokenEndpointAuth must be omitted unless authorizationEndpoint, tokenEndpoint, and jwks are configured explicitly".into(),
 			));
 		}
-		let provider = match explicit_field_count {
+		let resolved = match explicit_field_count {
 			0 => {
 				let discovery = match discovery {
 					Some(discovery) => discovery,
@@ -194,16 +189,15 @@ impl LocalOidcConfig {
 					},
 				};
 				let discovered =
-					discover_provider_metadata(client.clone(), &issuer, discovery, client_secret.is_some())
+					discover_provider_metadata(client.clone(), &issuer, discovery, client_secret.as_ref())
 						.await?;
 				let id_token_jwks = load_jwks(client, discovered.jwks, "discovered jwks source").await?;
 
-				PreparedOidcProvider {
-					issuer,
+				ResolvedProvider {
 					authorization_endpoint: discovered.authorization_endpoint,
 					token_endpoint: discovered.token_endpoint,
-					token_endpoint_auth: discovered.token_endpoint_auth,
 					id_token_jwks,
+					token_endpoint_auth: discovered.token_endpoint_auth,
 				}
 			},
 			3 => {
@@ -217,15 +211,13 @@ impl LocalOidcConfig {
 				else {
 					unreachable!("explicit_field_count == 3 requires all explicit provider fields");
 				};
-				resolve_explicit_provider(
-					client,
-					issuer,
+				let id_token_jwks = load_jwks(client, jwks, "explicit jwks source").await?;
+				ResolvedProvider {
 					authorization_endpoint,
 					token_endpoint,
-					token_endpoint_auth.unwrap_or_default(),
-					jwks,
-				)
-				.await?
+					id_token_jwks,
+					token_endpoint_auth: token_endpoint_auth.unwrap_or_default(),
+				}
 			},
 			_ => {
 				return Err(Error::Config(
@@ -234,11 +226,16 @@ impl LocalOidcConfig {
 				));
 			},
 		};
+		let credentials = ClientCredentials::from_parts(resolved.token_endpoint_auth, client_secret)?;
 
 		Ok(PreparedOidcPolicy {
-			provider,
+			policy_id,
+			issuer,
+			authorization_endpoint: resolved.authorization_endpoint,
+			token_endpoint: resolved.token_endpoint,
+			id_token_jwks: resolved.id_token_jwks,
 			client_id,
-			client_secret,
+			credentials,
 			redirect_uri,
 			scopes,
 		})
@@ -249,7 +246,7 @@ async fn discover_provider_metadata(
 	client: Client,
 	issuer: &str,
 	discovery: FileInlineOrRemote,
-	has_client_secret: bool,
+	client_secret: Option<&SecretString>,
 ) -> Result<DiscoveredProviderMetadata, Error> {
 	let document = discovery
 		.load::<OidcDiscoveryDocument>(client)
@@ -269,7 +266,7 @@ async fn discover_provider_metadata(
 
 	let token_endpoint_auth = parse_token_endpoint_auth_methods(
 		document.token_endpoint_auth_methods_supported,
-		has_client_secret,
+		client_secret,
 	)
 	.map_err(Error::Config)?;
 	let jwks = FileInlineOrRemote::Remote {
@@ -289,25 +286,6 @@ async fn discover_provider_metadata(
 			.map_err(|e| Error::Config(format!("invalid token endpoint: {e}")))?,
 		token_endpoint_auth,
 		jwks,
-	})
-}
-
-async fn resolve_explicit_provider(
-	client: Client,
-	issuer: String,
-	authorization_endpoint: ProviderEndpoint,
-	token_endpoint: ProviderEndpoint,
-	token_endpoint_auth: TokenEndpointAuth,
-	jwks: FileInlineOrRemote,
-) -> Result<PreparedOidcProvider, Error> {
-	let id_token_jwks = load_jwks(client, jwks, "explicit jwks source").await?;
-
-	Ok(PreparedOidcProvider {
-		issuer,
-		authorization_endpoint,
-		token_endpoint,
-		token_endpoint_auth,
-		id_token_jwks,
 	})
 }
 
@@ -336,47 +314,41 @@ async fn load_jwks(
 	Ok(jwks)
 }
 
-impl PreparedOidcProvider {
-	pub(super) fn compile(self, client_id: String) -> Result<Provider, Error> {
-		let provider = crate::http::jwt::Provider::from_jwks(
-			self.id_token_jwks,
-			self.issuer.clone(),
-			Some(vec![client_id]),
-			crate::http::jwt::JWTValidationOptions::default(),
-		)
-		.map_err(|e| Error::Config(format!("failed to create id token validator: {e}")))?;
-
-		Ok(Provider {
-			issuer: self.issuer,
-			authorization_endpoint: self.authorization_endpoint,
-			token_endpoint: self.token_endpoint,
-			id_token_validator: crate::http::jwt::Jwt::from_providers(
-				vec![provider],
-				crate::http::jwt::Mode::Strict,
-				crate::http::auth::AuthorizationLocation::bearer_header(),
-			),
-		})
-	}
-}
-
 impl PreparedOidcPolicy {
-	pub(super) fn compile(
+	pub(crate) fn compile(
 		self,
-		policy_id: PolicyId,
-		oidc_cookie_encoder: &crate::http::sessionpersistence::Encoder,
+		oidc_cookie_encoder: &OidcCookieEncoder,
 	) -> Result<OidcPolicy, Error> {
-		let (cookie_name, transaction_cookie_prefix) = session::derive_cookie_names(&policy_id);
+		let (cookie_name, transaction_cookie_prefix) = session::derive_cookie_names(&self.policy_id);
 		let PreparedOidcPolicy {
-			provider,
+			policy_id,
+			issuer,
+			authorization_endpoint,
+			token_endpoint,
+			id_token_jwks,
 			client_id,
-			client_secret,
+			credentials,
 			redirect_uri,
 			scopes,
 		} = self;
-		let scopes = dedupe_scopes(scopes);
-		let token_endpoint_auth = provider.token_endpoint_auth;
-		let credentials = ClientCredentials::from_parts(token_endpoint_auth, client_secret)?;
-		let provider = Arc::new(provider.compile(client_id.clone())?);
+		let scopes = normalize_scopes(scopes);
+		let id_token_validator = crate::http::jwt::Provider::from_jwks(
+			id_token_jwks,
+			issuer.clone(),
+			Some(vec![client_id.clone()]),
+			crate::http::jwt::JWTValidationOptions::default(),
+		)
+		.map_err(|e| Error::Config(format!("failed to create id token validator: {e}")))?;
+		let provider = Arc::new(Provider {
+			issuer,
+			authorization_endpoint,
+			token_endpoint,
+			id_token_validator: crate::http::jwt::Jwt::from_providers(
+				vec![id_token_validator],
+				crate::http::jwt::Mode::Strict,
+				crate::http::auth::AuthorizationLocation::bearer_header(),
+			),
+		});
 
 		Ok(OidcPolicy {
 			policy_id,

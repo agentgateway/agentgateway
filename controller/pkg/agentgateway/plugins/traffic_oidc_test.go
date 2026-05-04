@@ -1,300 +1,264 @@
 package plugins
 
 import (
-	"errors"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"istio.io/istio/pkg/kube/krt"
-	"k8s.io/apimachinery/pkg/types"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	oidcpkg "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/oidc"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil/krttest"
 )
 
-// stubOIDCLookup is a test-only fake for oidcpkg.Lookup.
-type stubOIDCLookup struct {
-	provider *oidcpkg.DiscoveredProvider
-	err      error
-}
+func TestNormalizedOIDCScopesAlwaysIncludesOpenidFirst(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{
+			name: "empty input",
+			in:   nil,
+			want: []string{"openid"},
+		},
+		{
+			name: "without openid",
+			in:   []string{"email", "profile"},
+			want: []string{"openid", "email", "profile"},
+		},
+		{
+			name: "openid already present",
+			in:   []string{"openid", "email"},
+			want: []string{"openid", "email"},
+		},
+		{
+			name: "openid present at non-first position is preserved at first",
+			in:   []string{"email", "openid", "profile"},
+			want: []string{"openid", "email", "profile"},
+		},
+		{
+			name: "duplicates collapsed in input order",
+			in:   []string{"email", "profile", "email", "openid"},
+			want: []string{"openid", "email", "profile"},
+		},
+	}
 
-func (s stubOIDCLookup) ResolveForOwner(krt.HandlerContext, oidcpkg.RemoteOidcOwner) (*oidcpkg.DiscoveredProvider, error) {
-	return s.provider, s.err
-}
-
-// makeOIDC returns a public-client OIDC config (no ClientSecret). The plugin
-// tests below that use this fixture intentionally exercise the public-client
-// path, which requires no Kubernetes Secret and therefore no harness setup.
-// Confidential-client behavior (Secret resolution, Basic/Post auth) is
-// exercised in TestResolveOIDCClientSecretReadsDataKey and in agent_xds tests.
-func makeOIDC() *agentgateway.OIDC {
-	return &agentgateway.OIDC{
-		IssuerURL:   "https://idp.example.com",
-		ClientID:    "my-client",
-		RedirectURI: "https://app.example.com/callback",
-		Scopes:      []string{"openid", "email"},
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, normalizedOIDCScopes(tc.in))
+		})
 	}
 }
 
-func makeDiscoveredProvider() *oidcpkg.DiscoveredProvider {
-	return &oidcpkg.DiscoveredProvider{
-		IssuerURL:                         "https://idp.example.com",
-		AuthorizationEndpoint:             "https://idp.example.com/authorize",
-		TokenEndpoint:                     "https://idp.example.com/token",
-		JwksJSON:                          `{"keys":[]}`,
-		TokenEndpointAuthMethodsSupported: []string{"none"},
+func TestConfiguredOIDCTokenEndpointAuth(t *testing.T) {
+	stringPtr := func(s string) *string { return &s }
+
+	tests := []struct {
+		name            string
+		method          string
+		hasClientSecret bool
+		want            api.TrafficPolicySpec_OIDC_TokenEndpointAuth
+		wantErrContains string
+	}{
+		{
+			name:            "ClientSecretBasic with secret",
+			method:          oidcConfigTokenEndpointAuthMethodClientSecretBasic,
+			hasClientSecret: true,
+			want:            api.TrafficPolicySpec_OIDC_CLIENT_SECRET_BASIC,
+		},
+		{
+			name:            "ClientSecretBasic without secret rejected",
+			method:          oidcConfigTokenEndpointAuthMethodClientSecretBasic,
+			hasClientSecret: false,
+			wantErrContains: "requires a clientSecret",
+		},
+		{
+			name:            "ClientSecretPost with secret",
+			method:          oidcConfigTokenEndpointAuthMethodClientSecretPost,
+			hasClientSecret: true,
+			want:            api.TrafficPolicySpec_OIDC_CLIENT_SECRET_POST,
+		},
+		{
+			name:            "ClientSecretPost without secret rejected",
+			method:          oidcConfigTokenEndpointAuthMethodClientSecretPost,
+			hasClientSecret: false,
+			wantErrContains: "requires a clientSecret",
+		},
+		{
+			name:            "None without secret",
+			method:          oidcConfigTokenEndpointAuthMethodNone,
+			hasClientSecret: false,
+			want:            api.TrafficPolicySpec_OIDC_NONE,
+		},
+		{
+			name:            "None with secret rejected",
+			method:          oidcConfigTokenEndpointAuthMethodNone,
+			hasClientSecret: true,
+			wantErrContains: "must not be paired with a clientSecret",
+		},
+		{
+			name:            "unsupported method rejected",
+			method:          "PrivateKeyJWT",
+			hasClientSecret: true,
+			wantErrContains: "unsupported tokenEndpointAuthMethod",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := configuredOIDCTokenEndpointAuth(
+				&agentgateway.OIDC{TokenEndpointAuthMethod: stringPtr(tc.method)},
+				tc.hasClientSecret,
+			)
+
+			if tc.wantErrContains != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.wantErrContains)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
 	}
 }
 
-func TestProcessOIDCPolicyHappyPath(t *testing.T) {
-	oidcCfg := makeOIDC()
-	provider := makeDiscoveredProvider()
-	policyKey := types.NamespacedName{Namespace: "default", Name: "my-policy"}
+func TestDiscoveredOIDCTokenEndpointAuth(t *testing.T) {
+	tests := []struct {
+		name            string
+		methods         []string
+		hasClientSecret bool
+		want            api.TrafficPolicySpec_OIDC_TokenEndpointAuth
+		wantErrContains string
+	}{
+		{
+			name:            "advertised list empty + secret defaults to client_secret_basic",
+			methods:         nil,
+			hasClientSecret: true,
+			want:            api.TrafficPolicySpec_OIDC_CLIENT_SECRET_BASIC,
+		},
+		{
+			name:            "advertised list empty + no secret requires explicit none",
+			methods:         nil,
+			hasClientSecret: false,
+			wantErrContains: "does not advertise",
+		},
+		{
+			name:            "secret prefers basic over post",
+			methods:         []string{"client_secret_post", "client_secret_basic"},
+			hasClientSecret: true,
+			want:            api.TrafficPolicySpec_OIDC_CLIENT_SECRET_BASIC,
+		},
+		{
+			name:            "secret falls back to post when basic missing",
+			methods:         []string{"client_secret_post", "private_key_jwt"},
+			hasClientSecret: true,
+			want:            api.TrafficPolicySpec_OIDC_CLIENT_SECRET_POST,
+		},
+		{
+			name:            "secret with no supported confidential method rejected",
+			methods:         []string{"private_key_jwt"},
+			hasClientSecret: true,
+			wantErrContains: "does not advertise",
+		},
+		{
+			name:            "no secret picks none when advertised",
+			methods:         []string{"none", "private_key_jwt"},
+			hasClientSecret: false,
+			want:            api.TrafficPolicySpec_OIDC_NONE,
+		},
+		{
+			name:            "no secret rejects when none not advertised",
+			methods:         []string{"client_secret_basic", "client_secret_post"},
+			hasClientSecret: false,
+			wantErrContains: "does not advertise",
+		},
+	}
 
-	result, err := processOIDCPolicy(
-		PolicyCtx{Krt: krt.TestingDummyContext{}},
-		oidcCfg,
-		nil,
-		"traffic/default/my-policy",
-		policyKey,
-		stubOIDCLookup{provider: provider},
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := discoveredOIDCTokenEndpointAuth(tc.methods, tc.hasClientSecret)
+
+			if tc.wantErrContains != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.wantErrContains)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestResolveOIDCClientSecret(t *testing.T) {
+	const (
+		policyNs   = "default"
+		secretName = "oidc-secret"
 	)
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil policy")
+	makeCtx := func(t *testing.T, secret *corev1.Secret) PolicyCtx {
+		t.Helper()
+		var secrets []*corev1.Secret
+		if secret != nil {
+			secrets = []*corev1.Secret{secret}
+		}
+		secretsCol := krt.NewStaticCollection(krttest.AlwaysSynced{}, secrets)
+		return PolicyCtx{
+			Krt:         krt.TestingDummyContext{},
+			Collections: &AgwCollections{Secrets: secretsCol},
+		}
 	}
 
-	oidcSpec := result.GetTraffic().GetOidc()
-	if oidcSpec == nil {
-		t.Fatal("expected oidc spec in policy")
+	cfg := &agentgateway.OIDC{
+		ClientSecret: &corev1.LocalObjectReference{Name: secretName},
 	}
-	if oidcSpec.Issuer != provider.IssuerURL {
-		t.Errorf("issuer: got %q, want %q", oidcSpec.Issuer, provider.IssuerURL)
-	}
-	if oidcSpec.AuthorizationEndpoint != provider.AuthorizationEndpoint {
-		t.Errorf("authorization_endpoint: got %q, want %q", oidcSpec.AuthorizationEndpoint, provider.AuthorizationEndpoint)
-	}
-	if oidcSpec.TokenEndpoint != provider.TokenEndpoint {
-		t.Errorf("token_endpoint: got %q, want %q", oidcSpec.TokenEndpoint, provider.TokenEndpoint)
-	}
-	if oidcSpec.JwksInline != provider.JwksJSON {
-		t.Errorf("jwks_inline: got %q, want %q", oidcSpec.JwksInline, provider.JwksJSON)
-	}
-	if oidcSpec.ClientId != oidcCfg.ClientID {
-		t.Errorf("client_id: got %q, want %q", oidcSpec.ClientId, oidcCfg.ClientID)
-	}
-	if oidcSpec.RedirectUri != oidcCfg.RedirectURI {
-		t.Errorf("redirect_uri: got %q, want %q", oidcSpec.RedirectUri, oidcCfg.RedirectURI)
-	}
-	if len(oidcSpec.Scopes) != 2 || oidcSpec.Scopes[0] != "openid" || oidcSpec.Scopes[1] != "email" {
-		t.Errorf("scopes: got %v, want [openid email]", oidcSpec.Scopes)
-	}
-	// Public-client fixture: no ClientSecret and the IdP advertises 'none',
-	// so the plugin must emit NONE and leave client_secret empty on the wire.
-	if oidcSpec.TokenEndpointAuth != api.TrafficPolicySpec_OIDC_NONE {
-		t.Errorf("token_endpoint_auth: got %v, want %v", oidcSpec.TokenEndpointAuth, api.TrafficPolicySpec_OIDC_NONE)
-	}
-	if oidcSpec.ClientSecret != "" {
-		t.Errorf("client_secret must be empty for a public client, got %q", oidcSpec.ClientSecret)
-	}
-}
 
-func TestProcessOIDCPolicyPolicyIDForAgentgatewayPolicy(t *testing.T) {
-	policyKey := types.NamespacedName{Namespace: "prod", Name: "auth-policy"}
+	t.Run("returns secret value when present", func(t *testing.T) {
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Namespace: policyNs, Name: secretName},
+			Data:       map[string][]byte{"clientSecret": []byte("s3cr3t")},
+		}
 
-	result, err := processOIDCPolicy(
-		PolicyCtx{Krt: krt.TestingDummyContext{}},
-		makeOIDC(),
-		nil,
-		"traffic/prod/auth-policy",
-		policyKey,
-		stubOIDCLookup{provider: makeDiscoveredProvider()},
-	)
+		got, err := resolveOIDCClientSecret(makeCtx(t, secret), policyNs, cfg)
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	want := "policy/prod/auth-policy"
-	got := result.GetTraffic().GetOidc().GetPolicyId()
-	if got != want {
-		t.Errorf("policy_id: got %q, want %q", got, want)
-	}
-}
+		require.NoError(t, err)
+		require.Equal(t, "s3cr3t", got)
+	})
 
-func TestProcessOIDCPolicyKeyUsesOIDCSuffix(t *testing.T) {
-	policyKey := types.NamespacedName{Namespace: "default", Name: "my-policy"}
+	t.Run("missing secret returns typed error", func(t *testing.T) {
+		_, err := resolveOIDCClientSecret(makeCtx(t, nil), policyNs, cfg)
 
-	result, err := processOIDCPolicy(
-		PolicyCtx{Krt: krt.TestingDummyContext{}},
-		makeOIDC(),
-		nil,
-		"traffic/default/my-policy",
-		policyKey,
-		stubOIDCLookup{provider: makeDiscoveredProvider()},
-	)
+		require.ErrorContains(t, err, "not found")
+	})
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	wantKey := "traffic/default/my-policy" + oidcPolicySuffix
-	if result.Key != wantKey {
-		t.Errorf("policy key: got %q, want %q", result.Key, wantKey)
-	}
-}
+	t.Run("missing data key returns typed error", func(t *testing.T) {
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Namespace: policyNs, Name: secretName},
+			Data:       map[string][]byte{"other": []byte("v")},
+		}
 
-func TestProcessOIDCPolicyPublicClientRequiresNoneAdvertised(t *testing.T) {
-	// Public client (no clientSecret) against an IdP that advertises only
-	// confidential methods must fail with a user-facing error directing the
-	// operator to register the client as public.
-	oidcCfg := makeOIDC()
-	provider := makeDiscoveredProvider()
-	provider.TokenEndpointAuthMethodsSupported = []string{"client_secret_post"}
+		_, err := resolveOIDCClientSecret(makeCtx(t, secret), policyNs, cfg)
 
-	_, err := processOIDCPolicy(
-		PolicyCtx{Krt: krt.TestingDummyContext{}},
-		oidcCfg,
-		nil,
-		"traffic/default/my-policy",
-		types.NamespacedName{Namespace: "default", Name: "my-policy"},
-		stubOIDCLookup{provider: provider},
-	)
-	if err == nil {
-		t.Fatal("expected an error when no clientSecret and IdP does not advertise 'none'")
-	}
-	if !contains(err.Error(), "register the client as public") {
-		t.Errorf("expected user-facing guidance in error, got: %v", err)
-	}
-}
+		require.ErrorContains(t, err, "missing or has empty")
+	})
 
-func TestProcessOIDCPolicyExplicitNoneOverridesDiscovery(t *testing.T) {
-	// User-supplied tokenEndpointAuthMethod=None wins even when the IdP
-	// advertises other methods, because the user has explicitly opted the
-	// client into public-client mode.
-	oidcCfg := makeOIDC()
-	override := oidcConfigTokenEndpointAuthMethodNone
-	oidcCfg.TokenEndpointAuthMethod = &override
-	provider := makeDiscoveredProvider()
-	provider.TokenEndpointAuthMethodsSupported = []string{"client_secret_post"}
+	t.Run("empty data value returns typed error", func(t *testing.T) {
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Namespace: policyNs, Name: secretName},
+			Data:       map[string][]byte{"clientSecret": []byte("   ")},
+		}
 
-	result, err := processOIDCPolicy(
-		PolicyCtx{Krt: krt.TestingDummyContext{}},
-		oidcCfg,
-		nil,
-		"traffic/default/my-policy",
-		types.NamespacedName{Namespace: "default", Name: "my-policy"},
-		stubOIDCLookup{provider: provider},
-	)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got := result.GetTraffic().GetOidc().GetTokenEndpointAuth(); got != api.TrafficPolicySpec_OIDC_NONE {
-		t.Errorf("token_endpoint_auth: got %v, want %v", got, api.TrafficPolicySpec_OIDC_NONE)
-	}
-}
+		_, err := resolveOIDCClientSecret(makeCtx(t, secret), policyNs, cfg)
 
-func contains(haystack, needle string) bool {
-	return strings.Contains(haystack, needle)
-}
+		require.ErrorContains(t, err, "empty")
+	})
 
-func TestProcessOIDCPolicyLookupNotYetFetchedReturnsError(t *testing.T) {
-	sentinel := errors.New("oidc provider not yet fetched")
+	t.Run("nil clientSecret returns empty", func(t *testing.T) {
+		got, err := resolveOIDCClientSecret(makeCtx(t, nil), policyNs, &agentgateway.OIDC{})
 
-	result, err := processOIDCPolicy(
-		PolicyCtx{Krt: krt.TestingDummyContext{}},
-		makeOIDC(),
-		nil,
-		"traffic/default/my-policy",
-		types.NamespacedName{Namespace: "default", Name: "my-policy"},
-		stubOIDCLookup{err: sentinel},
-	)
-
-	if err == nil {
-		t.Fatal("expected error when lookup returns error")
-	}
-	if !errors.Is(err, sentinel) {
-		t.Errorf("expected sentinel error, got %v", err)
-	}
-	if result != nil {
-		t.Fatal("expected no policy when lookup returns an error")
-	}
-}
-
-func TestProcessOIDCPolicyLookupReturnsNilProviderReturnsError(t *testing.T) {
-	result, err := processOIDCPolicy(
-		PolicyCtx{Krt: krt.TestingDummyContext{}},
-		makeOIDC(),
-		nil,
-		"traffic/default/my-policy",
-		types.NamespacedName{Namespace: "default", Name: "my-policy"},
-		stubOIDCLookup{provider: nil, err: nil},
-	)
-
-	if err == nil {
-		t.Fatal("expected error when lookup returns nil provider")
-	}
-	if result != nil {
-		t.Fatal("expected no policy when lookup returns a nil provider")
-	}
-}
-
-func TestProcessOIDCPolicyNilLookupReturnsError(t *testing.T) {
-	_, err := processOIDCPolicy(
-		PolicyCtx{Krt: krt.TestingDummyContext{}},
-		makeOIDC(),
-		nil,
-		"traffic/default/my-policy",
-		types.NamespacedName{Namespace: "default", Name: "my-policy"},
-		nil,
-	)
-
-	if err == nil {
-		t.Fatal("expected error when oidc lookup is nil")
-	}
-}
-
-func TestProcessOIDCPolicyResultHasTrafficKind(t *testing.T) {
-	result, err := processOIDCPolicy(
-		PolicyCtx{Krt: krt.TestingDummyContext{}},
-		makeOIDC(),
-		nil,
-		"traffic/default/my-policy",
-		types.NamespacedName{Namespace: "default", Name: "my-policy"},
-		stubOIDCLookup{provider: makeDiscoveredProvider()},
-	)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// GetTraffic() returns nil if the kind is not Traffic.
-	if result.GetTraffic() == nil {
-		t.Error("expected Traffic kind on policy, got nil")
-	}
-	// GetOidc() must be populated.
-	if result.GetTraffic().GetOidc() == nil {
-		t.Error("expected oidc spec inside Traffic policy")
-	}
-}
-
-func TestProcessOIDCPolicyPreservesConfiguredPhase(t *testing.T) {
-	preRouting := agentgateway.PolicyPhase("PreRouting")
-
-	result, err := processOIDCPolicy(
-		PolicyCtx{Krt: krt.TestingDummyContext{}},
-		makeOIDC(),
-		&preRouting,
-		"traffic/default/my-policy",
-		types.NamespacedName{Namespace: "default", Name: "my-policy"},
-		stubOIDCLookup{provider: makeDiscoveredProvider()},
-	)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got := result.GetTraffic().GetPhase(); got != api.TrafficPolicySpec_GATEWAY {
-		t.Fatalf("phase: got %v, want %v", got, api.TrafficPolicySpec_GATEWAY)
-	}
+		require.NoError(t, err)
+		require.Empty(t, got)
+	})
 }

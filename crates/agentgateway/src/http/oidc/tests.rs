@@ -96,11 +96,21 @@ fn test_redirect_uri() -> RedirectUri {
 	RedirectUri::parse("https://app.example.com/oauth/callback".into()).expect("redirect uri")
 }
 
-fn test_oidc_cookie_encoder() -> crate::http::sessionpersistence::Encoder {
-	crate::http::sessionpersistence::Encoder::aes(
+fn test_oidc_cookie_encoder() -> OidcCookieEncoder {
+	let session_encoder = crate::http::sessionpersistence::Encoder::aes(
 		"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 	)
-	.expect("aes encoder")
+	.expect("aes encoder");
+	OidcCookieEncoder::from_session_encoder(&session_encoder).expect("oidc cookie encoder")
+}
+
+#[test]
+fn oidc_cookie_encoder_rejects_base64_session_encoder() {
+	let err =
+		OidcCookieEncoder::from_session_encoder(&crate::http::sessionpersistence::Encoder::base64())
+			.expect_err("base64 encoder must not be accepted for oidc cookies");
+
+	assert!(err.to_string().contains("SESSION_KEY"), "unexpected: {err}");
 }
 
 fn provider_endpoint(value: impl AsRef<str>) -> ProviderEndpoint {
@@ -108,6 +118,7 @@ fn provider_endpoint(value: impl AsRef<str>) -> ProviderEndpoint {
 }
 
 fn test_policy() -> OidcPolicy {
+	let scopes: Vec<String> = vec!["openid".into(), "profile".into()];
 	let session = SessionConfig {
 		cookie_name: "agw_oidc_s_test".into(),
 		transaction_cookie_prefix: "agw_oidc_t_test".into(),
@@ -134,7 +145,7 @@ fn test_policy() -> OidcPolicy {
 		},
 		redirect_uri: test_redirect_uri(),
 		session,
-		scopes: vec!["openid".into(), "profile".into()],
+		scopes,
 	}
 }
 
@@ -566,7 +577,7 @@ async fn public_client_token_exchange_sends_no_client_secret() {
 	};
 	let client_config = ClientConfig {
 		client_id: TEST_CLIENT_ID.into(),
-		credentials: ClientCredentials::None,
+		credentials: ClientCredentials::Public,
 	};
 
 	let response = provider::exchange_code(
@@ -793,6 +804,100 @@ async fn callback_success_sets_session_cookie_and_clears_transaction_cookie() {
 		cookie.starts_with(&policy.session.transaction_cookie_name(transaction_id))
 			&& cookie.contains("Max-Age=0")
 	}));
+}
+
+#[tokio::test]
+async fn callback_rejects_transaction_cookie_from_incompatible_policy() {
+	let source = test_policy();
+	let mut target = test_policy();
+	target.policy_id = PolicyId::policy("other-policy");
+	let (cookie_name, transaction_cookie_prefix) =
+		super::session::derive_cookie_names(&target.policy_id);
+	target.session.cookie_name = cookie_name;
+	target.session.transaction_cookie_prefix = transaction_cookie_prefix;
+
+	let transaction_id = "tx-policy";
+	let callback_state = encoded_callback_state(transaction_id, "test-state");
+	let encoded = encoded_transaction(
+		&source,
+		transaction_id,
+		"test-state",
+		TEST_NONCE,
+		"/protected",
+		now_unix() + 300,
+	);
+	let uri = format!("https://app.example.com/oauth/callback?code=auth-code&state={callback_state}");
+	let mut req = request(Method::GET, &uri, Some("text/html"));
+	add_cookie(
+		&mut req,
+		format!(
+			"{}={encoded}",
+			target.session.transaction_cookie_name(transaction_id)
+		),
+	);
+
+	let err = target
+		.apply(None, &mut req, policy_client())
+		.await
+		.expect_err("incompatible transaction policy must be rejected");
+	assert!(matches!(err, Error::PolicyMismatch));
+}
+
+#[tokio::test]
+async fn browser_session_cookie_from_incompatible_policy_is_not_accepted() {
+	let source = test_policy();
+	let mut target = test_policy();
+	target.policy_id = PolicyId::policy("other-policy");
+	let (cookie_name, transaction_cookie_prefix) =
+		super::session::derive_cookie_names(&target.policy_id);
+	target.session.cookie_name = cookie_name;
+	target.session.transaction_cookie_prefix = transaction_cookie_prefix;
+
+	let encoded = source
+		.session
+		.encode_browser_session(&BrowserSession {
+			policy_id: source.policy_id.clone(),
+			raw_id_token: SecretString::new(signed_id_token(TEST_NONCE).into()),
+			expires_at_unix: Some(now_unix() + 300),
+		})
+		.expect("encode session");
+	let mut req = request(
+		Method::GET,
+		"https://app.example.com/protected",
+		Some("text/html"),
+	);
+	add_cookie(
+		&mut req,
+		format!("{}={encoded}", target.session.cookie_name),
+	);
+
+	let response = target
+		.apply(None, &mut req, policy_client())
+		.await
+		.expect("target policy should start a fresh login");
+	assert!(
+		response.direct_response.is_some(),
+		"incompatible browser session policy must not authenticate the request",
+	);
+	assert!(
+		req.extensions().get::<jwt::Claims>().is_none(),
+		"incompatible browser session policy must not install claims",
+	);
+}
+
+#[test]
+fn browser_session_cookie_size_limit_still_applies_with_policy_payload() {
+	let policy = test_policy();
+	let err = policy
+		.session
+		.encode_browser_session(&BrowserSession {
+			policy_id: policy.policy_id.clone(),
+			raw_id_token: SecretString::new("x".repeat(5000).into()),
+			expires_at_unix: Some(now_unix() + 300),
+		})
+		.expect_err("oversized session cookie must be rejected");
+
+	assert!(matches!(err, Error::SessionCookieTooLarge));
 }
 
 #[tokio::test]
@@ -1133,9 +1238,9 @@ fn policy_id_from_str_round_trips_canonical_forms() {
 
 	for input in [
 		"route/default/my-route/rule-0",
-		"policy/default/my-policy",
+		"policy/default/my-policy:oidc",
 		"route/ns/r",
-		"policy/ns/p",
+		"policy/ns/p:oidc",
 	] {
 		let parsed = PolicyId::from_str(input).expect(input);
 		assert_eq!(parsed.as_str(), input);
@@ -1183,21 +1288,24 @@ fn policy_id_constructors_match_from_str() {
 fn compile_test_oidc_from_xds(
 	policy_id: PolicyId,
 	jwks_inline: &str,
-	encoder: &crate::http::sessionpersistence::Encoder,
+	encoder: &OidcCookieEncoder,
 ) -> Result<OidcPolicy, super::Error> {
-	super::compile_oidc_policy_from_xds(
+	let credentials = ClientCredentials::from_parts(
+		TokenEndpointAuth::ClientSecretBasic,
+		Some(SecretString::new("client-secret".into())),
+	)?;
+	super::resolve_oidc_policy_from_xds(
 		policy_id,
 		TEST_ISSUER.into(),
 		provider_endpoint("https://issuer.example.com/authorize"),
 		provider_endpoint("https://issuer.example.com/token"),
-		TokenEndpointAuth::ClientSecretBasic,
 		jwks_inline,
 		TEST_CLIENT_ID.into(),
-		Some(SecretString::new("client-secret".into())),
+		credentials,
 		test_redirect_uri(),
-		vec!["profile".into()],
-		encoder,
-	)
+		vec!["profile".into(), "email".into()],
+	)?
+	.compile(encoder)
 }
 
 #[test]
@@ -1220,16 +1328,36 @@ fn xds_oidc_compiles_to_policy() {
 	}
 
 	// Scopes always include "openid", even when not explicitly requested.
-	assert_eq!(policy.scopes, vec!["openid".to_string(), "profile".into()]);
+	assert_eq!(
+		policy.scopes,
+		vec!["openid".to_string(), "profile".into(), "email".into()]
+	);
 
-	// Cookie names are deterministic from the policy id; the xDS path must
-	// derive the same cookie as the file-backed path.
+	// Cookie names are deterministic from the policy id.
 	let (expected_cookie, expected_transaction_prefix) =
-		super::session::derive_cookie_names(&policy_id);
+		super::session::derive_cookie_names(&policy.policy_id);
 	assert_eq!(policy.session.cookie_name, expected_cookie);
 	assert_eq!(
 		policy.session.transaction_cookie_prefix,
 		expected_transaction_prefix
+	);
+}
+
+#[test]
+fn different_policy_ids_use_different_cookie_names() {
+	let encoder = test_oidc_cookie_encoder();
+	let jwks = serde_json::to_string(&test_jwks()).expect("jwks json");
+
+	let first = compile_test_oidc_from_xds(PolicyId::policy("default/first"), &jwks, &encoder)
+		.expect("compile first xds oidc");
+	let second = compile_test_oidc_from_xds(PolicyId::policy("default/second"), &jwks, &encoder)
+		.expect("compile second xds oidc");
+
+	assert_ne!(first.policy_id, second.policy_id);
+	assert_ne!(first.session.cookie_name, second.session.cookie_name);
+	assert_ne!(
+		first.session.transaction_cookie_prefix,
+		second.session.transaction_cookie_prefix,
 	);
 }
 

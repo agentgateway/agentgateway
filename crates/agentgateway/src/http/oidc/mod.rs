@@ -23,8 +23,9 @@ mod session;
 mod tests;
 
 pub use local::LocalOidcConfig;
-pub(crate) use local::compile_oidc_policy_from_xds;
+pub(crate) use local::{PreparedOidcPolicy, resolve_oidc_policy_from_xds};
 pub use redirect::RedirectUri;
+pub(crate) use session::OidcCookieEncoder;
 pub use session::{
 	BrowserSession, CookieSecureMode, RESERVED_COOKIE_PREFIX, SameSiteMode, SessionConfig,
 	TransactionState,
@@ -32,11 +33,8 @@ pub use session::{
 
 pub use crate::http::oauth::TokenEndpointAuth;
 
-/// Stable identity used to prefix session cookies and to correlate an OIDC
-/// policy between the controller, xDS, and the dataplane runtime. The
-/// canonical wire form is `policy/<key>` or `route/<key>`; see
-/// [`PolicyId::policy`] / [`PolicyId::route`] for the constructors and
-/// [`<PolicyId as std::str::FromStr>::from_str`] for the parser.
+/// Cookie-prefix identity correlating an OIDC policy across controller, xDS,
+/// and dataplane. Wire form: `route/<key>` or `policy/<key>`.
 #[derive(
 	Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -60,23 +58,17 @@ impl PolicyId {
 impl std::str::FromStr for PolicyId {
 	type Err = String;
 
-	/// Parse a PolicyId from its canonical string form, used to transport the
-	/// identity through xDS. The encoding is produced by [`PolicyId::route`]
-	/// and [`PolicyId::policy`]; any other shape is rejected so a malformed
-	/// identity never becomes a stable cookie prefix.
 	fn from_str(value: &str) -> Result<Self, Self::Err> {
 		let (prefix, rest) = value
 			.split_once('/')
-			.ok_or_else(|| format!("policy id '{value}' is missing a '<prefix>/' segment"))?;
+			.ok_or_else(|| format!("policy id '{value}' missing '<prefix>/' segment"))?;
 		if rest.is_empty() {
-			return Err(format!("policy id '{value}' has an empty identifier"));
+			return Err(format!("policy id '{value}' has empty identifier"));
 		}
-		match prefix {
-			"route" | "policy" => Ok(Self(value.to_string())),
-			other => Err(format!(
-				"policy id prefix '{other}' is not supported (expected 'route' or 'policy')"
-			)),
+		if !matches!(prefix, "route" | "policy") {
+			return Err(format!("unknown policy id prefix '{prefix}'"));
 		}
+		Ok(Self(value.to_string()))
 	}
 }
 
@@ -194,7 +186,7 @@ pub enum ClientCredentials {
 		#[serde(serialize_with = "crate::serdes::ser_redact")]
 		client_secret: SecretString,
 	},
-	None,
+	Public,
 }
 
 impl ClientCredentials {
@@ -203,7 +195,7 @@ impl ClientCredentials {
 		match self {
 			Self::ClientSecretBasic { .. } => TokenEndpointAuth::ClientSecretBasic,
 			Self::ClientSecretPost { .. } => TokenEndpointAuth::ClientSecretPost,
-			Self::None => TokenEndpointAuth::None,
+			Self::Public => TokenEndpointAuth::Public,
 		}
 	}
 
@@ -221,20 +213,17 @@ impl ClientCredentials {
 			(TokenEndpointAuth::ClientSecretPost, Some(client_secret)) => {
 				Ok(Self::ClientSecretPost { client_secret })
 			},
-			(TokenEndpointAuth::None, None) => Ok(Self::None),
-			(method, None) if method.requires_client_secret() => Err(Error::Config(format!(
+			(TokenEndpointAuth::Public, None) => Ok(Self::Public),
+			(
+				method @ (TokenEndpointAuth::ClientSecretBasic | TokenEndpointAuth::ClientSecretPost),
+				None,
+			) => Err(Error::Config(format!(
 				"tokenEndpointAuthMethod {} requires a clientSecret",
 				method.as_str()
 			))),
-			(TokenEndpointAuth::None, Some(_)) => Err(Error::Config(
-				"tokenEndpointAuthMethod None must not be paired with a clientSecret".into(),
+			(TokenEndpointAuth::Public, Some(_)) => Err(Error::Config(
+				"tokenEndpointAuthMethod 'none' must not be paired with a clientSecret".into(),
 			)),
-			// Unreachable today (requires_client_secret covers the confidential methods)
-			// but kept exhaustive so a future method addition is a compile error.
-			(method, _) => Err(Error::Config(format!(
-				"tokenEndpointAuthMethod {} is not supported in this build",
-				method.as_str()
-			))),
 		}
 	}
 }
@@ -442,18 +431,19 @@ pub(crate) fn now_unix() -> u64 {
 		.as_secs()
 }
 
-pub(crate) fn dedupe_scopes(scopes: Vec<String>) -> Vec<String> {
-	let mut seen = HashSet::new();
+/// Controller also normalizes pre-emit; this is idempotent and the only
+/// normalization for the `LocalOidcConfig` path.
+pub(crate) fn normalize_scopes(scopes: Vec<String>) -> Vec<String> {
+	let mut seen = HashSet::with_capacity(scopes.len() + 1);
+	let mut normalized = Vec::with_capacity(scopes.len() + 1);
+	normalized.push("openid".to_string());
 	seen.insert("openid".to_string());
-
-	let mut deduped = Vec::with_capacity(scopes.len() + 1);
-	deduped.push("openid".to_string());
 	for scope in scopes {
 		if seen.insert(scope.clone()) {
-			deduped.push(scope);
+			normalized.push(scope);
 		}
 	}
-	deduped
+	normalized
 }
 
 pub(crate) fn cap_session_expiry(now: u64, ttl: Duration, claims: &Map<String, Value>) -> u64 {

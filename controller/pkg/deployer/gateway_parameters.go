@@ -48,7 +48,6 @@ var (
 )
 
 const sessionKeyChecksumAnnotation = "checksum/session-key"
-const oidcCookieSecretChecksumAnnotation = "checksum/oidc-cookie-secret" //nolint:gosec // annotation key, not a credential
 
 func NewGatewayParameters(cli apiclient.Client, inputs *Inputs) *GatewayParameters {
 	gp := &GatewayParameters{
@@ -73,13 +72,6 @@ func (gp *GatewayParameters) WithHelmValuesGeneratorOverride(generator HelmValue
 func (gp *GatewayParameters) WithSessionKeyGenerator(generator func() (string, error)) *GatewayParameters {
 	if gp.agwHelmValuesGenerator != nil && generator != nil {
 		gp.agwHelmValuesGenerator.sessionKeyGen = generator
-	}
-	return gp
-}
-
-func (gp *GatewayParameters) WithOIDCCookieSecretGenerator(generator func() (string, error)) *GatewayParameters {
-	if gp.agwHelmValuesGenerator != nil && generator != nil {
-		gp.agwHelmValuesGenerator.oidcCookieGen = generator
 	}
 	return gp
 }
@@ -189,33 +181,15 @@ func (gp *GatewayParameters) PostProcessObjects(ctx context.Context, obj client.
 			}
 			rendered = append(rendered, sessionKeySecret)
 		}
-		if usesManagedOIDCCookieSecretResolvedParameters(resolved) && gp.agwHelmValuesGenerator.gatewayRequiresOIDCCookieSecret(gw) {
-			oidcCookieSecret, err := gp.agwHelmValuesGenerator.buildOIDCCookieSecret(
-				ctx,
-				gw,
-				gatewayOIDCCookieSecretName(gw.Name),
-			)
-			if err != nil {
-				return nil, fmt.Errorf("failed to build oidc cookie secret for Gateway %s/%s: %w", gw.GetNamespace(), gw.GetName(), err)
-			}
-			if err := addSecretChecksumAnnotation(rendered, oidcCookieSecret, oidcCookieSecretChecksumAnnotation, "oidc cookie secret"); err != nil {
-				return nil, fmt.Errorf("failed to annotate oidc cookie secret checksum for Gateway %s/%s: %w", gw.GetNamespace(), gw.GetName(), err)
-			}
-			rendered = append(rendered, oidcCookieSecret)
-		}
 	}
 
 	return rendered, nil
 }
 
 func addSessionKeyChecksumAnnotation(rendered []client.Object, secret *corev1.Secret) error {
-	return addSecretChecksumAnnotation(rendered, secret, sessionKeyChecksumAnnotation, "session key secret")
-}
-
-func addSecretChecksumAnnotation(rendered []client.Object, secret *corev1.Secret, annotationKey, secretKind string) error {
 	key, found := secret.Data["key"]
 	if !found || len(key) == 0 {
-		return fmt.Errorf("%s %s/%s missing key entry", secretKind, secret.Namespace, secret.Name)
+		return fmt.Errorf("session key secret %s/%s missing key entry", secret.Namespace, secret.Name)
 	}
 
 	checksum := sha256.Sum256(key)
@@ -229,7 +203,7 @@ func addSecretChecksumAnnotation(rendered []client.Object, secret *corev1.Secret
 		if deployment.Spec.Template.Annotations == nil {
 			deployment.Spec.Template.Annotations = map[string]string{}
 		}
-		deployment.Spec.Template.Annotations[annotationKey] = checksumHex
+		deployment.Spec.Template.Annotations[sessionKeyChecksumAnnotation] = checksumHex
 	}
 
 	return nil
