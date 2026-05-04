@@ -8,9 +8,12 @@ import (
 	"sync"
 
 	"github.com/go-logr/logr"
+	"istio.io/istio/pkg/kube"
+	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/security"
 	"istio.io/istio/pkg/util/sets"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -34,6 +37,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/metrics"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk"
+	pluginsdkcol "github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
@@ -203,6 +207,10 @@ func (s *setup) Start(ctx context.Context) error {
 		CertWatcher:    certWatcher,
 	}
 
+	if err := initDiscoveryNSFilter(ctx, s.APIClient, s.GlobalSettings.DiscoveryNamespaceSelectors); err != nil {
+		return err
+	}
+
 	slog.Info("creating krt collections")
 	krtOpts := krtutil.NewKrtOptions(ctx.Done(), setupOpts.KrtDebugger)
 
@@ -358,6 +366,23 @@ func SetupLogging(levelStr string) {
 		klogLogger := logr.FromSlogHandler(logging.New("klog").Handler())
 		klog.SetLogger(klogLogger)
 	})
+}
+
+func initDiscoveryNSFilter(
+	ctx context.Context,
+	cli apiclient.Client,
+	discoveryNamespaceSetting string,
+) error {
+	// NOTE: Do not apply an ObjectFilter to namespaces as the discovery namespace ObjectFilter for other clients
+	// requires all namespaces to be watched
+	nsClient := kclient.New[*corev1.Namespace](cli) //nolint:forbidigo // okay to use non-filtered client
+	// Initialize discovery namespace filter
+	discoveryNamespacesFilter, err := pluginsdkcol.NewDiscoveryNamespacesFilter(nsClient, discoveryNamespaceSetting, ctx.Done())
+	if err != nil {
+		return fmt.Errorf("error creating discovery namespace filter: %w", err)
+	}
+	kube.SetObjectFilter(cli.Core(), discoveryNamespacesFilter)
+	return nil
 }
 
 func buildJwksStore(
