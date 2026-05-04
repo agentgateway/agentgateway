@@ -89,6 +89,14 @@ pub enum Transport {
 		waypoint_identities: Vec<Identity>, // Identities of waypoint/workload (workload + service SANs)
 		inner: ApplicationTransport,
 	},
+	/// HBONE tunnel to a waypoint proxy. The CONNECT URI uses the service target
+	/// (VIP or hostname) so the waypoint can route, while the physical connection
+	/// goes to the waypoint address.
+	HboneWaypoint {
+		waypoint_address: SocketAddr,   // Physical address of waypoint (IP:hbone_port)
+		identities: Vec<Identity>,      // Service SANs for mTLS verification
+		inner: ApplicationTransport,
+	},
 }
 
 impl From<ApplicationTransport> for Transport {
@@ -110,16 +118,17 @@ impl Transport {
 			Transport::Tunnel(inner, _) => inner,
 			Transport::Hbone(inner, _) => inner,
 			Transport::DoubleHbone { inner, .. } => inner,
+			Transport::HboneWaypoint { inner, .. } => inner,
 		}
 	}
 
 	pub fn skip_dns_resolution(&self) -> bool {
 		// For double HBONE, we don't need to resolve the hostname locally
 		// The gateway will resolve it. Use a placeholder dest (won't be used).
-		// Same with Tunnel
+		// Same with Tunnel and HboneWaypoint (we connect to the waypoint address directly).
 		matches!(
 			self,
-			Transport::DoubleHbone { .. } | Transport::Tunnel(_, _)
+			Transport::DoubleHbone { .. } | Transport::Tunnel(_, _) | Transport::HboneWaypoint { .. }
 		)
 	}
 
@@ -139,6 +148,14 @@ impl Transport {
 				inner: ApplicationTransport::Tls(_),
 				..
 			} => "doublehbone-tls",
+			Transport::HboneWaypoint {
+				inner: ApplicationTransport::Plaintext,
+				..
+			} => "hbone-waypoint",
+			Transport::HboneWaypoint {
+				inner: ApplicationTransport::Tls(_),
+				..
+			} => "hbone-waypoint-tls",
 		}
 	}
 }
@@ -306,6 +323,24 @@ impl Connector {
 					gateway_address,
 					gateway_identity,
 					waypoint_identities,
+				)
+				.await?
+			},
+
+			Transport::HboneWaypoint {
+				waypoint_address,
+				identities,
+				inner: _,
+			} => {
+				let pool = self
+					.hbone_pool
+					.clone()
+					.ok_or_else(|| crate::http::Error::new(anyhow::anyhow!("hbone pool disabled")))?;
+				hbone_tunnel::handshake_waypoint(
+					pool,
+					&target,
+					waypoint_address,
+					identities,
 				)
 				.await?
 			},
