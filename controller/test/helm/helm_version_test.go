@@ -286,7 +286,7 @@ func TestHelmChartTemplate(t *testing.T) {
 			name: "monitoring-enabled",
 			valuesYAML: `monitoring:
   enabled: true
-  serviceMonitor:
+  podMonitor:
     interval: 30s
     extraLabels:
       release: prometheus

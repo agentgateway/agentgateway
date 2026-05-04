@@ -356,7 +356,7 @@ spec:
 ---
 # Source: agentgateway/templates/monitoring.yaml
 apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+kind: PodMonitor
 metadata:
   name: test-release-agentgateway-proxy
   namespace: default
@@ -371,14 +371,14 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: agentgateway-proxy
-  endpoints:
+  podMetricsEndpoints:
   - port: metrics
     path: /metrics
     interval: 15s
 ---
 # Source: agentgateway/templates/monitoring.yaml
 apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+kind: PodMonitor
 metadata:
   name: test-release-agentgateway
   namespace: default
@@ -393,7 +393,7 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: agentgateway
-  endpoints:
+  podMetricsEndpoints:
   - port: metrics
     path: /metrics
     interval: 15s
