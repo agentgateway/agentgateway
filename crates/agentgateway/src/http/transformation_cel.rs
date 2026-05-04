@@ -1,8 +1,6 @@
-use std::str::FromStr;
-
 use ::http::{HeaderName, header};
 use agent_core::prelude::Strng;
-use serde_with::{DeserializeAs, SerializeAs, serde_as};
+use serde_with::serde_as;
 
 use crate::cel::{Expression, RequestSnapshot};
 use crate::http::{
@@ -156,39 +154,13 @@ pub struct TransformerConfig {
 	pub add: Vec<(HeaderOrPseudo, cel::Expression)>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub set: Vec<(HeaderOrPseudo, cel::Expression)>,
-	#[serde_as(serialize_as = "Vec<SerAsStr>")]
+	#[serde_as(as = "Vec<crate::serdes::SerAsStr>")]
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub remove: Vec<HeaderName>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub body: Option<cel::Expression>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub metadata: Vec<(Strng, cel::Expression)>,
-}
-
-pub struct SerAsStr;
-impl<T> SerializeAs<T> for SerAsStr
-where
-	T: AsRef<str>,
-{
-	fn serialize_as<S>(source: &T, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		source.as_ref().serialize(serializer)
-	}
-}
-impl<'de, T> DeserializeAs<'de, T> for SerAsStr
-where
-	T: FromStr,
-	<T as FromStr>::Err: std::fmt::Display,
-{
-	fn deserialize_as<D>(deserializer: D) -> Result<T, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
-		let s = <&str>::deserialize(deserializer)?;
-		s.parse().map_err(serde::de::Error::custom)
-	}
 }
 
 fn eval_body(

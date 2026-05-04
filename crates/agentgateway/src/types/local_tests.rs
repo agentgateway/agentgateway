@@ -302,6 +302,29 @@ binds:
 }
 
 #[tokio::test]
+async fn test_local_ext_authz_http_include_response_headers() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        extAuthz:
+          host: 127.0.0.1:9000
+          protocol:
+            http:
+              includeResponseHeaders:
+              - x-auth-request-user
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	normalize_test_yaml(input)
+		.await
+		.expect("http extAuthz includeResponseHeaders should accept header names");
+}
+
+#[tokio::test]
 async fn test_local_ext_authz_conditional_fallback_must_be_last() {
 	let input = r#"
 binds:

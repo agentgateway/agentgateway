@@ -79,18 +79,14 @@ pub trait BackendPolicyTrait: Send + Sync + 'static {
 /// RequestPolicy is a wrapper around a request policy implementation to handle common construction
 /// and usage around conditional policies, etc.
 /// This is cheaply clone-able.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum RequestPolicy<T> {
+	#[default]
 	Empty,
 	Single(PolicyWithCondition<T>),
 	/// Multiple policies are run in order, and the first one that matches is used.
 	/// In the future, we *may* support running all matches instead of the first.
 	Multiple(Vec<PolicyWithCondition<T>>),
-}
-impl<T> Default for RequestPolicy<T> {
-	fn default() -> RequestPolicy<T> {
-		Self::Empty
-	}
 }
 
 impl<T> Clone for RequestPolicy<T> {

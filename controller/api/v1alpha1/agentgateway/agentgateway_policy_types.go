@@ -1439,12 +1439,14 @@ type ExtProc struct {
 }
 
 // +k8s:deepcopy-gen=false
+// nolint: kubeapilinter
 type ConditionalPolicyEntry[T any] struct {
 	Condition shared.CELExpression
 	Policy    T
 }
 
 // +k8s:deepcopy-gen=false
+// nolint: kubeapilinter
 type ConditionalPolicy[T any] interface {
 	ConditionalPolicy() (*T, iter.Seq[ConditionalPolicyEntry[T]])
 }

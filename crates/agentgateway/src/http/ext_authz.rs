@@ -16,7 +16,6 @@ use crate::http::ext_authz::proto::{
 };
 use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::filters::BackendRequestTimeout;
-use crate::http::transformation_cel::SerAsStr;
 use crate::http::{
 	HeaderName, HeaderOrPseudo, PolicyResponse, Request, RequestOrResponse, Response,
 	envoy_proto_common, jwt,
@@ -101,7 +100,7 @@ pub enum Protocol {
 		redirect: Option<Arc<cel::Expression>>,
 		/// Specific headers from the authorization response will be copied into the request to the backend.
 		#[serde(default, skip_serializing_if = "Vec::is_empty")]
-		#[serde_as(as = "Vec<SerAsStr>")]
+		#[serde_as(as = "Vec<crate::serdes::SerAsStr>")]
 		#[cfg_attr(feature = "schema", schemars(with = "Vec<String>"))]
 		include_response_headers: Vec<HeaderName>,
 		/// Specific headers to add in the authorization request (empty = all headers), based on the expression
