@@ -53,12 +53,12 @@ anyhow = "1.0"
 arc-swap = "1.9"
 arcstr = { version = "1.2", features = ["serde"] }
 assert_matches = "1.5.0"
-async-openai = { version = "0.35", default-features = false, features = ["chat-completion-types", "moderation-types", "response-types", "realtime-types"] }
+async-openai = { version = "0.36", default-features = false, features = ["chat-completion-types", "moderation-types", "response-types", "realtime-types"] }
 async-stream = "0.3"
 async-trait = "0.1"
 aws-config = { version = "1.8", default-features = false, features = ["default-https-client", "rt-tokio", "sso"] }
 aws-credential-types = "1.2"
-aws-sigv4 = "1.3"
+aws-sigv4 = "1.4"
 aws-smithy-eventstream = "0.60"
 aws-smithy-types = "1.3"
 aws-lc-rs = "1.16"
@@ -67,9 +67,9 @@ axum-core = "0.5"
 axum-extra = { version = "0.12", features = ["json-lines", "typed-header"] }
 # Disable default features to avoid pulling in native-tls and requiring openssl
 # TODO: allow default features if we ever add an openssl feature
-azure_identity = { version = "0.34", default-features = false }
-azure_core = { version = "0.34", default-features = false }
-typespec_client_core = { default-features = false, version = "0.13" }
+azure_identity = { version = "0.35", default-features = false }
+azure_core = { version = "0.35", default-features = false }
+typespec_client_core = { default-features = false, version = "0.14" }
 base64 = "0.22"
 cookie = { version = "0.18", default-features = false }
 bcrypt = "0.19"
