@@ -2,15 +2,19 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use google_cloud_auth::credentials;
+use anyhow::{Context, anyhow};
+use google_cloud_auth::credentials::{self, AccessTokenCredentials};
 use headers::HeaderMapExt;
 use http::HeaderMap;
 use once_cell::sync::Lazy;
+use secrecy::{ExposeSecret, SecretString};
+use serde::Deserialize;
+use serde_json::Value;
 use tracing::trace;
 
-use crate::serdes::schema;
+use crate::serdes::{FileOrInline, schema};
 use crate::types::agent::Target;
-use crate::{ConstString, apply, const_string};
+use crate::{ConstString, apply, const_string, ser_redact};
 
 const_string!(IdToken = "idToken");
 const_string!(AccessToken = "accessToken");
@@ -24,11 +28,29 @@ pub enum GcpAuth {
 		r#type: IdToken,
 		/// Audience for the token. If not set, the destination host will be used.
 		audience: Option<String>,
+		/// ADC-compatible Google credential JSON. If not set, ambient credentials are used.
+		#[serde(
+			default,
+			serialize_with = "ser_redact",
+			deserialize_with = "deser_optional_credential",
+			skip_serializing_if = "Option::is_none"
+		)]
+		#[cfg_attr(feature = "schema", schemars(with = "Option<FileOrInline>"))]
+		credential: Option<GcpCredential>,
 	},
 	/// Fetch an access token
 	AccessToken {
 		#[serde(default)]
 		r#type: Option<AccessToken>,
+		/// ADC-compatible Google credential JSON. If not set, ambient credentials are used.
+		#[serde(
+			default,
+			serialize_with = "ser_redact",
+			deserialize_with = "deser_optional_credential",
+			skip_serializing_if = "Option::is_none"
+		)]
+		#[cfg_attr(feature = "schema", schemars(with = "Option<FileOrInline>"))]
+		credential: Option<GcpCredential>,
 	},
 }
 
@@ -36,7 +58,49 @@ impl Default for GcpAuth {
 	fn default() -> Self {
 		Self::AccessToken {
 			r#type: Default::default(),
+			credential: Default::default(),
 		}
+	}
+}
+
+fn deser_optional_credential<'de, D>(deserializer: D) -> Result<Option<GcpCredential>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	Option::<FileOrInline>::deserialize(deserializer)?
+		.map(|input| {
+			input
+				.load()
+				.map(|s| SecretString::from(s.trim().to_string()))
+				.map_err(|e| serde::de::Error::custom(e.to_string()))
+				.and_then(|credential| {
+					GcpCredential::new(credential).map_err(|e| serde::de::Error::custom(e.to_string()))
+				})
+		})
+		.transpose()
+}
+
+#[derive(Clone)]
+pub struct GcpCredential {
+	access_token: AccessTokenCredentials,
+	raw: SecretString,
+	id_tokens: Arc<Mutex<HashMap<String, Arc<credentials::idtoken::IDTokenCredentials>>>>,
+}
+
+impl GcpCredential {
+	pub(crate) fn new(raw: SecretString) -> anyhow::Result<Self> {
+		let access_token = build_access_token_credentials(&raw)?;
+		Ok(Self {
+			access_token,
+			raw,
+			id_tokens: Default::default(),
+		})
+	}
+}
+
+impl std::fmt::Debug for GcpCredential {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("GcpCredential")
 	}
 }
 
@@ -54,6 +118,44 @@ fn creds() -> anyhow::Result<&'static credentials::AccessTokenCredentials> {
 			Err(anyhow::anyhow!(msg))
 		},
 	}
+}
+
+fn parse_credential_json(credential: &SecretString) -> anyhow::Result<Value> {
+	serde_json::from_str(credential.expose_secret()).context("failed to parse GCP credential JSON")
+}
+
+fn extract_credential_type(json: &Value) -> anyhow::Result<&str> {
+	json
+		.get("type")
+		.ok_or_else(|| anyhow!("GCP credential JSON missing `type` field"))?
+		.as_str()
+		.ok_or_else(|| anyhow!("GCP credential JSON `type` field is not a string"))
+}
+
+fn build_access_token_credentials(
+	credential: &SecretString,
+) -> anyhow::Result<AccessTokenCredentials> {
+	let json = parse_credential_json(credential)?;
+	match extract_credential_type(&json)? {
+		"authorized_user" => {
+			Ok(credentials::user_account::Builder::new(json).build_access_token_credentials()?)
+		},
+		"service_account" => {
+			Ok(credentials::service_account::Builder::new(json).build_access_token_credentials()?)
+		},
+		"impersonated_service_account" => {
+			Ok(credentials::impersonated::Builder::new(json).build_access_token_credentials()?)
+		},
+		"external_account" => {
+			Ok(credentials::external_account::Builder::new(json).build_access_token_credentials()?)
+		},
+		cred_type => Err(anyhow!("unsupported GCP credential type: {cred_type}")),
+	}
+}
+
+async fn explicit_access_token(credential: &GcpCredential) -> anyhow::Result<String> {
+	let token = credential.access_token.access_token().await?;
+	Ok(token.token)
 }
 
 struct IdTokenBuilder {
@@ -74,6 +176,42 @@ static ID_TOKEN_BUILDER: Lazy<anyhow::Result<IdTokenBuilder>> = Lazy::new(|| {
 static ID_TOKEN_CACHE: Lazy<
 	Arc<Mutex<HashMap<String, Arc<credentials::idtoken::IDTokenCredentials>>>>,
 > = Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
+
+fn build_id_token_credentials(
+	aud: &str,
+	credential: &SecretString,
+) -> anyhow::Result<credentials::idtoken::IDTokenCredentials> {
+	let json = parse_credential_json(credential)?;
+	match extract_credential_type(&json)? {
+		"authorized_user" => Ok(credentials::idtoken::user_account::Builder::new(json).build()?),
+		"service_account" => {
+			Ok(credentials::idtoken::service_account::Builder::new(aud, json).build()?)
+		},
+		"impersonated_service_account" => Ok(
+			credentials::idtoken::impersonated::Builder::new(aud, json)
+				.with_include_email()
+				.build()?,
+		),
+		"external_account" => Err(anyhow!(
+			"GCP external_account credentials do not support idToken auth"
+		)),
+		cred_type => Err(anyhow!("unsupported GCP credential type: {cred_type}")),
+	}
+}
+
+async fn explicit_id_token(aud: &str, credential: &GcpCredential) -> anyhow::Result<String> {
+	let id_token_creds = {
+		let mut cache_guard = credential.id_tokens.lock().unwrap();
+		if let Some(creds) = cache_guard.get(aud) {
+			creds.clone()
+		} else {
+			let creds = Arc::new(build_id_token_credentials(aud, &credential.raw)?);
+			cache_guard.insert(aud.to_string(), creds.clone());
+			creds
+		}
+	};
+	Ok(id_token_creds.id_token().await?)
+}
 
 async fn fetch_id_token(aud: &str) -> anyhow::Result<String> {
 	match ID_TOKEN_BUILDER.as_ref() {
@@ -116,17 +254,27 @@ pub(super) async fn insert_token(
 	hm: &mut HeaderMap,
 ) -> anyhow::Result<()> {
 	let token = match g {
-		GcpAuth::IdToken { audience, .. } => {
+		GcpAuth::IdToken {
+			audience,
+			credential,
+			..
+		} => {
 			let aud = match (audience, call_target) {
 				(Some(aud), _) => Cow::Borrowed(aud.as_str()),
 				(None, Target::Hostname(host, _)) => Cow::Owned(format!("https://{host}")),
 				_ => anyhow::bail!("idToken auth requires a hostname target or explicit audience"),
 			};
-			fetch_id_token(aud.as_ref()).await?
+			match credential {
+				Some(credential) => explicit_id_token(aud.as_ref(), credential).await?,
+				None => fetch_id_token(aud.as_ref()).await?,
+			}
 		},
-		GcpAuth::AccessToken { .. } => {
-			let token = creds()?.access_token().await?;
-			token.token
+		GcpAuth::AccessToken { credential, .. } => match credential {
+			Some(credential) => explicit_access_token(credential).await?,
+			None => {
+				let token = creds()?.access_token().await?;
+				token.token
+			},
 		},
 	};
 	let header = headers::Authorization::bearer(&token)?;

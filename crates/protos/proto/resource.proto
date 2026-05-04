@@ -273,6 +273,9 @@ message Gcp {
     optional string audience = 1;
   }
 
+  // ADC-compatible Google credential JSON. If unset, ambient credentials are used.
+  optional string credential = 3;
+
   oneof token_type {
     // Default if unset
     AccessToken access_token = 1;

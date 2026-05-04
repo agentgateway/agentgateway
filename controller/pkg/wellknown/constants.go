@@ -14,4 +14,6 @@ const (
 	TenantID = "tenantID"
 	// ClientSecret is the key name for in the secret data for the client secret.
 	ClientSecret = "clientSecret"
+	// GCPCredentialsJSON is the key name for GCP ADC-compatible credential JSON.
+	GCPCredentialsJSON = "credentials.json"
 )

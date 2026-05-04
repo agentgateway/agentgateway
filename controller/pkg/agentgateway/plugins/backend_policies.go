@@ -746,7 +746,11 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 			errs = append(errs, err)
 		}
 	} else if auth.GCP != nil {
-		translatedAuth = buildGcpAuthPolicy(auth.GCP)
+		gcpAuth, err := buildGcpAuthPolicy(ctx.Krt, auth.GCP, ctx.Collections.Secrets, policy.Namespace)
+		translatedAuth = gcpAuth
+		if err != nil {
+			errs = append(errs, err)
+		}
 	} else if auth.Passthrough != nil {
 		translatedAuth = &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Passthrough{
@@ -947,27 +951,41 @@ func buildAzureClientSecret(secrets krt.Collection[*corev1.Secret], krtctx krt.H
 	}, errors.Join(errs...)
 }
 
-func buildGcpAuthPolicy(auth *agentgateway.GcpAuth) *api.BackendAuthPolicy {
+func buildGcpAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.GcpAuth, secrets krt.Collection[*corev1.Secret], namespace string) (*api.BackendAuthPolicy, error) {
+	var errs []error
+	var credential *string
+	if auth.SecretRef != nil {
+		// Preserve the user's explicit credential intent even when the Secret is
+		// missing or malformed. An explicit empty credential fails in the proxy
+		// instead of falling back to ambient GCP credentials.
+		credential = new("")
+		secret, err := kubeutils.GetSecret(secrets, krtctx, auth.SecretRef.Name, namespace)
+		if err != nil {
+			errs = append(errs, err)
+		} else if value, exists := kubeutils.GetSecretValue(secret, wellknown.GCPCredentialsJSON); !exists {
+			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SecretRef.Name, wellknown.GCPCredentialsJSON))
+		} else {
+			credential = &value
+		}
+	}
+
+	gcp := &api.Gcp{
+		Credential: credential,
+	}
 	if auth.Type == nil || *auth.Type == agentgateway.GcpAuthTypeAccessToken {
-		return &api.BackendAuthPolicy{
-			Kind: &api.BackendAuthPolicy_Gcp{
-				Gcp: &api.Gcp{
-					TokenType: &api.Gcp_AccessToken_{
-						AccessToken: &api.Gcp_AccessToken{},
-					},
-				},
+		gcp.TokenType = &api.Gcp_AccessToken_{
+			AccessToken: &api.Gcp_AccessToken{},
+		}
+	} else {
+		gcp.TokenType = &api.Gcp_IdToken_{
+			IdToken: &api.Gcp_IdToken{
+				Audience: auth.Audience,
 			},
 		}
 	}
 	return &api.BackendAuthPolicy{
 		Kind: &api.BackendAuthPolicy_Gcp{
-			Gcp: &api.Gcp{
-				TokenType: &api.Gcp_IdToken_{
-					IdToken: &api.Gcp_IdToken{
-						Audience: auth.Audience,
-					},
-				},
-			},
+			Gcp: gcp,
 		},
-	}
+	}, errors.Join(errs...)
 }

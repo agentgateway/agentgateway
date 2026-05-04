@@ -1080,6 +1080,12 @@ type GcpAuth struct {
 	//
 	// +optional
 	Type *GcpAuthType `json:"type,omitempty"`
+	// `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+	// Google credential JSON in the `credentials.json` key. When omitted,
+	// ambient credentials are used.
+	//
+	// +optional
+	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
 	// `audience` allows explicitly configuring the `aud` of the ID token. Only
 	// valid with `IdToken` type. If not set, the `aud` is automatically
 	// derived from the backend hostname.

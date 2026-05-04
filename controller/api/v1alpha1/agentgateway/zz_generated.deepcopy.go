@@ -1813,6 +1813,11 @@ func (in *GcpAuth) DeepCopyInto(out *GcpAuth) {
 		*out = new(GcpAuthType)
 		**out = **in
 	}
+	if in.SecretRef != nil {
+		in, out := &in.SecretRef, &out.SecretRef
+		*out = new(corev1.LocalObjectReference)
+		**out = **in
+	}
 	if in.Audience != nil {
 		in, out := &in.Audience, &out.Audience
 		*out = new(ShortString)

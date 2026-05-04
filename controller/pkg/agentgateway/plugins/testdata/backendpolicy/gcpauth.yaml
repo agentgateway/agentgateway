@@ -14,8 +14,99 @@ spec:
         type: IdToken
         audience: hello.world.example.com
 ---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: access-token-secret
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    auth:
+      gcp:
+        secretRef:
+          name: gcp-auth-secret
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gcp-auth-secret
+  namespace: default
+type: Opaque
+data:
+  credentials.json: eyJ0eXBlIjoic2VydmljZV9hY2NvdW50IiwicHJvamVjdF9pZCI6InByb2plY3QiLCJwcml2YXRlX2tleV9pZCI6ImtleS1pZCIsInByaXZhdGVfa2V5IjoiLS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tXG5GQUtFXG4tLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tXG4iLCJjbGllbnRfZW1haWwiOiJhZ2VudGdhdGV3YXlAcHJvamVjdC5pYW0uZ3NlcnZpY2VhY2NvdW50LmNvbSJ9
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: access-token-secret-invalid
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    auth:
+      gcp:
+        secretRef:
+          name: gcp-auth-secret-invalid
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gcp-auth-secret-invalid
+  namespace: default
+type: Opaque
+data:
+  other: dmFsdWU=
+---
 # Output
 output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        auth:
+          gcp:
+            accessToken: {}
+            credential: ""
+      key: backend/default/access-token-secret-invalid:backend-auth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: access-token-secret-invalid
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        auth:
+          gcp:
+            accessToken: {}
+            credential: '{"type":"service_account","project_id":"project","private_key_id":"key-id","private_key":"-----BEGIN
+              PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n","client_email":"agentgateway@project.iam.gserviceaccount.com"}'
+      key: backend/default/access-token-secret:backend-auth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: access-token-secret
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
 - gateway:
     Name: test
     Namespace: default
@@ -37,6 +128,51 @@ output:
           name: test
           namespace: default
 status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: access-token-secret
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: access-token-secret-invalid
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: secret default/gcp-auth-secret-invalid missing credentials.json value
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy
   metadata:
