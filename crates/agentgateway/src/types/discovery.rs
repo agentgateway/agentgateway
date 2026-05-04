@@ -109,9 +109,16 @@ impl WaypointIdentity {
 	}
 
 	/// Checks whether this waypoint identity matches a NamespacedHostname waypoint destination.
-	/// The hostname from xDS is always a FQDN (e.g., "waypoint.ns.svc.cluster.local").
+	/// Assumes the hostname from xDS always starts with `{gateway name}.{namespace}` but the suffix
+	/// may be customized.
 	pub fn matches_hostname(&self, nh: &NamespacedHostname) -> bool {
-		nh.hostname == self.hostname()
+		nh.namespace == self.namespace
+			&& nh
+				.hostname
+				.strip_prefix(self.gateway.as_str())
+				.and_then(|s| s.strip_prefix('.'))
+				.and_then(|s| s.strip_prefix(self.namespace.as_str()))
+				.is_some_and(|s| s.starts_with('.') && s.len() > 1)
 	}
 
 	/// Checks whether this waypoint identity matches an Address-based waypoint destination
@@ -119,18 +126,12 @@ impl WaypointIdentity {
 	pub fn matches_address(
 		&self,
 		addr: &NetworkAddress,
-		get_self_vips: impl FnOnce(&Strng, &Strng) -> Option<Vec<NetworkAddress>>,
+		get_service_at: impl FnOnce(&NetworkAddress) -> Option<(Strng, Strng)>,
 	) -> bool {
-		match get_self_vips(&self.namespace, &self.hostname()) {
-			Some(vips) => vips.contains(addr),
-			None => {
-				warn!(
-					"waypoint {}.{} cannot find own service for address verification",
-					self.gateway, self.namespace
-				);
-				false
-			},
-		}
+		matches!(
+			get_service_at(addr),
+			Some((name, ns)) if name == self.gateway && ns == self.namespace
+		)
 	}
 }
 

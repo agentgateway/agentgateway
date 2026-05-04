@@ -1272,14 +1272,11 @@ impl Gateway {
 			anyhow::bail!("self_id required for waypoint");
 		};
 		let is_ours = match &wp.destination {
-			Destination::Address(addr) => self_id.matches_address(addr, |ns, hostname| {
-				let self_svc = discovery.services.get_by_namespaced_host(
-					&crate::types::discovery::NamespacedHostname {
-						namespace: ns.clone(),
-						hostname: hostname.clone(),
-					},
-				)?;
-				Some(self_svc.vips.clone())
+			Destination::Address(addr) => self_id.matches_address(addr, |a| {
+				discovery
+					.services
+					.get_by_vip(a)
+					.map(|s| (s.name.clone(), s.namespace.clone()))
 			}),
 			Destination::Hostname(n) => self_id.matches_hostname(n),
 		};
