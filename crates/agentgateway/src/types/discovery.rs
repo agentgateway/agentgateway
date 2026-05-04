@@ -103,7 +103,8 @@ pub struct WaypointIdentity {
 }
 
 impl WaypointIdentity {
-	/// Returns the full Kubernetes FQDN for this waypoint.
+	/// Returns the default full Kubernetes FQDN for this waypoint.
+	/// TODO: we don't know the cluster domain, so we potentially return the wrong hostname for this waypoint.
 	pub fn hostname(&self) -> Strng {
 		strng::format!("{}.{}.svc.cluster.local", self.gateway, self.namespace)
 	}
@@ -122,16 +123,23 @@ impl WaypointIdentity {
 	}
 
 	/// Checks whether this waypoint identity matches an Address-based waypoint destination
-	/// by looking up this waypoint's own service VIPs.
+	/// by resolving the service at `addr` and comparing its (name, namespace) to this waypoint's
+	/// (gateway, namespace).
 	pub fn matches_address(
 		&self,
 		addr: &NetworkAddress,
 		get_service_at: impl FnOnce(&NetworkAddress) -> Option<(Strng, Strng)>,
 	) -> bool {
-		matches!(
-			get_service_at(addr),
-			Some((name, ns)) if name == self.gateway && ns == self.namespace
-		)
+		match get_service_at(addr) {
+			Some((name, ns)) => name == self.gateway && ns == self.namespace,
+			None => {
+				warn!(
+					"waypoint {}.{} cannot resolve service at {} for address verification",
+					self.gateway, self.namespace, addr
+				);
+				false
+			},
+		}
 	}
 }
 
