@@ -939,7 +939,10 @@ func processConditional[T any](
 			Kind: &api.ConditionalPolicy_Traffic{Traffic: base.Traffic},
 		}
 		if cond.Condition != "" {
-			c.Condition = ptr.Of(string(cond.Condition))
+			if !isCEL(cond.Condition) {
+				errs = append(errs, fmt.Errorf("condition CEL expression is invalid: %s", cond.Condition))
+			}
+			c.Condition = new(string(cond.Condition))
 		}
 		conditionals.Policies = append(conditionals.Policies, c)
 	}
@@ -1650,13 +1653,12 @@ func referencedBackendsFromPolicy(policy *agentgateway.AgentgatewayPolicy) []uti
 	s := policy.Spec
 	if s.Traffic != nil {
 		if s.Traffic.ExtAuth != nil {
-			if len(s.Traffic.ExtAuth.Conditional) > 0 {
-				for _, conditional := range s.Traffic.ExtAuth.Conditional {
-					if conditional.Policy.BackendRef != nil {
-						app(*conditional.Policy.BackendRef)
-					}
+			for _, conditional := range s.Traffic.ExtAuth.Conditional {
+				if conditional.Policy.BackendRef != nil {
+					app(*conditional.Policy.BackendRef)
 				}
-			} else if s.Traffic.ExtAuth.BackendRef != nil {
+			}
+			if s.Traffic.ExtAuth.BackendRef != nil {
 				app(*s.Traffic.ExtAuth.BackendRef)
 			}
 		}

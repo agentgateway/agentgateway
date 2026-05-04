@@ -31,9 +31,8 @@ use crate::http::tests_common::*;
 use crate::http::{Body, Response};
 use crate::llm::{AIProvider, openai};
 use crate::proxy::request_builder::RequestBuilder;
-use crate::test_helpers::extauthmock;
-use crate::test_helpers::oteltracemock;
 use crate::test_helpers::proxymock::*;
+use crate::test_helpers::{extauthmock, oteltracemock};
 use crate::types::agent::{
 	Backend, BackendTrafficPolicy, BackendWithPolicies, Bind, BindProtocol, Listener,
 	ListenerProtocol, ListenerSet, PathMatch, ResourceName, Route, RouteMatch, Target,

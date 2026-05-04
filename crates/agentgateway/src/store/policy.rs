@@ -189,6 +189,7 @@ impl<T> RequestPolicy<T> {
 	/// before it can run. ExtProc uses this to select an `ExtProc`, build an `ExtProcRequest`,
 	/// and keep that request state for the response phase.
 	pub fn select(&self, name: &'static str, req: &crate::http::Request) -> Option<Arc<T>> {
+		let mut first = true;
 		for pol in self.iter() {
 			if let Some(cond) = &pol.condition {
 				let exec = crate::cel::Executor::new_request(req);
@@ -199,9 +200,15 @@ impl<T> RequestPolicy<T> {
 						Skip,
 						"condition not met, skipping policy"
 					);
+					first = false;
 					continue;
-				};
+				} else {
+					dtrace::pol_result!(name, dtrace::Info, Apply, "condition met, applying policy");
+				}
 			};
+			if !first {
+				dtrace::pol_result!(name, dtrace::Info, Apply, "fallback met, applying policy");
+			}
 			return Some(pol.pol.clone());
 		}
 		None
@@ -266,31 +273,16 @@ impl<T: RequestPolicyTrait> RequestPolicy<T> {
 		req: &mut crate::http::Request,
 		response_headers: &mut HeaderMap,
 	) -> Result<Option<Arc<T>>, proxy::ProxyResponse> {
-		for pol in self.iter() {
-			if let Some(cond) = &pol.condition {
-				let exec = crate::cel::Executor::new_request(req);
-				if !exec.eval_bool(cond.as_ref()) {
-					dtrace::pol_result!(
-						name,
-						dtrace::Info,
-						Skip,
-						"condition not met, skipping policy"
-					);
-					continue;
-				};
-			};
-			let res = pol
-				.pol
-				.apply(client, log, req)
-				.await?
-				.apply(response_headers);
-			dtrace::snapshot!(Request, name, &req);
-			// Return the policy, for response handling.
-			// Conditions are ignored; we already evaluated them on the request side
-			// We do not allow response-side conditions
-			return res.map(|_| Some(pol.pol.to_owned()));
-		}
-		Ok(None)
+		let Some(pol) = self.select(name, req) else {
+			return Ok(None);
+		};
+
+		let res = pol.apply(client, log, req).await?.apply(response_headers);
+		dtrace::snapshot!(Request, name, &req);
+		// Return the policy, for response handling.
+		// Conditions are ignored; we already evaluated them on the request side
+		// We do not allow response-side conditions
+		res.map(|_| Some(pol))
 	}
 }
 

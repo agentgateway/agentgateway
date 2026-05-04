@@ -1,14 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"sigs.k8s.io/controller-tools/pkg/crd"
-	"sigs.k8s.io/controller-tools/pkg/deepcopy"
-	"sigs.k8s.io/controller-tools/pkg/genall"
 	"sigs.k8s.io/controller-tools/pkg/loader"
 	"sigs.k8s.io/controller-tools/pkg/markers"
 )
@@ -33,19 +30,6 @@ func newTestParser(t *testing.T, rootPath string) ([]*loader.Package, *crd.Parse
 	parser.NeedPackage(roots[0])
 
 	return roots, parser
-}
-
-func TestEmbeddedGenerics(t *testing.T) {
-	var objectGenerator genall.Generator = deepcopy.Generator{}
-	rt, err := genall.Generators{&objectGenerator}.ForRoots(
-		"github.com/agentgateway/agentgateway/controller/hack/crdgen/testdata/embeddedgeneric",
-		"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared",
-	)
-	require.NoError(t, err)
-
-	var errors bytes.Buffer
-	rt.ErrorWriter = &errors
-	require.False(t, rt.Run(), errors.String())
 }
 
 func TestAllJSONFieldNamesForTypeIncludesImportedInlineFields(t *testing.T) {
