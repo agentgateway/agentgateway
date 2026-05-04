@@ -645,15 +645,24 @@ fn backend_auth_from_proto(
 			value: k.secret.into(),
 			location: optional_authorization_location(k.authorization_location.as_ref())?,
 		},
-		Some(proto::agent::backend_auth_policy::Kind::Gcp(g)) => BackendAuth::Gcp(match g.token_type {
-			None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
-				r#type: Some(auth::gcp::AccessToken),
-			},
-			Some(gcp::TokenType::IdToken(gcp::IdToken { audience })) => GcpAuth::IdToken {
-				r#type: auth::gcp::IdToken,
-				audience,
-			},
-		}),
+		Some(proto::agent::backend_auth_policy::Kind::Gcp(g)) => {
+			let credential = g
+				.credential
+				.map(|credential| auth::gcp::GcpCredential::new(credential.into()))
+				.transpose()
+				.map_err(|e| ProtoError::Generic(e.to_string()))?;
+			BackendAuth::Gcp(match g.token_type {
+				None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
+					r#type: Some(auth::gcp::AccessToken),
+					credential,
+				},
+				Some(gcp::TokenType::IdToken(gcp::IdToken { audience })) => GcpAuth::IdToken {
+					r#type: auth::gcp::IdToken,
+					audience,
+					credential,
+				},
+			})
+		},
 		Some(proto::agent::backend_auth_policy::Kind::Aws(a)) => {
 			let aws_auth = match a.kind {
 				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => AwsAuth::ExplicitConfig {

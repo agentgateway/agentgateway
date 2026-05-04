@@ -2631,6 +2631,17 @@
                 "string",
                 "null"
               ]
+            },
+            "credential": {
+              "description": "ADC-compatible Google credential JSON. If not set, ambient credentials are used.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "additionalProperties": false,
@@ -2652,6 +2663,17 @@
                 }
               ],
               "default": null
+            },
+            "credential": {
+              "description": "ADC-compatible Google credential JSON. If not set, ambient credentials are used.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "additionalProperties": false

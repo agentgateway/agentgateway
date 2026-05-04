@@ -374,6 +374,23 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
+                                                secretRef:
+                                                  description: |-
+                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                                    Google credential JSON in the `credentials.json` key. When omitted,
+                                                    ambient credentials are used.
+                                                  properties:
+                                                    name:
+                                                      default: ""
+                                                      description: |-
+                                                        Name of the referent.
+                                                        This field is effectively required, but due to backwards compatibility is
+                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                        almost certainly wrong.
+                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                      type: string
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
                                                 type:
                                                   description: |-
                                                     The type of token to generate. To authenticate to GCP services,
@@ -898,6 +915,23 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
+                                                secretRef:
+                                                  description: |-
+                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                                    Google credential JSON in the `credentials.json` key. When omitted,
+                                                    ambient credentials are used.
+                                                  properties:
+                                                    name:
+                                                      default: ""
+                                                      description: |-
+                                                        Name of the referent.
+                                                        This field is effectively required, but due to backwards compatibility is
+                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                        almost certainly wrong.
+                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                      type: string
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
                                                 type:
                                                   description: |-
                                                     The type of token to generate. To authenticate to GCP services,
@@ -1419,6 +1453,23 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
+                                                secretRef:
+                                                  description: |-
+                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                                    Google credential JSON in the `credentials.json` key. When omitted,
+                                                    ambient credentials are used.
+                                                  properties:
+                                                    name:
+                                                      default: ""
+                                                      description: |-
+                                                        Name of the referent.
+                                                        This field is effectively required, but due to backwards compatibility is
+                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                        almost certainly wrong.
+                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                      type: string
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
                                                 type:
                                                   description: |-
                                                     The type of token to generate. To authenticate to GCP services,
@@ -2157,6 +2208,23 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
+                                                secretRef:
+                                                  description: |-
+                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                                    Google credential JSON in the `credentials.json` key. When omitted,
+                                                    ambient credentials are used.
+                                                  properties:
+                                                    name:
+                                                      default: ""
+                                                      description: |-
+                                                        Name of the referent.
+                                                        This field is effectively required, but due to backwards compatibility is
+                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                        almost certainly wrong.
+                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                      type: string
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
                                                 type:
                                                   description: |-
                                                     The type of token to generate. To authenticate to GCP services,
@@ -2681,6 +2749,23 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
+                                                secretRef:
+                                                  description: |-
+                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                                    Google credential JSON in the `credentials.json` key. When omitted,
+                                                    ambient credentials are used.
+                                                  properties:
+                                                    name:
+                                                      default: ""
+                                                      description: |-
+                                                        Name of the referent.
+                                                        This field is effectively required, but due to backwards compatibility is
+                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                        almost certainly wrong.
+                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                      type: string
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
                                                 type:
                                                   description: |-
                                                     The type of token to generate. To authenticate to GCP services,
@@ -3477,6 +3562,23 @@ spec:
                             maxLength: 256
                             minLength: 1
                             type: string
+                          secretRef:
+                            description: |-
+                              `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                              Google credential JSON in the `credentials.json` key. When omitted,
+                              ambient credentials are used.
+                            properties:
+                              name:
+                                default: ""
+                                description: |-
+                                  Name of the referent.
+                                  This field is effectively required, but due to backwards compatibility is
+                                  allowed to be empty. Instances of this type with an empty value here are
+                                  almost certainly wrong.
+                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                type: string
+                            type: object
+                            x-kubernetes-map-type: atomic
                           type:
                             description: |-
                               The type of token to generate. To authenticate to GCP services,
