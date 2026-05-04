@@ -219,18 +219,18 @@ gatewayClassParametersRefs: {}
 
 # -- Configure Prometheus and Grafana monitoring resources.
 monitoring:
-  # -- Create monitoring resources (PodMonitors and Grafana dashboard ConfigMap).
+  # -- Create monitoring resources (ServiceMonitors and Grafana dashboard ConfigMap).
   # Requires the Prometheus Operator CRDs to be installed in the cluster.
   enabled: false
 
-  podMonitor:
-    # -- Scrape interval for both PodMonitors.
+  serviceMonitor:
+    # -- Scrape interval for both ServiceMonitors.
     interval: 15s
-    # -- Additional labels to add to both PodMonitor resources (e.g. release: prometheus).
+    # -- Additional labels to add to both ServiceMonitor resources (e.g. release: prometheus).
     extraLabels: {}
 
   proxy:
-    # -- Selector label value used to find the proxy pods.
+    # -- Selector label value used to find the proxy Service.
     # The proxy is external to this chart; override if it carries a different app.kubernetes.io/name.
     selectorName: agentgateway-proxy
 

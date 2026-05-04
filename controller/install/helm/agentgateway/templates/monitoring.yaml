@@ -1,41 +1,41 @@
 {{- if .Values.monitoring.enabled }}
 apiVersion: monitoring.coreos.com/v1
-kind: PodMonitor
+kind: ServiceMonitor
 metadata:
   name: {{ include "agentgateway.fullname" . }}-proxy
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "agentgateway.labels" . | nindent 4 }}
-    {{- with .Values.monitoring.podMonitor.extraLabels }}
+    {{- with .Values.monitoring.serviceMonitor.extraLabels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ .Values.monitoring.proxy.selectorName }}
-  podMetricsEndpoints:
+  endpoints:
   - port: metrics
     path: /metrics
-    interval: {{ .Values.monitoring.podMonitor.interval }}
+    interval: {{ .Values.monitoring.serviceMonitor.interval }}
 ---
 apiVersion: monitoring.coreos.com/v1
-kind: PodMonitor
+kind: ServiceMonitor
 metadata:
   name: {{ include "agentgateway.fullname" . }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "agentgateway.labels" . | nindent 4 }}
-    {{- with .Values.monitoring.podMonitor.extraLabels }}
+    {{- with .Values.monitoring.serviceMonitor.extraLabels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ include "agentgateway.name" . }}
-  podMetricsEndpoints:
+  endpoints:
   - port: metrics
     path: /metrics
-    interval: {{ .Values.monitoring.podMonitor.interval }}
+    interval: {{ .Values.monitoring.serviceMonitor.interval }}
 {{- if .Values.monitoring.grafanaDashboard.enabled }}
 ---
 apiVersion: v1
