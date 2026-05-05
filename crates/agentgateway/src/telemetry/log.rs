@@ -439,6 +439,7 @@ pub struct CelLoggingBuildInputs<'a> {
 #[derive(Debug)]
 pub struct DropOnLog {
 	log: Option<RequestLog>,
+	debug_tracer: Option<dtrace::DebugTracer>,
 }
 
 impl DropOnLog {
@@ -578,7 +579,10 @@ impl DropOnLog {
 
 impl From<RequestLog> for DropOnLog {
 	fn from(log: RequestLog) -> Self {
-		Self { log: Some(log) }
+		Self {
+			log: Some(log),
+			debug_tracer: dtrace::DebugTracer::active(),
+		}
 	}
 }
 
@@ -719,7 +723,11 @@ pub struct RequestLog {
 
 impl Drop for DropOnLog {
 	fn drop(&mut self) {
-		dtrace::trace(|t| t.request_completed());
+		if let Some(debug_tracer) = &self.debug_tracer {
+			debug_tracer.request_completed();
+		} else {
+			dtrace::trace(|t| t.request_completed());
+		}
 		let Some(mut log) = self.log.take() else {
 			return;
 		};
