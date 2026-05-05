@@ -19,6 +19,10 @@ pub trait HasExpressions: Send + Sync + 'static {
 	}
 }
 
+pub trait PolicyExpressions {
+	fn register_expressions(&self, ctx: &mut ContextBuilder);
+}
+
 impl<T: RequestPolicyTrait> HasExpressions for T {
 	fn expressions(&self) -> impl Iterator<Item = &Expression> {
 		RequestPolicyTrait::expressions(self)
@@ -227,6 +231,12 @@ impl<T: HasExpressions> RequestPolicy<T> {
 				ctx.register_expression(expr)
 			}
 		}
+	}
+}
+
+impl<T: HasExpressions> PolicyExpressions for RequestPolicy<T> {
+	fn register_expressions(&self, ctx: &mut ContextBuilder) {
+		RequestPolicy::register_expressions(self, ctx);
 	}
 }
 

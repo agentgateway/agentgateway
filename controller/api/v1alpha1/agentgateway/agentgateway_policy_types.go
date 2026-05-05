@@ -1457,7 +1457,7 @@ type ExtAuthConditional struct {
 	Condition shared.CELExpression `json:"condition,omitempty"`
 	// `policy` definition.
 	// +required
-	// +kubebuilder:validation:XValidation:rule="has(self.backendRef)",message="backendRef is required2"
+	// +kubebuilder:validation:XValidation:rule="has(self.backendRef)",message="backendRef is required"
 	Policy ExtAuth `json:"policy"`
 }
 

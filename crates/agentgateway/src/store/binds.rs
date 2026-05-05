@@ -20,7 +20,7 @@ use crate::llm::policy::ResponseGuard;
 use crate::mcp::McpAuthorizationSet;
 use crate::proxy::dtrace;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::store::{BackendPolicy, RequestPolicy, ResponsePolicy};
+use crate::store::{BackendPolicy, PolicyExpressions, RequestPolicy, ResponsePolicy};
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendTargetRef, BackendTrafficPolicy, BackendWithPolicies,
 	Bind, BindKey, FrontendPolicy, JwtAuthentication, Listener, ListenerKey, ListenerName,
@@ -316,21 +316,53 @@ pub struct GatewayPolicies {
 }
 
 impl GatewayPolicies {
+	pub fn iter(&self) -> impl Iterator<Item = &dyn PolicyExpressions> {
+		[
+			&self.ext_proc as &dyn PolicyExpressions,
+			&self.oidc as &dyn PolicyExpressions,
+			&self.jwt as &dyn PolicyExpressions,
+			&self.ext_authz as &dyn PolicyExpressions,
+			&self.transformation as &dyn PolicyExpressions,
+			&self.basic_auth as &dyn PolicyExpressions,
+			&self.api_key as &dyn PolicyExpressions,
+		]
+		.into_iter()
+	}
+
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
-		// TODO: make a self.expressions iterator
-		self.transformation.register_expressions(ctx);
-		self.ext_authz.register_expressions(ctx);
-		self.ext_proc.register_expressions(ctx);
+		for policy in self.iter() {
+			policy.register_expressions(ctx);
+		}
 	}
 }
 
 impl RoutePolicies {
+	pub fn iter(&self) -> impl Iterator<Item = &dyn PolicyExpressions> {
+		[
+			&self.local_rate_limit as &dyn PolicyExpressions,
+			&self.remote_rate_limit as &dyn PolicyExpressions,
+			&self.authorization as &dyn PolicyExpressions,
+			&self.jwt as &dyn PolicyExpressions,
+			&self.oidc as &dyn PolicyExpressions,
+			&self.basic_auth as &dyn PolicyExpressions,
+			&self.api_key as &dyn PolicyExpressions,
+			&self.ext_authz as &dyn PolicyExpressions,
+			&self.ext_proc as &dyn PolicyExpressions,
+			&self.transformation as &dyn PolicyExpressions,
+			&self.csrf as &dyn PolicyExpressions,
+			&self.direct_response as &dyn PolicyExpressions,
+			&self.request_header_modifier as &dyn PolicyExpressions,
+			&self.request_redirect as &dyn PolicyExpressions,
+			&self.url_rewrite as &dyn PolicyExpressions,
+			&self.cors as &dyn PolicyExpressions,
+		]
+		.into_iter()
+	}
+
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
-		self.authorization.register_expressions(ctx);
-		self.remote_rate_limit.register_expressions(ctx);
-		self.transformation.register_expressions(ctx);
-		self.ext_authz.register_expressions(ctx);
-		self.ext_proc.register_expressions(ctx);
+		for policy in self.iter() {
+			policy.register_expressions(ctx);
+		}
 	}
 }
 
