@@ -443,6 +443,7 @@ pub mod from_completions {
 			metadata.extend(header_metadata);
 		}
 
+		let metadata = helpers::sanitize_request_metadata(metadata);
 		let metadata = if metadata.is_empty() {
 			None
 		} else {
@@ -1274,6 +1275,7 @@ pub mod from_messages {
 			metadata.extend(header_metadata);
 		}
 
+		let metadata = helpers::sanitize_request_metadata(metadata);
 		let metadata = if metadata.is_empty() {
 			None
 		} else {
@@ -2025,6 +2027,7 @@ pub mod from_responses {
 			metadata.extend(header_metadata);
 		}
 
+		let metadata = sanitize_request_metadata(metadata);
 		let metadata = if metadata.is_empty() {
 			None
 		} else {
@@ -2574,8 +2577,13 @@ pub mod from_anthropic_token_count {
 mod helpers {
 	use std::collections::HashMap;
 
+	use sha2::Sha256;
+	use sha2::digest::Digest;
+
 	use crate::llm::AIError;
 	use crate::llm::types::bedrock;
+
+	const BEDROCK_REQUEST_METADATA_MAX_LEN: usize = 256;
 
 	pub fn create_cache_point() -> bedrock::CachePointBlock {
 		bedrock::CachePointBlock {
@@ -2681,6 +2689,43 @@ mod helpers {
 		}
 
 		metadata
+	}
+
+	/// Bedrock Converse requestMetadata only accepts short strings from a restricted
+	/// character set. Keep compatible entries unchanged and hash incompatible ones.
+	pub fn sanitize_request_metadata(metadata: HashMap<String, String>) -> HashMap<String, String> {
+		metadata
+			.into_iter()
+			.map(|(key, value)| {
+				(
+					sanitize_request_metadata_component(&key),
+					sanitize_request_metadata_component(&value),
+				)
+			})
+			.collect()
+	}
+
+	fn sanitize_request_metadata_component(value: &str) -> String {
+		if is_valid_request_metadata_component(value) {
+			return value.to_string();
+		}
+
+		let digest = Sha256::digest(value.as_bytes());
+		format!("sha256:{}", hex::encode(digest))
+	}
+
+	fn is_valid_request_metadata_component(value: &str) -> bool {
+		value.len() <= BEDROCK_REQUEST_METADATA_MAX_LEN
+			&& value.chars().all(is_valid_request_metadata_char)
+	}
+
+	fn is_valid_request_metadata_char(c: char) -> bool {
+		c.is_ascii_alphanumeric()
+			|| c.is_ascii_whitespace()
+			|| matches!(
+				c,
+				':' | '_' | '@' | '$' | '#' | '=' | '/' | '+' | ',' | '-' | '.'
+			)
 	}
 
 	pub fn extract_beta_headers(
