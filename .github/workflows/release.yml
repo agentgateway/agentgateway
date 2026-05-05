@@ -83,6 +83,8 @@ jobs:
             os: blacksmith-4vcpu-ubuntu-2404
           - platform: linux/arm64
             os: blacksmith-4vcpu-ubuntu-2404-arm
+            cargo_features: agentgateway/ui,agentgateway-app/mimalloc
+            cargo_no_default_features: true
     env:
       VERSION: ${{ needs.setup.outputs.version }}
     steps:
@@ -251,6 +253,8 @@ jobs:
           VERSION=${{ env.VERSION }}
           GIT_REVISION=${{ github.sha }}
           BUILDER=musl
+          CARGO_FEATURES=${{ matrix.cargo_features || 'agentgateway/ui' }}
+          CARGO_NO_DEFAULT_FEATURES=${{ matrix.cargo_no_default_features || 'false' }}
 
     - name: Export digest
       run: |
