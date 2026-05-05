@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -14,8 +15,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
+	bbr "sigs.k8s.io/gateway-api-inference-extension/pkg/bbr/plugins/basemodelextractor"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
@@ -24,6 +28,8 @@ import (
 const (
 	defaultInferencePoolStatusKind = "Status"
 	defaultInferencePoolStatusName = "default"
+
+	virtualModelsPath = "/v1/models"
 )
 
 // NewInferencePlugin creates a new InferencePool policy plugin
@@ -38,6 +44,16 @@ func NewInferencePlugin(agw *AgwCollections) AgwPlugin {
 					return ConvertStatusCollection(status), policyCol
 				},
 			},
+		},
+		AddResourceExtension: &AddResourcesPlugin{
+			Routes: krt.NewManyCollection(agw.Gateways, func(krtctx krt.HandlerContext, gw *gwv1.Gateway) []ir.AgwResource {
+				gwNN := types.NamespacedName{Namespace: gw.Namespace, Name: gw.Name}
+				models := collectInferenceModelsForGateway(krtctx, agw, gwNN)
+				if len(models) == 0 {
+					return nil
+				}
+				return buildModelsRoutes(gw, gwNN, models)
+			}, agw.KrtOpts.ToOptions("agentgateway/VirtualModels")...),
 		},
 	}
 }
@@ -316,4 +332,167 @@ func inferencePoolParentMergeKey(ref inf.ParentReference) string {
 		group = wellknown.GatewayGroup
 	}
 	return fmt.Sprintf("%s/%s/%s/%s", group, kind, ref.Namespace, ref.Name)
+}
+
+// modelEntry is the per-model entry in the OpenAI /v1/models response.
+type modelEntry struct {
+	ID     string `json:"id"`
+	Object string `json:"object"`
+}
+
+// collectInferenceModelsForGateway scans all HTTPRoutes looking for rules that
+// (a) reference at least one InferencePool as a backend, and
+// (b) carry an exact-match header condition on X-Gateway-Base-Model-Name.
+//
+// It returns a deduplicated, sorted slice of model names found for the given gateway.
+func collectInferenceModelsForGateway(krtctx krt.HandlerContext, agw *AgwCollections, gwNN types.NamespacedName) []string {
+	allRoutes := krt.Fetch(krtctx, agw.HTTPRoutes)
+	seen := make(map[string]struct{})
+	for _, route := range allRoutes {
+		if !routeAttachedToGateway(route, gwNN) {
+			continue
+		}
+		for _, rule := range route.Spec.Rules {
+			if !ruleHasInferencePoolBackend(rule) {
+				continue
+			}
+			for _, match := range rule.Matches {
+				for _, h := range match.Headers {
+					if string(h.Name) == bbr.BaseModelHeader &&
+						(h.Type == nil || *h.Type == gwv1.HeaderMatchExact) {
+						seen[h.Value] = struct{}{}
+					}
+				}
+			}
+		}
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	models := make([]string, 0, len(seen))
+	for m := range seen {
+		models = append(models, m)
+	}
+	sort.Strings(models)
+	return models
+}
+
+// routeAttachedToGateway reports whether the HTTPRoute has a parentRef pointing
+// at the given Gateway.
+func routeAttachedToGateway(route *gwv1.HTTPRoute, gwNN types.NamespacedName) bool {
+	for _, ref := range route.Spec.ParentRefs {
+		if ref.Kind != nil && string(*ref.Kind) != wellknown.GatewayKind {
+			continue
+		}
+		if ref.Group != nil && string(*ref.Group) != wellknown.GatewayGroup {
+			continue
+		}
+		ns := route.Namespace
+		if ref.Namespace != nil {
+			ns = string(*ref.Namespace)
+		}
+		if ns == gwNN.Namespace && string(ref.Name) == gwNN.Name {
+			return true
+		}
+	}
+	return false
+}
+
+// ruleHasInferencePoolBackend returns true if any backendRef in the rule
+// references an InferencePool.
+func ruleHasInferencePoolBackend(rule gwv1.HTTPRouteRule) bool {
+	for _, backend := range rule.BackendRefs {
+		gk := schema.GroupKind{
+			Group: string(ptr.OrDefault((*gwv1.Group)(backend.Group), gwv1.Group(""))),
+			Kind:  string(ptr.OrDefault((*gwv1.Kind)(backend.Kind), gwv1.Kind("Service"))),
+		}
+		if gk == wellknown.InferencePoolGVK.GroupKind() {
+			return true
+		}
+	}
+	return false
+}
+
+// buildModelsRoutes creates one ir.AgwResource per Gateway listener.
+// Each resource is an api.Route for GET /v1/models that returns the aggregated
+// model list via an inline directResponse TrafficPolicy.
+func buildModelsRoutes(gw *gwv1.Gateway, gwNN types.NamespacedName, models []string) []ir.AgwResource {
+	body := buildModelsJSON(models)
+
+	var resources []ir.AgwResource
+	for _, listener := range gw.Spec.Listeners {
+		listenerKey := utils.InternalGatewayName(gwNN.Namespace, gwNN.Name, string(listener.Name))
+		routeKey := gwNN.Namespace + "/" + gwNN.Name + "." + string(listener.Name) + ":virtual-models"
+
+		route := &api.Route{
+			Key:         routeKey,
+			ListenerKey: listenerKey,
+			Name: &api.RouteName{
+				Kind:      wellknown.InferencePoolGVK.Kind,
+				Namespace: gwNN.Namespace,
+				Name:      gwNN.Name,
+			},
+			Matches: []*api.RouteMatch{
+				{
+					Path:   &api.PathMatch{Kind: &api.PathMatch_Exact{Exact: virtualModelsPath}},
+					Method: &api.MethodMatch{Exact: "GET"},
+				},
+			},
+			TrafficPolicies: []*api.TrafficPolicySpec{
+				{
+					Kind: &api.TrafficPolicySpec_DirectResponse{
+						DirectResponse: &api.DirectResponse{
+							Status: 200,
+							Body:   body,
+						},
+					},
+				},
+				{
+					Kind: &api.TrafficPolicySpec_Transformation{
+						Transformation: &api.TrafficPolicySpec_TransformationPolicy{
+							Response: &api.TrafficPolicySpec_TransformationPolicy_Transform{
+								Set: []*api.TrafficPolicySpec_HeaderTransformation{
+									{
+										Name:       "Content-Type",
+										Expression: "'application/json'",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		resources = append(resources, ir.AgwResource{
+			Resource: &api.Resource{Kind: &api.Resource_Route{Route: route}},
+			Gateway:  gwNN,
+		})
+	}
+	return resources
+}
+
+// buildModelsJSON serialises the model list to an OpenAI-compatible /v1/models
+// response body.  Returns the raw JSON bytes; falls back to a minimal valid
+// payload if marshalling unexpectedly fails.
+func buildModelsJSON(models []string) []byte {
+	entries := make([]modelEntry, 0, len(models))
+	for _, m := range models {
+		entries = append(entries, modelEntry{
+			ID:     m,
+			Object: "model",
+		})
+	}
+	payload := struct {
+		Object string       `json:"object"`
+		Data   []modelEntry `json:"data"`
+	}{
+		Object: "list",
+		Data:   entries,
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return []byte(`{"object":"list","data":[]}`)
+	}
+	return b
 }
