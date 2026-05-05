@@ -2,17 +2,15 @@ import styled from "@emotion/styled";
 import type { MenuProps } from "antd";
 import { Layout as AntLayout, Button, Menu } from "antd";
 import {
-  BarChart3,
   Brain,
   ExternalLink,
-  FileText,
   FlaskConical,
   Home,
   Moon,
   Network,
   Route,
   Sparkles,
-  Sun,
+  Sun
 } from "lucide-react";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -305,16 +303,17 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
           icon: <Brain size={18} />,
           label: "Configuration",
         },
-        {
-          key: "/llm-metrics",
-          icon: <BarChart3 size={18} />,
-          label: "Metrics",
-        },
-        {
-          key: "/llm-logs",
-          icon: <FileText size={18} />,
-          label: "Logs",
-        },
+        // Alan - commenting fake-data pages out until we hook up to a real backend
+        // {
+        //   key: "/llm-metrics",
+        //   icon: <BarChart3 size={18} />,
+        //   label: "Metrics",
+        // },
+        // {
+        //   key: "/llm-logs",
+        //   icon: <FileText size={18} />,
+        //   label: "Logs",
+        // },
         {
           key: "/llm-playground",
           icon: <FlaskConical size={18} />,
@@ -332,16 +331,17 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
           icon: <Network size={18} />,
           label: "Configuration",
         },
-        {
-          key: "/mcp-metrics",
-          icon: <BarChart3 size={18} />,
-          label: "Metrics",
-        },
-        {
-          key: "/mcp-logs",
-          icon: <FileText size={18} />,
-          label: "Logs",
-        },
+        // Alan - commenting fake-data pages out until we hook up to a real backend
+        // {
+        //   key: "/mcp-metrics",
+        //   icon: <BarChart3 size={18} />,
+        //   label: "Metrics",
+        // },
+        // {
+        //   key: "/mcp-logs",
+        //   icon: <FileText size={18} />,
+        //   label: "Logs",
+        // },
         {
           key: "/mcp-playground",
           icon: <FlaskConical size={18} />,
@@ -359,16 +359,17 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
           icon: <Route size={18} />,
           label: "Configuration",
         },
-        {
-          key: "/traffic-metrics",
-          icon: <BarChart3 size={18} />,
-          label: "Metrics",
-        },
-        {
-          key: "/traffic-logs",
-          icon: <FileText size={18} />,
-          label: "Logs",
-        },
+        // Alan - commenting fake-data pages out until we hook up to a real backend
+        // {
+        //   key: "/traffic-metrics",
+        //   icon: <BarChart3 size={18} />,
+        //   label: "Metrics",
+        // },
+        // {
+        //   key: "/traffic-logs",
+        //   icon: <FileText size={18} />,
+        //   label: "Logs",
+        // },
       ],
     },
     {

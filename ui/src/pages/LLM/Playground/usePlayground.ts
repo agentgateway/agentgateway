@@ -18,6 +18,8 @@ export function usePlayground() {
     [config]
   );
 
+  const hasTopLevelLlm = Boolean(config?.llm);
+
   const selectedModel = models.find((m) => m.label === selectedLabel) ?? null;
   /** The model name actually sent in the request body */
   const effectiveModel =
@@ -106,6 +108,7 @@ export function usePlayground() {
     sending,
     error,
     chatEndRef,
+    hasTopLevelLlm,
     handleSend,
     handleClear,
     handleSelectLabel,

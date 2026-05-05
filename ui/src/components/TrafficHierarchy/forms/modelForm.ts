@@ -8,7 +8,7 @@ import type { LocalLLMModels } from "../../../config";
 export const schema: RJSFSchema = {
   type: "object",
   required: ["name", "provider"],
-  additionalProperties: true,
+  additionalProperties: false,
   properties: {
     name: {
       type: "string",
@@ -18,7 +18,7 @@ export const schema: RJSFSchema = {
     provider: {
       type: "string",
       title: "Provider",
-      enum: ["openAI", "gemini", "vertex", "anthropic", "bedrock", "azureOpenAI"],
+      enum: ["openAI", "gemini", "vertex", "anthropic", "bedrock", "azure"],
       default: "openAI",
       description: "LLM provider to connect to",
     },
@@ -52,15 +52,46 @@ export const schema: RJSFSchema = {
           title: "Vertex Project",
           description: "Google Cloud project ID for Vertex AI",
         },
-        azureHost: {
+        azureResourceName: {
           type: "string",
-          title: "Azure Host",
-          description: "Azure OpenAI deployment host",
+          title: "Azure Resource Name",
+          description: "The resource name of the Azure OpenAI deployment",
+        },
+        azureResourceType: {
+          type: "string",
+          title: "Azure Resource Type",
+          enum: ["openAI", "foundry"],
+          description: "The type of Azure endpoint (openAI or foundry)",
         },
         azureApiVersion: {
           type: "string",
           title: "Azure API Version",
           description: "Azure OpenAI API version (e.g., 2024-02-01)",
+        },
+        azureProjectName: {
+          type: "string",
+          title: "Azure Project Name",
+          description: "The Foundry project name (required for foundry resource type)",
+        },
+        hostOverride: {
+          type: "string",
+          title: "Host Override",
+          description: "Override the upstream host for this provider",
+        },
+        pathOverride: {
+          type: "string",
+          title: "Path Override",
+          description: "Override the upstream path for this provider",
+        },
+        pathPrefix: {
+          type: "string",
+          title: "Path Prefix",
+          description: "Override the default base path prefix for this provider",
+        },
+        tokenize: {
+          type: "boolean",
+          title: "Tokenize",
+          description: "Tokenize the request before forwarding (enables accurate rate limiting but is computationally expensive)",
         },
       },
     },
@@ -268,13 +299,36 @@ export const uiSchema: UiSchema = {
       "ui:placeholder": "my-gcp-project",
       "ui:help": "Required for Google Vertex AI provider",
     },
-    azureHost: {
-      "ui:placeholder": "my-deployment.openai.azure.com",
+    azureResourceName: {
+      "ui:placeholder": "my-deployment",
+      "ui:help": "Required for Azure OpenAI provider",
+    },
+    azureResourceType: {
+      "ui:widget": "select",
       "ui:help": "Required for Azure OpenAI provider",
     },
     azureApiVersion: {
       "ui:placeholder": "2024-02-01",
-      "ui:help": "Required for Azure OpenAI provider",
+      "ui:help": "Optional; Azure OpenAI API version",
+    },
+    azureProjectName: {
+      "ui:placeholder": "my-foundry-project",
+      "ui:help": "Required when using foundry resource type",
+    },
+    hostOverride: {
+      "ui:placeholder": "api.example.com",
+      "ui:help": "Optional override for the upstream host",
+    },
+    pathOverride: {
+      "ui:placeholder": "/v1",
+      "ui:help": "Optional override for the upstream path",
+    },
+    pathPrefix: {
+      "ui:placeholder": "/openai",
+      "ui:help": "Optional override for the base path prefix",
+    },
+    tokenize: {
+      "ui:help": "Enable request tokenization for accurate rate limiting (computationally expensive)",
     },
   },
   defaults: {
