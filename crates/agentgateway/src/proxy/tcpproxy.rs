@@ -230,6 +230,7 @@ impl TCPProxy {
 				http_version_override: None,
 				transport_override: None,
 				network_gateway: None,
+				waypoint: None,
 				backend_policies,
 			},
 			SimpleBackend::Aws(_, config) => {
@@ -245,6 +246,7 @@ impl TCPProxy {
 					http_version_override: None,
 					transport_override: None,
 					network_gateway: None,
+					waypoint: None,
 					backend_policies: default_policies.merge(backend_policies),
 				}
 			},
