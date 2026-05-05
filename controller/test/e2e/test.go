@@ -270,7 +270,7 @@ func (i *TestInstallation) UninstallAgentgatewayCRDs(ctx context.Context, t *tes
 
 // PreFailHandler is the function that is invoked if a test in the given TestInstallation fails
 func (i *TestInstallation) PreFailHandler(ctx context.Context, t *testing.T) {
-	i.preFailHandler(ctx, t, i.GeneratedFiles.FailureDir)
+	i.preFailHandler(ctx, t, filepath.Join(i.GeneratedFiles.FailureDir, t.Name()))
 }
 
 // PerTestPreFailHandler is the function that is invoked if a test in the given TestInstallation fails
