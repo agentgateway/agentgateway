@@ -616,6 +616,8 @@ func (s *Syncer) getProtocolAndTLSConfig(obj *translator.GatewayListener) (api.P
 		if obj.TLSInfo.IstioMutual {
 			tlsConfig.Root = nil
 			tlsConfig.MtlsMode = api.TLSConfig_STRICT
+		} else if obj.TLSInfo.IstioWorkloadCert {
+			tlsConfig.MtlsMode = api.TLSConfig_DISABLE
 		} else if obj.TLSInfo.MtlsFallbackEnabled {
 			tlsConfig.MtlsMode = api.TLSConfig_ALLOW_INSECURE_FALLBACK
 		}

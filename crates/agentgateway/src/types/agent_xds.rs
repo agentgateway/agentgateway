@@ -248,10 +248,17 @@ fn server_tls_config_from_proto(
 			.unwrap_or_default();
 
 	if certificate_source == proto::agent::tls_config::CertificateSource::IstioWorkload {
-		return ServerTLSConfig::istio_workload(
-			mtls_mode == proto::agent::tls_config::MtlsMode::Strict,
-			default_alpns,
-		);
+		let require_client_cert = match mtls_mode {
+			proto::agent::tls_config::MtlsMode::Strict => true,
+			proto::agent::tls_config::MtlsMode::Disable => false,
+			proto::agent::tls_config::MtlsMode::AllowInsecureFallback => {
+				diagnostics.add_warning(
+					"ALLOW_INSECURE_FALLBACK is not supported with ISTIO_WORKLOAD certificates; disabling mTLS",
+				);
+				false
+			},
+		};
+		return ServerTLSConfig::istio_workload(require_client_cert, default_alpns);
 	}
 
 	match ServerTLSConfig::from_pem_with_profile(

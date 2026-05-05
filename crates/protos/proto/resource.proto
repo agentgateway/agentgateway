@@ -177,6 +177,9 @@ message TLSConfig {
 
     // Request a TLS certificate, but if one is not presented or invalid, allow the connection.
     ALLOW_INSECURE_FALLBACK = 1;
+
+    // Do not request or require a client TLS certificate.
+    DISABLE = 2;
   }
 
   // Cipher suites supported by agentgateway

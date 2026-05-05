@@ -288,6 +288,8 @@ const (
 	TLSConfig_STRICT TLSConfig_MTLSMode = 0
 	// Request a TLS certificate, but if one is not presented or invalid, allow the connection.
 	TLSConfig_ALLOW_INSECURE_FALLBACK TLSConfig_MTLSMode = 1
+	// Do not request or require a client TLS certificate.
+	TLSConfig_DISABLE TLSConfig_MTLSMode = 2
 )
 
 // Enum value maps for TLSConfig_MTLSMode.
@@ -295,10 +297,12 @@ var (
 	TLSConfig_MTLSMode_name = map[int32]string{
 		0: "STRICT",
 		1: "ALLOW_INSECURE_FALLBACK",
+		2: "DISABLE",
 	}
 	TLSConfig_MTLSMode_value = map[string]int32{
 		"STRICT":                  0,
 		"ALLOW_INSECURE_FALLBACK": 1,
+		"DISABLE":                 2,
 	}
 )
 
@@ -12569,8 +12573,7 @@ const file_resource_proto_rawDesc = "" +
 	"\adynamic\x18\x06 \x01(\v2..agentgateway.dev.resource.DynamicForwardProxyH\x00R\adynamic\x129\n" +
 	"\x03aws\x18\b \x01(\v2%.agentgateway.dev.resource.AwsBackendH\x00R\x03aws\x12U\n" +
 	"\x0finline_policies\x18\a \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0einlinePoliciesB\x06\n" +
-	"\x04kind\"\xfb\n" +
-	"\n" +
+	"\x04kind\"\x88\v\n" +
 	"\tTLSConfig\x12\x12\n" +
 	"\x04cert\x18\x01 \x01(\fR\x04cert\x12\x1f\n" +
 	"\vprivate_key\x18\x02 \x01(\fR\n" +
@@ -12592,11 +12595,12 @@ const file_resource_proto_rawDesc = "" +
 	"TLSVersion\x12\x1b\n" +
 	"\x17TLS_VERSION_UNSPECIFIED\x10\x00\x12\f\n" +
 	"\bTLS_V1_2\x10\x03\x12\f\n" +
-	"\bTLS_V1_3\x10\x04\"\x04\b\x01\x10\x01\"\x04\b\x02\x10\x02*\bTLS_V1_0*\bTLS_V1_1\"3\n" +
+	"\bTLS_V1_3\x10\x04\"\x04\b\x01\x10\x01\"\x04\b\x02\x10\x02*\bTLS_V1_0*\bTLS_V1_1\"@\n" +
 	"\bMTLSMode\x12\n" +
 	"\n" +
 	"\x06STRICT\x10\x00\x12\x1b\n" +
-	"\x17ALLOW_INSECURE_FALLBACK\x10\x01\"\x99\x03\n" +
+	"\x17ALLOW_INSECURE_FALLBACK\x10\x01\x12\v\n" +
+	"\aDISABLE\x10\x02\"\x99\x03\n" +
 	"\vCipherSuite\x12\x1c\n" +
 	"\x18CIPHER_SUITE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16TLS_AES_256_GCM_SHA384\x10\x01\x12\x1a\n" +
