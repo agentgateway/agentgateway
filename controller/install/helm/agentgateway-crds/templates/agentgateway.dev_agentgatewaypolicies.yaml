@@ -6349,8 +6349,12 @@ spec:
                                   type: object
                               type: object
                               x-kubernetes-validations:
-                              - message: backendRef is required2
+                              - message: backendRef is required
                                 rule: has(self.backendRef)
+                              - message: exactly one of the fields in [grpc http]
+                                  must be set
+                                rule: '[has(self.grpc),has(self.http)].filter(x,x==true).size()
+                                  == 1'
                           required:
                           - policy
                           type: object
@@ -6494,6 +6498,9 @@ spec:
                         type: object
                     type: object
                     x-kubernetes-validations:
+                    - message: exactly one of the fields in [grpc http] must be set
+                      rule: has(self.conditional) || [has(self.grpc),has(self.http)].filter(x,x==true).size()
+                        == 1
                     - message: conditional cannot be set with any other field
                       rule: 'has(self.conditional) ? [has(self.backendRef),has(self.failureMode),has(self.forwardBody),has(self.grpc),has(self.http)].filter(x,x==true).size()
                         == 0 : true'

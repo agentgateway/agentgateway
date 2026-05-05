@@ -693,6 +693,7 @@ spec:
             backendRef:
               name: foo
               port: 1234
+            grpc: {}
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -711,8 +712,10 @@ spec:
             backendRef:
               name: foo
               port: 1234
+            grpc: {}
         - policy:
             backendRef:
               name: fallback
               port: 1234
+            grpc: {}
 ---

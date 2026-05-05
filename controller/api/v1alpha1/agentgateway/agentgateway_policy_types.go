@@ -1458,10 +1458,12 @@ type ExtAuthConditional struct {
 	// `policy` definition.
 	// +required
 	// +kubebuilder:validation:XValidation:rule="has(self.backendRef)",message="backendRef is required"
+	// +kubebuilder:validation:XValidation:rule="[has(self.grpc),has(self.http)].filter(x,x==true).size() == 1",message="exactly one of the fields in [grpc http] must be set"
 	Policy ExtAuth `json:"policy"`
 }
 
 // +kubebuilder:validation:ConditionalPolicy:fields=backendRef
+// +kubebuilder:validation:XValidation:rule="has(self.conditional) || [has(self.grpc),has(self.http)].filter(x,x==true).size() == 1",message="exactly one of the fields in [grpc http] must be set"
 type ExtAuthOrConditional struct {
 	// +optional
 	ExtAuth `json:",inline"`
