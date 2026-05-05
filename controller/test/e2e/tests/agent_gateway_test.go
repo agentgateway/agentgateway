@@ -37,7 +37,7 @@ func TestAgentgatewayIntegration(t *testing.T) {
 	}
 
 	// We register the cleanup function _before_ we actually perform the installation.
-	// This allows us to uninstall kgateway, in case the original installation only completed partially
+	// This allows us to uninstall agentgateway, in case the original installation only completed partially
 	testutils.Cleanup(t, func() {
 		if !nsEnvPredefined {
 			os.Unsetenv(testutils.InstallNamespace)
@@ -49,7 +49,7 @@ func TestAgentgatewayIntegration(t *testing.T) {
 		testInstallation.Uninstall(ctx, t)
 	})
 
-	// Install kgateway
+	// Install agentgateway
 	testInstallation.InstallFromLocalChart(ctx, t)
 
 	common.SetupBaseConfig(ctx, t, testInstallation, filepath.Join("manifests", "agent-gateway-base.yaml"))
