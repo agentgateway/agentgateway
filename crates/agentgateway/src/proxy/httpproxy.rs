@@ -2005,9 +2005,6 @@ pub fn build_service_call(
 				};
 				identity.map(|id| (ip, id))
 			});
-			// Resolve the destination service's VIP for use as the HBONE CONNECT authority.
-			// The agentgateway waypoint inbound handler looks up services by VIP, so a
-			// hostname authority is not supported.
 			let service_vip = svc
 				.vips
 				.iter()
@@ -2050,11 +2047,8 @@ pub fn build_service_call(
 		None
 	};
 
-	// For waypoint routing, use the service VIP as the target. The HBONE CONNECT URI
-	// authority must be IP:port so the agentgateway waypoint inbound handler can
-	// look up the destination service by VIP.
-	// For double HBONE (without waypoint), use a hostname-based target so the gateway
-	// can resolve it.
+	// Waypoint: target = service VIP (becomes the inner CONNECT authority).
+	// Double HBONE: target = service hostname (resolved by the gateway).
 	let target = if let Some(wp) = &waypoint {
 		Target::Address(SocketAddr::new(wp.service_vip, port))
 	} else if network_gateway.is_some() {
@@ -2510,10 +2504,9 @@ pub struct BackendCall {
 pub struct WaypointTarget {
 	/// The socket address of the waypoint (IP:hbone_port).
 	pub address: SocketAddr,
-	/// Service VIP used as the HBONE CONNECT authority so the waypoint can
-	/// identify the destination service. The agentgateway waypoint inbound
-	/// handler looks up the service by VIP, so a hostname authority is not
-	/// supported.
+	/// Destination service VIP used as the inner HBONE CONNECT authority.
+	/// Required as IP:port by Istio's single-network Envoy waypoint; agentgateway's
+	/// waypoint accepts either IP:port or hostname.
 	pub service_vip: IpAddr,
 	/// Identities for mTLS verification (service SANs).
 	pub identities: Vec<Identity>,
