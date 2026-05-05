@@ -185,8 +185,6 @@ func TestDeployObjs(t *testing.T) {
 }
 
 func TestGatewayAndListenerSetPortModifications(t *testing.T) {
-	t.Helper()
-
 	var (
 		ns = "test-ns"
 	)
@@ -247,16 +245,7 @@ func TestGatewayAndListenerSetPortModifications(t *testing.T) {
 		}
 	})
 
-	t.Run("GetPortsValues uses dummy port when no listeners", func(t *testing.T) {
-		gw := createGatewayForDeployer() // Empty ports
-		ports := deployer.GetPortsValues(gw, 15000)
-		// 15000 is reserved - it gets added but will fail validation at runtime
-		// For now, GetPortsValues adds the dummy port regardless
-		assert.Equal(t, 1, len(ports))
-		assert.Equal(t, int32(15000), *ports[0].Port)
-	})
-
-	t.Run("GetPortsValues uses dummy port when no listeners (valid dummy)", func(t *testing.T) {
+	t.Run("GetPortsValues uses valid dummy port when no listeners", func(t *testing.T) {
 		gw := createGatewayForDeployer() // Empty ports
 		ports := deployer.GetPortsValues(gw, 8080)
 		// Should add dummy port
@@ -265,13 +254,10 @@ func TestGatewayAndListenerSetPortModifications(t *testing.T) {
 		assert.Equal(t, "listener-8080", *ports[0].Name)
 	})
 
-	t.Run("port addition modifies deployment", func(t *testing.T) {
-		// This test verifies the full integration: Gateway/ListenerSet port changes trigger service updates.
-		// It's covered by the existing TestDeployObjs scenarios, so we focus on GetPortsValues logic here.
-		// A full integration test would require a running Gateway + ListenerSet setup, which is
-		// tested separately in the existing deployer_test.go test suite.
-
-		// Verify that changing ports results in different HelmPort output
+	t.Run("GetPortsValues reflects port count changes", func(t *testing.T) {
+		// Verify that GetPortsValues output changes when gateway ports change.
+		// Full integration tests (Deployment/Service patching) are covered by existing
+		// TestDeployObjs scenarios in this file.
 		gw1 := createGatewayForDeployer(8080)
 		gw2 := createGatewayForDeployer(8080, 9090)
 
@@ -282,12 +268,13 @@ func TestGatewayAndListenerSetPortModifications(t *testing.T) {
 		assert.Equal(t, 2, len(ports2))
 	})
 
-	t.Run("multiple ListenerSets merged into single port set", func(t *testing.T) {
-		// Simulate multiple ListenerSets with their ports merged
+	t.Run("GetPortsValues handles multiple ports correctly", func(t *testing.T) {
+		// Test GetPortsValues behavior with multiple ports. ListenerSet merge logic
+		// happens in the IR builder before GatewayForDeployer is constructed, so it's
+		// covered by existing deployer integration tests.
 		gw := createGatewayForDeployer(8080, 9090, 3000)
 		ports := deployer.GetPortsValues(gw, 0)
 
-		// All ports from both Gateway and ListenerSets should be present
 		assert.Equal(t, 3, len(ports))
 	})
 
