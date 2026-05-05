@@ -359,6 +359,8 @@ spec:
               value: "true"
             - name: LOG_FORMAT
               value: "json"
+            - name: AGW_XDS_MODE
+              value: "tls"
             - name: AGW_GATEWAY_CLASS_PARAMETERS_REFS
               value: "{}"
             - name: POD_NAMESPACE

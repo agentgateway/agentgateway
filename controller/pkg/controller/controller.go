@@ -5,7 +5,6 @@ import (
 
 	"golang.org/x/time/rate"
 	"k8s.io/client-go/util/workqueue"
-	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -39,7 +38,7 @@ type GatewayConfig struct {
 	// Additional GatewayClass definitions to support extending to other well-known gateway classes
 	AdditionalGatewayClasses map[string]*deployer.GatewayClassInfo
 	// CertWatcher is the shared certificate watcher for xDS TLS
-	CertWatcher *certwatcher.CertWatcher
+	CertWatcher CertificateWatcher
 }
 
 type HelmValuesGeneratorOverrideFunc func(inputs *deployer.Inputs) deployer.HelmValuesGenerator
@@ -73,7 +72,8 @@ func watchGw(
 	logger.Info("creating gateway deployer",
 		"agwctrlname", cfg.AgwControllerName,
 		"server", cfg.ControlPlane.XdsHost,
-		"port", cfg.ControlPlane.AgwXdsPort, "tls", cfg.ControlPlane.XdsTLS,
+		"port", cfg.ControlPlane.AgwXdsPort,
+		"tls", cfg.ControlPlane.XdsTLS,
 	)
 
 	inputs := &deployer.Inputs{

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"log/slog"
 	"maps"
@@ -13,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -42,11 +42,15 @@ type SetupOpts struct {
 
 	// CertWatcher is the shared certificate watcher for xDS TLS
 	// Used by the Gateway controller to trigger reconciliation on cert changes
-	CertWatcher *certwatcher.CertWatcher
+	CertWatcher CertificateWatcher
 
 	PprofBindAddress       string
 	HealthProbeBindAddress string
 	MetricsBindAddress     string
+}
+
+type CertificateWatcher interface {
+	RegisterCallback(func(tls.Certificate))
 }
 
 var setupLog = ctrl.Log.WithName("setup")
@@ -230,10 +234,11 @@ func (c *ControllerBuilder) Build() (*syncer.Syncer, error) {
 			Tag:        defaultTag,
 		},
 		ControlPlane: deployer.ControlPlaneInfo{
-			XdsHost:      xdsHost,
-			AgwXdsPort:   agwXdsPort,
-			XdsTLS:       globalSettings.XdsTLS,
-			XdsTlsCaPath: apisettings.TLSRootCAPath,
+			XdsHost:          xdsHost,
+			AgwXdsPort:       agwXdsPort,
+			XdsTLS:           globalSettings.IsXdsTLSEnabled(),
+			XdsTLSSecretName: apisettings.TLSSecretName,
+			ControlPlaneNs:   namespaces.GetPodNamespace(),
 		},
 		AgwCollections:        c.cfg.AgwCollections,
 		AgentgatewayClassName: c.cfg.AgentgatewayClassName,
