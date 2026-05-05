@@ -1,0 +1,98 @@
+# Configuration:
+#
+# Parent infra/root:
+#   - Delegate /anything/team1 to team1 namespace
+#   - Delegate /anything/team2 to team2-root namespace
+#
+# Child team1/svc1:
+#   - Route /anything/team1/foo to team1/svc1
+#   - No parentRefs
+#
+# Intermediate team2-root/team2-root:
+#   - Delegate /anything/team2/ further to team2 namespace
+#   - Parent infra/root
+#
+#   Grandchild team2/svc2:
+#     - Route /anything/team2/* to team2/svc2
+#     - No parentRefs (implicit attachment via wildcard)
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: root
+  namespace: infra
+spec:
+  parentRefs:
+  - name: gateway
+    namespace: agentgateway-base
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team1
+    backendRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: "*"
+      namespace: team1
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team2
+    backendRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: "*"
+      namespace: team2-root
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: svc1
+  namespace: team1
+spec:
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team1/foo
+    backendRefs:
+    - name: svc1
+      port: 8000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: team2-root
+  namespace: team2-root
+spec:
+  parentRefs:
+  - name: root
+    namespace: infra
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team2/
+    backendRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: "*"
+      namespace: team2
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: svc2
+  namespace: team2
+spec:
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team2/foo
+    backendRefs:
+    - name: svc2
+      port: 8000
