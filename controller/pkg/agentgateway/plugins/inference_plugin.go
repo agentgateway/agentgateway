@@ -57,6 +57,14 @@ func translatePoliciesForInferencePool(
 	attachedGateways := inferencePoolAttachedGateways(krtctx, references, pool)
 	status := buildInferencePoolStatus(pool, controllerName, attachedGateways, validationErr)
 
+	// If the EndpointPickerRef failed validation (e.g. nil Port, wrong Kind, or
+	// missing referenced Service) we cannot safely build downstream policies:
+	// dereferencing fields like epr.Port.Number would panic. Surface the error
+	// via status and skip policy generation for this pool.
+	if validationErr != nil {
+		return status, infPolicies
+	}
+
 	// 'service/{namespace}/{hostname}:{port}'
 	hostname := kubeutils.GetInferenceServiceHostname(pool.Name, pool.Namespace)
 	eppPort := epr.Port.Number
