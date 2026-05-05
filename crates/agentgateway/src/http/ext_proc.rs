@@ -853,10 +853,43 @@ fn apply_header_mutations_response(resp: &mut http::Response, h: Option<&HeaderM
 // handle_response_for_response_mutation handles a single ext_proc response. If it returns 'true' we are done processing.
 async fn handle_response_for_response_mutation(
 	had_body: bool,
-	resp: Option<&mut http::Response>,
+	mut resp: Option<&mut http::Response>,
 	body_tx: &mut Sender<Result<Frame<Bytes>, Infallible>>,
 	presp: ProcessingResponse,
 ) -> (bool, bool) {
+	if let Some(dm) = &presp.dynamic_metadata {
+		if let Some(resp) = resp.as_mut() {
+			let mut meta = resp
+				.extensions_mut()
+				.remove::<ExtProcDynamicMetadata>()
+				.unwrap_or_default();
+			let mut conversion_err = false;
+			for (key, value) in &dm.fields {
+				match envoy_proto_common::prost_value_to_json(value) {
+					Ok(v) => {
+						meta.0.insert(key.clone(), v);
+					},
+					Err(e) => {
+						warn!(
+							"Failed to extract ext_proc dynamic metadata from response: failed to convert key '{}': {}",
+							key, e
+						);
+						conversion_err = true;
+						break;
+					},
+				}
+			}
+			if !conversion_err && !meta.0.is_empty() {
+				resp.extensions_mut().insert(meta);
+			}
+		} else if !dm.fields.is_empty() {
+			warn!(
+				"ext_proc server sent dynamic_metadata after response headers were processed; \
+					 metadata cannot be attached and will be ignored. Consider sending \
+					 metadata in the ResponseHeaders response instead."
+			);
+		}
+	}
 	let res = matches!(presp.response, Some(Response::ResponseHeaders(_)));
 	let cr = match presp.response {
 		Some(Response::ResponseHeaders(HeadersResponse { response: None })) => {
