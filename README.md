@@ -60,12 +60,42 @@
 
 - **Security & Observability**<br>
   Auth (JWT, API keys, OAuth), fine-grained RBAC with CEL policy engine, rate limiting, TLS, and OpenTelemetry metrics/logs/tracing.
-<br>
+  <br>
 
 ## Getting Started
 
 - [Standalone Quickstart](https://agentgateway.dev/docs/quickstart) — Get started with agentgateway in minutes.
 - [Kubernetes Quickstart](https://agentgateway.dev/docs/kubernetes/latest) — Deploy on Kubernetes using the built-in controller and Gateway API.
+
+## Setup (standalone)
+
+```
+# Clone the fork and check out the feature branch
+git clone git@github.com:solo-io/agentgateway-new-ui.git
+cd agentgateway-new-ui
+git checkout new-ui-features
+
+# Install cargo/rust if you havent already
+curl https://sh.rustup.rs -sSf | sh
+> Proceed with standard installation
+
+# reload shell & source env file
+source ~/.zshrc
+. "$HOME/.cargo/env" # note leading dot in front of command
+
+# install yarn dependencies in /ui directory
+yarn --cwd=ui install
+
+# Build agentgateway binary and install it in /usr/local/bin
+# This script will probably get removed before the fork is merged.
+bash ./build-replace-agentgateway.sh
+
+# Run the agentgateway proxy with an example yaml file (this has a MCP backend defined so that the MCP playground can be tested)
+agentgateway -f ./tmp-config.yaml
+
+# Open the built UI (this is the local version that was just built and packaged in the agentgateway binary)
+open http://localhost:15000/ui
+```
 
 ## Documentation
 
@@ -102,6 +132,7 @@ Thank you to our sponsors for helping to fund the development of agentgateway!
 For instructions on how to contribute to the agentgateway project, see the [CONTRIBUTION.md](CONTRIBUTION.md) file.
 
 ## Community Meetings
+
 To join a community meeting, add the [agentgateway calendar](https://calendar.google.com/calendar/u/0?cid=Y18zZTAzNGE0OTFiMGUyYzU2OWI1Y2ZlOWNmOWM4NjYyZTljNTNjYzVlOTdmMjdkY2I5ZTZmNmM5ZDZhYzRkM2ZmQGdyb3VwLmNhbGVuZGFyLmdvb2dsZS5jb20) to your Google account. Then, you can find event details on the calendar.
 
 Recordings of the community meetings will be published on our [google drive](https://drive.google.com/drive/folders/138716fESpxLkbd_KkGrUHa6TD7OA2tHs?usp=sharing).
