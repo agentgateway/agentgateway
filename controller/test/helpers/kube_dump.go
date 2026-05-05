@@ -69,6 +69,7 @@ func recordKubeState(ctx context.Context, kubectlCli *kubectl.Cli, f *os.File) {
 		"pods",
 		"deployments",
 		"configmaps",
+		"events",
 		// Agentgateway
 		"agentgatewaybackends.agentgateway.dev",
 		"agentgatewayparameters.agentgateway.dev",
