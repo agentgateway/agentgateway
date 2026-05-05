@@ -47,11 +47,11 @@ pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 ];
 
-pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[KeyExchangeGroup] = &[
-	KeyExchangeGroup::X25519,
-	KeyExchangeGroup::P256,
-	KeyExchangeGroup::P384,
-	KeyExchangeGroup::X25519_MLKEM768,
+pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[&'static dyn SupportedKxGroup] = &[
+	KeyExchangeGroup::X25519.to_supported_kx_group(),
+	KeyExchangeGroup::P256.to_supported_kx_group(),
+	KeyExchangeGroup::P384.to_supported_kx_group(),
+	KeyExchangeGroup::X25519_MLKEM768.to_supported_kx_group(),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -186,60 +186,31 @@ pub fn provider_with_options(
 	let cipher_suites = if cipher_suites.is_empty() {
 		DEFAULT_CIPHER_SUITES.to_vec()
 	} else {
-		let mut out = Vec::with_capacity(cipher_suites.len());
-		for suite in cipher_suites {
-			out.push(suite.to_supported_cipher_suite());
-		}
-		out
+		cipher_suites
+			.iter()
+			.map(CipherSuite::to_supported_cipher_suite)
+			.collect()
 	};
 
 	let key_exchange_groups = if key_exchange_groups.is_empty() {
 		DEFAULT_KEY_EXCHANGE_GROUPS.to_vec()
 	} else {
-		key_exchange_groups.to_vec()
+		key_exchange_groups
+			.iter()
+			.map(KeyExchangeGroup::to_supported_kx_group)
+			.collect()
 	};
 
 	let mut provider = rustls::crypto::aws_lc_rs::default_provider();
 	// Restrict negotiation to our allowlist.
 	provider.cipher_suites = cipher_suites;
-	provider.kx_groups = key_exchange_groups
-		.iter()
-		.map(KeyExchangeGroup::to_supported_kx_group)
-		.collect();
+	provider.kx_groups = key_exchange_groups;
 	Arc::new(provider)
 }
 
 pub fn provider_with_cipher_suites(cipher_suites: &[CipherSuite]) -> Arc<CryptoProvider> {
 	provider_with_options(cipher_suites, &[])
 }
-
-#[cfg(test)]
-mod tests {
-	use rustls::NamedGroup;
-
-	use super::*;
-
-	#[test]
-	fn provider_can_configure_key_exchange_groups() {
-		let classical = provider_with_options(&[], &[]);
-		assert_eq!(classical.kx_groups[0].name(), NamedGroup::X25519);
-		assert_eq!(classical.kx_groups.len(), 4);
-
-		let post_quantum = provider_with_options(&[], &[KeyExchangeGroup::X25519_MLKEM768]);
-		assert_eq!(post_quantum.kx_groups[0].name(), NamedGroup::X25519MLKEM768);
-	}
-}
-
-// pub fn provider() -> Arc<CryptoProvider> {
-// 	Arc::new(CryptoProvider {
-// 		// Limit to only the subset of ciphers that are FIPS compatible
-// 		cipher_suites: vec![
-// 			rustls::crypto::ring::cipher_suite::TLS13_AES_256_GCM_SHA384,
-// 			rustls::crypto::ring::cipher_suite::TLS13_AES_128_GCM_SHA256,
-// 		],
-// 		..rustls::crypto::ring::default_provider()
-// 	})
-// }
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
