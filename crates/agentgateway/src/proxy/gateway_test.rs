@@ -442,6 +442,34 @@ async fn multiple_requests() {
 }
 
 #[tokio::test]
+async fn debug_trace_only_captures_one_request_on_keepalive_connection() {
+	let (_mock, _bind, io) = basic_setup().await;
+	let mut trace_rx = crate::proxy::dtrace::track();
+
+	let res = send_request(io.clone(), Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+	read_body_raw(res.into_body()).await;
+
+	let res = send_request(io.clone(), Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 200);
+	read_body_raw(res.into_body()).await;
+
+	let mut events = Vec::new();
+	loop {
+		match tokio::time::timeout(Duration::from_millis(50), trace_rx.recv()).await {
+			Ok(Some(msg)) => events.push(serde_json::to_value(msg).unwrap()),
+			Ok(None) | Err(_) => break,
+		}
+	}
+
+	let request_started = events
+		.iter()
+		.filter(|event| event["message"]["type"] == "requestStarted")
+		.count();
+	assert_eq!(request_started, 1, "{events:#?}");
+}
+
+#[tokio::test]
 async fn basic_http2() {
 	let mock = simple_mock().await;
 	let t = setup_proxy_test("{}")

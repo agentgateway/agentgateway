@@ -281,7 +281,7 @@ impl Gateway {
 				let start = Instant::now();
 				let mut force_shutdown = force_shutdown.clone();
 				let name = name.clone();
-				tokio::spawn(dtrace::DebugTracer::maybe_scope(async move {
+				tokio::spawn(async move {
 					debug!(bind=?name, "connection started");
 					tokio::select! {
 						// We took too long; shutdown now.
@@ -291,7 +291,7 @@ impl Gateway {
 						_ = Self::handle_tunnel(name.clone(), bind_protocol, tunnel_protocol, stream, pi, drain) => {}
 					}
 					debug!(bind=?name, dur=?start.elapsed(), "connection completed");
-				}));
+				});
 			};
 			let wait = drain_watch.wait_for_drain();
 			tokio::pin!(wait);
@@ -731,7 +731,9 @@ impl Gateway {
 				let proxy = proxy.clone();
 				let connection = connection.clone();
 				req.extensions_mut().insert(BufferLimit::new(buffer));
-				async move { proxy.proxy(connection, req).map(Ok::<_, Infallible>).await }
+				dtrace::DebugTracer::maybe_scope(async move {
+					proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
+				})
 			}),
 		);
 		let (connection_drain_tx, connection_drain_rx) = drain::new();

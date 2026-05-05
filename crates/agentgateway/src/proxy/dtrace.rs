@@ -328,17 +328,20 @@ fn cel_severity(result: &Value) -> Severity {
 	}
 }
 
+#[derive(Clone, Debug)]
 pub struct DebugTracer {
 	sender: tokio::sync::mpsc::Sender<Message>,
 	start: Instant,
 	scope_state: Arc<Mutex<ScopeState>>,
 }
 
+#[derive(Debug)]
 struct ScopeState {
 	next_id: u64,
 	stack: Vec<ScopeFrame>,
 }
 
+#[derive(Debug)]
 struct ScopeFrame {
 	id: u64,
 	name: String,
@@ -390,6 +393,9 @@ impl DebugTracer {
 			})),
 		};
 		ACTIVE.scope(Some(ins), f).await
+	}
+	pub fn active() -> Option<Self> {
+		ACTIVE.try_with(Clone::clone).ok().flatten()
 	}
 	pub fn start_scope(&self, name: impl Into<String>) -> ScopeGuard {
 		let mut scope_state = self.scope_state.lock().expect("scope mutex poisoned");
