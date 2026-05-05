@@ -220,6 +220,12 @@ pub struct BackendContext {
 	/// The protocol of backend.
 	#[serde(default)]
 	pub protocol: BackendProtocol,
+	/// The AI provider name
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub provider: Option<Strng>,
+	/// The AI model name
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub model: Option<Strng>,
 }
 
 #[derive(
@@ -1751,6 +1757,8 @@ pub fn full_example_executor() -> ExecutorSerde {
 			name: "my-backend".into(),
 			backend_type: BackendType::Service,
 			protocol: BackendProtocol::http,
+			provider: None,
+			model: None,
 		}),
 		extauthz: Some(ExtAuthzDynamicMetadata::default()),
 		extproc: Some(ExtProcDynamicMetadata::default()),

@@ -42,6 +42,8 @@ fn build_test_request() -> crate::http::Request {
 		name: "test-backend".into(),
 		backend_type: BackendType::Service,
 		protocol: BackendProtocol::http,
+		provider: None,
+		model: None,
 	};
 	req.extensions_mut().insert(backend);
 	req.extensions_mut().insert(RequestTime(

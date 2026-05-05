@@ -127,6 +127,23 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
+  name: model-header-transformation
+  namespace: default
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: llm
+  traffic:
+    transformation:
+      response:
+        add:
+          - name: x-backend-model
+            value: "default(backend.model, \"unknown\")"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
   name: anthropic-response-guardrails
   namespace: default
 spec:

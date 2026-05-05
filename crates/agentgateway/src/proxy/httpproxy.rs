@@ -1835,10 +1835,18 @@ fn set_backend_cel_context(req: &mut http::Request, log: Option<&&mut RequestLog
 		&& let Some(bp) = l.backend_protocol
 		&& let Some(bi) = &l.backend_info
 	{
+		let (provider, model) = l.llm_request.as_ref().map_or((None, None), |llm_request| {
+			let provider = Some(llm_request.provider.clone());
+			let model = Some(llm_request.request_model.clone());
+			(provider, model)
+		});
+
 		req.extensions_mut().insert(BackendContext {
 			name: bi.backend_name.clone(),
 			backend_type: bi.backend_type,
 			protocol: bp,
+			provider,
+			model,
 		});
 	}
 }

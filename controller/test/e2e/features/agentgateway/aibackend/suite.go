@@ -87,14 +87,14 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 func (s *testingSuite) TestRouting() {
 	server := s.NewMockReqRespServer(MockReqResp{
 		Req:  "What is the name of this project?",
-		Resp: "The name of this project is kgateway",
+		Resp: "The name of this project is agentgateway",
 	})
 
 	common.BaseGateway.Send(
 		s.T(),
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
-			Body:       gomega.ContainSubstring(`The name of this project is kgateway`),
+			Body:       gomega.ContainSubstring(`The name of this project is agentgateway`),
 		},
 		curl.WithPath("/v1/chat/completions"),
 		curl.WithPostBody(`{"messages": [{"role": "user", "content": "What is the name of this project?"}]}`),
@@ -207,7 +207,7 @@ func (s *testingSuite) TestWebhook() {
 }
 
 func (s *testingSuite) TestFailover() {
-	expectedResponse := "The name of this project is kgateway"
+	expectedResponse := "The name of this project is agentgateway"
 
 	server := s.NewMockReqRespServer(MockReqResp{
 		Req:  "What is the name of this project?",
@@ -225,6 +225,7 @@ func (s *testingSuite) TestFailover() {
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body:       gomega.ContainSubstring(expectedResponse),
+			Headers:    map[string]any{"x-backend-model": "gpt-4o-mini"},
 		},
 		curl.WithPath("/v1/chat/completions"),
 		curl.WithPostBody(`{"messages": [{"role": "user", "content": "What is the name of this project?"}]}`),
