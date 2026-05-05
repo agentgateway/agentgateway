@@ -501,6 +501,8 @@ pub fn parse_config(
 		},
 		session_encoder,
 		oidc_cookie_encoder,
+		pricing: raw.pricing.unwrap_or_default(),
+		usage_store_path: raw.usage_store_path,
 		hbone: Arc::new(agent_hbone::Config {
 			// window size: per-stream limit
 			window_size: parse("HTTP2_STREAM_WINDOW_SIZE")?

@@ -40,6 +40,7 @@ use crate::telemetry::metrics::{
 };
 use crate::telemetry::trc;
 use crate::telemetry::trc::TraceParent;
+use crate::telemetry::usage_store::{PricingConfig, UsageStore};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendInfo, BindKey, ListenerName, RouteName, Target};
 use crate::types::loadbalancer::ActiveHandle;
@@ -572,6 +573,23 @@ impl DropOnLog {
 						.observe(throughput);
 				}
 			}
+
+			// ── Per-user usage tracking ──────────────────────────────────────
+			// Attribute the request to the authenticated JWT subject when
+			// present, or "anonymous" when no JWT-authenticated user exists.
+			let user_id = log.jwt_sub.as_deref().unwrap_or("anonymous");
+			let model = llm_response.response_model
+				.as_deref()
+				.unwrap_or_else(|| llm_response.request_model.as_str());
+			log.usage_store.record(
+				user_id,
+				model,
+				llm_response.input_tokens.unwrap_or(0),
+				llm_response.output_tokens.unwrap_or(0),
+				llm_response.cached_input_tokens.unwrap_or(0),
+				llm_response.cache_creation_input_tokens.unwrap_or(0),
+				&log.pricing,
+			);
 		}
 	}
 }
@@ -589,9 +607,29 @@ impl RequestLog {
 		start: Timestamp,
 		tcp_info: TCPConnectionInfo,
 	) -> Self {
+		RequestLog::new_with_usage(
+			cel,
+			metrics,
+			Arc::new(UsageStore::new()),
+			Arc::new(PricingConfig::default()),
+			start,
+			tcp_info,
+		)
+	}
+
+	pub fn new_with_usage(
+		cel: CelLogging,
+		metrics: Arc<Metrics>,
+		usage_store: Arc<UsageStore>,
+		pricing: Arc<PricingConfig>,
+		start: Timestamp,
+		tcp_info: TCPConnectionInfo,
+	) -> Self {
 		RequestLog {
 			cel,
 			metrics,
+			usage_store,
+			pricing,
 			start,
 			tcp_info,
 			tls_info: None,
@@ -653,6 +691,8 @@ impl RequestLog {
 pub struct RequestLog {
 	pub cel: CelLogging,
 	pub metrics: Arc<Metrics>,
+	pub usage_store: Arc<UsageStore>,
+	pub pricing: Arc<PricingConfig>,
 	pub start: Timestamp,
 	pub tcp_info: TCPConnectionInfo,
 

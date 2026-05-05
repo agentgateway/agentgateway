@@ -1,0 +1,79 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# agentgateway config: proxy Anthropic traffic from opencode.
+#
+# Run from the repo root:
+#   export ANTHROPIC_API_KEY="sk-ant-..."
+#   ./target/release/agentgateway --file examples/opencode-anthropic/gateway.yaml
+#
+# The gateway listens on port 3000 and accepts requests in the Anthropic
+# Messages API format, forwarding them to api.anthropic.com.
+# opencode sends requests to http://localhost:3000 and never needs to
+# hold the real API key itself.
+#
+# Shell variable references are expanded before parsing so the API key
+# is read securely from the environment at startup.
+
+# config: sets gateway-level options (pricing, logging, etc.).
+# Pricing (USD per million tokens) powers the /usage endpoint on the
+# admin server (http://localhost:15000/usage).
+# Source: https://www.anthropic.com/pricing
+config:
+  pricing:
+    models:
+      # Sonnet 4.6 / 4.5 — 3.00 input, 15.00 output USD per MTok
+      claude-sonnet-4-6:
+        input: 3.00
+        output: 15.00
+        cacheRead: 0.30
+        cacheWrite: 3.75
+      claude-sonnet-4-5:
+        input: 3.00
+        output: 15.00
+        cacheRead: 0.30
+        cacheWrite: 3.75
+      claude-sonnet-4-5-20250929:
+        input: 3.00
+        output: 15.00
+        cacheRead: 0.30
+        cacheWrite: 3.75
+      # Opus 4.6 — 5.00 input, 25.00 output USD per MTok
+      claude-opus-4-6:
+        input: 5.00
+        output: 25.00
+        cacheRead: 0.50
+        cacheWrite: 6.25
+      claude-opus-4-5:
+        input: 15.00
+        output: 75.00
+        cacheRead: 1.50
+        cacheWrite: 18.75
+      # Haiku 4.5 — 1.00 input, 5.00 output USD per MTok
+      claude-haiku-4-5:
+        input: 1.00
+        output: 5.00
+        cacheRead: 0.10
+        cacheWrite: 1.25
+
+binds:
+- port: 3000
+  listeners:
+  - name: opencode-anthropic
+    routes:
+    - policies:
+        ai:
+          # Tell the gateway which request format to expect on each path.
+          # Without this, all paths default to OpenAI completions format,
+          # which breaks requests from opencode (which sends native Anthropic
+          # Messages API format to /v1/messages).
+          routes:
+            /v1/messages: messages
+            /v1/messages/count_tokens: anthropicTokenCount
+      backends:
+      - ai:
+          name: anthropic
+          provider:
+            anthropic: {}
+          policies:
+            backendAuth:
+              key: ${ANTHROPIC_API_KEY}

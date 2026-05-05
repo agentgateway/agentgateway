@@ -198,6 +198,14 @@ pub struct RawConfig {
 	_listener: serdes::RenamedField,
 
 	hbone: Option<RawHBONE>,
+
+	/// Token pricing for computing per-request cost.
+	#[serde(default)]
+	pricing: Option<crate::telemetry::usage_store::PricingConfig>,
+
+	/// Optional path to a JSON file for persisting usage records across restarts.
+	#[serde(default)]
+	usage_store_path: Option<PathBuf>,
 }
 
 mod removed {
@@ -505,6 +513,15 @@ pub struct Config {
 
 	pub backend: BackendConfig,
 	pub mcp: McpConfig,
+
+	/// Token pricing configuration used to compute per-request cost.
+	#[serde(default)]
+	pub pricing: crate::telemetry::usage_store::PricingConfig,
+
+	/// Optional path to a JSON file for persisting usage records across restarts.
+	/// When unset, usage data is stored in memory only and lost on restart.
+	#[serde(default)]
+	pub usage_store_path: Option<PathBuf>,
 }
 
 #[apply(schema!)]
@@ -616,6 +633,9 @@ pub struct ProxyInputs {
 
 	pub mcp_state: mcp::App,
 	pub ca: Option<Arc<CaClient>>,
+
+	pub usage_store: Arc<crate::telemetry::usage_store::UsageStore>,
+	pub pricing: Arc<crate::telemetry::usage_store::PricingConfig>,
 }
 
 impl ProxyInputs {
@@ -632,6 +652,8 @@ impl ProxyInputs {
 		mcp_state: mcp::App,
 		ca: Option<Arc<CaClient>>,
 	) -> Self {
+		let usage_store = Arc::new(crate::telemetry::usage_store::UsageStore::new());
+		let pricing = Arc::new(crate::telemetry::usage_store::PricingConfig::default());
 		Self {
 			cfg,
 			stores,
@@ -639,6 +661,8 @@ impl ProxyInputs {
 			metrics,
 			mcp_state,
 			ca,
+			usage_store,
+			pricing,
 		}
 	}
 }
