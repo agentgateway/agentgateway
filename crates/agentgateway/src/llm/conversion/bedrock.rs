@@ -443,6 +443,7 @@ pub mod from_completions {
 			metadata.extend(header_metadata);
 		}
 
+		let metadata = helpers::sanitize_request_metadata(metadata);
 		let metadata = if metadata.is_empty() {
 			None
 		} else {
@@ -1266,14 +1267,19 @@ pub mod from_messages {
 			None
 		};
 
-		// Build metadata from request field and x-bedrock-metadata header
-		let mut metadata = req.metadata.map(|m| m.fields).unwrap_or_default();
-
-		// Extract metadata from x-bedrock-metadata header (set by ExtAuthz or transformation policy)
-		if let Some(header_metadata) = helpers::extract_metadata_from_headers(headers) {
-			metadata.extend(header_metadata);
+		if let Some(metadata) = req.metadata.map(|m| m.fields)
+			&& !metadata.is_empty()
+		{
+			// Anthropic metadata is opaque to Bedrock requestMetadata validation. Preserve it
+			// in the Anthropic model request envelope instead of dropping provider-specific data.
+			upsert_additional_field("metadata", serde_json::json!(metadata));
 		}
 
+		// Extract Bedrock-native metadata from x-bedrock-metadata header (set by ExtAuthz or
+		// transformation policy). This is separate from Anthropic's model-specific metadata.
+		let metadata = helpers::sanitize_request_metadata(
+			helpers::extract_metadata_from_headers(headers).unwrap_or_default(),
+		);
 		let metadata = if metadata.is_empty() {
 			None
 		} else {
@@ -2025,6 +2031,7 @@ pub mod from_responses {
 			metadata.extend(header_metadata);
 		}
 
+		let metadata = sanitize_request_metadata(metadata);
 		let metadata = if metadata.is_empty() {
 			None
 		} else {
@@ -2577,6 +2584,9 @@ mod helpers {
 	use crate::llm::AIError;
 	use crate::llm::types::bedrock;
 
+	const BEDROCK_REQUEST_METADATA_MAX_ENTRIES: usize = 16;
+	const BEDROCK_REQUEST_METADATA_MAX_LEN: usize = 256;
+
 	pub fn create_cache_point() -> bedrock::CachePointBlock {
 		bedrock::CachePointBlock {
 			r#type: bedrock::CachePointType::Default,
@@ -2681,6 +2691,36 @@ mod helpers {
 		}
 
 		metadata
+	}
+
+	/// Bedrock Converse requestMetadata only accepts short strings from a restricted
+	/// character set. Keep compatible entries unchanged and drop incompatible ones.
+	pub fn sanitize_request_metadata(metadata: HashMap<String, String>) -> HashMap<String, String> {
+		metadata
+			.into_iter()
+			.filter(|(key, value)| {
+				is_valid_request_metadata_key(key) && is_valid_request_metadata_value(value)
+			})
+			.take(BEDROCK_REQUEST_METADATA_MAX_ENTRIES)
+			.collect()
+	}
+
+	fn is_valid_request_metadata_key(value: &str) -> bool {
+		!value.is_empty() && is_valid_request_metadata_value(value)
+	}
+
+	fn is_valid_request_metadata_value(value: &str) -> bool {
+		value.len() <= BEDROCK_REQUEST_METADATA_MAX_LEN
+			&& value.chars().all(is_valid_request_metadata_char)
+	}
+
+	fn is_valid_request_metadata_char(c: char) -> bool {
+		c.is_ascii_alphanumeric()
+			|| c.is_ascii_whitespace()
+			|| matches!(
+				c,
+				':' | '_' | '@' | '$' | '#' | '=' | '/' | '+' | ',' | '-' | '.'
+			)
 	}
 
 	pub fn extract_beta_headers(

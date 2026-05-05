@@ -153,6 +153,56 @@ fn test_metadata_from_header() {
 }
 
 #[test]
+fn test_messages_metadata_is_preserved_in_additional_model_request_fields() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let json_encoded_user_id = r#"{"device_id":"704cb53c2074e9","account_uuid":"","session_id":"180423cd-fe24-4f48-bbde-b4ab5bfd36e7"}"#;
+	let req = messages::typed::Request {
+		model: "anthropic.claude-3-sonnet".to_string(),
+		messages: vec![messages::typed::Message {
+			role: messages::typed::Role::User,
+			content: vec![messages::typed::ContentBlock::Text(
+				messages::typed::ContentTextBlock {
+					text: "Hello".to_string(),
+					citations: None,
+					cache_control: None,
+				},
+			)],
+		}],
+		max_tokens: 100,
+		metadata: Some(messages::typed::Metadata {
+			fields: std::collections::HashMap::from([
+				("user_id".to_string(), json_encoded_user_id.to_string()),
+				("department".to_string(), "engineering".to_string()),
+			]),
+		}),
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_k: None,
+		top_p: None,
+		tools: None,
+		tool_choice: None,
+		thinking: None,
+		output_config: None,
+	};
+
+	let out = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let additional_fields = out.additional_model_request_fields.unwrap();
+	let metadata = additional_fields.get("metadata").unwrap();
+
+	assert!(out.request_metadata.is_none());
+	assert_eq!(metadata["user_id"], json_encoded_user_id);
+	assert_eq!(metadata["department"], "engineering");
+}
+
+#[test]
 fn test_output_config_effort_without_thinking_is_passed_through() {
 	let provider = Provider {
 		model: None,
