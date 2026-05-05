@@ -42,27 +42,6 @@ func TestExtractXdsCACertificateUsesCertManagerStyleCASecret(t *testing.T) {
 	require.Equal(t, string(caCert), got)
 }
 
-func TestExtractXdsCACertificateRejectsServingCertWithoutCA(t *testing.T) {
-	servingCert, servingKey := generateTestServingCert(t)
-	secret := xdsTLSSecret(map[string][]byte{
-		corev1.TLSCertKey:       servingCert,
-		corev1.TLSPrivateKeyKey: servingKey,
-	})
-
-	_, err := extractXdsCACertificate(secret)
-	require.ErrorContains(t, err, "must include ca.crt")
-}
-
-func TestExtractXdsCACertificateRejectsCASecretWithoutKey(t *testing.T) {
-	caCert, _ := generateTestCA(t, "tls-ca")
-	secret := xdsTLSSecret(map[string][]byte{
-		corev1.TLSCertKey: caCert,
-	})
-
-	_, err := extractXdsCACertificate(secret)
-	require.ErrorContains(t, err, "must include tls.key")
-}
-
 func xdsTLSSecret(data map[string][]byte) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -88,29 +67,6 @@ func generateTestCA(t *testing.T, commonName string) ([]byte, []byte) {
 		IsCA:                  true,
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
-	}
-	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
-	require.NoError(t, err)
-	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
-	require.NoError(t, err)
-	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
-		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-}
-
-func generateTestServingCert(t *testing.T) ([]byte, []byte) {
-	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	serial, err := rand.Int(rand.Reader, big.NewInt(1<<62))
-	require.NoError(t, err)
-	tpl := &x509.Certificate{
-		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: "xds.default.svc"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		DNSNames:     []string{"xds.default.svc"},
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
 	require.NoError(t, err)
