@@ -1,0 +1,122 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: invalid-epp-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: test-gateway
+  rules:
+    - backendRefs:
+        - name: invalid-epp-pool
+          kind: InferencePool
+          group: inference.networking.k8s.io
+---
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: invalid-epp-pool
+  namespace: default
+spec:
+  endpointPickerRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: test-gateway
+  selector:
+    matchLabels:
+      app: gateway
+  targetPorts:
+    - number: 8080
+
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        inferenceRouting:
+          endpointPicker: {}
+          failureMode: FAIL_CLOSED
+      key: default/invalid-epp-pool:inference
+      name:
+        kind: InferencePool
+        name: invalid-epp-pool
+        namespace: default
+      target:
+        service:
+          hostname: invalid-epp-pool.default.inference.cluster.local
+          namespace: default
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: invalid-epp-pool.default.inference.cluster.local
+            namespace: default
+        weight: 1
+      key: default/invalid-epp-route.00.http
+      listenerKey: default/test-gateway.http
+      name:
+        kind: HTTPRoute
+        name: invalid-epp-route
+        namespace: default
+status:
+- apiVersion: inference.networking.k8s.io/v1
+  kind: InferencePool
+  metadata:
+    name: invalid-epp-pool
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: InferencePool has been accepted by controller agentgateway.dev/agentgateway
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: 'error: endpointPickerRef.group must be empty, got "gateway.networking.k8s.io";
+          endpointPickerRef.kind must be "Service", got "Gateway"; endpointPickerRef.port
+          must be specified'
+        reason: InvalidExtensionRef
+        status: "False"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: invalid-epp-route
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default
