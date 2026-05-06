@@ -2399,11 +2399,6 @@ impl ResponsePolicies {
 	) -> Result<(), ProxyResponse> {
 		let rh = &mut self.response_headers;
 
-		if let Some(llm_info) = l.llm_response.take() {
-			let llm_ctx = crate::cel::LLMContext::from(llm_info);
-			resp.extensions_mut().insert(llm_ctx);
-		}
-
 		self
 			.route_response_header
 			.apply("response header modifier", l, resp, rh)
