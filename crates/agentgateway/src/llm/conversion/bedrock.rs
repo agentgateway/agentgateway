@@ -420,10 +420,9 @@ pub mod from_completions {
 			None
 		};
 
-		// Build metadata from:
+		// Build gateway-generated metadata from:
 		// - OpenAI `user` field (normalized as user_id)
 		// - OpenAI `metadata` field (agentgateway uses this to carry guardrail/model-armor knobs through Messages→Completions)
-		// - x-bedrock-metadata header (set by ExtAuthz or transformation policy)
 		let mut metadata = req
 			.user
 			.map(|user| HashMap::from([("user_id".to_string(), user)]))
@@ -438,12 +437,14 @@ pub mod from_completions {
 			}
 		}
 
-		// Extract metadata from x-bedrock-metadata header (set by ExtAuthz or transformation policy)
+		let mut metadata = helpers::sanitize_request_metadata(metadata);
+
+		// x-bedrock-metadata is an explicit Bedrock requestMetadata escape hatch. Forward it
+		// unchanged so Bedrock, not the gateway, rejects operator-supplied invalid values.
 		if let Some(header_metadata) = super::helpers::extract_metadata_from_headers(headers) {
 			metadata.extend(header_metadata);
 		}
 
-		let metadata = helpers::sanitize_request_metadata(metadata);
 		let metadata = if metadata.is_empty() {
 			None
 		} else {
@@ -1275,11 +1276,9 @@ pub mod from_messages {
 			upsert_additional_field("metadata", serde_json::json!(metadata));
 		}
 
-		// Extract Bedrock-native metadata from x-bedrock-metadata header (set by ExtAuthz or
-		// transformation policy). This is separate from Anthropic's model-specific metadata.
-		let metadata = helpers::sanitize_request_metadata(
-			helpers::extract_metadata_from_headers(headers).unwrap_or_default(),
-		);
+		// x-bedrock-metadata is an explicit Bedrock requestMetadata escape hatch. Forward it
+		// unchanged so Bedrock, not the gateway, rejects operator-supplied invalid values.
+		let metadata = helpers::extract_metadata_from_headers(headers).unwrap_or_default();
 		let metadata = if metadata.is_empty() {
 			None
 		} else {
@@ -2024,14 +2023,16 @@ pub mod from_responses {
 			None
 		};
 
-		// Extract metadata from request body and merge with headers (consistent with Messages/Completions)
-		let mut metadata = req.metadata.unwrap_or_default();
+		// Sanitize gateway-generated/request-body metadata before merging explicit Bedrock
+		// metadata from headers.
+		let mut metadata = sanitize_request_metadata(req.metadata.unwrap_or_default());
 
+		// x-bedrock-metadata is an explicit Bedrock requestMetadata escape hatch. Forward it
+		// unchanged so Bedrock, not the gateway, rejects operator-supplied invalid values.
 		if let Some(header_metadata) = extract_metadata_from_headers(headers) {
 			metadata.extend(header_metadata);
 		}
 
-		let metadata = sanitize_request_metadata(metadata);
 		let metadata = if metadata.is_empty() {
 			None
 		} else {

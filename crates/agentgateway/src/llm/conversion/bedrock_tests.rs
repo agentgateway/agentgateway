@@ -114,7 +114,7 @@ fn test_metadata_from_header() {
 	let mut headers = HeaderMap::new();
 	headers.insert(
 		"x-bedrock-metadata",
-		r#"{"user_id": "user123", "department": "engineering"}"#
+		r#"{"user_id": "user123", "department": "engineering", "json_user": "{\"device_id\":\"abc\"}", "bad?key": "bad{}"}"#
 			.parse()
 			.unwrap(),
 	);
@@ -150,6 +150,11 @@ fn test_metadata_from_header() {
 
 	assert_eq!(metadata.get("user_id"), Some(&"user123".to_string()));
 	assert_eq!(metadata.get("department"), Some(&"engineering".to_string()));
+	assert_eq!(
+		metadata.get("json_user"),
+		Some(&r#"{"device_id":"abc"}"#.to_string())
+	);
+	assert_eq!(metadata.get("bad?key"), Some(&"bad{}".to_string()));
 }
 
 #[test]
@@ -668,6 +673,7 @@ fn test_metadata_from_completions_metadata_field() {
 		metadata: Some(json!({
 			"user_id": "user123",
 			"department": "engineering",
+			"json_user": r#"{"device_id":"from-body"}"#,
 			// Non-string values should be ignored by the Bedrock metadata bridge
 			"nonstr": 123
 		})),
@@ -679,12 +685,19 @@ fn test_metadata_from_completions_metadata_field() {
 		store: None,
 		reasoning_effort: None,
 	};
+	let mut headers = HeaderMap::new();
+	headers.insert(
+		"x-bedrock-metadata",
+		r#"{"json_user": "{\"device_id\":\"from-header\"}", "bad?key": "bad{}"}"#
+			.parse()
+			.unwrap(),
+	);
 
 	let out = super::from_completions::translate_internal(
 		req,
 		"anthropic.claude-3-sonnet".to_string(),
 		&provider,
-		None,
+		Some(&headers),
 		None,
 	);
 	let md = out.request_metadata.unwrap();
@@ -692,6 +705,11 @@ fn test_metadata_from_completions_metadata_field() {
 	// `metadata.user_id` should win over the `user`-derived value.
 	assert_eq!(md.get("user_id"), Some(&"user123".to_string()));
 	assert_eq!(md.get("department"), Some(&"engineering".to_string()));
+	assert_eq!(
+		md.get("json_user"),
+		Some(&r#"{"device_id":"from-header"}"#.to_string())
+	);
+	assert_eq!(md.get("bad?key"), Some(&"bad{}".to_string()));
 	assert!(!md.contains_key("nonstr"));
 }
 
@@ -989,6 +1007,45 @@ fn test_responses_json_schema_text_format_maps_to_converse_output_config() {
 		translated["outputConfig"]["textFormat"]["structure"]["jsonSchema"]["schema"],
 		serde_json::to_string(&schema).unwrap()
 	);
+}
+
+#[test]
+fn test_responses_metadata_from_header_is_forwarded_without_sanitizing() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req: types::responses::Request = serde_json::from_value(json!({
+		"model": "gpt-4o",
+		"max_output_tokens": 16,
+		"input": "Hello",
+		"metadata": {
+			"safe": "ok",
+			"json_user": "{\"device_id\":\"from-body\"}"
+		}
+	}))
+	.expect("valid responses request");
+
+	let mut headers = HeaderMap::new();
+	headers.insert(
+		"x-bedrock-metadata",
+		r#"{"json_user": "{\"device_id\":\"from-header\"}", "bad?key": "bad{}"}"#
+			.parse()
+			.unwrap(),
+	);
+
+	let translated = super::from_responses::translate(&req, &provider, Some(&headers), None).unwrap();
+	let translated: serde_json::Value = serde_json::from_slice(&translated).unwrap();
+
+	assert_eq!(translated["requestMetadata"]["safe"], "ok");
+	assert_eq!(
+		translated["requestMetadata"]["json_user"],
+		r#"{"device_id":"from-header"}"#
+	);
+	assert_eq!(translated["requestMetadata"]["bad?key"], "bad{}");
 }
 
 #[test]
