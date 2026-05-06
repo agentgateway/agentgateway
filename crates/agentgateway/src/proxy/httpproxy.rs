@@ -1072,7 +1072,6 @@ impl HTTPProxy {
 		let start = log.start;
 		let call = make_backend_call(
 			self.inputs.clone(),
-			hbone_source_for_bind(&self.inputs, &self.bind_name),
 			route_policies.clone(),
 			&selected_backend.backend.backend,
 			backend_policies,
@@ -1192,21 +1191,6 @@ async fn handle_upgrade(
 		drop(log);
 	});
 	Ok(resp)
-}
-
-/// Resolve a bind to the HBONE source role it should advertise on outbound
-/// CONNECTs. Returns `None` if the bind is unknown or its tunnel protocol has
-/// no associated role.
-pub(crate) fn hbone_source_for_bind(
-	inputs: &ProxyInputs,
-	bind_name: &BindKey,
-) -> Option<HboneSourceRole> {
-	let binds = inputs.stores.read_binds();
-	let tp = binds
-		.bind(bind_name)
-		.map(|b| b.tunnel_protocol)
-		.unwrap_or(TunnelProtocol::Direct);
-	HboneSourceRole::from_tunnel(tp)
 }
 
 /// Build the `x-istio-source` / `x-forwarded-network` / `baggage` headers added
@@ -1427,7 +1411,6 @@ impl DerefMut for MustSnapshot<'_> {
 #[allow(clippy::too_many_arguments)]
 async fn make_backend_call(
 	inputs: Arc<ProxyInputs>,
-	hbone_source: Option<HboneSourceRole>,
 	route_policies: Arc<store::LLMRequestPolicies>,
 	backend: &Backend,
 	base_policies: BackendPolicies,
@@ -1438,6 +1421,11 @@ async fn make_backend_call(
 	let policy_client = PolicyClient {
 		inputs: inputs.clone(),
 	};
+	let hbone_source = req
+		.extensions()
+		.get::<WaypointService>()
+		.is_some()
+		.then_some(HboneSourceRole::Waypoint);
 
 	// The MCP backend aggregates multiple backends into a single backend.
 	// In some cases, we want to treat this as a normal backend, so we swap it out.
@@ -2596,7 +2584,6 @@ impl PolicyClient {
 		Box::pin(async move {
 			make_backend_call(
 				self.inputs.clone(),
-				None,
 				Arc::new(LLMRequestPolicies::default()),
 				&backend,
 				pols,

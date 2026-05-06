@@ -178,7 +178,10 @@ impl TCPProxy {
 			&selected_backend.backend.backend,
 			backend_policies,
 		)?;
-		let hbone_source = crate::proxy::httpproxy::hbone_source_for_bind(&inputs, &bind_name);
+		let hbone_source = connection
+			.ext::<WaypointService>()
+			.is_some()
+			.then_some(crate::client::HboneSourceRole::Waypoint);
 
 		let bi = selected_backend.backend.backend.backend_info();
 		log.endpoint = Some(backend_call.target.clone());

@@ -21,10 +21,11 @@ static BAGGAGE: http::HeaderName = http::HeaderName::from_static("baggage");
 /// `baggage` header is added (only set on the inner / terminating CONNECT).
 fn apply_hbone_headers(req: &mut ::http::Request<()>, headers: &HboneHeaders, inner: bool) {
 	let h = req.headers_mut();
-	if let Some(role) = headers.source
-		&& let Ok(v) = ::http::HeaderValue::from_str(role.as_header_value())
-	{
-		h.insert(X_ISTIO_SOURCE.clone(), v);
+	if let Some(role) = headers.source {
+		h.insert(
+			X_ISTIO_SOURCE.clone(),
+			http::HeaderValue::from_static(role.as_header_value()),
+		);
 	}
 	if !headers.forwarded_network.is_empty()
 		&& let Ok(v) = ::http::HeaderValue::from_str(&headers.forwarded_network)
