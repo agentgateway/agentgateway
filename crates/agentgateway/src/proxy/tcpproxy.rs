@@ -178,6 +178,7 @@ impl TCPProxy {
 			&selected_backend.backend.backend,
 			backend_policies,
 		)?;
+		let hbone_source = crate::proxy::httpproxy::hbone_source_for_bind(&inputs, &bind_name);
 
 		let bi = selected_backend.backend.backend.backend_info();
 		log.endpoint = Some(backend_call.target.clone());
@@ -186,6 +187,7 @@ impl TCPProxy {
 		let transport = crate::proxy::httpproxy::build_transport(
 			&inputs,
 			&backend_call,
+			hbone_source,
 			backend_call.backend_policies.backend_tls.clone(),
 			backend_call.backend_policies.tunnel.as_ref(),
 			// TODO: for TCP we should actually probably do something here: telling it to not use ALPN at all?

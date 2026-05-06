@@ -19,7 +19,7 @@ use types::agent::*;
 use types::discovery::*;
 
 use crate::cel::{BackendContext, RequestTime};
-use crate::client::{ApplicationTransport, Transport};
+use crate::client::{ApplicationTransport, HboneHeaders, HboneSourceRole, Transport};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::{ExtProcRequest, InferenceRoutingDestinationMode};
 use crate::http::filters::{AutoHostname, BackendRequestTimeout};
@@ -1072,6 +1072,7 @@ impl HTTPProxy {
 		let start = log.start;
 		let call = make_backend_call(
 			self.inputs.clone(),
+			hbone_source_for_bind(&self.inputs, &self.bind_name),
 			route_policies.clone(),
 			&selected_backend.backend.backend,
 			backend_policies,
@@ -1193,9 +1194,53 @@ async fn handle_upgrade(
 	Ok(resp)
 }
 
+/// Resolve a bind to the HBONE source role it should advertise on outbound
+/// CONNECTs. Returns `None` if the bind is unknown or its tunnel protocol has
+/// no associated role.
+pub(crate) fn hbone_source_for_bind(
+	inputs: &ProxyInputs,
+	bind_name: &BindKey,
+) -> Option<HboneSourceRole> {
+	let binds = inputs.stores.read_binds();
+	let tp = binds
+		.bind(bind_name)
+		.map(|b| b.tunnel_protocol)
+		.unwrap_or(TunnelProtocol::Direct);
+	HboneSourceRole::from_tunnel(tp)
+}
+
+/// Build the `x-istio-source` / `x-forwarded-network` / `baggage` headers added
+/// to outbound HBONE CONNECTs.
+pub(crate) fn build_hbone_headers(
+	inputs: &ProxyInputs,
+	source: Option<HboneSourceRole>,
+) -> HboneHeaders {
+	let baggage = inputs
+		.stores
+		.read_discovery()
+		.self_workload
+		.get()
+		.map(format_baggage)
+		.map(strng::new);
+	HboneHeaders {
+		source,
+		forwarded_network: inputs.cfg.network.clone(),
+		baggage,
+	}
+}
+
+/// Format matches Istio's `baggageFormat`.
+fn format_baggage(w: &Workload) -> String {
+	format!(
+		"k8s.cluster.name={},k8s.namespace.name={},k8s.deployment.name={},service.name={},service.version={}",
+		w.cluster_id, w.namespace, w.workload_name, w.canonical_name, w.canonical_revision,
+	)
+}
+
 pub async fn build_transport(
 	inputs: &ProxyInputs,
 	backend_call: &BackendCall,
+	hbone_source: Option<HboneSourceRole>,
 	backend_tls: Option<BackendTLS>,
 	backend_tunnel: Option<&backend::Tunnel>,
 	backend_http_version_override: Option<::http::Version>,
@@ -1217,6 +1262,7 @@ pub async fn build_transport(
 		let transport = Box::pin(build_transport(
 			inputs,
 			&call,
+			hbone_source,
 			tunnel_backend_tls,
 			None,
 			// Currently we only support HTTP/1.1
@@ -1269,6 +1315,7 @@ pub async fn build_transport(
 				gateway_identity: gw_identity.clone(),
 				waypoint_identities: waypoint_identities.clone(),
 				inner: app_transport,
+				headers: build_hbone_headers(inputs, hbone_source),
 			});
 		} else {
 			warn!("wanted double hbone but CA is not available");
@@ -1295,7 +1342,11 @@ pub async fn build_transport(
 		},
 		(Some((InboundProtocol::HBONE, idents)), Some(ca)) => {
 			if ca.get_identity().await.is_ok() {
-				Transport::Hbone(app_transport, idents.clone())
+				Transport::Hbone(
+					app_transport,
+					idents.clone(),
+					build_hbone_headers(inputs, hbone_source),
+				)
 			} else {
 				warn!("wanted TLS but CA is not available");
 				app_transport.into()
@@ -1373,8 +1424,10 @@ impl DerefMut for MustSnapshot<'_> {
 	}
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn make_backend_call(
 	inputs: Arc<ProxyInputs>,
+	hbone_source: Option<HboneSourceRole>,
 	route_policies: Arc<store::LLMRequestPolicies>,
 	backend: &Backend,
 	base_policies: BackendPolicies,
@@ -1564,7 +1617,6 @@ async fn make_backend_call(
 		},
 		Backend::Invalid => return Err(ProxyResponse::from(ProxyError::BackendDoesNotExist)),
 	};
-
 	// Apply auth before LLM request setup, so the providers can assume auth is in standardized header
 	// Apply auth as early as possible so any ext_proc or transformations won't be repeated on retries in case it fails.
 	let backend_info = auth::BackendInfo {
@@ -1765,6 +1817,7 @@ async fn make_backend_call(
 	let transport = build_transport(
 		&inputs,
 		&backend_call,
+		hbone_source,
 		backend_call.backend_policies.backend_tls.clone(),
 		backend_call.backend_policies.tunnel.as_ref(),
 		backend_call
@@ -2543,6 +2596,7 @@ impl PolicyClient {
 		Box::pin(async move {
 			make_backend_call(
 				self.inputs.clone(),
+				None,
 				Arc::new(LLMRequestPolicies::default()),
 				&backend,
 				pols,
