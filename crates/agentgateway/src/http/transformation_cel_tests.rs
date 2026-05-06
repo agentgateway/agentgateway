@@ -149,13 +149,15 @@ async fn test_transformation_response_json_body_rewrite() {
 		response: Some(super::LocalTransform {
 			body: Some(
 				r#"
-json(response.body).merge({
-	"verification_uri": "https://gateway.example.com/oauth/verify",
-	"verification_uri_complete": "https://gateway.example.com/oauth/verify?user_code=" + json(response.body).user_code
-})
-"#
+json(response.body).with(body,
+	body.merge({
+		"verification_uri": "https://gateway.example.com/oauth/verify",
+		"verification_uri_complete": "https://gateway.example.com/oauth/verify?user_code=" + body.user_code
+	})
+)
+	"#
 					.into(),
-			),
+				),
 			..Default::default()
 		}),
 	};

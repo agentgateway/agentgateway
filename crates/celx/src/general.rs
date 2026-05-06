@@ -36,8 +36,6 @@ pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("regexReplace", regex_replace);
 	ctx.add_function("fail", fail);
 	ctx.add_function("uuid", uuid_generate);
-	ctx.add_function("formDecode", form_decode);
-	ctx.add_function("formEncode", form_encode);
 
 	// Support legacy and modern name
 	ctx.add_function("base64Encode", base64_encode);

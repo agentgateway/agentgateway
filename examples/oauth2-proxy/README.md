@@ -55,10 +55,12 @@ policies:
     response:
       body: |
         request.path == "/oauth/devicecode" ?
-          json(response.body).merge({
-            "verification_uri": "https://gateway.example.com/oauth/verify",
-            "verification_uri_complete": "https://gateway.example.com/oauth/verify?user_code=" + json(response.body).user_code
-          }) :
+          json(response.body).with(body,
+            body.merge({
+              "verification_uri": "https://gateway.example.com/oauth/verify",
+              "verification_uri_complete": "https://gateway.example.com/oauth/verify?user_code=" + body.user_code
+            })
+          ) :
         response.body
 ```
 
