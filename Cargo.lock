@@ -26,6 +26,7 @@ dependencies = [
  "base64",
  "cel",
  "divan",
+ "hashbrown 0.17.0",
  "hex",
  "ipnet",
  "md-5 0.11.0",

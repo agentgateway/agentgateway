@@ -34,8 +34,8 @@ Requests to `http://localhost:3000` should automatically redirect to a GitHub si
 Some OAuth 2.0 Device Authorization Grant clients send empty
 `application/x-www-form-urlencoded` POST bodies and expect the gateway to add
 public-client fields before forwarding to the identity provider. A
-`transformation` policy can now parse the existing form body, merge required
-fields, and re-encode it with `form.decode` and `form.encode`.
+`transformation` policy can parse the existing form body, merge required fields,
+and re-encode it with `form.decode` and `form.encode`.
 
 ```yaml
 policies:

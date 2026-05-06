@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ::cel::extractors::{Argument, This};
-use ::cel::objects::{ListValue, MapValue, StringValue, ValueType};
+use ::cel::objects::{Key, MapValue, StringValue, ValueType};
 use ::cel::{Context, FunctionContext, ResolveResult, Value};
 use base64::alphabet;
 use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
@@ -109,32 +109,29 @@ pub fn form_decode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> Resolv
 	let v = v.load(ftx)?.always_materialize_owned();
 	let bytes = v.as_bytes_pre_materialized()?;
 	let pairs = form_urlencoded::parse(bytes);
-	let mut values = std::collections::HashMap::<String, Vec<String>>::new();
+	let mut map = hashbrown::HashMap::<Key, Value<'static>>::new();
 	for (key, value) in pairs {
-		values
-			.entry(key.into_owned())
-			.or_default()
-			.push(value.into_owned());
+		let key = Key::from(key.into_owned());
+		let value = Value::from(value.into_owned());
+		match map.entry(key) {
+			hashbrown::hash_map::Entry::Vacant(entry) => {
+				entry.insert(value);
+			},
+			hashbrown::hash_map::Entry::Occupied(mut entry) => match entry.get_mut() {
+				Value::List(values) => {
+					let mut values = values.as_ref().to_vec();
+					values.push(value);
+					entry.insert(Value::from(values));
+				},
+				existing => {
+					let first = std::mem::replace(existing, Value::Null);
+					entry.insert(Value::from(vec![first, value]));
+				},
+			},
+		}
 	}
 
-	let map = values
-		.into_iter()
-		.map(|(key, values)| {
-			let value = if values.len() == 1 {
-				Value::from(values.into_iter().next().unwrap())
-			} else {
-				Value::List(ListValue::Owned(
-					values
-						.into_iter()
-						.map(Value::from)
-						.collect::<Vec<_>>()
-						.into(),
-				))
-			};
-			(key, value)
-		})
-		.collect::<std::collections::HashMap<_, _>>();
-	Ok(Value::Map(MapValue::from(map)))
+	Ok(Value::Map(MapValue::Owned(Arc::new(map))))
 }
 
 pub fn form_encode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
