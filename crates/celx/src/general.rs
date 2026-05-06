@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ::cel::extractors::{Argument, This};
-use ::cel::objects::{MapValue, StringValue, ValueType};
+use ::cel::objects::{ListValue, MapValue, StringValue, ValueType};
 use ::cel::{Context, FunctionContext, ResolveResult, Value};
 use base64::alphabet;
 use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
@@ -14,6 +14,7 @@ use serde::Deserializer;
 use sha1::Sha1;
 use sha2::Sha256;
 use sha2::digest::Digest;
+use url::form_urlencoded;
 use uuid::Uuid;
 
 pub fn insert_all(ctx: &mut Context) {
@@ -35,12 +36,16 @@ pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("regexReplace", regex_replace);
 	ctx.add_function("fail", fail);
 	ctx.add_function("uuid", uuid_generate);
+	ctx.add_function("formDecode", form_decode);
+	ctx.add_function("formEncode", form_encode);
 
 	// Support legacy and modern name
 	ctx.add_function("base64Encode", base64_encode);
 	ctx.add_function("base64Decode", base64_decode);
 	ctx.add_qualified_function("base64", "encode", base64_encode);
 	ctx.add_qualified_function("base64", "decode", base64_decode);
+	ctx.add_qualified_function("form", "decode", form_decode);
+	ctx.add_qualified_function("form", "encode", form_encode);
 	ctx.add_qualified_function("sha1", "encode", sha1_encode);
 	ctx.add_qualified_function("sha256", "encode", sha256_encode);
 	ctx.add_qualified_function("md5", "encode", md5_encode);
@@ -98,6 +103,70 @@ pub fn sha1_encode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> Resolv
 
 pub fn md5_encode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
 	hash_encode::<Md5>(ftx, v)
+}
+
+pub fn form_decode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
+	let v = v.load(ftx)?.always_materialize_owned();
+	let bytes = v.as_bytes_pre_materialized()?;
+	let pairs = form_urlencoded::parse(bytes);
+	let mut values = std::collections::HashMap::<String, Vec<String>>::new();
+	for (key, value) in pairs {
+		values
+			.entry(key.into_owned())
+			.or_default()
+			.push(value.into_owned());
+	}
+
+	let map = values
+		.into_iter()
+		.map(|(key, values)| {
+			let value = if values.len() == 1 {
+				Value::from(values.into_iter().next().unwrap())
+			} else {
+				Value::List(ListValue::Owned(
+					values
+						.into_iter()
+						.map(Value::from)
+						.collect::<Vec<_>>()
+						.into(),
+				))
+			};
+			(key, value)
+		})
+		.collect::<std::collections::HashMap<_, _>>();
+	Ok(Value::Map(MapValue::from(map)))
+}
+
+pub fn form_encode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
+	let v = v.load_value(ftx)?;
+	let map = must_map(v)?;
+	let mut fields = map
+		.iter_owned()
+		.map(|(key, value)| (key.to_string(), value.always_materialize_owned()))
+		.collect::<Vec<_>>();
+	fields.sort_by(|(left, _), (right, _)| left.cmp(right));
+
+	let mut serializer = form_urlencoded::Serializer::new(String::new());
+	for (key, value) in fields {
+		match value {
+			Value::List(values) => {
+				for value in values.as_ref() {
+					let value = value
+						.as_str()
+						.map_err(|e| ftx.error(format!("invalid form value for key {key}: {e}")))?;
+					serializer.append_pair(&key, value.as_ref());
+				}
+			},
+			Value::Null => {},
+			value => {
+				let value = value
+					.as_str()
+					.map_err(|e| ftx.error(format!("invalid form value for key {key}: {e}")))?;
+				serializer.append_pair(&key, value.as_ref());
+			},
+		}
+	}
+	Ok(serializer.finish().into())
 }
 
 fn with<'a, 'rf, 'b>(
