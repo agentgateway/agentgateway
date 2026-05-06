@@ -1,0 +1,90 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: http
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    extProc:
+      backendRef:
+        name: extproc-svc
+        port: 4444
+      requestAttributes:
+        method: request.method
+      responseAttributes:
+        status: response.code
+      metadataContext:
+        envoy.filters.http.ext_proc:
+          path: request.path
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extproc-svc
+  namespace: default
+spec:
+  ports:
+    - port: 4444
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/http:extproc:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: http
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        extProc:
+          metadataContext:
+            envoy.filters.http.ext_proc:
+              context:
+                path: request.path
+          requestAttributes:
+            method: request.method
+          responseAttributes:
+            status: response.code
+          target:
+            port: 4444
+            service:
+              hostname: extproc-svc.default.svc.cluster.local
+              namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: http
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
