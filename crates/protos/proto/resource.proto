@@ -937,6 +937,59 @@ message TrafficPolicySpec {
     Mode mode = 1;
   }
 
+  // OIDC browser authentication configuration.
+  //
+  // Provider metadata (issuer validation, authorization/token endpoints, and
+  // discovered jwks_uri) is resolved by the controller from the issuer's
+  // discovery document. The dataplane never fetches discovery or JWKS URLs
+  // itself.
+  message OIDC {
+    // Client authentication method at the token endpoint.
+    //
+    // `NONE` is public-client mode: no client authentication is presented and
+    // `client_secret` must be empty on the wire. PKCE still protects the
+    // authorization code exchange in the OIDC callback flow.
+    enum TokenEndpointAuth {
+      TOKEN_ENDPOINT_AUTH_UNSPECIFIED = 0;
+      CLIENT_SECRET_BASIC = 1;
+      CLIENT_SECRET_POST = 2;
+      NONE = 3;
+    }
+
+    // Runtime session namespace. Encoded as "route/<key>" or "policy/<key>",
+    // where <key> is the effective emitted xDS resource key.
+    string policy_id = 1;
+    // IdP issuer identifier (matches the "iss" claim on id tokens).
+    string issuer = 2;
+
+    // Absolute authorization endpoint URL (the /authorize URL).
+    string authorization_endpoint = 3;
+
+    // Absolute token endpoint URL (the /token URL).
+    string token_endpoint = 4;
+
+    // Client authentication method advertised by the IdP (or overridden by the
+    // user).
+    TokenEndpointAuth token_endpoint_auth = 5;
+
+    // JWKS content, as JSON, resolved by the controller through the shared
+    // JWKS pipeline. The dataplane does not fetch jwks_uri.
+    string jwks_inline = 6;
+
+    // OIDC client identifier registered with the IdP.
+    string client_id = 7;
+
+    // OIDC client secret. SECURITY: plaintext on the wire — xDS MUST be
+    // TLS-protected; not encrypted at the proto layer.
+    string client_secret = 8;
+
+    // Absolute callback URI registered with the IdP.
+    string redirect_uri = 9;
+
+    // Requested scopes. When empty, the dataplane falls back to ["openid"].
+    repeated string scopes = 10;
+  }
+
   PolicyPhase phase = 1;
   oneof kind {
     Timeout timeout = 2;
@@ -959,6 +1012,7 @@ message TrafficPolicySpec {
     BasicAuthentication basic_auth = 19;
     APIKey api_key_auth = 20;
     HostRewrite host_rewrite = 21;
+    OIDC oidc = 22;
   }
 }
 

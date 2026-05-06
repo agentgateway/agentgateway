@@ -6,25 +6,12 @@ import (
 	"time"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotecache"
 )
 
-type OwnerKind string
-
-const (
-	OwnerKindPolicy  OwnerKind = "AgentgatewayPolicy"
-	OwnerKindBackend OwnerKind = "AgentgatewayBackend"
-)
-
-type JwksOwnerID struct {
-	Kind      OwnerKind
-	Namespace string
-	Name      string
-	Path      string
-}
-
-func (o JwksOwnerID) String() string {
-	return fmt.Sprintf("%s/%s/%s#%s", o.Kind, o.Namespace, o.Name, o.Path)
-}
+// JwksOwnerID is the JWKS-flavored alias for remotecache.OwnerID; identical
+// layout, package-local name for readability at JWKS call sites.
+type JwksOwnerID = remotecache.OwnerID
 
 type OwnerKey = JwksOwnerID
 
@@ -93,7 +80,7 @@ func PolicyJWTProviderLookupOwner(namespace, name string, providerIndex int, pro
 
 	return RemoteJwksOwner{
 		ID: JwksOwnerID{
-			Kind:      OwnerKindPolicy,
+			Kind:      remotecache.OwnerKindPolicy,
 			Namespace: namespace,
 			Name:      name,
 			Path:      fmt.Sprintf("spec.traffic.jwtAuthentication.providers[%d].jwks.remote", providerIndex),
@@ -107,7 +94,7 @@ func PolicyJWTProviderLookupOwner(namespace, name string, providerIndex int, pro
 func PolicyBackendMCPAuthenticationLookupOwner(namespace, name string, remote agentgateway.RemoteJWKS) RemoteJwksOwner {
 	return RemoteJwksOwner{
 		ID: JwksOwnerID{
-			Kind:      OwnerKindPolicy,
+			Kind:      remotecache.OwnerKindPolicy,
 			Namespace: namespace,
 			Name:      name,
 			Path:      "spec.backend.mcp.authentication.jwks",
@@ -121,7 +108,7 @@ func PolicyBackendMCPAuthenticationLookupOwner(namespace, name string, remote ag
 func backendMCPAuthenticationOwner(namespace, name string, remote agentgateway.RemoteJWKS) RemoteJwksOwner {
 	return RemoteJwksOwner{
 		ID: JwksOwnerID{
-			Kind:      OwnerKindBackend,
+			Kind:      remotecache.OwnerKindBackend,
 			Namespace: namespace,
 			Name:      name,
 			Path:      "spec.policies.mcp.authentication.jwks",

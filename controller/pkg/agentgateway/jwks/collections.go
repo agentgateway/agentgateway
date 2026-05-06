@@ -1,19 +1,18 @@
 package jwks
 
 import (
-	"cmp"
+	"time"
 
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/slices"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotecache"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
+	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 )
 
-var FetchKeyIndexCollectionFunc = krt.WithIndexCollectionFromString(func(s string) remotehttp.FetchKey {
-	return remotehttp.FetchKey(s)
-})
+var collectionsLogger = logging.New("jwks_collections")
 
 type CollectionInputs struct {
 	AgentgatewayPolicies krt.Collection[*agentgateway.AgentgatewayPolicy]
@@ -23,10 +22,6 @@ type CollectionInputs struct {
 }
 
 type Collections struct {
-	PolicyOwners   krt.Collection[RemoteJwksOwner]
-	BackendOwners  krt.Collection[RemoteJwksOwner]
-	Owners         krt.Collection[RemoteJwksOwner]
-	Sources        krt.Collection[JwksSource]
 	SharedRequests krt.Collection[SharedJwksRequest]
 }
 
@@ -39,10 +34,10 @@ func NewCollections(inputs CollectionInputs) Collections {
 	}, inputs.KrtOpts.ToOptions("BackendJwksOwners")...)
 	owners := krt.JoinCollection([]krt.Collection[RemoteJwksOwner]{policyOwners, backendOwners}, inputs.KrtOpts.ToOptions("JwksOwners")...)
 
-	sources := krt.NewCollection(owners, func(kctx krt.HandlerContext, owner RemoteJwksOwner) *JwksSource {
+	primarySources := krt.NewCollection(owners, func(kctx krt.HandlerContext, owner RemoteJwksOwner) *JwksSource {
 		resolved, err := inputs.Resolver.ResolveOwner(kctx, owner)
 		if err != nil {
-			logger.Error("error generating remote jwks url or tls options", "error", err, "owner", owner.ID.String())
+			collectionsLogger.Error("error generating remote jwks url or tls options", "error", err, "owner", owner.ID.String())
 			return nil
 		}
 
@@ -54,47 +49,33 @@ func NewCollections(inputs CollectionInputs) Collections {
 			ProxyTLSConfig: resolved.Target.ProxyTLSConfig,
 			TTL:            resolved.TTL,
 		}
-	}, inputs.KrtOpts.ToOptions("JwksSources")...)
+	}, inputs.KrtOpts.ToOptions("JwksSources/primary")...)
 
-	sourcesByRequestKey := krt.NewIndex(sources, "jwks-request-key", func(source JwksSource) []remotehttp.FetchKey {
+	sourcesByRequestKey := krt.NewIndex(primarySources, "jwks-request-key", func(source JwksSource) []remotehttp.FetchKey {
 		return []remotehttp.FetchKey{source.RequestKey}
 	})
-	requestGroups := sourcesByRequestKey.AsCollection(append(inputs.KrtOpts.ToOptions("JwksRequestGroups"), FetchKeyIndexCollectionFunc)...)
+	requestGroups := sourcesByRequestKey.AsCollection(append(inputs.KrtOpts.ToOptions("JwksRequestGroups"), remotecache.FetchKeyIndexCollectionOption)...)
 	sharedRequests := krt.NewCollection(requestGroups, func(kctx krt.HandlerContext, grouped krt.IndexObject[remotehttp.FetchKey, JwksSource]) *SharedJwksRequest {
-		return CollapseJwksSources(grouped)
+		return collapseJwksSources(grouped)
 	}, inputs.KrtOpts.ToOptions("JwksRequests")...)
 
 	return Collections{
-		PolicyOwners:   policyOwners,
-		BackendOwners:  backendOwners,
-		Owners:         owners,
-		Sources:        sources,
 		SharedRequests: sharedRequests,
 	}
 }
 
-func CollapseJwksSources(grouped krt.IndexObject[remotehttp.FetchKey, JwksSource]) *SharedJwksRequest {
+func collapseJwksSources(grouped krt.IndexObject[remotehttp.FetchKey, JwksSource]) *SharedJwksRequest {
 	if len(grouped.Objects) == 0 {
 		return nil
 	}
-
-	sources := append([]JwksSource(nil), grouped.Objects...)
-	sources = slices.SortFunc(sources, func(a, b JwksSource) int {
-		return cmp.Compare(a.OwnerKey.String(), b.OwnerKey.String())
-	})
-
-	shared := SharedJwksRequest{
+	primary, minTTL := remotecache.CollapseSources(grouped.Objects,
+		func(s JwksSource) string { return s.OwnerKey.String() },
+		func(s JwksSource) time.Duration { return s.TTL })
+	return &SharedJwksRequest{
 		RequestKey:     grouped.Key,
-		Target:         sources[0].Target,
-		TLSConfig:      sources[0].TLSConfig,
-		ProxyTLSConfig: sources[0].ProxyTLSConfig,
-		TTL:            sources[0].TTL,
+		Target:         primary.Target,
+		TLSConfig:      primary.TLSConfig,
+		ProxyTLSConfig: primary.ProxyTLSConfig,
+		TTL:            minTTL,
 	}
-	for _, source := range sources[1:] {
-		if source.TTL < shared.TTL {
-			shared.TTL = source.TTL
-		}
-	}
-
-	return &shared
 }

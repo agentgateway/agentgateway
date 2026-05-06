@@ -28,6 +28,7 @@ import (
 	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
 	agwv1alpha1 "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/oidc"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/policyselection"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
@@ -171,7 +172,7 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 		// Only used for NACK, so no need to do anything special here.
 		fc,
 		ctx.Collections,
-		agwPluginFactory(ctx.Collections, resolver, jwksLookup),
+		agwPluginFactory(ctx.Collections, resolver, jwksLookup, BuildOIDCLookup(ctx.Collections)),
 		nil,
 		opts,
 		nil,
@@ -194,8 +195,8 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 
 // agwPluginFactory is a factory function that returns the agent gateway plugins
 // It is based on agwPluginFactory(cfg)(ctx, cfg.AgwCollections) in start.go
-func agwPluginFactory(agwCollections *plugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup) plugins.AgwPlugin {
-	agwPlugins := controller.Plugins(agwCollections, resolver, jwksLookup)
+func agwPluginFactory(agwCollections *plugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, oidcLookup oidc.Lookup) plugins.AgwPlugin {
+	agwPlugins := controller.Plugins(agwCollections, resolver, jwksLookup, oidcLookup)
 	mergedPlugins := plugins.MergePlugins(agwPlugins...)
 	return mergedPlugins
 }
@@ -203,11 +204,13 @@ func agwPluginFactory(agwCollections *plugins.AgwCollections, resolver remotehtt
 func BuildMockPolicyContext(t test.Failer, inputs []any) plugins.PolicyCtx {
 	collections := BuildMockCollection(t, inputs)
 	resolver := BuildRemoteHTTPResolver(collections)
+	persistedOIDC := oidc.NewPersistedEntriesFromCollection(collections.ConfigMaps, oidc.DefaultStorePrefix, collections.SystemNamespace)
 	return plugins.PolicyCtx{
 		Krt:         krt.TestingDummyContext{},
 		Collections: collections,
 		Resolver:    resolver,
 		JWKSLookup:  jwks.NewLookup(jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace), jwks.NewResolver(resolver)),
+		OidcLookup:  oidc.NewLookup(persistedOIDC),
 	}
 }
 
@@ -256,4 +259,9 @@ func BuildRemoteHTTPResolver(collections *plugins.AgwCollections) remotehttp.Res
 func BuildJWKSLookup(collections *plugins.AgwCollections) jwks.Lookup {
 	persistedJWKS := jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace)
 	return jwks.NewLookup(persistedJWKS, jwks.NewResolver(BuildRemoteHTTPResolver(collections)))
+}
+
+func BuildOIDCLookup(collections *plugins.AgwCollections) oidc.Lookup {
+	persistedOIDC := oidc.NewPersistedEntriesFromCollection(collections.ConfigMaps, oidc.DefaultStorePrefix, collections.SystemNamespace)
+	return oidc.NewLookup(persistedOIDC)
 }

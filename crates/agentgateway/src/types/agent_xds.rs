@@ -26,6 +26,7 @@ use llm::{AIBackend, AIProvider, NamedAIProvider};
 
 use super::agent::*;
 use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
+use crate::http::oidc::OidcCookieEncoder;
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{HeaderOrPseudo, Scheme, auth, authorization, health};
 use crate::mcp::{FailureMode, McpAuthorization};
@@ -935,15 +936,21 @@ impl TCPRoute {
 }
 
 impl Route {
-	pub fn from_xds(
+	pub(crate) fn from_xds(
 		s: &proto::agent::Route,
 		diagnostics: &mut Diagnostics,
+		oidc_cookie_encoder: Option<&OidcCookieEncoder>,
 	) -> Result<(Self, ListenerKey, Option<RouteGroupKey>), ProtoError> {
 		let name: RouteName = s
 			.name
 			.as_ref()
 			.ok_or(ProtoError::MissingRequiredField)?
 			.into();
+		let inline_policies = s
+			.traffic_policies
+			.iter()
+			.map(|policy| xds_traffic_policy_from_proto(policy, diagnostics, oidc_cookie_encoder))
+			.collect::<Result<Vec<_>, _>>()?;
 		let r = Route {
 			key: strng::new(&s.key),
 			service_key: service_key_from_proto(s.service_key.as_ref()),
@@ -959,11 +966,7 @@ impl Route {
 				.iter()
 				.map(|backend| route_backend_reference_from_proto(backend, diagnostics))
 				.collect::<Result<Vec<_>, _>>()?,
-			inline_policies: s
-				.traffic_policies
-				.iter()
-				.map(|policy| traffic_policy_from_proto(policy, diagnostics))
-				.collect::<Result<Vec<_>, _>>()?,
+			inline_policies,
 		};
 		Ok((
 			r,
@@ -1519,18 +1522,44 @@ fn convert_health(
 	}
 }
 
-fn phased_traffic_policy_from_proto(
+fn xds_phased_traffic_policy_from_proto(
 	spec: &proto::agent::TrafficPolicySpec,
 	diagnostics: &mut Diagnostics,
-) -> Result<PhasedTrafficPolicy, ProtoError> {
-	let tp = traffic_policy_from_proto(spec, diagnostics)?;
-	Ok(PhasedTrafficPolicy {
+	oidc_cookie_encoder: Option<&OidcCookieEncoder>,
+) -> Result<agent::PhasedTrafficPolicy, ProtoError> {
+	let policy = xds_traffic_policy_from_proto(spec, diagnostics, oidc_cookie_encoder)?;
+	Ok(agent::PhasedTrafficPolicy {
 		phase: match proto::agent::traffic_policy_spec::PolicyPhase::try_from(spec.phase)? {
 			proto::agent::traffic_policy_spec::PolicyPhase::Route => PolicyPhase::Route,
 			proto::agent::traffic_policy_spec::PolicyPhase::Gateway => PolicyPhase::Gateway,
 		},
-		policy: tp,
+		policy,
 	})
+}
+
+fn xds_traffic_policy_from_proto(
+	spec: &proto::agent::TrafficPolicySpec,
+	diagnostics: &mut Diagnostics,
+	oidc_cookie_encoder: Option<&OidcCookieEncoder>,
+) -> Result<TrafficPolicy, ProtoError> {
+	use crate::types::proto::agent::traffic_policy_spec as tps;
+
+	match &spec.kind {
+		Some(tps::Kind::Oidc(oidc)) => {
+			// Check encoder before decode so we don't allocate client_secret on a rejected path.
+			let encoder = oidc_cookie_encoder.ok_or_else(|| {
+				ProtoError::Generic(
+					"received xDS OIDC policy but SESSION_KEY is not configured on this gateway".into(),
+				)
+			})?;
+			let policy = oidc_policy_from_proto(oidc)?;
+			policy
+				.compile(encoder)
+				.map(|p| TrafficPolicy::Oidc(RequestPolicy::single(p)))
+				.map_err(|e| ProtoError::Generic(format!("failed to compile xDS OIDC policy: {e}")))
+		},
+		_ => traffic_policy_from_proto(spec, diagnostics),
+	}
 }
 
 fn traffic_policy_from_proto(
@@ -1699,6 +1728,11 @@ fn traffic_policy_from_proto(
 		},
 		Some(tps::Kind::Authorization(rbac)) => {
 			TrafficPolicy::Authorization(authorization_from_proto(rbac, diagnostics))
+		},
+		Some(tps::Kind::Oidc(_)) => {
+			return Err(ProtoError::Generic(
+				"internal error: OIDC policy must be decoded through xds_traffic_policy_from_proto".into(),
+			));
 		},
 		Some(tps::Kind::Jwt(jwt)) => {
 			let mode = match tps::jwt::Mode::try_from(jwt.mode)
@@ -2088,6 +2122,97 @@ fn traffic_policy_from_proto(
 
 fn convert_duration(d: prost_types::Duration) -> Duration {
 	Duration::from_secs(d.seconds as u64) + Duration::from_nanos(d.nanos as u64)
+}
+
+fn oidc_policy_from_proto(
+	oidc: &proto::agent::traffic_policy_spec::Oidc,
+) -> Result<crate::http::oidc::PreparedOidcPolicy, ProtoError> {
+	use std::str::FromStr;
+
+	use proto::agent::traffic_policy_spec::oidc::TokenEndpointAuth as ProtoAuth;
+
+	use crate::http::oidc::{
+		ClientCredentials, PolicyId, ProviderEndpoint, RedirectUri, resolve_oidc_policy_from_xds,
+	};
+
+	let policy_id = PolicyId::from_str(&oidc.policy_id)
+		.map_err(|e| ProtoError::Generic(format!("xDS OIDC: invalid policy_id: {e}")))?;
+	let authorization_endpoint = ProviderEndpoint::try_from(oidc.authorization_endpoint.as_str())
+		.map_err(|e| ProtoError::Generic(format!("xDS OIDC: invalid authorization_endpoint: {e}")))?;
+	let token_endpoint = ProviderEndpoint::try_from(oidc.token_endpoint.as_str())
+		.map_err(|e| ProtoError::Generic(format!("xDS OIDC: invalid token_endpoint: {e}")))?;
+	let redirect_uri = RedirectUri::parse(oidc.redirect_uri.clone())
+		.map_err(|e| ProtoError::Generic(format!("xDS OIDC: invalid redirect_uri: {e}")))?;
+	let token_endpoint_auth = match ProtoAuth::try_from(oidc.token_endpoint_auth).map_err(|_| {
+		ProtoError::EnumParse(format!(
+			"xDS OIDC: invalid token_endpoint_auth value {}",
+			oidc.token_endpoint_auth
+		))
+	})? {
+		ProtoAuth::Unspecified => {
+			return Err(ProtoError::Generic(
+				"xDS OIDC: token_endpoint_auth must not be unspecified".into(),
+			));
+		},
+		ProtoAuth::ClientSecretBasic => http::oauth::TokenEndpointAuth::ClientSecretBasic,
+		ProtoAuth::ClientSecretPost => http::oauth::TokenEndpointAuth::ClientSecretPost,
+		ProtoAuth::None => http::oauth::TokenEndpointAuth::Public,
+	};
+	if oidc.issuer.is_empty() {
+		return Err(ProtoError::Generic(
+			"xDS OIDC: issuer must not be empty".into(),
+		));
+	}
+	if oidc.client_id.is_empty() {
+		return Err(ProtoError::Generic(
+			"xDS OIDC: client_id must not be empty".into(),
+		));
+	}
+	if oidc.jwks_inline.is_empty() {
+		return Err(ProtoError::Generic(
+			"xDS OIDC: jwks_inline must not be empty".into(),
+		));
+	}
+
+	// Build credentials directly with proto-named errors so the xDS path doesn't
+	// re-validate the same pairing inside `ClientCredentials::from_parts`.
+	let credentials = match (token_endpoint_auth, oidc.client_secret.is_empty()) {
+		(http::oauth::TokenEndpointAuth::Public, true) => ClientCredentials::Public,
+		(http::oauth::TokenEndpointAuth::Public, false) => {
+			return Err(ProtoError::Generic(
+				"xDS OIDC: token_endpoint_auth=None (public client) must not carry a client_secret over xDS".into(),
+			));
+		},
+		(method, true) => {
+			return Err(ProtoError::Generic(format!(
+				"xDS OIDC: token_endpoint_auth={} requires a non-empty client_secret",
+				method.as_str()
+			)));
+		},
+		(http::oauth::TokenEndpointAuth::ClientSecretBasic, false) => {
+			ClientCredentials::ClientSecretBasic {
+				client_secret: secrecy::SecretString::new(oidc.client_secret.clone().into()),
+			}
+		},
+		(http::oauth::TokenEndpointAuth::ClientSecretPost, false) => {
+			ClientCredentials::ClientSecretPost {
+				client_secret: secrecy::SecretString::new(oidc.client_secret.clone().into()),
+			}
+		},
+	};
+
+	resolve_oidc_policy_from_xds(
+		policy_id,
+		oidc.issuer.clone(),
+		authorization_endpoint,
+		token_endpoint,
+		&oidc.jwks_inline,
+		oidc.client_id.clone(),
+		credentials,
+		redirect_uri,
+		oidc.scopes.clone(),
+	)
+	.map_err(|e| ProtoError::Generic(format!("failed to decode xDS OIDC policy: {e}")))
 }
 
 fn authorization_location(
@@ -2491,6 +2616,7 @@ fn policy_target_from_proto(t: &proto::agent::PolicyTarget) -> Result<PolicyTarg
 pub(crate) fn targeted_policy_from_proto(
 	p: &proto::agent::Policy,
 	diagnostics: &mut Diagnostics,
+	oidc_cookie_encoder: Option<&OidcCookieEncoder>,
 ) -> Result<TargetedPolicy, ProtoError> {
 	use crate::types::proto::agent::policy as pol;
 
@@ -2501,16 +2627,18 @@ pub(crate) fn targeted_policy_from_proto(
 		.and_then(policy_target_from_proto)?;
 
 	let policy = match &p.kind {
-		Some(pol::Kind::Traffic(spec)) => {
-			PolicyType::Traffic(phased_traffic_policy_from_proto(spec, diagnostics)?)
-		},
+		Some(pol::Kind::Traffic(spec)) => agent::PolicyType::Traffic(
+			xds_phased_traffic_policy_from_proto(spec, diagnostics, oidc_cookie_encoder)?,
+		),
 		Some(pol::Kind::Backend(spec)) => {
-			PolicyType::Backend(backend_policy_from_proto(spec, diagnostics)?)
+			agent::PolicyType::Backend(backend_policy_from_proto(spec, diagnostics)?)
 		},
 		Some(pol::Kind::Frontend(spec)) => {
-			PolicyType::Frontend(frontend_policy_from_proto(spec, diagnostics)?)
+			agent::PolicyType::Frontend(frontend_policy_from_proto(spec, diagnostics)?)
 		},
-		Some(pol::Kind::Conditional(cond)) => conditional_policy_from_proto(cond, diagnostics)?,
+		Some(pol::Kind::Conditional(cond)) => {
+			conditional_policy_from_proto(cond, diagnostics, oidc_cookie_encoder)?
+		},
 		None => return Err(ProtoError::MissingRequiredField),
 	};
 
@@ -2525,6 +2653,7 @@ pub(crate) fn targeted_policy_from_proto(
 fn conditional_policy_from_proto(
 	cond: &proto::agent::ConditionalPolicies,
 	diagnostics: &mut Diagnostics,
+	oidc_cookie_encoder: Option<&OidcCookieEncoder>,
 ) -> Result<PolicyType, ProtoError> {
 	use crate::types::proto::agent::conditional_policy as cp;
 
@@ -2536,7 +2665,8 @@ fn conditional_policy_from_proto(
 		};
 		match kind {
 			cp::Kind::Traffic(spec) => {
-				let traffic_policy = phased_traffic_policy_from_proto(spec, diagnostics)?;
+				let traffic_policy =
+					xds_phased_traffic_policy_from_proto(spec, diagnostics, oidc_cookie_encoder)?;
 				let policy_kind = traffic_policy_kind_name(&traffic_policy.policy);
 				let policy_phase = traffic_policy.phase;
 				if let Some((expected_kind, expected_phase)) = expected_shape {
@@ -2951,7 +3081,7 @@ mod tests {
 			)),
 		};
 
-		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default())?;
+		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default(), None)?;
 		let PolicyType::Traffic(PhasedTrafficPolicy {
 			policy: TrafficPolicy::RequestHeaderModifier(policies),
 			..
@@ -2989,7 +3119,7 @@ mod tests {
 			)),
 		};
 
-		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default())?;
+		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default(), None)?;
 		let PolicyType::Traffic(PhasedTrafficPolicy {
 			policy: TrafficPolicy::RequestHeaderModifier(policies),
 			..
@@ -3024,7 +3154,7 @@ mod tests {
 		};
 
 		let mut diagnostics = Diagnostics::default();
-		let policy = targeted_policy_from_proto(&policy, &mut diagnostics)?;
+		let policy = targeted_policy_from_proto(&policy, &mut diagnostics, None)?;
 		let PolicyType::Traffic(PhasedTrafficPolicy {
 			policy: TrafficPolicy::RequestHeaderModifier(policies),
 			..
@@ -3073,7 +3203,7 @@ mod tests {
 			)),
 		};
 
-		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default())?;
+		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default(), None)?;
 		let PolicyType::Traffic(PhasedTrafficPolicy {
 			policy: TrafficPolicy::LocalRateLimit(policies),
 			..
@@ -3111,12 +3241,74 @@ mod tests {
 			)),
 		};
 
-		let err = targeted_policy_from_proto(&policy, &mut Diagnostics::default())
+		let err = targeted_policy_from_proto(&policy, &mut Diagnostics::default(), None)
 			.expect_err("mixed conditional traffic kinds should be rejected");
 		assert!(
 			err
 				.to_string()
 				.contains("must all have the same traffic policy kind")
+		);
+	}
+
+	#[test]
+	fn test_targeted_policy_from_proto_conditional_oidc() -> Result<(), ProtoError> {
+		let policy = proto::agent::Policy {
+			key: "policy".to_string(),
+			name: None,
+			target: Some(test_policy_target()),
+			kind: Some(proto::agent::policy::Kind::Conditional(
+				proto::agent::ConditionalPolicies {
+					policies: vec![
+						conditional_traffic_policy(
+							"request.path.startsWith('/admin')",
+							proto::agent::traffic_policy_spec::Kind::Oidc(sample_oidc_proto()),
+						),
+						conditional_traffic_policy(
+							"request.path.startsWith('/internal')",
+							proto::agent::traffic_policy_spec::Kind::Oidc(sample_oidc_proto()),
+						),
+					],
+				},
+			)),
+		};
+
+		let encoder = test_oidc_cookie_encoder();
+		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default(), Some(&encoder))?;
+		let PolicyType::Traffic(PhasedTrafficPolicy {
+			policy: TrafficPolicy::Oidc(policies),
+			..
+		}) = policy.policy
+		else {
+			panic!("expected conditional OIDC policy");
+		};
+		let entries = policies.iter().collect::<Vec<_>>();
+		assert_eq!(entries.len(), 2);
+		assert!(entries[0].condition.is_some());
+		assert!(entries[1].condition.is_some());
+		Ok(())
+	}
+
+	#[test]
+	fn test_targeted_policy_from_proto_conditional_oidc_requires_session_key() {
+		let policy = proto::agent::Policy {
+			key: "policy".to_string(),
+			name: None,
+			target: Some(test_policy_target()),
+			kind: Some(proto::agent::policy::Kind::Conditional(
+				proto::agent::ConditionalPolicies {
+					policies: vec![conditional_traffic_policy(
+						"request.path.startsWith('/admin')",
+						proto::agent::traffic_policy_spec::Kind::Oidc(sample_oidc_proto()),
+					)],
+				},
+			)),
+		};
+
+		let err = targeted_policy_from_proto(&policy, &mut Diagnostics::default(), None)
+			.expect_err("conditional OIDC without encoder must be rejected");
+		assert!(
+			err.to_string().contains("SESSION_KEY"),
+			"expected SESSION_KEY rejection, got: {err}",
 		);
 	}
 
@@ -3468,5 +3660,171 @@ mod tests {
 
 		assert_eq!(metrics.add.len(), 0);
 		Ok(())
+	}
+
+	fn sample_oidc_proto() -> proto::agent::traffic_policy_spec::Oidc {
+		use proto::agent::traffic_policy_spec::oidc::TokenEndpointAuth;
+		proto::agent::traffic_policy_spec::Oidc {
+			policy_id: "policy/default/my-policy:oidc".to_string(),
+			issuer: "https://issuer.example.com".to_string(),
+			authorization_endpoint: "https://issuer.example.com/authorize".to_string(),
+			token_endpoint: "https://issuer.example.com/token".to_string(),
+			token_endpoint_auth: TokenEndpointAuth::ClientSecretBasic as i32,
+			jwks_inline: serde_json::json!({
+				"keys": [{
+					"use": "sig",
+					"kty": "EC",
+					"kid": "kid-1",
+					"crv": "P-256",
+					"alg": "ES256",
+					"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+					"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
+				}]
+			})
+			.to_string(),
+			client_id: "client-id".to_string(),
+			client_secret: "client-secret".to_string(),
+			redirect_uri: "https://app.example.com/oauth/callback".to_string(),
+			scopes: vec!["openid".to_string(), "profile".to_string()],
+		}
+	}
+
+	fn test_oidc_cookie_encoder() -> OidcCookieEncoder {
+		let session_encoder = crate::http::sessionpersistence::Encoder::aes(
+			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		)
+		.expect("aes encoder");
+		OidcCookieEncoder::from_session_encoder(&session_encoder).expect("oidc cookie encoder")
+	}
+
+	fn oidc_traffic_spec(
+		oidc: proto::agent::traffic_policy_spec::Oidc,
+	) -> proto::agent::TrafficPolicySpec {
+		proto::agent::TrafficPolicySpec {
+			phase: proto::agent::traffic_policy_spec::PolicyPhase::Route as i32,
+			kind: Some(proto::agent::traffic_policy_spec::Kind::Oidc(oidc)),
+		}
+	}
+
+	fn assert_oidc_proto_rejected(oidc: proto::agent::traffic_policy_spec::Oidc, expected: &str) {
+		let spec = oidc_traffic_spec(oidc);
+		let encoder = test_oidc_cookie_encoder();
+		let err =
+			match xds_traffic_policy_from_proto(&spec, &mut Diagnostics::default(), Some(&encoder)) {
+				Ok(_) => panic!("expected xDS OIDC policy to be rejected"),
+				Err(err) => err,
+			};
+		let msg = err.to_string();
+		assert!(
+			msg.contains(expected),
+			"expected error containing {expected:?}, got: {msg}",
+		);
+	}
+
+	#[test]
+	fn test_oidc_spec_compiles_to_traffic_policy() -> Result<(), ProtoError> {
+		let spec = oidc_traffic_spec(sample_oidc_proto());
+
+		let encoder = test_oidc_cookie_encoder();
+		let policy = xds_traffic_policy_from_proto(&spec, &mut Diagnostics::default(), Some(&encoder))?;
+		let TrafficPolicy::Oidc(_) = &policy else {
+			panic!("Expected Oidc");
+		};
+		Ok(())
+	}
+
+	#[test]
+	fn test_oidc_spec_requires_session_key() {
+		let spec = oidc_traffic_spec(sample_oidc_proto());
+
+		let err = match xds_traffic_policy_from_proto(&spec, &mut Diagnostics::default(), None) {
+			Ok(_) => panic!("expected missing SESSION_KEY"),
+			Err(err) => err,
+		};
+		assert!(
+			err.to_string().contains("SESSION_KEY"),
+			"unexpected error: {err}",
+		);
+	}
+
+	#[test]
+	fn test_oidc_spec_rejects_invalid_policy_id() {
+		let mut oidc = sample_oidc_proto();
+		oidc.policy_id = "not-a-valid-prefix".into();
+		assert_oidc_proto_rejected(oidc, "invalid policy_id");
+	}
+
+	#[test]
+	fn test_oidc_spec_rejects_empty_policy_id() {
+		let mut oidc = sample_oidc_proto();
+		oidc.policy_id = String::new();
+		assert_oidc_proto_rejected(oidc, "invalid policy_id");
+	}
+
+	#[test]
+	fn test_oidc_spec_rejects_unspecified_token_endpoint_auth() {
+		use proto::agent::traffic_policy_spec::oidc::TokenEndpointAuth;
+
+		let mut oidc = sample_oidc_proto();
+		oidc.token_endpoint_auth = TokenEndpointAuth::Unspecified as i32;
+		assert_oidc_proto_rejected(oidc, "token_endpoint_auth");
+	}
+
+	#[test]
+	fn test_oidc_spec_rejects_empty_issuer() {
+		let mut oidc = sample_oidc_proto();
+		oidc.issuer = String::new();
+		assert_oidc_proto_rejected(oidc, "issuer");
+	}
+
+	#[test]
+	fn test_oidc_spec_rejects_invalid_authorization_endpoint() {
+		let mut oidc = sample_oidc_proto();
+		oidc.authorization_endpoint = "not-a-url".into();
+		assert_oidc_proto_rejected(oidc, "authorization_endpoint");
+	}
+
+	#[test]
+	fn test_oidc_spec_rejects_invalid_token_endpoint() {
+		let mut oidc = sample_oidc_proto();
+		oidc.token_endpoint = "file:///tmp/token".into();
+		assert_oidc_proto_rejected(oidc, "token_endpoint");
+	}
+
+	#[test]
+	fn test_oidc_spec_rejects_invalid_redirect_uri() {
+		let mut oidc = sample_oidc_proto();
+		oidc.redirect_uri = "not-a-url".into();
+		assert_oidc_proto_rejected(oidc, "redirect_uri");
+	}
+
+	#[test]
+	fn test_oidc_spec_rejects_empty_jwks_inline() {
+		let mut oidc = sample_oidc_proto();
+		oidc.jwks_inline = String::new();
+		assert_oidc_proto_rejected(oidc, "jwks_inline");
+	}
+
+	#[test]
+	fn test_oidc_spec_rejects_invalid_jwks_inline() {
+		let mut oidc = sample_oidc_proto();
+		oidc.jwks_inline = "not json".into();
+		assert_oidc_proto_rejected(oidc, "inline oidc jwks");
+	}
+
+	#[test]
+	fn test_oidc_spec_rejects_none_auth_with_client_secret() {
+		use proto::agent::traffic_policy_spec::oidc::TokenEndpointAuth;
+
+		let mut oidc = sample_oidc_proto();
+		oidc.token_endpoint_auth = TokenEndpointAuth::None as i32;
+		assert_oidc_proto_rejected(oidc, "must not carry a client_secret");
+	}
+
+	#[test]
+	fn test_oidc_spec_rejects_confidential_auth_without_client_secret() {
+		let mut oidc = sample_oidc_proto();
+		oidc.client_secret = String::new();
+		assert_oidc_proto_rejected(oidc, "requires a non-empty client_secret");
 	}
 }

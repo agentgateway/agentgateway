@@ -7145,6 +7145,101 @@ spec:
                       rule: '!has(self.mcp) || size(self.providers) == 1'
                     - message: jwtAuthentication.mcp requires mode Strict
                       rule: '!has(self.mcp) || !has(self.mode) || self.mode == ''Strict'''
+                  oidc:
+                    description: |-
+                      `oidc` performs OpenID Connect authentication for inbound requests.
+                      When set, the gateway acts as an OIDC Relying Party: it validates identity
+                      tokens and manages the redirect flow. The controller manages discovery
+                      and JWKS fetching on behalf of the gateway. Requires `SESSION_KEY` on
+                      the gateway pod (auto-mounted by the deployer).
+                    properties:
+                      clientID:
+                        description: ClientID is the OIDC client identifier.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      clientSecret:
+                        description: |-
+                          ClientSecret references a Secret containing the OIDC client secret under
+                          the `clientSecret` data key. Omit for a public client; in that case PKCE
+                          alone protects the authorization code exchange and the IdP must accept
+                          the `none` token-endpoint auth method (see TokenEndpointAuthMethod).
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      issuerURL:
+                        description: |-
+                          IssuerURL is the OIDC issuer URL. It must be an absolute HTTPS URL with
+                          no query or fragment. The configured value is preserved exactly for
+                          discovery-document issuer matching, including any trailing slash.
+                        maxLength: 512
+                        minLength: 1
+                        pattern: ^https://[^/?#]+(/[^?#]*)?$
+                        type: string
+                      redirectURI:
+                        description: |-
+                          RedirectURI is the callback URL registered with the IdP. Absolute
+                          http(s) URL, no query or fragment. The `http` scheme is permitted only
+                          because some IdPs allow it for `localhost` development; production
+                          deployments must use `https` and most IdPs reject `http` redirect
+                          registrations outright.
+                        maxLength: 2048
+                        minLength: 1
+                        pattern: ^https?://[^?#\s]+$
+                        type: string
+                      refreshInterval:
+                        default: 1h
+                        description: |-
+                          RefreshInterval governs both the discovery-document refresh and the
+                          JWKS refresh derived from it.
+                        type: string
+                        x-kubernetes-validations:
+                        - message: refreshInterval must be at least 5m.
+                          rule: duration(self) >= duration('5m')
+                      scopes:
+                        description: Scopes to request from the IdP. The `openid`
+                          scope is always included.
+                        items:
+                          maxLength: 256
+                          minLength: 1
+                          type: string
+                        maxItems: 64
+                        type: array
+                      tokenEndpointAuthMethod:
+                        description: |-
+                          TokenEndpointAuthMethod overrides the auth method the IdP advertises
+                          in its discovery document. `None` selects public-client mode (no client
+                          authentication at the token endpoint; PKCE still protects the code
+                          exchange) and must not be paired with a `clientSecret`.
+                        enum:
+                        - ClientSecretBasic
+                        - ClientSecretPost
+                        - None
+                        type: string
+                    required:
+                    - clientID
+                    - issuerURL
+                    - redirectURI
+                    type: object
+                    x-kubernetes-validations:
+                    - message: tokenEndpointAuthMethod None must not be paired with
+                        a clientSecret
+                      rule: 'has(self.tokenEndpointAuthMethod) && self.tokenEndpointAuthMethod
+                        == ''None'' ? !has(self.clientSecret) : true'
+                    - message: tokenEndpointAuthMethod ClientSecretBasic or ClientSecretPost
+                        requires a clientSecret
+                      rule: 'has(self.tokenEndpointAuthMethod) && self.tokenEndpointAuthMethod
+                        in [''ClientSecretBasic'', ''ClientSecretPost''] ? has(self.clientSecret)
+                        : true'
                   phase:
                     description: |-
                       The phase to apply the traffic policy to. If the phase is `PreRouting`,
@@ -7726,9 +7821,11 @@ spec:
                         >= 1'
                 type: object
                 x-kubernetes-validations:
+                - message: oidc and jwtAuthentication are mutually exclusive
+                  rule: '!(has(self.oidc) && has(self.jwtAuthentication))'
                 - message: phase PreRouting only supports extAuth, transformation,
                     extProc, jwtAuthentication, basicAuthentication, and apiKeyAuthentication
-                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.authorization),has(self.cors),has(self.csrf),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
+                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.authorization),has(self.cors),has(self.csrf),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.oidc),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
                     == 0 : true'
             type: object
             x-kubernetes-validations:

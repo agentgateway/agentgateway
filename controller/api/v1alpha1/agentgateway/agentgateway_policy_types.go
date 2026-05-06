@@ -610,6 +610,7 @@ const (
 )
 
 // +kubebuilder:validation:IfThenOnlyFields:if="has(self.phase) && self.phase == 'PreRouting'",fields=phase;transformation;extProc;extAuth;jwtAuthentication;basicAuthentication;apiKeyAuthentication,message="phase PreRouting only supports extAuth, transformation, extProc, jwtAuthentication, basicAuthentication, and apiKeyAuthentication"
+// +kubebuilder:validation:XValidation:rule="!(has(self.oidc) && has(self.jwtAuthentication))",message="oidc and jwtAuthentication are mutually exclusive"
 type Traffic struct {
 	// The phase to apply the traffic policy to. If the phase is `PreRouting`,
 	// the `targetRef` must be a `Gateway` or a `Listener`. `PreRouting` is
@@ -708,6 +709,14 @@ type Traffic struct {
 	// +optional
 	APIKeyAuthentication *APIKeyAuthentication `json:"apiKeyAuthentication,omitempty"`
 
+	// `oidc` performs OpenID Connect authentication for inbound requests.
+	// When set, the gateway acts as an OIDC Relying Party: it validates identity
+	// tokens and manages the redirect flow. The controller manages discovery
+	// and JWKS fetching on behalf of the gateway. Requires `SESSION_KEY` on
+	// the gateway pod (auto-mounted by the deployer).
+	// +optional
+	OIDC *OIDC `json:"oidc,omitempty"`
+
 	// `directResponse` configures the policy to send a direct response to the
 	// client.
 	// +optional
@@ -730,6 +739,69 @@ type DirectResponse struct {
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=4096
 	Body *string `json:"body,omitempty"`
+}
+
+// OIDC configures the gateway as an OpenID Connect Relying Party.
+// The gateway validates identity tokens and manages the OIDC redirect flow
+// on behalf of upstream services. The controller fetches the IdP discovery
+// document and JWKS to configure the gateway.
+// +kubebuilder:validation:XValidation:rule="has(self.tokenEndpointAuthMethod) && self.tokenEndpointAuthMethod == 'None' ? !has(self.clientSecret) : true",message="tokenEndpointAuthMethod None must not be paired with a clientSecret"
+// +kubebuilder:validation:XValidation:rule="has(self.tokenEndpointAuthMethod) && self.tokenEndpointAuthMethod in ['ClientSecretBasic', 'ClientSecretPost'] ? has(self.clientSecret) : true",message="tokenEndpointAuthMethod ClientSecretBasic or ClientSecretPost requires a clientSecret"
+type OIDC struct {
+	// IssuerURL is the OIDC issuer URL. It must be an absolute HTTPS URL with
+	// no query or fragment. The configured value is preserved exactly for
+	// discovery-document issuer matching, including any trailing slash.
+	// +kubebuilder:validation:Pattern=`^https://[^/?#]+(/[^?#]*)?$`
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=512
+	// +required
+	IssuerURL string `json:"issuerURL"`
+
+	// ClientID is the OIDC client identifier.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=256
+	// +required
+	ClientID string `json:"clientID"`
+
+	// ClientSecret references a Secret containing the OIDC client secret under
+	// the `clientSecret` data key. Omit for a public client; in that case PKCE
+	// alone protects the authorization code exchange and the IdP must accept
+	// the `none` token-endpoint auth method (see TokenEndpointAuthMethod).
+	// +optional
+	ClientSecret *corev1.LocalObjectReference `json:"clientSecret,omitempty"`
+
+	// RedirectURI is the callback URL registered with the IdP. Absolute
+	// http(s) URL, no query or fragment. The `http` scheme is permitted only
+	// because some IdPs allow it for `localhost` development; production
+	// deployments must use `https` and most IdPs reject `http` redirect
+	// registrations outright.
+	// +kubebuilder:validation:Pattern=`^https?://[^?#\s]+$`
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=2048
+	// +required
+	RedirectURI string `json:"redirectURI"`
+
+	// Scopes to request from the IdP. The `openid` scope is always included.
+	// +optional
+	// +kubebuilder:validation:MaxItems=64
+	// +kubebuilder:validation:items:MinLength=1
+	// +kubebuilder:validation:items:MaxLength=256
+	Scopes []string `json:"scopes,omitempty"`
+
+	// RefreshInterval governs both the discovery-document refresh and the
+	// JWKS refresh derived from it.
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('5m')",message="refreshInterval must be at least 5m."
+	// +kubebuilder:default="1h"
+	RefreshInterval *metav1.Duration `json:"refreshInterval,omitempty"`
+
+	// TokenEndpointAuthMethod overrides the auth method the IdP advertises
+	// in its discovery document. `None` selects public-client mode (no client
+	// authentication at the token endpoint; PKCE still protects the code
+	// exchange) and must not be paired with a `clientSecret`.
+	// +optional
+	// +kubebuilder:validation:Enum=ClientSecretBasic;ClientSecretPost;None
+	TokenEndpointAuthMethod *string `json:"tokenEndpointAuthMethod,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Strict;Optional;Permissive

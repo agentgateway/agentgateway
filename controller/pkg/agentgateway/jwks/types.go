@@ -15,6 +15,9 @@ type Keyset struct {
 	JwksJSON   string              `json:"jwks"`
 }
 
+func (k Keyset) RemoteRequestKey() remotehttp.FetchKey { return k.RequestKey }
+func (k Keyset) RemoteFetchedAt() time.Time            { return k.FetchedAt }
+
 // JwksSource is a per-owner JWKS request before KRT collapses equivalent
 // sources onto a shared request key.
 type JwksSource struct {
@@ -27,6 +30,9 @@ type JwksSource struct {
 	ProxyTLSConfig *tls.Config
 	TTL            time.Duration
 }
+
+func (s JwksSource) RemoteRequestKey() remotehttp.FetchKey { return s.RequestKey }
+func (s JwksSource) RemoteTTL() time.Duration              { return s.TTL }
 
 func (s JwksSource) ResourceName() string {
 	return s.OwnerKey.String()
@@ -55,19 +61,16 @@ func (r SharedJwksRequest) ResourceName() string {
 	return string(r.RequestKey)
 }
 
+func (r SharedJwksRequest) RemoteRequestKey() remotehttp.FetchKey {
+	return r.RequestKey
+}
+
+func (r SharedJwksRequest) RemoteTTL() time.Duration {
+	return r.TTL
+}
+
 func (r SharedJwksRequest) Equals(other SharedJwksRequest) bool {
 	return r.RequestKey == other.RequestKey &&
 		reflect.DeepEqual(r.Target, other.Target) &&
 		r.TTL == other.TTL
-}
-
-// JwksSource returns the canonical runtime request consumed by the Fetcher.
-func (r SharedJwksRequest) JwksSource() JwksSource {
-	return JwksSource{
-		RequestKey:     r.RequestKey,
-		Target:         r.Target,
-		TLSConfig:      r.TLSConfig,
-		ProxyTLSConfig: r.ProxyTLSConfig,
-		TTL:            r.TTL,
-	}
 }

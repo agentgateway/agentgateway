@@ -718,4 +718,3 @@ spec:
               name: fallback
               port: 1234
             grpc: {}
----

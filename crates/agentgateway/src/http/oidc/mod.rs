@@ -23,7 +23,9 @@ mod session;
 mod tests;
 
 pub use local::LocalOidcConfig;
+pub(crate) use local::{PreparedOidcPolicy, resolve_oidc_policy_from_xds};
 pub use redirect::RedirectUri;
+pub(crate) use session::OidcCookieEncoder;
 pub use session::{
 	BrowserSession, CookieSecureMode, RESERVED_COOKIE_PREFIX, SameSiteMode, SessionConfig,
 	TransactionState,
@@ -31,6 +33,8 @@ pub use session::{
 
 pub use crate::http::oauth::TokenEndpointAuth;
 
+/// Cookie-prefix identity correlating an OIDC policy across controller, xDS,
+/// and dataplane. Wire form: `route/<key>` or `policy/<key>`.
 #[derive(
 	Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -48,6 +52,23 @@ impl PolicyId {
 
 	pub fn policy(policy_key: impl std::fmt::Display) -> Self {
 		Self(format!("policy/{policy_key}"))
+	}
+}
+
+impl std::str::FromStr for PolicyId {
+	type Err = String;
+
+	fn from_str(value: &str) -> Result<Self, Self::Err> {
+		let (prefix, rest) = value
+			.split_once('/')
+			.ok_or_else(|| format!("policy id '{value}' missing '<prefix>/' segment"))?;
+		if rest.is_empty() {
+			return Err(format!("policy id '{value}' has empty identifier"));
+		}
+		if !matches!(prefix, "route" | "policy") {
+			return Err(format!("unknown policy id prefix '{prefix}'"));
+		}
+		Ok(Self(value.to_string()))
 	}
 }
 
@@ -146,9 +167,65 @@ pub struct Provider {
 #[serde(rename_all = "camelCase")]
 pub struct ClientConfig {
 	pub client_id: String,
-	#[serde(serialize_with = "crate::serdes::ser_redact")]
-	pub client_secret: SecretString,
-	pub token_endpoint_auth: TokenEndpointAuth,
+	pub credentials: ClientCredentials,
+}
+
+/// Runtime-strict pairing of a token-endpoint auth method with the secret it
+/// requires. Confidential variants carry the `client_secret`; `None` is the
+/// public-client mode where PKCE alone protects the authorization code
+/// exchange. By tying the method to the secret at the type level, public and
+/// confidential configurations cannot be mixed by accident at a call site.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase", tag = "method")]
+pub enum ClientCredentials {
+	ClientSecretBasic {
+		#[serde(serialize_with = "crate::serdes::ser_redact")]
+		client_secret: SecretString,
+	},
+	ClientSecretPost {
+		#[serde(serialize_with = "crate::serdes::ser_redact")]
+		client_secret: SecretString,
+	},
+	Public,
+}
+
+impl ClientCredentials {
+	#[cfg(test)]
+	pub(super) fn method(&self) -> TokenEndpointAuth {
+		match self {
+			Self::ClientSecretBasic { .. } => TokenEndpointAuth::ClientSecretBasic,
+			Self::ClientSecretPost { .. } => TokenEndpointAuth::ClientSecretPost,
+			Self::Public => TokenEndpointAuth::Public,
+		}
+	}
+
+	/// Pair a method with its (optional) secret, rejecting mismatches. Returns
+	/// an [`Error::Config`] with a user-comprehensible message that names both
+	/// the method and whether a secret was expected.
+	pub fn from_parts(
+		method: TokenEndpointAuth,
+		client_secret: Option<SecretString>,
+	) -> Result<Self, Error> {
+		match (method, client_secret) {
+			(TokenEndpointAuth::ClientSecretBasic, Some(client_secret)) => {
+				Ok(Self::ClientSecretBasic { client_secret })
+			},
+			(TokenEndpointAuth::ClientSecretPost, Some(client_secret)) => {
+				Ok(Self::ClientSecretPost { client_secret })
+			},
+			(TokenEndpointAuth::Public, None) => Ok(Self::Public),
+			(
+				method @ (TokenEndpointAuth::ClientSecretBasic | TokenEndpointAuth::ClientSecretPost),
+				None,
+			) => Err(Error::Config(format!(
+				"tokenEndpointAuthMethod {} requires a clientSecret",
+				method.as_str()
+			))),
+			(TokenEndpointAuth::Public, Some(_)) => Err(Error::Config(
+				"tokenEndpointAuthMethod 'none' must not be paired with a clientSecret".into(),
+			)),
+		}
+	}
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -354,11 +431,19 @@ pub(crate) fn now_unix() -> u64 {
 		.as_secs()
 }
 
-pub(crate) fn dedupe_scopes(mut scopes: Vec<String>) -> Vec<String> {
-	scopes.insert(0, "openid".into());
-	let mut seen = HashSet::new();
-	scopes.retain(|scope| seen.insert(scope.clone()));
-	scopes
+/// Controller also normalizes pre-emit; this is idempotent and the only
+/// normalization for the `LocalOidcConfig` path.
+pub(crate) fn normalize_scopes(scopes: Vec<String>) -> Vec<String> {
+	let mut seen = HashSet::with_capacity(scopes.len() + 1);
+	let mut normalized = Vec::with_capacity(scopes.len() + 1);
+	normalized.push("openid".to_string());
+	seen.insert("openid".to_string());
+	for scope in scopes {
+		if seen.insert(scope.clone()) {
+			normalized.push(scope);
+		}
+	}
+	normalized
 }
 
 pub(crate) fn cap_session_expiry(now: u64, ttl: Duration, claims: &Map<String, Value>) -> u64 {

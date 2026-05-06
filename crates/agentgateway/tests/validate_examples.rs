@@ -18,10 +18,9 @@ use agentgateway::{BackendConfig, client};
 // Test infrastructure
 // ---------------------------------------------------------------------------
 
-/// Deterministic 32-byte (64 hex-char) cookie secret used for configs that enable
+/// Deterministic 32-byte (64 hex-char) session key used for configs that enable
 /// OIDC browser auth, matching the value exported by `validate-configs.sh`.
-const TEST_OIDC_COOKIE_SECRET: &str =
-	"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+const TEST_SESSION_KEY: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 /// Change the process working directory to the workspace root exactly once.
 ///
@@ -48,15 +47,12 @@ fn setup() {
 }
 
 fn test_config() -> agentgateway::Config {
-	// Supply a deterministic OIDC cookie secret so configs that enable browser
-	// auth (e.g. oidc/) can be compiled without errors, matching the behaviour of
-	// validate-configs.sh which exports OIDC_COOKIE_SECRET.
+	// Supply a deterministic session key so configs that enable browser auth
+	// (e.g. oidc/) can be compiled without errors, matching validate-configs.sh.
 	let mut config =
 		agentgateway::config::parse_config("{}".to_string(), None).expect("parse empty config");
-	config.oidc_cookie_encoder = Some(
-		agentgateway::http::sessionpersistence::Encoder::aes(TEST_OIDC_COOKIE_SECRET)
-			.expect("AES encoder"),
-	);
+	config.session_encoder =
+		agentgateway::http::sessionpersistence::Encoder::aes(TEST_SESSION_KEY).expect("AES encoder");
 	config
 }
 

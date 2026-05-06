@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotecache"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 )
 
@@ -15,18 +15,12 @@ func TestPlanConfigMapSyncKeepsCanonicalConfigMap(t *testing.T) {
 		URL:        "https://issuer.example/jwks",
 		JwksJSON:   `{"keys":[]}`,
 	}
-	plan := planConfigMapSync(keyset.RequestKey, nil, DefaultJwksStorePrefix, func(requestKey remotehttp.FetchKey) (Keyset, bool) {
-		if requestKey == keyset.RequestKey {
-			return keyset, true
-		}
-		return Keyset{}, false
-	})
 
-	if assert.NotNil(t, plan.keyset) {
-		assert.Equal(t, keyset, *plan.keyset)
-	}
-	assert.Equal(t, JwksConfigMapName(DefaultJwksStorePrefix, keyset.RequestKey), plan.upsertName)
-	assert.Empty(t, plan.deleteNames)
+	canonicalName := remotecache.ConfigMapName(DefaultJwksStorePrefix, keyset.RequestKey)
+	plan := remotecache.PlanConfigMapSync(nil, canonicalName, true)
+
+	assert.Equal(t, canonicalName, plan.UpsertName)
+	assert.Empty(t, plan.DeleteNames)
 }
 
 func TestPlanConfigMapSyncDeletesInactiveConfigMap(t *testing.T) {
@@ -35,28 +29,19 @@ func TestPlanConfigMapSyncDeletesInactiveConfigMap(t *testing.T) {
 		URL:        "https://issuer.example/jwks",
 		JwksJSON:   `{"keys":[]}`,
 	}
-	cmName := JwksConfigMapName(DefaultJwksStorePrefix, keyset.RequestKey)
-	existingEntry := persistedEntryWithKeyset(cmName, keyset)
+	cmName := remotecache.ConfigMapName(DefaultJwksStorePrefix, keyset.RequestKey)
 
-	plan := planConfigMapSync(keyset.RequestKey, []PersistedEntry{existingEntry}, DefaultJwksStorePrefix, func(remotehttp.FetchKey) (Keyset, bool) {
-		return Keyset{}, false
-	})
+	plan := remotecache.PlanConfigMapSync([]string{cmName}, "", false)
 
-	assert.Nil(t, plan.keyset)
-	assert.Empty(t, plan.upsertName)
-	assert.Equal(t, []string{cmName}, plan.deleteNames)
+	assert.Empty(t, plan.UpsertName)
+	assert.Equal(t, []string{cmName}, plan.DeleteNames)
 }
 
 func TestPlanConfigMapSyncNoopsWhenConfigMapIsAlreadyGone(t *testing.T) {
-	requestKey := remotehttp.FetchTarget{URL: "https://issuer.example/jwks"}.Key()
+	plan := remotecache.PlanConfigMapSync(nil, "", false)
 
-	plan := planConfigMapSync(requestKey, nil, DefaultJwksStorePrefix, func(remotehttp.FetchKey) (Keyset, bool) {
-		return Keyset{}, false
-	})
-
-	assert.Nil(t, plan.keyset)
-	assert.Empty(t, plan.upsertName)
-	assert.Empty(t, plan.deleteNames)
+	assert.Empty(t, plan.UpsertName)
+	assert.Empty(t, plan.DeleteNames)
 }
 
 func TestPlanConfigMapSyncDeletesNonCanonicalConfigMapsForActiveRequest(t *testing.T) {
@@ -65,28 +50,17 @@ func TestPlanConfigMapSyncDeletesNonCanonicalConfigMapsForActiveRequest(t *testi
 		URL:        "https://issuer.example/jwks",
 		JwksJSON:   `{"keys":[]}`,
 	}
-	canonicalName := JwksConfigMapName(DefaultJwksStorePrefix, keyset.RequestKey)
+	canonicalName := remotecache.ConfigMapName(DefaultJwksStorePrefix, keyset.RequestKey)
 	legacyName := "jwks-store-legacy-name"
-	plan := planConfigMapSync(
-		keyset.RequestKey,
-		[]PersistedEntry{
-			persistedEntryWithKeyset(canonicalName, keyset),
-			persistedEntryWithKeyset(legacyName, keyset),
-		},
-		DefaultJwksStorePrefix,
-		func(requestKey remotehttp.FetchKey) (Keyset, bool) {
-			if requestKey == keyset.RequestKey {
-				return keyset, true
-			}
-			return Keyset{}, false
-		},
+
+	plan := remotecache.PlanConfigMapSync(
+		[]string{canonicalName, legacyName},
+		canonicalName,
+		true,
 	)
 
-	if assert.NotNil(t, plan.keyset) {
-		assert.Equal(t, keyset, *plan.keyset)
-	}
-	assert.Equal(t, canonicalName, plan.upsertName)
-	assert.Equal(t, []string{legacyName}, plan.deleteNames)
+	assert.Equal(t, canonicalName, plan.UpsertName)
+	assert.Equal(t, []string{legacyName}, plan.DeleteNames)
 }
 
 func TestPlanConfigMapSyncMigratesLegacyOnlyEntriesToCanonicalName(t *testing.T) {
@@ -95,28 +69,17 @@ func TestPlanConfigMapSyncMigratesLegacyOnlyEntriesToCanonicalName(t *testing.T)
 		URL:        "https://issuer.example/jwks",
 		JwksJSON:   `{"keys":[]}`,
 	}
-	canonicalName := JwksConfigMapName(DefaultJwksStorePrefix, keyset.RequestKey)
+	canonicalName := remotecache.ConfigMapName(DefaultJwksStorePrefix, keyset.RequestKey)
 	legacyName := "jwks-store-legacy-name"
 
-	plan := planConfigMapSync(
-		keyset.RequestKey,
-		[]PersistedEntry{
-			persistedEntryWithKeyset(legacyName, keyset),
-		},
-		DefaultJwksStorePrefix,
-		func(requestKey remotehttp.FetchKey) (Keyset, bool) {
-			if requestKey == keyset.RequestKey {
-				return keyset, true
-			}
-			return Keyset{}, false
-		},
+	plan := remotecache.PlanConfigMapSync(
+		[]string{legacyName},
+		canonicalName,
+		true,
 	)
 
-	if assert.NotNil(t, plan.keyset) {
-		assert.Equal(t, keyset, *plan.keyset)
-	}
-	assert.Equal(t, canonicalName, plan.upsertName)
-	assert.Equal(t, []string{legacyName}, plan.deleteNames)
+	assert.Equal(t, canonicalName, plan.UpsertName)
+	assert.Equal(t, []string{legacyName}, plan.DeleteNames)
 }
 
 func TestPlanConfigMapSyncDeletesAllEntriesForInactiveRequest(t *testing.T) {
@@ -125,32 +88,15 @@ func TestPlanConfigMapSyncDeletesAllEntriesForInactiveRequest(t *testing.T) {
 		URL:        "https://issuer.example/jwks",
 		JwksJSON:   `{"keys":[]}`,
 	}
-	canonicalName := JwksConfigMapName(DefaultJwksStorePrefix, keyset.RequestKey)
+	canonicalName := remotecache.ConfigMapName(DefaultJwksStorePrefix, keyset.RequestKey)
 	legacyName := "jwks-store-legacy-name"
 
-	plan := planConfigMapSync(
-		keyset.RequestKey,
-		[]PersistedEntry{
-			persistedEntryWithKeyset(canonicalName, keyset),
-			persistedEntryWithKeyset(legacyName, keyset),
-		},
-		DefaultJwksStorePrefix,
-		func(remotehttp.FetchKey) (Keyset, bool) {
-			return Keyset{}, false
-		},
+	plan := remotecache.PlanConfigMapSync(
+		[]string{canonicalName, legacyName},
+		"",
+		false,
 	)
 
-	assert.Nil(t, plan.keyset)
-	assert.Empty(t, plan.upsertName)
-	assert.Equal(t, []string{canonicalName, legacyName}, plan.deleteNames)
-}
-
-func persistedEntryWithKeyset(name string, keyset Keyset) PersistedEntry {
-	return PersistedEntry{
-		NamespacedName: types.NamespacedName{
-			Name:      name,
-			Namespace: "agentgateway-system",
-		},
-		Keyset: &keyset,
-	}
+	assert.Empty(t, plan.UpsertName)
+	assert.Equal(t, []string{canonicalName, legacyName}, plan.DeleteNames)
 }

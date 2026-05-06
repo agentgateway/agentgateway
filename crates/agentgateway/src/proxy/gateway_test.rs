@@ -68,7 +68,7 @@ fn test_oidc_cookie_encoder() -> crate::http::sessionpersistence::Encoder {
 
 fn setup_proxy_test_with_oidc() -> TestBind {
 	let mut config = crate::config::parse_config("{}".to_string(), None).expect("config");
-	config.oidc_cookie_encoder = Some(test_oidc_cookie_encoder());
+	config.session_encoder = test_oidc_cookie_encoder();
 	setup_proxy_test_with_config(config)
 }
 
