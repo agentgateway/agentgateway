@@ -20,7 +20,13 @@ const (
 	bearerTokenPrefix = "Bearer "
 )
 
+// Keep the legacy kgateway audience during mixed-version rollouts so older data
+// planes can still authenticate against a newer controller. Once the controller
+// and all deployed data planes project agentgateway-only xDS tokens, we can drop
+// the legacy audience.
 var xdsTokenAudiences = []string{"agentgateway", "kgateway"}
+
+var validateK8sJWT = tokenreview.ValidateK8sJwt
 
 // KubeJWTAuthenticator authenticates K8s JWTs.
 type KubeJWTAuthenticator struct {
@@ -73,7 +79,7 @@ func (a *KubeJWTAuthenticator) authenticateGrpc(ctx context.Context) (*security.
 }
 
 func (a *KubeJWTAuthenticator) authenticate(targetJWT string) (*security.Caller, error) {
-	id, err := tokenreview.ValidateK8sJwt(a.kubeClient, targetJWT, xdsTokenAudiences)
+	id, err := validateK8sJWT(a.kubeClient, targetJWT, xdsTokenAudiences)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate the JWT token: %v", err)
 	}
