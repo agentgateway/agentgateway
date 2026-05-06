@@ -2,21 +2,17 @@ package setup
 
 import (
 	"net/http"
+	"slices"
 	"testing"
 
+	"istio.io/istio/pkg/security"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
-
-	"istio.io/istio/pkg/security"
 )
 
 func TestAuthenticateUsesLegacyAndCurrentXDSTokenAudiences(t *testing.T) {
-	originalValidateK8sJWT := validateK8sJWT
-	t.Cleanup(func() {
-		validateK8sJWT = originalValidateK8sJWT
-	})
-
-	validateK8sJWT = func(_ kubernetes.Interface, targetToken string, audiences []string) (security.KubernetesInfo, error) {
+	authenticator := NewKubeJWTAuthenticator(fake.NewSimpleClientset())
+	authenticator.validateJWT = func(_ kubernetes.Interface, targetToken string, audiences []string) (security.KubernetesInfo, error) {
 		if targetToken != "test-token" {
 			t.Fatalf("unexpected token %q", targetToken)
 		}
@@ -32,8 +28,6 @@ func TestAuthenticateUsesLegacyAndCurrentXDSTokenAudiences(t *testing.T) {
 			PodServiceAccount: "agentgateway",
 		}, nil
 	}
-
-	authenticator := NewKubeJWTAuthenticator(fake.NewSimpleClientset())
 
 	caller, err := authenticator.authenticate("test-token")
 	if err != nil {
@@ -52,7 +46,7 @@ func TestAuthenticateUsesLegacyAndCurrentXDSTokenAudiences(t *testing.T) {
 
 func TestExtractRequestToken(t *testing.T) {
 	t.Run("extracts bearer token", func(t *testing.T) {
-		req := testRequestWithAuthHeader("Bearer test-token")
+		req := testRequestWithAuthHeader(t, "Bearer test-token")
 
 		token, err := extractRequestToken(req)
 		if err != nil {
@@ -64,7 +58,7 @@ func TestExtractRequestToken(t *testing.T) {
 	})
 
 	t.Run("rejects missing authorization header", func(t *testing.T) {
-		req := testRequestWithAuthHeader("")
+		req := testRequestWithAuthHeader(t, "")
 
 		_, err := extractRequestToken(req)
 		if err == nil {
@@ -73,7 +67,7 @@ func TestExtractRequestToken(t *testing.T) {
 	})
 
 	t.Run("rejects non bearer authorization header", func(t *testing.T) {
-		req := testRequestWithAuthHeader("Basic abc123")
+		req := testRequestWithAuthHeader(t, "Basic abc123")
 
 		_, err := extractRequestToken(req)
 		if err == nil {
@@ -83,18 +77,15 @@ func TestExtractRequestToken(t *testing.T) {
 }
 
 func containsAudience(audiences []string, want string) bool {
-	for _, audience := range audiences {
-		if audience == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(audiences, want)
 }
 
-func testRequestWithAuthHeader(authHeader string) *http.Request {
+func testRequestWithAuthHeader(t *testing.T, authHeader string) *http.Request {
+	t.Helper()
+
 	req, err := http.NewRequest(http.MethodGet, "http://example.com", nil)
 	if err != nil {
-		panic(err)
+		t.Fatalf("http.NewRequest returned error: %v", err)
 	}
 	if authHeader != "" {
 		req.Header.Set(authorizationHeader, authHeader)

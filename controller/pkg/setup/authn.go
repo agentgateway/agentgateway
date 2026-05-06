@@ -26,11 +26,12 @@ const (
 // the legacy audience.
 var xdsTokenAudiences = []string{"agentgateway", "kgateway"}
 
-var validateK8sJWT = tokenreview.ValidateK8sJwt
+type jwtValidator func(kubernetes.Interface, string, []string) (security.KubernetesInfo, error)
 
 // KubeJWTAuthenticator authenticates K8s JWTs.
 type KubeJWTAuthenticator struct {
-	kubeClient kubernetes.Interface
+	kubeClient  kubernetes.Interface
+	validateJWT jwtValidator
 }
 
 var _ security.Authenticator = &KubeJWTAuthenticator{}
@@ -40,7 +41,8 @@ func NewKubeJWTAuthenticator(
 	client kubernetes.Interface,
 ) *KubeJWTAuthenticator {
 	out := &KubeJWTAuthenticator{
-		kubeClient: client,
+		kubeClient:  client,
+		validateJWT: tokenreview.ValidateK8sJwt,
 	}
 
 	return out
@@ -79,7 +81,7 @@ func (a *KubeJWTAuthenticator) authenticateGrpc(ctx context.Context) (*security.
 }
 
 func (a *KubeJWTAuthenticator) authenticate(targetJWT string) (*security.Caller, error) {
-	id, err := validateK8sJWT(a.kubeClient, targetJWT, xdsTokenAudiences)
+	id, err := a.validateJWT(a.kubeClient, targetJWT, xdsTokenAudiences)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate the JWT token: %v", err)
 	}
