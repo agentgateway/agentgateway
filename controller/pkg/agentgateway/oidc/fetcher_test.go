@@ -15,7 +15,9 @@ import (
 
 func TestFetcherFetchesAndValidatesDiscovery(t *testing.T) {
 	ctx := t.Context()
-	const jwksJSON = `{"keys":[]}`
+	// Minimal valid JWKS so the schema validator accepts the body. Uses an
+	// `oct` key to avoid generating real RSA material in test fixtures.
+	const jwksJSON = `{"keys":[{"kty":"oct","k":"AAECAwQFBgc"}]}`
 
 	var backendURL string
 	backend := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -56,6 +58,62 @@ func TestFetcherFetchesAndValidatesDiscovery(t *testing.T) {
 	provider, _ := cache.Get(source.RequestKey)
 	require.Equal(t, backendURL, provider.IssuerURL)
 	require.Equal(t, jwksJSON, provider.JwksInline)
+}
+
+func TestOidcDriverRejectsInvalidJWKSBody(t *testing.T) {
+	tests := []struct {
+		name            string
+		jwksBody        string
+		wantErrContains string
+	}{
+		{
+			name:            "non-jwks 200 OK is rejected, not persisted",
+			jwksBody:        `{"status":"error"}`,
+			wantErrContains: "contains no keys",
+		},
+		{
+			name:            "explicitly empty key set is rejected",
+			jwksBody:        `{"keys":[]}`,
+			wantErrContains: "contains no keys",
+		},
+		{
+			name:            "malformed key fails strict JWKS parse",
+			jwksBody:        `{"keys":[{"kty":"RSA","n":"!"}]}`,
+			wantErrContains: "not a valid JWKS document",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var backendURL string
+			backend := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.URL.Path == "/jwks" {
+					_, _ = fmt.Fprint(w, tc.jwksBody)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(discoveryDocument{
+					Issuer:                backendURL,
+					AuthorizationEndpoint: backendURL + "/auth",
+					TokenEndpoint:         backendURL + "/token",
+					JwksURI:               backendURL + "/jwks",
+				})
+			}))
+			defer backend.Close()
+			backendURL = backend.URL
+
+			driver := &OidcDriver{DefaultClient: backend.Client()}
+			source := SharedOidcRequest{
+				RequestKey:     remotehttp.FetchTarget{URL: backendURL}.Key(),
+				ExpectedIssuer: backendURL,
+				Target:         remotehttp.FetchTarget{URL: backendURL},
+				TTL:            time.Hour,
+			}
+
+			_, err := driver.Fetch(t.Context(), source)
+			require.ErrorContains(t, err, tc.wantErrContains)
+		})
+	}
 }
 
 func TestValidateDiscoveryDocument(t *testing.T) {

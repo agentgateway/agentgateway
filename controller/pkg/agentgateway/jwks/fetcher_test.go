@@ -161,4 +161,6 @@ func awaitStoredKeyset(t *testing.T, cache *JwksCache, requestKey remotehttp.Fet
 	return keyset
 }
 
-var sampleJWKS = `{"keys":[]}`
+// sampleJWKS is a minimal valid JWKS so the fetcher's non-empty-keys check
+// accepts it. Uses an `oct` key to avoid generating real RSA material.
+var sampleJWKS = `{"keys":[{"kty":"oct","k":"AAECAwQFBgc"}]}`

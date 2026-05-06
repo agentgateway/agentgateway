@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/go-jose/go-jose/v4"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotecache"
@@ -53,8 +54,17 @@ func (d *OidcDriver) Fetch(ctx context.Context, source SharedOidcRequest) (Disco
 	if err != nil {
 		return DiscoveredProvider{}, fmt.Errorf("failed to fetch OIDC JWKS from %s: %w", doc.JwksURI, err)
 	}
-	if !json.Valid(jwksBody) {
-		return DiscoveredProvider{}, fmt.Errorf("OIDC JWKS response from %s is not valid JSON", doc.JwksURI)
+	// Validate the JWKS shape, not just JSON well-formedness — an IdP that
+	// returns an unrelated 200 OK body (error envelope, HTML, etc.) would
+	// otherwise be persisted to ConfigMap and fail opaquely in the dataplane.
+	// The original bytes are still stored verbatim so downstream consumers
+	// see exactly what the IdP returned.
+	var keyset jose.JSONWebKeySet
+	if err := json.Unmarshal(jwksBody, &keyset); err != nil {
+		return DiscoveredProvider{}, fmt.Errorf("OIDC JWKS response from %s is not a valid JWKS document: %w", doc.JwksURI, err)
+	}
+	if len(keyset.Keys) == 0 {
+		return DiscoveredProvider{}, fmt.Errorf("OIDC JWKS response from %s contains no keys", doc.JwksURI)
 	}
 
 	return DiscoveredProvider{
