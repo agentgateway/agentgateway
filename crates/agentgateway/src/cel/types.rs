@@ -359,6 +359,9 @@ impl<'a> Executor<'a> {
 	}
 	fn set_response(&mut self, resp: &'a crate::http::Response) {
 		self.response = Some(resp.into());
+		if resp.extensions().get::<LLMContext>().is_some() {
+			self.llm = ExtensionOrDirect::Extension(resp.extensions());
+		}
 	}
 	fn set_response_snapshot(&mut self, resp: &'a ResponseSnapshot) {
 		self.response = Some(resp.into());

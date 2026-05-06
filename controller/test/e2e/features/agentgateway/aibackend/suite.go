@@ -65,7 +65,14 @@ var (
 	}
 	testCases = map[string]*base.TestCase{
 		"TestFailover": {
-			Manifests: []string{failoverEvictionManifest},
+			ManifestsWithTransform: map[string]func(string) string{
+				failoverEvictionManifest: func(original string) string {
+					if runtime.GOOS == "darwin" {
+						return strings.ReplaceAll(original, dockerBridgeIfaceIP, macOSDockerBridgeHost)
+					}
+					return original
+				},
+			},
 		},
 	}
 )
@@ -225,6 +232,7 @@ func (s *testingSuite) TestFailover() {
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body:       gomega.ContainSubstring(expectedResponse),
+			Headers:    map[string]any{"x-backend-model": "gpt-4o-mini", "x-model-swapped": "true"},
 		},
 		curl.WithPath("/v1/chat/completions"),
 		curl.WithPostBody(`{"messages": [{"role": "user", "content": "What is the name of this project?"}]}`),
