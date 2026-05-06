@@ -37,8 +37,9 @@ const (
 	// Ref: https://github.com/solo-io/gloo-gateway-use-cases/blob/76e6cec2f0b41eda7a93ac87a1b0f41ddb17503c/ai-guardrail-webhook-server/main.py#L112
 	maskedPatternResponse = "****ing"
 
-	dockerBridgeIfaceIP = "172.17.0.1"
-
+	// TODO(nfuden): This shoudlnt be in this specific file, it should either be an overarching replacement or a special env variable as we see in some other projects
+	// Mac causes a lot of problems but we should be able to support it in general
+	dockerBridgeIfaceIP   = "172.17.0.1"
 	macOSDockerBridgeHost = "host.docker.internal"
 )
 
