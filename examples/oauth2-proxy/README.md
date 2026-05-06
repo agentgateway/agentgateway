@@ -39,7 +39,7 @@ fields, and re-encode it with `form.decode` and `form.encode`.
 
 ```yaml
 policies:
-  transformation:
+  transformations:
     request:
       body: |
         request.path == "/oauth/devicecode" ?
