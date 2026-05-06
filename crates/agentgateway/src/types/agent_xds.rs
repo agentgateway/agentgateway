@@ -1555,7 +1555,7 @@ fn xds_traffic_policy_from_proto(
 			let policy = oidc_policy_from_proto(oidc)?;
 			policy
 				.compile(encoder)
-				.map(TrafficPolicy::Oidc)
+				.map(|p| TrafficPolicy::Oidc(RequestPolicy::single(p)))
 				.map_err(|e| ProtoError::Generic(format!("failed to compile xDS OIDC policy: {e}")))
 		},
 		_ => traffic_policy_from_proto(spec, diagnostics),
@@ -2636,7 +2636,9 @@ pub(crate) fn targeted_policy_from_proto(
 		Some(pol::Kind::Frontend(spec)) => {
 			agent::PolicyType::Frontend(frontend_policy_from_proto(spec, diagnostics)?)
 		},
-		Some(pol::Kind::Conditional(cond)) => conditional_policy_from_proto(cond, diagnostics)?,
+		Some(pol::Kind::Conditional(cond)) => {
+			conditional_policy_from_proto(cond, diagnostics, oidc_cookie_encoder)?
+		},
 		None => return Err(ProtoError::MissingRequiredField),
 	};
 
@@ -2651,6 +2653,7 @@ pub(crate) fn targeted_policy_from_proto(
 fn conditional_policy_from_proto(
 	cond: &proto::agent::ConditionalPolicies,
 	diagnostics: &mut Diagnostics,
+	oidc_cookie_encoder: Option<&OidcCookieEncoder>,
 ) -> Result<PolicyType, ProtoError> {
 	use crate::types::proto::agent::conditional_policy as cp;
 
@@ -2662,7 +2665,8 @@ fn conditional_policy_from_proto(
 		};
 		match kind {
 			cp::Kind::Traffic(spec) => {
-				let traffic_policy = phased_traffic_policy_from_proto(spec, diagnostics)?;
+				let traffic_policy =
+					xds_phased_traffic_policy_from_proto(spec, diagnostics, oidc_cookie_encoder)?;
 				let policy_kind = traffic_policy_kind_name(&traffic_policy.policy);
 				let policy_phase = traffic_policy.phase;
 				if let Some((expected_kind, expected_phase)) = expected_shape {
@@ -3077,7 +3081,7 @@ mod tests {
 			)),
 		};
 
-		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default())?;
+		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default(), None)?;
 		let PolicyType::Traffic(PhasedTrafficPolicy {
 			policy: TrafficPolicy::RequestHeaderModifier(policies),
 			..
@@ -3115,7 +3119,7 @@ mod tests {
 			)),
 		};
 
-		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default())?;
+		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default(), None)?;
 		let PolicyType::Traffic(PhasedTrafficPolicy {
 			policy: TrafficPolicy::RequestHeaderModifier(policies),
 			..
@@ -3150,7 +3154,7 @@ mod tests {
 		};
 
 		let mut diagnostics = Diagnostics::default();
-		let policy = targeted_policy_from_proto(&policy, &mut diagnostics)?;
+		let policy = targeted_policy_from_proto(&policy, &mut diagnostics, None)?;
 		let PolicyType::Traffic(PhasedTrafficPolicy {
 			policy: TrafficPolicy::RequestHeaderModifier(policies),
 			..
@@ -3199,7 +3203,7 @@ mod tests {
 			)),
 		};
 
-		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default())?;
+		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default(), None)?;
 		let PolicyType::Traffic(PhasedTrafficPolicy {
 			policy: TrafficPolicy::LocalRateLimit(policies),
 			..
@@ -3237,12 +3241,74 @@ mod tests {
 			)),
 		};
 
-		let err = targeted_policy_from_proto(&policy, &mut Diagnostics::default())
+		let err = targeted_policy_from_proto(&policy, &mut Diagnostics::default(), None)
 			.expect_err("mixed conditional traffic kinds should be rejected");
 		assert!(
 			err
 				.to_string()
 				.contains("must all have the same traffic policy kind")
+		);
+	}
+
+	#[test]
+	fn test_targeted_policy_from_proto_conditional_oidc() -> Result<(), ProtoError> {
+		let policy = proto::agent::Policy {
+			key: "policy".to_string(),
+			name: None,
+			target: Some(test_policy_target()),
+			kind: Some(proto::agent::policy::Kind::Conditional(
+				proto::agent::ConditionalPolicies {
+					policies: vec![
+						conditional_traffic_policy(
+							"request.path.startsWith('/admin')",
+							proto::agent::traffic_policy_spec::Kind::Oidc(sample_oidc_proto()),
+						),
+						conditional_traffic_policy(
+							"request.path.startsWith('/internal')",
+							proto::agent::traffic_policy_spec::Kind::Oidc(sample_oidc_proto()),
+						),
+					],
+				},
+			)),
+		};
+
+		let encoder = test_oidc_cookie_encoder();
+		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default(), Some(&encoder))?;
+		let PolicyType::Traffic(PhasedTrafficPolicy {
+			policy: TrafficPolicy::Oidc(policies),
+			..
+		}) = policy.policy
+		else {
+			panic!("expected conditional OIDC policy");
+		};
+		let entries = policies.iter().collect::<Vec<_>>();
+		assert_eq!(entries.len(), 2);
+		assert!(entries[0].condition.is_some());
+		assert!(entries[1].condition.is_some());
+		Ok(())
+	}
+
+	#[test]
+	fn test_targeted_policy_from_proto_conditional_oidc_requires_session_key() {
+		let policy = proto::agent::Policy {
+			key: "policy".to_string(),
+			name: None,
+			target: Some(test_policy_target()),
+			kind: Some(proto::agent::policy::Kind::Conditional(
+				proto::agent::ConditionalPolicies {
+					policies: vec![conditional_traffic_policy(
+						"request.path.startsWith('/admin')",
+						proto::agent::traffic_policy_spec::Kind::Oidc(sample_oidc_proto()),
+					)],
+				},
+			)),
+		};
+
+		let err = targeted_policy_from_proto(&policy, &mut Diagnostics::default(), None)
+			.expect_err("conditional OIDC without encoder must be rejected");
+		assert!(
+			err.to_string().contains("SESSION_KEY"),
+			"expected SESSION_KEY rejection, got: {err}",
 		);
 	}
 

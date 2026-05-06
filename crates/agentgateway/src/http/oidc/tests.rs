@@ -245,6 +245,37 @@ fn parse_set_cookie(set_cookie: &str) -> cookie::Cookie<'static> {
 		.into_owned()
 }
 
+fn make_min_req_log() -> crate::telemetry::log::RequestLog {
+	use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+	use std::sync::Arc;
+
+	use frozen_collections::FzHashSet;
+	use prometheus_client::registry::Registry;
+
+	use crate::telemetry::log;
+	use crate::telemetry::log::{LoggingFields, MetricsConfig, RequestLog};
+	use crate::telemetry::metrics::Metrics;
+	use crate::transport::stream::TCPConnectionInfo;
+
+	let log_cfg = log::Config {
+		filter: None,
+		fields: LoggingFields::default(),
+		level: "info".to_string(),
+		format: crate::LoggingFormat::Text,
+	};
+	let cel = log::CelLogging::new(log_cfg, MetricsConfig::default());
+	let mut prom = Registry::default();
+	let metrics = Arc::new(Metrics::new(&mut prom, FzHashSet::default()));
+	let start = agent_core::Timestamp::now();
+	let tcp_info = TCPConnectionInfo {
+		peer_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345),
+		local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080),
+		start: start.as_instant(),
+		raw_peer_addr: None,
+	};
+	RequestLog::new(cel, metrics, start, tcp_info)
+}
+
 fn explicit_local_oidc_config() -> LocalOidcConfig {
 	LocalOidcConfig {
 		issuer: TEST_ISSUER.into(),
@@ -836,8 +867,9 @@ async fn callback_rejects_transaction_cookie_from_incompatible_policy() {
 		),
 	);
 
+	let mut log = make_min_req_log();
 	let err = target
-		.apply(None, &mut req, policy_client())
+		.apply(&mut log, &mut req, policy_client())
 		.await
 		.expect_err("incompatible transaction policy must be rejected");
 	assert!(matches!(err, Error::PolicyMismatch));
@@ -871,8 +903,9 @@ async fn browser_session_cookie_from_incompatible_policy_is_not_accepted() {
 		format!("{}={encoded}", target.session.cookie_name),
 	);
 
+	let mut log = make_min_req_log();
 	let response = target
-		.apply(None, &mut req, policy_client())
+		.apply(&mut log, &mut req, policy_client())
 		.await
 		.expect("target policy should start a fresh login");
 	assert!(
