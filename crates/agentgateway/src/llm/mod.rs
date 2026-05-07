@@ -155,6 +155,11 @@ trait Provider {
 pub struct LLMRequest {
 	/// Input tokens derived by tokenizing the request. Not always enabled
 	pub input_tokens: Option<u64>,
+	/// The actual weighted cost charged at pre-flight time. Stored for accurate
+	/// true-up delta calculation (avoids re-deriving the cache-aware split).
+	pub preflight_cost: Option<u64>,
+	/// Number of messages in the request. Used for cache-aware preflight estimation.
+	pub message_count: usize,
 	pub input_format: InputFormat,
 	pub request_model: Strng,
 	pub provider: Strng,
@@ -1605,19 +1610,50 @@ pub enum AIError {
 }
 
 fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo) {
-	let input_mismatch = match (
+	// Resolve token cost multipliers — defaults to 1.0 for all categories when absent.
+	let tc = rate_limit
+		.token_costs
+		.as_deref()
+		.cloned()
+		.unwrap_or_default();
+
+	let cache_read = llm_resp.response.cached_input_tokens.unwrap_or_default();
+	let cache_write = llm_resp
+		.response
+		.cache_creation_input_tokens
+		.unwrap_or_default();
+	let output = llm_resp.response.output_tokens.unwrap_or_default();
+
+	// Compute the input budget adjustment using weighted token costs.
+	// Mirrors the original three-case logic:
+	//   • (req, resp) known  → delta between weighted actual and weighted pre-flight
+	//   • resp unknown       → nothing to adjust (0), true-up is output only
+	//   • req unknown only   → charge the full weighted actual input (pre-flight was 0)
+	let input_adjustment: i64 = match (
 		llm_resp.request.input_tokens,
 		llm_resp.response.input_tokens,
 	) {
-		// Already counted 'req'
-		(Some(req), Some(resp)) => (resp as i64) - (req as i64),
-		// No request or response count... this is probably an issue.
+		// Response has no input token count — no input delta, only output will be charged.
 		(_, None) => 0,
-		// No request counted, so count the full response
-		(_, Some(resp)) => resp as i64,
+		(req_opt, Some(resp)) => {
+			// Separate cached tokens from base input so each category is billed at its
+			// own multiplier rather than being double-counted at the input rate.
+			let base_input = resp.saturating_sub(cache_read).saturating_sub(cache_write);
+			let weighted_actual = tc.weighted_cost(base_input, 0, cache_write, cache_read) as i64;
+			// Use the stored preflight_cost (cache-aware weighted charge) when available.
+			// Fall back to raw estimation (input × multiplier) for backward compatibility.
+			let weighted_preflight = llm_resp
+				.request
+				.preflight_cost
+				.map(|c| c as i64)
+				.or_else(|| req_opt.map(|r| (r as f64 * tc.input).round() as i64))
+				.unwrap_or(0);
+			weighted_actual - weighted_preflight
+		},
 	};
-	let response = llm_resp.response.output_tokens.unwrap_or_default();
-	let tokens_to_remove = input_mismatch + (response as i64);
+
+	let weighted_output = (output as f64 * tc.output).round() as i64;
+	let tokens_to_remove = input_adjustment + weighted_output;
 
 	for lrl in &rate_limit.local_rate_limit {
 		lrl.amend_tokens(tokens_to_remove)

@@ -359,6 +359,51 @@ type FieldTransformation struct {
 	Expression shared.CELExpression `json:"expression"`
 }
 
+// TokenCosts defines per-category cost multipliers for LLM token budget accounting.
+//
+// When the gateway charges tokens against the rate-limiter budget, each raw token is
+// multiplied by the corresponding multiplier before the counter is incremented. This
+// allows operators to express budgets in cost-proportional units rather than raw token
+// counts, closing the pricing gap between cheap cached reads and expensive cache writes
+// or output tokens across different models.
+//
+// All fields default to 1 when omitted, preserving backward compatibility — an existing
+// backend with no `tokenCosts` block is charged 1 budget unit per raw token, identical
+// to the previous behavior.
+//
+// Example — approximate Anthropic Claude 3.5 Sonnet pricing ratios (input = baseline 1):
+//
+//	tokenCosts:
+//	  input: 1
+//	  output: 5
+//	  cacheWrite: 1.25
+//	  cacheRead: 0.1
+type TokenCosts struct {
+	// Input is the multiplier applied to non-cached input tokens.
+	// Defaults to 1 when omitted. Must be a positive decimal number (e.g. "1", "5.0", "0.1").
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="double(self) > 0.0",message="input multiplier must be positive"
+	Input *string `json:"input,omitempty"`
+
+	// Output is the multiplier applied to output (completion) tokens.
+	// Defaults to 1 when omitted. Must be a positive decimal number (e.g. "1", "5.0", "0.1").
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="double(self) > 0.0",message="output multiplier must be positive"
+	Output *string `json:"output,omitempty"`
+
+	// CacheWrite is the multiplier applied to tokens that create a new cache entry.
+	// Defaults to 1 when omitted. Must be a positive decimal number (e.g. "1", "5.0", "0.1").
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="double(self) > 0.0",message="cacheWrite multiplier must be positive"
+	CacheWrite *string `json:"cacheWrite,omitempty"`
+
+	// CacheRead is the multiplier applied to tokens served from an existing cache entry.
+	// Defaults to 1 when omitted. Must be a positive decimal number (e.g. "1", "5.0", "0.1").
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="double(self) > 0.0",message="cacheRead multiplier must be positive"
+	CacheRead *string `json:"cacheRead,omitempty"`
+}
+
 // PromptCachingConfig configures automatic prompt caching for supported LLM providers.
 // Currently only AWS Bedrock supports this feature (Claude 3+ and Nova models).
 //

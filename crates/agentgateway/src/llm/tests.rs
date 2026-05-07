@@ -583,6 +583,8 @@ mod response {
 	pub fn dummy_llm_req(input_format: InputFormat) -> LLMRequest {
 		LLMRequest {
 			input_tokens: None,
+			preflight_cost: None,
+			message_count: 0,
 			input_format,
 			request_model: "input-model".into(),
 			provider: Default::default(),
@@ -1061,6 +1063,8 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 
 	let req = LLMRequest {
 		input_tokens: None,
+		preflight_cost: None,
+		message_count: 0,
 		input_format: InputFormat::Completions,
 		request_model: "input-model".into(),
 		provider: Default::default(),
@@ -1141,6 +1145,8 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 		.process_streaming(
 			LLMRequest {
 				input_tokens: None,
+				preflight_cost: None,
+				message_count: 0,
 				input_format: InputFormat::Completions,
 				request_model: "input-model".into(),
 				provider: Default::default(),
@@ -1229,6 +1235,8 @@ fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 fn llm_request_for_path(request_model: &str) -> LLMRequest {
 	LLMRequest {
 		input_tokens: None,
+		preflight_cost: None,
+		message_count: 0,
 		input_format: InputFormat::Messages,
 		request_model: request_model.into(),
 		provider: Default::default(),

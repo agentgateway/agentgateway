@@ -2119,6 +2119,7 @@ json(request.body).model
 			wildcard_patterns: Arc::new(vec![]),
 			prompt_caching: None,
 			routes: Default::default(),
+			token_costs: None,
 		})));
 		let backend_with_policies = BackendWithPolicies {
 			backend: Backend::AI(local_name(backend_key.clone()), ai_backend),

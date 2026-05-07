@@ -963,6 +963,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].policies.ai.promptCaching.minTokens`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptCaching.cacheMessageOffset`|integer||
+|`binds[].listeners[].routes[].policies.ai.tokenCosts`|object|Per-category cost multipliers for LLM token budget accounting.<br><br>When the gateway charges tokens against the rate-limiter budget (via `hits_addend`),<br>each raw token is multiplied by the corresponding multiplier before the counter is<br>incremented. This allows `requests_per_unit` on the rate-limit server to represent<br>a cost-proportional budget unit rather than a raw token count, closing the pricing<br>gap between e.g. cheap cached reads and expensive cache writes across different models.<br><br>All fields default to `1.0` when omitted — backward compatible with configs that<br>pre-date this feature.<br><br># Budget charge formula<br>```text<br>budget_units = (base_input × input)<br>             + (output_tokens × output)<br>             + (cache_write_tokens × cacheWrite)<br>             + (cache_read_tokens × cacheRead)<br><br>where base_input = total_input_tokens − cache_read_tokens − cache_write_tokens<br>```|
+|`binds[].listeners[].routes[].policies.ai.tokenCosts.input`|number|Multiplier applied to non-cached input tokens. Defaults to `1.0`.|
+|`binds[].listeners[].routes[].policies.ai.tokenCosts.output`|number|Multiplier applied to output (completion) tokens. Defaults to `1.0`.|
+|`binds[].listeners[].routes[].policies.ai.tokenCosts.cacheWrite`|number|Multiplier applied to tokens that create a new cache entry. Defaults to `1.0`.|
+|`binds[].listeners[].routes[].policies.ai.tokenCosts.cacheRead`|number|Multiplier applied to tokens served from an existing cache entry. Defaults to `1.0`.|
 |`binds[].listeners[].routes[].policies.ai.routes`|object||
 |`binds[].listeners[].routes[].policies.backendTLS`|object|Send TLS to the backend.|
 |`binds[].listeners[].routes[].policies.backendTLS.cert`|string||
@@ -2808,6 +2813,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.minTokens`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.tokenCosts`|object|Per-category cost multipliers for LLM token budget accounting.<br><br>When the gateway charges tokens against the rate-limiter budget (via `hits_addend`),<br>each raw token is multiplied by the corresponding multiplier before the counter is<br>incremented. This allows `requests_per_unit` on the rate-limit server to represent<br>a cost-proportional budget unit rather than a raw token count, closing the pricing<br>gap between e.g. cheap cached reads and expensive cache writes across different models.<br><br>All fields default to `1.0` when omitted — backward compatible with configs that<br>pre-date this feature.<br><br># Budget charge formula<br>```text<br>budget_units = (base_input × input)<br>             + (output_tokens × output)<br>             + (cache_write_tokens × cacheWrite)<br>             + (cache_read_tokens × cacheRead)<br><br>where base_input = total_input_tokens − cache_read_tokens − cache_write_tokens<br>```|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.tokenCosts.input`|number|Multiplier applied to non-cached input tokens. Defaults to `1.0`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.tokenCosts.output`|number|Multiplier applied to output (completion) tokens. Defaults to `1.0`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.tokenCosts.cacheWrite`|number|Multiplier applied to tokens that create a new cache entry. Defaults to `1.0`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.tokenCosts.cacheRead`|number|Multiplier applied to tokens served from an existing cache entry. Defaults to `1.0`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.routes`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers`|[]object||
@@ -3881,6 +3891,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.minTokens`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.tokenCosts`|object|Per-category cost multipliers for LLM token budget accounting.<br><br>When the gateway charges tokens against the rate-limiter budget (via `hits_addend`),<br>each raw token is multiplied by the corresponding multiplier before the counter is<br>incremented. This allows `requests_per_unit` on the rate-limit server to represent<br>a cost-proportional budget unit rather than a raw token count, closing the pricing<br>gap between e.g. cheap cached reads and expensive cache writes across different models.<br><br>All fields default to `1.0` when omitted — backward compatible with configs that<br>pre-date this feature.<br><br># Budget charge formula<br>```text<br>budget_units = (base_input × input)<br>             + (output_tokens × output)<br>             + (cache_write_tokens × cacheWrite)<br>             + (cache_read_tokens × cacheRead)<br><br>where base_input = total_input_tokens − cache_read_tokens − cache_write_tokens<br>```|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.tokenCosts.input`|number|Multiplier applied to non-cached input tokens. Defaults to `1.0`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.tokenCosts.output`|number|Multiplier applied to output (completion) tokens. Defaults to `1.0`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.tokenCosts.cacheWrite`|number|Multiplier applied to tokens that create a new cache entry. Defaults to `1.0`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.tokenCosts.cacheRead`|number|Multiplier applied to tokens served from an existing cache entry. Defaults to `1.0`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.routes`|object||
 |`binds[].listeners[].routes[].backends[].aws`|object||
 |`binds[].listeners[].routes[].backends[].aws.agentCore`|object||
@@ -4929,6 +4944,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheTools`|boolean||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.minTokens`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.tokenCosts`|object|Per-category cost multipliers for LLM token budget accounting.<br><br>When the gateway charges tokens against the rate-limiter budget (via `hits_addend`),<br>each raw token is multiplied by the corresponding multiplier before the counter is<br>incremented. This allows `requests_per_unit` on the rate-limit server to represent<br>a cost-proportional budget unit rather than a raw token count, closing the pricing<br>gap between e.g. cheap cached reads and expensive cache writes across different models.<br><br>All fields default to `1.0` when omitted — backward compatible with configs that<br>pre-date this feature.<br><br># Budget charge formula<br>```text<br>budget_units = (base_input × input)<br>             + (output_tokens × output)<br>             + (cache_write_tokens × cacheWrite)<br>             + (cache_read_tokens × cacheRead)<br><br>where base_input = total_input_tokens − cache_read_tokens − cache_write_tokens<br>```|
+|`binds[].listeners[].routes[].backends[].policies.ai.tokenCosts.input`|number|Multiplier applied to non-cached input tokens. Defaults to `1.0`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.tokenCosts.output`|number|Multiplier applied to output (completion) tokens. Defaults to `1.0`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.tokenCosts.cacheWrite`|number|Multiplier applied to tokens that create a new cache entry. Defaults to `1.0`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.tokenCosts.cacheRead`|number|Multiplier applied to tokens served from an existing cache entry. Defaults to `1.0`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.routes`|object||
 |`binds[].listeners[].tcpRoutes`|[]object||
 |`binds[].listeners[].tcpRoutes[].name`|string||
@@ -6561,6 +6581,11 @@
 |`policies[].policy.ai.promptCaching.cacheTools`|boolean||
 |`policies[].policy.ai.promptCaching.minTokens`|integer||
 |`policies[].policy.ai.promptCaching.cacheMessageOffset`|integer||
+|`policies[].policy.ai.tokenCosts`|object|Per-category cost multipliers for LLM token budget accounting.<br><br>When the gateway charges tokens against the rate-limiter budget (via `hits_addend`),<br>each raw token is multiplied by the corresponding multiplier before the counter is<br>incremented. This allows `requests_per_unit` on the rate-limit server to represent<br>a cost-proportional budget unit rather than a raw token count, closing the pricing<br>gap between e.g. cheap cached reads and expensive cache writes across different models.<br><br>All fields default to `1.0` when omitted — backward compatible with configs that<br>pre-date this feature.<br><br># Budget charge formula<br>```text<br>budget_units = (base_input × input)<br>             + (output_tokens × output)<br>             + (cache_write_tokens × cacheWrite)<br>             + (cache_read_tokens × cacheRead)<br><br>where base_input = total_input_tokens − cache_read_tokens − cache_write_tokens<br>```|
+|`policies[].policy.ai.tokenCosts.input`|number|Multiplier applied to non-cached input tokens. Defaults to `1.0`.|
+|`policies[].policy.ai.tokenCosts.output`|number|Multiplier applied to output (completion) tokens. Defaults to `1.0`.|
+|`policies[].policy.ai.tokenCosts.cacheWrite`|number|Multiplier applied to tokens that create a new cache entry. Defaults to `1.0`.|
+|`policies[].policy.ai.tokenCosts.cacheRead`|number|Multiplier applied to tokens served from an existing cache entry. Defaults to `1.0`.|
 |`policies[].policy.ai.routes`|object||
 |`policies[].policy.backendTLS`|object|Send TLS to the backend.|
 |`policies[].policy.backendTLS.cert`|string||
@@ -8401,6 +8426,11 @@
 |`backends[].ai.policies.ai.promptCaching.cacheTools`|boolean||
 |`backends[].ai.policies.ai.promptCaching.minTokens`|integer||
 |`backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer||
+|`backends[].ai.policies.ai.tokenCosts`|object|Per-category cost multipliers for LLM token budget accounting.<br><br>When the gateway charges tokens against the rate-limiter budget (via `hits_addend`),<br>each raw token is multiplied by the corresponding multiplier before the counter is<br>incremented. This allows `requests_per_unit` on the rate-limit server to represent<br>a cost-proportional budget unit rather than a raw token count, closing the pricing<br>gap between e.g. cheap cached reads and expensive cache writes across different models.<br><br>All fields default to `1.0` when omitted — backward compatible with configs that<br>pre-date this feature.<br><br># Budget charge formula<br>```text<br>budget_units = (base_input × input)<br>             + (output_tokens × output)<br>             + (cache_write_tokens × cacheWrite)<br>             + (cache_read_tokens × cacheRead)<br><br>where base_input = total_input_tokens − cache_read_tokens − cache_write_tokens<br>```|
+|`backends[].ai.policies.ai.tokenCosts.input`|number|Multiplier applied to non-cached input tokens. Defaults to `1.0`.|
+|`backends[].ai.policies.ai.tokenCosts.output`|number|Multiplier applied to output (completion) tokens. Defaults to `1.0`.|
+|`backends[].ai.policies.ai.tokenCosts.cacheWrite`|number|Multiplier applied to tokens that create a new cache entry. Defaults to `1.0`.|
+|`backends[].ai.policies.ai.tokenCosts.cacheRead`|number|Multiplier applied to tokens served from an existing cache entry. Defaults to `1.0`.|
 |`backends[].ai.policies.ai.routes`|object||
 |`backends[].ai.groups`|[]object||
 |`backends[].ai.groups[].providers`|[]object||
@@ -9474,6 +9504,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheTools`|boolean||
 |`backends[].ai.groups[].providers[].policies.ai.promptCaching.minTokens`|integer||
 |`backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer||
+|`backends[].ai.groups[].providers[].policies.ai.tokenCosts`|object|Per-category cost multipliers for LLM token budget accounting.<br><br>When the gateway charges tokens against the rate-limiter budget (via `hits_addend`),<br>each raw token is multiplied by the corresponding multiplier before the counter is<br>incremented. This allows `requests_per_unit` on the rate-limit server to represent<br>a cost-proportional budget unit rather than a raw token count, closing the pricing<br>gap between e.g. cheap cached reads and expensive cache writes across different models.<br><br>All fields default to `1.0` when omitted — backward compatible with configs that<br>pre-date this feature.<br><br># Budget charge formula<br>```text<br>budget_units = (base_input × input)<br>             + (output_tokens × output)<br>             + (cache_write_tokens × cacheWrite)<br>             + (cache_read_tokens × cacheRead)<br><br>where base_input = total_input_tokens − cache_read_tokens − cache_write_tokens<br>```|
+|`backends[].ai.groups[].providers[].policies.ai.tokenCosts.input`|number|Multiplier applied to non-cached input tokens. Defaults to `1.0`.|
+|`backends[].ai.groups[].providers[].policies.ai.tokenCosts.output`|number|Multiplier applied to output (completion) tokens. Defaults to `1.0`.|
+|`backends[].ai.groups[].providers[].policies.ai.tokenCosts.cacheWrite`|number|Multiplier applied to tokens that create a new cache entry. Defaults to `1.0`.|
+|`backends[].ai.groups[].providers[].policies.ai.tokenCosts.cacheRead`|number|Multiplier applied to tokens served from an existing cache entry. Defaults to `1.0`.|
 |`backends[].ai.groups[].providers[].policies.ai.routes`|object||
 |`backends[].aws`|object||
 |`backends[].aws.agentCore`|object||
@@ -10521,6 +10556,11 @@
 |`backends[].policies.ai.promptCaching.cacheTools`|boolean||
 |`backends[].policies.ai.promptCaching.minTokens`|integer||
 |`backends[].policies.ai.promptCaching.cacheMessageOffset`|integer||
+|`backends[].policies.ai.tokenCosts`|object|Per-category cost multipliers for LLM token budget accounting.<br><br>When the gateway charges tokens against the rate-limiter budget (via `hits_addend`),<br>each raw token is multiplied by the corresponding multiplier before the counter is<br>incremented. This allows `requests_per_unit` on the rate-limit server to represent<br>a cost-proportional budget unit rather than a raw token count, closing the pricing<br>gap between e.g. cheap cached reads and expensive cache writes across different models.<br><br>All fields default to `1.0` when omitted — backward compatible with configs that<br>pre-date this feature.<br><br># Budget charge formula<br>```text<br>budget_units = (base_input × input)<br>             + (output_tokens × output)<br>             + (cache_write_tokens × cacheWrite)<br>             + (cache_read_tokens × cacheRead)<br><br>where base_input = total_input_tokens − cache_read_tokens − cache_write_tokens<br>```|
+|`backends[].policies.ai.tokenCosts.input`|number|Multiplier applied to non-cached input tokens. Defaults to `1.0`.|
+|`backends[].policies.ai.tokenCosts.output`|number|Multiplier applied to output (completion) tokens. Defaults to `1.0`.|
+|`backends[].policies.ai.tokenCosts.cacheWrite`|number|Multiplier applied to tokens that create a new cache entry. Defaults to `1.0`.|
+|`backends[].policies.ai.tokenCosts.cacheRead`|number|Multiplier applied to tokens served from an existing cache entry. Defaults to `1.0`.|
 |`backends[].policies.ai.routes`|object||
 |`routeGroups`|[]object||
 |`routeGroups[].name`|string||
@@ -11406,6 +11446,11 @@
 |`routeGroups[].routes[].policies.ai.promptCaching.cacheTools`|boolean||
 |`routeGroups[].routes[].policies.ai.promptCaching.minTokens`|integer||
 |`routeGroups[].routes[].policies.ai.promptCaching.cacheMessageOffset`|integer||
+|`routeGroups[].routes[].policies.ai.tokenCosts`|object|Per-category cost multipliers for LLM token budget accounting.<br><br>When the gateway charges tokens against the rate-limiter budget (via `hits_addend`),<br>each raw token is multiplied by the corresponding multiplier before the counter is<br>incremented. This allows `requests_per_unit` on the rate-limit server to represent<br>a cost-proportional budget unit rather than a raw token count, closing the pricing<br>gap between e.g. cheap cached reads and expensive cache writes across different models.<br><br>All fields default to `1.0` when omitted — backward compatible with configs that<br>pre-date this feature.<br><br># Budget charge formula<br>```text<br>budget_units = (base_input × input)<br>             + (output_tokens × output)<br>             + (cache_write_tokens × cacheWrite)<br>             + (cache_read_tokens × cacheRead)<br><br>where base_input = total_input_tokens − cache_read_tokens − cache_write_tokens<br>```|
+|`routeGroups[].routes[].policies.ai.tokenCosts.input`|number|Multiplier applied to non-cached input tokens. Defaults to `1.0`.|
+|`routeGroups[].routes[].policies.ai.tokenCosts.output`|number|Multiplier applied to output (completion) tokens. Defaults to `1.0`.|
+|`routeGroups[].routes[].policies.ai.tokenCosts.cacheWrite`|number|Multiplier applied to tokens that create a new cache entry. Defaults to `1.0`.|
+|`routeGroups[].routes[].policies.ai.tokenCosts.cacheRead`|number|Multiplier applied to tokens served from an existing cache entry. Defaults to `1.0`.|
 |`routeGroups[].routes[].policies.ai.routes`|object||
 |`routeGroups[].routes[].policies.backendTLS`|object|Send TLS to the backend.|
 |`routeGroups[].routes[].policies.backendTLS.cert`|string||
@@ -13251,6 +13296,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptCaching.cacheTools`|boolean||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptCaching.minTokens`|integer||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.ai.tokenCosts`|object|Per-category cost multipliers for LLM token budget accounting.<br><br>When the gateway charges tokens against the rate-limiter budget (via `hits_addend`),<br>each raw token is multiplied by the corresponding multiplier before the counter is<br>incremented. This allows `requests_per_unit` on the rate-limit server to represent<br>a cost-proportional budget unit rather than a raw token count, closing the pricing<br>gap between e.g. cheap cached reads and expensive cache writes across different models.<br><br>All fields default to `1.0` when omitted — backward compatible with configs that<br>pre-date this feature.<br><br># Budget charge formula<br>```text<br>budget_units = (base_input × input)<br>             + (output_tokens × output)<br>             + (cache_write_tokens × cacheWrite)<br>             + (cache_read_tokens × cacheRead)<br><br>where base_input = total_input_tokens − cache_read_tokens − cache_write_tokens<br>```|
+|`routeGroups[].routes[].backends[].ai.policies.ai.tokenCosts.input`|number|Multiplier applied to non-cached input tokens. Defaults to `1.0`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.tokenCosts.output`|number|Multiplier applied to output (completion) tokens. Defaults to `1.0`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.tokenCosts.cacheWrite`|number|Multiplier applied to tokens that create a new cache entry. Defaults to `1.0`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.tokenCosts.cacheRead`|number|Multiplier applied to tokens served from an existing cache entry. Defaults to `1.0`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.routes`|object||
 |`routeGroups[].routes[].backends[].ai.groups`|[]object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers`|[]object||
@@ -14324,6 +14374,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheTools`|boolean||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.minTokens`|integer||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.tokenCosts`|object|Per-category cost multipliers for LLM token budget accounting.<br><br>When the gateway charges tokens against the rate-limiter budget (via `hits_addend`),<br>each raw token is multiplied by the corresponding multiplier before the counter is<br>incremented. This allows `requests_per_unit` on the rate-limit server to represent<br>a cost-proportional budget unit rather than a raw token count, closing the pricing<br>gap between e.g. cheap cached reads and expensive cache writes across different models.<br><br>All fields default to `1.0` when omitted — backward compatible with configs that<br>pre-date this feature.<br><br># Budget charge formula<br>```text<br>budget_units = (base_input × input)<br>             + (output_tokens × output)<br>             + (cache_write_tokens × cacheWrite)<br>             + (cache_read_tokens × cacheRead)<br><br>where base_input = total_input_tokens − cache_read_tokens − cache_write_tokens<br>```|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.tokenCosts.input`|number|Multiplier applied to non-cached input tokens. Defaults to `1.0`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.tokenCosts.output`|number|Multiplier applied to output (completion) tokens. Defaults to `1.0`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.tokenCosts.cacheWrite`|number|Multiplier applied to tokens that create a new cache entry. Defaults to `1.0`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.tokenCosts.cacheRead`|number|Multiplier applied to tokens served from an existing cache entry. Defaults to `1.0`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.routes`|object||
 |`routeGroups[].routes[].backends[].aws`|object||
 |`routeGroups[].routes[].backends[].aws.agentCore`|object||
@@ -15372,6 +15427,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptCaching.cacheTools`|boolean||
 |`routeGroups[].routes[].backends[].policies.ai.promptCaching.minTokens`|integer||
 |`routeGroups[].routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer||
+|`routeGroups[].routes[].backends[].policies.ai.tokenCosts`|object|Per-category cost multipliers for LLM token budget accounting.<br><br>When the gateway charges tokens against the rate-limiter budget (via `hits_addend`),<br>each raw token is multiplied by the corresponding multiplier before the counter is<br>incremented. This allows `requests_per_unit` on the rate-limit server to represent<br>a cost-proportional budget unit rather than a raw token count, closing the pricing<br>gap between e.g. cheap cached reads and expensive cache writes across different models.<br><br>All fields default to `1.0` when omitted — backward compatible with configs that<br>pre-date this feature.<br><br># Budget charge formula<br>```text<br>budget_units = (base_input × input)<br>             + (output_tokens × output)<br>             + (cache_write_tokens × cacheWrite)<br>             + (cache_read_tokens × cacheRead)<br><br>where base_input = total_input_tokens − cache_read_tokens − cache_write_tokens<br>```|
+|`routeGroups[].routes[].backends[].policies.ai.tokenCosts.input`|number|Multiplier applied to non-cached input tokens. Defaults to `1.0`.|
+|`routeGroups[].routes[].backends[].policies.ai.tokenCosts.output`|number|Multiplier applied to output (completion) tokens. Defaults to `1.0`.|
+|`routeGroups[].routes[].backends[].policies.ai.tokenCosts.cacheWrite`|number|Multiplier applied to tokens that create a new cache entry. Defaults to `1.0`.|
+|`routeGroups[].routes[].backends[].policies.ai.tokenCosts.cacheRead`|number|Multiplier applied to tokens served from an existing cache entry. Defaults to `1.0`.|
 |`routeGroups[].routes[].backends[].policies.ai.routes`|object||
 |`llm`|object||
 |`llm.port`|integer||
@@ -17641,6 +17701,11 @@
 |`mcp.policies.ai.promptCaching.cacheTools`|boolean||
 |`mcp.policies.ai.promptCaching.minTokens`|integer||
 |`mcp.policies.ai.promptCaching.cacheMessageOffset`|integer||
+|`mcp.policies.ai.tokenCosts`|object|Per-category cost multipliers for LLM token budget accounting.<br><br>When the gateway charges tokens against the rate-limiter budget (via `hits_addend`),<br>each raw token is multiplied by the corresponding multiplier before the counter is<br>incremented. This allows `requests_per_unit` on the rate-limit server to represent<br>a cost-proportional budget unit rather than a raw token count, closing the pricing<br>gap between e.g. cheap cached reads and expensive cache writes across different models.<br><br>All fields default to `1.0` when omitted — backward compatible with configs that<br>pre-date this feature.<br><br># Budget charge formula<br>```text<br>budget_units = (base_input × input)<br>             + (output_tokens × output)<br>             + (cache_write_tokens × cacheWrite)<br>             + (cache_read_tokens × cacheRead)<br><br>where base_input = total_input_tokens − cache_read_tokens − cache_write_tokens<br>```|
+|`mcp.policies.ai.tokenCosts.input`|number|Multiplier applied to non-cached input tokens. Defaults to `1.0`.|
+|`mcp.policies.ai.tokenCosts.output`|number|Multiplier applied to output (completion) tokens. Defaults to `1.0`.|
+|`mcp.policies.ai.tokenCosts.cacheWrite`|number|Multiplier applied to tokens that create a new cache entry. Defaults to `1.0`.|
+|`mcp.policies.ai.tokenCosts.cacheRead`|number|Multiplier applied to tokens served from an existing cache entry. Defaults to `1.0`.|
 |`mcp.policies.ai.routes`|object||
 |`mcp.policies.backendTLS`|object|Send TLS to the backend.|
 |`mcp.policies.backendTLS.cert`|string||

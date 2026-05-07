@@ -1086,6 +1086,8 @@ impl From<llm::LLMRequest> for LLMContext {
 	fn from(info: LLMRequest) -> Self {
 		let LLMRequest {
 			input_tokens,
+			preflight_cost: _,
+			message_count: _,
 			input_format: _, // Expose this?
 			request_model,
 			provider,

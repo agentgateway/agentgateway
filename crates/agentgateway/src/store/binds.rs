@@ -410,6 +410,7 @@ impl LLMRequestPolicies {
 				.prompt_caching
 				.clone()
 				.or_else(|| re.prompt_caching.clone()),
+			token_costs: be.token_costs.clone().or_else(|| re.token_costs.clone()),
 			routes: if be.routes.is_empty() {
 				re.routes.clone()
 			} else {
@@ -425,6 +426,10 @@ pub struct LLMResponsePolicies {
 	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
 	pub remote_rate_limit: Option<http::remoteratelimit::LLMResponseAmend>,
 	pub prompt_guard: Vec<ResponseGuard>,
+	/// Token cost multipliers copied from the backend's AI policy.
+	/// Used at true-up time to apply per-category cost scaling before
+	/// amending the rate-limit counter.
+	pub token_costs: Option<Arc<llm::policy::TokenCosts>>,
 }
 
 impl Default for Store {
@@ -2606,5 +2611,137 @@ mod tests {
 			pols_b.access_log.is_none(),
 			"section-targeted policy should NOT apply to a different listener in the same set"
 		);
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LLMRequestPolicies::merge_backend_policies — token_costs merge tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod merge_token_costs_tests {
+	use std::sync::Arc;
+
+	use super::{LLMRequestPolicies, llm};
+
+	fn make_policy_with_costs(
+		input: f64,
+		output: f64,
+		cache_write: f64,
+		cache_read: f64,
+	) -> Arc<llm::Policy> {
+		Arc::new(llm::Policy {
+			token_costs: Some(llm::policy::TokenCosts {
+				input,
+				output,
+				cache_write,
+				cache_read,
+			}),
+			..Default::default()
+		})
+	}
+
+	fn make_policy_without_costs() -> Arc<llm::Policy> {
+		Arc::new(llm::Policy {
+			token_costs: None,
+			..Default::default()
+		})
+	}
+
+	/// Backend's token_costs take precedence over route's when both are set.
+	#[test]
+	fn merge_backend_costs_win_over_route_costs() {
+		let route = LLMRequestPolicies {
+			llm: Some(make_policy_with_costs(1.0, 1.0, 1.0, 1.0)),
+			..Default::default()
+		};
+		// Backend sets aggressive output pricing
+		let backend = make_policy_with_costs(2.0, 10.0, 3.0, 0.5);
+
+		let merged = Arc::new(route).merge_backend_policies(Some(backend));
+		let tc = merged
+			.llm
+			.as_ref()
+			.expect("llm policy must be set after merge")
+			.token_costs
+			.as_ref()
+			.expect("token_costs must be Some after merge with backend costs");
+
+		assert_eq!(tc.input, 2.0, "backend input multiplier must win");
+		assert_eq!(tc.output, 10.0, "backend output multiplier must win");
+		assert_eq!(
+			tc.cache_write, 3.0,
+			"backend cache_write multiplier must win"
+		);
+		assert_eq!(tc.cache_read, 0.5, "backend cache_read multiplier must win");
+	}
+
+	/// When backend has no token_costs, route's costs are preserved.
+	#[test]
+	fn merge_route_costs_survive_when_backend_has_none() {
+		let route = LLMRequestPolicies {
+			llm: Some(make_policy_with_costs(5.0, 20.0, 6.25, 0.1)),
+			..Default::default()
+		};
+		let backend = make_policy_without_costs();
+
+		let merged = Arc::new(route).merge_backend_policies(Some(backend));
+		let tc = merged
+			.llm
+			.as_ref()
+			.expect("llm policy must be set after merge")
+			.token_costs
+			.as_ref()
+			.expect("token_costs must be Some — route costs must survive");
+
+		assert_eq!(tc.input, 5.0);
+		assert_eq!(tc.output, 20.0);
+		assert_eq!(tc.cache_write, 6.25);
+		assert_eq!(tc.cache_read, 0.1);
+	}
+
+	/// When neither route nor backend sets token_costs, the merged result is None.
+	/// None is backward-compatible — callers treat it as all-1.0 multipliers.
+	#[test]
+	fn merge_both_absent_token_costs_is_none() {
+		let route = LLMRequestPolicies {
+			llm: Some(make_policy_without_costs()),
+			..Default::default()
+		};
+		let backend = make_policy_without_costs();
+
+		let merged = Arc::new(route).merge_backend_policies(Some(backend));
+		let token_costs = merged
+			.llm
+			.as_ref()
+			.expect("llm policy must be set after merge")
+			.token_costs
+			.as_ref();
+
+		assert!(
+			token_costs.is_none(),
+			"token_costs must be None when neither route nor backend configures it"
+		);
+	}
+
+	/// When there is no backend policy at all, route token_costs are passed through.
+	#[test]
+	fn merge_no_backend_returns_route_unchanged() {
+		let route = LLMRequestPolicies {
+			llm: Some(make_policy_with_costs(3.0, 9.0, 3.75, 0.3)),
+			..Default::default()
+		};
+
+		let merged = Arc::new(route).merge_backend_policies(None);
+		let tc = merged
+			.llm
+			.as_ref()
+			.expect("llm must still be set")
+			.token_costs
+			.as_ref()
+			.expect("route token_costs must survive a no-backend merge");
+
+		assert_eq!(tc.input, 3.0);
+		assert_eq!(tc.output, 9.0);
 	}
 }

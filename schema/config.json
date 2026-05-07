@@ -2050,6 +2050,16 @@
             }
           ]
         },
+        "tokenCosts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenCosts"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "routes": {
           "type": "object",
           "additionalProperties": {
@@ -3286,6 +3296,37 @@
           "format": "uint",
           "minimum": 0,
           "default": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "TokenCosts": {
+      "description": "Per-category cost multipliers for LLM token budget accounting.\n\nWhen the gateway charges tokens against the rate-limiter budget (via `hits_addend`),\neach raw token is multiplied by the corresponding multiplier before the counter is\nincremented. This allows `requests_per_unit` on the rate-limit server to represent\na cost-proportional budget unit rather than a raw token count, closing the pricing\ngap between e.g. cheap cached reads and expensive cache writes across different models.\n\nAll fields default to `1.0` when omitted — backward compatible with configs that\npre-date this feature.\n\n# Budget charge formula\n```text\nbudget_units = (base_input × input)\n             + (output_tokens × output)\n             + (cache_write_tokens × cacheWrite)\n             + (cache_read_tokens × cacheRead)\n\nwhere base_input = total_input_tokens − cache_read_tokens − cache_write_tokens\n```",
+      "type": "object",
+      "properties": {
+        "input": {
+          "description": "Multiplier applied to non-cached input tokens. Defaults to `1.0`.",
+          "type": "number",
+          "format": "double",
+          "default": 1.0
+        },
+        "output": {
+          "description": "Multiplier applied to output (completion) tokens. Defaults to `1.0`.",
+          "type": "number",
+          "format": "double",
+          "default": 1.0
+        },
+        "cacheWrite": {
+          "description": "Multiplier applied to tokens that create a new cache entry. Defaults to `1.0`.",
+          "type": "number",
+          "format": "double",
+          "default": 1.0
+        },
+        "cacheRead": {
+          "description": "Multiplier applied to tokens served from an existing cache entry. Defaults to `1.0`.",
+          "type": "number",
+          "format": "double",
+          "default": 1.0
         }
       },
       "additionalProperties": false

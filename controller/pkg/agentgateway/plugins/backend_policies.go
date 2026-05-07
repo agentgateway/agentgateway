@@ -3,6 +3,8 @@ package plugins
 import (
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 
 	jsonpb "google.golang.org/protobuf/encoding/protojson"
@@ -678,6 +680,15 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 		}
 	}
 
+	if aiSpec.TokenCosts != nil {
+		translatedAIPolicy.TokenCosts = &api.BackendPolicySpec_Ai_TokenCosts{
+			Input:      stringPtrToFloat64OrDefault(aiSpec.TokenCosts.Input),
+			Output:     stringPtrToFloat64OrDefault(aiSpec.TokenCosts.Output),
+			CacheWrite: stringPtrToFloat64OrDefault(aiSpec.TokenCosts.CacheWrite),
+			CacheRead:  stringPtrToFloat64OrDefault(aiSpec.TokenCosts.CacheRead),
+		}
+	}
+
 	if aiSpec.Routes != nil {
 		r := make(map[string]api.BackendPolicySpec_Ai_RouteType)
 		for path, routeType := range aiSpec.Routes {
@@ -798,6 +809,18 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 		"agentgateway_policy", authPolicy.Name)
 
 	return authPolicy, errors.Join(append(errs, kindErrs...)...)
+}
+
+// stringPtrToFloat64OrDefault parses a string-encoded decimal, or returns 1.0 if s is nil or invalid.
+func stringPtrToFloat64OrDefault(s *string) float64 {
+	if s == nil {
+		return 1.0
+	}
+	v, err := strconv.ParseFloat(*s, 64)
+	if err != nil || v <= 0 || math.IsInf(v, 0) || math.IsNaN(v) {
+		return 1.0
+	}
+	return v
 }
 
 // translateRouteType converts RouteType to agentgateway proto RouteType

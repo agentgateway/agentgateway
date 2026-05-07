@@ -384,7 +384,7 @@ async fn apply_llm_request_policies(
 	policies: &store::LLMRequestPolicies,
 	client: PolicyClient,
 	req: &mut Request,
-	llm_req: &LLMRequest,
+	llm_req: &mut LLMRequest,
 	response_headers: &mut HeaderMap,
 ) -> Result<store::LLMResponsePolicies, ProxyResponse> {
 	let local_rate_limit = policies
@@ -398,13 +398,35 @@ async fn apply_llm_request_policies(
 	for lrl in &local_rate_limit {
 		lrl.check_llm_request(llm_req)?;
 	}
+	// Apply token cost multipliers to the pre-flight charge if configured.
+	// When prompt caching is enabled, tokens before the cache point are assumed
+	// to be served from cache and charged at the cacheRead rate. This reduces
+	// overshoot on the remote limiter where negative deltas cannot be refunded.
+	let raw_preflight = llm_req.input_tokens.unwrap_or_default();
+	let llm_policy = policies.llm.as_deref();
+	let preflight_cost =
+		llm_policy
+			.and_then(|llm| llm.token_costs.as_ref())
+			.map_or(raw_preflight, |tc| {
+				tc.weighted_preflight(
+					raw_preflight,
+					llm_req.message_count,
+					llm_policy.and_then(|llm| llm.prompt_caching.as_ref()),
+				)
+			});
+
+	// Store the actual preflight cost for accurate true-up delta calculation.
+	llm_req.preflight_cost = Some(preflight_cost);
+
+	// Pre-charge the weighted cost against both local and remote token rate limiters.
+	for lrl in &local_rate_limit {
+		lrl.check_llm_preflight(preflight_cost)?;
+	}
 	let (rl_resp, response) = if let Some(rrl) = &policies.remote_rate_limit {
 		// For the LLM request side, request either the count of the input tokens (if tokenization was done)
 		// or 0.
 		// Either way, we will 'true up' on the response side.
-		rrl
-			.check_llm(client, req, llm_req.input_tokens.unwrap_or_default())
-			.await?
+		rrl.check_llm(client, req, preflight_cost).await?
 	} else {
 		(http::PolicyResponse::default(), None)
 	};
@@ -418,6 +440,11 @@ async fn apply_llm_request_policies(
 			.and_then(|llm| llm.prompt_guard.as_ref())
 			.map(|g| g.response.clone())
 			.unwrap_or_default(),
+		token_costs: policies
+			.llm
+			.as_deref()
+			.and_then(|llm| llm.token_costs.clone())
+			.map(Arc::new),
 	})
 }
 
@@ -1715,7 +1742,7 @@ async fn make_backend_call(
 						.map_err(|e| ProxyError::Processing(e.into()))?,
 						_ => unreachable!(),
 					};
-					let (mut req, llm_request) = match r {
+					let (mut req, mut llm_request) = match r {
 						RequestResult::Success(r, lr) => (r, lr),
 						RequestResult::Rejected(dr) => return Err(ProxyResponse::DirectResponse(Box::new(dr))),
 					};
@@ -1742,7 +1769,7 @@ async fn make_backend_call(
 							&llm_request_policies,
 							policy_client.clone(),
 							&mut req,
-							&llm_request,
+							&mut llm_request,
 							&mut response_policies.response_headers,
 						)
 						.await?
@@ -1790,6 +1817,8 @@ async fn make_backend_call(
 								streaming: true,
 								provider: llm.provider.provider(),
 								input_tokens: None,
+								preflight_cost: None,
+								message_count: 0,
 								params: Default::default(),
 								prompt: Default::default(),
 							})

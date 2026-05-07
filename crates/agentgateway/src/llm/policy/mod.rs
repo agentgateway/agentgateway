@@ -131,6 +131,8 @@ pub struct Policy {
 	pub wildcard_patterns: Arc<Vec<(ModelAliasPattern, Strng)>>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompt_caching: Option<PromptCachingConfig>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub token_costs: Option<TokenCosts>,
 	#[serde(default, skip_serializing_if = "SortedRoutes::is_empty")]
 	#[cfg_attr(
 		feature = "schema",
@@ -205,6 +207,111 @@ impl Default for PromptCachingConfig {
 			min_tokens: Some(1024),
 			cache_message_offset: 0,
 		}
+	}
+}
+
+/// Per-category cost multipliers for LLM token budget accounting.
+///
+/// When the gateway charges tokens against the rate-limiter budget (via `hits_addend`),
+/// each raw token is multiplied by the corresponding multiplier before the counter is
+/// incremented. This allows `requests_per_unit` on the rate-limit server to represent
+/// a cost-proportional budget unit rather than a raw token count, closing the pricing
+/// gap between e.g. cheap cached reads and expensive cache writes across different models.
+///
+/// All fields default to `1.0` when omitted — backward compatible with configs that
+/// pre-date this feature.
+///
+/// # Budget charge formula
+/// ```text
+/// budget_units = (base_input × input)
+///              + (output_tokens × output)
+///              + (cache_write_tokens × cacheWrite)
+///              + (cache_read_tokens × cacheRead)
+///
+/// where base_input = total_input_tokens − cache_read_tokens − cache_write_tokens
+/// ```
+#[apply(schema!)]
+#[serde(default)]
+pub struct TokenCosts {
+	/// Multiplier applied to non-cached input tokens. Defaults to `1.0`.
+	pub input: f64,
+	/// Multiplier applied to output (completion) tokens. Defaults to `1.0`.
+	pub output: f64,
+	/// Multiplier applied to tokens that create a new cache entry. Defaults to `1.0`.
+	pub cache_write: f64,
+	/// Multiplier applied to tokens served from an existing cache entry. Defaults to `1.0`.
+	pub cache_read: f64,
+}
+
+impl Default for TokenCosts {
+	fn default() -> Self {
+		Self {
+			input: 1.0,
+			output: 1.0,
+			cache_write: 1.0,
+			cache_read: 1.0,
+		}
+	}
+}
+
+impl TokenCosts {
+	/// Compute the weighted pre-flight cost from an estimated input token count.
+	///
+	/// When `prompt_caching` is configured and the request has enough messages,
+	/// tokens are split at the cache point boundary: messages at or before the
+	/// cache point are assumed to be served from cache (charged at `cache_read`
+	/// rate) while messages after the cache point are charged at `input` rate.
+	/// This proportional estimate avoids large negative deltas at true-up when
+	/// cache hit rates are high.
+	///
+	/// When prompt caching is not configured, all tokens are charged at `input`.
+	pub fn weighted_preflight(
+		&self,
+		estimated_input: u64,
+		message_count: usize,
+		prompt_caching: Option<&PromptCachingConfig>,
+	) -> u64 {
+		let Some(caching) = prompt_caching else {
+			return (estimated_input as f64 * self.input).round() as u64;
+		};
+
+		// Cache point logic mirrors insert_message_cache_point in bedrock.rs:
+		// target_idx = (len - 2) - offset, clamped to 0.
+		// Messages [0..=target_idx] are assumed cached on subsequent calls.
+		if message_count < 2 || !caching.cache_messages {
+			// Not enough messages to cache, or caching disabled for messages
+			return (estimated_input as f64 * self.input).round() as u64;
+		}
+
+		let target_idx = (message_count - 2).saturating_sub(caching.cache_message_offset);
+		// cached_messages = messages[0..=target_idx] → (target_idx + 1) messages
+		let cached_msg_count = target_idx + 1;
+
+		// Proportional split: assume tokens are evenly distributed across messages
+		let cached_tokens =
+			(estimated_input as f64 * cached_msg_count as f64 / message_count as f64).round() as u64;
+		let uncached_tokens = estimated_input.saturating_sub(cached_tokens);
+
+		let cost = (cached_tokens as f64 * self.cache_read) + (uncached_tokens as f64 * self.input);
+		cost.round() as u64
+	}
+
+	/// Compute the full weighted cost for a completed LLM exchange.
+	///
+	/// `base_input` should be `total_input − cache_read_tokens − cache_write_tokens`
+	/// so that cached tokens are not double-counted against the input multiplier.
+	pub fn weighted_cost(
+		&self,
+		base_input: u64,
+		output_tokens: u64,
+		cache_write_tokens: u64,
+		cache_read_tokens: u64,
+	) -> u64 {
+		let cost = (base_input as f64 * self.input)
+			+ (output_tokens as f64 * self.output)
+			+ (cache_write_tokens as f64 * self.cache_write)
+			+ (cache_read_tokens as f64 * self.cache_read);
+		cost.round() as u64
 	}
 }
 

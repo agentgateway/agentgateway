@@ -1202,6 +1202,14 @@ type BackendAI struct {
 	// +optional
 	PromptCaching *PromptCachingConfig `json:"promptCaching,omitempty"`
 
+	// `tokenCosts` configures per-category cost multipliers for LLM token budget accounting.
+	// When set, every raw token charged against the rate-limiter budget is multiplied by the
+	// appropriate multiplier, making `requests_per_unit` on the rate-limit server a
+	// cost-proportional unit rather than a raw token count.
+	// All fields default to 1 when omitted (backward compatible).
+	// +optional
+	TokenCosts *TokenCosts `json:"tokenCosts,omitempty"`
+
 	// `routes` defines how to identify the type of traffic to handle.
 	// The keys are URL path suffixes matched using ends-with comparison, for
 	// example `"/v1/chat/completions"`.
