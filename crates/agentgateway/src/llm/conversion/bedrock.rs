@@ -420,31 +420,9 @@ pub mod from_completions {
 			None
 		};
 
-		// Build gateway-generated metadata from:
-		// - OpenAI `user` field (normalized as user_id)
-		// - OpenAI `metadata` field (agentgateway uses this to carry guardrail/model-armor knobs through Messages→Completions)
-		let mut metadata = req
-			.user
-			.map(|user| HashMap::from([("user_id".to_string(), user)]))
-			.unwrap_or_default();
-
-		// Merge OpenAI request `metadata` when it is an object of string values
-		if let Some(serde_json::Value::Object(obj)) = &req.metadata {
-			for (k, v) in obj {
-				if let serde_json::Value::String(s) = v {
-					metadata.insert(k.clone(), s.clone());
-				}
-			}
-		}
-
-		let mut metadata = helpers::sanitize_request_metadata(metadata);
-
 		// x-bedrock-metadata is an explicit Bedrock requestMetadata escape hatch. Forward it
 		// unchanged so Bedrock, not the gateway, rejects operator-supplied invalid values.
-		if let Some(header_metadata) = super::helpers::extract_metadata_from_headers(headers) {
-			metadata.extend(header_metadata);
-		}
-
+		let metadata = super::helpers::extract_metadata_from_headers(headers).unwrap_or_default();
 		let metadata = if metadata.is_empty() {
 			None
 		} else {
@@ -2023,16 +2001,9 @@ pub mod from_responses {
 			None
 		};
 
-		// Sanitize gateway-generated/request-body metadata before merging explicit Bedrock
-		// metadata from headers.
-		let mut metadata = sanitize_request_metadata(req.metadata.unwrap_or_default());
-
 		// x-bedrock-metadata is an explicit Bedrock requestMetadata escape hatch. Forward it
 		// unchanged so Bedrock, not the gateway, rejects operator-supplied invalid values.
-		if let Some(header_metadata) = extract_metadata_from_headers(headers) {
-			metadata.extend(header_metadata);
-		}
-
+		let metadata = extract_metadata_from_headers(headers).unwrap_or_default();
 		let metadata = if metadata.is_empty() {
 			None
 		} else {
@@ -2585,9 +2556,6 @@ mod helpers {
 	use crate::llm::AIError;
 	use crate::llm::types::bedrock;
 
-	const BEDROCK_REQUEST_METADATA_MAX_ENTRIES: usize = 16;
-	const BEDROCK_REQUEST_METADATA_MAX_LEN: usize = 256;
-
 	pub fn create_cache_point() -> bedrock::CachePointBlock {
 		bedrock::CachePointBlock {
 			r#type: bedrock::CachePointType::Default,
@@ -2692,36 +2660,6 @@ mod helpers {
 		}
 
 		metadata
-	}
-
-	/// Bedrock Converse requestMetadata only accepts short strings from a restricted
-	/// character set. Keep compatible entries unchanged and drop incompatible ones.
-	pub fn sanitize_request_metadata(metadata: HashMap<String, String>) -> HashMap<String, String> {
-		metadata
-			.into_iter()
-			.filter(|(key, value)| {
-				is_valid_request_metadata_key(key) && is_valid_request_metadata_value(value)
-			})
-			.take(BEDROCK_REQUEST_METADATA_MAX_ENTRIES)
-			.collect()
-	}
-
-	fn is_valid_request_metadata_key(value: &str) -> bool {
-		!value.is_empty() && is_valid_request_metadata_value(value)
-	}
-
-	fn is_valid_request_metadata_value(value: &str) -> bool {
-		value.len() <= BEDROCK_REQUEST_METADATA_MAX_LEN
-			&& value.chars().all(is_valid_request_metadata_char)
-	}
-
-	fn is_valid_request_metadata_char(c: char) -> bool {
-		c.is_ascii_alphanumeric()
-			|| c.is_ascii_whitespace()
-			|| matches!(
-				c,
-				':' | '_' | '@' | '$' | '#' | '=' | '/' | '+' | ',' | '-' | '.'
-			)
 	}
 
 	pub fn extract_beta_headers(

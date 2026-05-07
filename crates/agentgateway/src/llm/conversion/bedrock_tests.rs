@@ -628,7 +628,7 @@ fn test_messages_image_url_to_bedrock_returns_error() {
 }
 
 #[test]
-fn test_metadata_from_completions_metadata_field() {
+fn test_completions_request_metadata_only_uses_bedrock_header() {
 	let provider = Provider {
 		model: None,
 		region: strng::new("us-east-1"),
@@ -636,7 +636,6 @@ fn test_metadata_from_completions_metadata_field() {
 		guardrail_version: None,
 	};
 
-	// OpenAI-style request metadata (agentgateway uses this to carry request-scoped guardrail knobs)
 	let req = types::completions::typed::Request {
 		model: Some("anthropic.claude-3-sonnet".to_string()),
 		messages: vec![types::completions::typed::RequestMessage::User(
@@ -674,7 +673,6 @@ fn test_metadata_from_completions_metadata_field() {
 			"user_id": "user123",
 			"department": "engineering",
 			"json_user": r#"{"device_id":"from-body"}"#,
-			// Non-string values should be ignored by the Bedrock metadata bridge
 			"nonstr": 123
 		})),
 		#[allow(deprecated)]
@@ -702,9 +700,8 @@ fn test_metadata_from_completions_metadata_field() {
 	);
 	let md = out.request_metadata.unwrap();
 
-	// `metadata.user_id` should win over the `user`-derived value.
-	assert_eq!(md.get("user_id"), Some(&"user123".to_string()));
-	assert_eq!(md.get("department"), Some(&"engineering".to_string()));
+	assert!(!md.contains_key("user_id"));
+	assert!(!md.contains_key("department"));
 	assert_eq!(
 		md.get("json_user"),
 		Some(&r#"{"device_id":"from-header"}"#.to_string())
@@ -1010,7 +1007,7 @@ fn test_responses_json_schema_text_format_maps_to_converse_output_config() {
 }
 
 #[test]
-fn test_responses_metadata_from_header_is_forwarded_without_sanitizing() {
+fn test_responses_request_metadata_only_uses_bedrock_header() {
 	let provider = Provider {
 		model: None,
 		region: strng::new("us-east-1"),
@@ -1039,8 +1036,11 @@ fn test_responses_metadata_from_header_is_forwarded_without_sanitizing() {
 
 	let translated = super::from_responses::translate(&req, &provider, Some(&headers), None).unwrap();
 	let translated: serde_json::Value = serde_json::from_slice(&translated).unwrap();
+	let metadata = translated["requestMetadata"]
+		.as_object()
+		.expect("requestMetadata object");
 
-	assert_eq!(translated["requestMetadata"]["safe"], "ok");
+	assert!(!metadata.contains_key("safe"));
 	assert_eq!(
 		translated["requestMetadata"]["json_user"],
 		r#"{"device_id":"from-header"}"#
