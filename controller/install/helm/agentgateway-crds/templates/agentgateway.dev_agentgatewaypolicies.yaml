@@ -5316,12 +5316,13 @@ spec:
                 x-kubernetes-list-type: atomic
                 x-kubernetes-validations:
                 - message: targetRefs may only reference Gateway, HTTPRoute, GRPCRoute,
-                    ListenerSet, Service, or AgentgatewayBackend resources
+                    ListenerSet, Service, AgentgatewayBackend, or InferencePool resources
                   rule: self.all(r, (r.kind == 'Service' && r.group == '') || (r.kind
                     == 'AgentgatewayBackend' && r.group == 'agentgateway.dev') ||
                     (r.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute'] && r.group ==
                     'gateway.networking.k8s.io') || (r.kind == 'ListenerSet' && r.group
-                    == 'gateway.networking.k8s.io'))
+                    == 'gateway.networking.k8s.io') || (r.kind == 'InferencePool'
+                    && r.group == 'inference.networking.k8s.io'))
                 - message: Only one Kind of targetRef can be set on one policy
                   rule: self.all(l1, !self.exists(l2, l1.kind != l2.kind))
               targetSelectors:
@@ -5374,12 +5375,13 @@ spec:
                 type: array
                 x-kubernetes-validations:
                 - message: targetRefs may only reference Gateway, HTTPRoute, GRPCRoute,
-                    ListenerSet, Service, or AgentgatewayBackend resources
+                    ListenerSet, Service, AgentgatewayBackend, or InferencePool resources
                   rule: self.all(r, (r.kind == 'Service' && r.group == '') || (r.kind
                     == 'AgentgatewayBackend' && r.group == 'agentgateway.dev') ||
                     (r.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute'] && r.group ==
                     'gateway.networking.k8s.io') || (r.kind == 'ListenerSet' && r.group
-                    == 'gateway.networking.k8s.io'))
+                    == 'gateway.networking.k8s.io') || (r.kind == 'InferencePool'
+                    && r.group == 'inference.networking.k8s.io'))
                 - message: Only one Kind of targetRef can be set on one policy
                   rule: self.all(l1, !self.exists(l2, l1.kind != l2.kind))
               traffic:
@@ -7758,15 +7760,15 @@ spec:
               rule: 'has(self.frontend) && has(self.targetSelectors) ? self.targetSelectors.all(t,
                 t.kind == ''Gateway'' && !has(t.sectionName)) : true'
             - message: the 'traffic' field can only target a Gateway, ListenerSet,
-                GRPCRoute, or HTTPRoute
+                GRPCRoute, HTTPRoute, or InferencePool
               rule: 'has(self.traffic) && has(self.targetRefs) ? self.targetRefs.all(t,
-                t.kind in [''Gateway'', ''HTTPRoute'', ''GRPCRoute'', ''ListenerSet''])
-                : true'
+                t.kind in [''Gateway'', ''HTTPRoute'', ''GRPCRoute'', ''ListenerSet'',
+                ''InferencePool'']) : true'
             - message: the 'traffic' field can only target a Gateway, ListenerSet,
-                GRPCRoute, or HTTPRoute
+                GRPCRoute, HTTPRoute, or InferencePool
               rule: 'has(self.traffic) && has(self.targetSelectors) ? self.targetSelectors.all(t,
-                t.kind in [''Gateway'', ''HTTPRoute'', ''GRPCRoute'', ''ListenerSet''])
-                : true'
+                t.kind in [''Gateway'', ''HTTPRoute'', ''GRPCRoute'', ''ListenerSet'',
+                ''InferencePool'']) : true'
             - message: the 'traffic.phase=PreRouting' field can only target a Gateway
                 or ListenerSet
               rule: 'has(self.targetRefs) && has(self.traffic) && has(self.traffic.phase)

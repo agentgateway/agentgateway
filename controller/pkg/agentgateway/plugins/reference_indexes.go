@@ -91,6 +91,11 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 				return []*api.PolicyTarget{{
 					Kind: utils.ListenerSetTarget(namespace, string(name), sectionName),
 				}}, ResourceExists(krtctx, agw.ListenerSets, key)
+			case wellknown.InferencePoolGVK.GroupKind():
+				hostname := kubeutils.GetInferenceServiceHostname(string(name), namespace)
+				return []*api.PolicyTarget{{
+					Kind: utils.ServiceTargetWithHostname(namespace, hostname, nil),
+				}}, ResourceExists(krtctx, agw.InferencePools, key)
 			}
 			return nil, false
 		},
