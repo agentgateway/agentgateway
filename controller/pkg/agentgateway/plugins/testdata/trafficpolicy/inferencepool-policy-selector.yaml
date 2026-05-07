@@ -1,0 +1,80 @@
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: gateway-pool
+  namespace: default
+  labels:
+    app: gateway-pool
+spec:
+  appProtocol: kubernetes.io/h2c
+  endpointPickerRef:
+    failureMode: FailClose
+    group: ""
+    kind: Service
+    name: gateway-pool-endpoint-picker
+    port:
+      number: 9002
+  selector:
+    matchLabels:
+      app: gateway
+  targetPorts:
+    - number: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-pool-endpoint-picker
+  namespace: default
+spec:
+  ports:
+    - port: 9002
+      protocol: TCP
+  selector:
+    app: gateway
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: pool-rl-policy
+  namespace: default
+spec:
+  targetSelectors:
+  - group: inference.networking.k8s.io
+    kind: InferencePool
+    matchLabels:
+      app: gateway-pool
+  traffic:
+    rateLimit:
+      local:
+        - requests: 100
+          unit: Minutes
+          burst: 10
+
+---
+# Output
+output: []
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: pool-rl-policy
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: agentgateway.dev
+        name: StatusSummary
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is not attached: InferencePool default/gateway-pool is not
+          attached to any Gateway'
+        reason: Pending
+        status: "False"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

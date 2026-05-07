@@ -147,6 +147,14 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 					}}
 					targets = append(targets, ResolvedPolicySelectorTarget{Name: gwv1.ObjectName(svc.Name), Namespace: svc.Namespace, PolicyTargets: policyTargets})
 				}
+			case wellknown.InferencePoolGVK.GroupKind():
+				for _, pool := range krt.Fetch(krtctx, agw.InferencePools, krt.FilterLabel(selector.MatchLabels), krt.FilterIndex(agw.InferencePoolsByNamespace, policyNamespace)) {
+					hostname := kubeutils.GetInferenceServiceHostname(pool.Name, pool.Namespace)
+					policyTargets := []*api.PolicyTarget{{
+						Kind: utils.ServiceTargetWithHostname(pool.Namespace, hostname, nil),
+					}}
+					targets = append(targets, ResolvedPolicySelectorTarget{Name: gwv1.ObjectName(pool.Name), Namespace: pool.Namespace, PolicyTargets: policyTargets})
+				}
 			}
 
 			slices.SortFunc(targets, func(a, b ResolvedPolicySelectorTarget) int {
