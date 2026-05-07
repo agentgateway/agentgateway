@@ -967,7 +967,7 @@ impl PartialEq for RequestRef<'_> {
 #[apply(schema!)]
 #[derive(Eq, PartialEq, cel::DynamicType)]
 pub struct LLMContext {
-	/// Whether the LLM response is streamed.
+	/// Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.
 	pub streaming: bool,
 	/// The model requested for the LLM request. This may differ from the actual model used.
 	#[dynamic(rename = "requestModel")]

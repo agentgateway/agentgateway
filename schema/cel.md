@@ -28,7 +28,7 @@
 |`basicAuth`|object|`basicAuth` contains the claims from a verified basic authentication Key. This is only present if the Basic authentication policy is enabled.|
 |`basicAuth.username`|string||
 |`llm`|object|`llm` contains attributes about an LLM request or response. This is only present when using an `ai` backend.|
-|`llm.streaming`|boolean|Whether the LLM response is streamed.|
+|`llm.streaming`|boolean|Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.|
 |`llm.requestModel`|string|The model requested for the LLM request. This may differ from the actual model used.|
 |`llm.responseModel`|string|The model that actually served the LLM response.|
 |`llm.provider`|string|The provider of the LLM.|

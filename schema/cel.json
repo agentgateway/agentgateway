@@ -196,7 +196,7 @@
       ],
       "properties": {
         "streaming": {
-          "description": "Whether the LLM response is streamed.",
+          "description": "Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.",
           "type": "boolean"
         },
         "requestModel": {
