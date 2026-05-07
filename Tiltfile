@@ -59,8 +59,10 @@ docker_build_with_restart(
     entrypoint='/usr/local/bin/agentgateway-controller',
     dockerfile_contents="""
 FROM ubuntu:24.04
+RUN useradd -u 1337 -m agentgateway
 COPY agentgateway-controller /usr/local/bin/agentgateway-controller
-ENTRYPOINT /usr/local/bin/agentgateway-controller
+USER 1337
+ENTRYPOINT ["/usr/local/bin/agentgateway-controller"]
     """,
     # Live update: sync Go binaries
     live_update=[

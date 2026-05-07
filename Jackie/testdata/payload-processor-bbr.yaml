@@ -1,0 +1,120 @@
+# POC: PayloadProcessor — Body-Based Routing Example
+#
+# This example demonstrates using a PayloadProcessor to extract the "model"
+# field from a JSON request body and set it as an HTTP header, enabling
+# standard HTTPRoute header-based routing to select the correct backend.
+#
+# Flow:
+#   1. Client sends POST with body: {"model": "gpt-4", "messages": [...]}
+#   2. PayloadProcessor (PreRouting) evaluates: json(request.body).model
+#   3. Sets header: X-Gateway-Model-Name: gpt-4
+#   4. HTTPRoute matches on X-Gateway-Model-Name header → routes to correct backend
+#
+# Test:
+#   curl -X POST http://gateway:8080/v1/chat/completions \
+#     -H "Content-Type: application/json" \
+#     -d '{"model": "gpt-4", "messages": [{"role": "user", "content": "hello"}]}'
+#
+#   curl -X POST http://gateway:8080/v1/chat/completions \
+#     -H "Content-Type: application/json" \
+#     -d '{"model": "claude", "messages": [{"role": "user", "content": "hello"}]}'
+
+---
+# Gateway
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: ai-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 8080
+
+---
+# POC: PayloadProcessor — extracts model from body, sets as header (PreRouting)
+apiVersion: ainetworking.x-k8s.io/v0alpha0
+kind: PayloadProcessor
+metadata:
+  name: model-header-setter
+  namespace: default
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: ai-gateway
+  phase: PreRouting
+  processors:
+  - name: extract-model
+    type: InProcess
+    failureMode: FailClosed
+    inProcess:
+      request:
+        set:
+        - name: X-Gateway-Model-Name
+          value: 'json(request.body).model'
+
+---
+# HTTPRoute: routes to gpt-4 backend when model header matches
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: gpt4-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: ai-gateway
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v1/chat/completions
+      headers:
+      - name: X-Gateway-Model-Name
+        value: gpt-4
+    backendRefs:
+    - name: gpt4-backend
+      port: 8080
+
+---
+# HTTPRoute: routes to claude backend when model header matches
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: claude-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: ai-gateway
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v1/chat/completions
+      headers:
+      - name: X-Gateway-Model-Name
+        value: claude
+    backendRefs:
+    - name: claude-backend
+      port: 8080
+
+---
+# HTTPRoute: fallback for unknown models
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: fallback-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: ai-gateway
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v1/chat/completions
+    backendRefs:
+    - name: default-backend
+      port: 8080

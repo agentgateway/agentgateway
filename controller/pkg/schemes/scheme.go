@@ -16,6 +16,9 @@ import (
 	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	agwv1a1 "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+
+	// POC: ainetworking API resources
+	ainetworkingv0 "github.com/agentgateway/agentgateway/controller/api/v0alpha0/ainetworking"
 )
 
 // SchemeBuilder contains all the Schemes for registering the CRDs with which agentgateway interacts.
@@ -37,6 +40,9 @@ var SchemeBuilder = runtime.SchemeBuilder{
 
 	// agentgateway API resources
 	agwv1a1.Install,
+
+	// POC: ainetworking API resources
+	ainetworkingv0.Install,
 
 	// Istio resources
 	istionetworkingv1.AddToScheme,

@@ -1,0 +1,168 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: payloadprocessors.ainetworking.x-k8s.io
+spec:
+  group: ainetworking.x-k8s.io
+  names:
+    kind: PayloadProcessor
+    listKind: PayloadProcessorList
+    plural: payloadprocessors
+    singular: payloadprocessor
+    shortNames:
+    - pp
+    categories:
+    - ainetworking
+  scope: Namespaced
+  versions:
+  - name: v0alpha0
+    served: true
+    storage: true
+    additionalPrinterColumns:
+    - name: Phase
+      type: string
+      jsonPath: ".spec.phase"
+    - name: Age
+      type: date
+      jsonPath: ".metadata.creationTimestamp"
+    subresources:
+      status: {}
+    schema:
+      openAPIV3Schema:
+        type: object
+        required: ["spec"]
+        properties:
+          spec:
+            type: object
+            required: ["targetRef", "phase", "processors"]
+            properties:
+              targetRef:
+                type: object
+                required: ["group", "kind", "name"]
+                properties:
+                  group:
+                    type: string
+                  kind:
+                    type: string
+                  name:
+                    type: string
+                  sectionName:
+                    type: string
+              phase:
+                type: string
+                enum: ["PreRouting", "PostRouting"]
+              processors:
+                type: array
+                minItems: 1
+                maxItems: 16
+                items:
+                  type: object
+                  required: ["name", "type"]
+                  properties:
+                    name:
+                      type: string
+                      minLength: 1
+                      maxLength: 63
+                    type:
+                      type: string
+                      enum: ["InProcess", "ExtProc"]
+                    failureMode:
+                      type: string
+                      enum: ["FailClosed", "FailOpen"]
+                      default: "FailClosed"
+                    timeout:
+                      type: string
+                    inProcess:
+                      type: object
+                      required: ["request"]
+                      properties:
+                        request:
+                          type: object
+                          properties:
+                            set:
+                              type: array
+                              maxItems: 16
+                              items:
+                                type: object
+                                required: ["name", "value"]
+                                properties:
+                                  name:
+                                    type: string
+                                    minLength: 1
+                                    maxLength: 256
+                                  value:
+                                    type: string
+                            add:
+                              type: array
+                              maxItems: 16
+                              items:
+                                type: object
+                                required: ["name", "value"]
+                                properties:
+                                  name:
+                                    type: string
+                                    minLength: 1
+                                    maxLength: 256
+                                  value:
+                                    type: string
+                            remove:
+                              type: array
+                              maxItems: 16
+                              items:
+                                type: string
+                    extProc:
+                      type: object
+                      required: ["backendRef"]
+                      properties:
+                        backendRef:
+                          type: object
+                          required: ["name"]
+                          properties:
+                            group:
+                              type: string
+                            kind:
+                              type: string
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                            port:
+                              type: integer
+                              format: int32
+          status:
+            type: object
+            properties:
+              ancestors:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    ancestorRef:
+                      type: object
+                      properties:
+                        group:
+                          type: string
+                        kind:
+                          type: string
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                    conditions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          type:
+                            type: string
+                          status:
+                            type: string
+                          reason:
+                            type: string
+                          message:
+                            type: string
+                          lastTransitionTime:
+                            type: string
+                            format: date-time
+                    controllerName:
+                      type: string

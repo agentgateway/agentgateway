@@ -31,7 +31,7 @@ func New(restConfig *rest.Config) (*client, error) {
 		return nil, err
 	}
 
-	RegisterTypes()
+	RegisterTypes(restConfig)
 	kube.EnableCrdWatcher(kubeClient)
 	return &client{
 		Client:   kubeClient,

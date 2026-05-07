@@ -49,7 +49,7 @@ func NewClientWithExtraGVRs(t test.Failer, extraGVRs []schema.GroupVersionResour
 		})
 	}
 
-	apiclient.RegisterTypes()
+	apiclient.RegisterTypes(nil) // POC: fake client doesn't need REST config for PayloadProcessor
 
 	return c
 }
