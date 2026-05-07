@@ -165,6 +165,7 @@ impl WorkloadCertificate {
 				self.chain.iter().map(|c| c.der.clone()).collect(),
 				self.private_key.clone_key(),
 			)?;
+		cc.key_log = transport::tls::key_log();
 		cc.alpn_protocols = vec![b"istio".into()];
 		cc.resumption = Resumption::disabled();
 		// cc.enable_sni = false;
@@ -186,6 +187,7 @@ impl WorkloadCertificate {
 				self.chain.iter().map(|c| c.der.clone()).collect(),
 				self.private_key.clone_key(),
 			)?;
+		cc.key_log = transport::tls::key_log();
 		cc.alpn_protocols = vec![b"h2".into()];
 		cc.resumption = Resumption::disabled();
 		cc.enable_sni = false;
@@ -233,6 +235,7 @@ impl WorkloadCertificate {
 			self.chain.iter().map(|c| c.der.clone()).collect(),
 			self.private_key.clone_key(),
 		)?;
+		sc.key_log = transport::tls::key_log();
 		sc.alpn_protocols = alpns;
 		Ok(sc)
 	}

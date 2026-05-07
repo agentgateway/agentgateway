@@ -209,6 +209,7 @@ impl ResolvedBackendTLS {
 					roots, sans,
 				)));
 		}
+		cc.key_log = transport::tls::key_log();
 		let allow_custom_alpn = self.alpn.is_none();
 		if let Some(a) = self.alpn {
 			cc.alpn_protocols = a.into_iter().map(|b| b.as_bytes().to_vec()).collect();

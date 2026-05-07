@@ -179,6 +179,38 @@ pub fn provider() -> Arc<CryptoProvider> {
 	provider_with_options(&[], &[])
 }
 
+/// Returns a shared rustls `KeyLog` backed by `rustls::KeyLogFile`, which honors
+/// the `SSLKEYLOGFILE` environment variable. If the env var is unset, returns NoKeyLog.
+pub fn key_log() -> Arc<dyn rustls::KeyLog> {
+	static KEY_LOG: std::sync::LazyLock<Arc<dyn rustls::KeyLog>> = std::sync::LazyLock::new(|| {
+		// if SSLKEYLOGFILE is set use key log file.
+		// Note - in theory, KeyLogFile is a no-op if SSLKEYLOGFILE is not set,
+		// but it does use an internal mutex even if no file is set. so check it here
+		// and return the default (NoKeyLog) if not set. This guarantees that we are not
+		// introducing new overhead when SSLKEYLOGFILE is not set.
+		if std::env::var("SSLKEYLOGFILE").is_ok() {
+			Arc::new(rustls::KeyLogFile::new())
+		} else {
+			Arc::new(rustls::NoKeyLog)
+		}
+	});
+	let key_log = &*KEY_LOG;
+	key_log.clone()
+}
+
+/// Emits a startup warning if `SSLKEYLOGFILE` is set, since secret logging is
+/// enabled and traffic can be decrypted by anyone who reads the file.
+pub fn warn_if_key_log_enabled() {
+	if let Ok(path) = std::env::var("SSLKEYLOGFILE")
+		&& !path.is_empty()
+	{
+		warn!(
+			"SSLKEYLOGFILE is set ({path}); TLS session secrets will be written to disk. \
+				 This is intended for debugging only — do not enable in production."
+		);
+	}
+}
+
 pub fn provider_with_options(
 	cipher_suites: &[CipherSuite],
 	key_exchange_groups: &[KeyExchangeGroup],

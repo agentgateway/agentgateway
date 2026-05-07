@@ -432,6 +432,7 @@ impl ServerTLSConfig {
 		let cert_chain = parse_cert(&inputs.cert_pem)?;
 		let private_key = parse_key(&inputs.key_pem)?;
 		let mut sc = scb.with_single_cert(cert_chain, private_key)?;
+		sc.key_log = crate::transport::tls::key_log();
 		sc.alpn_protocols = alpns
 			.map(|a| a.to_vec())
 			.unwrap_or_else(|| inputs.default_alpns.clone());
