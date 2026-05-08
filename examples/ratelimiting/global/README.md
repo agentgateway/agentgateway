@@ -100,3 +100,34 @@ docker logs -f ratelimit | grep -E '(OVER_LIMIT|OK)'
 ```
 
 Refer to the [telemetry](../telemetry) example to learn how to visualize metrics and tracing provided by agentgateway for your MCP servers.
+
+### Cost-rational budgeting with `tokenCosts`
+
+By default, the rate limiter charges 1 budget unit per raw token regardless of category
+(input, output, cache write, cache read). Since these categories have very different
+prices across models, `requests_per_unit` does not represent a meaningful cost ceiling.
+
+The `tokenCosts` field on `AgentgatewayBackend` solves this by applying per-category
+multipliers to all token-based rate limiting (both local and remote/global):
+
+```yaml
+spec:
+  ai:
+    provider:
+      bedrock:
+        modelId: anthropic.claude-3-5-sonnet-20241022-v2:0
+  policies:
+    ai:
+      tokenCosts:
+        input: 1       # baseline
+        output: 5      # 5× more expensive than input
+        cacheWrite: 1.25
+        cacheRead: 0.1  # 90% discount
+```
+
+Once multipliers are configured, `requests_per_unit` becomes a cost-proportional budget
+unit. Setting it to `1000000` limits a user to ~1M input-token-equivalents of spend per day
+regardless of which token category mix they produce.
+
+See [`token-costs-backend.yaml`](./token-costs-backend.yaml) for a complete annotated example
+and [`architecture/token-costs.md`](../../architecture/token-costs.md) for full documentation.

@@ -326,8 +326,9 @@ impl RequestType for Request {
 
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
+		let messages = self.get_messages();
+		let message_count = messages.len();
 		let input_tokens = if tokenize {
-			let messages = self.get_messages();
 			let tokens = crate::llm::num_tokens_from_messages(&model, &messages)?;
 			Some(tokens)
 		} else {
@@ -335,6 +336,8 @@ impl RequestType for Request {
 		};
 		Ok(LLMRequest {
 			input_tokens,
+			preflight_cost: None,
+			message_count,
 			input_format: InputFormat::Responses,
 			request_model: model,
 			provider,

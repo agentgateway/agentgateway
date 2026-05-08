@@ -691,6 +691,10 @@ fn convert_backend_ai_policy(
 			.collect(),
 		wildcard_patterns: Arc::new(Vec::new()), // Will be populated by compile_model_alias_patterns()
 		prompt_caching: ai.prompt_caching.as_ref().map(convert_prompt_caching),
+		token_costs: ai
+			.token_costs
+			.as_ref()
+			.map(|tc| convert_token_costs(tc, diagnostics)),
 		routes: ai
 			.routes
 			.iter()
@@ -2758,6 +2762,33 @@ fn convert_prompt_caching(
 	}
 }
 
+fn convert_token_costs(
+	tc: &proto::agent::backend_policy_spec::ai::TokenCosts,
+	diagnostics: &mut Diagnostics,
+) -> llm::policy::TokenCosts {
+	// Proto double fields default to 0.0 when unset; treat 0.0 as "not configured"
+	// and fall back to the default of 1.0 so that unset fields are backward-compatible.
+	// Also reject negative, NaN, and infinite values to prevent undercharging.
+	fn coerce(v: f64, field: &str, diagnostics: &mut Diagnostics) -> f64 {
+		if v == 0.0 {
+			return 1.0;
+		}
+		if !v.is_finite() || v < 0.0 {
+			diagnostics.add_warning(format!(
+				"tokenCosts.{field}: invalid value {v}, must be finite and positive; defaulting to 1.0"
+			));
+			return 1.0;
+		}
+		v
+	}
+	llm::policy::TokenCosts {
+		input: coerce(tc.input, "input", diagnostics),
+		output: coerce(tc.output, "output", diagnostics),
+		cache_write: coerce(tc.cache_write, "cacheWrite", diagnostics),
+		cache_read: coerce(tc.cache_read, "cacheRead", diagnostics),
+	}
+}
+
 fn convert_webhook(
 	w: &proto::agent::backend_policy_spec::ai::Webhook,
 	diagnostics: &mut Diagnostics,
@@ -3207,6 +3238,7 @@ mod tests {
 				]
 				.into_iter()
 				.collect(),
+				token_costs: None,
 			})),
 		};
 

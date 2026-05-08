@@ -76,6 +76,8 @@ impl RequestType for Request {
 		Ok(LLMRequest {
 			// We never tokenize these, so always empty
 			input_tokens: None,
+			preflight_cost: None,
+			message_count: 0,
 			input_format: InputFormat::Detect,
 			request_model: self
 				.lookup(lookups::MODEL, |v| v.as_str())

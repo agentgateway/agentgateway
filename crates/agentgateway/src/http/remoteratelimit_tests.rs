@@ -777,3 +777,101 @@ fn build_request_jwt_sub_descriptor_evaluates_with_materialization() {
 	assert_eq!(request.descriptors[0].entries[0].key, "user");
 	assert_eq!(request.descriptors[0].entries[0].value, "rate-limit-user");
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Token cost multiplier tests
+// These tests verify that `build_request` correctly propagates the cost
+// parameter (hits_addend) which is produced by TokenCosts at the call site.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// When cost=Some(n), hits_addend must equal n regardless of multiplier logic
+/// (the multiplier is applied by the caller before passing cost to build_request).
+/// Verifies that hits_addend is faithfully forwarded to the gRPC descriptor.
+#[test]
+fn token_cost_multiplier_applied_to_preflight_forwarded_via_hits_addend() {
+	// The caller computes: tc.weighted_preflight(estimated_input, msg_count, caching)
+	// e.g. with input=5.0, 100 tokens → 500. We verify the descriptor carries it.
+	let entry = make_descriptor_entry(vec![("user", r#""alice""#)], RateLimitType::Tokens);
+	let rl = make_rate_limit(vec![entry]);
+
+	let req = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri("http://example.com/mcp")
+		.body(crate::http::Body::empty())
+		.unwrap();
+
+	let result = rl
+		.build_request(&req, RateLimitType::Tokens, Some(500))
+		.unwrap();
+	assert_eq!(
+		result.descriptors[0].hits_addend,
+		Some(500),
+		"hits_addend must equal the pre-multiplied cost supplied by the caller"
+	);
+}
+
+/// Default multipliers (1.0) produce hits_addend equal to the raw token count —
+/// preserving backward-compatible behaviour.
+#[test]
+fn token_cost_default_multiplier_unchanged_hits_addend() {
+	// tc = TokenCosts::default() → weighted_preflight(1000, _, _) = 1000
+	let entry = make_descriptor_entry(vec![("user", r#""bob""#)], RateLimitType::Tokens);
+	let rl = make_rate_limit(vec![entry]);
+
+	let req = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri("http://example.com/mcp")
+		.body(crate::http::Body::empty())
+		.unwrap();
+
+	let result = rl
+		.build_request(&req, RateLimitType::Tokens, Some(1000))
+		.unwrap();
+	assert_eq!(
+		result.descriptors[0].hits_addend,
+		Some(1000),
+		"default multipliers must pass raw cost through unchanged"
+	);
+}
+
+/// When cost is None (Requests type), hits_addend must be None.
+/// Multiplier logic does not apply to request-counted descriptors.
+#[test]
+fn token_cost_requests_type_hits_addend_none() {
+	let entry = make_descriptor_entry(vec![("user", r#""carol""#)], RateLimitType::Requests);
+	let rl = make_rate_limit(vec![entry]);
+
+	let req = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri("http://example.com/mcp")
+		.body(crate::http::Body::empty())
+		.unwrap();
+
+	let result = rl
+		.build_request(&req, RateLimitType::Requests, None)
+		.unwrap();
+	assert_eq!(
+		result.descriptors[0].hits_addend, None,
+		"Requests-type descriptors must not set hits_addend"
+	);
+}
+
+/// A large multiplier (e.g. 6.25× for cache writes) produces a proportionally
+/// larger hits_addend — verifying that the full weighted cost round-trips.
+#[test]
+fn token_cost_large_multiplier_large_hits_addend() {
+	// Simulate: tc.weighted_cost(...) returned 625 for 100 cache-write tokens at 6.25×
+	let entry = make_descriptor_entry(vec![("user", r#""dave""#)], RateLimitType::Tokens);
+	let rl = make_rate_limit(vec![entry]);
+
+	let req = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri("http://example.com/mcp")
+		.body(crate::http::Body::empty())
+		.unwrap();
+
+	let result = rl
+		.build_request(&req, RateLimitType::Tokens, Some(625))
+		.unwrap();
+	assert_eq!(result.descriptors[0].hits_addend, Some(625));
+}

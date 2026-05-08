@@ -1111,6 +1111,24 @@ message BackendPolicySpec {
     map<string, string> model_aliases = 5;
     PromptCaching prompt_caching = 6;
 
+    // TokenCosts defines per-category cost multipliers for LLM token budget accounting.
+    // When set, raw tokens are multiplied by the corresponding multiplier before being
+    // charged against the rate-limiter budget (hits_addend). This allows requests_per_unit
+    // to represent cost-proportional budget units rather than raw token counts.
+    // All fields default to 1.0 when unset (zero value maps to 1.0 in the Rust consumer).
+    message TokenCosts {
+      // Multiplier for non-cached input tokens. Defaults to 1.0.
+      double input = 1;
+      // Multiplier for output (completion) tokens. Defaults to 1.0.
+      double output = 2;
+      // Multiplier for tokens that create a new cache entry. Defaults to 1.0.
+      double cache_write = 3;
+      // Multiplier for tokens served from an existing cache entry. Defaults to 1.0.
+      double cache_read = 4;
+    }
+
+    optional TokenCosts token_costs = 9;
+
     // RouteType specifies how incoming requests should be processed
     // based on the URL path.
     enum RouteType {

@@ -1341,3 +1341,308 @@ fn test_google_model_armor_implicit_auth_used_when_no_user_credentials() {
 		resolved.backend_auth
 	);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TokenCosts unit tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod token_costs_tests {
+	use super::TokenCosts;
+
+	// ── Default ───────────────────────────────────────────────────────────────
+
+	/// All multipliers default to 1.0 — total must equal the raw sum.
+	#[test]
+	fn default_all_ones_weighted_cost_equals_raw_sum() {
+		let tc = TokenCosts::default();
+		// base_input=100, output=50, cache_write=20, cache_read=30 → 100+50+20+30 = 200
+		assert_eq!(tc.weighted_cost(100, 50, 20, 30), 200);
+	}
+
+	/// Default pre-flight is identity.
+	#[test]
+	fn default_preflight_equals_input() {
+		let tc = TokenCosts::default();
+		assert_eq!(tc.weighted_preflight(1000, 0, None), 1000);
+	}
+
+	// ── Input multiplier ──────────────────────────────────────────────────────
+
+	/// Input-only multiplier scales only the base_input bucket.
+	#[test]
+	fn input_multiplier_scales_base_input() {
+		let tc = TokenCosts {
+			input: 5.0,
+			..TokenCosts::default()
+		};
+		assert_eq!(tc.weighted_cost(100, 0, 0, 0), 500);
+	}
+
+	/// weighted_preflight applies the input multiplier.
+	#[test]
+	fn preflight_multiplied_by_input() {
+		let tc = TokenCosts {
+			input: 5.0,
+			..TokenCosts::default()
+		};
+		assert_eq!(tc.weighted_preflight(1000, 0, None), 5000);
+	}
+
+	// ── Output multiplier ─────────────────────────────────────────────────────
+
+	/// Output-only multiplier scales only output tokens.
+	#[test]
+	fn output_multiplier_scales_output_tokens() {
+		let tc = TokenCosts {
+			output: 5.0,
+			..TokenCosts::default()
+		};
+		// 0 input, 100 output → 0 + 500 = 500
+		assert_eq!(tc.weighted_cost(0, 100, 0, 0), 500);
+	}
+
+	// ── Cache read discount ───────────────────────────────────────────────────
+
+	/// Cache-read tokens at 0.1× discount.
+	#[test]
+	fn cache_read_discount_applied() {
+		let tc = TokenCosts {
+			cache_read: 0.1,
+			..TokenCosts::default()
+		};
+		// 0 base, 0 output, 0 write, 1000 read → 0 + 0 + 0 + 100 = 100
+		assert_eq!(tc.weighted_cost(0, 0, 0, 1000), 100);
+	}
+
+	// ── Cache write premium ───────────────────────────────────────────────────
+
+	/// Cache-write tokens at 6.25× premium.
+	#[test]
+	fn cache_write_premium_applied() {
+		let tc = TokenCosts {
+			cache_write: 6.25,
+			..TokenCosts::default()
+		};
+		// 0 base, 0 output, 100 write, 0 read → 625
+		assert_eq!(tc.weighted_cost(0, 0, 100, 0), 625);
+	}
+
+	// ── Mixed all types ───────────────────────────────────────────────────────
+
+	/// All four multipliers set; verifies the full billing formula.
+	///
+	/// Pricing ratios (Claude 3.5 Sonnet approximation):
+	///   input=1, output=5, cache_write=1.25, cache_read=0.1
+	///   base_input=100, output=50, cache_write=80, cache_read=200
+	///
+	/// Expected = 100×1 + 50×5 + 80×1.25 + 200×0.1
+	///          = 100 + 250 + 100 + 20 = 470
+	#[test]
+	fn mixed_all_types_full_formula() {
+		let tc = TokenCosts {
+			input: 1.0,
+			output: 5.0,
+			cache_write: 1.25,
+			cache_read: 0.1,
+		};
+		assert_eq!(tc.weighted_cost(100, 50, 80, 200), 470);
+	}
+
+	// ── Zero inputs ───────────────────────────────────────────────────────────
+
+	/// Zero token counts always produce 0 regardless of multipliers.
+	#[test]
+	fn zero_tokens_returns_zero() {
+		let tc = TokenCosts {
+			input: 100.0,
+			output: 100.0,
+			cache_write: 100.0,
+			cache_read: 100.0,
+		};
+		assert_eq!(tc.weighted_cost(0, 0, 0, 0), 0);
+		assert_eq!(tc.weighted_preflight(0, 0, None), 0);
+	}
+
+	// ── Fractional rounding ───────────────────────────────────────────────────
+
+	/// Fractional multiplier rounds to nearest integer (not truncates).
+	#[test]
+	fn fractional_multiplier_rounds() {
+		let tc = TokenCosts {
+			input: 1.5,
+			..TokenCosts::default()
+		};
+		// 3 × 1.5 = 4.5 → rounds to 5
+		assert_eq!(tc.weighted_preflight(3, 0, None), 5);
+	}
+
+	// ── Serde defaults ────────────────────────────────────────────────────────
+
+	/// Deserialising an empty object yields all-1.0 defaults.
+	#[test]
+	fn serde_empty_object_gives_defaults() {
+		let tc: TokenCosts = serde_json::from_str("{}").expect("empty object must deserialise");
+		assert_eq!(tc.input, 1.0);
+		assert_eq!(tc.output, 1.0);
+		assert_eq!(tc.cache_write, 1.0);
+		assert_eq!(tc.cache_read, 1.0);
+	}
+
+	/// Deserialising a partial object applies specified field and defaults rest.
+	#[test]
+	fn serde_partial_object_defaults_missing_fields() {
+		let tc: TokenCosts =
+			serde_json::from_str(r#"{"input": 5.0}"#).expect("partial object must deserialise");
+		assert_eq!(tc.input, 5.0);
+		assert_eq!(tc.output, 1.0);
+		assert_eq!(tc.cache_write, 1.0);
+		assert_eq!(tc.cache_read, 1.0);
+	}
+
+	/// All four fields deserialise correctly when provided.
+	#[test]
+	fn serde_all_fields_roundtrip() {
+		let json = r#"{"input":1.0,"output":5.0,"cacheWrite":1.25,"cacheRead":0.1}"#;
+		let tc: TokenCosts = serde_json::from_str(json).expect("full object must deserialise");
+		assert_eq!(tc.input, 1.0);
+		assert_eq!(tc.output, 5.0);
+		assert_eq!(tc.cache_write, 1.25);
+		assert_eq!(tc.cache_read, 0.1);
+	}
+
+	// ── Policy embedding ─────────────────────────────────────────────────────
+
+	/// `token_costs` field deserialises correctly when embedded in a Policy.
+	#[test]
+	fn policy_token_costs_field_deserialises() {
+		use serde_json::json;
+
+		use super::Policy;
+		let j = json!({"tokenCosts": {"input": 3.0, "output": 15.0}});
+		let p: Policy = serde_json::from_value(j).expect("policy with tokenCosts must parse");
+		let tc = p.token_costs.expect("token_costs must be Some");
+		assert_eq!(tc.input, 3.0);
+		assert_eq!(tc.output, 15.0);
+		assert_eq!(tc.cache_write, 1.0); // default
+		assert_eq!(tc.cache_read, 1.0); // default
+	}
+
+	/// Omitting `tokenCosts` entirely yields None (backward compatible).
+	#[test]
+	fn policy_without_token_costs_is_none() {
+		use serde_json::json;
+
+		use super::Policy;
+		let j = json!({});
+		let p: Policy = serde_json::from_value(j).expect("empty policy must parse");
+		assert!(p.token_costs.is_none(), "absent tokenCosts must be None");
+	}
+
+	// ── Cache-aware preflight ────────────────────────────────────────────────
+
+	/// With caching enabled, preflight splits tokens proportionally between
+	/// cached (cache_read multiplier) and uncached (input multiplier) portions.
+	#[test]
+	fn weighted_preflight_cache_aware_splits_tokens() {
+		use super::PromptCachingConfig;
+
+		let tc = TokenCosts {
+			input: 1.0,
+			output: 1.0,
+			cache_write: 1.0,
+			cache_read: 0.1,
+		};
+		let caching = PromptCachingConfig {
+			cache_system: false,
+			cache_messages: true,
+			cache_tools: false,
+			min_tokens: None,
+			cache_message_offset: 0,
+		};
+		// 10 messages, offset 0 → cache_point at idx 8, so 9 cached msgs, 1 uncached
+		// 1000 tokens: 900 cached (×0.1=90) + 100 uncached (×1.0=100) = 190
+		let result = tc.weighted_preflight(1000, 10, Some(&caching));
+		assert_eq!(result, 190);
+	}
+
+	/// With cache_messages=false, falls back to plain input multiplier.
+	#[test]
+	fn weighted_preflight_cache_disabled_falls_back() {
+		use super::PromptCachingConfig;
+
+		let tc = TokenCosts {
+			input: 2.0,
+			output: 1.0,
+			cache_write: 1.0,
+			cache_read: 0.1,
+		};
+		let caching = PromptCachingConfig {
+			cache_system: false,
+			cache_messages: false,
+			cache_tools: false,
+			min_tokens: None,
+			cache_message_offset: 0,
+		};
+		// cache_messages=false → all 1000 tokens at input rate: 1000×2.0 = 2000
+		assert_eq!(tc.weighted_preflight(1000, 10, Some(&caching)), 2000);
+	}
+
+	/// With fewer than 2 messages, cache logic is skipped (not enough context).
+	#[test]
+	fn weighted_preflight_too_few_messages_falls_back() {
+		use super::PromptCachingConfig;
+
+		let tc = TokenCosts {
+			input: 3.0,
+			output: 1.0,
+			cache_write: 1.0,
+			cache_read: 0.5,
+		};
+		let caching = PromptCachingConfig {
+			cache_system: false,
+			cache_messages: true,
+			cache_tools: false,
+			min_tokens: None,
+			cache_message_offset: 0,
+		};
+		// Only 1 message → falls back: 100×3.0 = 300
+		assert_eq!(tc.weighted_preflight(100, 1, Some(&caching)), 300);
+	}
+
+	/// cache_message_offset shifts the cache boundary, reducing cached portion.
+	#[test]
+	fn weighted_preflight_cache_offset_reduces_cached_portion() {
+		use super::PromptCachingConfig;
+
+		let tc = TokenCosts {
+			input: 1.0,
+			output: 1.0,
+			cache_write: 1.0,
+			cache_read: 0.0,
+		};
+		let caching = PromptCachingConfig {
+			cache_system: false,
+			cache_messages: true,
+			cache_tools: false,
+			min_tokens: None,
+			cache_message_offset: 3,
+		};
+		// 10 messages, offset 3 → target_idx = (10 - 2) - 3 = 5, cached = 6 msgs
+		// 1000 tokens: 600 cached (×0.0=0) + 400 uncached (×1.0=400) = 400
+		assert_eq!(tc.weighted_preflight(1000, 10, Some(&caching)), 400);
+	}
+
+	/// When prompt_caching is None, weighted_preflight uses plain input multiplier.
+	#[test]
+	fn weighted_preflight_no_caching_config() {
+		let tc = TokenCosts {
+			input: 2.5,
+			output: 1.0,
+			cache_write: 1.0,
+			cache_read: 0.1,
+		};
+		// No caching config → 200×2.5 = 500
+		assert_eq!(tc.weighted_preflight(200, 5, None), 500);
+	}
+}

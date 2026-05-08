@@ -83,19 +83,12 @@ impl RateLimit {
 		if self.spec.limit_type != RateLimitType::Tokens {
 			return Ok(());
 		}
-		if let Some(it) = req.input_tokens {
-			// If we tokenized the request, check to make sure we permit that many tokens
-			// We will add the response tokens in `amend_tokens`
-			self
-				.ratelimit
-				.try_wait_n(it)
-				.map_err(|(limit, remaining, reset)| ProxyError::RateLimitExceeded {
-					limit,
-					remaining,
-					reset_seconds: reset.as_secs(),
-				})
+		if req.input_tokens.is_some() {
+			// Actual pre-flight charge is handled by check_llm_preflight; here we just
+			// confirm the request type is eligible.
+			Ok(())
 		} else {
-			// Otherwise, make sure at least 1 token is allowed.
+			// No tokenization was performed — make sure at least 1 token is allowed.
 			// Note this may lead to large over-allowance, especially with fast fill_intervals.
 			let avail = self.ratelimit.available_refill();
 			if avail > 0 {
@@ -109,6 +102,22 @@ impl RateLimit {
 				})
 			}
 		}
+	}
+
+	/// Pre-charge a weighted token cost against the bucket. Called after token cost
+	/// multipliers have been applied so the gate check uses budget units, not raw tokens.
+	pub fn check_llm_preflight(&self, cost: u64) -> Result<(), ProxyError> {
+		if self.spec.limit_type != RateLimitType::Tokens {
+			return Ok(());
+		}
+		self
+			.ratelimit
+			.try_wait_n(cost)
+			.map_err(|(limit, remaining, reset)| ProxyError::RateLimitExceeded {
+				limit,
+				remaining,
+				reset_seconds: reset.as_secs(),
+			})
 	}
 
 	/// Remove tokens from the rate limiter after the fact. This is useful for true-up

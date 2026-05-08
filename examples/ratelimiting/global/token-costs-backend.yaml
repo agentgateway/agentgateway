@@ -1,0 +1,52 @@
+# Example: Cost-rational token budget using tokenCosts multipliers
+#
+# This backend configures per-category cost multipliers that translate raw
+# LLM token counts into budget units proportional to actual model pricing.
+#
+# With the multipliers below (approximate Anthropic Claude 3.5 Sonnet ratios):
+#   input      = 1    →  1 budget unit per non-cached input token  ($3/MTok baseline)
+#   output     = 5    →  5 budget units per output token           ($15/MTok = 5× input)
+#   cacheWrite = 1.25 →  1.25 budget units per cache-write token   ($3.75/MTok)
+#   cacheRead  = 0.1  →  0.1 budget units per cache-read token     ($0.30/MTok = 10% input)
+#
+# The rate-limit server's `requests_per_unit` now represents budget units rather
+# than raw tokens. Setting `requests_per_unit: 1000000` caps a user at
+# 1,000,000 budget units/day — roughly equivalent to 1M non-cached input tokens
+# worth of spend, regardless of the actual token category mix.
+#
+# See architecture/token-costs.md for a full explanation and more examples.
+apiVersion: gateway.agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: claude-sonnet-bedrock
+  namespace: agentgateway-system
+spec:
+  ai:
+    provider:
+      bedrock:
+        modelId: anthropic.claude-3-5-sonnet-20241022-v2:0
+  policies:
+    ai:
+      tokenCosts:
+        input: 1
+        output: 5
+        cacheWrite: 1.25
+        cacheRead: 0.1
+---
+# Companion rate-limit config for the Envoy ratelimit server.
+# With tokenCosts applied, `requests_per_unit` is now a budget-unit limit,
+# not a raw token limit. 1,000,000 budget units ≈ 1M input tokens of spend.
+#
+# Place this in your ratelimit server's config.yaml:
+#
+# domain: agentgateway
+# descriptors:
+#   - key: user_id
+#     rate_limit:
+#       unit: day
+#       requests_per_unit: 1000000   # 1M budget units / day
+#   - key: user_id
+#     value: "premium-user"
+#     rate_limit:
+#       unit: day
+#       requests_per_unit: 10000000  # 10M budget units / day for premium
