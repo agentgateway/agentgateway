@@ -6,7 +6,7 @@ use rand::prelude::IndexedRandom;
 
 use crate::cel::SourceContext;
 use crate::proxy::httpproxy::BackendCall;
-use crate::proxy::{ProxyError, WaypointService, httpproxy};
+use crate::proxy::{httpproxy, ProxyError, WaypointService};
 use crate::store::{BackendPolicies, FrontendPolices, RoutePath};
 use crate::telemetry::log;
 use crate::telemetry::log::{DropOnLog, RequestLog};
@@ -173,8 +173,8 @@ impl TCPProxy {
 
 		let hbone_source = connection
 			.ext::<WaypointService>()
-			.is_some()
-			.then_some(crate::client::HboneSourceRole::Waypoint);
+			.map(|_| crate::client::HboneSourceRole::Waypoint)
+			.or(Some(crate::client::HboneSourceRole::Gateway));
 		let backend_call = Self::build_backend_call(
 			&mut Some(log),
 			sni,
@@ -850,7 +850,7 @@ mod tests {
 		use prometheus_client::registry::Registry;
 
 		use crate::client::Client;
-		use crate::{BackendConfig, client};
+		use crate::{client, BackendConfig};
 
 		let config = crate::config::parse_config("{}".to_string(), None).unwrap();
 		let encoder = config.session_encoder.clone();

@@ -84,12 +84,14 @@ pub struct TunnelConfig {
 #[non_exhaustive]
 pub enum HboneSourceRole {
 	Waypoint,
+	Gateway,
 }
 
 impl HboneSourceRole {
 	pub fn as_header_value(self) -> &'static str {
 		match self {
 			HboneSourceRole::Waypoint => "waypoint",
+			HboneSourceRole::Gateway => "gateway",
 		}
 	}
 
@@ -99,7 +101,8 @@ impl HboneSourceRole {
 		use types::agent::TunnelProtocol;
 		match tp {
 			TunnelProtocol::HboneWaypoint => Some(HboneSourceRole::Waypoint),
-			TunnelProtocol::Direct | TunnelProtocol::HboneGateway | TunnelProtocol::Proxy => None,
+			TunnelProtocol::HboneGateway => Some(HboneSourceRole::Gateway),
+			TunnelProtocol::Direct | TunnelProtocol::Proxy => None,
 		}
 	}
 }
@@ -709,12 +712,16 @@ mod tests {
 	}
 
 	#[test]
-	fn non_waypoint_tunnel_protocols_have_no_source_role() {
-		for tp in [
-			TunnelProtocol::Direct,
-			TunnelProtocol::HboneGateway,
-			TunnelProtocol::Proxy,
-		] {
+	fn gateway_bind_renders_as_gateway() {
+		assert_eq!(
+			HboneSourceRole::from_tunnel(TunnelProtocol::HboneGateway).map(|r| r.as_header_value()),
+			Some("gateway"),
+		);
+	}
+
+	#[test]
+	fn non_role_tunnel_protocols_have_no_source_role() {
+		for tp in [TunnelProtocol::Direct, TunnelProtocol::Proxy] {
 			assert_eq!(
 				HboneSourceRole::from_tunnel(tp),
 				None,

@@ -1461,8 +1461,8 @@ async fn make_backend_call(
 	let hbone_source = req
 		.extensions()
 		.get::<WaypointService>()
-		.is_some()
-		.then_some(HboneSourceRole::Waypoint);
+		.map(|_| HboneSourceRole::Waypoint)
+		.or_else(|| Some(HboneSourceRole::Gateway));
 
 	// The MCP backend aggregates multiple backends into a single backend.
 	// In some cases, we want to treat this as a normal backend, so we swap it out.
