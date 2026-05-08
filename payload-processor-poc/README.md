@@ -2,6 +2,7 @@
 
 This directory contains a proof-of-concept implementation of the `PayloadProcessor` CRD
 for the [wg-ai-gateway Payload Processing proposal](https://github.com/kubernetes-sigs/wg-ai-gateway/blob/main/proposals/7-payload-processing.md).
+This POC is scoped to [inline processing](https://github.com/kubernetes-sigs/wg-ai-gateway/issues/53), but the CRD schema is designed to support both inline and external processing.
 
 ## What It Does
 
@@ -36,18 +37,18 @@ metadata:
 spec:
   targetRef:
     group: gateway.networking.k8s.io
-    kind: Gateway
+    kind: Gateway # Allowed targets dependent on phase
     name: ai-gateway
-  phase: PreRouting
+  phase: PreRouting # Models agentgateway's traffic phases (PreRouting, PostRouting). TODO: Consider moving within processors to allow per-processor phase selection
   processors:
   - name: extract-model
-    type: InProcess
-    failureMode: FailClosed
+    type: InProcess # (InProcess, ExtProc)
+    failureMode: FailClosed # (FailClosed, FailOpen)
     inProcess:
       request:
         set:
-        - name: X-Gateway-Model-Name
-          value: 'json(request.body).model'
+        - name: X-Gateway-Model-Name # Header name
+          value: 'json(request.body).model' # CEL expression
 ```
 
 ## How It Works
@@ -63,6 +64,17 @@ spec:
 
 3. **No Rust changes**: The Go plugin emits standard transformation policies,
    so the existing data plane handles everything without modification.
+
+## CRD Components
+- **targetRef**: The `Gateway` to which the policy applies. The plugin will
+  reject any other kind of target for the `PreRouting` phase.
+- **phase**: The phase in which the transformation is applied. Only `PreRouting` is supported in this POC.
+   The `PostRouting` phases applies payload processing after a route has been selected and the backend is known.
+- **processors**: A list of processors to apply. Each processor has a `name`, `type`, and `failureMode`.
+  - Type:
+    - **InProcess**: The only supported type in this POC. The processor runs in the agentgateway data plane.
+    - **ExtProc**: Not implemented in this POC. The processor would run in an external process.
+  - **failureMode**: Determines what happens if the processor fails. `FailClosed` rejects the request, while `FailOpen` continues without applying the transformation.
 
 ## Files
 
@@ -102,12 +114,19 @@ spec:
 ## Testing
 
 ### Prerequisites
-- A Kubernetes cluster with agentgateway installed
-- The `PayloadProcessor` CRD registered
+- A Kubernetes cluster with agentgateway installed. See 
+- The `PayloadProcessor` CRD registered with RBAC permissions for agentgateway
+```bash
+kubectl apply -f payload-processor-poc/install-crd/
+```
 
 ### Deploy
 ```bash
-kubectl apply -f Jackie/testdata/payload-processor-bbr.yaml
+# Deploys simulated (llm-d's simulator) claude, gtp4, and default backends for testing
+kubectl apply -f payload-processor-poc/testdata/simulator-backends.yaml
+
+# Deploys Gateway, PayloadProcessor CR, and HTTPRoute for routing to backends bases on model header
+kubectl apply -f payload-processor-poc/testdata/payload-processor-bbr.yaml
 ```
 
 ### Verify
