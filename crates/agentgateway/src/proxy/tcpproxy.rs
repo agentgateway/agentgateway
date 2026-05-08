@@ -171,17 +171,18 @@ impl TCPProxy {
 			Some(route_path),
 		);
 
+		let hbone_source = connection
+			.ext::<WaypointService>()
+			.is_some()
+			.then_some(crate::client::HboneSourceRole::Waypoint);
 		let backend_call = Self::build_backend_call(
 			&mut Some(log),
 			sni,
 			&inputs,
 			&selected_backend.backend.backend,
 			backend_policies,
+			hbone_source,
 		)?;
-		let hbone_source = connection
-			.ext::<WaypointService>()
-			.is_some()
-			.then_some(crate::client::HboneSourceRole::Waypoint);
 
 		let bi = selected_backend.backend.backend.backend_info();
 		log.endpoint = Some(backend_call.target.clone());
@@ -219,6 +220,7 @@ impl TCPProxy {
 		inputs: &ProxyInputs,
 		selected_backend: &SimpleBackend,
 		backend_policies: BackendPolicies,
+		hbone_source: Option<crate::client::HboneSourceRole>,
 	) -> Result<BackendCall, ProxyError> {
 		let backend_call = match &selected_backend {
 			SimpleBackend::Service(svc, port) => httpproxy::build_service_call(
@@ -229,6 +231,7 @@ impl TCPProxy {
 				svc,
 				port,
 				sni.as_deref(),
+				hbone_source,
 			)?,
 			SimpleBackend::Opaque(_, target) => BackendCall {
 				target: target.clone(),
@@ -900,6 +903,7 @@ mod tests {
 			&inputs,
 			&backend,
 			BackendPolicies::default(),
+			None,
 		)
 		.unwrap();
 
@@ -946,7 +950,7 @@ mod tests {
 		};
 
 		let result =
-			super::TCPProxy::build_backend_call(&mut None, None, &inputs, &backend, user_policies)
+			super::TCPProxy::build_backend_call(&mut None, None, &inputs, &backend, user_policies, None)
 				.unwrap();
 
 		assert!(

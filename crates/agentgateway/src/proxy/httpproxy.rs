@@ -1255,7 +1255,7 @@ pub async fn build_transport(
 	if let Some(tun) = backend_tunnel {
 		let backend = super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?;
 		let pols = crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &[], None);
-		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols)?;
+		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols, None)?;
 		let tunnel_backend_tls = call.backend_policies.backend_tls.clone();
 		let tunnel_auth = call.backend_policies.backend_auth.clone();
 		// This is a bounded recursion; this code is only called when backend_tunnel is set, and in this call
@@ -1567,6 +1567,7 @@ async fn make_backend_call(
 			svc,
 			port,
 			req.uri().host(),
+			hbone_source,
 		)?,
 		Backend::Opaque(_, target) => BackendCall {
 			target: target.clone(),
@@ -1946,6 +1947,7 @@ pub fn build_service_call(
 	svc: &Arc<Service>,
 	port: &u16,
 	request_host: Option<&str>,
+	hbone_source: Option<HboneSourceRole>,
 ) -> Result<BackendCall, ProxyError> {
 	let port = *port;
 	let http_version_override = if svc.port_is_http2(port) {
@@ -2030,8 +2032,9 @@ pub fn build_service_call(
 
 	// Check if the service has ingress_use_waypoint set and a waypoint configured.
 	// When set, route traffic through the waypoint instead of directly to the workload.
-	// Skip if this gateway IS the waypoint for the service, to prevent forwarding loops.
-	let waypoint = if svc.ingress_use_waypoint && !is_self_the_waypoint(inputs, svc) {
+	// Skip when we are acting as a waypoint: ingress_use_waypoint should only affect
+	// ingress gateways, never waypoint-to-waypoint traffic.
+	let waypoint = if svc.ingress_use_waypoint && hbone_source.is_none() {
 		if let Some(wp) = &svc.waypoint {
 			let discovery = inputs.stores.read_discovery();
 			let wp_ip = match &wp.destination {
@@ -2195,33 +2198,6 @@ fn workload_and_service_sans(wl: &Workload, svc: &Service) -> Vec<Identity> {
 		}
 	}
 	ids
-}
-
-/// Returns true if this gateway instance is the waypoint for the given service.
-/// Used to prevent waypoints from forwarding ingress_use_waypoint traffic back to themselves.
-fn is_self_the_waypoint(inputs: &ProxyInputs, svc: &Service) -> bool {
-	let Some(self_id) = inputs.cfg.self_addr.as_ref() else {
-		return false;
-	};
-	let Some(wp) = svc.waypoint.as_ref() else {
-		return false;
-	};
-	match &wp.destination {
-		types::discovery::gatewayaddress::Destination::Hostname(nh) => self_id.matches_hostname(nh),
-		types::discovery::gatewayaddress::Destination::Address(addr) => {
-			let stores = inputs.stores.clone();
-			self_id.matches_address(addr, |ns, hostname| {
-				stores
-					.read_discovery()
-					.services
-					.get_by_namespaced_host(&NamespacedHostname {
-						namespace: ns.clone(),
-						hostname: hostname.clone(),
-					})
-					.map(|s| s.vips.clone())
-			})
-		},
-	}
 }
 
 fn resolved_workload_target_hostname<'a>(

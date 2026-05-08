@@ -2969,6 +2969,7 @@ async fn ingress_use_waypoint_sets_waypoint_target() {
 		&svc,
 		&80,
 		None,
+		None,
 	)
 	.expect("build_service_call should succeed");
 
@@ -3027,6 +3028,7 @@ async fn ingress_use_waypoint_false_no_waypoint() {
 		Default::default(),
 		&svc,
 		&80,
+		None,
 		None,
 	)
 	.expect("build_service_call should succeed");
@@ -3126,6 +3128,7 @@ async fn ingress_use_waypoint_ip_based_waypoint() {
 		&svc,
 		&80,
 		None,
+		None,
 	)
 	.expect("build_service_call should succeed");
 
@@ -3197,6 +3200,7 @@ async fn ingress_use_waypoint_no_waypoint_field_no_routing() {
 		&svc,
 		&80,
 		None,
+		None,
 	)
 	.expect("build_service_call should succeed");
 
@@ -3238,13 +3242,14 @@ async fn ingress_use_waypoint_build_transport_falls_back_without_ca() {
 		&svc,
 		&80,
 		None,
+		None,
 	)
 	.expect("build_service_call should succeed");
 
 	assert!(backend_call.waypoint.is_some());
 
 	// build_transport with no CA should fall back to plain transport
-	let transport = httpproxy::build_transport(&t.pi, &backend_call, None, None, None)
+	let transport = httpproxy::build_transport(&t.pi, &backend_call, None, None, None, None)
 		.await
 		.expect("build_transport should succeed");
 	// Without CA, it falls back to Plain
