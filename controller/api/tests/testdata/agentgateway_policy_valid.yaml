@@ -675,3 +675,206 @@ spec:
     proxyProtocol:
       version: All
       mode: Optional
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ext-auth-conditional
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    extAuth:
+      conditional:
+        - condition: "random() > .5"
+          policy:
+            backendRef:
+              name: foo
+              port: 1234
+            grpc: {}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ext-auth-conditional-fallback
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    extAuth:
+      conditional:
+        - condition: '"x-test" in request.headers'
+          policy:
+            backendRef:
+              name: foo
+              port: 1234
+            grpc: {}
+        - policy:
+            backendRef:
+              name: fallback
+              port: 1234
+            grpc: {}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: transformation-conditional
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    transformation:
+      conditional:
+        - condition: "request.path == '/transform'"
+          policy:
+            request:
+              set:
+                - name: x-test
+                  value: "'transform'"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: transformation-conditional-fallback
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    transformation:
+      conditional:
+        - condition: "request.path == '/transform'"
+          policy:
+            request:
+              set:
+                - name: x-test
+                  value: "'transform'"
+        - policy:
+            response:
+              add:
+                - name: x-fallback
+                  value: "'true'"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ext-proc-conditional
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    extProc:
+      conditional:
+        - condition: "request.path == '/process'"
+          policy:
+            backendRef:
+              name: processor
+              port: 1234
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ext-proc-conditional-fallback
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    extProc:
+      conditional:
+        - condition: "request.path == '/process'"
+          policy:
+            backendRef:
+              name: processor
+              port: 1234
+        - policy:
+            backendRef:
+              name: fallback-processor
+              port: 1234
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: rate-limit-conditional
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    rateLimit:
+      conditional:
+        - condition: "request.path == '/limited'"
+          policy:
+            local:
+              - requests: 10
+                unit: Seconds
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: rate-limit-conditional-fallback
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    rateLimit:
+      conditional:
+        - condition: "request.path == '/limited'"
+          policy:
+            local:
+              - requests: 10
+                unit: Seconds
+        - policy:
+            local:
+              - requests: 1
+                unit: Minutes
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: direct-response-conditional
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    directResponse:
+      conditional:
+        - condition: "request.path == '/blocked'"
+          policy:
+            status: 403
+            body: denied
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: direct-response-conditional-fallback
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    directResponse:
+      conditional:
+        - condition: "request.path == '/blocked'"
+          policy:
+            status: 403
+            body: denied
+        - policy:
+            status: 404
+---

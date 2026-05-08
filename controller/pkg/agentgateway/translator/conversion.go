@@ -1206,7 +1206,12 @@ var dummyTls = &TLSInfo{
 	Key:  []byte("invalid"),
 }
 
+const gatewayTLSTerminateModeKey = "gateway.istio.io/tls-terminate-mode"
+
 func validateTLS(certInfo *TLSInfo) *ConfigError {
+	if certInfo.IstioWorkloadCert {
+		return nil
+	}
 	if _, err := tls.X509KeyPair(certInfo.Cert, certInfo.Key); err != nil {
 		return &ConfigError{
 			Reason:  InvalidTLS,
@@ -1243,6 +1248,15 @@ func buildTLS(
 	namespace := gw.GetNamespace()
 	switch mode {
 	case gwv1.TLSModeTerminate:
+		if tls.Options != nil {
+			switch tls.Options[gatewayTLSTerminateModeKey] {
+			case "ISTIO_SIMPLE":
+				return &TLSInfo{IstioWorkloadCert: true}, nil
+			case "ISTIO_MUTUAL":
+				return &TLSInfo{IstioWorkloadCert: true, IstioMutual: true}, nil
+			}
+		}
+
 		// Important: all failures MUST include dummyTls, as this is the signal to the dataplane to actually do TLS (but fail)
 		if len(tls.CertificateRefs) != 1 {
 			// This is required in the API, should be rejected in validation

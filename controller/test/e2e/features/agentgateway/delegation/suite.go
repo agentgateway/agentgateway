@@ -124,3 +124,50 @@ func (s *testingSuite) TestCyclicDelegation() {
 		curl.WithPath("/anything/team2/foo"),
 	)
 }
+
+// TestRecursiveDelegation tests multi-level route delegation.
+//   - Parent infra/root delegates /anything/team2 to an intermediate route
+//     team2-root/team2-root, which in turn delegates to team2/svc2.
+//   - The shallow /anything/team1 delegation still works in parallel.
+func (s *testingSuite) TestRecursiveDelegation() {
+	s.TestInstallation.AssertionsT(s.T()).EventuallyHTTPRouteCondition(
+		s.Ctx,
+		"root",
+		"infra",
+		gwv1.RouteConditionAccepted,
+		metav1.ConditionTrue,
+	)
+
+	// Single-level delegation via team1 still works
+	common.BaseGateway.Send(
+		s.T(),
+		&testmatchers.HttpResponse{StatusCode: http.StatusOK},
+		curl.WithPath("/anything/team1/foo"),
+	)
+
+	// Two-level delegation: root -> team2-root -> svc2
+	common.BaseGateway.Send(
+		s.T(),
+		&testmatchers.HttpResponse{StatusCode: http.StatusOK},
+		curl.WithPath("/anything/team2/foo"),
+	)
+}
+
+// TestUnresolvedChild tests that a parent HTTPRoute which delegates to a
+// namespace with no matching children is still Accepted, and that requests
+// to the delegated prefix return 404 rather than a hard error.
+func (s *testingSuite) TestUnresolvedChild() {
+	s.TestInstallation.AssertionsT(s.T()).EventuallyHTTPRouteCondition(
+		s.Ctx,
+		"root",
+		"infra",
+		gwv1.RouteConditionAccepted,
+		metav1.ConditionTrue,
+	)
+
+	common.BaseGateway.Send(
+		s.T(),
+		&testmatchers.HttpResponse{StatusCode: http.StatusNotFound},
+		curl.WithPath("/anything/team1/foo"),
+	)
+}

@@ -10,7 +10,7 @@ import (
 )
 
 // Provider is the entity that creates actions.
-// These actions are executed against a running installation of kgateway, within a Kubernetes Cluster.
+// These actions are executed against a running installation of agentgateway, within a Kubernetes Cluster.
 // This provider is just a wrapper around sub-providers, so it exposes methods to access those providers
 type Provider struct {
 	kubeCli *kubectl.Cli
@@ -34,7 +34,7 @@ func (p *Provider) WithClusterContext(clusterContext *cluster.Context) *Provider
 	return p
 }
 
-// WithInstallContext sets the provider to point to the provided kgateway installation
+// WithInstallContext sets the provider to point to the provided agentgateway installation
 func (p *Provider) WithInstallContext(installContext *install.Context) *Provider {
 	p.installContext = installContext
 	return p

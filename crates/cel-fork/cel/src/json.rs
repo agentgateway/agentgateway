@@ -70,6 +70,7 @@ impl<'a> Value<'a> {
 					.json()
 					.map_err(|_| ConvertToJsonError::Value(self))?
 			},
+			Value::Type(ref t) => t.name().into(),
 		})
 	}
 }
@@ -82,6 +83,7 @@ mod tests {
 	use serde_json::json;
 
 	use crate::Value as CelValue;
+	use crate::common::types;
 	use crate::objects::{ListValue, MapValue};
 
 	#[test]
@@ -92,6 +94,7 @@ mod tests {
 			(json!(42.0), CelValue::Float(42.0)),
 			(json!(true), CelValue::Bool(true)),
 			(json!(null), CelValue::Null),
+			(json!("int"), CelValue::Type(types::INT_TYPE)),
 			(
 				json!([true, null]),
 				CelValue::List(ListValue::Owned(

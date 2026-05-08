@@ -13,7 +13,7 @@ use crate::telemetry::log::{DropOnLog, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
 use crate::transport::stream::{Socket, TCPConnectionInfo, TLSConnectionInfo, WaypointTLSInfo};
 use crate::types::agent::{
-	BackendPolicy, BindKey, Listener, ListenerProtocol, SimpleBackend, SimpleBackendReference,
+	BackendTrafficPolicy, BindKey, Listener, ListenerProtocol, SimpleBackend, SimpleBackendReference,
 	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference, Target,
 	TransportProtocol,
 };
@@ -178,6 +178,10 @@ impl TCPProxy {
 			&selected_backend.backend.backend,
 			backend_policies,
 		)?;
+		let hbone_source = connection
+			.ext::<WaypointService>()
+			.is_some()
+			.then_some(crate::client::HboneSourceRole::Waypoint);
 
 		let bi = selected_backend.backend.backend.backend_info();
 		log.endpoint = Some(backend_call.target.clone());
@@ -186,6 +190,7 @@ impl TCPProxy {
 		let transport = crate::proxy::httpproxy::build_transport(
 			&inputs,
 			&backend_call,
+			hbone_source,
 			backend_call.backend_policies.backend_tls.clone(),
 			backend_call.backend_policies.tunnel.as_ref(),
 			// TODO: for TCP we should actually probably do something here: telling it to not use ALPN at all?
@@ -379,15 +384,12 @@ fn resolve_waypoint_service(
 	let is_ours = match &wp.destination {
 		Destination::Address(addr) => {
 			let stores_ref = stores.clone();
-			self_id.matches_address(addr, |ns, hostname| {
+			self_id.matches_address(addr, |a| {
 				let discovery = stores_ref.read_discovery();
-				let self_svc = discovery.services.get_by_namespaced_host(
-					&crate::types::discovery::NamespacedHostname {
-						namespace: ns.clone(),
-						hostname: hostname.clone(),
-					},
-				)?;
-				Some(self_svc.vips.clone())
+				discovery
+					.services
+					.get_by_vip(a)
+					.map(|s| (s.name.clone(), s.namespace.clone()))
 			})
 		},
 		Destination::Hostname(n) => self_id.matches_hostname(n),
@@ -426,7 +428,7 @@ fn resolve_backend(
 pub fn get_backend_policies(
 	inputs: &ProxyInputs,
 	backend: &SimpleBackendWithPolicies,
-	inline_policies: &[BackendPolicy],
+	inline_policies: &[BackendTrafficPolicy],
 	route_path: Option<RoutePath>,
 ) -> BackendPolicies {
 	inputs.stores.read_binds().backend_policies(
@@ -603,6 +605,38 @@ mod tests {
 			route.is_none(),
 			"should reject service bound to different waypoint"
 		);
+	}
+
+	#[tokio::test]
+	async fn test_waypoint_default_tcp_route_custom_cluster_domain() {
+		let svc = make_service(
+			"mysql-db",
+			"default",
+			"mysql-db.default.custom.local",
+			"10.0.0.50",
+			"network",
+			Some(GatewayAddress {
+				destination: Destination::Hostname(NamespacedHostname {
+					namespace: strng::new("istio-system"),
+					hostname: strng::new("my-waypoint.istio-system.custom.local"),
+				}),
+				hbone_mtls_port: 15008,
+			}),
+		);
+		let stores = stores_with_services(vec![svc]);
+		let network = strng::literal!("network");
+		let dst = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 50)), 3306);
+		let self_addr = make_self_addr("my-waypoint", "istio-system");
+
+		let route = super::select_best_route(
+			None,
+			hbone_listener(),
+			&stores,
+			&network,
+			dst,
+			Some(&self_addr),
+		);
+		assert!(route.is_some());
 	}
 
 	#[tokio::test]

@@ -64,7 +64,8 @@ type AgwCollections struct {
 	ListenerSetsByNamespace krt.Index[string, *gwv1.ListenerSet]
 
 	// Extended resources
-	InferencePools krt.Collection[*inf.InferencePool]
+	InferencePools            krt.Collection[*inf.InferencePool]
+	InferencePoolsByNamespace krt.Index[string, *inf.InferencePool]
 
 	// agentgateway resources
 	Backends             krt.Collection[*agentgateway.AgentgatewayBackend]
@@ -203,6 +204,7 @@ func (c *AgwCollections) SetupIndexes() {
 	c.GRPCRoutesByNamespace = krt.NewNamespaceIndex(c.GRPCRoutes)
 	c.ListenerSetsByNamespace = krt.NewNamespaceIndex(c.ListenerSets)
 	c.BackendsByNamespace = krt.NewNamespaceIndex(c.Backends)
+	c.InferencePoolsByNamespace = krt.NewNamespaceIndex(c.InferencePools)
 }
 
 func (c *AgwCollections) HasSynced() bool {

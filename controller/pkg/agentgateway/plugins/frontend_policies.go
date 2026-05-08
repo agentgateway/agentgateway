@@ -434,6 +434,7 @@ func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) 
 	if len(agwCipherSuites) > 0 {
 		spec.CipherSuites = agwCipherSuites
 	}
+	spec.KeyExchangeGroups = convertTLSKeyExchangeGroups(tls.KeyExchangeGroups)
 
 	tlsPolicy := &api.Policy{
 		Key:  name + frontendTlsPolicySuffix,
@@ -452,6 +453,26 @@ func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) 
 		"agentgateway_policy", tlsPolicy.Name)
 
 	return tlsPolicy
+}
+
+func convertTLSKeyExchangeGroups(groups []agentgateway.KeyExchangeGroup) []api.TLSConfig_KeyExchangeGroup {
+	var out []api.TLSConfig_KeyExchangeGroup
+	for _, group := range groups {
+		switch group {
+		case agentgateway.KeyExchangeGroupX25519:
+			out = append(out, api.TLSConfig_X25519)
+		case agentgateway.KeyExchangeGroupP256:
+			out = append(out, api.TLSConfig_P256)
+		case agentgateway.KeyExchangeGroupP384:
+			out = append(out, api.TLSConfig_P384)
+		case agentgateway.KeyExchangeGroupX25519MLKEM768:
+			out = append(out, api.TLSConfig_X25519_MLKEM768)
+		default:
+			logger.Warn("unknown tls key exchange group", "key_exchange_group", group)
+			continue
+		}
+	}
+	return out
 }
 
 func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {

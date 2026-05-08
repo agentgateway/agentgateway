@@ -351,12 +351,12 @@ func deploymentWithLabels(labels map[string]string) *appsv1.Deployment {
 
 var gatewayLabels = map[string]string{
 	"app.kubernetes.io/instance":                   "gw",
-	"app.kubernetes.io/managed-by":                 "kgateway",
+	"app.kubernetes.io/managed-by":                 "agentgateway",
 	"app.kubernetes.io/name":                       "gw",
 	"app.kubernetes.io/version":                    "1.0.0-dev",
 	"gateway.networking.k8s.io/gateway-class-name": "agentgateway",
 	"gateway.networking.k8s.io/gateway-name":       "gw",
-	"kgateway":                                     "kube-gateway",
+	"agentgateway":                                 "kube-gateway",
 }
 
 func TestCreatePodDisruptionBudget_InheritsDeploymentLabels(t *testing.T) {

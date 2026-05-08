@@ -132,6 +132,42 @@ fn base64() {
 }
 
 #[test]
+fn form() {
+	assert(
+		json!({"client_id": "abc", "scope": "openid profile"}),
+		r#"form.decode("client_id=abc&scope=openid+profile")"#,
+	);
+	assert(json!({"a": ["1", "2"]}), r#"form.decode("a=1&a=2")"#);
+	assert(
+		json!("scope=openid+profile"),
+		r#"form.encode({"scope": "openid profile"})"#,
+	);
+	assert(
+		json!({"client_id": "app id", "scope": "openid profile"}),
+		r#"form.decode(form.encode({"client_id": "app id", "scope": "openid profile"}))"#,
+	);
+	assert(
+		json!({
+			"client_id": "app-id",
+			"scope": "openid profile api://app-id/access_as_user",
+		}),
+		r#"form.decode(form.encode(form.decode("").merge({"client_id": "app-id", "scope": "openid profile api://app-id/access_as_user"})))"#,
+	);
+	assert(
+		json!({
+			"client_id": "app-id",
+			"device_code": "abc",
+			"grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+		}),
+		r#"form.decode(form.encode(form.decode("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code&device_code=abc").merge({"client_id": "app-id"})))"#,
+	);
+
+	assert_fails(r#"form.decode({})"#);
+	assert_fails(r#"form.encode([])"#);
+	assert_fails(r#"form.encode({"bad": {}})"#);
+}
+
+#[test]
 fn hashes() {
 	assert(
 		json!("aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d"),

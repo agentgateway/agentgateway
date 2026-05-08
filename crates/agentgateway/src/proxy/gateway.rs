@@ -281,7 +281,7 @@ impl Gateway {
 				let start = Instant::now();
 				let mut force_shutdown = force_shutdown.clone();
 				let name = name.clone();
-				tokio::spawn(dtrace::DebugTracer::maybe_scope(async move {
+				tokio::spawn(async move {
 					debug!(bind=?name, "connection started");
 					tokio::select! {
 						// We took too long; shutdown now.
@@ -291,7 +291,7 @@ impl Gateway {
 						_ = Self::handle_tunnel(name.clone(), bind_protocol, tunnel_protocol, stream, pi, drain) => {}
 					}
 					debug!(bind=?name, dur=?start.elapsed(), "connection completed");
-				}));
+				});
 			};
 			let wait = drain_watch.wait_for_drain();
 			tokio::pin!(wait);
@@ -731,7 +731,9 @@ impl Gateway {
 				let proxy = proxy.clone();
 				let connection = connection.clone();
 				req.extensions_mut().insert(BufferLimit::new(buffer));
-				async move { proxy.proxy(connection, req).map(Ok::<_, Infallible>).await }
+				dtrace::DebugTracer::maybe_scope(async move {
+					proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
+				})
 			}),
 		);
 		let (connection_drain_tx, connection_drain_rx) = drain::new();
@@ -899,7 +901,7 @@ impl Gateway {
 			let best = listeners
 				.best_match_tls(sni)
 				.ok_or(anyhow!("no TLS listener match for {sni}"))?;
-			match best.protocol.tls(tls_pol) {
+			match best.protocol.tls(tls_pol, inp.ca.as_ref()).await {
 				Some(Err(e)) => {
 					// There is a TLS config for this listener, but its invalid. Reject the connection
 					Err(e)
@@ -1272,14 +1274,11 @@ impl Gateway {
 			anyhow::bail!("self_id required for waypoint");
 		};
 		let is_ours = match &wp.destination {
-			Destination::Address(addr) => self_id.matches_address(addr, |ns, hostname| {
-				let self_svc = discovery.services.get_by_namespaced_host(
-					&crate::types::discovery::NamespacedHostname {
-						namespace: ns.clone(),
-						hostname: hostname.clone(),
-					},
-				)?;
-				Some(self_svc.vips.clone())
+			Destination::Address(addr) => self_id.matches_address(addr, |a| {
+				discovery
+					.services
+					.get_by_vip(a)
+					.map(|s| (s.name.clone(), s.namespace.clone()))
 			}),
 			Destination::Hostname(n) => self_id.matches_hostname(n),
 		};

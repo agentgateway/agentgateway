@@ -37,8 +37,9 @@ const (
 	// Ref: https://github.com/solo-io/gloo-gateway-use-cases/blob/76e6cec2f0b41eda7a93ac87a1b0f41ddb17503c/ai-guardrail-webhook-server/main.py#L112
 	maskedPatternResponse = "****ing"
 
-	dockerBridgeIfaceIP = "172.17.0.1"
-
+	// TODO(nfuden): This shouldnt be in this specific file, it should either be an overarching replacement or a special env variable as we see in some other projects
+	// Mac causes a lot of problems but we should be able to support it in general
+	dockerBridgeIfaceIP   = "172.17.0.1"
 	macOSDockerBridgeHost = "host.docker.internal"
 )
 
@@ -65,7 +66,14 @@ var (
 	}
 	testCases = map[string]*base.TestCase{
 		"TestFailover": {
-			Manifests: []string{failoverEvictionManifest},
+			ManifestsWithTransform: map[string]func(string) string{
+				failoverEvictionManifest: func(original string) string {
+					if runtime.GOOS == "darwin" {
+						return strings.ReplaceAll(original, dockerBridgeIfaceIP, macOSDockerBridgeHost)
+					}
+					return original
+				},
+			},
 		},
 	}
 )
@@ -87,14 +95,14 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 func (s *testingSuite) TestRouting() {
 	server := s.NewMockReqRespServer(MockReqResp{
 		Req:  "What is the name of this project?",
-		Resp: "The name of this project is kgateway",
+		Resp: "The name of this project is agentgateway",
 	})
 
 	common.BaseGateway.Send(
 		s.T(),
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
-			Body:       gomega.ContainSubstring(`The name of this project is kgateway`),
+			Body:       gomega.ContainSubstring(`The name of this project is agentgateway`),
 		},
 		curl.WithPath("/v1/chat/completions"),
 		curl.WithPostBody(`{"messages": [{"role": "user", "content": "What is the name of this project?"}]}`),
@@ -207,7 +215,7 @@ func (s *testingSuite) TestWebhook() {
 }
 
 func (s *testingSuite) TestFailover() {
-	expectedResponse := "The name of this project is kgateway"
+	expectedResponse := "The name of this project is agentgateway"
 
 	server := s.NewMockReqRespServer(MockReqResp{
 		Req:  "What is the name of this project?",
@@ -225,6 +233,7 @@ func (s *testingSuite) TestFailover() {
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body:       gomega.ContainSubstring(expectedResponse),
+			Headers:    map[string]any{"x-backend-model": "gpt-4o-mini", "x-model-swapped": "true"},
 		},
 		curl.WithPath("/v1/chat/completions"),
 		curl.WithPostBody(`{"messages": [{"role": "user", "content": "What is the name of this project?"}]}`),

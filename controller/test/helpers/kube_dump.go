@@ -18,10 +18,10 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
-// StandardKgatewayDumpOnFail creates a dump of the kubernetes state and certain envoy data from
+// StandardAgentgatewayDumpOnFail creates a dump of the kubernetes state and certain envoy data from
 // the admin interface when a test fails.
 // Look at `KubeDumpOnFail` && `EnvoyDumpOnFail` for more details
-func StandardKgatewayDumpOnFail(outLog io.Writer, kubectlCli *kubectl.Cli, outDir string, namespaces []string) {
+func StandardAgentgatewayDumpOnFail(outLog io.Writer, kubectlCli *kubectl.Cli, outDir string, namespaces []string) {
 	if os.Getenv(testutils.SkipDump) == "true" {
 		return
 	}
@@ -45,7 +45,7 @@ func StandardKgatewayDumpOnFail(outLog io.Writer, kubectlCli *kubectl.Cli, outDi
 // - process state
 // - kubernetes state
 // - logs from all pods in the given namespaces
-// - yaml representations of all kgateway CRs in the given namespaces
+// - yaml representations of all agentgateway CRs in the given namespaces
 func KubeDumpOnFail(ctx context.Context, kubectlCli *kubectl.Cli, outLog io.Writer, outDir string,
 	namespaces []string,
 ) {
@@ -69,6 +69,7 @@ func recordKubeState(ctx context.Context, kubectlCli *kubectl.Cli, f *os.File) {
 		"pods",
 		"deployments",
 		"configmaps",
+		"events",
 		// Agentgateway
 		"agentgatewaybackends.agentgateway.dev",
 		"agentgatewayparameters.agentgateway.dev",

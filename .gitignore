@@ -5,6 +5,8 @@
 .run
 .DS_Store
 .venv
+.env
+.env.*
 *.local
 var/
 controller/_output

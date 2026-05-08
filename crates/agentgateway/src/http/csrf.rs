@@ -92,6 +92,20 @@ impl Csrf {
 	}
 }
 
+impl crate::store::RequestPolicyTrait for Csrf {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		req: &mut Request,
+	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
+		self
+			.apply(req)
+			.map_err(|_| crate::proxy::ProxyError::CsrfValidationFailed)
+			.map_err(crate::proxy::ProxyResponse::from)
+	}
+}
+
 /// Check if the HTTP method is a safe method
 fn is_safe_method(method: &Method) -> bool {
 	matches!(method, &Method::GET | &Method::HEAD | &Method::OPTIONS)

@@ -33,7 +33,7 @@ For e2e tests specifically, you can also use `hack/run-e2e-test.sh`:
 ./hack/run-e2e-test.sh TestCookieSessionPersistence
 
 # Run a top-level test function
-./hack/run-e2e-test.sh TestKgateway
+./hack/run-e2e-test.sh TestAgentgatewayIntegration
 ```
 
 The scripts will automatically:
@@ -50,22 +50,22 @@ If you prefer to run tests manually:
 1. Make sure you have a kind cluster running with the images loaded. You can do this by running `./hack/kind/setup-kind.sh`
 2. The `make unit` command will not run e2e tests; `make e2e-test` does. To run a specific e2e test, you can use `go test -tags=e2e` directly. This is accomplished via go build tags, so when you add a new test, be sure to make the first line of each go source file read `//go:build e2e`.
 
-To run a specific test suite directly (everything that starts with `TestKgateway`):
+To run a specific test suite directly (everything that starts with `TestAgentgatewayIntegration`):
 ```shell
-go test -tags=e2e -v -timeout 600s ./test/e2e/tests -run ^TestKgateway
+go test -tags=e2e -v -timeout 600s ./test/e2e/tests -run ^TestAgentgatewayIntegration
 ```
-Here the regex matches any test whose name starts with `TestKgateway` (e.g. `TestKgatewayBasicRouting` would also run).
+Here the regex matches any test whose name starts with `TestAgentgateway` (e.g. `TestAgentgatewayIntegration` would also run).
 
-You can also run a specific match (only run the suite that starts with `TestKgateway`):
+You can also run a specific match (only run the suite that starts with `TestAgentgatewayIntegration`):
 ```shell
-go test -tags=e2e -v -timeout 600s ./test/e2e/tests -run ^TestKgateway$
+go test -tags=e2e -v -timeout 600s ./test/e2e/tests -run ^TestAgentgatewayIntegration$
 ```
 
-Here the `$` anchors the regex to the end of the string, so it would only match exactly `TestKgateway`.
+Here the `$` anchors the regex to the end of the string, so it would only match exactly `TestAgentgatewayIntegration`.
 
 To run a specific e2e test, you can use regex to select a specific sub-suite or test:
 ```shell
-go test -tags=e2e -v -timeout 600s ./test/e2e/tests -run ^TestKgateway$$/^BasicRouting$$
+go test -tags=e2e -v -timeout 600s ./test/e2e/tests -run ^TestAgentgatewayIntegration$$/^BasicRouting$$
 ```
 
 You can find more information on running tests in the [e2e test debugging guide](debugging.md#step-2-running-tests).
@@ -170,7 +170,7 @@ Set to `true`/`1`/`yes`/`y` to enable.
 
 **Quick Start:**
 ```shell
-FAIL_FAST_AND_PERSIST=true go test -failfast -tags=e2e ./test/e2e/tests -run ^TestKgateway$
+FAIL_FAST_AND_PERSIST=true go test -failfast -tags=e2e ./test/e2e/tests -run ^TestAgentgatewayIntegration$
 ```
 
 **What it does:**
@@ -188,14 +188,14 @@ FAIL_FAST_AND_PERSIST=true go test -failfast -tags=e2e ./test/e2e/tests -run ^Te
 **Example workflow:**
 ```shell
 # First run - installs kgateway, test fails, resources preserved
-FAIL_FAST_AND_PERSIST=true go test -failfast -tags=e2e ./test/e2e/tests -run ^TestKgateway$
+FAIL_FAST_AND_PERSIST=true go test -failfast -tags=e2e ./test/e2e/tests -run ^TestAgentgatewayIntegration$
 
 # Inspect the failure state
 kubectl get pods -n agentgateway-system
 kubectl logs -n agentgateway-system deployment/kgateway
 
 # Fix the issue and re-run - reuses installation, cleans up on success
-FAIL_FAST_AND_PERSIST=true go test -failfast -tags=e2e ./test/e2e/tests -run ^TestKgateway$
+FAIL_FAST_AND_PERSIST=true go test -failfast -tags=e2e ./test/e2e/tests -run ^TestAgentgatewayIntegration$
 ```
 
 Set to `true`/`1`/`yes`/`y` to enable.

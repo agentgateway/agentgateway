@@ -257,6 +257,10 @@ impl ContextBuilder {
 		}
 	}
 
+	pub fn needs_llm(&self) -> bool {
+		self.any_has(Attributes::Llm)
+	}
+
 	pub fn needs_llm_prompt(&self) -> bool {
 		self.any_has(Attributes::LlmPrompt)
 	}

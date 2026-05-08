@@ -18,7 +18,7 @@ import (
 	agwv1a1 "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 )
 
-// SchemeBuilder contains all the Schemes for registering the CRDs with which kgateway interacts.
+// SchemeBuilder contains all the Schemes for registering the CRDs with which agentgateway interacts.
 // We share one SchemeBuilder as there's no harm in registering all I/O types internally.
 var SchemeBuilder = runtime.SchemeBuilder{
 	// K8s Gateway API resources
@@ -47,7 +47,7 @@ func AddToScheme(s *runtime.Scheme) error {
 	return SchemeBuilder.AddToScheme(s)
 }
 
-// DefaultScheme returns a scheme with all the types registered for kgateway.
+// DefaultScheme returns a scheme with all the types registered for agentgateway.
 // We intentionally do not perform this operation in an init!!
 // See https://github.com/kgateway-dev/kgateway/pull/9692 for context
 func DefaultScheme() *runtime.Scheme {

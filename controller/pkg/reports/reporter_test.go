@@ -685,7 +685,7 @@ func grpcRoute(conditions ...metav1.Condition) client.Object {
 
 func parentRef() *gwv1.ParentReference {
 	return &gwv1.ParentReference{
-		Name: "kgateway-gtw",
+		Name: "agentgateway-gtw",
 	}
 }
 
@@ -726,7 +726,7 @@ func gw() *gwv1.Gateway {
 	g := &gwv1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
-			Name:      "kgateway-gtw",
+			Name:      "agentgateway-gtw",
 		},
 	}
 	g.Spec.Listeners = append(g.Spec.Listeners, *listener())

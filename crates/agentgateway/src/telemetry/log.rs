@@ -439,6 +439,7 @@ pub struct CelLoggingBuildInputs<'a> {
 #[derive(Debug)]
 pub struct DropOnLog {
 	log: Option<RequestLog>,
+	debug_tracer: Option<dtrace::DebugTracer>,
 }
 
 impl DropOnLog {
@@ -578,7 +579,10 @@ impl DropOnLog {
 
 impl From<RequestLog> for DropOnLog {
 	fn from(log: RequestLog) -> Self {
-		Self { log: Some(log) }
+		Self {
+			log: Some(log),
+			debug_tracer: dtrace::DebugTracer::active(),
+		}
 	}
 }
 
@@ -709,7 +713,7 @@ pub struct RequestLog {
 	pub inference_pool: Option<SocketAddr>,
 
 	pub request_handle: Option<ActiveHandle>,
-	pub request_snapshot: Option<cel::RequestSnapshot>,
+	pub request_snapshot: Option<Arc<cel::RequestSnapshot>>,
 	pub response_snapshot: Option<cel::ResponseSnapshot>,
 	/// Source context for TCP connections (where we don't have an HTTP request)
 	pub source_context: Option<cel::SourceContext>,
@@ -719,7 +723,11 @@ pub struct RequestLog {
 
 impl Drop for DropOnLog {
 	fn drop(&mut self) {
-		dtrace::trace(|t| t.request_completed());
+		if let Some(debug_tracer) = &self.debug_tracer {
+			debug_tracer.request_completed();
+		} else {
+			dtrace::trace(|t| t.request_completed());
+		}
 		let Some(mut log) = self.log.take() else {
 			return;
 		};
@@ -768,7 +776,7 @@ impl Drop for DropOnLog {
 		let mcp_cel = mcp.as_ref().filter(|m| !m.is_empty());
 		let cel_end_time = cel::RequestTime(end_time.as_datetime());
 		let cel_exec = log.cel.build(CelLoggingBuildInputs {
-			req: log.request_snapshot.as_ref(),
+			req: log.request_snapshot.as_deref(),
 			resp: log.response_snapshot.as_ref(),
 			llm_response: llm_response.as_ref(),
 			mcp: mcp_cel,
@@ -1236,7 +1244,7 @@ impl PolicyGrpcLogExporter {
 	fn new(
 		inputs: Arc<crate::ProxyInputs>,
 		target: Arc<crate::types::agent::SimpleBackendReference>,
-		policies: Vec<crate::types::agent::BackendPolicy>,
+		policies: Vec<crate::types::agent::BackendTrafficPolicy>,
 		runtime: tokio::runtime::Handle,
 	) -> Self {
 		use crate::http::ext_proc::GrpcReferenceChannel;
@@ -1327,7 +1335,7 @@ impl OtelAccessLogger {
 	pub fn new(
 		policy_client: crate::proxy::httpproxy::PolicyClient,
 		backend_ref: crate::types::agent::SimpleBackendReference,
-		policies: Vec<crate::types::agent::BackendPolicy>,
+		policies: Vec<crate::types::agent::BackendTrafficPolicy>,
 		protocol: crate::types::agent::TracingProtocol,
 		path: String,
 	) -> anyhow::Result<Self> {

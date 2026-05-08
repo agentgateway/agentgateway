@@ -125,6 +125,18 @@ message TCPRoute {
   repeated RouteBackend backends = 6;
 }
 
+message ConditionalPolicies {
+    repeated ConditionalPolicy policies = 1;
+}
+message ConditionalPolicy {
+  optional string condition = 1;
+  oneof kind {
+    // Currently only traffic is supported
+    TrafficPolicySpec traffic = 2;
+//    BackendPolicySpec backend = 3;
+//    FrontendPolicySpec frontend = 4;
+  }
+}
 message Policy {
   // Unique key for this policy
   string key = 1;
@@ -136,6 +148,7 @@ message Policy {
     TrafficPolicySpec traffic = 4;
     BackendPolicySpec backend = 5;
     FrontendPolicySpec frontend = 6;
+    ConditionalPolicies conditional = 7;
   }
 }
 message Backend {
@@ -154,6 +167,11 @@ message Backend {
 }
 
 message TLSConfig {
+  enum CertificateSource {
+    INLINE = 0;
+    ISTIO_WORKLOAD = 1;
+  }
+
   enum TLSVersion {
     TLS_VERSION_UNSPECIFIED = 0;
 
@@ -172,6 +190,9 @@ message TLSConfig {
 
     // Request a TLS certificate, but if one is not presented or invalid, allow the connection.
     ALLOW_INSECURE_FALLBACK = 1;
+
+    // Do not request or require a client TLS certificate.
+    DISABLE = 2;
   }
 
   // Cipher suites supported by agentgateway
@@ -193,6 +214,16 @@ message TLSConfig {
     TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 = 9;
   }
 
+  // Key exchange groups supported by agentgateway.
+  // Keep in sync with `crates/agentgateway/src/transport/tls.rs` (`DEFAULT_KEY_EXCHANGE_GROUPS`).
+  enum KeyExchangeGroup {
+    KEY_EXCHANGE_GROUP_UNSPECIFIED = 0;
+    X25519 = 1;
+    P256 = 2;
+    P384 = 3;
+    X25519_MLKEM768 = 4;
+  }
+
   bytes cert = 1;
   bytes private_key = 2;
   // Root to verify client certificates. If not set, mTLS will not be used
@@ -201,6 +232,10 @@ message TLSConfig {
   optional TLSVersion min_version = 5;
   optional TLSVersion max_version = 6;
   MTLSMode mtls_mode = 7;
+  // Key exchange groups allowed for negotiating TLS.
+  // If empty, defaults are used.
+  repeated KeyExchangeGroup key_exchange_groups = 8;
+  CertificateSource certificate_source = 9;
 }
 
 enum Protocol {
@@ -534,6 +569,9 @@ message FrontendPolicySpec {
     // If unset, defaults are used.
     optional TLSConfig.TLSVersion min_version = 4;
     optional TLSConfig.TLSVersion max_version = 5;
+    // Key exchange groups allowed for negotiating TLS.
+    // If empty, defaults are used.
+    repeated TLSConfig.KeyExchangeGroup key_exchange_groups = 6;
 
     // TODO: allow setting mTLS things as well
   }
@@ -700,6 +738,7 @@ message TrafficPolicySpec {
       repeated Entry entries = 1;
       Type type = 2;
       optional string limit_override = 3; // CEL expr returning {unit, requestsPerUnit}
+      optional string cost = 4; // CEL expr
     }
     message Entry {
       string key = 1;
@@ -1178,6 +1217,9 @@ message BackendPolicySpec {
     // Set but empty: send none
     // Set with values: send those values
     Alpn alpn = 7;
+    // Key exchange groups allowed for negotiating TLS.
+    // If empty, defaults are used.
+    repeated TLSConfig.KeyExchangeGroup key_exchange_groups = 8;
   }
   message BackendHTTP {
     enum HttpVersion {
@@ -1251,6 +1293,7 @@ message BackendPolicySpec {
     TrafficPolicySpec.TransformationPolicy transformation = 14;
     Health health = 15;
     BackendTunnel backend_tunnel = 16;
+    TrafficPolicySpec.ExternalAuth ext_authz = 17;
   }
 }
 

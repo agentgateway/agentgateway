@@ -106,3 +106,77 @@ impl ResourceId {
 		&self.id
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use std::sync::Arc;
+
+	use serde_json::json;
+
+	use super::*;
+	use crate::http::authorization::PolicySet;
+
+	fn tool_resource(target: &str, name: &str) -> ResourceType {
+		ResourceType::Tool(ResourceId::new(target.to_string(), name.to_string()))
+	}
+
+	fn req_with_claims(claims: serde_json::Value) -> ::http::Request<()> {
+		let mut req = ::http::Request::builder()
+			.method(::http::Method::POST)
+			.uri("http://example.com/mcp")
+			.body(())
+			.unwrap();
+		let serde_json::Value::Object(claims) = claims else {
+			panic!("claims must be a JSON object");
+		};
+		req.extensions_mut().insert(crate::http::jwt::Claims {
+			inner: claims,
+			jwt: Default::default(),
+		});
+		req
+	}
+
+	fn req_without_claims() -> ::http::Request<()> {
+		::http::Request::builder()
+			.method(::http::Method::POST)
+			.uri("http://example.com/mcp")
+			.body(())
+			.unwrap()
+	}
+
+	fn authorization_set(expr: &str) -> McpAuthorizationSet {
+		let policies = PolicySet::new(
+			vec![Arc::new(cel::Expression::new_strict(expr).unwrap())],
+			vec![],
+			vec![],
+		);
+		McpAuthorizationSet::new(RuleSets::from(vec![RuleSet::new(policies)]))
+	}
+
+	#[test]
+	fn test_mcp_authorization_jwt_claim_match() {
+		let authz = authorization_set(r#"mcp.tool.name == "increment" && jwt.sub == "1234567890""#);
+		let req = req_with_claims(json!({ "sub": "1234567890" }));
+		let res = tool_resource("server", "increment");
+
+		assert!(authz.validate(&res, &CelExecWrapper::new(req)));
+	}
+
+	#[test]
+	fn test_mcp_authorization_jwt_nested_claim_mismatch() {
+		let authz = authorization_set(r#"mcp.tool.name == "increment" && jwt.user.role == "admin""#);
+		let req = req_with_claims(json!({ "user": { "role": "viewer" } }));
+		let res = tool_resource("server", "increment");
+
+		assert!(!authz.validate(&res, &CelExecWrapper::new(req)));
+	}
+
+	#[test]
+	fn test_mcp_authorization_jwt_claim_required_but_missing() {
+		let authz = authorization_set(r#"mcp.tool.name == "increment" && jwt.sub == "1234567890""#);
+		let req = req_without_claims();
+		let res = tool_resource("server", "increment");
+
+		assert!(!authz.validate(&res, &CelExecWrapper::new(req)));
+	}
+}

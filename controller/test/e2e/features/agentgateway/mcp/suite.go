@@ -16,6 +16,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/tests/base"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
+	"github.com/agentgateway/agentgateway/controller/test/testutils/testjwt"
 )
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
@@ -55,9 +56,7 @@ func (s *testingSuite) TestMCPAuthn() {
 		metav1.ConditionTrue,
 	)
 
-	// The token is hard coded in the mock auth0 server
-	testJwt := "eyJhbGciOiJSUzI1NiIsImtpZCI6IjUzNTAyMzEyMTkzMDYwMzg2OTIiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2tnYXRld2F5LmRldiIsInN1YiI6Imlnbm9yZUBrZ2F0ZXdheS5kZXYiLCJleHAiOjIwNzExNjM0MDcsIm5iZiI6MTc2MzU3OTQwNywiaWF0IjoxNzYzNTc5NDA3fQ.TsHCCdd0_629wibU4EviEi1-_UXaFUX1NuLgXCrC-tr7kqlcnUJIJC0WSab1EgXKtF8gTfwTUeQcAQNrunwngQU-K9DFcH5-2vnGeiXV3_X3SokkPq74ceRrCFEL2d7YNaGfhq_UNyvKRJsRz-pwdKK7QIPXALmWaUHn7EV7zU-CcPCKNwmt62P88qNp5HYSbgqz_WfnzIIH8LANpCC8fUqVedgTJMJ86E06pfDNUuuXe_fhjgMQXlfyDeUxIuzJunvS2qIqt4IYMzjcQbl2QI1QK3xz37tridSP_WVuuMUe2Lqo0oDjWVpxqPb5fb90W6a6khRP59Pf6qKMbQ9SQg"
-	validAuthnHeader := map[string]string{"Authorization": "Bearer " + testJwt}
+	validAuthnHeader := map[string]string{"Authorization": "Bearer " + testjwt.OrgOneJWT}
 
 	// Verify authentication is actually enforced (not just policy accepted)
 	// by waiting for an unauthenticated request to return 401
@@ -110,9 +109,7 @@ func (s *testingSuite) TestMCPAuthnRoute() {
 		metav1.ConditionTrue,
 	)
 
-	// The token is hard coded in the mock auth0 server
-	testJwt := "eyJhbGciOiJSUzI1NiIsImtpZCI6IjUzNTAyMzEyMTkzMDYwMzg2OTIiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2tnYXRld2F5LmRldiIsInN1YiI6Imlnbm9yZUBrZ2F0ZXdheS5kZXYiLCJleHAiOjIwNzExNjM0MDcsIm5iZiI6MTc2MzU3OTQwNywiaWF0IjoxNzYzNTc5NDA3fQ.TsHCCdd0_629wibU4EviEi1-_UXaFUX1NuLgXCrC-tr7kqlcnUJIJC0WSab1EgXKtF8gTfwTUeQcAQNrunwngQU-K9DFcH5-2vnGeiXV3_X3SokkPq74ceRrCFEL2d7YNaGfhq_UNyvKRJsRz-pwdKK7QIPXALmWaUHn7EV7zU-CcPCKNwmt62P88qNp5HYSbgqz_WfnzIIH8LANpCC8fUqVedgTJMJ86E06pfDNUuuXe_fhjgMQXlfyDeUxIuzJunvS2qIqt4IYMzjcQbl2QI1QK3xz37tridSP_WVuuMUe2Lqo0oDjWVpxqPb5fb90W6a6khRP59Pf6qKMbQ9SQg"
-	validAuthnHeader := map[string]string{"Authorization": "Bearer " + testJwt}
+	validAuthnHeader := map[string]string{"Authorization": "Bearer " + testjwt.OrgOneJWT}
 
 	// Verify authentication is actually enforced (not just policy accepted)
 	// by waiting for an unauthenticated request to return 401

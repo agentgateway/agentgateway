@@ -293,7 +293,7 @@ func extractInferencePoolParentConditions(parents []inf.ParentStatus) [][]metav1
 }
 
 // EventuallyInferencePoolCondition checks that the specified InferencePool condition
-// eventually has the desired status on any parent managed by Kgateway.
+// eventually has the desired status on any parent managed by agentgateway.
 func (p *Provider) EventuallyInferencePoolCondition(
 	ctx context.Context,
 	poolName string,

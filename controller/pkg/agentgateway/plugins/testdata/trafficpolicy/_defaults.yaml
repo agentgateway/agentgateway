@@ -34,3 +34,8 @@ spec:
         - name: be
           group: agentgateway.dev
           kind: AgentgatewayBackend
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc1

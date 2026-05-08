@@ -91,6 +91,11 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 				return []*api.PolicyTarget{{
 					Kind: utils.ListenerSetTarget(namespace, string(name), sectionName),
 				}}, ResourceExists(krtctx, agw.ListenerSets, key)
+			case wellknown.InferencePoolGVK.GroupKind():
+				hostname := kubeutils.GetInferenceServiceHostname(string(name), namespace)
+				return []*api.PolicyTarget{{
+					Kind: utils.ServiceTargetWithHostname(namespace, hostname, nil),
+				}}, ResourceExists(krtctx, agw.InferencePools, key)
 			}
 			return nil, false
 		},
@@ -141,6 +146,14 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 						Kind: utils.ServiceTarget(svc.Namespace, svc.Name, sectionName),
 					}}
 					targets = append(targets, ResolvedPolicySelectorTarget{Name: gwv1.ObjectName(svc.Name), Namespace: svc.Namespace, PolicyTargets: policyTargets})
+				}
+			case wellknown.InferencePoolGVK.GroupKind():
+				for _, pool := range krt.Fetch(krtctx, agw.InferencePools, krt.FilterLabel(selector.MatchLabels), krt.FilterIndex(agw.InferencePoolsByNamespace, policyNamespace)) {
+					hostname := kubeutils.GetInferenceServiceHostname(pool.Name, pool.Namespace)
+					policyTargets := []*api.PolicyTarget{{
+						Kind: utils.ServiceTargetWithHostname(pool.Namespace, hostname, nil),
+					}}
+					targets = append(targets, ResolvedPolicySelectorTarget{Name: gwv1.ObjectName(pool.Name), Namespace: pool.Namespace, PolicyTargets: policyTargets})
 				}
 			}
 

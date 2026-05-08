@@ -26,9 +26,9 @@ use crate::llm::{
 	AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider, anthropic, copilot, openai,
 };
 use crate::mcp::{FailureMode, McpAuthorization};
-use crate::store::LocalWorkload;
+use crate::store::{LocalWorkload, RequestPolicy};
 use crate::types::agent::{
-	A2aPolicy, Authorization, Backend, BackendKey, BackendPolicy, BackendReference,
+	A2aPolicy, Authorization, Backend, BackendKey, BackendReference, BackendTrafficPolicy,
 	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch,
 	JwtAuthentication, Listener, ListenerKey, ListenerName, ListenerProtocol, ListenerSet,
 	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpTarget, McpTargetName,
@@ -41,6 +41,13 @@ use crate::types::agent::{
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
 use crate::{agentcore, *};
+
+type LocalExtAuthzPolicy = LocalExplicitOrConditional<crate::http::ext_authz::ExtAuthz>;
+type LocalDirectResponsePolicy = LocalExplicitOrConditional<filters::DirectResponse>;
+type LocalExtProcPolicy = LocalExplicitOrConditional<crate::http::ext_proc::ExtProc>;
+type LocalRemoteRateLimitPolicy =
+	LocalExplicitOrConditional<crate::http::remoteratelimit::RemoteRateLimit>;
+type LocalTransformationPolicy = LocalExplicitOrConditional<LocalTransformationConfig>;
 
 // Windows has different output, for now easier to just not deal with it
 #[cfg(all(test, target_family = "unix"))]
@@ -207,7 +214,7 @@ fn merge_deprecated_frontend_policies(
 				response: None,
 			};
 			let backend_xfm = Transformation::try_from_local_config(backend_xfm, true)?;
-			vec![BackendPolicy::Transformation(backend_xfm)]
+			vec![BackendTrafficPolicy::Transformation(Arc::new(backend_xfm))]
 		} else {
 			Vec::new()
 		};
@@ -305,6 +312,156 @@ pub struct LocalSimpleMcpConfig {
 	backend: LocalMcpBackend,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	policies: Option<FilterOrPolicy>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+struct LocalConditionalPolicy<T> {
+	/// condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.
+	#[serde(default)]
+	condition: Option<Arc<crate::cel::Expression>>,
+	/// policy definition.
+	#[serde(flatten)]
+	policy: T,
+}
+
+#[apply(schema_de!)]
+struct LocalConditionalPolicies<T> {
+	/// conditional policy entries. An entry without a condition must be the final fallback.
+	conditional: Vec<LocalConditionalPolicy<T>>,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(untagged, deny_unknown_fields))]
+enum LocalExplicitOrConditional<T> {
+	Conditional(LocalConditionalPolicies<T>),
+	Explicit(T),
+}
+
+// Custom impl to avoid terrible 'not match any variant of untagged' errors.
+impl<'de, T> Deserialize<'de> for LocalExplicitOrConditional<T>
+where
+	T: serde::de::DeserializeOwned,
+{
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		serde_untagged::UntaggedEnumVisitor::new()
+			.map(|map| {
+				let v: serde_json::Value = map.deserialize()?;
+
+				if let serde_json::Value::Object(m) = &v
+					&& m.contains_key("conditional")
+				{
+					Ok(LocalExplicitOrConditional::Conditional(
+						serde_json::from_value(v).map_err(serde::de::Error::custom)?,
+					))
+				} else {
+					Ok(LocalExplicitOrConditional::Explicit(
+						serde_json::from_value(v).map_err(serde::de::Error::custom)?,
+					))
+				}
+			})
+			.deserialize(deserializer)
+	}
+}
+
+impl<T> LocalExplicitOrConditional<T> {
+	fn into_policy(self) -> anyhow::Result<RequestPolicy<T>> {
+		match self {
+			LocalExplicitOrConditional::Explicit(policy) => Ok(RequestPolicy::single(policy)),
+			LocalExplicitOrConditional::Conditional(policies) => {
+				validate_local_conditional_policies(&policies)?;
+				Ok(RequestPolicy::from_policies(
+					policies
+						.conditional
+						.into_iter()
+						.map(|entry| (entry.policy, entry.condition)),
+				))
+			},
+		}
+	}
+}
+
+fn validate_local_conditional_policies<T>(
+	policies: &LocalConditionalPolicies<T>,
+) -> anyhow::Result<()> {
+	if policies.conditional.is_empty() {
+		bail!("conditional policies must have at least one entry");
+	}
+	if policies.conditional.len() > 64 {
+		bail!("conditional policies may have at most 64 entries");
+	}
+	if let Some(unconditional_idx) = policies
+		.conditional
+		.iter()
+		.position(|entry| entry.condition.is_none())
+		&& unconditional_idx + 1 != policies.conditional.len()
+	{
+		bail!("conditional policy entries without condition must be last");
+	}
+	Ok(())
+}
+
+impl LocalExplicitOrConditional<LocalTransformationConfig> {
+	fn into_transformation_policy(self) -> anyhow::Result<RequestPolicy<Transformation>> {
+		match self {
+			LocalExplicitOrConditional::Explicit(policy) => Ok(RequestPolicy::single(
+				Transformation::try_from_local_config(policy, true)?,
+			)),
+			LocalExplicitOrConditional::Conditional(policies) => {
+				validate_local_conditional_policies(&policies)?;
+				Ok(RequestPolicy::from_policies(
+					policies
+						.conditional
+						.into_iter()
+						.map(|entry| {
+							Transformation::try_from_local_config(entry.policy, true)
+								.map(|policy| (policy, entry.condition))
+						})
+						.collect::<anyhow::Result<Vec<_>>>()?,
+				))
+			},
+		}
+	}
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(untagged)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(untagged, deny_unknown_fields))]
+enum LocalRateLimitPolicy {
+	Conditional(LocalConditionalPolicies<crate::http::localratelimit::RateLimit>),
+	Explicit(Vec<crate::http::localratelimit::RateLimit>),
+}
+
+impl LocalRateLimitPolicy {
+	fn is_empty(&self) -> bool {
+		match self {
+			LocalRateLimitPolicy::Conditional(policies) => policies.conditional.is_empty(),
+			LocalRateLimitPolicy::Explicit(policies) => policies.is_empty(),
+		}
+	}
+
+	fn into_request_policy(
+		self,
+	) -> anyhow::Result<RequestPolicy<Vec<crate::http::localratelimit::RateLimit>>> {
+		match self {
+			LocalRateLimitPolicy::Explicit(policies) => Ok(RequestPolicy::single(policies)),
+			LocalRateLimitPolicy::Conditional(policies) => {
+				validate_local_conditional_policies(&policies)?;
+				Ok(RequestPolicy::from_policies(
+					policies
+						.conditional
+						.into_iter()
+						.map(|entry| (vec![entry.policy], entry.condition)),
+				))
+			},
+		}
+	}
 }
 
 #[apply(schema_de!)]
@@ -479,6 +636,10 @@ pub struct LocalTLSServerConfig {
 		alias = "maxTlsVersion"
 	)]
 	pub max_tls_version: Option<frontend::TLSVersion>,
+	/// Key exchange groups allowed for negotiating TLS.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub key_exchange_groups: Option<Vec<crate::transport::tls::KeyExchangeGroup>>,
 }
 
 #[apply(schema_de!)]
@@ -719,12 +880,13 @@ impl LocalBackend {
 				response_header_modifier: None,
 				request_redirect: None,
 				health: None,
+				ext_authz: None,
 			})
 			.map(LocalBackendPolicies::translate)
 			.transpose()?
 			.unwrap_or_default();
 		if tls {
-			inline_policies.push(BackendPolicy::BackendTLS(
+			inline_policies.push(BackendTrafficPolicy::BackendTLS(
 				LocalBackendTLS::default().try_into()?,
 			));
 		}
@@ -854,7 +1016,7 @@ impl SimpleLocalBackend {
 	pub fn as_backends(
 		&self,
 		name: ResourceName,
-		policies: Vec<BackendPolicy>,
+		policies: Vec<BackendTrafficPolicy>,
 	) -> Option<SimpleBackendWithPolicies> {
 		match self {
 			SimpleLocalBackend::Service { .. } => None, // These stay as references
@@ -1168,6 +1330,12 @@ struct LocalLLMPolicy {
 	/// Authorization policies for HTTP access.
 	#[serde(default)]
 	authorization: Option<Authorization>,
+	/// Rate limit incoming requests. State is kept local.
+	#[serde(default)]
+	local_rate_limit: Vec<crate::http::localratelimit::RateLimit>,
+	/// Rate limit incoming requests. State is managed by a remote server.
+	#[serde(default)]
+	remote_rate_limit: Option<crate::http::remoteratelimit::RemoteRateLimit>,
 }
 
 #[apply(schema_de!)]
@@ -1181,18 +1349,17 @@ struct LocalGatewayPolicy {
 	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
 	/// Authenticate incoming requests by calling an external authorization server.
 	#[serde(default)]
-	ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
+	ext_authz: Option<LocalExtAuthzPolicy>,
 	/// Extend agentgateway with an external processor
 	#[serde(default)]
-	ext_proc: Option<crate::http::ext_proc::ExtProc>,
+	ext_proc: Option<LocalExtProcPolicy>,
 	/// Modify requests and responses
 	#[serde(default)]
-	#[serde(deserialize_with = "de_transform")]
 	#[cfg_attr(
 		feature = "schema",
-		schemars(with = "Option<http::transformation_cel::LocalTransformationConfig>")
+		schemars(with = "Option<LocalTransformationPolicy>")
 	)]
-	transformations: Option<crate::http::transformation_cel::Transformation>,
+	transformations: Option<LocalTransformationPolicy>,
 	/// Authenticate incoming requests using Basic Authentication with htpasswd.
 	#[serde(default)]
 	basic_auth: Option<crate::http::basicauth::LocalBasicAuth>,
@@ -1289,6 +1456,10 @@ pub struct LocalBackendPolicies {
 	#[serde(default)]
 	pub health: Option<health::LocalHealthPolicy>,
 
+	/// Authenticate incoming requests by calling an external authorization server after this backend is selected.
+	#[serde(default)]
+	pub ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
+
 	/// Authorization policies for MCP access.
 	#[serde(default)]
 	pub mcp_authorization: Option<McpAuthorization>,
@@ -1334,7 +1505,7 @@ fn validate_inference_routing_scope(
 }
 
 impl LocalBackendPolicies {
-	pub fn translate(self) -> anyhow::Result<Vec<BackendPolicy>> {
+	pub fn translate(self) -> anyhow::Result<Vec<BackendTrafficPolicy>> {
 		let LocalBackendPolicies {
 			simple:
 				SimpleLocalBackendPolicies {
@@ -1353,50 +1524,54 @@ impl LocalBackendPolicies {
 			response_header_modifier,
 			request_redirect,
 			health,
+			ext_authz,
 		} = self;
 		let mut pols = vec![];
 		if let Some(p) = tcp {
-			pols.push(BackendPolicy::TCP(p));
+			pols.push(BackendTrafficPolicy::TCP(p));
 		}
 		if let Some(p) = backend_tunnel {
-			pols.push(BackendPolicy::Tunnel(p));
+			pols.push(BackendTrafficPolicy::Tunnel(p));
 		}
 		if let Some(p) = http {
-			pols.push(BackendPolicy::HTTP(p));
+			pols.push(BackendTrafficPolicy::HTTP(p));
 		}
 		if let Some(p) = request_header_modifier {
-			pols.push(BackendPolicy::RequestHeaderModifier(p));
+			pols.push(BackendTrafficPolicy::RequestHeaderModifier(p));
 		}
 		if let Some(p) = response_header_modifier {
-			pols.push(BackendPolicy::ResponseHeaderModifier(p));
+			pols.push(BackendTrafficPolicy::ResponseHeaderModifier(Arc::new(p)));
 		}
 		if let Some(p) = request_redirect {
-			pols.push(BackendPolicy::RequestRedirect(p));
+			pols.push(BackendTrafficPolicy::RequestRedirect(p));
 		}
 		if let Some(p) = transformations {
-			pols.push(BackendPolicy::Transformation(p));
+			pols.push(BackendTrafficPolicy::Transformation(Arc::new(p)));
 		}
 		if let Some(p) = mcp_authorization {
-			pols.push(BackendPolicy::McpAuthorization(p))
+			pols.push(BackendTrafficPolicy::McpAuthorization(p))
 		}
 		if let Some(p) = a2a {
-			pols.push(BackendPolicy::A2a(p))
+			pols.push(BackendTrafficPolicy::A2a(p))
 		}
 		if let Some(p) = inference_routing {
-			pols.push(BackendPolicy::InferenceRouting(p))
+			pols.push(BackendTrafficPolicy::InferenceRouting(p))
 		}
 		if let Some(p) = backend_tls {
-			pols.push(BackendPolicy::BackendTLS(p.try_into()?))
+			pols.push(BackendTrafficPolicy::BackendTLS(p.try_into()?))
 		}
 		if let Some(p) = backend_auth {
-			pols.push(BackendPolicy::BackendAuth(p))
+			pols.push(BackendTrafficPolicy::BackendAuth(p))
+		}
+		if let Some(p) = ext_authz {
+			pols.push(BackendTrafficPolicy::ExtAuthz(Arc::new(p)))
 		}
 		if let Some(mut p) = ai {
 			p.compile_model_alias_patterns();
-			pols.push(BackendPolicy::AI(Arc::new(p)))
+			pols.push(BackendTrafficPolicy::AI(Arc::new(p)))
 		}
 		if let Some(p) = health {
-			pols.push(BackendPolicy::Health(p.try_into().map_err(
+			pols.push(BackendTrafficPolicy::Health(p.try_into().map_err(
 				|e: crate::cel::Error| anyhow::anyhow!("health.unhealthyExpression: {}", e),
 			)?));
 		}
@@ -1416,17 +1591,17 @@ pub struct LocalTCPBackendPolicies {
 }
 
 impl LocalTCPBackendPolicies {
-	pub fn translate(self) -> anyhow::Result<Vec<BackendPolicy>> {
+	pub fn translate(self) -> anyhow::Result<Vec<BackendTrafficPolicy>> {
 		let LocalTCPBackendPolicies {
 			backend_tls,
 			backend_tunnel,
 		} = self;
 		let mut pols = vec![];
 		if let Some(p) = backend_tls {
-			pols.push(BackendPolicy::BackendTLS(p.try_into()?))
+			pols.push(BackendTrafficPolicy::BackendTLS(p.try_into()?))
 		}
 		if let Some(p) = backend_tunnel {
-			pols.push(BackendPolicy::Tunnel(p))
+			pols.push(BackendTrafficPolicy::Tunnel(p))
 		}
 		Ok(pols)
 	}
@@ -1484,7 +1659,7 @@ pub struct FilterOrPolicy {
 
 	/// Directly respond to the request with a static response.
 	#[serde(default)]
-	direct_response: Option<filters::DirectResponse>,
+	direct_response: Option<LocalDirectResponsePolicy>,
 
 	/// Handle CORS preflight requests and append configured CORS headers to applicable requests.
 	#[serde(default)]
@@ -1517,10 +1692,10 @@ pub struct FilterOrPolicy {
 	backend_auth: Option<BackendAuth>,
 	/// Rate limit incoming requests. State is kept local.
 	#[serde(default)]
-	local_rate_limit: Vec<crate::http::localratelimit::RateLimit>,
+	local_rate_limit: Option<LocalRateLimitPolicy>,
 	/// Rate limit incoming requests. State is managed by a remote server.
 	#[serde(default)]
-	remote_rate_limit: Option<crate::http::remoteratelimit::RemoteRateLimit>,
+	remote_rate_limit: Option<LocalRemoteRateLimitPolicy>,
 	/// Authenticate incoming JWT requests.
 	#[serde(default)]
 	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
@@ -1535,18 +1710,17 @@ pub struct FilterOrPolicy {
 	api_key: Option<crate::http::apikey::LocalAPIKeys>,
 	/// Authenticate incoming requests by calling an external authorization server.
 	#[serde(default)]
-	ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
+	ext_authz: Option<LocalExtAuthzPolicy>,
 	/// Extend agentgateway with an external processor
 	#[serde(default)]
-	ext_proc: Option<crate::http::ext_proc::ExtProc>,
+	ext_proc: Option<LocalExtProcPolicy>,
 	/// Modify requests and responses
 	#[serde(default)]
-	#[serde(deserialize_with = "de_transform")]
 	#[cfg_attr(
 		feature = "schema",
-		schemars(with = "Option<http::transformation_cel::LocalTransformationConfig>")
+		schemars(with = "Option<LocalTransformationPolicy>")
 	)]
-	transformations: Option<crate::http::transformation_cel::Transformation>,
+	transformations: Option<LocalTransformationPolicy>,
 
 	/// Handle CSRF protection by validating request origins against configured allowed origins.
 	#[serde(default)]
@@ -1797,11 +1971,16 @@ async fn convert_llm_config(
 		let LocalLLMPolicy {
 			gateway,
 			authorization,
+			local_rate_limit,
+			remote_rate_limit,
 		} = pol;
-		let authorization_policies = split_policies(
+		let route_policies = split_policies(
 			client.clone(),
 			FilterOrPolicy {
 				authorization,
+				local_rate_limit: (!local_rate_limit.is_empty())
+					.then_some(LocalRateLimitPolicy::Explicit(local_rate_limit)),
+				remote_rate_limit: remote_rate_limit.map(LocalExplicitOrConditional::Explicit),
 				..Default::default()
 			},
 			None,
@@ -1815,7 +1994,7 @@ async fn convert_llm_config(
 		.await?;
 		(
 			gateway_policies.route_policies,
-			authorization_policies.route_policies,
+			route_policies.route_policies,
 		)
 	} else {
 		(vec![], vec![])
@@ -1900,15 +2079,15 @@ json(request.body).model
 		],
 		backends: vec![],
 		inline_policies: vec![
-			TrafficPolicy::ResponseHeaderModifier(crate::http::filters::HeaderModifier {
+			TrafficPolicy::ResponseHeaderModifier(Arc::new(crate::http::filters::HeaderModifier {
 				set: vec![(strng::new("Content-Type"), strng::new("application/json"))],
 				add: vec![],
 				remove: vec![],
-			}),
-			TrafficPolicy::DirectResponse(filters::DirectResponse {
+			})),
+			TrafficPolicy::DirectResponse(RequestPolicy::single(filters::DirectResponse {
 				body: Bytes::copy_from_slice(model_list_body.as_bytes()),
 				status: ::http::StatusCode::OK,
-			}),
+			})),
 		],
 	};
 	routes.push(model_list_route);
@@ -1960,7 +2139,7 @@ json(request.body).model
 				value: key.0.clone(),
 				location: None,
 			};
-			pols.push(BackendPolicy::BackendAuth(backend_auth));
+			pols.push(BackendTrafficPolicy::BackendAuth(backend_auth));
 		}
 
 		// Create AI backend
@@ -1983,30 +2162,32 @@ json(request.body).model
 
 		let mut pols = vec![];
 		if let Some(p) = model_config.backend_tls.clone() {
-			pols.push(BackendPolicy::BackendTLS(p.try_into()?));
+			pols.push(BackendTrafficPolicy::BackendTLS(p.try_into()?));
 		}
 		if let Some(p) = model_config.backend_tunnel.clone() {
-			pols.push(BackendPolicy::Tunnel(p));
+			pols.push(BackendTrafficPolicy::Tunnel(p));
 		}
 		if let Some(mut rh) = model_config.request_headers.clone() {
 			rh.remove.push(strng::literal!("x-gateway-model-name"));
-			pols.push(BackendPolicy::RequestHeaderModifier(rh));
+			pols.push(BackendTrafficPolicy::RequestHeaderModifier(rh));
 		} else {
-			pols.push(BackendPolicy::RequestHeaderModifier(HeaderModifier {
-				remove: vec![strng::literal!("x-gateway-model-name")],
-				add: vec![],
-				set: vec![],
-			}));
+			pols.push(BackendTrafficPolicy::RequestHeaderModifier(
+				HeaderModifier {
+					remove: vec![strng::literal!("x-gateway-model-name")],
+					add: vec![],
+					set: vec![],
+				},
+			));
 		}
 		if let Some(rh) = model_config.response_headers.clone() {
-			pols.push(BackendPolicy::ResponseHeaderModifier(rh));
+			pols.push(BackendTrafficPolicy::ResponseHeaderModifier(Arc::new(rh)));
 		}
 		if let Some(p) = model_config.health.clone() {
-			pols.push(BackendPolicy::Health(p.try_into().map_err(
+			pols.push(BackendTrafficPolicy::Health(p.try_into().map_err(
 				|e: crate::cel::Error| anyhow::anyhow!("health.unhealthyExpression: {}", e),
 			)?));
 		}
-		pols.push(BackendPolicy::AI(Arc::new(llm::Policy {
+		pols.push(BackendTrafficPolicy::AI(Arc::new(llm::Policy {
 			defaults: model_config.defaults.clone(),
 			overrides: model_config.overrides.clone(),
 			transformations: model_config.transformation.clone(),
@@ -2173,7 +2354,7 @@ json(request.body).model
 		key: strng::new("llm:transformation"),
 		target: PolicyTarget::Gateway(listener_target),
 		policy: PolicyType::from((
-			TrafficPolicy::Transformation(transformation),
+			TrafficPolicy::Transformation(RequestPolicy::single(transformation)),
 			PolicyPhase::Gateway,
 		)),
 	};
@@ -2540,7 +2721,7 @@ pub async fn convert_route(
 
 #[derive(Default)]
 pub(crate) struct ResolvedPolicies {
-	pub(crate) backend_policies: Vec<BackendPolicy>,
+	pub(crate) backend_policies: Vec<BackendTrafficPolicy>,
 	pub(crate) route_policies: Vec<TrafficPolicy>,
 }
 
@@ -2653,16 +2834,18 @@ pub(crate) async fn split_policies(
 		retry,
 	} = pol;
 	if let Some(p) = request_header_modifier {
-		route_policies.push(TrafficPolicy::RequestHeaderModifier(p));
+		route_policies.push(TrafficPolicy::RequestHeaderModifier(RequestPolicy::single(
+			p,
+		)));
 	}
 	if let Some(p) = response_header_modifier {
-		route_policies.push(TrafficPolicy::ResponseHeaderModifier(p));
+		route_policies.push(TrafficPolicy::ResponseHeaderModifier(Arc::new(p)));
 	}
 	if let Some(p) = request_redirect {
-		route_policies.push(TrafficPolicy::RequestRedirect(p));
+		route_policies.push(TrafficPolicy::RequestRedirect(RequestPolicy::single(p)));
 	}
 	if let Some(p) = url_rewrite {
-		route_policies.push(TrafficPolicy::UrlRewrite(p));
+		route_policies.push(TrafficPolicy::UrlRewrite(RequestPolicy::single(p)));
 	}
 	if let Some(p) = request_mirror {
 		route_policies.push(TrafficPolicy::RequestMirror(vec![p]));
@@ -2670,34 +2853,36 @@ pub(crate) async fn split_policies(
 
 	// Filters
 	if let Some(p) = direct_response {
-		route_policies.push(TrafficPolicy::DirectResponse(p));
+		route_policies.push(TrafficPolicy::DirectResponse(p.into_policy()?));
 	}
 	if let Some(p) = cors {
-		route_policies.push(TrafficPolicy::CORS(p));
+		route_policies.push(TrafficPolicy::CORS(RequestPolicy::single(p)));
 	}
 
 	// Backend policies
 	if let Some(p) = mcp_authorization {
-		backend_policies.push(BackendPolicy::McpAuthorization(p))
+		backend_policies.push(BackendTrafficPolicy::McpAuthorization(p))
 	}
 	if let Some(p) = mcp_authentication {
 		let authn: McpAuthentication = p.translate(client.clone()).await?;
-		route_policies.push(TrafficPolicy::JwtAuth(JwtAuthentication {
-			jwt: authn.jwt_validator.as_ref().clone(),
-			mcp: Some(authn),
-		}));
+		route_policies.push(TrafficPolicy::JwtAuth(RequestPolicy::single(
+			JwtAuthentication {
+				jwt: authn.jwt_validator.as_ref().clone(),
+				mcp: Some(authn),
+			},
+		)));
 	}
 	if let Some(p) = a2a {
-		backend_policies.push(BackendPolicy::A2a(p))
+		backend_policies.push(BackendTrafficPolicy::A2a(p))
 	}
 	if let Some(p) = backend_tls {
-		backend_policies.push(BackendPolicy::BackendTLS(p.try_into()?))
+		backend_policies.push(BackendTrafficPolicy::BackendTLS(p.try_into()?))
 	}
 	if let Some(p) = backend_tunnel {
-		backend_policies.push(BackendPolicy::Tunnel(p))
+		backend_policies.push(BackendTrafficPolicy::Tunnel(p))
 	}
 	if let Some(p) = backend_auth {
-		backend_policies.push(BackendPolicy::BackendAuth(p))
+		backend_policies.push(BackendTrafficPolicy::BackendAuth(p))
 	}
 
 	// Route policies
@@ -2706,10 +2891,12 @@ pub(crate) async fn split_policies(
 		route_policies.push(TrafficPolicy::AI(Arc::new(p)))
 	}
 	if let Some(p) = jwt_auth {
-		route_policies.push(TrafficPolicy::JwtAuth(JwtAuthentication {
-			jwt: p.try_into(client.clone()).await?,
-			mcp: None,
-		}));
+		route_policies.push(TrafficPolicy::JwtAuth(RequestPolicy::single(
+			JwtAuthentication {
+				jwt: p.try_into(client.clone()).await?,
+				mcp: None,
+			},
+		)));
 	}
 	let compiled_oidc = if let Some(oidc) = oidc_config {
 		let Some(AttachedPolicyContext {
@@ -2724,40 +2911,46 @@ pub(crate) async fn split_policies(
 				"OIDC_COOKIE_SECRET is required when oidc is configured",
 			));
 		};
-		Some(TrafficPolicy::Oidc(
+		Some(TrafficPolicy::Oidc(RequestPolicy::single(
 			oidc
 				.compile(client.clone(), oidc_policy_id, oidc_cookie_encoder)
 				.await?,
-		))
+		)))
 	} else {
 		None
 	};
 	if let Some(p) = basic_auth {
-		route_policies.push(TrafficPolicy::BasicAuth(p.try_into()?));
+		route_policies.push(TrafficPolicy::BasicAuth(RequestPolicy::single(
+			p.try_into()?,
+		)));
 	}
 	if let Some(p) = api_key {
-		route_policies.push(TrafficPolicy::APIKey(p.into()));
+		route_policies.push(TrafficPolicy::APIKey(RequestPolicy::single(p.into())));
 	}
 	if let Some(p) = transformations {
-		route_policies.push(TrafficPolicy::Transformation(p));
+		route_policies.push(TrafficPolicy::Transformation(
+			p.into_transformation_policy()?,
+		));
 	}
 	if let Some(p) = csrf {
-		route_policies.push(TrafficPolicy::Csrf(p))
+		route_policies.push(TrafficPolicy::Csrf(RequestPolicy::single(p)))
 	}
 	if let Some(p) = authorization {
 		route_policies.push(TrafficPolicy::Authorization(p))
 	}
 	if let Some(p) = ext_authz {
-		route_policies.push(TrafficPolicy::ExtAuthz(p))
+		route_policies.push(TrafficPolicy::ExtAuthz(p.into_policy()?))
 	}
 	if let Some(p) = ext_proc {
-		route_policies.push(TrafficPolicy::ExtProc(p))
+		route_policies.push(TrafficPolicy::ExtProc(p.into_policy()?))
 	}
-	if !local_rate_limit.is_empty() {
-		route_policies.push(TrafficPolicy::LocalRateLimit(local_rate_limit))
+	if let Some(p) = local_rate_limit
+		&& !p.is_empty()
+	{
+		route_policies.push(TrafficPolicy::LocalRateLimit(p.into_request_policy()?))
 	}
 	if let Some(p) = remote_rate_limit {
-		route_policies.push(TrafficPolicy::RemoteRateLimit(p))
+		route_policies.push(TrafficPolicy::RemoteRateLimit(p.into_policy()?))
 	}
 
 	// Traffic policies
@@ -2829,7 +3022,7 @@ async fn convert_tcp_route(
 		if let Some(p) = backend_tls {
 			for br in backend_refs.iter_mut() {
 				br.inline_policies
-					.push(BackendPolicy::BackendTLS(p.clone().try_into()?));
+					.push(BackendTrafficPolicy::BackendTLS(p.clone().try_into()?));
 			}
 		}
 	}
@@ -2874,6 +3067,7 @@ impl TryInto<ServerTLSConfig> for LocalTLSServerConfig {
 			self.min_tls_version.map(Into::into),
 			self.max_tls_version.map(Into::into),
 			self.cipher_suites,
+			self.key_exchange_groups,
 			false,
 		)
 	}
@@ -2885,7 +3079,7 @@ pub fn local_name(name: Strng) -> ResourceName {
 
 pub fn de_from_local_backend_policy<'de: 'a, 'a, D>(
 	deserializer: D,
-) -> Result<Vec<BackendPolicy>, D::Error>
+) -> Result<Vec<BackendTrafficPolicy>, D::Error>
 where
 	D: Deserializer<'de>,
 {

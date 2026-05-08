@@ -1,0 +1,148 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: test-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: istio-simple
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        options:
+          gateway.istio.io/tls-terminate-mode: ISTIO_SIMPLE
+    - name: istio-mutual
+      port: 8443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        options:
+          gateway.istio.io/tls-terminate-mode: ISTIO_MUTUAL
+
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 443/default/test-gateway
+      port: 443
+      protocol: TLS
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 8443/default/test-gateway
+      port: 8443
+      protocol: TLS
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8443/default/test-gateway
+      key: default/test-gateway.istio-mutual
+      name:
+        gatewayName: test-gateway
+        gatewayNamespace: default
+        listenerName: istio-mutual
+      protocol: HTTPS
+      tls:
+        certificateSource: ISTIO_WORKLOAD
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 443/default/test-gateway
+      key: default/test-gateway.istio-simple
+      name:
+        gatewayName: test-gateway
+        gatewayNamespace: default
+        listenerName: istio-simple
+      protocol: HTTPS
+      tls:
+        certificateSource: ISTIO_WORKLOAD
+        mtlsMode: DISABLE
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: test-gateway
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: istio-simple
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: istio-mutual
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute

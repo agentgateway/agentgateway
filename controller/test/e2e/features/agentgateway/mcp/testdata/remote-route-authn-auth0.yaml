@@ -122,7 +122,7 @@ spec:
   traffic:
     jwtAuthentication:
       providers:
-        - issuer: https://kgateway.dev
+        - issuer: https://agentgateway.dev
           jwks:
             remote:
               jwksPath: .well-known/jwks.json

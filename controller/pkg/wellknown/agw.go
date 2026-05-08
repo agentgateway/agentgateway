@@ -27,7 +27,7 @@ func buildAgwGvk(kind string) schema.GroupVersionKind {
 	}
 }
 
-// GVKToGVR maps a known kgateway GVK to its corresponding GVR
+// GVKToGVR maps a known agentgateway GVK to its corresponding GVR
 func GVKToGVR(gvk schema.GroupVersionKind) (schema.GroupVersionResource, error) {
 	// Try Istio lib to resolve common GVKs
 	istioGVK := config.GroupVersionKind{
@@ -40,7 +40,7 @@ func GVKToGVR(gvk schema.GroupVersionKind) (schema.GroupVersionResource, error) 
 		return gvr, nil
 	}
 
-	// Try kgateway types
+	// Try agentgateway types
 	switch gvk {
 	case AgentgatewayParametersGVK:
 		return AgentgatewayParametersGVR, nil

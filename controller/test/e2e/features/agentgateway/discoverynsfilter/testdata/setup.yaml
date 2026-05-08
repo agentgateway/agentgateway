@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: discoveryns-selected
+  labels:
+    agentgateway.dev/discovery: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: discoveryns-unselected
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gateway
+  namespace: discoveryns-selected
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - protocol: HTTP
+      port: 80
+      name: http
+      allowedRoutes:
+        namespaces:
+          from: All
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: discoveryns-selected
+spec:
+  ports:
+    - name: http
+      port: 80
+  selector:
+    app.kubernetes.io/name: testbox
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: discoveryns-unselected
+spec:
+  ports:
+    - name: http
+      port: 80
+  selector:
+    app.kubernetes.io/name: testbox

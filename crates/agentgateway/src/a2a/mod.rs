@@ -20,7 +20,11 @@ async fn classify_request(req: &mut Request<Body>) -> RequestType {
 	match (req.method(), req.uri().path()) {
 		// agent-card.json: v0.3.0+
 		// agent.json: older versions
-		(m, "/.well-known/agent.json" | "/.well-known/agent-card.json") if m == http::Method::GET => {
+		(m, path)
+			if m == http::Method::GET
+				&& (path.ends_with("/.well-known/agent.json")
+					|| path.ends_with("/.well-known/agent-card.json")) =>
+		{
 			// In case of rewrite, use the original so we know where to send them back to
 			let uri = req
 				.extensions()

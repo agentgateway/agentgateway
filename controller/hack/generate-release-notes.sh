@@ -21,7 +21,7 @@ function show_help() {
     echo "Options:"
     echo "  -p, --previous-tag <tag>     Previous release tag (required)"
     echo "  -c, --current-tag <tag>      Current release tag (default: HEAD)"
-    echo "  -r, --repo <owner/repo>      GitHub repository (default: kgateway-dev/kgateway)"
+    echo "  -r, --repo <owner/repo>      GitHub repository (default: agentgateway/agentgateway)"
     echo "  -o, --output <file>          Output file (default: _output/RELEASE_NOTES.md)"
     echo "  -h, --help                   Show this help message"
     echo ""

@@ -607,10 +607,18 @@ func (s *Syncer) getProtocolAndTLSConfig(obj *translator.GatewayListener) (api.P
 			Cert:       obj.TLSInfo.Cert,
 			PrivateKey: obj.TLSInfo.Key,
 		}
+		if obj.TLSInfo.IstioWorkloadCert {
+			tlsConfig.CertificateSource = api.TLSConfig_ISTIO_WORKLOAD
+		}
 		if len(obj.TLSInfo.CaCert) > 0 {
 			tlsConfig.Root = obj.TLSInfo.CaCert
 		}
-		if obj.TLSInfo.MtlsFallbackEnabled {
+		if obj.TLSInfo.IstioMutual {
+			tlsConfig.Root = nil
+			tlsConfig.MtlsMode = api.TLSConfig_STRICT
+		} else if obj.TLSInfo.IstioWorkloadCert {
+			tlsConfig.MtlsMode = api.TLSConfig_DISABLE
+		} else if obj.TLSInfo.MtlsFallbackEnabled {
 			tlsConfig.MtlsMode = api.TLSConfig_ALLOW_INSECURE_FALLBACK
 		}
 	}

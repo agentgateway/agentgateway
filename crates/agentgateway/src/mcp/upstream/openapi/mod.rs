@@ -693,8 +693,8 @@ impl Handler {
 			ClientRequest::ReadResourceRequest(_) => {
 				Messages::from_result(id, ReadResourceResult::new(vec![]))
 			},
-			ClientRequest::PingRequest(_)
-			| ClientRequest::CustomRequest(_)
+			ClientRequest::PingRequest(_) => Messages::from_result(id, ServerResult::empty(())),
+			ClientRequest::CustomRequest(_)
 			| ClientRequest::SetLevelRequest(_)
 			| ClientRequest::SubscribeRequest(_)
 			| ClientRequest::UnsubscribeRequest(_) => Messages::empty(),

@@ -30,6 +30,7 @@ fn make_descriptor_entry(entries: Vec<(&str, &str)>, limit_type: RateLimitType) 
 	DescriptorEntry {
 		entries: Arc::new(descriptors),
 		limit_type,
+		cost: None,
 		limit_override: None,
 	}
 }
@@ -57,7 +58,7 @@ fn build_request_all_descriptors_evaluate_returns_some() {
 		result.is_some(),
 		"expected Some when all descriptors evaluate"
 	);
-	let request = result.unwrap();
+	let request = result.unwrap().0;
 	assert_eq!(request.descriptors.len(), 1);
 	assert_eq!(request.descriptors[0].entries.len(), 2);
 	assert_eq!(request.descriptors[0].entries[0].key, "user");
@@ -85,7 +86,7 @@ fn build_request_header_descriptor_evaluates() {
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(result.is_some());
-	let request = result.unwrap();
+	let request = result.unwrap().0;
 	assert_eq!(request.descriptors[0].entries[0].value, "my-client");
 }
 
@@ -136,7 +137,7 @@ fn build_request_second_descriptor_fails_sends_successful_only() {
 		result.is_some(),
 		"expected Some with the successful descriptor when only one fails"
 	);
-	let request = result.unwrap();
+	let request = result.unwrap().0;
 	assert_eq!(
 		request.descriptors.len(),
 		1,
@@ -169,7 +170,7 @@ fn build_request_first_descriptor_fails_sends_successful_only() {
 		result.is_some(),
 		"expected Some with the successful descriptor when only the first fails"
 	);
-	let request = result.unwrap();
+	let request = result.unwrap().0;
 	assert_eq!(
 		request.descriptors.len(),
 		1,
@@ -216,8 +217,48 @@ fn build_request_cost_propagated_to_hits_addend() {
 
 	let result = rl
 		.build_request(&req, RateLimitType::Tokens, Some(42))
-		.unwrap();
+		.unwrap()
+		.0;
 	assert_eq!(result.descriptors[0].hits_addend, Some(42));
+}
+
+#[test]
+fn amend_tokens_keeps_descriptor_costs_aligned_when_dropping_descriptor() {
+	let descriptor = |value: &str| proto::RateLimitDescriptor {
+		entries: vec![proto::rate_limit_descriptor::Entry {
+			key: "user".to_string(),
+			value: value.to_string(),
+		}],
+		limit: None,
+		hits_addend: Some(0),
+	};
+	let mut request = proto::RateLimitRequest {
+		domain: "test-domain".to_string(),
+		descriptors: vec![
+			descriptor("first"),
+			descriptor("second"),
+			descriptor("third"),
+		],
+		hits_addend: 0,
+	};
+	let descriptor_costs = vec![
+		Some(Arc::new(
+			cel::Expression::new_strict("missingField").expect("valid CEL expression"),
+		)),
+		Some(Arc::new(
+			cel::Expression::new_strict("uint(7)").expect("valid CEL expression"),
+		)),
+		None,
+	];
+	let exec = cel::Executor::new_empty();
+
+	LLMResponseAmend::apply_token_amend(&mut request, &descriptor_costs, 11, &exec);
+
+	assert_eq!(request.descriptors.len(), 2);
+	assert_eq!(request.descriptors[0].entries[0].value, "second");
+	assert_eq!(request.descriptors[0].hits_addend, Some(7));
+	assert_eq!(request.descriptors[1].entries[0].value, "third");
+	assert_eq!(request.descriptors[1].hits_addend, Some(11));
 }
 
 #[test]
@@ -237,7 +278,8 @@ fn build_request_limit_override_evaluates() {
 
 	let result = rl
 		.build_request(&req, RateLimitType::Requests, None)
-		.unwrap();
+		.unwrap()
+		.0;
 	let limit = result.descriptors[0]
 		.limit
 		.as_ref()
@@ -290,7 +332,7 @@ fn build_request_multiple_entries_all_succeed() {
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(result.is_some());
-	let request = result.unwrap();
+	let request = result.unwrap().0;
 	assert_eq!(request.descriptors.len(), 3);
 	assert_eq!(request.descriptors[0].entries[0].value, "alice");
 	assert_eq!(request.descriptors[1].entries[0].value, "echo");
@@ -334,7 +376,7 @@ fn build_request_tokens_type_all_succeed() {
 
 	let result = rl.build_request(&req, RateLimitType::Tokens, Some(50));
 	assert!(result.is_some());
-	let request = result.unwrap();
+	let request = result.unwrap().0;
 	assert_eq!(request.descriptors.len(), 1);
 	assert_eq!(request.descriptors[0].entries[0].value, "test-user");
 	assert_eq!(request.descriptors[0].hits_addend, Some(50));
@@ -416,7 +458,7 @@ fn build_request_two_descriptors_multi_entry_all_succeed() {
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(result.is_some());
-	let request = result.unwrap();
+	let request = result.unwrap().0;
 	assert_eq!(request.descriptors.len(), 2);
 	// First descriptor: path + remote_address
 	assert_eq!(request.descriptors[0].entries.len(), 2);
@@ -464,7 +506,7 @@ fn build_request_two_descriptors_first_partially_fails_sends_second() {
 		result.is_some(),
 		"expected Some — second descriptor should still be sent"
 	);
-	let request = result.unwrap();
+	let request = result.unwrap().0;
 	assert_eq!(
 		request.descriptors.len(),
 		1,
@@ -771,7 +813,7 @@ fn build_request_jwt_sub_descriptor_evaluates_with_materialization() {
 		result.is_some(),
 		"expected Some when jwt.sub evaluates (with materialization) to a string"
 	);
-	let request = result.unwrap();
+	let request = result.unwrap().0;
 	assert_eq!(request.descriptors.len(), 1);
 	assert_eq!(request.descriptors[0].entries.len(), 1);
 	assert_eq!(request.descriptors[0].entries[0].key, "user");

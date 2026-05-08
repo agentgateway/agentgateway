@@ -492,6 +492,8 @@ pub mod x_headers {
 	use http::uri::Scheme;
 	use http::{HeaderMap, HeaderName, HeaderValue, Uri};
 
+	pub const TRACEPARENT: HeaderName = HeaderName::from_static("traceparent");
+
 	pub const X_RATELIMIT_LIMIT: HeaderName = HeaderName::from_static("x-ratelimit-limit");
 	pub const X_RATELIMIT_REMAINING: HeaderName = HeaderName::from_static("x-ratelimit-remaining");
 	pub const X_RATELIMIT_RESET: HeaderName = HeaderName::from_static("x-ratelimit-reset");

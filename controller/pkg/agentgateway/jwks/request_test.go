@@ -168,7 +168,7 @@ func gatewayJWTPolicy(remote agentgateway.RemoteJWKS) *agentgateway.Agentgateway
 				JWTAuthentication: &agentgateway.JWTAuthentication{
 					Mode: agentgateway.JWTAuthenticationModeStrict,
 					Providers: []agentgateway.JWTProvider{{
-						Issuer: "https://kgateway.dev",
+						Issuer: "https://agentgateway.dev",
 						JWKS:   agentgateway.JWKS{Remote: &remote},
 					}},
 				},

@@ -26,6 +26,7 @@ Name|Version|License
 [prometheus/client_model](https://github.com/prometheus/client_model)|v0.6.2|Apache License 2.0
 [prometheus/common](https://github.com/prometheus/common)|v0.67.5|Apache License 2.0
 [rivo/tview](https://github.com/rivo/tview)|v0.42.0|MIT License
+[soheilhy/cmux](https://github.com/soheilhy/cmux)|v0.1.5|Apache License 2.0
 [spf13/cobra](https://github.com/spf13/cobra)|v1.10.2|Apache License 2.0
 [spf13/pflag](https://github.com/spf13/pflag)|v1.0.10|BSD 3-clause "New" or "Revised" License
 [stretchr/testify](https://github.com/stretchr/testify)|v1.11.1|MIT License

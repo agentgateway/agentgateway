@@ -226,8 +226,8 @@ jobs:
     - name: Debug Info
       if: ${{ failure() }}
       run: |
-        kubectl describe deployment -n agentgateway-system
-        kubectl get pods -n agentgateway-system
+        kubectl describe deployment -A
+        kubectl get pods -A
         kubectl logs -n agentgateway-system -l app.kubernetes.io/name=agentgateway
     - name: Upload cargo timings
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0

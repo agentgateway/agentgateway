@@ -7,6 +7,7 @@ import (
 
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/test/util/assert"
+	"istio.io/istio/pkg/util/smallset"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -18,6 +19,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
@@ -179,6 +181,116 @@ func TestDeployObjs(t *testing.T) {
 		err := d.DeployObjsWithSource(ctx, []client.Object{cm}, gw)
 		assert.NoError(t, err)
 		assert.Equal(t, wellknown.DefaultAgwControllerName, usedFieldManager)
+	})
+}
+
+func TestGatewayAndListenerSetPortModifications(t *testing.T) {
+	var (
+		ns = "test-ns"
+	)
+
+	// Helper to create GatewayForDeployer with specific ports
+	createGatewayForDeployer := func(ports ...int32) *collections.GatewayForDeployer {
+		portSet := smallset.New(ports...)
+		return &collections.GatewayForDeployer{
+			ObjectSource: collections.ObjectSource{
+				Name:      "test-gateway",
+				Namespace: ns,
+				Group:     gwv1.GroupVersion.Group,
+				Kind:      wellknown.GatewayKind,
+			},
+			ControllerName: wellknown.DefaultAgwControllerName,
+			Ports:          portSet,
+		}
+	}
+
+	t.Run("GetPortsValues generates correct HelmPorts from single port", func(t *testing.T) {
+		gw := createGatewayForDeployer(8080)
+		ports := deployer.GetPortsValues(gw, 0)
+		assert.Equal(t, 1, len(ports))
+		assert.Equal(t, int32(8080), *ports[0].Port)
+		assert.Equal(t, "listener-8080", *ports[0].Name)
+	})
+
+	t.Run("GetPortsValues generates correct HelmPorts from multiple ports", func(t *testing.T) {
+		gw := createGatewayForDeployer(8080, 9090, 3000)
+		ports := deployer.GetPortsValues(gw, 0)
+		assert.Equal(t, 3, len(ports))
+
+		// Verify all ports are present (order may vary due to set)
+		portMap := make(map[int32]string)
+		for _, p := range ports {
+			portMap[*p.Port] = *p.Name
+		}
+		assert.Equal(t, 3, len(portMap))
+		_, has8080 := portMap[8080]
+		_, has9090 := portMap[9090]
+		_, has3000 := portMap[3000]
+		assert.Equal(t, true, has8080)
+		assert.Equal(t, true, has9090)
+		assert.Equal(t, true, has3000)
+	})
+
+	t.Run("GetPortsValues skips reserved ports", func(t *testing.T) {
+		// Include a reserved port (15020) alongside normal ports
+		gw := createGatewayForDeployer(8080, 15020, 9090)
+		ports := deployer.GetPortsValues(gw, 0)
+
+		// Should only have 2 ports (8080 and 9090), 15020 skipped
+		assert.Equal(t, 2, len(ports))
+		for _, p := range ports {
+			if *p.Port == 15020 {
+				t.Errorf("reserved port 15020 should have been skipped")
+			}
+		}
+	})
+
+	t.Run("GetPortsValues uses valid dummy port when no listeners", func(t *testing.T) {
+		gw := createGatewayForDeployer() // Empty ports
+		ports := deployer.GetPortsValues(gw, 8080)
+		// Should add dummy port
+		assert.Equal(t, 1, len(ports))
+		assert.Equal(t, int32(8080), *ports[0].Port)
+		assert.Equal(t, "listener-8080", *ports[0].Name)
+	})
+
+	t.Run("GetPortsValues reflects port count changes", func(t *testing.T) {
+		// Verify that GetPortsValues output changes when gateway ports change.
+		// Full integration tests (Deployment/Service patching) are covered by existing
+		// TestDeployObjs scenarios in this file.
+		gw1 := createGatewayForDeployer(8080)
+		gw2 := createGatewayForDeployer(8080, 9090)
+
+		ports1 := deployer.GetPortsValues(gw1, 0)
+		ports2 := deployer.GetPortsValues(gw2, 0)
+
+		assert.Equal(t, 1, len(ports1))
+		assert.Equal(t, 2, len(ports2))
+	})
+
+	t.Run("GetPortsValues handles multiple ports correctly", func(t *testing.T) {
+		// Test GetPortsValues behavior with multiple ports. ListenerSet merge logic
+		// happens in the IR builder before GatewayForDeployer is constructed, so it's
+		// covered by existing deployer integration tests.
+		gw := createGatewayForDeployer(8080, 9090, 3000)
+		ports := deployer.GetPortsValues(gw, 0)
+
+		assert.Equal(t, 3, len(ports))
+	})
+
+	t.Run("port names generated consistently", func(t *testing.T) {
+		gw := createGatewayForDeployer(443, 80)
+		ports := deployer.GetPortsValues(gw, 0)
+
+		for _, p := range ports {
+			// Port name should follow pattern "listener-{port_number}" (tilde gets sanitized to hyphen)
+			if *p.Port == 443 {
+				assert.Equal(t, "listener-443", *p.Name)
+			}
+			if *p.Port == 80 {
+				assert.Equal(t, "listener-80", *p.Name)
+			}
+		}
 	})
 }
 

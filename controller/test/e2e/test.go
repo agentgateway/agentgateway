@@ -27,7 +27,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
-// CreateTestInstallation is the simplest way to construct a TestInstallation in kgateway.
+// CreateTestInstallation is the simplest way to construct a TestInstallation in agentgateway.
 // It is syntactic sugar on top of CreateTestInstallationForCluster
 func CreateTestInstallation(
 	t *testing.T,
@@ -49,7 +49,7 @@ func CreateTestInstallation(
 //
 //	runtime - These are properties that are supplied at runtime and will impact how tests are executed
 //	cluster - These are properties that are used to connect to the Kubernetes cluster
-//	install - These are properties that are relevant to how the kgateway installation will be configured
+//	install - These are properties that are relevant to how the agentgateway installation will be configured
 func CreateTestInstallationForCluster(
 	t *testing.T,
 	runtimeContext testruntime.Context,
@@ -97,7 +97,7 @@ func CreateTestInstallationForCluster(
 }
 
 // TestInstallation is the structure around a set of tests that validate behavior for an installation
-// of kgateway.
+// of agentgateway.
 type TestInstallation struct {
 	fmt.Stringer
 
@@ -107,7 +107,7 @@ type TestInstallation struct {
 	// ClusterContext contains the metadata about the Kubernetes Cluster that is used for this TestCluster
 	ClusterContext *cluster.Context
 
-	// Metadata contains the properties used to install kgateway
+	// Metadata contains the properties used to install agentgateway
 	Metadata *install.Context
 
 	// Actions is the entity that creates actions that can be executed by the Operator
@@ -139,7 +139,7 @@ func (i *TestInstallation) finalize() {
 }
 
 // InstallFromLocalChart installs the controller and CRD chart based on the `ChartType` of the underlying
-// TestInstallation. By default `kgateway` will be installed but can be set to `agentgateway`
+// TestInstallation.
 func (i *TestInstallation) InstallFromLocalChart(ctx context.Context, t *testing.T) {
 	i.InstallAgentgatewayCRDsFromLocalChart(ctx, t)
 	i.InstallAgentgatewayCoreFromLocalChart(ctx, t)
@@ -270,7 +270,7 @@ func (i *TestInstallation) UninstallAgentgatewayCRDs(ctx context.Context, t *tes
 
 // PreFailHandler is the function that is invoked if a test in the given TestInstallation fails
 func (i *TestInstallation) PreFailHandler(ctx context.Context, t *testing.T) {
-	i.preFailHandler(ctx, t, i.GeneratedFiles.FailureDir)
+	i.preFailHandler(ctx, t, filepath.Join(i.GeneratedFiles.FailureDir, t.Name()))
 }
 
 // PerTestPreFailHandler is the function that is invoked if a test in the given TestInstallation fails
@@ -303,7 +303,7 @@ func (i *TestInstallation) preFailHandler(ctx context.Context, t *testing.T, dir
 	})
 
 	// Dump the logs and state of the cluster
-	helpers.StandardKgatewayDumpOnFail(os.Stdout, i.Actions.Kubectl(), dir, namespaces)
+	helpers.StandardAgentgatewayDumpOnFail(os.Stdout, i.Actions.Kubectl(), dir, namespaces)
 }
 
 func (i *TestInstallation) releaseExists(ctx context.Context, releaseName, namespace string) bool {

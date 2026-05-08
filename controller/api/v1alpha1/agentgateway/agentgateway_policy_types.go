@@ -1,6 +1,8 @@
 package agentgateway
 
 import (
+	"iter"
+
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,8 +57,8 @@ type AgentgatewayPolicyList struct {
 // +kubebuilder:validation:XValidation:rule="!(has(self.traffic) && has(self.traffic.jwtAuthentication) && has(self.backend) && has(self.backend.mcp) && has(self.backend.mcp.authentication))",message="traffic.jwtAuthentication may not be used with backend.mcp.authentication in the same policy"
 // +kubebuilder:validation:XValidation:rule="has(self.frontend) && has(self.targetRefs) ? self.targetRefs.all(t, t.kind == 'Gateway' && !has(t.sectionName)) : true",message="the 'frontend' field can only target a Gateway"
 // +kubebuilder:validation:XValidation:rule="has(self.frontend) && has(self.targetSelectors) ? self.targetSelectors.all(t, t.kind == 'Gateway' && !has(t.sectionName)) : true",message="the 'frontend' field can only target a Gateway"
-// +kubebuilder:validation:XValidation:rule="has(self.traffic) && has(self.targetRefs) ? self.targetRefs.all(t, t.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute', 'ListenerSet']) : true",message="the 'traffic' field can only target a Gateway, ListenerSet, GRPCRoute, or HTTPRoute"
-// +kubebuilder:validation:XValidation:rule="has(self.traffic) && has(self.targetSelectors) ? self.targetSelectors.all(t, t.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute', 'ListenerSet']) : true",message="the 'traffic' field can only target a Gateway, ListenerSet, GRPCRoute, or HTTPRoute"
+// +kubebuilder:validation:XValidation:rule="has(self.traffic) && has(self.targetRefs) ? self.targetRefs.all(t, t.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute', 'ListenerSet', 'InferencePool']) : true",message="the 'traffic' field can only target a Gateway, ListenerSet, GRPCRoute, HTTPRoute, or InferencePool"
+// +kubebuilder:validation:XValidation:rule="has(self.traffic) && has(self.targetSelectors) ? self.targetSelectors.all(t, t.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute', 'ListenerSet', 'InferencePool']) : true",message="the 'traffic' field can only target a Gateway, ListenerSet, GRPCRoute, HTTPRoute, or InferencePool"
 // +kubebuilder:validation:XValidation:rule="has(self.targetRefs) && has(self.traffic) && has(self.traffic.phase) && self.traffic.phase == 'PreRouting' ? self.targetRefs.all(t, t.kind in ['Gateway', 'ListenerSet']) : true",message="the 'traffic.phase=PreRouting' field can only target a Gateway or ListenerSet"
 // +kubebuilder:validation:XValidation:rule="has(self.targetSelectors) && has(self.traffic) && has(self.traffic.phase) && self.traffic.phase == 'PreRouting' ? self.targetSelectors.all(t, t.kind in ['Gateway', 'ListenerSet']) : true",message="the 'traffic.phase=PreRouting' field can only target a Gateway or ListenerSet"
 type AgentgatewayPolicySpec struct {
@@ -66,7 +68,7 @@ type AgentgatewayPolicySpec struct {
 	// +listType=atomic
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
-	// +kubebuilder:validation:XValidation:rule="self.all(r, (r.kind == 'Service' && r.group == '') || (r.kind == 'AgentgatewayBackend' && r.group == 'agentgateway.dev') || (r.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute'] && r.group == 'gateway.networking.k8s.io') || (r.kind == 'ListenerSet' && r.group == 'gateway.networking.k8s.io'))",message="targetRefs may only reference Gateway, HTTPRoute, GRPCRoute, ListenerSet, Service, or AgentgatewayBackend resources"
+	// +kubebuilder:validation:XValidation:rule="self.all(r, (r.kind == 'Service' && r.group == '') || (r.kind == 'AgentgatewayBackend' && r.group == 'agentgateway.dev') || (r.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute'] && r.group == 'gateway.networking.k8s.io') || (r.kind == 'ListenerSet' && r.group == 'gateway.networking.k8s.io') || (r.kind == 'InferencePool' && r.group == 'inference.networking.k8s.io'))",message="targetRefs may only reference Gateway, HTTPRoute, GRPCRoute, ListenerSet, Service, AgentgatewayBackend, or InferencePool resources"
 	// +kubebuilder:validation:XValidation:message="Only one Kind of targetRef can be set on one policy",rule="self.all(l1, !self.exists(l2, l1.kind != l2.kind))"
 	// +optional
 	TargetRefs []shared.LocalPolicyTargetReferenceWithSectionName `json:"targetRefs,omitempty"`
@@ -75,7 +77,7 @@ type AgentgatewayPolicySpec struct {
 	// to attach the policy to.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
-	// +kubebuilder:validation:XValidation:rule="self.all(r, (r.kind == 'Service' && r.group == '') || (r.kind == 'AgentgatewayBackend' && r.group == 'agentgateway.dev') || (r.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute'] && r.group == 'gateway.networking.k8s.io') || (r.kind == 'ListenerSet' && r.group == 'gateway.networking.k8s.io'))",message="targetRefs may only reference Gateway, HTTPRoute, GRPCRoute, ListenerSet, Service, or AgentgatewayBackend resources"
+	// +kubebuilder:validation:XValidation:rule="self.all(r, (r.kind == 'Service' && r.group == '') || (r.kind == 'AgentgatewayBackend' && r.group == 'agentgateway.dev') || (r.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute'] && r.group == 'gateway.networking.k8s.io') || (r.kind == 'ListenerSet' && r.group == 'gateway.networking.k8s.io') || (r.kind == 'InferencePool' && r.group == 'inference.networking.k8s.io'))",message="targetRefs may only reference Gateway, HTTPRoute, GRPCRoute, ListenerSet, Service, AgentgatewayBackend, or InferencePool resources"
 	// +kubebuilder:validation:XValidation:message="Only one Kind of targetRef can be set on one policy",rule="self.all(l1, !self.exists(l2, l1.kind != l2.kind))"
 	// +optional
 	TargetSelectors []shared.LocalPolicyTargetSelectorWithSectionName `json:"targetSelectors,omitempty"`
@@ -253,6 +255,11 @@ type BackendFull struct {
 	// health defines settings for passive and active health checking.
 	// +optional
 	Health *Health `json:"health,omitempty"`
+
+	// extAuth specifies the external authentication configuration for requests
+	// sent to this backend.
+	// +optional
+	ExtAuth *ExtAuth `json:"extAuth,omitempty"`
 }
 
 // +kubebuilder:validation:MinLength=1
@@ -347,6 +354,11 @@ type BackendTLS struct {
 	// +kubebuilder:validation:MaxItems=16
 	// +optional
 	AlpnProtocols *[]TinyString `json:"alpnProtocols,omitempty"`
+
+	// keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+	// For example: `X25519_MLKEM768,X25519`.
+	// +optional
+	KeyExchangeGroups []KeyExchangeGroup `json:"keyExchangeGroups,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -517,6 +529,11 @@ type FrontendTLS struct {
 	// +optional
 	CipherSuites []CipherSuite `json:"cipherSuites,omitempty"`
 
+	// keyExchangeGroups configures the ordered list of key exchange groups for a TLS listener.
+	// For example: `X25519_MLKEM768,X25519`.
+	// +optional
+	KeyExchangeGroups []KeyExchangeGroup `json:"keyExchangeGroups,omitempty"`
+
 	// TODO: mirror the tuneables on BackendTLS
 }
 
@@ -546,6 +563,16 @@ const (
 	CipherSuiteTLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384       CipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
 	CipherSuiteTLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256       CipherSuite = "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
 	CipherSuiteTLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 CipherSuite = "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
+)
+
+// +kubebuilder:validation:Enum=X25519;P-256;P-384;X25519_MLKEM768
+type KeyExchangeGroup string
+
+const (
+	KeyExchangeGroupX25519         KeyExchangeGroup = "X25519"
+	KeyExchangeGroupP256           KeyExchangeGroup = "P-256"
+	KeyExchangeGroupP384           KeyExchangeGroup = "P-384"
+	KeyExchangeGroupX25519MLKEM768 KeyExchangeGroup = "X25519_MLKEM768"
 )
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -610,21 +637,23 @@ type Traffic struct {
 	// transformation is used to mutate and transform requests and responses
 	// before forwarding them to the destination.
 	// +optional
-	Transformation *Transformation `json:"transformation,omitempty"`
+	Transformation *TransformationOrConditional `json:"transformation,omitempty"`
 
 	// extProc specifies the external processing configuration for the policy.
 	// +optional
-	ExtProc *ExtProc `json:"extProc,omitempty"`
+	ExtProc *ExtProcOrConditional `json:"extProc,omitempty"`
 
 	// extAuth specifies the external authentication configuration for the policy.
 	// This controls what external server to send requests to for authentication.
+	//
+	// An extAuth policy can be conditionally set by nesting configuration under the `conditional` field.
 	// +optional
-	ExtAuth *ExtAuth `json:"extAuth,omitempty"`
+	ExtAuth *ExtAuthOrConditional `json:"extAuth,omitempty"`
 
 	// rateLimit specifies the rate limiting configuration for the policy.
 	// This controls the rate at which requests are allowed to be processed.
 	// +optional
-	RateLimit *RateLimits `json:"rateLimit,omitempty"`
+	RateLimit *RateLimitsOrConditional `json:"rateLimit,omitempty"`
 
 	// cors specifies the CORS configuration for the policy.
 	// +optional
@@ -687,17 +716,17 @@ type Traffic struct {
 	// `directResponse` configures the policy to send a direct response to the
 	// client.
 	// +optional
-	DirectResponse *DirectResponse `json:"directResponse,omitempty"`
+	DirectResponse *DirectResponseOrConditional `json:"directResponse,omitempty"`
 }
 
 // DirectResponse defines the policy to send a direct response to the client.
 type DirectResponse struct {
 	// StatusCode defines the HTTP status code to return for this route.
 	//
-	// +required
+	// +optional // This is actually required, but making it required breaks Conditional
 	// +kubebuilder:validation:Minimum=200
 	// +kubebuilder:validation:Maximum=599
-	StatusCode int32 `json:"status"`
+	StatusCode *int32 `json:"status,omitempty"`
 	// Body defines the content to be returned in the HTTP response body.
 	// The maximum length of the body is restricted to prevent excessively large responses.
 	// If this field is omitted, no body is included in the response.
@@ -706,6 +735,44 @@ type DirectResponse struct {
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=4096
 	Body *string `json:"body,omitempty"`
+}
+
+type DirectResponseConditional struct {
+	// `condition` must evaluate to true for this policy to execute.
+	// +optional
+	Condition shared.CELExpression `json:"condition,omitempty"`
+	// `policy` definition.
+	// +required
+	// +kubebuilder:validation:XValidation:rule="has(self.status)",message="status is required"
+	Policy DirectResponse `json:"policy"`
+}
+
+// +kubebuilder:validation:ConditionalPolicy:fields=status
+type DirectResponseOrConditional struct {
+	// +optional
+	DirectResponse `json:",inline"`
+	// `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level directResponse fields.
+	// The first matching policy will be executed.
+	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
+	// in case no conditions are met.
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:XValidation:message="conditional entries without condition must be last",rule="self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e, !has(e.condition)) || !has(self[size(self) - 1].condition))"
+	Conditional []DirectResponseConditional `json:"conditional,omitempty"`
+}
+
+func (d *DirectResponseOrConditional) ConditionalPolicy() (*DirectResponse, iter.Seq[ConditionalPolicyEntry[DirectResponse]]) {
+	seq := mapseq(d.Conditional, func(d DirectResponseConditional) ConditionalPolicyEntry[DirectResponse] {
+		return ConditionalPolicyEntry[DirectResponse]{
+			Condition: d.Condition,
+			Policy:    d.Policy,
+		}
+	})
+	if len(d.Conditional) > 0 {
+		return nil, seq
+	}
+	return &d.DirectResponse, seq
 }
 
 // +kubebuilder:validation:Enum=Strict;Optional;Permissive
@@ -1343,6 +1410,50 @@ type Transformation struct {
 	Response *Transform `json:"response,omitempty"`
 }
 
+type TransformationConditional struct {
+	// `condition` must evaluate to true for this policy to execute.
+	// +optional
+	Condition shared.CELExpression `json:"condition,omitempty"`
+	// `policy` definition.
+	// +required
+	Policy Transformation `json:"policy"`
+}
+
+// +kubebuilder:validation:ConditionalPolicy
+// +kubebuilder:validation:AtLeastOneFieldSet
+type TransformationOrConditional struct {
+	// `request` is used to modify the request path.
+	// +optional
+	Request *Transform `json:"request,omitempty"`
+
+	// `response` is used to modify the response path.
+	// +optional
+	Response *Transform `json:"response,omitempty"`
+
+	// `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level transformation fields.
+	// The first matching policy will be executed.
+	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
+	// in case no conditions are met.
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:XValidation:message="conditional entries without condition must be last",rule="self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e, !has(e.condition)) || !has(self[size(self) - 1].condition))"
+	Conditional []TransformationConditional `json:"conditional,omitempty"`
+}
+
+func (t *TransformationOrConditional) ConditionalPolicy() (*Transformation, iter.Seq[ConditionalPolicyEntry[Transformation]]) {
+	seq := mapseq(t.Conditional, func(t TransformationConditional) ConditionalPolicyEntry[Transformation] {
+		return ConditionalPolicyEntry[Transformation]{
+			Condition: t.Condition,
+			Policy:    t.Policy,
+		}
+	})
+	if len(t.Conditional) > 0 {
+		return nil, seq
+	}
+	return &Transformation{Request: t.Request, Response: t.Response}, seq
+}
+
 // +kubebuilder:validation:AtLeastOneFieldSet
 type Transform struct {
 	// `set` is a list of headers and the value they should be set to.
@@ -1410,17 +1521,116 @@ type HeaderTransformation struct {
 type ExtProc struct {
 	// `backendRef` references the External Processor server to reach.
 	// Supported types: `Service` and `Backend`.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	// +optional // This is actually required, but making it required breaks Conditional
+	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
 }
 
-// +kubebuilder:validation:ExactlyOneOf=grpc;http
+type ExtProcConditional struct {
+	// `condition` must evaluate to true for this policy to execute.
+	// +optional
+	Condition shared.CELExpression `json:"condition,omitempty"`
+	// `policy` definition.
+	// +required
+	// +kubebuilder:validation:XValidation:rule="has(self.backendRef)",message="backendRef is required"
+	Policy ExtProc `json:"policy"`
+}
+
+// +kubebuilder:validation:ConditionalPolicy:fields=backendRef
+type ExtProcOrConditional struct {
+	// +optional
+	ExtProc `json:",inline"`
+	// `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level extProc fields.
+	// The first matching policy will be executed.
+	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
+	// in case no conditions are met.
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:XValidation:message="conditional entries without condition must be last",rule="self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e, !has(e.condition)) || !has(self[size(self) - 1].condition))"
+	Conditional []ExtProcConditional `json:"conditional,omitempty"`
+}
+
+func (e *ExtProcOrConditional) ConditionalPolicy() (*ExtProc, iter.Seq[ConditionalPolicyEntry[ExtProc]]) {
+	seq := mapseq(e.Conditional, func(e ExtProcConditional) ConditionalPolicyEntry[ExtProc] {
+		return ConditionalPolicyEntry[ExtProc]{
+			Condition: e.Condition,
+			Policy:    e.Policy,
+		}
+	})
+	if len(e.Conditional) > 0 {
+		return nil, seq
+	}
+	return &e.ExtProc, seq
+}
+
+// +k8s:deepcopy-gen=false
+// nolint: kubeapilinter
+type ConditionalPolicyEntry[T any] struct {
+	Condition shared.CELExpression
+	Policy    T
+}
+
+// +k8s:deepcopy-gen=false
+// nolint: kubeapilinter
+type ConditionalPolicy[T any] interface {
+	ConditionalPolicy() (*T, iter.Seq[ConditionalPolicyEntry[T]])
+}
+
+type ExtAuthConditional struct {
+	// `condition` must evaluate to true for this policy to execute.
+	// +optional
+	Condition shared.CELExpression `json:"condition,omitempty"`
+	// `policy` definition.
+	// +required
+	// +kubebuilder:validation:XValidation:rule="has(self.backendRef)",message="backendRef is required"
+	// +kubebuilder:validation:XValidation:rule="[has(self.grpc),has(self.http)].filter(x,x==true).size() == 1",message="exactly one of the fields in [grpc http] must be set"
+	Policy ExtAuth `json:"policy"`
+}
+
+// +kubebuilder:validation:ConditionalPolicy:fields=backendRef
+// +kubebuilder:validation:XValidation:rule="has(self.conditional) || [has(self.grpc),has(self.http)].filter(x,x==true).size() == 1",message="exactly one of the fields in [grpc http] must be set"
+type ExtAuthOrConditional struct {
+	// +optional
+	ExtAuth `json:",inline"`
+	// `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level extAuth fields.
+	// The first matching policy will be executed.
+	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
+	// in case no conditions are met.
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:XValidation:message="conditional entries without condition must be last",rule="self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e, !has(e.condition)) || !has(self[size(self) - 1].condition))"
+	Conditional []ExtAuthConditional `json:"conditional,omitempty"`
+}
+
+func (e *ExtAuthOrConditional) ConditionalPolicy() (*ExtAuth, iter.Seq[ConditionalPolicyEntry[ExtAuth]]) {
+	seq := mapseq(e.Conditional, func(e ExtAuthConditional) ConditionalPolicyEntry[ExtAuth] {
+		return ConditionalPolicyEntry[ExtAuth]{
+			Condition: e.Condition,
+			Policy:    e.Policy,
+		}
+	})
+	if len(e.Conditional) > 0 {
+		return nil, seq
+	}
+	return &e.ExtAuth, seq
+}
+
+// mapseq runs f() over all elements in s and returns the result
+func mapseq[E any, O any](s []E, f func(E) O) iter.Seq[O] {
+	return func(yield func(O) bool) {
+		for _, e := range s {
+			yield(f(e))
+		}
+	}
+}
+
 type ExtAuth struct {
 	// `backendRef` references the External Authorization server to reach.
 	//
 	// Supported types: `Service` and `Backend`.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	// +optional // This is actually required, but making it required breaks Conditional
+	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
 
 	// FailureMode controls behavior when the external authorization service is
 	// unavailable or returns an error. "FailOpen" allows the request to continue.
@@ -1538,6 +1748,52 @@ type RateLimits struct {
 	Global *GlobalRateLimit `json:"global,omitempty"`
 }
 
+type RateLimitsConditional struct {
+	// `condition` must evaluate to true for this policy to execute.
+	// +optional
+	Condition shared.CELExpression `json:"condition,omitempty"`
+	// `policy` definition.
+	// +required
+	Policy RateLimits `json:"policy"`
+}
+
+// +kubebuilder:validation:ConditionalPolicy
+// +kubebuilder:validation:AtLeastOneFieldSet
+type RateLimitsOrConditional struct {
+	// Local defines a local rate limiting policy.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	Local []LocalRateLimit `json:"local,omitempty"`
+
+	// Global defines a global rate limiting policy using an external service.
+	// +optional
+	Global *GlobalRateLimit `json:"global,omitempty"`
+
+	// `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level rateLimit fields.
+	// The first matching policy will be executed.
+	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
+	// in case no conditions are met.
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:XValidation:message="conditional entries without condition must be last",rule="self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e, !has(e.condition)) || !has(self[size(self) - 1].condition))"
+	Conditional []RateLimitsConditional `json:"conditional,omitempty"`
+}
+
+func (r *RateLimitsOrConditional) ConditionalPolicy() (*RateLimits, iter.Seq[ConditionalPolicyEntry[RateLimits]]) {
+	seq := mapseq(r.Conditional, func(r RateLimitsConditional) ConditionalPolicyEntry[RateLimits] {
+		return ConditionalPolicyEntry[RateLimits]{
+			Condition: r.Condition,
+			Policy:    r.Policy,
+		}
+	})
+	if len(r.Conditional) > 0 {
+		return nil, seq
+	}
+	return &RateLimits{Local: r.Local, Global: r.Global}, seq
+}
+
 type GlobalRateLimit struct {
 	// `backendRef` references the rate limit server to reach.
 	// Supported types: `Service` and `Backend`.
@@ -1585,6 +1841,17 @@ type RateLimitDescriptor struct {
 	// +kubebuilder:validation:Enum=Requests;Tokens
 	// +optional
 	Unit *RateLimitUnit `json:"unit,omitempty"`
+	// `cost` is a Common Expression Language (`CEL`) expression that determines
+	// the cost of the request for this descriptor. If unset, `Requests` costs
+	// default to 1, and `Tokens` costs default to the total token count.
+	//
+	// `Tokens` cost are evaluated after the request has completed. For non-streaming requests, `request`, `llm`, and
+	// `response` fields are all available; for streaming requests, `response` is not available (however, all LLM
+	// attributes are in `llm`). For `Requests`, cost is computed during the request phase.
+	//
+	// See https://agentgateway.dev/docs/standalone/latest/reference/cel/ for more info.
+	// +optional
+	Cost *shared.CELExpression `json:"cost,omitempty"`
 }
 
 // A descriptor entry defines a single entry in a rate limit descriptor.

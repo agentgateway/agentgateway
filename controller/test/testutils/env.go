@@ -6,7 +6,7 @@ import (
 
 const (
 	// SkipInstallAndTeardown can be used when you plan to re-run a test suite and want to skip the installation
-	// and teardown of kgateway.
+	// and teardown of agentgateway.
 	SkipInstallAndTeardown = "SKIP_INSTALL"
 
 	// PersistInstall is a convenience flag that skips installation if charts are already installed
@@ -21,7 +21,7 @@ const (
 	// cluster on failure begging for forensic analysis.
 	//
 	// Setup/Install behavior:
-	// - Installs kgateway if not present
+	// - Installs agentgateway if not present
 	// - Skips installation if charts are already installed (same as PERSIST_INSTALL)
 	//
 	// Teardown/Cleanup behavior:
@@ -45,7 +45,7 @@ const (
 	// SkipDump, if true, disables test dumping
 	SkipDump = "SKIP_DUMP"
 
-	// InstallNamespace is the namespace in which kgateway is installed
+	// InstallNamespace is the namespace in which agentgateway is installed
 	InstallNamespace = "INSTALL_NAMESPACE"
 
 	// SkipIstioInstall is a flag that indicates whether to skip the install of Istio.
@@ -78,7 +78,7 @@ const (
 	Version = "VERSION"
 )
 
-// ShouldSkipInstallAndTeardown returns true if kgateway installation and teardown should be skipped.
+// ShouldSkipInstallAndTeardown returns true if agentgateway installation and teardown should be skipped.
 func ShouldSkipInstallAndTeardown() bool {
 	return envutils.IsEnvTruthy(SkipInstallAndTeardown)
 }

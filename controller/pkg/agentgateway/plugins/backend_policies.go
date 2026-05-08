@@ -8,6 +8,7 @@ import (
 	jsonpb "google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
+	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
@@ -157,7 +158,26 @@ func translateBackendPolicyToAgw(
 		appendPolicy("backendAuth")(translateBackendAuth(ctx, policy, policyName))
 	}
 
+	if s := backend.ExtAuth; s != nil {
+		appendPolicy("backendExtAuth")(translateBackendExtAuth(ctx, policy))
+	}
+
 	return agwPolicies, errors.Join(errs...)
+}
+
+func translateBackendExtAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
+	spec, err := buildExtAuthSpec(ctx, policy.Spec.Backend.ExtAuth, config.NamespacedName(policy))
+	return &api.Policy{
+		Key:  getBackendPolicyName(policy.Namespace, policy.Name) + extauthPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, config.NamespacedName(policy)),
+		Kind: &api.Policy_Backend{
+			Backend: &api.BackendPolicySpec{
+				Kind: &api.BackendPolicySpec_ExtAuthz{
+					ExtAuthz: spec,
+				},
+			},
+		},
+	}, err
 }
 
 func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
@@ -329,6 +349,7 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 	if tls.AlpnProtocols != nil {
 		p.Alpn = &api.Alpn{Protocols: *tls.AlpnProtocols}
 	}
+	p.KeyExchangeGroups = convertTLSKeyExchangeGroups(tls.KeyExchangeGroups)
 
 	tlsPolicy := &api.Policy{
 		Key:  policy.Namespace + "/" + policy.Name + tlsPolicySuffix,
@@ -779,7 +800,7 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 	return authPolicy, errors.Join(append(errs, kindErrs...)...)
 }
 
-// translateRouteType converts kgateway RouteType to agentgateway proto RouteType
+// translateRouteType converts RouteType to agentgateway proto RouteType
 func translateRouteType(rt agentgateway.RouteType) api.BackendPolicySpec_Ai_RouteType {
 	switch rt {
 	case agentgateway.RouteTypeCompletions:

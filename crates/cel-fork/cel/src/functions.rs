@@ -261,10 +261,12 @@ pub fn contains<'a>(
 // * `uint` - Returns the unsigned integer value of the target.
 // * `float` - Returns the float value of the target.
 // * `bytes` - Converts bytes to string using from_utf8_lossy.
+// * `type` - Returns the type name.
 pub fn string<'a>(ftx: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
 	let this = ftx.this_or_arg_value()?;
 	Ok(match this {
 		Value::String(v) => Value::String(v.clone()),
+		Value::Type(v) => Value::String(v.name().into()),
 
 		Value::Timestamp(t) => Value::String(format_timestamp(&t).into()),
 
@@ -279,6 +281,12 @@ pub fn string<'a>(ftx: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
 		v => return Err(ftx.error(format!("cannot convert {v:?} to string"))),
 	})
 }
+
+pub fn type_<'a>(ftx: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
+	let value = ftx.this_or_arg_value()?;
+	Ok(Value::Type(crate::objects::type_of_value(&value)))
+}
+
 pub fn bytes<'a>(ftx: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
 	let value: StringValue = ftx.arg(0)?;
 	Ok(Value::Bytes(BytesValue::Owned(value.as_bytes().into())))

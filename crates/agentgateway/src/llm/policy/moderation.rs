@@ -6,7 +6,7 @@ use crate::json;
 use crate::llm::RequestType;
 use crate::llm::policy::Moderation;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::{BackendPolicy, ResourceName, SimpleBackend, Target};
+use crate::types::agent::{BackendTrafficPolicy, ResourceName, SimpleBackend, Target};
 
 pub async fn send_request(
 	req: &mut dyn RequestType,
@@ -18,7 +18,7 @@ pub async fn send_request(
 		.model
 		.clone()
 		.unwrap_or(strng::literal!("omni-moderation-latest"));
-	let mut pols = vec![BackendPolicy::BackendTLS(
+	let mut pols = vec![BackendTrafficPolicy::BackendTLS(
 		crate::http::backendtls::SYSTEM_TRUST.clone(),
 	)];
 	pols.extend(moderation.policies.iter().cloned());

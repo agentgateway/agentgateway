@@ -2,7 +2,7 @@
 image:
   registry: ghcr.io/agentgateway
 
-# Configuration for the kgateway controller pod
+# Configuration for the agentgateway controller pod
 controller:
   logLevel: debug
 

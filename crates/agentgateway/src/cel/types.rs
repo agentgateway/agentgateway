@@ -359,6 +359,9 @@ impl<'a> Executor<'a> {
 	}
 	fn set_response(&mut self, resp: &'a crate::http::Response) {
 		self.response = Some(resp.into());
+		if let Some(llm) = resp.extensions().get::<LLMContext>() {
+			self.llm = ExtensionOrDirect::Direct(Some(llm));
+		}
 	}
 	fn set_response_snapshot(&mut self, resp: &'a ResponseSnapshot) {
 		self.response = Some(resp.into());
@@ -407,6 +410,17 @@ impl<'a> Executor<'a> {
 		if let Some(f) = this.request.as_mut() {
 			f.end_time = end_time;
 		}
+		this
+	}
+	pub fn new_llm_rate_limit_streaming(
+		req: Option<&'a RequestSnapshot>,
+		llm: &'a LLMContext,
+	) -> Self {
+		let mut this = Self::new_empty();
+		if let Some(req) = req {
+			this.set_request_snapshot(req);
+		}
+		this.llm = ExtensionOrDirect::Direct(Some(llm));
 		this
 	}
 	pub fn new_tcp_logger(
@@ -964,7 +978,7 @@ impl PartialEq for RequestRef<'_> {
 #[apply(schema!)]
 #[derive(Eq, PartialEq, cel::DynamicType)]
 pub struct LLMContext {
-	/// Whether the LLM response is streamed.
+	/// Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.
 	pub streaming: bool,
 	/// The model requested for the LLM request. This may differ from the actual model used.
 	#[dynamic(rename = "requestModel")]

@@ -131,11 +131,18 @@ mod-tidy: mod-download mod-tidy-nested ## Tidy the go mod file
 #----------------------------------------------------------------------------
 
 .PHONY: analyze
-analyze: $(CUSTOM_GOLANGCI_LINT_BIN)  ## Run golangci-lint. Override options with ANALYZE_ARGS.
+analyze: ensure-custom-golangci-lint  ## Run golangci-lint. Override options with ANALYZE_ARGS.
 	$(CUSTOM_GOLANGCI_LINT_RUN) $(ANALYZE_ARGS) ./...
 
-$(CUSTOM_GOLANGCI_LINT_BIN): ../go.mod ../go.sum .custom-gcl.yml
-	golangci-lint custom
+.PHONY: ensure-custom-golangci-lint
+ensure-custom-golangci-lint:
+	@expected_go_version="$$(go env GOVERSION)"; \
+	current_go_version="$$( $(CUSTOM_GOLANGCI_LINT_BIN) version 2>/dev/null | sed -n 's/.* built with \(go[0-9.]*\).*/\1/p' )"; \
+	if [ ! -x "$(CUSTOM_GOLANGCI_LINT_BIN)" ] || [ "$$current_go_version" != "$$expected_go_version" ]; then \
+		echo "Rebuilding golangci-lint custom with $$expected_go_version..."; \
+		rm -f "$(CUSTOM_GOLANGCI_LINT_BIN)"; \
+		golangci-lint custom; \
+	fi
 
 .PHONY: lint-actions
 lint-actions: ## Lint the GitHub Actions workflows
@@ -366,7 +373,7 @@ $(STAMP_DIR)/generate-licenses: $(MOD_FILES) | $(STAMP_DIR)
 	@touch $@
 
 # Formatting - only runs if generation steps changed
-$(STAMP_DIR)/fmt: $(STAMP_DIR)/go-generate-all $(CUSTOM_GOLANGCI_LINT_BIN)
+$(STAMP_DIR)/fmt: $(STAMP_DIR)/go-generate-all ensure-custom-golangci-lint
 	@echo "Formatting code..."
 	$(CUSTOM_GOLANGCI_LINT_FMT) ./...
 	@touch $@

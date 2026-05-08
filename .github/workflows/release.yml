@@ -210,6 +210,8 @@ jobs:
             os: blacksmith-4vcpu-ubuntu-2404
           - platform: linux/arm64
             os: blacksmith-4vcpu-ubuntu-2404-arm
+            cargo_features: agentgateway/ui,agentgateway-app/mimalloc
+            cargo_no_default_features: true
     env:
       VERSION: ${{ needs.setup.outputs.version }}
     steps:
@@ -251,6 +253,8 @@ jobs:
           VERSION=${{ env.VERSION }}
           GIT_REVISION=${{ github.sha }}
           BUILDER=musl
+          CARGO_FEATURES=${{ matrix.cargo_features || 'agentgateway/ui' }}
+          CARGO_NO_DEFAULT_FEATURES=${{ matrix.cargo_no_default_features || 'false' }}
 
     - name: Export digest
       run: |
@@ -527,8 +531,9 @@ jobs:
             name: linux
           - os: blacksmith-4vcpu-ubuntu-2404-arm
             target: aarch64-unknown-linux-musl
-            # TODO: arm64 build fails with jemalloc for some reason? https://github.com/tikv/jemallocator/issues/146
-            features: default
+            # arm64 musl fails with jemalloc: https://github.com/tikv/jemallocator/issues/146
+            features: agentgateway-app/mimalloc
+            extra_cargo_args: --no-default-features
             name: linux-arm
           - os: macos-26
             target: aarch64-apple-darwin
@@ -566,7 +571,7 @@ jobs:
     - name: Build
       run: make build
       env:
-        CARGO_BUILD_ARGS: "--target ${{ matrix.target }} -F ${{ matrix.features }}"
+        CARGO_BUILD_ARGS: "--target ${{ matrix.target }} ${{ matrix.extra_cargo_args || '' }} -F ${{ matrix.features }}"
     - name: Debug dirty build
       run: |
         git status

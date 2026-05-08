@@ -6,8 +6,8 @@ use secrecy::SecretString;
 
 use crate::serdes::FileInlineOrRemote;
 use crate::types::agent::{
-	HeaderValueMatch, ListenerTarget, PolicyPhase, PolicyTarget, PolicyType, ResourceName,
-	TrafficPolicy,
+	BackendTrafficPolicy, HeaderValueMatch, ListenerTarget, PolicyPhase, PolicyTarget, PolicyType,
+	ResourceName, TrafficPolicy,
 };
 use crate::types::local::NormalizedLocalConfig;
 use crate::*;
@@ -264,6 +264,238 @@ binds:
 	normalize_test_config(input)
 		.await
 		.expect("service backends should allow inference routing");
+}
+
+#[tokio::test]
+async fn test_local_ext_authz_conditional_policy() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        extAuthz:
+          conditional:
+          - condition: request.path == "/admin"
+            host: 127.0.0.1:9000
+          - host: 127.0.0.1:9001
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	let normalized = normalize_test_yaml(input).await.unwrap();
+	let route = &normalized.listener_routes[0].1[0];
+	let Some(TrafficPolicy::ExtAuthz(ext_authz)) = route
+		.inline_policies
+		.iter()
+		.find(|policy| matches!(policy, TrafficPolicy::ExtAuthz(_)))
+	else {
+		panic!("expected extAuthz policy");
+	};
+	let entries = ext_authz.iter().collect::<Vec<_>>();
+	assert_eq!(entries.len(), 2);
+	assert_eq!(
+		entries[0].condition.as_ref().unwrap().original_expression,
+		"request.path == \"/admin\""
+	);
+	assert!(entries[1].condition.is_none());
+}
+
+#[tokio::test]
+async fn test_local_ext_authz_http_include_response_headers() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        extAuthz:
+          host: 127.0.0.1:9000
+          protocol:
+            http:
+              includeResponseHeaders:
+              - x-auth-request-user
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	normalize_test_yaml(input)
+		.await
+		.expect("http extAuthz includeResponseHeaders should accept header names");
+}
+
+#[tokio::test]
+async fn test_local_backend_ext_authz_policy() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8000
+        policies:
+          extAuthz:
+            host: 127.0.0.1:9000
+      - host: 127.0.0.1:8001
+"#;
+
+	let normalized = normalize_test_yaml(input).await.unwrap();
+	let route = &normalized.listener_routes[0].1[0];
+	assert!(route.inline_policies.is_empty());
+	assert!(matches!(
+		route.backends[0].inline_policies.as_slice(),
+		[BackendTrafficPolicy::ExtAuthz(_)]
+	));
+	assert!(route.backends[1].inline_policies.is_empty());
+}
+
+#[tokio::test]
+async fn test_local_ext_authz_conditional_fallback_must_be_last() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        extAuthz:
+          conditional:
+          - host: 127.0.0.1:9000
+          - condition: request.path == "/admin"
+            host: 127.0.0.1:9001
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	let err = normalize_test_yaml(input).await.unwrap_err();
+	assert!(
+		err
+			.to_string()
+			.contains("conditional policy entries without condition must be last"),
+		"unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
+async fn test_local_ext_authz_conditional_reports_field_errors() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        extAuthz:
+          conditional:
+          - condition: 1
+            host: 127.0.0.1:9000
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	let err = normalize_test_yaml(input).await.unwrap_err();
+	assert!(
+		err.to_string().contains("invalid type: integer `1`"),
+		"unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
+async fn test_local_conditional_policy_types() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        directResponse:
+          conditional:
+          - condition: request.path == "/direct"
+            status: 403
+            body: denied
+          - status: 404
+            body: missing
+        transformations:
+          conditional:
+          - condition: request.path == "/transform"
+            request:
+              set:
+                x-test: "'transform'"
+          - response:
+              add:
+                x-fallback: "'true'"
+        extProc:
+          conditional:
+          - condition: request.path == "/process"
+            host: 127.0.0.1:9000
+          - host: 127.0.0.1:9001
+        localRateLimit:
+          conditional:
+          - condition: request.path == "/local-limit"
+            maxTokens: 10
+            tokensPerFill: 1
+            fillInterval: 1s
+          - maxTokens: 1
+            tokensPerFill: 1
+            fillInterval: 60s
+        remoteRateLimit:
+          conditional:
+          - condition: request.path == "/remote-limit"
+            domain: agentgateway
+            host: 127.0.0.1:9002
+            descriptors:
+            - entries:
+              - key: user
+                value: '"test-user"'
+          - domain: fallback
+            host: 127.0.0.1:9003
+            descriptors:
+            - entries:
+              - key: user
+                value: '"fallback"'
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	let normalized = normalize_test_yaml(input).await.unwrap();
+	let route = &normalized.listener_routes[0].1[0];
+
+	for policy in [
+		"directResponse",
+		"transformation",
+		"extProc",
+		"localRateLimit",
+		"remoteRateLimit",
+	] {
+		let (len, fallback_is_none) = route
+			.inline_policies
+			.iter()
+			.find_map(|p| match (policy, p) {
+				("directResponse", TrafficPolicy::DirectResponse(p)) => {
+					let entries = p.iter().collect::<Vec<_>>();
+					Some((entries.len(), entries[1].condition.is_none()))
+				},
+				("transformation", TrafficPolicy::Transformation(p)) => {
+					let entries = p.iter().collect::<Vec<_>>();
+					Some((entries.len(), entries[1].condition.is_none()))
+				},
+				("extProc", TrafficPolicy::ExtProc(p)) => {
+					let entries = p.iter().collect::<Vec<_>>();
+					Some((entries.len(), entries[1].condition.is_none()))
+				},
+				("localRateLimit", TrafficPolicy::LocalRateLimit(p)) => {
+					let entries = p.iter().collect::<Vec<_>>();
+					Some((entries.len(), entries[1].condition.is_none()))
+				},
+				("remoteRateLimit", TrafficPolicy::RemoteRateLimit(p)) => {
+					let entries = p.iter().collect::<Vec<_>>();
+					Some((entries.len(), entries[1].condition.is_none()))
+				},
+				_ => None,
+			})
+			.unwrap_or_else(|| panic!("expected {policy} policy"));
+
+		assert_eq!(len, 2, "expected two {policy} entries");
+		assert!(fallback_is_none, "expected {policy} fallback condition");
+	}
 }
 
 #[tokio::test]
