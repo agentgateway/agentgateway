@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -2079,15 +2079,9 @@ pub fn build_service_call(
 				};
 				identity.map(|id| (ip, id))
 			});
-			let service_vip = svc
-				.vips
-				.iter()
-				.find(|v| v.network == inputs.cfg.network)
-				.or_else(|| svc.vips.first())
-				.map(|v| v.address);
 			drop(discovery);
-			match (waypoint_info, service_vip) {
-				(Some((ip, identity)), Some(vip)) => {
+			match waypoint_info {
+				Some((ip, identity)) => {
 					let wp_port = if wp.hbone_mtls_port > 0 {
 						wp.hbone_mtls_port
 					} else {
@@ -2097,12 +2091,11 @@ pub fn build_service_call(
 						service = %svc.hostname,
 						waypoint = %ip,
 						waypoint_port = %wp_port,
-						service_vip = %vip,
 						"ingress_use_waypoint: routing through waypoint"
 					);
 					Some(WaypointTarget {
 						address: SocketAddr::new(ip, wp_port),
-						service_vip: vip,
+						service_hostname: svc.hostname.clone(),
 						identities: vec![identity],
 					})
 				},
@@ -2121,10 +2114,10 @@ pub fn build_service_call(
 		None
 	};
 
-	// Waypoint: target = service VIP (becomes the inner CONNECT authority).
+	// Waypoint: target = service hostname (becomes the inner CONNECT authority).
 	// Double HBONE: target = service hostname (resolved by the gateway).
 	let target = if let Some(wp) = &waypoint {
-		Target::Address(SocketAddr::new(wp.service_vip, port))
+		Target::Hostname(wp.service_hostname.clone(), port)
 	} else if network_gateway.is_some() {
 		tracing::debug!(
 			hostname=%svc.hostname,
@@ -2551,10 +2544,8 @@ pub struct BackendCall {
 pub struct WaypointTarget {
 	/// The socket address of the waypoint (IP:hbone_port).
 	pub address: SocketAddr,
-	/// Destination service VIP used as the inner HBONE CONNECT authority.
-	/// Required as IP:port by Istio's single-network Envoy waypoint; agentgateway's
-	/// waypoint accepts either IP:port or hostname.
-	pub service_vip: IpAddr,
+	/// Destination service hostname used as the inner HBONE CONNECT authority.
+	pub service_hostname: Strng,
 	/// Identities for mTLS verification (service SANs).
 	pub identities: Vec<Identity>,
 }
