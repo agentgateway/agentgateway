@@ -1939,6 +1939,7 @@ fn set_backend_cel_context(req: &mut http::Request, log: Option<&&mut RequestLog
 	}
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_service_call(
 	inputs: &ProxyInputs,
 	backend_policies: BackendPolicies,
