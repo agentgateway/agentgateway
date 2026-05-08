@@ -375,6 +375,7 @@ impl Policy {
 	) -> anyhow::Result<Option<Response>> {
 		let client = PolicyClient {
 			inputs: backend_info.inputs.clone(),
+			outbound: None,
 		};
 		for g in self
 			.prompt_guard

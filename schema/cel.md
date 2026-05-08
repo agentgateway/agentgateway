@@ -19,6 +19,10 @@
 |`response.grpcStatus`|integer|The gRPC status code of the response, when present.|
 |`response.headers`|object|The headers of the response.|
 |`response.body`|string|The body of the response. Warning: accessing the body will cause the body to be buffered.|
+|`proxy`|object|`proxy` contains proxy timing information for the request.|
+|`proxy.requestProcessingDuration`|string|Time spent processing the request before sending the primary outbound call.|
+|`proxy.upstreamDuration`|string|Time spent waiting for the primary outbound call.|
+|`proxy.responseProcessingDuration`|string|Time spent processing the primary outbound response before sending the downstream response.|
 |`env`|object|`env` contains selected process environment attributes exposed to CEL.<br>This does NOT expose raw environment variables, but rather a subset of well-known variables.|
 |`env.podName`|string|The name of the pod (when running on Kubernetes)|
 |`env.namespace`|string|The namespace of the pod (when running on Kubernetes)|

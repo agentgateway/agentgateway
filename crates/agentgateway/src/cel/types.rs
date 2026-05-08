@@ -42,6 +42,8 @@ pub struct Executor<'a> {
 
 	pub response: Option<ResponseRef<'a>>,
 
+	pub proxy: Option<&'a ProxyContext>,
+
 	pub env: EnvContext,
 
 	pub source: ExtensionOrDirect<'a, SourceContext>,
@@ -68,6 +70,78 @@ pub struct Executor<'a> {
 	pub extproc: ExtensionOrDirect<'a, ExtProcDynamicMetadata>,
 
 	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+#[dynamic(rename_all = "camelCase")]
+pub struct ProxyContext {
+	/// Time spent processing the request before sending the primary outbound call.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub request_processing_duration: Option<CelDuration>,
+	/// Time spent waiting for the primary outbound call.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub upstream_duration: Option<CelDuration>,
+	/// Time spent processing the primary outbound response before sending the downstream response.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub response_processing_duration: Option<CelDuration>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CelDuration(pub chrono::Duration);
+
+impl From<chrono::Duration> for CelDuration {
+	fn from(duration: chrono::Duration) -> Self {
+		Self(duration)
+	}
+}
+
+impl From<CelDuration> for chrono::Duration {
+	fn from(duration: CelDuration) -> Self {
+		duration.0
+	}
+}
+
+impl Serialize for CelDuration {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		let duration = ::cel::format_duration(&self.0).ok_or_else(|| {
+			serde::ser::Error::custom(format!("duration too large to serialize: {:?}", self.0))
+		})?;
+		duration.serialize(serializer)
+	}
+}
+
+impl<'de> Deserialize<'de> for CelDuration {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let duration = String::deserialize(deserializer)?;
+		let (remaining, duration) = ::cel::parse_duration(&duration)
+			.map_err(|err| serde::de::Error::custom(format!("invalid duration: {err:?}")))?;
+		if !remaining.is_empty() {
+			return Err(serde::de::Error::custom(format!(
+				"invalid duration: trailing input {remaining:?}"
+			)));
+		}
+		Ok(Self(duration))
+	}
+}
+
+impl DynamicType for CelDuration {
+	fn auto_materialize(&self) -> bool {
+		true
+	}
+
+	fn materialize(&self) -> Value<'_> {
+		Value::Duration(self.0)
+	}
 }
 
 fn is_extension_or_direct_none<T: Send + Sync + 'static>(e: &ExtensionOrDirect<T>) -> bool {
@@ -419,6 +493,7 @@ impl<'a> Executor<'a> {
 		llm: Option<&'a LLMContext>,
 		mcp: Option<&'a MCPInfo>,
 		end_time: Option<&'a RequestTime>,
+		proxy: Option<&'a ProxyContext>,
 	) -> Self {
 		let mut this = Self::new_empty();
 		if let Some(req) = req {
@@ -429,6 +504,7 @@ impl<'a> Executor<'a> {
 		}
 		this.llm = ExtensionOrDirect::Direct(llm);
 		this.mcp = mcp;
+		this.proxy = proxy;
 		if let Some(f) = this.request.as_mut() {
 			f.end_time = end_time;
 		}
@@ -1564,6 +1640,10 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub response: Option<ResponseRefSerde>,
 
+	/// `proxy` contains proxy timing information for the request.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub proxy: Option<ProxyContext>,
+
 	/// `env` contains selected process environment attributes exposed to CEL.
 	/// This does NOT expose raw environment variables, but rather a subset of well-known variables.
 	//  TODO: in the future we can, but we should add an allow-list of vars to avoid security issues.
@@ -1686,6 +1766,7 @@ impl ExecutorSerde {
 				},
 			});
 		}
+		exec.proxy = self.proxy.as_ref();
 		exec.llm_request = self.llm_request.as_ref();
 
 		// Set all the ExtensionOrDirect fields
@@ -1735,6 +1816,11 @@ pub fn full_example_executor() -> ExecutorSerde {
 			grpc_status: None,
 			headers: resp_headers,
 			body: Some(BufferedBody(Bytes::from(r#"{"ok": true}"#))),
+		}),
+		proxy: Some(ProxyContext {
+			request_processing_duration: Some(chrono::Duration::milliseconds(12).into()),
+			upstream_duration: Some(chrono::Duration::milliseconds(675).into()),
+			response_processing_duration: Some(chrono::Duration::milliseconds(6).into()),
 		}),
 		env: Some(EnvContext {
 			pod_name: Some("pod-1".to_string()),

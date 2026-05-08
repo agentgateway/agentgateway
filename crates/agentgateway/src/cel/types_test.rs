@@ -83,8 +83,14 @@ fn test_snapshot_matches_ref() {
 	let mut req = build_test_request();
 	let snapshot = snapshot_request(&mut req, true);
 	let req = build_test_request();
-	let snapshot_exec =
-		Executor::new_logger(Some(&snapshot), None, snapshot.llm.as_ref(), None, None);
+	let snapshot_exec = Executor::new_logger(
+		Some(&snapshot),
+		None,
+		snapshot.llm.as_ref(),
+		None,
+		None,
+		None,
+	);
 	let ref_executor = Executor::new_request(&req);
 
 	assert_eq!(exec_to_json(&ref_executor), exec_to_json(&snapshot_exec));
@@ -100,12 +106,30 @@ fn test_request_start_time_is_native_timestamp() {
 }
 
 #[test]
+fn test_proxy_timing_is_native_duration() {
+	let proxy = ProxyContext {
+		request_processing_duration: Some(chrono::Duration::milliseconds(12).into()),
+		upstream_duration: Some(chrono::Duration::milliseconds(675).into()),
+		response_processing_duration: Some(chrono::Duration::milliseconds(6).into()),
+	};
+	let executor = Executor::new_logger(None, None, None, None, None, Some(&proxy));
+	let expr = Expression::new_strict(
+		"proxy.requestProcessingDuration == duration('12ms') && \
+		 proxy.upstreamDuration == duration('675ms') && \
+		 proxy.responseProcessingDuration == duration('6ms')",
+	)
+	.unwrap();
+
+	assert!(executor.eval_bool(&expr));
+}
+
+#[test]
 fn test_executor_snapshot_round_trip() {
 	let mut req = build_test_request();
 	let req_snapshot = snapshot_request(&mut req, true);
 
 	// Create executor from snapshot
-	let executor1 = Executor::new_logger(Some(&req_snapshot), None, None, None, None);
+	let executor1 = Executor::new_logger(Some(&req_snapshot), None, None, None, None, None);
 
 	// Serialize to JSON
 	let json = exec_to_json(&executor1);
@@ -131,6 +155,11 @@ fn test_executor_round_trip() {
 
 	// Serialize to JSON
 	let json = exec_to_json(&executor1);
+	assert_json_field_coverage(
+		&serde_json::to_value(&exec).expect("failed to serialize ExecutorSerde"),
+		&json,
+		"$",
+	);
 
 	// Deserialize into ExecutorSerde
 	let exec_snapshot: ExecutorSerde =
@@ -144,6 +173,23 @@ fn test_executor_round_trip() {
 
 	// They should be identical
 	assert_eq!(json, json2, "Round-trip serialization mismatch");
+}
+
+fn assert_json_field_coverage(
+	expected: &serde_json::Value,
+	actual: &serde_json::Value,
+	path: &str,
+) {
+	let (Some(expected), Some(actual)) = (expected.as_object(), actual.as_object()) else {
+		return;
+	};
+	for (key, expected_value) in expected {
+		let child_path = format!("{path}.{key}");
+		let actual_value = actual
+			.get(key)
+			.unwrap_or_else(|| panic!("variables() missing populated field {child_path}"));
+		assert_json_field_coverage(expected_value, actual_value, &child_path);
+	}
 }
 
 #[test]
@@ -203,6 +249,11 @@ fn test_executor_snapshot_json_to_cel() {
 		"jwt": {
 			"sub": "test-user",
 			"role": "admin"
+		},
+		"proxy": {
+			"requestProcessingDuration": "12ms",
+			"upstreamDuration": "675ms",
+			"responseProcessingDuration": "6ms"
 		}
 	});
 
@@ -224,6 +275,17 @@ fn test_executor_snapshot_json_to_cel() {
 	assert_eq!(cel_json["source"]["address"], "10.0.0.1");
 	assert_eq!(cel_json["backend"]["name"], "my-backend");
 	assert_eq!(cel_json["jwt"]["sub"], "test-user");
+	assert_eq!(cel_json["proxy"]["requestProcessingDuration"], "0.012s");
+	assert_eq!(cel_json["proxy"]["upstreamDuration"], "0.675s");
+	assert_eq!(cel_json["proxy"]["responseProcessingDuration"], "0.006s");
+
+	let expr = Expression::new_strict(
+		"proxy.requestProcessingDuration == duration('12ms') && \
+		 proxy.upstreamDuration == duration('675ms') && \
+		 proxy.responseProcessingDuration == duration('6ms')",
+	)
+	.expect("failed to compile");
+	assert!(executor.eval_bool(&expr));
 }
 
 #[test]

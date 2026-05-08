@@ -106,7 +106,10 @@ impl App {
 		};
 		let sessions = self.session.clone();
 		sessions.ensure_idle_running();
-		let client = PolicyClient { inputs: pi.clone() };
+		let client = PolicyClient {
+			inputs: pi.clone(),
+			outbound: None,
+		};
 		let authorization_policies = backend_policies
 			.mcp_authorization
 			.unwrap_or_else(|| McpAuthorizationSet::new(RuleSets::from(Vec::new())));

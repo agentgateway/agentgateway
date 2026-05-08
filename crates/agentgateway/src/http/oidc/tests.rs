@@ -55,6 +55,7 @@ fn policy_client() -> crate::proxy::httpproxy::PolicyClient {
 	let proxy = setup_proxy_test("{}").expect("proxy test harness");
 	crate::proxy::httpproxy::PolicyClient {
 		inputs: proxy.inputs(),
+		outbound: None,
 	}
 }
 

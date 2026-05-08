@@ -10,6 +10,7 @@ use crate::http::remoteratelimit::proto::{RateLimitDescriptor, RateLimitRequest}
 use crate::http::{PolicyResponse, Request, envoy_proto_common};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 use crate::*;
 
@@ -412,7 +413,7 @@ impl RemoteRateLimit {
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
 			policies: Arc::new(self.policies.clone()),
-			client,
+			client: client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::RateLimit),
 		};
 		let mut client = RateLimitServiceClient::new(chan);
 		let resp = client.should_rate_limit(request).await;

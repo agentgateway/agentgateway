@@ -28,6 +28,7 @@ use crate::proxy::dtrace::{Severity, pol_event, pol_result_timed};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::proxy::{ProxyError, ProxyResponse, dtrace};
 use crate::telemetry::log::RequestLog;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 use crate::*;
@@ -364,7 +365,7 @@ impl ExtAuthz {
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
 			policies: Arc::new(self.policies.clone()),
-			client,
+			client: client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtAuthz),
 		};
 		let mut grpc_client = AuthorizationClient::new(chan);
 		// Get connection info with proper error handling
@@ -805,7 +806,10 @@ impl ExtAuthz {
 			.extensions_mut()
 			.insert(BackendRequestTimeout(Duration::from_millis(200)));
 		let scope = dtrace::start_scope("ext_authz");
-		let resp = client.call_reference(check_req, &self.target).await;
+		let resp = client
+			.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtAuthz)
+			.call_reference(check_req, &self.target)
+			.await;
 		let mut resp = match resp {
 			Ok(r) => r,
 			Err(e) => {
