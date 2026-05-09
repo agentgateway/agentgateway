@@ -37,9 +37,9 @@ func InternalRouteRuleKey(routeNamespace, routeName string, ruleName int) string
 }
 
 // InternalRouteGroupKey returns the internal key for a delegated HTTP route group selector.
-// Format: routeNamespace/routeSelector
-func InternalRouteGroupKey(routeNamespace, routeSelector string) string {
-	return fmt.Sprintf("%s/%s", routeNamespace, routeSelector)
+// Format: sourceNamespace/sourceName/routeNamespace/routeSelector
+func InternalRouteGroupKey(sourceNamespace, sourceName, routeNamespace, routeSelector string) string {
+	return fmt.Sprintf("%s/%s/%s/%s", sourceNamespace, sourceName, routeNamespace, routeSelector)
 }
 
 // InternalMCPStaticBackendName returns the name of the internal MCP Static Backend corresponding to the

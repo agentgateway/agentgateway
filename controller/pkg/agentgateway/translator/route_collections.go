@@ -44,7 +44,7 @@ type resolvedBinding struct {
 }
 
 func (b resolvedBinding) RouteGroupKey() string {
-	return utils.InternalRouteGroupKey(b.Target.Namespace, b.Target.Name)
+	return utils.InternalRouteGroupKey(b.Parent.Namespace, b.Parent.Name, b.Target.Namespace, b.Target.Name)
 }
 
 type routeGroupBindingKey struct {

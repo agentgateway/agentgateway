@@ -1,0 +1,77 @@
+# Configuration:
+#
+# Parent infra/parent1 on hostname parent1.com:
+#   - Delegate /anything/team2 to team2 namespace via wildcard
+#
+# Parent infra/parent2 on hostname parent2.com:
+#   - Delegate /anything/team2 to team2 namespace via wildcard
+#
+# Child team2/svc2:
+#   - Route /anything/team2/foo to team2/svc2
+#   - Explicit parentRef of infra/parent1 only
+#
+# Expected: svc2 is reachable through parent1 but NOT parent2.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: parent1
+  namespace: infra
+spec:
+  parentRefs:
+  - name: gateway
+    namespace: agentgateway-base
+  hostnames:
+  - parent1.com
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team2
+    backendRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: "*"
+      namespace: team2
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: parent2
+  namespace: infra
+spec:
+  parentRefs:
+  - name: gateway
+    namespace: agentgateway-base
+  hostnames:
+  - parent2.com
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team2
+    backendRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: "*"
+      namespace: team2
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: svc2
+  namespace: team2
+spec:
+  parentRefs:
+  - name: parent1
+    namespace: infra
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+  rules:
+  - matches:
+    - path:
+        type: Exact
+        value: /anything/team2/foo
+    backendRefs:
+    - name: svc2
+      port: 8000
