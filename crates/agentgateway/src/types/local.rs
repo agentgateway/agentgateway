@@ -2005,22 +2005,16 @@ async fn convert_llm_config(
 		LocalTransformationConfig {
 			request: Some(http::transformation_cel::LocalTransform {
 				metadata: Vec::new(),
-				set: vec![
-					(
-						strng::new("x-gateway-model-name"),
-						strng::new(
-							r#"
+				set: vec![(
+					strng::new("x-gateway-model-name"),
+					strng::new(
+						r#"
 request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict") ?
 request.path.regexReplace("^.*/publishers/anthropic/models/(.+?):.*", "${1}") :
 json(request.body).model
 "#,
-						),
 					),
-					(
-						strng::new("anthropic-beta"),
-						strng::new("request.headers['anthropic-beta'].split(',').filter(v, v.trim() in [])"),
-					),
-				],
+				)],
 				add: vec![],
 				remove: vec![],
 				body: None,

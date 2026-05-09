@@ -213,8 +213,6 @@ policies:
             set:
               - - x-gateway-model-name
                 - "\nrequest.path.endsWith(\":streamRawPredict\") || request.path.endsWith(\":rawPredict\") ?\nrequest.path.regexReplace(\"^.*/publishers/anthropic/models/(.+?):.*\", \"${1}\") :\njson(request.body).model\n"
-              - - anthropic-beta
-                - "request.headers['anthropic-beta'].split(',').filter(v, v.trim() in [])"
           response: {}
   - key: frontend/accessLog
     name: ~
