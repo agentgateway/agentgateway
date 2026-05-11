@@ -9,7 +9,7 @@ import { defineConfig, devices } from '@playwright/test';
 // dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const STANDARD_BASE_URL = process.env.BASE_URL || 'http://127.0.0.1:15000';
-const XDS_BASE_URL = process.env.XDS_BASE_URL || 'http://127.0.0.1:15001';
+const XDS_BASE_URL = process.env.BASE_URL ||'http://127.0.0.1:15001';
 
 const XDS_SPEC = /xdsMode\.spec\.ts/;
 
@@ -48,17 +48,17 @@ export default defineConfig({
   projects: [
     // standard mode - ie all tests other than xDS-mode (port 15000)
     {
-      name: 'standard-chromium',
+      name: 'chromium',
       testIgnore: XDS_SPEC,
       use: { ...devices['Desktop Chrome'], baseURL: STANDARD_BASE_URL },
     },
     {
-      name: 'standard-firefox',
+      name: 'firefox',
       testIgnore: XDS_SPEC,
       use: { ...devices['Desktop Firefox'], baseURL: STANDARD_BASE_URL },
     },
     {
-      name: 'standard-webkit',
+      name: 'webkit',
       testIgnore: XDS_SPEC,
       use: { ...devices['Desktop Safari'], baseURL: STANDARD_BASE_URL },
     },
