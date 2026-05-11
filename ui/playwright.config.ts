@@ -13,6 +13,8 @@ const XDS_BASE_URL = process.env.BASE_URL ||'http://127.0.0.1:15001';
 
 const XDS_SPEC = /xdsMode\.spec\.ts/;
 
+const BINARY_PATH = (process.env.CI) ? "../agentgateway" : "agentgateway";
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -104,12 +106,12 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: [
     {
-      command: 'agentgateway -f tests/fixtures/e2e-config.yaml',
+      command: '${BINARY_PATH} -f tests/fixtures/e2e-config.yaml',
       url: 'http://127.0.0.1:15000',
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: 'ADMIN_ADDR=127.0.0.1:15001 STATS_ADDR=127.0.0.1:15022 READINESS_ADDR=127.0.0.1:15023 XDS_ADDRESS=localhost:18000 NAMESPACE=default GATEWAY=default agentgateway -f tests/fixtures/e2e-config.yaml',
+      command: 'ADMIN_ADDR=127.0.0.1:15001 STATS_ADDR=127.0.0.1:15022 READINESS_ADDR=127.0.0.1:15023 XDS_ADDRESS=localhost:18000 NAMESPACE=default GATEWAY=default ${BINARY_PATH} -f tests/fixtures/e2e-config.yaml',
       url: 'http://127.0.0.1:15001',
       reuseExistingServer: !process.env.CI,
     }
