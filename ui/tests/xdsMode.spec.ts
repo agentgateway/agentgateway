@@ -15,6 +15,7 @@ const AGENTGATEWAY_ROUTES = [
 ];
 
 const CONFIGURATION_MANAGED_BY_XDS = "Configuration is managed by xDS";
+const CANNOT_EDIT_READONLY_MODE = "Cannot edit in read-only editor";
 
 async function verifyXdsAwareButton(dataTestId: string, page: Page) { 
     // verify button is disabled
@@ -32,6 +33,17 @@ async function verifyXdsAwareButton(dataTestId: string, page: Page) {
     // move cursor off of tooltip to reset
     await page.mouse.move(0, 0);
     await expect(tooltip).toBeHidden();
+}
+
+async function verifyReadonlyMonacoEditor(page: Page) { 
+    // locate monaco editor on page, type text to pop read-only tooltip
+    const monacoEditor = page.getByText('binds');
+    await monacoEditor.click();
+    await monacoEditor.pressSequentially('abc123', { delay: 100 });
+    const readonlyTooltip = page.locator('#root').getByText(CANNOT_EDIT_READONLY_MODE);
+
+    await expect(readonlyTooltip).toBeVisible();
+    await expect(readonlyTooltip).toContainText(CANNOT_EDIT_READONLY_MODE);
 }
 
 test('xDS banner should be visible app-wide across all pages', async ({ page }) => { 
@@ -58,7 +70,16 @@ test('LLM Configuration should be in read-only mode', async ({ page }) => {
 });
 
 test('LLM Editor should be in read-only mode', async ({ page }) => { 
-    // TODO
+    // navigate to LLM Configuration Editor page
+    await page.goto('/ui#/llm-configuration/editor');
+
+    // verify buttons are disabled
+    await verifyXdsAwareButton('config-editor-format-button', page);
+    await verifyXdsAwareButton('config-editor-cancel-button', page);
+    await verifyXdsAwareButton('config-editor-save-button', page);
+
+    // verify text editor is in read-only mode
+    await verifyReadonlyMonacoEditor(page);
 });
 
 test('MCP Configuration should be in read-only mode', async ({ page }) => { 
@@ -71,7 +92,16 @@ test('MCP Configuration should be in read-only mode', async ({ page }) => {
 });
 
 test('MCP Editor should be in read-only mode', async ({ page }) => { 
-    // TODO
+    // navigate to MCP Configuration Editor page
+    await page.goto('/ui#/mcp-configuration/editor');
+
+    // verify buttons are disabled
+    await verifyXdsAwareButton('config-editor-format-button', page);
+    await verifyXdsAwareButton('config-editor-cancel-button', page);
+    await verifyXdsAwareButton('config-editor-save-button', page);
+
+    // verify text editor is in read-only mode
+    await verifyReadonlyMonacoEditor(page);
 });
 
 test('Traffic Configuration should be in read-only mode', async ({ page }) => { 
@@ -90,5 +120,14 @@ test('Traffic Configuration should be in read-only mode', async ({ page }) => {
 });
 
 test('Traffic Editor should be in read-only mode', async ({ page }) => { 
-    // TODO
+    // navigate to Traffic Configuration Editor page
+    await page.goto('/ui#/traffic-configuration/editor');
+
+    // verify buttons are disabled
+    await verifyXdsAwareButton('config-editor-format-button', page);
+    await verifyXdsAwareButton('config-editor-cancel-button', page);
+    await verifyXdsAwareButton('config-editor-save-button', page);
+
+    // verify text editor is in read-only mode
+    await verifyReadonlyMonacoEditor(page);
 });
