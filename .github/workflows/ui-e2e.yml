@@ -90,7 +90,9 @@ jobs:
           name: agentgateway-binary
           path: .
       - name: Prepare binary
-        run: chmod +x ../agentgateway
+        run: |
+          chmod +x ../agentgateway
+          cp tests/fixtures/e2e-config.yaml ../e2e-test-config.yaml
       - name: Run Playwright tests
         run: yarn playwright test
       - name: Upload test videos
