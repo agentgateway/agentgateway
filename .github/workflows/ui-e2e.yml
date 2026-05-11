@@ -97,15 +97,24 @@ jobs:
           # copy over test config file 
           cp tests/fixtures/e2e-config.yaml ../e2e-test-config.yaml
 
-          # start binary with health check (2 secs / 30 attempts)
+          # start two binaries, standard mode on :15000 and xDS mode on :15001
           ../agentgateway -f ../e2e-test-config.yaml &
-          for i in $(seq 1 30); do
-            if curl -s http://127.0.0.1:15000/ui > /dev/null 2>&1; then
-              echo "Gateway is ready"
-              break
-            fi
-            echo "Waiting for gateway... ($i/30)"
-            sleep 2
+          ADMIN_ADDR=127.0.0.1:15001 \
+            XDS_ADDRESS=localhost:18000 \
+            NAMESPACE=default \
+            GATEWAY=default \
+            ../agentgateway -f ../e2e-test-config.yaml &
+
+          # health check both binaries (2 secs * 30 attempts each)
+          for port in 15000 15001; do
+            for i in $(seq 1 30); do
+              if curl -s http://127.0.0.1:$port/ui > /dev/null 2>&1; then
+                echo "Gateway on port :$port is ready"
+                break
+              fi
+              echo "Waiting for gateway on port :$port... ($i/30)"
+              sleep 2
+            done
           done
       - name: Run Playwright tests
         run: yarn playwright test
