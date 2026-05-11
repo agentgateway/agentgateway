@@ -10,16 +10,25 @@ export type {
   LocalBackendPolicies,
   LocalBind,
   LocalConfig,
-  LocalLLMConfig,
-  LocalLLMModels,
   LocalListener,
   LocalListenerProtocol,
-  LocalMcpTarget,
+  LocalLLMConfig,
+  LocalLLMModels, LocalMcpBackend, LocalMcpTarget,
   LocalPolicy,
   LocalRoute,
   LocalRouteBackend,
   LocalSimpleMcpConfig,
   LocalTCPRoute,
   LocalTCPRouteBackend,
-  LocalTLSServerConfig,
+  LocalTLSServerConfig, RouteMatch
 } from "../config";
+
+// Config Dump interface (can move this to another file later if needed)
+export interface ConfigDump { 
+  config?: { 
+    xds?: { 
+      address?: string | null;
+    }
+  };
+  [key: string]: any; // loosely typing remaining payload for now
+}

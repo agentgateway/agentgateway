@@ -31,11 +31,12 @@ import type { Key, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useConfig } from "../../api";
+import { useConfig, useXdsMode } from "../../api";
 import * as api from "../../api/crud";
 import type { LocalRouteBackend } from "../../config";
 import { getResourceColor } from "../../utils/colorPalette";
 import { ProtocolTag } from "../ProtocolTag";
+import { XdsAwareButton } from "../XdsAwareButton";
 import { getDefaultBackendValue, transformBeforeSubmit } from "./forms/backendForm";
 import type {
   BackendNode,
@@ -444,6 +445,26 @@ type ConfirmDeleteFn = (
   onConfirm: () => void,
 ) => void;
 
+function NodeMenu({ items }: { items: MenuProps["items"]}) { 
+  const { xdsMode } = useXdsMode();
+  if (xdsMode) return null;
+  return (
+    <Dropdown
+      menu={{ items }}
+      trigger={["click"]}
+      placement="bottomRight"
+      overlayClassName="hierarchy-menu"
+    >
+      <MoreButton 
+        type="text"
+        size="small"
+        icon={<MoreVertical size={14} />}
+        onClick={(e) => e.stopPropagation()}
+      />
+    </Dropdown>
+  );
+}
+
 function buildBindTitle(
   bind: BindNode,
   navigate: (path: string) => void,
@@ -507,19 +528,7 @@ function buildBindTitle(
         <ProtocolTag protocol={bind.bind.tunnelProtocol} />
       )}
       <ValidationBadges errors={bind.validationErrors} />
-      <Dropdown
-        menu={{ items: menuItems }}
-        trigger={["click"]}
-        placement="bottomRight"
-        overlayClassName="hierarchy-menu"
-      >
-        <MoreButton
-          type="text"
-          size="small"
-          icon={<MoreVertical size={14} />}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </Dropdown>
+      <NodeMenu items={menuItems} />
     </NodeRow>
   );
 }
@@ -610,19 +619,7 @@ function buildListenerTitle(
       <NodeLabel>{ln.listener.name ?? "(unnamed listener)"}</NodeLabel>
       <ProtocolTag protocol={protocol} />
       <ValidationBadges errors={ln.validationErrors} />
-      <Dropdown
-        menu={{ items: menuItems }}
-        trigger={["click"]}
-        placement="bottomRight"
-        overlayClassName="hierarchy-menu"
-      >
-        <MoreButton
-          type="text"
-          size="small"
-          icon={<MoreVertical size={14} />}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </Dropdown>
+      <NodeMenu items={menuItems} />
     </NodeRow>
   );
 }
@@ -702,19 +699,7 @@ function buildPolicyTitle(
         size="small"
       />
       <NodeLabel>{displayName}</NodeLabel>
-      <Dropdown
-        menu={{ items: menuItems }}
-        trigger={["click"]}
-        placement="bottomRight"
-        overlayClassName="hierarchy-menu"
-      >
-        <MoreButton
-          type="text"
-          size="small"
-          icon={<MoreVertical size={14} />}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </Dropdown>
+      <NodeMenu items={menuItems} />
     </NodeRow>
   );
 }
@@ -772,19 +757,7 @@ function buildMCPTargetPolicyTitle(
         size="small"
       />
       <NodeLabel>{displayName}</NodeLabel>
-      <Dropdown
-        menu={{ items: menuItems }}
-        trigger={["click"]}
-        placement="bottomRight"
-        overlayClassName="hierarchy-menu"
-      >
-        <MoreButton
-          type="text"
-          size="small"
-          icon={<MoreVertical size={14} />}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </Dropdown>
+      <NodeMenu items={menuItems} />
     </NodeRow>
   );
 }
@@ -912,19 +885,7 @@ function buildBackendTitle(
         size="small"
       />
       <NodeLabel>{label}</NodeLabel>
-      <Dropdown
-        menu={{ items: menuItems }}
-        trigger={["click"]}
-        placement="bottomRight"
-        overlayClassName="hierarchy-menu"
-      >
-        <MoreButton
-          type="text"
-          size="small"
-          icon={<MoreVertical size={14} />}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </Dropdown>
+      <NodeMenu items={menuItems} />
     </NodeRow>
   );
 }
@@ -979,19 +940,7 @@ function buildModelTitle(
         size="small"
       />
       <NodeLabel>{modelName}</NodeLabel>
-      <Dropdown
-        menu={{ items: menuItems }}
-        trigger={["click"]}
-        placement="bottomRight"
-        overlayClassName="hierarchy-menu"
-      >
-        <MoreButton
-          type="text"
-          size="small"
-          icon={<MoreVertical size={14} />}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </Dropdown>
+      <NodeMenu items={menuItems} />
     </NodeRow>
   );
 }
@@ -1135,19 +1084,7 @@ function buildRouteTitle(
           />
         </Tooltip>
       )}
-      <Dropdown
-        menu={{ items: menuItems }}
-        trigger={["click"]}
-        placement="bottomRight"
-        overlayClassName="hierarchy-menu"
-      >
-        <MoreButton
-          type="text"
-          size="small"
-          icon={<MoreVertical size={14} />}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </Dropdown>
+      <NodeMenu items={menuItems} />
     </NodeRow>
   );
 }
@@ -1199,19 +1136,7 @@ function buildTopLevelItemTitle(
       {icon}
       <NodeLabel>{label}</NodeLabel>
       {exists && (
-        <Dropdown
-          menu={{ items: menuItems }}
-          trigger={["click"]}
-          placement="bottomRight"
-          overlayClassName="hierarchy-menu"
-        >
-          <MoreButton
-            type="text"
-            size="small"
-            icon={<MoreVertical size={14} />}
-            onClick={(e) => e.stopPropagation()}
-          />
-        </Dropdown>
+        <NodeMenu items={menuItems} />
       )}
     </NodeRow>
   );
@@ -1269,19 +1194,7 @@ function buildTopLevelPolicyTitle(
         size="small"
       />
       <NodeLabel>{label}</NodeLabel>
-      <Dropdown
-        menu={{ items: menuItems }}
-        trigger={["click"]}
-        placement="bottomRight"
-        overlayClassName="hierarchy-menu"
-      >
-        <MoreButton
-          type="text"
-          size="small"
-          icon={<MoreVertical size={14} />}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </Dropdown>
+      <NodeMenu items={menuItems} />
     </NodeRow>
   );
 }
@@ -1363,19 +1276,7 @@ function buildLLMItemTitle(
     >
       {icon}
       <NodeLabel>{label}</NodeLabel>
-      <Dropdown
-        menu={{ items: menuItems }}
-        trigger={["click"]}
-        placement="bottomRight"
-        overlayClassName="hierarchy-menu"
-      >
-        <MoreButton
-          type="text"
-          size="small"
-          icon={<MoreVertical size={14} />}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </Dropdown>
+      <NodeMenu items={menuItems} />
     </NodeRow>
   );
 }
@@ -1457,19 +1358,7 @@ function buildMCPTargetTitle(
         size="small"
       />
       <NodeLabel>{targetName}</NodeLabel>
-      <Dropdown
-        menu={{ items: menuItems }}
-        trigger={["click"]}
-        placement="bottomRight"
-        overlayClassName="hierarchy-menu"
-      >
-        <MoreButton
-          type="text"
-          size="small"
-          icon={<MoreVertical size={14} />}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </Dropdown>
+      <NodeMenu items={menuItems} />
     </NodeRow>
   );
 }
@@ -1551,19 +1440,7 @@ function buildMCPItemTitle(
     >
       {icon}
       <NodeLabel>{label}</NodeLabel>
-      <Dropdown
-        menu={{ items: menuItems }}
-        trigger={["click"]}
-        placement="bottomRight"
-        overlayClassName="hierarchy-menu"
-      >
-        <MoreButton
-          type="text"
-          size="small"
-          icon={<MoreVertical size={14} />}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </Dropdown>
+      <NodeMenu items={menuItems} />
     </NodeRow>
   );
 }
@@ -2105,6 +1982,7 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
   }, [location.pathname]);
   const { modal } = App.useApp();
   const { mutate } = useConfig();
+  const { xdsMode } = useXdsMode();
 
   // Define confirmDelete first
   const confirmDelete = useCallback<ConfirmDeleteFn>(
@@ -3124,9 +3002,9 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       <TreeCard>
         <Empty description="No resources configured" image={Empty.PRESENTED_IMAGE_SIMPLE}>
           <Dropdown menu={{ items: addMenuItems }} trigger={["click"]}>
-            <Button type="primary" icon={<PlusOutlined />}>
+            <XdsAwareButton disabled={xdsMode} type="primary" icon={<PlusOutlined />}>
               Add <DownOutlined />
-            </Button>
+            </XdsAwareButton>
           </Dropdown>
         </Empty>
       </TreeCard>
@@ -3159,9 +3037,9 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
               </CardTitle>
               <Space size="small">
                 <Dropdown menu={{ items: addMenuItems }} trigger={["click"]}>
-                  <Button type="primary" size="small" icon={<PlusOutlined />}>
+                  <XdsAwareButton type="primary" size="small" icon={<PlusOutlined />}>
                     Add <DownOutlined />
-                  </Button>
+                  </XdsAwareButton>
                 </Dropdown>
                 <Tooltip
                   title={

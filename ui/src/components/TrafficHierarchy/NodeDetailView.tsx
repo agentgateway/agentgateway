@@ -18,6 +18,7 @@ import {
 } from "../FormTemplates";
 import { ProtocolTag } from "../ProtocolTag";
 import { StyledAlert } from "../StyledAlert";
+import { XdsAwareButton } from "../XdsAwareButton";
 import { forms, getFormForPolicy } from "./forms";
 import { getDefaultBackendValue } from "./forms/backendForm";
 import { useNodePolling } from "./hooks/useNodePolling";
@@ -1437,13 +1438,13 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             </TitleLeft>
             {!isEditing && (
               <Space>
-                <Button
+                <XdsAwareButton
                   type="primary"
                   icon={<Edit2 size={14} />}
                   onClick={() => navigate(location.pathname + "?edit=true")}
                 >
                   Edit
-                </Button>
+                </XdsAwareButton>
               </Space>
             )}
             {isEditing && (
@@ -1527,13 +1528,13 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             </TitleLeft>
             {!isEditing && (
               <Space>
-                <Button
+                <XdsAwareButton
                   type="primary"
                   icon={<Edit2 size={14} />}
                   onClick={() => navigate(location.pathname + "?edit=true")}
                 >
                   Edit
-                </Button>
+                </XdsAwareButton>
               </Space>
             )}
             {isEditing && (
@@ -1624,13 +1625,13 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             </TitleLeft>
             {!isEditing && (
               <Space>
-                <Button
+                <XdsAwareButton
                   type="primary"
                   icon={<Edit2 size={14} />}
                   onClick={() => navigate(location.pathname + "?edit=true")}
                 >
                   Edit
-                </Button>
+                </XdsAwareButton>
               </Space>
             )}
             {isEditing && (
@@ -1744,13 +1745,13 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
               <TypeBadge>Backend</TypeBadge>
             </TitleLeft>
             {!isEditing && (
-              <Button
+              <XdsAwareButton
                 type="primary"
                 icon={<Edit2 size={14} />}
                 onClick={() => navigate(location.pathname + "?edit=true")}
               >
                 Edit
-              </Button>
+              </XdsAwareButton>
             )}
             {isEditing && (
               <Space>
@@ -1848,13 +1849,13 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
               <TypeBadge>Policy</TypeBadge>
             </TitleLeft>
             {!isEditing && (
-              <Button
+              <XdsAwareButton
                 type="primary"
                 icon={<Edit2 size={14} />}
                 onClick={() => navigate(location.pathname + "?edit=true")}
               >
                 Edit
-              </Button>
+              </XdsAwareButton>
             )}
             {isEditing && (
               <Space>
@@ -1942,13 +1943,13 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
               <TypeBadge>Policy</TypeBadge>
             </TitleLeft>
             {!isEditing && (
-              <Button
+              <XdsAwareButton
                 type="primary"
                 icon={<Edit2 size={14} />}
                 onClick={() => navigate(location.pathname + "?edit=true")}
               >
                 Edit
-              </Button>
+              </XdsAwareButton>
             )}
             {isEditing && (
               <Space>
@@ -2035,13 +2036,13 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
               <TypeBadge>{scope} Policy</TypeBadge>
             </TitleLeft>
             {!isEditing && (
-              <Button
+              <XdsAwareButton
                 type="primary"
                 icon={<Edit2 size={14} />}
                 onClick={() => navigate(location.pathname + "?edit=true")}
               >
                 Edit
-              </Button>
+              </XdsAwareButton>
             )}
             {isEditing && (
               <Space>
@@ -2131,13 +2132,13 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
               <TypeBadge>Target Policy</TypeBadge>
             </TitleLeft>
             {!isEditing && (
-              <Button
+              <XdsAwareButton
                 type="primary"
                 icon={<Edit2 size={14} />}
                 onClick={() => navigate(location.pathname + "?edit=true")}
               >
                 Edit
-              </Button>
+              </XdsAwareButton>
             )}
             {isEditing && (
               <Space>
@@ -2222,13 +2223,13 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
               <TypeBadge>Model</TypeBadge>
             </TitleLeft>
             {!isEditing && (
-              <Button
+              <XdsAwareButton
                 type="primary"
                 icon={<Edit2 size={14} />}
                 onClick={() => navigate(location.pathname + "?edit=true")}
               >
                 Edit
-              </Button>
+              </XdsAwareButton>
             )}
             {isEditing && (
               <Space>
@@ -2310,13 +2311,13 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
               <TypeBadge>MCP Target</TypeBadge>
             </TitleLeft>
             {!isEditing && (
-              <Button
+              <XdsAwareButton
                 type="primary"
                 icon={<Edit2 size={14} />}
                 onClick={() => navigate(location.pathname + "?edit=true")}
               >
                 Edit
-              </Button>
+              </XdsAwareButton>
             )}
             {isEditing && (
               <Space>
@@ -2455,13 +2456,13 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
             </TitleLeft>
             {!isEditing && (
               <Space>
-                <Button
+                <XdsAwareButton
                   type="primary"
                   icon={<Edit2 size={14} />}
                   onClick={() => navigate(location.pathname + "?edit=true")}
                 >
                   Edit
-                </Button>
+                </XdsAwareButton>
               </Space>
             )}
             {isEditing && (

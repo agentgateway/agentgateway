@@ -16,6 +16,10 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       open: true,
+      proxy: { 
+        "/config_dump": "http://localhost:15000",
+        "/config": "http://localhost:15000",
+      }
     },
     build: {
       outDir: "out",

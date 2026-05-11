@@ -11,6 +11,7 @@ import {
   NodeDetailView,
   useTrafficHierarchy,
 } from "../../components/TrafficHierarchy";
+import { XdsAwareButton } from "../../components/XdsAwareButton";
 
 const PageRoot = styled.div`
   display: flex;
@@ -250,14 +251,14 @@ export function MCPConfigurationPage() {
                       configuring servers and policies.
                     </p>
                     <div style={{ marginTop: 16 }}>
-                      <Button
+                      <XdsAwareButton
                         type="primary"
                         icon={<Headphones size={16} />}
                         onClick={() => addHandlers?.addMCP()}
                         disabled={!addHandlers}
                       >
                         Add MCP Config
-                      </Button>
+                      </XdsAwareButton>
                     </div>
                   </>
                 )}

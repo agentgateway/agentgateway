@@ -11,6 +11,7 @@ import {
   NodeDetailView,
   useTrafficHierarchy,
 } from "../../components/TrafficHierarchy";
+import { XdsAwareButton } from "../../components/XdsAwareButton";
 
 // ---------------------------------------------------------------------------
 // Styled components
@@ -310,14 +311,14 @@ export function TrafficConfigurationPage() {
                       listeners, routes, and backends.
                     </p>
                     <div style={{ marginTop: 16 }}>
-                      <Button
+                      <XdsAwareButton
                         type="primary"
                         icon={<Network size={16} />}
                         onClick={() => addHandlers?.addBind()}
                         disabled={!addHandlers}
                       >
                         Add Bind
-                      </Button>
+                      </XdsAwareButton>
                     </div>
                   </>
                 )}
