@@ -1442,6 +1442,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
                   type="primary"
                   icon={<Edit2 size={14} />}
                   onClick={() => navigate(location.pathname + "?edit=true")}
+                  data-testid="port-bind-edit-button"
                 >
                   Edit
                 </XdsAwareButton>

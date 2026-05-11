@@ -3042,7 +3042,12 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
               </CardTitle>
               <Space size="small">
                 <Dropdown menu={{ items: addMenuItems }} trigger={["click"]}>
-                  <XdsAwareButton type="primary" size="small" icon={<PlusOutlined />} >
+                  <XdsAwareButton 
+                    type="primary" 
+                    size="small" 
+                    icon={<PlusOutlined />} 
+                    data-testid="hierarchy-tree-header-row-add-button"
+                  >
                     Add <DownOutlined />
                   </XdsAwareButton>
                 </Dropdown>
