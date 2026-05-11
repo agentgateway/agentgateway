@@ -8,6 +8,11 @@ import { defineConfig, devices } from '@playwright/test';
 // import path from 'path';
 // dotenv.config({ path: path.resolve(__dirname, '.env') });
 
+const STANDARD_BASE_URL = process.env.BASE_URL || 'http://127.0.0.1:15000';
+const XDS_BASE_URL = process.env.XDS_BASE_URL || 'http://127.0.0.1:15001';
+
+const XDS_SPEC = /xdsMode\.spec\.ts/;
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -41,19 +46,38 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
+    // standard mode - ie all tests other than xDS-mode (port 15000)
     {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      name: 'standard-chromium',
+      testIgnore: XDS_SPEC,
+      use: { ...devices['Desktop Chrome'], baseURL: STANDARD_BASE_URL },
+    },
+    {
+      name: 'standard-firefox',
+      testIgnore: XDS_SPEC,
+      use: { ...devices['Desktop Firefox'], baseURL: STANDARD_BASE_URL },
+    },
+    {
+      name: 'standard-webkit',
+      testIgnore: XDS_SPEC,
+      use: { ...devices['Desktop Safari'], baseURL: STANDARD_BASE_URL },
     },
 
+    // xDS mode: ONLY xdsMode.spec.ts (port 15001)
     {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+      name: 'xds-chromium',
+      testMatch: XDS_SPEC,
+      use: { ...devices['Desktop Chrome'], baseURL: XDS_BASE_URL },
     },
-
     {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
+      name: 'xds-firefox',
+      testMatch: XDS_SPEC,
+      use: { ...devices['Desktop Firefox'], baseURL: XDS_BASE_URL },
+    },
+    {
+      name: 'xds-webkit',
+      testMatch: XDS_SPEC,
+      use: { ...devices['Desktop Safari'], baseURL: XDS_BASE_URL },
     },
 
     /* Test against mobile viewports. */
