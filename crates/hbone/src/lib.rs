@@ -19,6 +19,9 @@ pub mod client;
 pub mod pool;
 pub mod server;
 
+/// Default HBONE mTLS port used when no explicit port is configured.
+pub const DEFAULT_HBONE_PORT: u16 = 15008;
+
 pub trait Key: Display + Clone + Hash + Debug + PartialEq + Eq + Send + Sync + 'static {
 	fn dest(&self) -> SocketAddr;
 }

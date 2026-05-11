@@ -1294,8 +1294,9 @@ pub async fn build_transport(
 				inner: app_transport,
 			});
 		} else {
-			warn!("ingress_use_waypoint: wanted HBONE to waypoint but CA is not available");
-			return Ok(app_transport.into());
+			return Err(ProxyError::Processing(anyhow::anyhow!(
+				"ingress_use_waypoint: wanted HBONE to waypoint but CA is not available"
+			)));
 		}
 	}
 
@@ -2086,7 +2087,7 @@ pub fn build_service_call(
 					let wp_port = if wp.hbone_mtls_port > 0 {
 						wp.hbone_mtls_port
 					} else {
-						15008
+						agent_hbone::DEFAULT_HBONE_PORT
 					};
 					tracing::debug!(
 						service = %svc.hostname,

@@ -93,7 +93,9 @@ pub async fn handshake_waypoint(
 		Target::Hostname(host, port) => format!("{}:{}", host, port),
 		Target::Address(addr) => addr.to_string(),
 		Target::UnixSocket(_) => {
-			unreachable!("Unix sockets should not reach HboneWaypoint connection path")
+			return Err(Error::new(
+				"Unix sockets should not reach HboneWaypoint connection path",
+			));
 		},
 	};
 	let uri = Uri::builder()
