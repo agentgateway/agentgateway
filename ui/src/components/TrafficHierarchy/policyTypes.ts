@@ -181,3 +181,18 @@ export function getDefaultPolicyValue(policyType: string): Record<string, unknow
       return {};
   }
 }
+
+/**
+ * Helper function to check if policy key exists.
+ * Used by configMapper to detect xDS-delivered keys.
+ */
+export function isKnownPolicyKey(key: string): boolean { 
+  return typeMap.has(key);
+}
+
+/**
+ * Helper function to check if given policy key applies at the listener level
+ */
+export function isKnownGatewayPolicyKey(key: string): boolean { 
+  return typeMap.get(key)?.scopes.includes("listener") ?? false;
+}

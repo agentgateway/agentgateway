@@ -4,7 +4,7 @@
 
 import useSWR, { type SWRConfiguration } from "swr";
 import { fetchConfig, fetchConfigDump } from "./config";
-import type { LocalConfig } from "./types";
+import type { ConfigDump, LocalConfig } from "./types";
 
 /**
  * Hook to fetch and cache configuration
@@ -20,12 +20,25 @@ export function useConfig(options?: SWRConfiguration<LocalConfig>) {
 /**
  * Hook to fetch config dump
  */
-export function useConfigDump(options?: SWRConfiguration<any>) {
-  return useSWR<any>("/config_dump", fetchConfigDump, {
+export function useConfigDump(options?: SWRConfiguration<ConfigDump>) {
+  return useSWR<ConfigDump>("/config_dump", fetchConfigDump, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     ...options,
   });
+}
+
+/**
+ * Hook to check if running in xDS mode
+ */
+export function useXdsMode() { 
+  const { data, error, isLoading } = useConfigDump();
+  return { 
+    xdsMode: !!data?.config?.xds?.address,
+    xdsAddress: data?.config?.xds?.address ?? null,
+    isLoading,
+    error,
+  }
 }
 
 /**

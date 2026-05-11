@@ -11,6 +11,7 @@ import {
   NodeDetailView,
   useTrafficHierarchy,
 } from "../../components/TrafficHierarchy";
+import { XdsAwareButton } from "../../components/XdsAwareButton";
 
 const PageRoot = styled.div`
   display: flex;
@@ -242,14 +243,14 @@ export function LLMConfigurationPage() {
                       configuring models and policies.
                     </p>
                     <div style={{ marginTop: 16 }}>
-                      <Button
+                      <XdsAwareButton
                         type="primary"
                         icon={<Bot size={16} />}
                         onClick={() => addHandlers?.addLLM()}
                         disabled={!addHandlers}
                       >
                         Add LLM Config
-                      </Button>
+                      </XdsAwareButton>
                     </div>
                   </>
                 )}

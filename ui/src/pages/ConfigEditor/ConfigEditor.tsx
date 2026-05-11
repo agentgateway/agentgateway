@@ -1,13 +1,14 @@
 import styled from "@emotion/styled";
 import { type OnMount } from "@monaco-editor/react";
-import { Button, Select, Space, Spin } from "antd";
+import { Select, Space, Spin } from "antd";
 import * as yaml from "js-yaml";
 import type * as monacoEditor from "monaco-editor";
 import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { fetchConfig, updateConfig } from "../../api";
+import { fetchConfig, updateConfig, useXdsMode } from "../../api";
 import type { LocalConfig } from "../../api/types";
 import { MonacoEditorWithSettings } from "../../components/MonacoEditor";
+import { XdsAwareButton } from "../../components/XdsAwareButton";
 import { useTheme } from "../../contexts/ThemeContext";
 import { assetUrl } from "../../utils/assetUrl";
 
@@ -73,6 +74,8 @@ export function ConfigEditor({ onClose }: ConfigEditorProps) {
   const originalConfigRef = useRef<LocalConfig | null>(null);
   const originalValueRef = useRef<string>("");
 
+  const { xdsMode } = useXdsMode();
+
   const convertToFormat = useCallback(
     (config: LocalConfig, targetFormat: ConfigFormat): string => {
       if (targetFormat === "yaml") {
@@ -108,32 +111,18 @@ export function ConfigEditor({ onClose }: ConfigEditorProps) {
     async (editor, monaco) => {
       editorRef.current = editor;
 
-      try {
-        const response = await fetch(assetUrl("/config-schema.json"));
-        if (!response.ok) {
-          throw new Error(`Failed to fetch config-schema.json: ${response.statusText}`);
-        }
-        const schema = await response.json();
-        
-        // Configure JSON schema
-        monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-          validate: true,
-          allowComments: false,
-          schemas: [
-            {
-              uri: "http://agentgateway/config-schema.json",
-              fileMatch: ["*"],
-              schema: schema,
-            },
-          ],
-          enableSchemaRequest: true,
-        });
-
-        // Configure YAML schema (if monaco-yaml is available)
-        const yamlWorker = (monaco.languages as any).yaml?.yamlDefaults;
-        if (yamlWorker) {
-          yamlWorker.setDiagnosticsOptions({
+      if (!xdsMode) { 
+        try {
+          const response = await fetch(assetUrl("/config-schema.json"));
+          if (!response.ok) {
+            throw new Error(`Failed to fetch config-schema.json: ${response.statusText}`);
+          }
+          const schema = await response.json();
+          
+          // Configure JSON schema
+          monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
             validate: true,
+            allowComments: false,
             schemas: [
               {
                 uri: "http://agentgateway/config-schema.json",
@@ -141,11 +130,27 @@ export function ConfigEditor({ onClose }: ConfigEditorProps) {
                 schema: schema,
               },
             ],
+            enableSchemaRequest: true,
           });
+  
+          // Configure YAML schema (if monaco-yaml is available)
+          const yamlWorker = (monaco.languages as any).yaml?.yamlDefaults;
+          if (yamlWorker) {
+            yamlWorker.setDiagnosticsOptions({
+              validate: true,
+              schemas: [
+                {
+                  uri: "http://agentgateway/config-schema.json",
+                  fileMatch: ["*"],
+                  schema: schema,
+                },
+              ],
+            });
+          }
+        } catch (_e) {
+          console.error("Failed to load config schema:", _e);
+          toast.error("Failed to load configuration schema");
         }
-      } catch (_e) {
-        console.error("Failed to load config schema:", _e);
-        toast.error("Failed to load configuration schema");
       }
 
       editor.onDidChangeModelContent(() => {
@@ -158,7 +163,7 @@ export function ConfigEditor({ onClose }: ConfigEditorProps) {
         editor.getAction("editor.action.formatDocument")?.run();
       }, 300);
     },
-    []
+    [xdsMode]
   );
 
   const handleSave = async () => {
@@ -315,24 +320,24 @@ export function ConfigEditor({ onClose }: ConfigEditorProps) {
               { label: "YAML", value: "yaml" },
             ]}
           />
-          <Button onClick={handleFormat} disabled={isLoading}>
+          <XdsAwareButton onClick={handleFormat} disabled={isLoading}>
             Format
-          </Button>
-          <Button onClick={onClose} disabled={isSubmitting}>
+          </XdsAwareButton>
+          <XdsAwareButton onClick={onClose} disabled={isSubmitting}>
             Cancel
-          </Button>
+          </XdsAwareButton>
           <InfoText>
             {hasChanges && "⚠️ You have unsaved changes"}
           </InfoText>
         </Space>
-        <Button
+        <XdsAwareButton
           type="primary"
           onClick={handleSave}
           loading={isSubmitting}
           disabled={!hasChanges || isLoading}
         >
           Save Changes
-        </Button>
+        </XdsAwareButton>
       </ActionBar>
 
       <EditorWrapper>
@@ -347,6 +352,7 @@ export function ConfigEditor({ onClose }: ConfigEditorProps) {
             value={configValue}
             theme={theme}
             onMount={handleEditorDidMount}
+            readOnly={xdsMode}
             onSave={handleSave}
             onQuit={onClose}
             downloadFileName={`agentgateway-config.${format}`}

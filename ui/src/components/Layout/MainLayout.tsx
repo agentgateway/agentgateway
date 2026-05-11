@@ -17,6 +17,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "../../contexts";
 import { AgentgatewayLogo } from "../AgentgatewayLogo";
 import { Breadcrumbs } from "../Breadcrumbs";
+import { XdsModeBanner } from "../XdsModeBanner";
 
 const { Sider, Content, Header } = AntLayout;
 
@@ -463,6 +464,7 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
             />
           </HeaderActions>
         </StyledHeader>
+        <XdsModeBanner />
         <StyledContent>{children}</StyledContent>
       </ContentWrapper>
     </StyledLayout>
