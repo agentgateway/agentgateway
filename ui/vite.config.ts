@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => {
       proxy: { 
         "/config_dump": "http://localhost:15000",
         "/config": "http://localhost:15000",
+        "/cel": "http://localhost:15000",
       }
     },
     build: {
