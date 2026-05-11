@@ -256,6 +256,7 @@ export function MCPConfigurationPage() {
                         icon={<Headphones size={16} />}
                         onClick={() => addHandlers?.addMCP()}
                         disabled={!addHandlers}
+                        data-testid="mcp-config-no-resources-add-button"
                       >
                         Add MCP Config
                       </XdsAwareButton>
