@@ -89,33 +89,8 @@ jobs:
         with:
           name: agentgateway-binary
           path: .
-      - name: Start agentgateway binary
-        run: |
-          # make agentgateway executable
-          chmod +x ../agentgateway
-
-          # copy over test config file 
-          cp tests/fixtures/e2e-config.yaml ../e2e-test-config.yaml
-
-          # start two binaries, standard mode on :15000 and xDS mode on :15001
-          ../agentgateway -f ../e2e-test-config.yaml &
-          ADMIN_ADDR=127.0.0.1:15001 \
-            XDS_ADDRESS=localhost:18000 \
-            NAMESPACE=default \
-            GATEWAY=default \
-            ../agentgateway -f ../e2e-test-config.yaml &
-
-          # health check both binaries (2 secs * 30 attempts each)
-          for port in 15000 15001; do
-            for i in $(seq 1 30); do
-              if curl -s http://127.0.0.1:$port/ui > /dev/null 2>&1; then
-                echo "Gateway on port :$port is ready"
-                break
-              fi
-              echo "Waiting for gateway on port :$port... ($i/30)"
-              sleep 2
-            done
-          done
+      - name: Prepare binary
+        run: chmod +x ../agentgateway
       - name: Run Playwright tests
         run: yarn playwright test
       - name: Upload test videos
