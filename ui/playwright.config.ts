@@ -106,12 +106,12 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: [
     {
-      command: '${BINARY_PATH} -f tests/fixtures/e2e-config.yaml',
+      command: `${BINARY_PATH} -f tests/fixtures/e2e-config.yaml`,
       url: 'http://127.0.0.1:15000',
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: 'ADMIN_ADDR=127.0.0.1:15001 STATS_ADDR=127.0.0.1:15022 READINESS_ADDR=127.0.0.1:15023 XDS_ADDRESS=localhost:18000 NAMESPACE=default GATEWAY=default ${BINARY_PATH} -f tests/fixtures/e2e-config.yaml',
+      command: `ADMIN_ADDR=127.0.0.1:15001 STATS_ADDR=127.0.0.1:15022 READINESS_ADDR=127.0.0.1:15023 XDS_ADDRESS=localhost:18000 NAMESPACE=default GATEWAY=default ${BINARY_PATH} -f tests/fixtures/e2e-config.yaml`,
       url: 'http://127.0.0.1:15001',
       reuseExistingServer: !process.env.CI,
     }
