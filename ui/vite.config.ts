@@ -6,6 +6,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const basePath = env.BASE_PATH || "/";
 
+  const port = Number(env.PORT) || 5173;
+  const proxyTarget = env.PROXY_TARGET || "http://localhost:15000";
+
   return {
     base: basePath,
     plugins: [
@@ -14,12 +17,12 @@ export default defineConfig(({ mode }) => {
       }),
     ],
     server: {
-      port: 3000,
-      open: true,
+      port,
+      //open: true,
       proxy: { 
-        "/config_dump": "http://localhost:15000",
-        "/config": "http://localhost:15000",
-        "/cel": "http://localhost:15000",
+        "/config_dump": proxyTarget,
+        "/config": proxyTarget,
+        "/cel": proxyTarget,
       }
     },
     build: {

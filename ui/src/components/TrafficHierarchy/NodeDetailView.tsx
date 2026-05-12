@@ -644,7 +644,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
   );
 
   // Action handlers for creating sub-resources - defined early to satisfy hooks rules
-  const handleAddListener = useCallback(
+  const _handleAddListener = useCallback(
     async (port: number) => {
       try {
         const newListener = {
@@ -670,7 +670,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     [basePath, mutate, navigate],
   );
 
-  const handleAddRoute = useCallback(
+  const _handleAddRoute = useCallback(
     async (port: number, li: number, isTcp: boolean) => {
       try {
         const bind = hierarchy.binds.find((b) => b.bind.port === port);
@@ -718,7 +718,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     [basePath, hierarchy.binds, mutate, navigate],
   );
 
-  const handleAddBackend = useCallback(
+  const _handleAddBackend = useCallback(
     async (port: number, li: number, ri: number, isTcp: boolean) => {
       try {
         const bind = hierarchy.binds.find((b) => b.bind.port === port);
@@ -781,7 +781,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     [basePath, hierarchy.binds, mutate, navigate],
   );
 
-  const handleAddPolicy = useCallback(
+  const _handleAddPolicy = useCallback(
     async (
       port: number,
       li: number,
@@ -1510,7 +1510,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
   if (selected.type === "listener") {
     const { node } = selected;
     const protocol = node.listener.protocol ?? "HTTP";
-    const isTcp = protocol === "TCP" || protocol === "TLS";
+    const _isTcp = protocol === "TCP" || protocol === "TLS";
     const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
     return (
       <Container>

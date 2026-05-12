@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import { getPolicyTypesForScope, type PolicyScope } from '../src/components/TrafficHierarchy/policyTypes';

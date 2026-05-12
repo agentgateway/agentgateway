@@ -175,6 +175,7 @@ export function MCPPlaygroundPage() {
             <a 
               href="https://agentgateway.dev/docs/standalone/latest/mcp/connect/stdio/#configure-the-agentgateway" 
               target="_blank"
+              rel="noreferrer"
             >
               Learn more
             </a>
