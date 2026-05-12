@@ -82,8 +82,21 @@ jobs:
           cache-dependency-path: ui/yarn.lock
       - name: Install dependencies
         run: yarn install --immutable
-      - name: Install Playwright dependencies
+      - name: Get Playwright version
+        id: playwright-version
+        run: echo "version=$(yarn info @playwright/test --json | jq -r '.children.Version')" >> $GITHUB_OUTPUT
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: yarn playwright install --with-deps
+      - name: Install Playwright system deps
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: yarn playwright install-deps
       - name: Download proxy binary
         uses: actions/download-artifact@v8
         with:
