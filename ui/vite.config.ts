@@ -18,7 +18,6 @@ export default defineConfig(({ mode }) => {
     ],
     server: {
       port,
-      //open: true,
       proxy: { 
         "/config_dump": proxyTarget,
         "/config": proxyTarget,
