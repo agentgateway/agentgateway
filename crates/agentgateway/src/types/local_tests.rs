@@ -388,6 +388,46 @@ binds:
 }
 
 #[tokio::test]
+async fn test_local_frontend_usage_export_policy_custom_oid() {
+	let input = r#"
+frontendPolicies:
+  usageExport:
+    host: 127.0.0.1:9000
+    path: /v1/usage
+    maxAttempts: 4
+    retryBackoff: 100ms
+    add:
+      oid: "has(jwt.oid) ? jwt.oid : 'unknown'"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	let normalized = normalize_test_yaml(input).await.unwrap();
+	let usage_export = normalized
+		.policies
+		.iter()
+		.find_map(|policy| match &policy.policy {
+			PolicyType::Frontend(crate::types::agent::FrontendPolicy::UsageExport(policy)) => {
+				Some(policy)
+			},
+			_ => None,
+		})
+		.expect("expected usageExport frontend policy");
+
+	assert_eq!(usage_export.config.path, "/v1/usage");
+	assert_eq!(usage_export.config.max_attempts.get(), 4);
+	assert_eq!(
+		usage_export.config.retry_backoff,
+		std::time::Duration::from_millis(100)
+	);
+	assert!(usage_export.config.add.contains_key("oid"));
+}
+
+#[tokio::test]
 async fn test_local_ext_authz_conditional_fallback_must_be_last() {
 	let input = r#"
 binds:

@@ -1,3 +1,4 @@
+use std::num::NonZeroU32;
 use std::time::Duration;
 
 use frozen_collections::{FzHashSet, Len};
@@ -249,4 +250,70 @@ fn default_logs_path() -> String {
 
 fn is_default_logs_path(path: &str) -> bool {
 	path == "/v1/logs"
+}
+
+#[apply(schema!)]
+pub struct UsageExportConfig {
+	/// Backend reference that receives usage events.
+	#[serde(flatten)]
+	pub provider_backend: super::agent::SimpleBackendReference,
+	/// Backend policies applied when sending usage events, such as backend auth or TLS.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+	)]
+	pub policies: Vec<super::agent::BackendTrafficPolicy>,
+	/// Request path for usage event POSTs. Defaults to `/usage`.
+	#[serde(
+		default = "default_usage_export_path",
+		skip_serializing_if = "is_default_usage_export_path"
+	)]
+	pub path: String,
+	/// Maximum send attempts for each usage event. Attempts are best effort and are not persisted across process restarts.
+	#[serde(
+		default = "default_usage_export_max_attempts",
+		skip_serializing_if = "is_default_usage_export_max_attempts"
+	)]
+	pub max_attempts: NonZeroU32,
+	/// Delay between failed send attempts.
+	#[serde(with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	#[serde(
+		default = "default_usage_export_retry_backoff",
+		skip_serializing_if = "is_default_usage_export_retry_backoff"
+	)]
+	pub retry_backoff: Duration,
+	/// CEL expressions evaluated at request completion and emitted under the event `attributes` object, for example `oid: jwt.oid`.
+	#[serde(default, skip_serializing_if = "OrderedStringMap::is_empty")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, String>")
+	)]
+	pub add: Arc<OrderedStringMap<Arc<cel::Expression>>>,
+}
+
+fn default_usage_export_path() -> String {
+	"/usage".to_string()
+}
+
+fn is_default_usage_export_path(path: &str) -> bool {
+	path == "/usage"
+}
+
+fn default_usage_export_max_attempts() -> NonZeroU32 {
+	NonZeroU32::new(3).unwrap()
+}
+
+fn is_default_usage_export_max_attempts(max_attempts: &NonZeroU32) -> bool {
+	*max_attempts == default_usage_export_max_attempts()
+}
+
+fn default_usage_export_retry_backoff() -> Duration {
+	Duration::from_millis(200)
+}
+
+fn is_default_usage_export_retry_backoff(retry_backoff: &Duration) -> bool {
+	*retry_backoff == default_usage_export_retry_backoff()
 }

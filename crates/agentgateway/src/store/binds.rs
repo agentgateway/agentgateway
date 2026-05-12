@@ -129,6 +129,7 @@ pub struct FrontendPolices {
 	pub access_log: Option<frontend::LoggingPolicy>,
 	pub tracing: Option<Arc<crate::types::agent::TracingPolicy>>,
 	pub access_log_otlp: Option<Arc<crate::types::agent::AccessLogPolicy>>,
+	pub usage_export: Option<Arc<crate::types::agent::UsageExportPolicy>>,
 	pub metrics_fields: Option<frontend::MetricsFieldsPolicy>,
 }
 
@@ -163,6 +164,9 @@ impl FrontendPolices {
 			FrontendPolicy::Tracing(p) => {
 				self.tracing.get_or_insert_with(|| p.clone());
 			},
+			FrontendPolicy::UsageExport(p) => {
+				self.usage_export.get_or_insert_with(|| p.clone());
+			},
 			FrontendPolicy::Metrics(p) => {
 				self.metrics_fields.get_or_insert_with(|| p.clone());
 			},
@@ -186,6 +190,11 @@ impl FrontendPolices {
 		}
 		if let Some(mf) = &self.metrics_fields {
 			for (_, v) in mf.add.iter() {
+				ctx.register_log_expression(v)
+			}
+		}
+		if let Some(ue) = &self.usage_export {
+			for (_, v) in ue.config.add.iter() {
 				ctx.register_log_expression(v)
 			}
 		}
@@ -1036,6 +1045,7 @@ impl Store {
 						}
 					}) as ShutdownPolicy)
 				},
+				FrontendPolicy::UsageExport(_) => None,
 				_ => None,
 			})
 			.collect_vec()

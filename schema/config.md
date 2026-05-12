@@ -5934,6 +5934,115 @@
 |`frontendPolicies.accessLog.otlp.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`frontendPolicies.accessLog.otlp.protocol`|enum|Possible values: `grpc`, `http`.|
 |`frontendPolicies.accessLog.otlp.path`|string||
+|`frontendPolicies.usageExport`|object|Export one JSON usage event for each completed LLM request with token usage.|
+|`frontendPolicies.usageExport.service`|object||
+|`frontendPolicies.usageExport.service.name`|object||
+|`frontendPolicies.usageExport.service.name.namespace`|string||
+|`frontendPolicies.usageExport.service.name.hostname`|string||
+|`frontendPolicies.usageExport.service.port`|integer||
+|`frontendPolicies.usageExport.host`|string|Hostname or IP address|
+|`frontendPolicies.usageExport.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`frontendPolicies.usageExport.policies`|object|Backend policies applied when sending usage events, such as backend auth or TLS.|
+|`frontendPolicies.usageExport.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`frontendPolicies.usageExport.policies.requestHeaderModifier.add`|object||
+|`frontendPolicies.usageExport.policies.requestHeaderModifier.set`|object||
+|`frontendPolicies.usageExport.policies.requestHeaderModifier.remove`|[]string||
+|`frontendPolicies.usageExport.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`frontendPolicies.usageExport.policies.transformations.request`|object||
+|`frontendPolicies.usageExport.policies.transformations.request.add`|object||
+|`frontendPolicies.usageExport.policies.transformations.request.set`|object||
+|`frontendPolicies.usageExport.policies.transformations.request.remove`|[]string||
+|`frontendPolicies.usageExport.policies.transformations.request.body`|string||
+|`frontendPolicies.usageExport.policies.transformations.request.metadata`|object||
+|`frontendPolicies.usageExport.policies.transformations.response`|object||
+|`frontendPolicies.usageExport.policies.transformations.response.add`|object||
+|`frontendPolicies.usageExport.policies.transformations.response.set`|object||
+|`frontendPolicies.usageExport.policies.transformations.response.remove`|[]string||
+|`frontendPolicies.usageExport.policies.transformations.response.body`|string||
+|`frontendPolicies.usageExport.policies.transformations.response.metadata`|object||
+|`frontendPolicies.usageExport.policies.backendTLS`|object|Send TLS to the backend.|
+|`frontendPolicies.usageExport.policies.backendTLS.cert`|string||
+|`frontendPolicies.usageExport.policies.backendTLS.key`|string||
+|`frontendPolicies.usageExport.policies.backendTLS.root`|string||
+|`frontendPolicies.usageExport.policies.backendTLS.hostname`|string||
+|`frontendPolicies.usageExport.policies.backendTLS.insecure`|boolean||
+|`frontendPolicies.usageExport.policies.backendTLS.insecureHost`|boolean||
+|`frontendPolicies.usageExport.policies.backendTLS.alpn`|[]string||
+|`frontendPolicies.usageExport.policies.backendTLS.subjectAltNames`|[]string||
+|`frontendPolicies.usageExport.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`frontendPolicies.usageExport.policies.backendAuth`|object|Authenticate to the backend.|
+|`frontendPolicies.usageExport.policies.backendAuth.passthrough`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.passthrough.location`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.passthrough.location.header`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.passthrough.location.header.name`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.passthrough.location.header.prefix`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.passthrough.location.queryParameter`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.passthrough.location.cookie`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.key`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.key.value`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.key.value.file`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.key.location`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.key.location.header`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.key.location.header.name`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.key.location.header.prefix`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.key.location.queryParameter`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.key.location.queryParameter.name`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.key.location.cookie`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.key.location.cookie.name`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.gcp`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`frontendPolicies.usageExport.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`frontendPolicies.usageExport.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`frontendPolicies.usageExport.policies.backendAuth.gcp.credential.file`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`frontendPolicies.usageExport.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`frontendPolicies.usageExport.policies.backendAuth.gcp.credential.file`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.aws`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.aws.accessKeyId`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.aws.secretAccessKey`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.aws.region`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.aws.sessionToken`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`frontendPolicies.usageExport.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`frontendPolicies.usageExport.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`frontendPolicies.usageExport.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.azure.developerImplicit`|object||
+|`frontendPolicies.usageExport.policies.backendAuth.azure.implicit`|object||
+|`frontendPolicies.usageExport.policies.http`|object|Specify HTTP settings for the backend|
+|`frontendPolicies.usageExport.policies.http.version`|string||
+|`frontendPolicies.usageExport.policies.http.requestTimeout`|string||
+|`frontendPolicies.usageExport.policies.tcp`|object|Specify TCP settings for the backend|
+|`frontendPolicies.usageExport.policies.tcp.keepalives`|object||
+|`frontendPolicies.usageExport.policies.tcp.keepalives.enabled`|boolean||
+|`frontendPolicies.usageExport.policies.tcp.keepalives.time`|string||
+|`frontendPolicies.usageExport.policies.tcp.keepalives.interval`|string||
+|`frontendPolicies.usageExport.policies.tcp.keepalives.retries`|integer||
+|`frontendPolicies.usageExport.policies.tcp.connectTimeout`|object||
+|`frontendPolicies.usageExport.policies.tcp.connectTimeout.secs`|integer||
+|`frontendPolicies.usageExport.policies.tcp.connectTimeout.nanos`|integer||
+|`frontendPolicies.usageExport.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`frontendPolicies.usageExport.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`frontendPolicies.usageExport.policies.backendTunnel.proxy.service`|object||
+|`frontendPolicies.usageExport.policies.backendTunnel.proxy.service.name`|object||
+|`frontendPolicies.usageExport.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`frontendPolicies.usageExport.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`frontendPolicies.usageExport.policies.backendTunnel.proxy.service.port`|integer||
+|`frontendPolicies.usageExport.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`frontendPolicies.usageExport.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`frontendPolicies.usageExport.path`|string|Request path for usage event POSTs. Defaults to `/usage`.|
+|`frontendPolicies.usageExport.maxAttempts`|integer|Maximum send attempts for each usage event. Attempts are best effort and are not persisted across process restarts.|
+|`frontendPolicies.usageExport.retryBackoff`|string|Delay between failed send attempts.|
+|`frontendPolicies.usageExport.add`|object|CEL expressions evaluated at request completion and emitted under the event `attributes` object, for example `oid: jwt.oid`.|
 |`frontendPolicies.tracing`|object||
 |`frontendPolicies.tracing.service`|object||
 |`frontendPolicies.tracing.service.name`|object||

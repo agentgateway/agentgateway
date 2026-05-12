@@ -1629,6 +1629,9 @@ struct LocalFrontendPolicies {
 	/// Settings for request access logs.
 	#[serde(default, alias = "logging")]
 	pub access_log: Option<frontend::LoggingPolicy>,
+	/// Export one JSON usage event for each completed LLM request with token usage.
+	#[serde(default)]
+	pub usage_export: Option<frontend::UsageExportConfig>,
 	#[serde(default)]
 	pub tracing: Option<TracingConfig>,
 }
@@ -2745,6 +2748,7 @@ async fn split_frontend_policies(
 		network_authorization,
 		proxy_protocol,
 		access_log,
+		usage_export,
 		tracing,
 	} = pol;
 	if let Some(p) = http {
@@ -2768,6 +2772,15 @@ async fn split_frontend_policies(
 	if let Some(mut p) = access_log {
 		p.init_access_log_policy();
 		add(FrontendPolicy::AccessLog(p), "accessLog");
+	}
+	if let Some(p) = usage_export {
+		add(
+			FrontendPolicy::UsageExport(Arc::new(crate::types::agent::UsageExportPolicy {
+				config: p,
+				exporter: once_cell::sync::OnceCell::new(),
+			})),
+			"usageExport",
+		);
 	}
 	if let Some(tracing_config) = tracing {
 		// Build logging fields from attributes for lazy tracer creation

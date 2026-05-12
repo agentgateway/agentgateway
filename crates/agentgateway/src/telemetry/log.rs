@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, ready};
 use std::time::{Duration, SystemTime};
@@ -14,6 +15,7 @@ use bytes::Buf;
 use crossbeam::atomic::AtomicCell;
 use frozen_collections::FzHashSet;
 use http_body::{Body, Frame, SizeHint};
+use http_body_util::BodyExt;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use opentelemetry::logs::{AnyValue, LogRecord as _, Logger, LoggerProvider as _, Severity};
@@ -28,7 +30,7 @@ use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
-use tracing::{Level, trace};
+use tracing::{Level, trace, warn};
 
 use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::{Request, health};
@@ -436,6 +438,383 @@ pub struct CelLoggingBuildInputs<'a> {
 	pub source_context: Option<&'a cel::SourceContext>,
 }
 
+static USAGE_EVENT_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Clone, Debug)]
+pub struct UsageEventExporter {
+	policy_client: crate::proxy::httpproxy::PolicyClient,
+	backend_ref: crate::types::agent::SimpleBackendReference,
+	policies: Vec<crate::types::agent::BackendTrafficPolicy>,
+	path: String,
+	max_attempts: u32,
+	retry_backoff: Duration,
+	add: Arc<OrderedStringMap<Arc<cel::Expression>>>,
+	runtime: tokio::runtime::Handle,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UsageEvent {
+	schema_version: &'static str,
+	event_id: String,
+	start_time: String,
+	end_time: String,
+	duration_ms: u64,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	trace_id: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	span_id: Option<String>,
+	http: UsageHttp,
+	route: UsageRoute,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	backend: Option<UsageBackend>,
+	llm: UsageLlm,
+	tokens: UsageTokens,
+	#[serde(skip_serializing_if = "serde_json::Map::is_empty")]
+	attributes: serde_json::Map<String, Value>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UsageHttp {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	method: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	host: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	path: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	status: Option<u16>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UsageRoute {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	gateway: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	listener: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	route: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	route_rule: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UsageBackend {
+	backend_type: cel::BackendType,
+	backend_name: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	protocol: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	endpoint: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UsageLlm {
+	operation: &'static str,
+	provider: String,
+	request_model: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	response_model: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	service_tier: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UsageTokens {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	input: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	input_text: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	input_image: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	input_audio: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	cache_read_input: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	cache_creation_input: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	output: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	output_text: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	output_image: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	output_audio: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	reasoning: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	total: Option<u64>,
+}
+
+impl UsageTokens {
+	fn from_llm(llm: &LLMContext) -> Self {
+		Self {
+			input: llm.input_tokens,
+			input_text: llm.input_text_tokens,
+			input_image: llm.input_image_tokens,
+			input_audio: llm.input_audio_tokens,
+			cache_read_input: llm.cached_input_tokens,
+			cache_creation_input: llm.cache_creation_input_tokens,
+			output: llm.output_tokens,
+			output_text: llm.output_text_tokens,
+			output_image: llm.output_image_tokens,
+			output_audio: llm.output_audio_tokens,
+			reasoning: llm.reasoning_tokens,
+			total: llm.total_tokens,
+		}
+	}
+
+	fn has_usage(&self) -> bool {
+		self.input.is_some()
+			|| self.input_text.is_some()
+			|| self.input_image.is_some()
+			|| self.input_audio.is_some()
+			|| self.cache_read_input.is_some()
+			|| self.cache_creation_input.is_some()
+			|| self.output.is_some()
+			|| self.output_text.is_some()
+			|| self.output_image.is_some()
+			|| self.output_audio.is_some()
+			|| self.reasoning.is_some()
+			|| self.total.is_some()
+	}
+}
+
+impl UsageEventExporter {
+	pub fn new(
+		policy_client: crate::proxy::httpproxy::PolicyClient,
+		backend_ref: crate::types::agent::SimpleBackendReference,
+		policies: Vec<crate::types::agent::BackendTrafficPolicy>,
+		path: String,
+		max_attempts: u32,
+		retry_backoff: Duration,
+		add: Arc<OrderedStringMap<Arc<cel::Expression>>>,
+	) -> Self {
+		let runtime = policy_client
+			.inputs
+			.cfg
+			.admin_runtime_handle
+			.clone()
+			.unwrap_or_else(tokio::runtime::Handle::current);
+		Self {
+			policy_client,
+			backend_ref,
+			policies,
+			path,
+			max_attempts: max_attempts.max(1),
+			retry_backoff,
+			add,
+			runtime,
+		}
+	}
+
+	pub fn emit(
+		&self,
+		log: &RequestLog,
+		route_identifier: &RouteIdentifier,
+		end_time: Timestamp,
+		duration: Duration,
+		llm_response: Option<&LLMContext>,
+		cel_exec: &CelLoggingExecutor<'_>,
+	) {
+		let Some(event) = build_usage_event(
+			&self.add,
+			log,
+			route_identifier,
+			end_time,
+			duration,
+			llm_response,
+			cel_exec,
+		) else {
+			return;
+		};
+
+		let client = self.policy_client.clone();
+		let backend_ref = self.backend_ref.clone();
+		let policies = self.policies.clone();
+		let path = self.path.clone();
+		let max_attempts = self.max_attempts;
+		let retry_backoff = self.retry_backoff;
+		let event_id = event.event_id.clone();
+		self.runtime.spawn(async move {
+			for attempt in 1..=max_attempts {
+				let req = match build_usage_request(&path, &event) {
+					Ok(req) => req,
+					Err(err) => {
+						warn!(error=%err, %event_id, "failed to build usage event export request");
+						return;
+					},
+				};
+				match client
+					.call_reference_with_policies(req, &backend_ref, &policies)
+					.await
+				{
+					Ok(resp) => {
+						let status = resp.status();
+						if let Err(err) = resp.into_body().collect().await {
+							warn!(
+								error=%err,
+								%event_id,
+								attempt,
+								max_attempts,
+								"failed to drain usage event export response body"
+							);
+						}
+						if status.is_success() {
+							return;
+						}
+						warn!(
+							status=%status,
+							%event_id,
+							attempt,
+							max_attempts,
+							"usage event export returned non-success status"
+						);
+						if attempt == max_attempts {
+							return;
+						}
+					},
+					Err(err) => {
+						warn!(
+							error=%err,
+							%event_id,
+							attempt,
+							max_attempts,
+							"usage event export failed"
+						);
+						if attempt == max_attempts {
+							return;
+						}
+					},
+				}
+				tokio::time::sleep(retry_backoff).await;
+			}
+		});
+	}
+}
+
+fn build_usage_event(
+	add: &OrderedStringMap<Arc<cel::Expression>>,
+	log: &RequestLog,
+	route_identifier: &RouteIdentifier,
+	end_time: Timestamp,
+	duration: Duration,
+	llm_response: Option<&LLMContext>,
+	cel_exec: &CelLoggingExecutor<'_>,
+) -> Option<UsageEvent> {
+	let llm_response = llm_response?;
+	let tokens = UsageTokens::from_llm(llm_response);
+	if !tokens.has_usage() {
+		return None;
+	}
+	let trace_id = log
+		.outgoing_span
+		.as_ref()
+		.map(|id| id.trace_id().to_string());
+	let span_id = log
+		.outgoing_span
+		.as_ref()
+		.map(|id| id.span_id().to_string());
+	let event_id = match (&trace_id, &span_id) {
+		(Some(trace_id), Some(span_id)) => format!("{trace_id}:{span_id}"),
+		_ => fallback_usage_event_id(log),
+	};
+	let attributes = cel_exec
+		.eval(add)
+		.into_iter()
+		.filter_map(|(k, v)| v.map(|v| (k.into_owned(), v)))
+		.collect();
+	Some(UsageEvent {
+		schema_version: "agentgateway.llm.usage.v1",
+		event_id,
+		start_time: log.start.as_datetime().to_rfc3339(),
+		end_time: end_time.as_datetime().to_rfc3339(),
+		duration_ms: duration.as_millis().try_into().unwrap_or(u64::MAX),
+		trace_id,
+		span_id,
+		http: UsageHttp {
+			method: log.method.as_ref().map(ToString::to_string),
+			host: log.host.clone(),
+			path: log.path.clone(),
+			status: log.status.as_ref().map(|s| s.as_u16()),
+		},
+		route: UsageRoute {
+			gateway: route_identifier.gateway.as_deref().map(ToString::to_string),
+			listener: route_identifier
+				.listener
+				.as_deref()
+				.map(ToString::to_string),
+			route: route_identifier.route.as_deref().map(ToString::to_string),
+			route_rule: route_identifier
+				.route_rule
+				.as_deref()
+				.map(ToString::to_string),
+		},
+		backend: log.backend_info.as_ref().map(|backend| UsageBackend {
+			backend_type: backend.backend_type,
+			backend_name: backend.backend_name.to_string(),
+			protocol: log.backend_protocol.as_ref().map(|p| format!("{p:?}")),
+			endpoint: log.endpoint.as_ref().map(ToString::to_string),
+		}),
+		llm: UsageLlm {
+			operation: if log
+				.llm_request
+				.as_ref()
+				.is_some_and(|r| r.input_format == InputFormat::Embeddings)
+			{
+				"embeddings"
+			} else {
+				"chat"
+			},
+			provider: llm_response.provider.to_string(),
+			request_model: llm_response.request_model.to_string(),
+			response_model: llm_response
+				.response_model
+				.as_ref()
+				.map(ToString::to_string),
+			service_tier: llm_response.service_tier.as_ref().map(ToString::to_string),
+		},
+		tokens,
+		attributes,
+	})
+}
+
+fn build_usage_request(path: &str, event: &UsageEvent) -> anyhow::Result<Request> {
+	let body = serde_json::to_vec(event)?;
+	let path = if path.starts_with('/') {
+		path.to_string()
+	} else {
+		format!("/{path}")
+	};
+	Ok(
+		::http::Request::builder()
+			.uri(path)
+			.method(::http::Method::POST)
+			.header(
+				::http::header::CONTENT_TYPE,
+				::http::HeaderValue::from_static("application/json"),
+			)
+			.body(crate::http::Body::from(body))?,
+	)
+}
+
+fn fallback_usage_event_id(log: &RequestLog) -> String {
+	let started = log
+		.start
+		.as_system_time()
+		.duration_since(SystemTime::UNIX_EPOCH)
+		.map(|d| d.as_nanos())
+		.unwrap_or_default();
+	let sequence = USAGE_EVENT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+	format!("{started}:{sequence}")
+}
+
 #[derive(Debug)]
 pub struct DropOnLog {
 	log: Option<RequestLog>,
@@ -602,6 +981,7 @@ impl RequestLog {
 			tracer: None,
 			trace_spans: Arc::new(Mutex::new(Default::default())),
 			otel_logger: None,
+			usage_exporter: None,
 			endpoint: None,
 			bind_name: None,
 			listener_name: None,
@@ -671,6 +1051,8 @@ pub struct RequestLog {
 
 	// Set only if OTLP logging is configured
 	pub otel_logger: Option<std::sync::Arc<OtelAccessLogger>>,
+	// Set only if usage export is configured.
+	pub usage_exporter: Option<std::sync::Arc<UsageEventExporter>>,
 
 	pub endpoint: Option<Target>,
 
@@ -847,6 +1229,16 @@ impl Drop for DropOnLog {
 			llm_response.as_ref(),
 			&custom_metric_fields,
 		);
+		if let Some(exporter) = &log.usage_exporter {
+			exporter.emit(
+				&log,
+				&route_identifier,
+				end_time,
+				duration,
+				llm_response.as_ref(),
+				&cel_exec,
+			);
+		}
 		if let Some(mcp) = &mcp
 			&& mcp.method_name.is_some()
 		{
@@ -1571,12 +1963,15 @@ mod tests {
 	use std::sync::{Arc, Mutex};
 	use std::time::Instant;
 
+	use http_body_util::BodyExt;
 	use opentelemetry::trace::{SpanKind, TracerProvider};
 	use opentelemetry_sdk::error::OTelSdkResult;
 	use opentelemetry_sdk::trace::{SimpleSpanProcessor, SpanData, SpanExporter};
 	use prometheus_client::registry::Registry;
+	use serde_json::json;
 
 	use super::*;
+	use crate::http::jwt;
 	use crate::telemetry::metrics::Metrics;
 	use crate::telemetry::trc;
 	use crate::transport::stream::TCPConnectionInfo;
@@ -1638,6 +2033,229 @@ mod tests {
 				raw_peer_addr: None,
 			},
 		)
+	}
+
+	fn test_llm_response() -> LLMContext {
+		LLMContext {
+			streaming: false,
+			request_model: "gpt-4".into(),
+			response_model: Some("gpt-4".into()),
+			provider: "openai".into(),
+			input_tokens: Some(100),
+			input_image_tokens: None,
+			input_text_tokens: Some(90),
+			input_audio_tokens: None,
+			cached_input_tokens: Some(20),
+			cache_creation_input_tokens: Some(10),
+			output_tokens: Some(50),
+			output_image_tokens: None,
+			output_text_tokens: Some(45),
+			output_audio_tokens: None,
+			reasoning_tokens: Some(5),
+			total_tokens: Some(150),
+			service_tier: Some("default".into()),
+			first_token: None,
+			count_tokens: None,
+			prompt: None,
+			completion: None,
+			params: llm::LLMRequestParams::default(),
+		}
+	}
+
+	#[test]
+	fn usage_event_includes_custom_oid_attribute() {
+		let mut request = test_request_log();
+		let mut req = ::http::Request::builder()
+			.method(::http::Method::POST)
+			.uri("http://example.com/v1/chat/completions")
+			.body(crate::http::Body::empty())
+			.unwrap();
+		let serde_json::Value::Object(claims) = json!({
+			"oid": "366ad564-ff40-4220-8bba-1a0aeed3e4f4"
+		}) else {
+			unreachable!()
+		};
+		req.extensions_mut().insert(jwt::Claims {
+			inner: claims,
+			jwt: Default::default(),
+		});
+		request.request_snapshot = Some(Arc::new(cel::snapshot_request(&mut req, true)));
+
+		let add =
+			OrderedStringMap::from_iter([("oid", Arc::new(Expression::new_strict("jwt.oid").unwrap()))]);
+		let llm_response = test_llm_response();
+		let end_time = Timestamp::now();
+		let cel_end_time = cel::RequestTime(end_time.as_datetime());
+		let cel_exec = request.cel.build(CelLoggingBuildInputs {
+			req: request.request_snapshot.as_deref(),
+			resp: None,
+			llm_response: Some(&llm_response),
+			mcp: None,
+			end_time: &cel_end_time,
+			source_context: None,
+		});
+
+		let event = build_usage_event(
+			&add,
+			&request,
+			&RouteIdentifier::default(),
+			end_time,
+			Duration::from_millis(10),
+			Some(&llm_response),
+			&cel_exec,
+		)
+		.expect("usage event should be built");
+
+		assert_eq!(
+			event.attributes.get("oid"),
+			Some(&json!("366ad564-ff40-4220-8bba-1a0aeed3e4f4"))
+		);
+		assert_eq!(event.tokens.input, Some(100));
+		assert_eq!(event.tokens.output, Some(50));
+	}
+
+	#[test]
+	fn usage_event_uses_trace_span_as_event_id_and_preserves_token_fields() {
+		let mut request = test_request_log();
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		request.outgoing_span = Some(outgoing.clone());
+		let llm_response = test_llm_response();
+		let end_time = Timestamp::now();
+		let cel_end_time = cel::RequestTime(end_time.as_datetime());
+		let cel_exec = request.cel.build(CelLoggingBuildInputs {
+			req: None,
+			resp: None,
+			llm_response: Some(&llm_response),
+			mcp: None,
+			end_time: &cel_end_time,
+			source_context: None,
+		});
+
+		let event = build_usage_event(
+			&OrderedStringMap::default(),
+			&request,
+			&RouteIdentifier::default(),
+			end_time,
+			Duration::from_millis(42),
+			Some(&llm_response),
+			&cel_exec,
+		)
+		.expect("usage event should be built");
+
+		assert_eq!(
+			event.event_id,
+			format!("{}:{}", outgoing.trace_id(), outgoing.span_id())
+		);
+		assert_eq!(event.trace_id, Some(outgoing.trace_id().to_string()));
+		assert_eq!(event.span_id, Some(outgoing.span_id().to_string()));
+		assert_eq!(event.duration_ms, 42);
+		assert_eq!(event.llm.provider, "openai");
+		assert_eq!(event.llm.request_model, "gpt-4");
+		assert_eq!(event.llm.service_tier.as_deref(), Some("default"));
+		assert_eq!(event.tokens.input, Some(100));
+		assert_eq!(event.tokens.input_text, Some(90));
+		assert_eq!(event.tokens.cache_read_input, Some(20));
+		assert_eq!(event.tokens.cache_creation_input, Some(10));
+		assert_eq!(event.tokens.output, Some(50));
+		assert_eq!(event.tokens.output_text, Some(45));
+		assert_eq!(event.tokens.reasoning, Some(5));
+		assert_eq!(event.tokens.total, Some(150));
+	}
+
+	#[test]
+	fn usage_event_is_not_built_without_llm_usage() {
+		let request = test_request_log();
+		let mut llm_response = test_llm_response();
+		llm_response.input_tokens = None;
+		llm_response.input_text_tokens = None;
+		llm_response.cached_input_tokens = None;
+		llm_response.cache_creation_input_tokens = None;
+		llm_response.output_tokens = None;
+		llm_response.output_text_tokens = None;
+		llm_response.reasoning_tokens = None;
+		llm_response.total_tokens = None;
+		let end_time = Timestamp::now();
+		let cel_end_time = cel::RequestTime(end_time.as_datetime());
+		let cel_exec = request.cel.build(CelLoggingBuildInputs {
+			req: None,
+			resp: None,
+			llm_response: Some(&llm_response),
+			mcp: None,
+			end_time: &cel_end_time,
+			source_context: None,
+		});
+
+		assert!(
+			build_usage_event(
+				&OrderedStringMap::default(),
+				&request,
+				&RouteIdentifier::default(),
+				end_time,
+				Duration::from_millis(1),
+				None,
+				&cel_exec,
+			)
+			.is_none()
+		);
+		assert!(
+			build_usage_event(
+				&OrderedStringMap::default(),
+				&request,
+				&RouteIdentifier::default(),
+				end_time,
+				Duration::from_millis(1),
+				Some(&llm_response),
+				&cel_exec,
+			)
+			.is_none()
+		);
+	}
+
+	#[tokio::test]
+	async fn usage_request_serializes_json_post_with_normalized_path() {
+		let request = test_request_log();
+		let llm_response = test_llm_response();
+		let end_time = Timestamp::now();
+		let cel_end_time = cel::RequestTime(end_time.as_datetime());
+		let cel_exec = request.cel.build(CelLoggingBuildInputs {
+			req: None,
+			resp: None,
+			llm_response: Some(&llm_response),
+			mcp: None,
+			end_time: &cel_end_time,
+			source_context: None,
+		});
+		let event = build_usage_event(
+			&OrderedStringMap::from_iter([(
+				"oid",
+				Arc::new(Expression::new_strict("'user-oid'").unwrap()),
+			)]),
+			&request,
+			&RouteIdentifier::default(),
+			end_time,
+			Duration::from_millis(10),
+			Some(&llm_response),
+			&cel_exec,
+		)
+		.expect("usage event should be built");
+
+		let req = build_usage_request("v1/usage", &event).unwrap();
+		assert_eq!(req.method(), ::http::Method::POST);
+		assert_eq!(req.uri().path(), "/v1/usage");
+		assert_eq!(
+			req.headers().get(::http::header::CONTENT_TYPE).unwrap(),
+			"application/json"
+		);
+
+		let body = req.into_body().collect().await.unwrap().to_bytes();
+		let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+		assert_eq!(value["schemaVersion"], "agentgateway.llm.usage.v1");
+		assert_eq!(value["attributes"]["oid"], "user-oid");
+		assert_eq!(value["tokens"]["input"], 100);
+		assert_eq!(value["tokens"]["cacheReadInput"], 20);
+		assert_eq!(value["tokens"]["cacheCreationInput"], 10);
+		assert_eq!(value["tokens"]["output"], 50);
 	}
 
 	#[test]

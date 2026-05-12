@@ -6397,6 +6397,18 @@
           ],
           "default": null
         },
+        "usageExport": {
+          "description": "Export one JSON usage event for each completed LLM request with token usage.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UsageExportConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "tracing": {
           "anyOf": [
             {
@@ -6732,6 +6744,105 @@
       "enum": [
         "grpc",
         "http"
+      ]
+    },
+    "UsageExportConfig": {
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies applied when sending usage events, such as backend auth or TLS.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "description": "Request path for usage event POSTs. Defaults to `/usage`.",
+          "type": "string"
+        },
+        "maxAttempts": {
+          "description": "Maximum send attempts for each usage event. Attempts are best effort and are not persisted across process restarts.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 1
+        },
+        "retryBackoff": {
+          "description": "Delay between failed send attempts.",
+          "type": "string"
+        },
+        "add": {
+          "description": "CEL expressions evaluated at request completion and emitted under the event `attributes` object, for example `oid: jwt.oid`.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "invalid"
+          ]
+        },
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
       ]
     },
     "TracingConfig": {

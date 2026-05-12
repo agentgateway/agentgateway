@@ -2113,6 +2113,40 @@ impl serde::Serialize for AccessLogPolicy {
 	}
 }
 
+#[derive(Clone, Debug)]
+pub struct UsageExportPolicy {
+	pub config: crate::types::frontend::UsageExportConfig,
+	pub exporter: once_cell::sync::OnceCell<Arc<crate::telemetry::log::UsageEventExporter>>,
+}
+
+impl UsageExportPolicy {
+	pub fn get_or_init(
+		&self,
+		policy_client: crate::proxy::httpproxy::PolicyClient,
+	) -> anyhow::Result<&Arc<crate::telemetry::log::UsageEventExporter>> {
+		self.exporter.get_or_try_init(|| {
+			Ok(Arc::new(crate::telemetry::log::UsageEventExporter::new(
+				policy_client,
+				self.config.provider_backend.clone(),
+				self.config.policies.clone(),
+				self.config.path.clone(),
+				self.config.max_attempts.get(),
+				self.config.retry_backoff,
+				self.config.add.clone(),
+			)))
+		})
+	}
+}
+
+impl serde::Serialize for UsageExportPolicy {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		self.config.serialize(serializer)
+	}
+}
+
 impl From<BackendTrafficPolicy> for PolicyType {
 	fn from(value: BackendTrafficPolicy) -> Self {
 		Self::Backend(value)
@@ -2280,6 +2314,7 @@ pub enum FrontendPolicy {
 	Proxy(frontend::Proxy),
 	AccessLog(frontend::LoggingPolicy),
 	Tracing(Arc<TracingPolicy>),
+	UsageExport(Arc<UsageExportPolicy>),
 	Metrics(frontend::MetricsFieldsPolicy),
 }
 

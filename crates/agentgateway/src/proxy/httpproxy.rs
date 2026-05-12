@@ -948,6 +948,16 @@ impl HTTPProxy {
 				});
 		}
 
+		if let Some(uep) = frontend_policies.usage_export.as_deref() {
+			log.usage_exporter = uep
+				.get_or_init(self.policy_client())
+				.map(|e| Some(e.clone()))
+				.unwrap_or_else(|e| {
+					warn!("failed to initialize usage event exporter: {e}");
+					None
+				});
+		}
+
 		let mut sampler = TraceSampler::default();
 		if let Some(tp) = frontend_policies.tracing.as_deref() {
 			// Apply sampling overrides if present
