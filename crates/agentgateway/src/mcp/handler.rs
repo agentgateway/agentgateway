@@ -23,7 +23,7 @@ use crate::http::Response;
 use crate::http::sessionpersistence::MCPSession;
 use crate::mcp;
 use crate::mcp::mergestream::{MergeFn, Messages};
-use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
+use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet, McpDirectResponseSet};
 use crate::mcp::router::McpBackendGroup;
 use crate::mcp::streamablehttp::{RequestProtocol, ServerSseMessage};
 use crate::mcp::subscriptions::ResourceSubscription;
@@ -279,6 +279,7 @@ impl ResolveKind {
 pub struct Relay {
 	pub(crate) upstreams: Arc<upstream::UpstreamGroup>,
 	pub policies: McpAuthorizationSet,
+	pub(crate) direct_response: McpDirectResponseSet,
 	pub(crate) mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
 	pub(crate) policy_client: PolicyClient,
 }
@@ -287,6 +288,7 @@ pub struct RelayInputs {
 	pub backend_id: ResourceName,
 	pub backend: McpBackendGroup,
 	pub policies: McpAuthorizationSet,
+	pub direct_response: McpDirectResponseSet,
 	pub mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
 	pub client: PolicyClient,
 }
@@ -296,6 +298,7 @@ impl RelayInputs {
 		let r = Relay::new(self.backend, self.policies, self.client)?;
 		Ok(Relay {
 			mcp_guardrails: self.mcp_guardrails,
+			direct_response: self.direct_response,
 			..r
 		})
 	}
@@ -310,6 +313,7 @@ impl Relay {
 		Ok(Self {
 			upstreams: Arc::new(upstream::UpstreamGroup::new(client.clone(), backend)?),
 			policies,
+			direct_response: McpDirectResponseSet::default(),
 			mcp_guardrails: None,
 			policy_client: client,
 		})
@@ -318,6 +322,7 @@ impl Relay {
 		Self {
 			upstreams: self.upstreams.clone(),
 			policies,
+			direct_response: self.direct_response.clone(),
 			mcp_guardrails: self.mcp_guardrails.clone(),
 			policy_client: self.policy_client.clone(),
 		}

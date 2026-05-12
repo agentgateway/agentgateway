@@ -1549,6 +1549,67 @@ message BackendPolicySpec {
     repeated string require = 3;
   }
 
+  // Policy-controlled synthetic responses for tools/call. Rules are evaluated
+  // before authorization and guardrails; the first matching rule short-circuits
+  // the request with the configured result.
+  message McpDirectResponse {
+    repeated DirectResponseRule rules = 1;
+
+    // MCP content-block annotations (model spec: audience/priority/lastModified).
+    message Annotations {
+      // "user" or "assistant".
+      repeated string audience = 1;
+      // 0.0..1.0
+      optional float priority = 2;
+      // RFC 3339 timestamp.
+      optional string last_modified = 3;
+    }
+
+    message TextContent {
+      string text = 1;
+      Annotations annotations = 2;
+      google.protobuf.Struct meta = 3;
+    }
+
+    message ResourceLink {
+      string uri = 1;
+      string name = 2;
+      string title = 3;
+      string description = 4;
+      string mime_type = 5;
+      optional uint32 size = 6;
+      Annotations annotations = 7;
+      google.protobuf.Struct meta = 8;
+    }
+
+    message ContentBlock {
+      oneof kind {
+        TextContent text = 1;
+        ResourceLink resource_link = 2;
+      }
+    }
+
+    message CallToolResult {
+      repeated ContentBlock content = 1;
+      bool is_error = 2;
+      // Optional structured payload alongside `content`, per the MCP spec.
+      google.protobuf.Value structured_content = 3;
+      google.protobuf.Struct meta = 4;
+    }
+
+    message DirectResponse {
+      oneof result {
+        CallToolResult call_tool = 1;
+      }
+    }
+
+    message DirectResponseRule {
+      // CEL predicate; when true, `respond` is returned.
+      string when = 1;
+      DirectResponse respond = 2;
+    }
+  }
+
   message McpAuthentication {
     message ResourceMetadata {
       map<string, google.protobuf.Value> extra = 1;
@@ -1675,6 +1736,7 @@ message BackendPolicySpec {
     // AI failover providers use this to preserve the authorization policy of
     // the concrete model from which the provider was lowered.
     TrafficPolicySpec.RBAC authorization = 19;
+    McpDirectResponse mcp_direct_response = 20;
   }
 }
 

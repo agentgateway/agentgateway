@@ -114,6 +114,7 @@ impl App {
 		let authorization_policies = backend_policies
 			.mcp_authorization
 			.unwrap_or_else(|| McpAuthorizationSet::new(RuleSets::from(Vec::new())));
+		let direct_response = backend_policies.mcp_direct_response.unwrap_or_default();
 		let authn = backend_policies.mcp_authentication;
 		let mcp_guardrails = backend_policies.mcp_guardrails.clone();
 
@@ -125,6 +126,7 @@ impl App {
 		req.extensions_mut().insert(tracer);
 
 		authorization_policies.register(log.cel.ctx());
+		direct_response.register(log.cel.ctx());
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
 		// `response` is not valid here, since we run authz first
@@ -160,6 +162,7 @@ impl App {
 							backend_id: backend_group_name.clone(),
 							backend: backends.clone(),
 							policies: authorization_policies.clone(),
+							direct_response: direct_response.clone(),
 							mcp_guardrails: mcp_guardrails.clone(),
 							client: client.clone(),
 						},
@@ -182,6 +185,7 @@ impl App {
 							backend_id: backend_group_name,
 							backend: backends.clone(),
 							policies: authorization_policies.clone(),
+							direct_response: direct_response.clone(),
 							mcp_guardrails: mcp_guardrails.clone(),
 							client: client.clone(),
 						},
