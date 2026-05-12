@@ -29,7 +29,11 @@ use crate::http::auth::{AwsAuth, BackendAuth, BackendAuthKind, GcpAuth};
 use crate::http::buffer::BufferBody;
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{HeaderOrPseudo, Scheme, auth, authorization, health};
-use crate::mcp::{FailureMode, McpAuthorization};
+use crate::mcp::direct_response::{
+	self as dr, AnnotationRole, Annotations, ContentBlock, DirectResponse, DirectResponseRule,
+	ResourceLink, TextContent,
+};
+use crate::mcp::{FailureMode, McpAuthorization, McpDirectResponse};
 use crate::store::RequestPolicy;
 use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
@@ -530,6 +534,203 @@ fn mcp_authorization_from_proto(
 
 	let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
 	McpAuthorization::new(authorization::RuleSet::new(policy_set))
+}
+
+fn mcp_direct_response_from_proto(
+	dr: &proto::agent::backend_policy_spec::McpDirectResponse,
+	diagnostics: &mut Diagnostics,
+) -> McpDirectResponse {
+	let rules = dr
+		.rules
+		.iter()
+		.filter_map(|r| direct_response_rule_from_proto(diagnostics, r))
+		.collect();
+	McpDirectResponse { rules }
+}
+
+fn direct_response_rule_from_proto(
+	diagnostics: &mut Diagnostics,
+	rule: &proto::agent::backend_policy_spec::mcp_direct_response::DirectResponseRule,
+) -> Option<DirectResponseRule> {
+	use proto::agent::backend_policy_spec::mcp_direct_response::direct_response::Result as ProtoResult;
+	let when = permissive_cel_expression_arc(
+		diagnostics,
+		"backend.mcpDirectResponse.rules.when",
+		&rule.when,
+	);
+	let Some(respond) = rule.respond.as_ref().and_then(|r| r.result.as_ref()) else {
+		diagnostics.add_warning("mcpDirectResponse rule missing `respond`; skipping");
+		return None;
+	};
+	let respond = match respond {
+		ProtoResult::CallTool(r) => DirectResponse::CallTool(dr::CallToolResult {
+			content: content_blocks_from_proto(diagnostics, &r.content),
+			is_error: r.is_error,
+			structured_content: r
+				.structured_content
+				.as_ref()
+				.and_then(|v| serde_json::to_value(v).ok()),
+			meta: meta_from_proto(diagnostics, r.meta.as_ref()),
+		}),
+	};
+	Some(DirectResponseRule { when, respond })
+}
+
+fn content_blocks_from_proto(
+	diagnostics: &mut Diagnostics,
+	blocks: &[proto::agent::backend_policy_spec::mcp_direct_response::ContentBlock],
+) -> Vec<ContentBlock> {
+	blocks
+		.iter()
+		.filter_map(|b| content_block_from_proto(diagnostics, b))
+		.collect()
+}
+
+fn content_block_from_proto(
+	diagnostics: &mut Diagnostics,
+	block: &proto::agent::backend_policy_spec::mcp_direct_response::ContentBlock,
+) -> Option<ContentBlock> {
+	use proto::agent::backend_policy_spec::mcp_direct_response::content_block::Kind;
+	match block.kind.as_ref()? {
+		Kind::Text(t) => Some(ContentBlock::Text(TextContent {
+			text: t.text.clone(),
+			annotations: t
+				.annotations
+				.as_ref()
+				.map(|a| annotations_from_proto(diagnostics, a)),
+			meta: meta_from_proto(diagnostics, t.meta.as_ref()),
+		})),
+		Kind::ResourceLink(r) => Some(ContentBlock::ResourceLink(ResourceLink {
+			uri: r.uri.clone(),
+			name: r.name.clone(),
+			title: non_empty(&r.title),
+			description: non_empty(&r.description),
+			mime_type: non_empty(&r.mime_type),
+			size: r.size,
+			annotations: r
+				.annotations
+				.as_ref()
+				.map(|a| annotations_from_proto(diagnostics, a)),
+			meta: meta_from_proto(diagnostics, r.meta.as_ref()),
+		})),
+	}
+}
+
+fn annotations_from_proto(
+	diagnostics: &mut Diagnostics,
+	a: &proto::agent::backend_policy_spec::mcp_direct_response::Annotations,
+) -> Annotations {
+	let audience = a
+		.audience
+		.iter()
+		.filter_map(|r| match r.as_str() {
+			"user" => Some(AnnotationRole::User),
+			"assistant" => Some(AnnotationRole::Assistant),
+			other => {
+				diagnostics.add_warning(format!(
+					"mcpDirectResponse: ignoring unknown annotation audience {other:?} \
+					 (expected \"user\" or \"assistant\")"
+				));
+				None
+			},
+		})
+		.collect();
+	let last_modified =
+		a.last_modified
+			.as_ref()
+			.and_then(|s| match chrono::DateTime::parse_from_rfc3339(s) {
+				Ok(dt) => Some(dt.with_timezone(&chrono::Utc)),
+				Err(e) => {
+					diagnostics.add_warning(format!(
+						"mcpDirectResponse: ignoring invalid lastModified {s:?}: {e}"
+					));
+					None
+				},
+			});
+	let priority = a.priority.and_then(|p| {
+		if (0.0..=1.0).contains(&p) {
+			Some(p)
+		} else {
+			diagnostics.add_warning(format!(
+				"mcpDirectResponse: ignoring priority {p} out of range 0.0..=1.0"
+			));
+			None
+		}
+	});
+	Annotations {
+		audience,
+		priority,
+		last_modified,
+	}
+}
+
+/// Converts a proto `_meta` struct to a JSON object, dropping keys that do not
+/// satisfy the MCP `_meta` key-name rules.
+fn meta_from_proto<T: serde::Serialize>(
+	diagnostics: &mut Diagnostics,
+	meta: Option<&T>,
+) -> Option<serde_json::Map<String, serde_json::Value>> {
+	let serde_json::Value::Object(mut map) = serde_json::to_value(meta?).ok()? else {
+		return None;
+	};
+	map.retain(|key, _| match validate_meta_key(key) {
+		Ok(()) => true,
+		Err(reason) => {
+			diagnostics.add_warning(format!(
+				"mcpDirectResponse: ignoring _meta key {key:?}: {reason}"
+			));
+			false
+		},
+	});
+	(!map.is_empty()).then_some(map)
+}
+
+/// Validates an MCP `_meta` key (optional dotted prefix ending in `/`, then a
+/// name) per the 2025-06-18 spec, rejecting MCP-reserved prefixes.
+fn validate_meta_key(key: &str) -> Result<(), &'static str> {
+	if let Some(slash) = key.rfind('/') {
+		let labels: Vec<&str> = key[..slash].split('.').collect();
+		if !labels.iter().all(|l| is_meta_label(l)) {
+			return Err("invalid prefix");
+		}
+		if labels
+			.iter()
+			.enumerate()
+			.any(|(i, l)| matches!(*l, "mcp" | "modelcontextprotocol") && i + 1 < labels.len())
+		{
+			return Err("prefix is reserved for MCP");
+		}
+		is_meta_name(&key[slash + 1..])
+	} else {
+		is_meta_name(key)
+	}
+}
+
+fn is_meta_label(l: &str) -> bool {
+	let b = l.as_bytes();
+	!b.is_empty()
+		&& b[0].is_ascii_alphabetic()
+		&& b[b.len() - 1].is_ascii_alphanumeric()
+		&& b.iter().all(|c| c.is_ascii_alphanumeric() || *c == b'-')
+}
+
+fn is_meta_name(n: &str) -> Result<(), &'static str> {
+	let b = n.as_bytes();
+	let ok = b.is_empty()
+		|| (b[0].is_ascii_alphanumeric()
+			&& b[b.len() - 1].is_ascii_alphanumeric()
+			&& b
+				.iter()
+				.all(|c| c.is_ascii_alphanumeric() || matches!(*c, b'-' | b'_' | b'.')));
+	if ok { Ok(()) } else { Err("invalid name") }
+}
+
+fn non_empty(s: &str) -> Option<String> {
+	if s.is_empty() {
+		None
+	} else {
+		Some(s.to_string())
+	}
 }
 
 fn mcp_authentication_from_proto(
@@ -2328,6 +2529,9 @@ fn backend_policy_from_proto(
 		},
 		Some(bps::Kind::Authorization(rbac)) => {
 			BackendTrafficPolicy::Authorization(authorization_from_proto(rbac, diagnostics))
+		},
+		Some(bps::Kind::McpDirectResponse(dr)) => {
+			BackendTrafficPolicy::McpDirectResponse(mcp_direct_response_from_proto(dr, diagnostics))
 		},
 		Some(bps::Kind::McpAuthentication(ma)) => {
 			BackendTrafficPolicy::McpAuthentication(mcp_authentication_from_proto(ma, diagnostics)?)
@@ -4258,6 +4462,29 @@ mod tests {
 				},
 			)]),
 			..Default::default()
+		}
+	}
+
+	#[test]
+	fn meta_key_validation_follows_spec() {
+		for ok in [
+			"action",
+			"agentgateway.dev/action",
+			"a.b-c.d/name_1.2",
+			"agentgateway.dev/",
+		] {
+			assert!(validate_meta_key(ok).is_ok(), "{ok} should be valid");
+		}
+		for bad in [
+			"modelcontextprotocol.io/x",
+			"mcp.dev/x",
+			"tools.mcp.com/x",
+			"/name",
+			"bad prefix/name",
+			"-bad/name",
+			"white space",
+		] {
+			assert!(validate_meta_key(bad).is_err(), "{bad} should be invalid");
 		}
 	}
 
