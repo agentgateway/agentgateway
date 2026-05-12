@@ -142,10 +142,10 @@ If you already have `yarn dev` (or `yarn dev:xds`) running in another terminal, 
 ### Playwright test scripts
 `test:e2e` or `test:e2e:dev` can be used for these commands.
 
-Run all tests via command line.
+Run all tests via command line
 ```
 yarn test:e2e           # headless
-yarn testLe2e --headed  # headed with popup browser
+yarn test:e2e --headed  # headed with popup browser
 ```
 
 Run all tests via interactive UI interface
