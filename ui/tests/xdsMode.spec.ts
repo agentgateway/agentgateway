@@ -25,14 +25,15 @@ async function verifyXdsAwareButton(dataTestId: string, page: Page) {
 
     // verify tooltip is visible on hover
     await button.hover({ force: true });
-    await button.page().waitForTimeout(300); // small timeout to confirm tooltip pops in UI mode
-    const tooltip = page.getByRole('tooltip');
+    await expect(button).toHaveClass(/ant-tooltip-open/);
+    const tooltipId = await button.getAttribute('aria-describedby');
+    const tooltip = page.locator(`#${tooltipId}`);
     await expect(tooltip).toBeVisible();
     await expect(tooltip).toContainText(CONFIGURATION_MANAGED_BY_XDS);
 
     // move cursor off of tooltip to reset
     await page.mouse.move(0, 0);
-    await expect(tooltip).toBeHidden();
+    await expect(button).not.toHaveClass(/ant-tooltip-open/);
 }
 
 async function verifyReadonlyMonacoEditor(page: Page) { 

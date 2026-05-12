@@ -26,6 +26,7 @@ const xdsBaseUrlTarget = useDevUi ? 'http://localhost:5174' : XDS_BASE_URL;
 export default defineConfig({
   timeout: 90000,
   testDir: './tests',
+  globalTeardown: './tests/teardown.ts',
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
