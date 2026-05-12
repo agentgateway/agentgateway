@@ -136,6 +136,7 @@ export function LLMPlaygroundPage() {
                 <a 
                   href="https://agentgateway.dev/docs/standalone/latest/llm/configuration-modes/#traditional-http-routing-configuration" 
                   target="_blank"
+                  rel="noreferrer"
                 >
                   Learn more
                 </a>

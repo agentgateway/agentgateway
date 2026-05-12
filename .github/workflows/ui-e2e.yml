@@ -123,7 +123,7 @@ jobs:
           cp tests/fixtures/e2e-config.yaml ../e2e-test-config.yaml
 
       - name: Run Playwright tests
-        run: yarn playwright test --project chromium xds-chromium # todo: remove after ci/cd stabilizes
+        run: yarn playwright test
 
       - name: Upload test videos
         if: always()
