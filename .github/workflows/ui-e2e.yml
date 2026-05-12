@@ -94,7 +94,7 @@ jobs:
           chmod +x ../agentgateway
           cp tests/fixtures/e2e-config.yaml ../e2e-test-config.yaml
       - name: Run Playwright tests
-        run: yarn playwright test
+        run: yarn playwright test --project chromium xds-chromium # todo: remove after ci/cd stabilizes
       - name: Upload test videos
         if: always()
         uses: actions/upload-artifact@v6
