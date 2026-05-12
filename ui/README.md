@@ -22,7 +22,7 @@ ui/src/
 
 ## ⚡ Quick Start
 
-First, make sure agentgateway is running as well. The UI must run on port 3000, so any config files that have a port bind to 3000 must be updated (you can change them to 3001 before starting the program):
+First, make sure agentgateway is running. The UI dev server runs on port 5173 by default; any config that binds to 5173 should be moved to a free port before starting agentgateway. (The xDS dev server, if you use one, runs on port 5174.)
 
 ```bash
 # Start the agentgateway. For example:
@@ -111,43 +111,51 @@ make generate-schema
 - **CSS flex layout** for layouts
 
 ## 🧪 Testing
-E2E testing is provided through Playwright.  First run the app via the compiled binary in a terminal session via:
-```
-agentgateway -f ui/tests/fixtures/e2e-config.yaml
+
+E2E testing is provided through Playwright. Tests cover two backend modes:
+
+- **Standard mode** — agentgateway running with a local config file (admin endpoint on `:15000`).
+- **xDS mode** — agentgateway configured to consume xDS (admin endpoint on `:15001`). Only `xdsMode.spec.ts` runs in this project.
+
+Playwright manages the lifecycle of every required server (agentgateway binaries and, in dev mode, Vite servers). You don't need to start anything yourself, just run the script.
+
+**Prerequisite:** the `agentgateway` binary must be on your `PATH` (e.g. `cargo build --release --features ui && export PATH=$PWD/target/release:$PATH` from the repo root).
+
+### Running the tests
+
+Two run modes, both single-command:
+
+```bash
+yarn test:e2e       # tests run against compiled binary (does not pick up UI changes without rebuild)
+yarn test:e2e:dev   # tests run against Vite dev servers, which proxy to the binaries
 ```
 
-Then open another terminal session, cd to the `ui/` directory and use the following scripts to run tests.
+- `test:e2e` — Playwright starts two agentgateway binaries (standard + xDS), points all tests directly at them. This is what CI runs.
+- `test:e2e:dev` — sets `E2E_DEV_UI=true`. Playwright additionally starts two Vite dev servers:
+  - `yarn dev` on `:5173` → proxies to the standard binary on `:15000`
+  - `yarn dev:xds` on `:5174` → proxies to the xDS binary on `:15001`
 
-By default, the tests will run against the `agentgateway` binary on port 15000.  You can also run the tests against the UI dev server by setting the 
-`BASE_URL` environment variable
+Tests target the Vite servers instead of the binaries. UI changes are picked up instantly via the Vite dev server, so no binary rebuild is required. Note: the binaries themselves still need to be rebuilt if you change backend code.
 
-```
-yarn playwright test # default: run tests against agentgateway binary (port 15000)
-BASE_URL=http://localhost:3000 yarn playwright tests # run tests against UI dev server (port 3000)
-```
-
-You can also use these shortcuts to run e2e tests from the CLI:
-```
-yarn test:e2e # runs `yarn playwright test` against agentgatway binary on port 15000
-yarn test:e2e:dev # runs `yarn playwright test` against UI dev server on port 3000
-```
+If you already have `yarn dev` (or `yarn dev:xds`) running in another terminal, Playwright reuses the existing server (`reuseExistingServer: true`).
 
 ### Playwright test scripts
+`test:e2e` or `test:e2e:dev` can be used for these commands.
 
-Run all tests via command line
+Run all tests via command line.
 ```
-yarn playwright test # headless
-yarn playwright test --headed # headed with popup browser
+yarn test:e2e           # headless
+yarn testLe2e --headed  # headed with popup browser
 ```
 
 Run all tests via interactive UI interface
 ```
-yarn playwright test --ui
+yarn test:e2e test --ui
 ```
 
 Run individual test by name
 ```
-yarn playwright test -g "Name of the test"
+yarn test:e2e -g "Name of the test"
 ```
 
 Show HTML test run report:
@@ -161,4 +169,9 @@ yarn playwright codegen
 ```
 
 ### Testing configuration
-e2e tests can be further configured by adjusting the `playwright.config.ts` file
+
+E2E tests are configured in `ui/playwright.config.ts`. Notable knobs:
+
+- `STANDARD_BASE_URL` / `XDS_BASE_URL` env vars — override the default base URLs (rarely needed locally).
+- `E2E_DEV_UI=true` — toggle dev-server mode (set by `test:e2e:dev`).
+- The standard binary uses `tests/fixtures/e2e-config.yaml` locally, and `../e2e-test-config.yaml` in CI (a writable copy created by the workflow so the repo fixture stays pristine).
