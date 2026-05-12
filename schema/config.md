@@ -211,6 +211,37 @@
 |`binds[].listeners[].routes[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`binds[].listeners[].routes[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`binds[].listeners[].routes[].policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules`|[]object||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].when`|string||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond`|object||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`binds[].listeners[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`binds[].listeners[].routes[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -6780,6 +6811,37 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules`|[]object||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].when`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -10168,6 +10230,37 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules`|[]object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].when`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -13519,6 +13612,37 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules`|[]object||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].when`|string||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond`|object||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`binds[].listeners[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -19038,6 +19162,37 @@
 |`policies[].policy.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`policies[].policy.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`policies[].policy.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`policies[].policy.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`policies[].policy.mcpDirectResponse.rules`|[]object||
+|`policies[].policy.mcpDirectResponse.rules[].when`|string||
+|`policies[].policy.mcpDirectResponse.rules[].respond`|object||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool`|object||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`policies[].policy.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`policies[].policy.mcpGuardrails`|object|External MCP policy processors.|
 |`policies[].policy.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`policies[].policy.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -25607,6 +25762,37 @@
 |`backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`backends[].ai.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`backends[].ai.policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`backends[].ai.policies.mcpDirectResponse.rules`|[]object||
+|`backends[].ai.policies.mcpDirectResponse.rules[].when`|string||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond`|object||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`backends[].ai.policies.mcpGuardrails`|object|External MCP policy processors.|
 |`backends[].ai.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`backends[].ai.policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -28995,6 +29181,37 @@
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules`|[]object||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].when`|string||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond`|object||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -32344,6 +32561,37 @@
 |`backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`backends[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`backends[].policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`backends[].policies.mcpDirectResponse.rules`|[]object||
+|`backends[].policies.mcpDirectResponse.rules[].when`|string||
+|`backends[].policies.mcpDirectResponse.rules[].respond`|object||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`backends[].policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`backends[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`backends[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`backends[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -34750,6 +34998,37 @@
 |`routeGroups[].routes[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routeGroups[].routes[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`routeGroups[].routes[].policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules`|[]object||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].when`|string||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond`|object||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`routeGroups[].routes[].policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`routeGroups[].routes[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -41319,6 +41598,37 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules`|[]object||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].when`|string||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond`|object||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`routeGroups[].routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -44707,6 +45017,37 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules`|[]object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].when`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -48058,6 +48399,37 @@
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules`|[]object||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].when`|string||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond`|object||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`routeGroups[].routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -53104,6 +53476,37 @@
 |`routes[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routes[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`routes[].policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`routes[].policies.mcpDirectResponse.rules`|[]object||
+|`routes[].policies.mcpDirectResponse.rules[].when`|string||
+|`routes[].policies.mcpDirectResponse.rules[].respond`|object||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`routes[].policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`routes[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routes[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routes[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -59673,6 +60076,37 @@
 |`routes[].backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routes[].backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].backends[].ai.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`routes[].backends[].ai.policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules`|[]object||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].when`|string||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond`|object||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`routes[].backends[].ai.policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`routes[].backends[].ai.policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -63061,6 +63495,37 @@
 |`routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules`|[]object||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].when`|string||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond`|object||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`routes[].backends[].ai.groups[].providers[].policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -66412,6 +66877,37 @@
 |`routes[].backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routes[].backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].backends[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`routes[].backends[].policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`routes[].backends[].policies.mcpDirectResponse.rules`|[]object||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].when`|string||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond`|object||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`routes[].backends[].policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`routes[].backends[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routes[].backends[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -76512,6 +77008,37 @@
 |`mcp.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`mcp.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`mcp.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
+|`mcp.policies.mcpDirectResponse`|object|Synthetic direct responses for MCP tools/call.|
+|`mcp.policies.mcpDirectResponse.rules`|[]object||
+|`mcp.policies.mcpDirectResponse.rules[].when`|string||
+|`mcp.policies.mcpDirectResponse.rules[].respond`|object||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool`|object||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content`|[]object||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].text`|object||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.text`|string||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations`|object||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.priority`|number||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.annotations.lastModified`|string||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta`|object||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].text.meta.*`|any||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink`|object||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.uri`|string||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.name`|string||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.title`|string||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.description`|string||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.mimeType`|string||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.size`|integer||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations`|object||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.audience`|[]enum|Possible values: `user`, `assistant`.|
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.priority`|number||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.annotations.lastModified`|string||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta`|object||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.content[].resourceLink.meta.*`|any||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.isError`|boolean||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.structuredContent`|any||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.meta`|object||
+|`mcp.policies.mcpDirectResponse.rules[].respond.callTool.meta.*`|any||
 |`mcp.policies.mcpGuardrails`|object|External MCP policy processors.|
 |`mcp.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`mcp.policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|

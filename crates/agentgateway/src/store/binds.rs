@@ -20,7 +20,7 @@ use crate::http::{
 	ext_authz, ext_proc, filters, health, oidc, remoteratelimit, retry, substrate, timeout,
 };
 use crate::llm::policy::ResponseGuard;
-use crate::mcp::McpAuthorizationSet;
+use crate::mcp::{McpAuthorizationSet, McpDirectResponseSet};
 use crate::proxy::dtrace;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicy, HasExpressions, PolicyExpressions, RequestPolicy};
@@ -257,6 +257,7 @@ pub struct BackendPolicies {
 	pub ext_authz: BackendPolicy<ext_authz::ExtAuthz>,
 
 	pub mcp_authorization: Option<McpAuthorizationSet>,
+	pub mcp_direct_response: Option<McpDirectResponseSet>,
 	pub mcp_authentication: Option<McpAuthentication>,
 	pub mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
 
@@ -308,6 +309,7 @@ impl BackendPolicies {
 				(Some(base), Some(more)) => Some(base.merge(more)),
 				(base, more) => more.or(base),
 			},
+			mcp_direct_response: other.mcp_direct_response.or(self.mcp_direct_response),
 			mcp_authentication: other.mcp_authentication.or(self.mcp_authentication),
 			mcp_guardrails: other.mcp_guardrails.or(self.mcp_guardrails),
 			inference_routing: other.inference_routing.or(self.inference_routing),
@@ -1360,6 +1362,7 @@ impl Store {
 
 		let mut authz = Vec::new();
 		let mut mcp_authz = Vec::new();
+		let mut mcp_direct_response = Vec::new();
 		let mut pol = BackendPolicies::default();
 		for rule in rules {
 			match &rule {
@@ -1425,6 +1428,9 @@ impl Store {
 					// Authorization composes to avoid erasing a broader deny
 					mcp_authz.push(p.clone().into_inner());
 				},
+				BackendTrafficPolicy::McpDirectResponse(p) => {
+					mcp_direct_response.extend(p.rules.clone());
+				},
 				BackendTrafficPolicy::McpAuthentication(p) => {
 					pol.mcp_authentication.get_or_insert_with(|| p.clone());
 				},
@@ -1440,6 +1446,9 @@ impl Store {
 		}
 		if !mcp_authz.is_empty() {
 			pol.mcp_authorization = Some(McpAuthorizationSet::new(mcp_authz.into()));
+		}
+		if !mcp_direct_response.is_empty() {
+			pol.mcp_direct_response = Some(McpDirectResponseSet::new(mcp_direct_response));
 		}
 		dtrace::trace(|t| {
 			let s = serde_json::to_value(&pol).unwrap_or_default();
