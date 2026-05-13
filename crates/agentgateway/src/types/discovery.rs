@@ -17,7 +17,7 @@ use crate::types::proto::workload::{
 	GatewayAddress as XdsGatewayAddress, Port, PortList, Service as XdsService,
 	Workload as XdsWorkload,
 };
-use crate::types::proto::{ProtoError, workload};
+use crate::types::proto::{workload, ProtoError};
 use crate::*;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
@@ -224,7 +224,7 @@ pub enum SelfIdentitySource {
 	},
 }
 
-#[derive(Debug, Default, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Workload {
 	pub workload_ips: Vec<IpAddr>,
@@ -285,8 +285,40 @@ pub struct Workload {
 	pub capacity: u32,
 }
 
-fn default_capacity() -> u32 {
+pub fn default_capacity() -> u32 {
 	1
+}
+
+impl Default for Workload {
+	fn default() -> Self {
+		Self {
+			workload_ips: Default::default(),
+			waypoint: Default::default(),
+			network_gateway: Default::default(),
+			protocol: Default::default(),
+			network_mode: Default::default(),
+			uid: Default::default(),
+			name: Default::default(),
+			namespace: Default::default(),
+			trust_domain: Default::default(),
+			service_account: Default::default(),
+			network: Default::default(),
+			workload_name: Default::default(),
+			workload_type: Default::default(),
+			canonical_name: Default::default(),
+			canonical_revision: Default::default(),
+			hostname: Default::default(),
+			node: Default::default(),
+			authorization_policies: Default::default(),
+			status: Default::default(),
+			cluster_id: Default::default(),
+			locality: Default::default(),
+			services: Default::default(),
+
+			// default capacity to 1, as 0 means this workload should not receive traffic
+			capacity: default_capacity(),
+		}
+	}
 }
 
 impl Workload {

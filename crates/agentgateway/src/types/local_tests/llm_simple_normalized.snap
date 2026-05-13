@@ -256,6 +256,7 @@ backends:
                     consecutiveFailures: 0
                     timesEjected: 0
                     evictedUntil: ~
+                  capacity: 1
               rejected: {}
     inlinePolicies:
       - backendTLS: ~
@@ -301,6 +302,7 @@ backends:
                     consecutiveFailures: 0
                     timesEjected: 0
                     evictedUntil: ~
+                  capacity: 1
               rejected: {}
     inlinePolicies:
       - requestHeaderModifier:
@@ -335,6 +337,7 @@ backends:
                     consecutiveFailures: 0
                     timesEjected: 0
                     evictedUntil: ~
+                  capacity: 1
               rejected: {}
     inlinePolicies:
       - requestHeaderModifier:
@@ -365,6 +368,7 @@ backends:
                     consecutiveFailures: 0
                     timesEjected: 0
                     evictedUntil: ~
+                  capacity: 1
               rejected: {}
     inlinePolicies:
       - requestHeaderModifier:

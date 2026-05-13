@@ -22,21 +22,147 @@ type EndpointKey = Strng;
 pub struct EndpointWithInfo<T> {
 	pub endpoint: Arc<T>,
 	pub info: Arc<EndpointInfo>,
+	pub capacity: u32,
 }
 
 impl<T> EndpointWithInfo<T> {
 	pub fn new(ep: T) -> Self {
+		Self::with_capacity(ep, 1)
+	}
+
+	pub fn with_capacity(ep: T, capacity: u32) -> Self {
 		Self {
 			endpoint: Arc::new(ep),
 			info: Default::default(),
+			capacity,
 		}
 	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Sampler {
+	/// All endpoints have the same nonzero capacity. No need for weighted sampling.
+	/// Stores the common capacity for quick checks that we're still uniform after
+	/// new endpoints are added incrementally.
+	Uniform(u32),
+	// Weighted sampling by capacity via expansion table.
+	Weighted(Vec<u32>),
+	/// At least one endpoint is present, but total capacity is zero — every
+	/// active endpoint is drained. Distinct from the zero-endpoints case,
+	/// which keeps the default `Uniform(1)` sampler.
+	Drained,
+}
+
+impl Default for Sampler {
+	fn default() -> Self {
+		Sampler::Uniform(1)
+	}
+}
+
+impl Sampler {
+	pub fn is_drained(&self) -> bool {
+		matches!(self, Sampler::Drained)
+	}
+}
+
+// cap the size of the expansion table to avoid excessive memory
+// usage in pathological cases for capacity values.
+const MAX_EXPANSION: usize = 4096;
+
+fn gcd_u32(mut a: u32, mut b: u32) -> u32 {
+	while b != 0 {
+		let t = b;
+		b = a % b;
+		a = t;
+	}
+	a
+}
+
+fn build_sampler<T>(active: &IndexMap<EndpointKey, EndpointWithInfo<T>>) -> Sampler {
+	let mut iter = active.values();
+	let Some(first_cap) = iter.next().map(|e| e.capacity) else {
+		return Sampler::default();
+	};
+	let mut all_equal = true;
+	let mut any_nonzero = first_cap != 0;
+	for ewi in iter {
+		if ewi.capacity != 0 {
+			any_nonzero = true;
+		}
+		if ewi.capacity != first_cap {
+			all_equal = false;
+		}
+	}
+	if !any_nonzero {
+		return Sampler::Drained;
+	}
+	if all_equal {
+		return Sampler::Uniform(first_cap);
+	}
+
+	let g = active
+		.values()
+		.map(|e| e.capacity)
+		.filter(|&c| c > 0)
+		// reduce expansion size by normalizing capacity weights
+		.reduce(gcd_u32)
+		.unwrap_or(1)
+		.max(1);
+	let mut reduced: Vec<u32> = active.values().map(|e| e.capacity / g).collect();
+
+	// if the expansion would be very large due to no common divisor with
+	// large values for capacity, iteratively shrink all capacities which
+	// reduces precision but keeps memory usage sane
+	let mut total: u64 = reduced.iter().map(|&c| c as u64).sum();
+	while total as usize > MAX_EXPANSION {
+		let mut changed = false;
+		for c in reduced.iter_mut() {
+			if *c > 1 {
+				*c = c.div_ceil(2);
+				changed = true;
+			}
+		}
+		if !changed {
+			break;
+		}
+		total = reduced.iter().map(|&c| c as u64).sum();
+	}
+
+	let mut table = Vec::with_capacity(total as usize);
+	for (i, &c) in reduced.iter().enumerate() {
+		for _ in 0..c {
+			table.push(i as u32);
+		}
+	}
+	Sampler::Weighted(table)
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct EndpointGroup<T> {
 	active: IndexMap<EndpointKey, EndpointWithInfo<T>>,
 	rejected: IndexMap<EndpointKey, EndpointWithInfo<T>>,
+	#[serde(skip)]
+	sampler: Sampler,
+}
+
+impl<T> EndpointGroup<T> {
+	// rebuilds the sampler, unless the change is guaranteed to preserve the same distribution
+	fn update_sampler(&mut self, added_ep_cap: Option<u32>) {
+		let preserved = match (&self.sampler, added_ep_cap) {
+			// change doesn't modify any capacity, still Uniform
+			// this is the common case for unweighted EndpointGroups
+			(Sampler::Uniform(c), Some(new_c)) if *c == new_c && new_c > 0 => true,
+			(Sampler::Uniform(_), None) => true,
+			(Sampler::Drained, Some(0)) => true,
+			(Sampler::Drained, None) if !self.active.is_empty() => true,
+
+			// must rebuild
+			_ => false,
+		};
+		if !preserved {
+			self.sampler = build_sampler(&self.active);
+		}
+	}
 }
 
 impl<T> Default for EndpointGroup<T> {
@@ -44,6 +170,7 @@ impl<T> Default for EndpointGroup<T> {
 		EndpointGroup::<T> {
 			active: IndexMap::new(),
 			rejected: IndexMap::new(),
+			sampler: Sampler::default(),
 		}
 	}
 }
@@ -75,7 +202,9 @@ impl EndpointSet<Endpoint> {
 			Some(b) => b,
 			None => return, // Strict mode mismatch — drop
 		};
-		self.insert_key(ep.workload_uid.clone(), ep, bucket)
+		let key = ep.workload_uid.clone();
+		let ewi = EndpointWithInfo::with_capacity(ep, dest_workload.capacity);
+		self.event(EndpointEvent::Add(key, ewi, bucket))
 	}
 
 	pub fn select_endpoint(
@@ -128,6 +257,9 @@ impl EndpointSet<Endpoint> {
 	/// P2C: pick two random endpoints from the best non-empty bucket, return the
 	/// higher-scored one. Sampling with replacement (vs `rand::seq::index::sample`)
 	/// keeps the worst endpoint reachable instead of starving it of traffic.
+	///
+	/// sets of endpoints that define non-uniform capacity will use weighted sampling
+	/// when making the random picks.
 	fn select_p2c(
 		&self,
 		workloads: &store::WorkloadStore,
@@ -141,8 +273,20 @@ impl EndpointSet<Endpoint> {
 			return None;
 		}
 		let mut rng = rand::rng();
-		let a = rng.random_range(0..index.len());
-		let b = rng.random_range(0..index.len());
+		let (a, b) = match iter.sampler() {
+			Some(Sampler::Drained) => return None,
+			Some(Sampler::Weighted(table)) => {
+				let tl = table.len();
+				(
+					table[rng.random_range(0..tl)] as usize,
+					table[rng.random_range(0..tl)] as usize,
+				)
+			},
+			Some(Sampler::Uniform(_)) | None => {
+				let len = index.len();
+				(rng.random_range(0..len), rng.random_range(0..len))
+			},
+		};
 		[a, b]
 			.into_iter()
 			.filter_map(|idx| {
@@ -160,6 +304,10 @@ impl EndpointSet<Endpoint> {
 	/// Slow fallback when P2C finds nothing viable: scan buckets in locality order
 	/// and take the best-scored match in the first bucket that yields any.
 	/// Per-bucket: prefer active, fall back to rejected when active is empty.
+	/// Fully-drained buckets (`sampler.is_drained()` — every active endpoint at
+	/// capacity=0) are skipped entirely: the operator's drain signal supersedes
+	/// the rejected-set fallback. Partially-drained buckets are scanned, but
+	/// individual cap=0 endpoints are filtered out.
 	fn select_fallback(
 		&self,
 		workloads: &store::WorkloadStore,
@@ -168,6 +316,9 @@ impl EndpointSet<Endpoint> {
 	) -> Option<Candidate> {
 		self.buckets.iter().find_map(|bucket| {
 			let group = bucket.load_full();
+			if group.sampler.is_drained() {
+				return None;
+			}
 			let map = if !group.active.is_empty() {
 				&group.active
 			} else {
@@ -201,7 +352,16 @@ fn viable(
 	if target_port == 0 && !endpoint.port.contains_key(&svc_port) {
 		trace!(
 			"filter endpoint {}, no service port {}",
-			endpoint.workload_uid, svc_port
+			endpoint.workload_uid,
+			svc_port
+		);
+		return None;
+	}
+	if wl.capacity == 0 {
+		trace!(
+			"filter endpoint {}, workload {} capacity is 0",
+			endpoint.workload_uid,
+			wl.name
 		);
 		return None;
 	}
@@ -378,6 +538,8 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		let buckets = initial_set
 			.into_iter()
 			.map(|items| {
+				// All EWIs created via `new` get cap=1, so the default Uniform(1)
+				// sampler is already correct — no rebuild needed.
 				let eg = EndpointGroup {
 					active: IndexMap::from_iter(
 						items
@@ -385,6 +547,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 							.map(|(k, v)| (k, EndpointWithInfo::new(v))),
 					),
 					rejected: Default::default(),
+					sampler: Sampler::default(),
 				};
 				Arc::new(ArcSwap::new(Arc::new(eg)))
 			})
@@ -449,7 +612,11 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 			.iter()
 			.find_map(|x| {
 				let b = x.load_full();
-				if !b.active.is_empty() { Some(b) } else { None }
+				if !b.active.is_empty() {
+					Some(b)
+				} else {
+					None
+				}
 			})
 			// TODO: allow selecting across multiple buckets.
 			.unwrap_or_else(|| self.buckets[0].load_full())
@@ -557,7 +724,10 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 			}
 		}
 
-		for (i, group) in new_groups.into_iter().enumerate() {
+		for (i, mut group) in new_groups.into_iter().enumerate() {
+			// Redistributed EWIs may have any capacity, so derive the sampler
+			// from scratch — no trusted prior to incrementally update from.
+			group.sampler = build_sampler(&group.active);
 			self.buckets[i].store(Arc::new(group));
 		}
 	}
@@ -579,7 +749,9 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 				};
 				let mut eps = Arc::unwrap_or_clone(slot.load_full());
 				eps.rejected.swap_remove(&key);
+				let cap = ep.capacity;
 				eps.active.insert(key, ep);
+				eps.update_sampler(Some(cap));
 				slot.store(Arc::new(eps));
 			},
 			EndpointEvent::Delete(key) => {
@@ -587,8 +759,9 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 					return;
 				};
 				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
-				eps.active.swap_remove(&key);
-				eps.rejected.swap_remove(&key);
+				if eps.active.swap_remove(&key).is_some() || eps.rejected.swap_remove(&key).is_some() {
+					eps.update_sampler(None);
+				}
 				bucket.store(Arc::new(eps));
 			},
 		}
@@ -618,7 +791,9 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 						// Health scoring assumes normalized values in [0.0, 1.0].
 						ep.info.health.set(h.clamp(0.0, 1.0));
 					}
+					let cap = ep.capacity;
 					eps.active.insert(key, ep);
+					eps.update_sampler(Some(cap));
 				}
 				bucket.store(Arc::new(eps));
 			};
@@ -639,6 +814,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 				uneviction_heap.push(UnevictEntry(until, key.clone(), restore_health));
 				if let Some(ep) = eps.active.swap_remove(&key) {
 					eps.rejected.insert(key, ep);
+					eps.update_sampler(None);
 				}
 				bucket.store(Arc::new(eps));
 			};
@@ -911,12 +1087,20 @@ impl<T> ActiveEndpointsIter<T> {
 		self.index().iter().map(|(_k, v)| (&v.endpoint, &v.info))
 	}
 	pub fn index(&self) -> &IndexMap<EndpointKey, EndpointWithInfo<T>> {
-		if self.0.active.is_empty() {
+		if self.is_active_phase() {
+			&self.0.active
+		} else {
 			// If we have no active endpoints, return the rejected ones
 			&self.0.rejected
-		} else {
-			&self.0.active
 		}
+	}
+	pub fn is_active_phase(&self) -> bool {
+		!self.0.active.is_empty()
+	}
+	/// The sampler for the active pool. `None` in the rejected-fallback phase,
+	/// where capacity weighting doesn't apply.
+	pub fn sampler(&self) -> Option<&Sampler> {
+		self.is_active_phase().then_some(&self.0.sampler)
 	}
 }
 
@@ -1406,6 +1590,272 @@ mod tests {
 		assert_eq!(r.rank(&wl("n1", "_", "z1", "_", "_")), Some(2));
 		assert_eq!(r.rank(&wl("n1", "_", "z2", "_", "_")), None);
 		assert_eq!(r.rank(&wl("n2", "_", "z1", "_", "_")), None);
+	}
+
+	// --- Sampler / capacity weighting ---
+
+	fn make_active(caps: &[u32]) -> IndexMap<EndpointKey, EndpointWithInfo<()>> {
+		let mut map = IndexMap::new();
+		for (i, &cap) in caps.iter().enumerate() {
+			let key: Strng = format!("ep{i}").into();
+			map.insert(key, EndpointWithInfo::with_capacity((), cap));
+		}
+		map
+	}
+
+	#[test]
+	fn sampler_empty_map_is_uniform() {
+		// Vacuously uniform; the empty-len check in callers prevents sampling.
+		let active = make_active(&[]);
+		assert!(matches!(build_sampler(&active), Sampler::Uniform(_)));
+	}
+
+	#[test]
+	fn sampler_all_default_capacity_is_uniform() {
+		let active = make_active(&[1, 1, 1, 1]);
+		assert_eq!(build_sampler(&active), Sampler::Uniform(1));
+	}
+
+	#[test]
+	fn sampler_all_equal_nonzero_is_uniform() {
+		let active = make_active(&[5, 5, 5]);
+		assert_eq!(build_sampler(&active), Sampler::Uniform(5));
+	}
+
+	#[test]
+	fn sampler_all_zero_is_drained() {
+		let active = make_active(&[0, 0, 0]);
+		assert!(matches!(build_sampler(&active), Sampler::Drained));
+		assert!(build_sampler(&active).is_drained());
+	}
+
+	#[test]
+	fn sampler_single_zero_is_drained() {
+		let active = make_active(&[0]);
+		assert!(matches!(build_sampler(&active), Sampler::Drained));
+	}
+
+	#[test]
+	fn sampler_weighted_3_1_distribution() {
+		let active = make_active(&[3, 1]);
+		let sampler = build_sampler(&active);
+		let Sampler::Weighted(table) = &sampler else {
+			panic!("expected Weighted, got {sampler:?}");
+		};
+		assert_eq!(table.len(), 4);
+
+		let mut rng = rand::rng();
+		let mut counts = [0u32; 2];
+		let n = 100_000u32;
+		for _ in 0..n {
+			let idx = table[rng.random_range(0..table.len())] as usize;
+			counts[idx] += 1;
+		}
+		// Expect ~75/25; ±2% is comfortable for n=100k.
+		let ratio0 = counts[0] as f64 / n as f64;
+		assert!(
+			(ratio0 - 0.75).abs() < 0.02,
+			"index 0 share = {ratio0} (counts={counts:?})"
+		);
+	}
+
+	#[test]
+	fn sampler_gcd_reduces_round_capacities() {
+		// 100, 200, 300 → after gcd=100, table size is 1+2+3 = 6, not 600.
+		let active = make_active(&[100, 200, 300]);
+		let sampler = build_sampler(&active);
+		let Sampler::Weighted(table) = &sampler else {
+			panic!("expected Weighted, got {sampler:?}");
+		};
+		assert_eq!(table.len(), 6, "gcd reduction should yield 1+2+3");
+		let zero = table.iter().filter(|&&i| i == 0).count();
+		let one = table.iter().filter(|&&i| i == 1).count();
+		let two = table.iter().filter(|&&i| i == 2).count();
+		assert_eq!((zero, one, two), (1, 2, 3));
+	}
+
+	#[test]
+	fn sampler_zero_cap_excluded_from_weighted_table() {
+		// Mixed 0 and nonzero — the 0-cap index must never appear in samples.
+		let active = make_active(&[0, 1, 1]);
+		let sampler = build_sampler(&active);
+		let Sampler::Weighted(table) = &sampler else {
+			panic!("expected Weighted, got {sampler:?}");
+		};
+		assert_eq!(table.len(), 2);
+		for &i in table {
+			assert_ne!(i, 0, "cap=0 endpoint must not appear in expansion table");
+		}
+	}
+
+	#[test]
+	fn sampler_clamps_pathological_large_capacity() {
+		// gcd(10_000, 1) = 1 → naive expansion would be 10_001 entries.
+		// The clamp must bound the table without zeroing out the small cap.
+		let active = make_active(&[10_000, 1]);
+		let sampler = build_sampler(&active);
+		let Sampler::Weighted(table) = &sampler else {
+			panic!("expected Weighted, got {sampler:?}");
+		};
+		assert!(
+			table.len() <= MAX_EXPANSION,
+			"table.len()={} exceeds MAX_EXPANSION={}",
+			table.len(),
+			MAX_EXPANSION
+		);
+		let zero = table.iter().filter(|&&i| i == 0).count();
+		let one = table.iter().filter(|&&i| i == 1).count();
+		assert!(
+			one >= 1,
+			"small-capacity endpoint must remain reachable post-clamp (zero={zero}, one={one})"
+		);
+		// Ratio should still strongly favor the large-capacity endpoint.
+		assert!(
+			zero > one * 100,
+			"expected strong skew toward index 0, got zero={zero}, one={one}"
+		);
+	}
+
+	/// Test helper: equivalent to the inlined `sampler = build_sampler(&active)`
+	/// used by EndpointSet::new / rebucket — lets tests set up a known starting
+	/// sampler before exercising `update_sampler`.
+	fn rebuild_sampler<T>(group: &mut EndpointGroup<T>) {
+		group.sampler = build_sampler(&group.active);
+	}
+
+	#[test]
+	fn build_sampler_reflects_active_state() {
+		let mut group = EndpointGroup::<()>::default();
+		group
+			.active
+			.insert("a".into(), EndpointWithInfo::with_capacity((), 1));
+		group
+			.active
+			.insert("b".into(), EndpointWithInfo::with_capacity((), 1));
+		rebuild_sampler(&mut group);
+		assert_eq!(group.sampler, Sampler::Uniform(1));
+
+		// Replace "a" with cap=3 — now mixed, should become Weighted.
+		group
+			.active
+			.insert("a".into(), EndpointWithInfo::with_capacity((), 3));
+		rebuild_sampler(&mut group);
+		let Sampler::Weighted(table) = &group.sampler else {
+			panic!("expected Weighted, got {:?}", group.sampler);
+		};
+		assert_eq!(table.len(), 4); // 3 + 1
+
+		// Drain everything — should become Drained.
+		group
+			.active
+			.insert("a".into(), EndpointWithInfo::with_capacity((), 0));
+		group
+			.active
+			.insert("b".into(), EndpointWithInfo::with_capacity((), 0));
+		rebuild_sampler(&mut group);
+		assert!(group.sampler.is_drained());
+	}
+
+	#[test]
+	fn update_sampler_preserves_uniform_when_cap_matches() {
+		// Common XDS case: all endpoints share the default cap=1. Adds and
+		// deletes should leave the sampler instance untouched, not rebuild.
+		let mut group = EndpointGroup::<()>::default();
+		group
+			.active
+			.insert("a".into(), EndpointWithInfo::with_capacity((), 1));
+		rebuild_sampler(&mut group);
+		assert_eq!(group.sampler, Sampler::Uniform(1));
+
+		group
+			.active
+			.insert("b".into(), EndpointWithInfo::with_capacity((), 1));
+		group.update_sampler(Some(1));
+		assert_eq!(group.sampler, Sampler::Uniform(1));
+
+		group.active.swap_remove(&Strng::from("b"));
+		group.update_sampler(None);
+		assert_eq!(group.sampler, Sampler::Uniform(1));
+	}
+
+	#[test]
+	fn update_sampler_rebuilds_on_cap_mismatch() {
+		// Adding a cap=2 endpoint to a Uniform(1) group must transition to Weighted.
+		let mut group = EndpointGroup::<()>::default();
+		group
+			.active
+			.insert("a".into(), EndpointWithInfo::with_capacity((), 1));
+		rebuild_sampler(&mut group);
+		assert_eq!(group.sampler, Sampler::Uniform(1));
+
+		group
+			.active
+			.insert("b".into(), EndpointWithInfo::with_capacity((), 2));
+		group.update_sampler(Some(2));
+		assert!(matches!(group.sampler, Sampler::Weighted(_)));
+	}
+
+	#[test]
+	fn update_sampler_drained_stays_drained_on_zero_cap_add() {
+		let mut group = EndpointGroup::<()>::default();
+		group
+			.active
+			.insert("a".into(), EndpointWithInfo::with_capacity((), 0));
+		rebuild_sampler(&mut group);
+		assert_eq!(group.sampler, Sampler::Drained);
+
+		group
+			.active
+			.insert("b".into(), EndpointWithInfo::with_capacity((), 0));
+		group.update_sampler(Some(0));
+		assert_eq!(group.sampler, Sampler::Drained);
+	}
+
+	#[test]
+	fn update_sampler_remove_last_uniform_stays_uniform() {
+		// Deleting the last active entry leaves the sampler as Uniform
+		let mut group = EndpointGroup::<()>::default();
+		group
+			.active
+			.insert("a".into(), EndpointWithInfo::with_capacity((), 1));
+		rebuild_sampler(&mut group);
+
+		group.active.swap_remove(&Strng::from("a"));
+		group.update_sampler(None);
+		assert!(matches!(group.sampler, Sampler::Uniform(_)));
+		assert!(!group.sampler.is_drained());
+	}
+
+	#[test]
+	fn update_sampler_drops_drained_state_when_active_becomes_empty() {
+		// Setup: one cap=0 endpoint → sampler is Drained.
+		// Action: remove that endpoint.
+		// Expect: sampler must NOT stay Drained. A drained sampler tells
+		// select_fallback to skip the whole bucket, which would also skip
+		// the rejected pool — the wrong behavior when active is empty.
+		let mut group = EndpointGroup::<()>::default();
+		group
+			.active
+			.insert("a".into(), EndpointWithInfo::with_capacity((), 0));
+		rebuild_sampler(&mut group);
+		assert_eq!(group.sampler, Sampler::Drained);
+
+		group.active.swap_remove(&Strng::from("a"));
+		group.update_sampler(None);
+		assert!(
+			!group.sampler.is_drained(),
+			"sampler stayed drained after removing the last cap=0 endpoint; \
+			 select_fallback would now skip this bucket's rejected pool"
+		);
+	}
+
+	#[test]
+	fn gcd_basic() {
+		assert_eq!(gcd_u32(12, 18), 6);
+		assert_eq!(gcd_u32(7, 11), 1);
+		assert_eq!(gcd_u32(100, 0), 100);
+		assert_eq!(gcd_u32(0, 100), 100);
+		assert_eq!(gcd_u32(0, 0), 0);
 	}
 
 	#[test]

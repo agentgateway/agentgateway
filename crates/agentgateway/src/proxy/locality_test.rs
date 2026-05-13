@@ -45,18 +45,21 @@ async fn prefer_same_zone_pins_to_local_zone() {
 						svc: "app",
 						loc: ("r1", "z1", "node-a"),
 						healthy: true,
+						cap: 1,
 					},
 					Ep {
 						label: "other-zone",
 						svc: "app",
 						loc: ("r1", "z2", "node-b"),
 						healthy: true,
+						cap: 1,
 					},
 					Ep {
 						label: "other-region",
 						svc: "app",
 						loc: ("r2", "z1", "node-c"),
 						healthy: true,
+						cap: 1,
 					},
 				],
 			},
@@ -89,12 +92,14 @@ async fn failover_spills_to_next_tier_when_local_missing() {
 						svc: "app",
 						loc: ("r1", "z2", "node-b"),
 						healthy: true,
+						cap: 1,
 					},
 					Ep {
 						label: "other-region",
 						svc: "app",
 						loc: ("r2", "z1", "node-c"),
 						healthy: true,
+						cap: 1,
 					},
 				],
 			},
@@ -126,12 +131,14 @@ async fn prefer_same_node_pins_to_local_node() {
 						svc: "app",
 						loc: ("r1", "z1", "node-a"),
 						healthy: true,
+						cap: 1,
 					},
 					Ep {
 						label: "same-zone",
 						svc: "app",
 						loc: ("r1", "z1", "node-b"),
 						healthy: true,
+						cap: 1,
 					},
 				],
 			},
@@ -164,12 +171,14 @@ async fn strict_mode_drops_non_matching_endpoints() {
 						svc: "app",
 						loc: ("r1", "z2", "node-b"),
 						healthy: true,
+						cap: 1,
 					},
 					Ep {
 						label: "other-region",
 						svc: "app",
 						loc: ("r2", "z1", "node-c"),
 						healthy: true,
+						cap: 1,
 					},
 				],
 			},
@@ -201,12 +210,14 @@ async fn strict_mode_keeps_full_matches() {
 						svc: "app",
 						loc: ("r1", "z1", "node-a"),
 						healthy: true,
+						cap: 1,
 					},
 					Ep {
 						label: "drop",
 						svc: "app",
 						loc: ("r1", "z2", "node-b"),
 						healthy: true,
+						cap: 1,
 					},
 				],
 			},
@@ -239,18 +250,21 @@ async fn standard_mode_ignores_locality() {
 						svc: "app",
 						loc: ("r1", "z1", "node-a"),
 						healthy: true,
+						cap: 1,
 					},
 					Ep {
 						label: "z2",
 						svc: "app",
 						loc: ("r1", "z2", "node-b"),
 						healthy: true,
+						cap: 1,
 					},
 					Ep {
 						label: "z3",
 						svc: "app",
 						loc: ("r1", "z3", "node-c"),
 						healthy: true,
+						cap: 1,
 					},
 				],
 			},
@@ -258,6 +272,52 @@ async fn standard_mode_ignores_locality() {
 				hits: 30,
 				want_status: StatusCode::OK,
 				want: Expect::Spread(vec!["z1", "z2", "z3"]),
+			},
+		],
+	})
+	.await;
+}
+
+// test capacity weighted p2c but with a large tolerance
+// to avoid tet flakes, and account for ewma also amplifying
+// the split
+#[tokio::test]
+async fn capacity_weighted_p2c_splits_traffic_by_weight() {
+	run(Case {
+		self_loc: Some(("r1", "z1", "node-a")),
+		steps: vec![
+			Step::Sync {
+				services: vec![Svc {
+					name: "app",
+					mode: Standard,
+					scopes: vec![],
+				}],
+				endpoints: vec![
+					Ep {
+						label: "heavy",
+						svc: "app",
+						loc: ("r1", "z1", "node-a"),
+						cap: 3,
+						..Default::default()
+					},
+					Ep {
+						label: "light",
+						svc: "app",
+						loc: ("r1", "z1", "node-a"),
+						cap: 1,
+						..Default::default()
+					},
+				],
+			},
+			Step::Hit {
+				hits: 4000,
+				want_status: StatusCode::OK,
+				// Window [0.60, 0.90] for heavy: rejects uniform (broken, 0.50) but tolerates
+				// the score-dynamic amplification above the pure-sampler 0.75.
+				want: Expect::Ratio {
+					shares: vec![("heavy", 0.75), ("light", 0.25)],
+					tolerance: 0.15,
+				},
 			},
 		],
 	})
@@ -284,12 +344,14 @@ async fn missing_self_identity_keeps_all_endpoints_reachable() {
 							svc: "app",
 							loc: ("r1", "z1", "node-a"),
 							healthy: true,
+							cap: 1,
 						},
 						Ep {
 							label: "b",
 							svc: "app",
 							loc: ("r1", "z2", "node-b"),
 							healthy: true,
+							cap: 1,
 						},
 					],
 				},
@@ -323,12 +385,14 @@ async fn unhealthy_local_zone_falls_back_to_next_tier() {
 						svc: "app",
 						loc: ("r1", "z1", "node-a"),
 						healthy: false,
+						cap: 1,
 					},
 					Ep {
 						label: "same-region",
 						svc: "app",
 						loc: ("r1", "z2", "node-b"),
 						healthy: true,
+						cap: 1,
 					},
 				],
 			},
@@ -360,18 +424,21 @@ async fn shared_bucket_splits_within_and_skips_lower_tier() {
 						svc: "app",
 						loc: ("r1", "z1", "node-a"),
 						healthy: true,
+						cap: 1,
 					},
 					Ep {
 						label: "b",
 						svc: "app",
 						loc: ("r1", "z1", "node-b"),
 						healthy: true,
+						cap: 1,
 					},
 					Ep {
 						label: "c",
 						svc: "app",
 						loc: ("r1", "z2", "node-c"),
 						healthy: true,
+						cap: 1,
 					},
 				],
 			},
@@ -404,18 +471,21 @@ async fn shared_bucket_with_one_unhealthy_stays_in_bucket() {
 						svc: "app",
 						loc: ("r1", "z1", "node-a"),
 						healthy: false,
+						cap: 1,
 					},
 					Ep {
 						label: "b",
 						svc: "app",
 						loc: ("r1", "z1", "node-b"),
 						healthy: true,
+						cap: 1,
 					},
 					Ep {
 						label: "c",
 						svc: "app",
 						loc: ("r1", "z2", "node-c"),
 						healthy: true,
+						cap: 1,
 					},
 				],
 			},
@@ -441,12 +511,14 @@ async fn service_arrives_after_workloads() {
 			svc: "app",
 			loc: ("r1", "z1", "node-a"),
 			healthy: true,
+			cap: 1,
 		},
 		Ep {
 			label: "other-zone",
 			svc: "app",
 			loc: ("r1", "z2", "node-b"),
 			healthy: true,
+			cap: 1,
 		},
 	];
 	run(Case {
@@ -493,18 +565,21 @@ async fn service_lb_preference_change_rebuckets() {
 			svc: "app",
 			loc: ("r1", "z1", "node-a"),
 			healthy: true,
+			cap: 1,
 		},
 		Ep {
 			label: "same-zone",
 			svc: "app",
 			loc: ("r1", "z1", "node-b"),
 			healthy: true,
+			cap: 1,
 		},
 		Ep {
 			label: "same-region",
 			svc: "app",
 			loc: ("r1", "z2", "node-c"),
 			healthy: true,
+			cap: 1,
 		},
 	];
 	run(Case {
@@ -557,12 +632,14 @@ async fn strict_then_failover_recovers_dropped_endpoints() {
 			svc: "app",
 			loc: ("r1", "z2", "node-b"),
 			healthy: true,
+			cap: 1,
 		},
 		Ep {
 			label: "other-zone-2",
 			svc: "app",
 			loc: ("r1", "z3", "node-c"),
 			healthy: true,
+			cap: 1,
 		},
 	];
 	run(Case {
@@ -626,12 +703,14 @@ async fn late_self_identity_rebuckets() {
 			svc: "app",
 			loc: ("r1", "z1", "node-a"),
 			healthy: true,
+			cap: 1,
 		},
 		Ep {
 			label: "other-zone",
 			svc: "app",
 			loc: ("r1", "z2", "node-b"),
 			healthy: true,
+			cap: 1,
 		},
 	];
 	run(Case {
@@ -746,6 +825,19 @@ struct Ep {
 	svc: &'static str,
 	loc: Loc,
 	healthy: bool,
+	cap: u32,
+}
+
+impl Default for Ep {
+	fn default() -> Self {
+		Self {
+			label: "",
+			svc: "",
+			loc: ("", "", ""),
+			healthy: true,
+			cap: 1,
+		}
+	}
 }
 
 enum Expect {
@@ -753,6 +845,13 @@ enum Expect {
 	Exact(Vec<(&'static str, usize)>),
 	/// Every listed label must receive ≥1 request this step; counts must sum to `hits`.
 	Spread(Vec<&'static str>),
+	/// Per-label expected share of `hits` (fractions, sum should be 1.0). Asserts each label's
+	/// observed share is within `tolerance` of its expected share. Use for stochastic
+	/// distributions (e.g. capacity-weighted P2C).
+	Ratio {
+		shares: Vec<(&'static str, f64)>,
+		tolerance: f64,
+	},
 }
 
 enum Step {
@@ -823,6 +922,7 @@ fn build_workload(
 	node: &str,
 	svc: &str,
 	status: HealthStatus,
+	capacity: u32,
 ) -> LocalWorkload {
 	LocalWorkload {
 		workload: Workload {
@@ -833,6 +933,7 @@ fn build_workload(
 			locality: loc,
 			node: node.into(),
 			status,
+			capacity,
 			..Default::default()
 		},
 		services: HashMap::from([(svc_key(svc), HashMap::from([(SVC_PORT, addr.port())]))]),
@@ -892,6 +993,7 @@ async fn apply_sync(h: &mut Harness, services: Vec<Svc>, endpoints: Vec<Ep>) {
 			n,
 			ep.svc,
 			status,
+			ep.cap,
 		));
 	}
 	let svcs: Vec<Service> = services.iter().map(build_service).collect();
@@ -942,6 +1044,15 @@ async fn apply_hit(h: &mut Harness, hits: usize, want_status: StatusCode, want: 
 				total += got;
 			}
 			assert_eq!(total, hits, "total hits");
+		},
+		Expect::Ratio { shares, tolerance } => {
+			for (label, want_share) in &shares {
+				let got_share = delta(label) as f64 / hits as f64;
+				assert!(
+					(got_share - want_share).abs() <= tolerance,
+					"label={label} share={got_share} want={want_share} ±{tolerance}",
+				);
+			}
 		},
 	}
 	h.baseline = snapshot;
