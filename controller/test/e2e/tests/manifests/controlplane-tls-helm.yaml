@@ -1,4 +1,3 @@
 controller:
   xds:
-    tls:
-      enabled: true
+    mode: tls
